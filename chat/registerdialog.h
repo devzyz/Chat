@@ -2,9 +2,10 @@
 #define REGISTERDIALOG_H
 
 #include <QDialog>
+#include "global.h"
 
 namespace Ui {
-class RegisterDialog;
+    class RegisterDialog;
 }
 
 class RegisterDialog : public QDialog
@@ -17,10 +18,13 @@ public:
 
 private slots:
     void on_get_code_clicked();
+    void slot_reg_mod_finish(ReqId id, QString res, ErrorCodes err);
 
 private:
     Ui::RegisterDialog *ui;
     void showTip(QString str, bool isOk);
+    void initHttpHandlers();
+    QMap<ReqId, std::function<void(const QJsonObject&)>> _handlers;
 };
 
 #endif // REGISTERDIALOG_H
