@@ -11,7 +11,6 @@ namespace Ui {
 class RegisterDialog : public QDialog
 {
     Q_OBJECT
-
 public:
     explicit RegisterDialog(QWidget *parent = nullptr);
     ~RegisterDialog();

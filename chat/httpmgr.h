@@ -14,6 +14,7 @@
 class HttpMgr : public QObject, public Singleton<HttpMgr>,
                 public std::enable_shared_from_this<HttpMgr>
 {
+    Q_OBJECT
 public:
     /**
      * 为什么设置为公有？
@@ -24,6 +25,8 @@ public:
      * 因此只有当它为公有析构的时候，才能够通过智能指针析构掉
      */
     ~HttpMgr();
+    void PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod);
+
 private:
     /**
      * 为什么这里要添加一个友元？
@@ -35,7 +38,7 @@ private:
     friend class Singleton;
     HttpMgr();
     QNetworkAccessManager _manager;
-    void PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod);
+
 private slots:
     void slot_http_finish(ReqId id, Modules mod, QString res, ErrorCodes err);
 

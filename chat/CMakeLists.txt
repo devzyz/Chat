@@ -34,6 +34,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         global.cpp
         singleton.h
         httpmgr.h httpmgr.cpp
+        config.ini
+
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET chat APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -52,6 +54,17 @@ else()
         )
     endif()
 endif()
+
+set(CONFIG_FILE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/config.ini")
+
+add_custom_command(
+    TARGET chat POST_BUILD
+    # 使用 CMake 内置的跨平台拷贝命令，自动处理斜杠问题
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CONFIG_FILE_SRC}"
+        "$<TARGET_FILE_DIR:chat>/config.ini"
+    COMMENT "Copying config.ini to output directory..."
+)
 
 target_link_libraries(chat PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
 

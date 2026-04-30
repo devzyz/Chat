@@ -2,7 +2,7 @@
 
 HttpMgr::HttpMgr() {
     // 连接信号与槽
-    connect(this, &HttpMgr::sig_http_finish, this, &HttpMgr::sig_http_finish);
+    connect(this, &HttpMgr::sig_http_finish, this, &HttpMgr::slot_http_finish);
 }
 
 void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod)
