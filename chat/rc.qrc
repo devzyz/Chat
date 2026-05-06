@@ -2,5 +2,10 @@
     <qresource prefix="/">
         <file>res/ice.png</file>
         <file>style/stylesheet.qss</file>
+        <file>res/normal_hover.png</file>
+        <file>res/normal_leave.png</file>
+        <file>res/select_hover.png</file>
+        <file>res/select_leave.png</file>
+        <file>res/head_1.jpg</file>
     </qresource>
 </RCC>

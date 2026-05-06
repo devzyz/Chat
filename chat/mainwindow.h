@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include "logindialog.h"
 #include "registerdialog.h"
+#include "resetdialog.h"
 
 /***************************************************
  * @file        mainwindow.h
@@ -28,11 +29,14 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 public slots:
-    void SlotSwitchReg();
-
+    void slot_login_switch_reg();
+    void slot_reg_switch_login();
+    void slot_login_switch_reset();
+    void slot_reset_switch_login();
 private:
     Ui::MainWindow *ui;
     LoginDialog * _login_dlg;
     RegisterDialog * _register_dlg;
+    ResetDialog * _reset_dlg;
 };
 #endif // MAINWINDOW_H

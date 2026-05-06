@@ -9,8 +9,13 @@
 #include <QJsonObject>
 #include <QJsonDocument>
 #include <QNetworkReply>
+#include "global.h"
 
 // CRTP
+/**
+ * @brief The HttpMgr class
+ * 用于使用http短链接与服务器进行通信
+ */
 class HttpMgr : public QObject, public Singleton<HttpMgr>,
                 public std::enable_shared_from_this<HttpMgr>
 {
@@ -35,7 +40,7 @@ private:
      * 但是此时构造函数是私有的，无法访问
      * 因此，通过添加友元的方式，实现对私有构造函数的访问
      */
-    friend class Singleton;
+    friend class Singleton<HttpMgr>;
     HttpMgr();
     QNetworkAccessManager _manager;
 
@@ -45,6 +50,8 @@ private slots:
 signals:
     void sig_http_finish(ReqId id, Modules mod, QString res, ErrorCodes err);
     void sig_reg_mod_finish(ReqId id, QString res, ErrorCodes err);
+    void sig_reset_mod_finish(ReqId id, QString res, ErrorCodes err);
+    void sig_login_mod_finish(ReqId id, QString res, ErrorCodes err);
 };
 
 #endif // HTTPMGR_H

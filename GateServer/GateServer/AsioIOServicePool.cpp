@@ -17,7 +17,7 @@ void AsioIOServicePool::stop() {
 	for (auto& work : _works) {
 		// 把服务先停止，防止其他人再进行注册
 		work->get_executor().context().stop();
-		work.reset();
+		work.reset();	
 	}
 
 	for (auto& t : _threads) {

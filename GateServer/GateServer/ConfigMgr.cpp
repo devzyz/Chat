@@ -1,4 +1,7 @@
 #include "ConfigMgr.h"
+#include <boost/filesystem.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/ini_parser.hpp>
 
 SectionInfo::SectionInfo() {
 
@@ -35,6 +38,9 @@ SectionInfo ConfigMgr::operator[](const std::string& section) {
 	return _config_map[section];
 }
 
+/**
+ * 从config.ini文件内，读取对应的服务的配置信息
+ */
 ConfigMgr::ConfigMgr() {
 	boost::filesystem::path current_path = boost::filesystem::current_path();
 	boost::filesystem::path config_path = current_path / "config.ini";

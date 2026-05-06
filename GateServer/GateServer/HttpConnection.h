@@ -6,13 +6,23 @@ class HttpConnection : public std::enable_shared_from_this<HttpConnection>
 	friend class LogicSystem;
 public:
 	HttpConnection(boost::asio::io_context & ioc);
+	/**
+	 * @brief 与客户端通信，读取客户端发来的数据
+	 */
 	void Start();
 	tcp::socket& GetSocket();
 private:
 	void CheckDeadline();
+	/**
+	 * @brief 与客户端通信，将数据发往客户端
+	 */
 	void WriteResponse();
+
+	/**
+	 * @brief 处理客户端发来的请求
+	 */
 	void HandleReq();
-	// 解析url参数
+	
 	void PreParseGetParam();
 	tcp::socket _socket;
 	beast::flat_buffer _buffer{ 8192 };

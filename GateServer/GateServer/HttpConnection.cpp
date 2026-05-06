@@ -9,6 +9,10 @@ tcp::socket& HttpConnection::GetSocket() {
 	return _socket;
 }
 
+/**
+ * @brief 
+ * 异步读取客户端的请求，同时进行处理和开启定时器
+ */
 void HttpConnection::Start() {
 	auto self = shared_from_this();
 	http::async_read(_socket, _buffer, _request, [self](beast::error_code ec, std::size_t bytes_transferred) {
@@ -93,6 +97,11 @@ std::string UrlDecode(const std::string& str) {
 	return strTemp;
 }
 
+/**
+ * @brief 处理url请求，从url请求中，提取出对应的参数
+ * 修改_get_url为请求连接
+ * 修改_get_params为连接附带的参数
+ */
 void HttpConnection::PreParseGetParam() {
 	// 提取URL http://localhost:8080/get_test?key1=value1&key2=value2
 	auto url = _request.target();
@@ -183,11 +192,12 @@ void HttpConnection::WriteResponse() {
 	// 设置回复消息的长度，用于http粘包处理
 	_response.content_length(_response.body().size());
 	http::async_write(_socket, _response, [self](beast::error_code ec, std::size_t bytes_transferred) {
+		// 发送完成后，关闭发送端，并取消关联的定时器
 		self->_socket.shutdown(tcp::socket::shutdown_send, ec);
 		self->deadline_.cancel();
 		});
 }
-
+// 开启定时器
 void HttpConnection::CheckDeadline() {
 	auto self = shared_from_this();
 	deadline_.async_wait([self](beast::error_code ec) {

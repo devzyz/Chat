@@ -35,6 +35,13 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         singleton.h
         httpmgr.h httpmgr.cpp
         config.ini
+        timerbtn.h timerbtn.cpp
+        clickedlabel.h clickedlabel.cpp
+        resetdialog.ui
+        resetdialog.h resetdialog.cpp
+        tcpmgr.h tcpmgr.cpp
+
+
 
     )
 # Define target properties for Android with Qt 6 as:
@@ -65,6 +72,8 @@ add_custom_command(
         "$<TARGET_FILE_DIR:chat>/config.ini"
     COMMENT "Copying config.ini to output directory..."
 )
+
+target_include_directories(chat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(chat PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
 

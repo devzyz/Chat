@@ -29,14 +29,16 @@ int main()
 {
     //TestRedisMgr();
     ConfigMgr& gCfgMgr = ConfigMgr::GetInstance();
+    // 获取当前服务的端口信息
     std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
     unsigned short gate_port = atoi(gate_port_str.c_str());
 
     try {
-        unsigned short port = static_cast<unsigned short> (8080);
+        unsigned short port = static_cast<unsigned short> (gate_port);
         net::io_context ioc{ 1 };
         boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
 
+        // 异步等待，当接收到SIGINT, SIGTERM信号后，触发后面的回调函数
         signals.async_wait([&ioc](const boost::system::error_code& err, int signal_number) {
             if (err) {
                 return;

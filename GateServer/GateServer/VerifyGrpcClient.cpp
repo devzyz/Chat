@@ -82,5 +82,5 @@ VerifyGrpcClient::VerifyGrpcClient() {
 	auto& configMgr = ConfigMgr::GetInstance();
 	std::string host = configMgr["VarifyServer"]["Host"];
 	std::string port = configMgr["VarifyServer"]["Port"];
-	_pool .reset(new RPCConnectionPool(5, host, port));
+	_pool.reset(new RPCConnectionPool(5, host, port));
 }
