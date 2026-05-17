@@ -5,6 +5,7 @@
 #include <QObject>
 #include <functional>
 #include <QTcpSocket>
+#include "userdata.h"
 
 class TcpMgr : public QObject, public Singleton<TcpMgr>,
                public std::enable_shared_from_this<TcpMgr>
@@ -58,6 +59,8 @@ signals:
      * 发送由登录窗口转换为聊天窗口的信号
      */
     void sig_login_switch_chat();
+
+    void sig_user_search(std::shared_ptr<SearchInfo>);
 public slots:
     /**
      * @brief slot_tcp_connect

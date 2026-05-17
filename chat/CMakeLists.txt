@@ -40,6 +40,37 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         resetdialog.ui
         resetdialog.h resetdialog.cpp
         tcpmgr.h tcpmgr.cpp
+        chatdialog.h chatdialog.cpp chatdialog.ui
+        clickedbtn.h clickedbtn.cpp
+        customizeedit.h customizeedit.cpp
+        chatuserlist.h chatuserlist.cpp
+        chatuserwidget.h chatuserwidget.cpp chatuserwidget.ui
+        listitembase.h listitembase.cpp
+        loadingdialog.h loadingdialog.cpp loadingdialog.ui
+        chatpage.h chatpage.cpp chatpage.ui
+        chatview.h chatview.cpp
+        chatitembase.h chatitembase.cpp
+        bubbleframe.h bubbleframe.cpp
+        textbubble.h textbubble.cpp
+        picturebubble.h picturebubble.cpp
+        messagetextedit.h messagetextedit.cpp
+        statewidget.h statewidget.cpp
+        searchlist.h searchlist.cpp
+        userdata.h userdata.cpp
+        adduseritem.h adduseritem.cpp adduseritem.ui
+        findsuccessdialog.h findsuccessdialog.cpp findsuccessdialog.ui
+        applyfriend.h applyfriend.cpp applyfriend.ui
+        clickedoncelabel.h clickedoncelabel.cpp
+        friendlabel.h friendlabel.cpp friendlabel.ui
+        usermgr.h usermgr.cpp
+        contactuserlist.h contactuserlist.cpp
+        contactuseritem.h contactuseritem.cpp contactuseritem.ui
+        grouptipitem.h grouptipitem.cpp grouptipitem.ui
+        chatdetailwidget.h chatdetailwidget.cpp chatdetailwidget.ui
+        chatbubble.h chatbubble.cpp chatbubble.ui
+        textchatbubble.h textchatbubble.cpp
+        chatbubble.cpp chatbubble.h chatbubble.ui textchatbubble.cpp textchatbubble.h
+        applyfriendpage.h applyfriendpage.cpp applyfriendpage.ui
 
 
 
@@ -63,6 +94,7 @@ else()
 endif()
 
 set(CONFIG_FILE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/config.ini")
+set(STATIC_FOLDER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/static")
 
 add_custom_command(
     TARGET chat POST_BUILD
@@ -70,6 +102,10 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CONFIG_FILE_SRC}"
         "$<TARGET_FILE_DIR:chat>/config.ini"
+
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+           "${STATIC_FOLDER_SRC}"
+           "$<TARGET_FILE_DIR:chat>/static"
     COMMENT "Copying config.ini to output directory..."
 )
 

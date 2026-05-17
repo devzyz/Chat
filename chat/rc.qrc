@@ -7,5 +7,31 @@
         <file>res/select_hover.png</file>
         <file>res/select_leave.png</file>
         <file>res/head_1.jpg</file>
+        <file>res/add_friend_hover.png</file>
+        <file>res/add_friend_normal.png</file>
+        <file>res/search.png</file>
+        <file>res/close_transparent.png</file>
+        <file>res/close_search.png</file>
+        <file>res/head_2.jpg</file>
+        <file>res/head_3.jpg</file>
+        <file>res/head_5.jpg</file>
+        <file>res/loading.gif</file>
+        <file>res/filedir_hover.png</file>
+        <file>res/filedir_press.png</file>
+        <file>res/smile_hover.png</file>
+        <file>res/smile_press.png</file>
+        <file>res/filedir.png</file>
+        <file>res/smile.png</file>
+        <file>res/red_point.png</file>
+        <file>res/chat.ico</file>
+        <file>res/add_tip.png</file>
+        <file>res/right_tip.png</file>
+        <file>res/chat_hover.png</file>
+        <file>res/chat_leave.png</file>
+        <file>res/chat_select.png</file>
+        <file>res/user_hover.png</file>
+        <file>res/user_leave.png</file>
+        <file>res/user_select.png</file>
+        <file>res/add_friend.png</file>
     </qresource>
 </RCC>

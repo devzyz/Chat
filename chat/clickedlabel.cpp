@@ -15,6 +15,29 @@ void ClickedLabel::mousePressEvent(QMouseEvent *event) {
         if(_curState == ClickLabelState::Normal){
             // qDebug()<<"clicked , change to select hover: "<< _select_hover;
             _curState = ClickLabelState::Selected;
+            setProperty("state",_select_press);
+            repolish(this);
+            update();
+        }else{
+            // qDebug()<<"clicked , change to normal hover: "<< _normal_hover;
+            _curState = ClickLabelState::Normal;
+            setProperty("state",_normal_press);
+            repolish(this);
+            update();
+        }
+        return ;
+    }
+
+    // 调用基类的mousePressEvent以保证正常的事件处理
+    QLabel::mousePressEvent(event);
+}
+
+void ClickedLabel::mouseReleaseEvent(QMouseEvent * event)
+{
+    if (event->button() == Qt::LeftButton) {
+        if(_curState == ClickLabelState::Normal){
+            // qDebug()<<"clicked , change to select hover: "<< _select_hover;
+            _curState = ClickLabelState::Selected;
             setProperty("state",_select_hover);
             repolish(this);
             update();
@@ -26,10 +49,11 @@ void ClickedLabel::mousePressEvent(QMouseEvent *event) {
             update();
         }
         emit clicked();
+        return ;
     }
 
     // 调用基类的mousePressEvent以保证正常的事件处理
-    QLabel::mousePressEvent(event);
+    QLabel::mouseReleaseEvent(event);
 }
 
 /**
@@ -97,4 +121,26 @@ void ClickedLabel::SetState(QString normal_leave, QString normal_hover, QString 
 
 ClickLabelState ClickedLabel::GetCurState() {
     return _curState;
+}
+
+bool ClickedLabel::SetCurState(ClickLabelState state)
+{
+    _curState = state;
+
+    if (_curState == ClickLabelState::Normal) {
+        setProperty("state", _normal_leave);
+        repolish(this);
+    }else if (_curState == ClickLabelState::Selected) {
+        setProperty("state", _select_leave);
+        repolish(this);
+    }
+
+    return true;
+}
+
+void ClickedLabel::ResetNormalState()
+{
+    _curState = ClickLabelState::Normal;
+    setProperty("state", _normal_leave);
+    repolish(this);
 }

@@ -171,3 +171,7 @@ void TcpMgr::slot_tcp_connect(ServerInfo si)
     // 异步连接服务器
     _socket.connectToHost(_host, _port);
 }
+
+TcpMgr::~TcpMgr() {
+
+}
