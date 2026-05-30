@@ -3,7 +3,12 @@
 
 #include "chatbubble.h"
 #include <QTextEdit>
+#include "bubbleframe.h"
 
+/**
+ * @brief The TextChatBubble class
+ * 文本聊天气泡类
+ */
 class TextChatBubble : public ChatBubble
 {
     Q_OBJECT
@@ -18,16 +23,21 @@ public:
      */
     TextChatBubble(ChatRole role, const QString &text, const QString& userName, const QString& userIcon, QWidget *parent = nullptr);
 
-    void setPlainText(const QString &text, QWidget * wrappper);
+    /**
+     * @brief setPlainText
+     * @param text
+     * @param wrappper
+     * 设置文本，并设置宽高等
+     */
+    void setPlainText(const QString &text);
     QTextEdit *textEdit() const { return _text_edit;}
-    QSize sizeHint() const override;
 
 protected:
 
 private:
-    void initStyleSheet(QWidget * wrapper);
 
     QTextEdit* _text_edit;
+    BubbleFrame* _wrapper;
 };
 
 #endif // TEXTCHATBUBBLE_H

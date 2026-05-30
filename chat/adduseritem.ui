@@ -27,7 +27,7 @@
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <item>
-    <widget class="QLabel" name="add_tip">
+    <widget class="QLabel" name="add_user_tip">
      <property name="minimumSize">
       <size>
        <width>40</width>
@@ -46,14 +46,14 @@
     </widget>
    </item>
    <item>
-    <widget class="QLabel" name="message_tip">
+    <widget class="QLabel" name="add_user_message_tip">
      <property name="text">
       <string>查找 uid/name</string>
      </property>
     </widget>
    </item>
    <item>
-    <widget class="QLabel" name="right_tip">
+    <widget class="QLabel" name="add_user_right_tip">
      <property name="minimumSize">
       <size>
        <width>30</width>

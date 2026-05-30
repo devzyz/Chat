@@ -31,6 +31,17 @@ enum ReqId {
     ID_LOGIN_UESR = 1004, // 用户登录
     ID_CHAT_LOGIN = 1005, // 登录聊天服务器
     ID_CHAT_LOGIN_RSP = 1006, // 登录聊天服务器回包
+    ID_SEARCH_USER_REQ = 1007, // 用户搜索请求
+    ID_SEARCH_USER_RSP = 1008, // 用户搜索请求回包
+    ID_ADD_FRIEND_REQ = 1009, // 添加好友申请
+    ID_ADD_FRIEND_RSP = 1010, // 添加好友申请回包
+    ID_NOTIFY_ADD_FRIEND_REQ = 1011, // 服务器通知我添加好友
+    ID_AUTH_FRIEND_REQ = 1013, // 认证添加好友请求
+    ID_AUTH_FRIEND_RSP = 1014, // 认证添加好友请求回包
+    ID_NOTIFY_AUTH_FRIEND_REQ = 1015, // 服务器通知我认证添加好友
+    ID_TEXT_CHAT_MSG_REQ = 1016, // 发送文本聊天数据请求
+    ID_TEXT_CHAT_MSG_RSP = 1017, // 发送文本聊天数据请求回包
+    ID_NOTIFY_CHAT_MSG_REQ = 1018, // 通知接收文本聊天数据
 };
 
 enum Modules {
@@ -101,9 +112,6 @@ struct MsgInfo {
     QPixmap pixmap; // 文件和图片的缩略图
 };
 
-// 申请好友标签输入框最低长度
-const int MIN_APPLY_LABEL_EDIT_LENGTH = 40;
-const QString add_prefix = "添加标签 ";
-const int tip_offset = 5;
+const int LOADING_STEP_LENGTH = 13;
 
 #endif // GLOBAL_H

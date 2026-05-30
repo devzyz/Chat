@@ -17,7 +17,7 @@ LoginDialog::LoginDialog(QWidget *parent)
     connect(ui->forget_label, &ClickedLabel::clicked, this, &LoginDialog::sig_login_switch_reset);
 
     // 忘记密码高亮显示逻辑
-    ui->forget_label->SetState("invisible_leave","invisible_hover","","visible_leave","visible_hover","");
+    ui->forget_label->SetState("invisible_leave","invisible_hover","invisible_press","visible_leave","visible_hover","visible_press");
 
     // 错误提示信息颜色
     ui->err_tip->setProperty("state", "normal");
@@ -31,7 +31,7 @@ LoginDialog::LoginDialog(QWidget *parent)
     });
 
     // 密码隐藏逻辑
-    ui->password_visible->SetState("invisible_leave","invisible_hover","","visible_leave","visible_hover","");
+    ui->password_visible->SetState("invisible_leave","invisible_hover","invisible_press","visible_leave","visible_hover","visible_presss");
     ui->password_edit->setEchoMode(QLineEdit::Password);
     connect(ui->password_visible, &ClickedLabel::clicked, [this](){
         auto curState = ui->password_visible->GetCurState();
@@ -267,7 +267,7 @@ void LoginDialog::slot_tcp_connect_finish(bool bSuccess)
         jsonObj["token"] = _token;
 
         QJsonDocument doc(jsonObj);
-        QString jsonString = doc.toJson(QJsonDocument::Indented);
+        QByteArray jsonString = doc.toJson(QJsonDocument::Indented);
 
         // 发送tcp请求给chat server请求连接
         emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_CHAT_LOGIN, jsonString);

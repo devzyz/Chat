@@ -6,14 +6,280 @@ QDialog#LoginDialog, QDialog#RegisterDialog {
     color:black;
 }
 
-#err_tip[state='normal'] {
-    color:green;
+#user_chat_label{
+   color:rgb(153,153,153);
+   font-size: 12px;
+   font-family: "Microsoft YaHei";
 }
 
-#err_tip[state='err'] {
-    color:red;
+#user_name_label{
+   color:rgb(0,0,0);
+   font-size: 14px;
+   font-weight: normal;
+   font-family: "Microsoft YaHei";
 }
 
+#time_wideget #time_label{
+   color:rgb(140,140,140);
+   font-size: 12px;
+   font-family: "Microsoft YaHei";
+}
+
+
+
+LoadingDialog{
+   background: #f2eada;
+}
+
+
+
+#chat_edit{
+   background: #ffffff;
+   border: none; /* 隐藏边框 */
+   font-family: "Microsoft YaHei"; /* 设置字体 */
+   font-size: 18px; /* 设置字体大小 */
+   padding: 5px; /* 设置内边距 */
+}
+
+
+#chat_data_list{
+   background: #f0f0f0;
+}
+
+#chat_background{
+   background: #f0f0f0;
+}
+
+#chat_scrollarea{
+   border: none;
+}
+
+
+#invalid_item {
+   background-color: #eaeaea;
+   border: none;
+}
+
+#name_label{
+   font-size: 14px;
+   font-family: "Microsoft YaHei";
+}
+
+#ApplyFriend{
+   border: 2px solid #f1f1f1;
+   font-size: 14px;
+   background: #f7f7f8;
+}
+
+#scrollArea{
+   background: #f7f7f8;
+   border: none;
+}
+
+#scrollcontent{
+   background: #f7f7f8;
+}
+
+/* -------------- 聊天界面 最上部对方昵称的label设置 -------------- */
+#title_label{
+   font-family: "Microsoft YaHei";
+   font-size: 18px;
+   font-weight: normal;
+}
+
+/* -------------- 聊天界面 聊天区域背景等设置 -------------- */
+#chat_detail_data_list {
+   background-color: rgb(240, 240, 240);
+   border: none
+}
+
+#chat_detail_data_list::item {
+   background: transparent;
+}
+
+#chat_detail_data_list::item:selected {
+   background: transparent;
+}
+
+/* -------------- 设置红点的背景 -------------- */
+#red_point {
+   border-image: url(:/res/red_point.png);
+}
+
+/* -------------- 侧边栏 聊天、联系人 样式 -------------- */
+#side_chat_label[state='leave']{
+   border-image: url(:/res/chat_leave.png);
+}
+
+#side_chat_label[state='hover']{
+   border-image: url(:/res/chat_hover.png);
+}
+
+#side_chat_label[state='select']{
+   border-image: url(:/res/chat_select.png);
+}
+
+#side_user_label[state='leave']{
+   border-image: url(:/res/user_leave.png);
+}
+
+#side_user_label[state='hover']{
+   border-image: url(:/res/user_hover.png);
+}
+
+#side_user_label[state='select']{
+   border-image: url(:/res/user_select.png);
+}
+
+/* -------------- 聊天列表 Item 样式 -------------- */
+#chat_user_Item {
+   background-color: rgb(0, 0, 0);
+}
+
+/* -------------- 聊天列表 QListWidget（chat_user_list） 样式 -------------- */
+#chat_user_list {
+   background-color: rgb(247, 247, 248);
+   border: none;
+}
+
+#chat_user_list::item:selected {
+   background-color: #d3d7d4;
+   border: none;
+   outline: none;
+}
+
+#chat_user_list::item:hover {
+   background-color: rgb(206,207,208);
+   border: none;
+   outline: none;
+}
+
+#chat_user_list::focus {
+   border: none;
+   outline: none;
+}
+
+/* -------------- 联系人列表 QListWidget（contact_user_list） 样式 -------------- */
+#contact_user_list {
+   background-color: rgb(247,247,248);
+   border: none;
+}
+
+#contact_user_list::item:selected {
+   background-color: #d3d7d4;
+   border: none;
+   outline: none;
+}
+
+#contact_user_list::item:hover {
+   background-color: rgb(206,207,208);
+   border: none;
+   outline: none;
+}
+
+#contact_user_list::focus {
+   border: none;
+   outline: none;
+}
+
+/* -------------- 新朋友申请列表 QListWidget（apply_friend_list） 的样式 -------------- */
+
+#apply_friend_list {
+   background-color: #f1f2f3;
+   border-left: 1px solid #ede9e7;
+   border-top: none;
+   border-right: none;
+   border-bottom: none;
+}
+
+/* -------------- 搜索结果列表 QListWidget（search_list） 的样式 -------------- */
+#search_list {
+   background-color: rgb(247,247,248);
+   border: none;
+}
+
+#search_list::item:selected {
+   background-color: #d3d7d4;
+   border: none;
+   outline: none;
+}
+
+#search_list::item:hover {
+   background-color: rgb(206,207,208);
+   border: none;
+   outline: none;
+}
+
+#search_list::focus {
+   border: none;
+   outline: none;
+}
+
+/* -------------- AddUserItem 的样式 -------------- */
+#add_user_tip {
+   border-image: url(:/res/add_tip.png);
+}
+
+#add_user_right_tip {
+   border-image: url(:/res/right_tip.png);
+}
+
+#add_user_message_tip {
+  text-align: center;
+  font-family: "Microsoft YaHei";
+  font-size: 12pt;
+}
+
+/* -------------- GroupTipItem 的样式 -------------- */
+#GroupTipItem {
+   background-color: #eaeaea;
+   border: none;
+}
+
+#GroupTipItem QLabel{
+   color: #2e2f30;
+   font-size: 12px; /* 设置字体大小 */
+   font-family: "Microsoft YaHei"; /* 设置字体 */
+   border: none;
+}
+
+/* -------------- ApplyFriendItem 的样式 -------------- */
+ApplyFriendItem {
+   background-color: #f1f2f3;
+   border-bottom: 2px solid #dbd9d9;
+}
+
+ApplyFriendItem #apply_friend_user_chat_label{
+   color: #a2a2a2;
+   font-size: 14px; /* 设置字体大小 */
+   font-family: "Microsoft YaHei"; /* 设置字体 */
+}
+
+ApplyFriendItem #apply_friend_add_friend_btn[state='normal'] {
+   background-color: #d3d7d4;
+   color: #2cb46e;
+   font-size: 16px; /* 设置字体大小 */
+   font-family: "Microsoft YaHei"; /* 设置字体 */
+   border-radius: 20px; /* 设置圆角 */
+}
+
+ApplyFriendItem #apply_friend_add_friend_btn[state='hover'] {
+   background-color: #D3D3D3;
+   color: #2cb46e;
+   font-size: 16px; /* 设置字体大小 */
+   font-family: "Microsoft YaHei"; /* 设置字体 */
+   border-radius: 20px; /* 设置圆角 */
+}
+
+ApplyFriendItem #apply_friend_add_friend_btn[state='press'] {
+   background-color: #BEBEBE;
+   color: #2cb46e;
+   font-size: 16px; /* 设置字体大小 */
+   font-family: "Microsoft YaHei"; /* 设置字体 */
+   border-radius: 20px; /* 设置圆角 */
+}
+
+/* -------------- 注册时，密码与确认密码的隐藏与显示 -------------- */
 #password_visible[state='invisible_leave']{
    border-image: url(:/res/normal_leave.png);
 }
@@ -52,141 +318,7 @@ QDialog#LoginDialog, QDialog#RegisterDialog {
    border-image: url(:/res/normal_hover.png);
 }
 
-#forget_label[state='invisible_leave'], #forget_label[state='visible_leave']{
-   color: black;
-}
-
-#forget_label[state='invisible_hover'], #forget_label[state='visible_hover']{
-   color: rgb(42, 112, 241);
-}
-
-#side_bar_widget {
-   background-color: rgb(46,46,46);
-}
-
-#add_btn[state='normal'] {
-   border-image: url(:/res/add_friend_normal.png);
-}
-
-#add_btn[state='hover'] {
-   border-image: url(:/res/add_friend_hover.png);
-}
-
-#add_btn[state='press'] {
-   border-image: url(:/res/add_friend_hover.png);
-}
-
-#search_widget {
-   background-color: rgb(247, 247, 247);
-}
-
-#search_edit {
-   border: 2px solid #f1f1f1
-}
-
-#chat_user_widget {
-   background-color: rgb(0, 0, 0);
-}
-
-#chat_user_list {
-   background-color: rgb(247, 247, 248);
-   border: none;
-}
-
-#chat_user_list::item:selected {
-   background-color: #d3d7d4;
-   border: none;
-   outline: none;
-}
-
-#chat_user_list::item:hover {
-   background-color: rgb(206,207,208);
-   border: none;
-   outline: none;
-}
-
-#chat_user_list::focus {
-   border: none;
-   outline: none;
-}
-
-#user_chat_label{
-   color:rgb(153,153,153);
-   font-size: 12px;
-   font-family: "Microsoft YaHei";
-}
-
-#user_name_label{
-   color:rgb(0,0,0);
-   font-size: 14px;
-   font-weight: normal;
-   font-family: "Microsoft YaHei";
-}
-
-#time_wid #time_lb{
-   color:rgb(140,140,140);
-   font-size: 12px;
-   font-family: "Microsoft YaHei";
-}
-
-QScrollBar:vertical {
-    background: transparent; /* 将轨道背景设置为透明 */
-    width: 8px; /* 滚动条宽度，根据需要调整 */
-    margin: 0px; /* 移除滚动条与滑块之间的间距 */
-}
-
-QScrollBar::handle:vertical {
-    background: rgb(173,170,169); /* 滑块颜色 */
-    min-height: 10px; /* 滑块最小高度，根据需要调整 */
-    border-radius: 4px; /* 滑块边缘圆角，调整以形成椭圆形状 */
-}
-
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-    height: 0px; /* 移除上下按钮 */
-    border: none; /* 移除边框 */
-    background: transparent; /* 背景透明 */
-}
-
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-    background: none; /* 页面滚动部分背景透明 */
-}
-
-LoadingDialog{
-   background: #f2eada;
-}
-
-#title_label{
-   font-family: "Microsoft YaHei";
-   font-size: 18px;
-   font-weight: normal;
-}
-
-#chat_edit{
-   background: #ffffff;
-   border: none; /* 隐藏边框 */
-   font-family: "Microsoft YaHei"; /* 设置字体 */
-   font-size: 18px; /* 设置字体大小 */
-   padding: 5px; /* 设置内边距 */
-}
-
-#send_widget{
-   background: #ffffff;
-   border: none; /* 隐藏边框 */
-}
-
-#add_btn[state='normal']{
-   border-image: url(:/res/add_friend_normal.png);
-}
-
-#add_btn[state='hover']{
-   border-image: url(:/res/add_friend_hover.png);
-
-}
-
-#add_btn[state='press']{
-   border-image: url(:/res/add_friend_hover.png);
-}
-
+/* -------------- 发送按钮与接收按钮的移入移出效果 -------------- */
 #receive_btn[state='normal']{
    background: #f0f0f0;
    color: #2cb46e;
@@ -235,11 +367,34 @@ LoadingDialog{
    border-radius: 20px; /* 设置圆角 */
 }
 
-#tool_widget{
-   background: #ffffff;
-   border-bottom: 0.5px solid #ececec; /* 设置下边框颜色和宽度 */
+/* -------------- 登录界面 忘记密码的移入移出效果 -------------- */
+#forget_label[state='invisible_leave'], #forget_label[state='visible_leave']{
+   color: black;
 }
 
+#forget_label[state='invisible_hover'], #forget_label[state='visible_hover']{
+   color: rgb(42, 112, 241);
+}
+
+/* -------------- 主界面 最左侧的菜单栏的背景颜色 -------------- */
+#side_bar_widget {
+   background-color: rgb(46,46,46);
+}
+
+/* -------------- 主界面 上面搜索框后面的添加好友图标的移入移出状态 -------------- */
+#add_btn[state='normal'] {
+   border-image: url(:/res/add_friend_normal.png);
+}
+
+#add_btn[state='hover'] {
+   border-image: url(:/res/add_friend_hover.png);
+}
+
+#add_btn[state='press'] {
+   border-image: url(:/res/add_friend_hover.png);
+}
+
+/* -------------- 主界面 表情图标和文件图标的移入移出状态 -------------- */
 #emoij_label[state='normal']{
    border-image: url(:/res/smile.png);
 }
@@ -264,97 +419,31 @@ LoadingDialog{
    border-image: url(:/res/filedir_press.png);
 }
 
-#chat_data_list{
-   background: #f0f0f0;
+/* -------------- 主界面 搜索区域widget的背景颜色 -------------- */
+#search_widget {
+   background-color: rgb(247, 247, 247);
 }
 
-#chat_background{
-   background: #f0f0f0;
+/* -------------- 登录界面/注册界面 错误提示的颜色设置 -------------- */
+#err_tip[state='normal'] {
+    color:green;
 }
 
-#chat_scrollarea{
-   border: none;
+#err_tip[state='err'] {
+    color:red;
 }
 
-#side_chat_label[state='leave']{
-   border-image: url(:/res/chat_leave.png);
-}
-
-#side_chat_label[state='hover']{
-   border-image: url(:/res/chat_hover.png);
-}
-
-#side_chat_label[state='select']{
-   border-image: url(:/res/chat_select.png);
-}
-
-#side_user_label[state='leave']{
-   border-image: url(:/res/user_leave.png);
-}
-
-#side_user_label[state='hover']{
-   border-image: url(:/res/user_hover.png);
-}
-
-#side_user_label[state='select']{
-   border-image: url(:/res/user_select.png);
-}
-
+/* -------------- 主界面 搜索框的边框大小 -------------- */
 #search_edit {
    border: 2px solid #f1f1f1;
 }
 
-/* 搜索框列表*/
-#search_list {
-   background-color: rgb(247,247,248);
-   border: none;
-}
-
-#search_list::item:selected {
-   background-color: #d3d7d4;
-   border: none;
-   outline: none;
-}
-
-#search_list::item:hover {
-   background-color: rgb(206,207,208);
-   border: none;
-   outline: none;
-}
-
-#search_list::focus {
-   border: none;
-   outline: none;
-}
-
-#invalid_item {
-   background-color: #eaeaea;
-   border: none;
-}
-
-#add_tip {
-   border-image: url(:/res/add_tip.png);
-}
-
-#right_tip{
-   border-image: url(:/res/right_tip.png);
-}
-
-#message_tip{
-  text-align: center;
-  font-family: "Microsoft YaHei";
-  font-size: 12pt;
-}
-
+/* -------------- 主界面 搜索到好友后的弹出框的背景颜色 -------------- */
 #FindSuccessDialog{
    background-color: #ffffff;
 }
 
-#name_label{
-   font-size: 14px;
-   font-family: "Microsoft YaHei";
-}
-
+/* -------------- 主界面 搜索到好友后的弹出框，添加好友按钮的移入移出状态 -------------- */
 #add_friend_btn[state='normal']{
    background: #07c160;
    color: #ffffff;
@@ -379,62 +468,63 @@ LoadingDialog{
    border-radius: 20px; /* 设置圆角 */
 }
 
-#ApplyFriend{
-   border: 2px solid #f1f1f1;
-   font-size: 14px;
-   background: #f7f7f8;
+/* -------------- 对所有的包含垂直滚动条的控件的滚动条执行下面的状态设计 -------------- */
+QScrollBar:vertical {
+   background: transparent; /* 将轨道背景设置为透明 */
+   width: 8px; /* 滚动条宽度，根据需要调整 */
+   margin: 0px; /* 移除滚动条与滑块之间的间距 */
 }
 
-#scrollArea{
-   background: #f7f7f8;
-   border: none;
+QScrollBar::handle:vertical {
+   background: rgb(173,170,169); /* 滑块颜色 */
+   min-height: 10px; /* 滑块最小高度，根据需要调整 */
+   border-radius: 4px; /* 滑块边缘圆角，调整以形成椭圆形状 */
 }
 
-#scrollcontent{
-   background: #f7f7f8;
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+   height: 0px; /* 移除上下按钮 */
+   border: none; /* 移除边框 */
+   background: transparent; /* 背景透明 */
 }
 
-/* 不显示QListWidgetItem的样式 */
-#chat_detail_list_widget::item {
-   background: transparent;
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+   background: none; /* 页面滚动部分背景透明 */
 }
 
-#chat_detail_list_widget::item:selected {
-   background: transparent;
+/* -------------- 聊天页面，最下面的发送widget的背景颜色及边框 -------------- */
+#send_widget{
+   background: #ffffff;
+   border: none; /* 隐藏边框 */
 }
 
-#contact_user_list {
-   background-color: rgb(247,247,248);
-   border: none;
+/* -------------- 聊天页面，中间工具栏（表情包和文件等）widget的背景颜色及边框 -------------- */
+#tool_widget{
+   background: #ffffff;
+   border-bottom: 0.5px solid #ececec; /* 设置下边框颜色和宽度 */
 }
 
-#contact_user_list::item:selected {
-   background-color: #d3d7d4;
-   border: none;
-   outline: none;
+/* -------------- 右侧用户信息页面 聊天、语音、视频的状态 -------------- */
+
+#info_chat_label{
+   border-image: url(:/res/chat_label.png);
 }
 
-#contact_user_list::item:hover {
-   background-color: rgb(206,207,208);
-   border: none;
-   outline: none;
+#info_video_label{
+   border-image: url(:/res/video_label.png);
 }
 
-#contact_user_list::focus {
-   border: none;
-   outline: none;
+#info_voice_label{
+   border-image: url(:/res/voice_label.png);
 }
 
-#GroupTipItem {
-   background-color: #eaeaea;
-   border: none;
-}
-
-#GroupTipItem QLabel{
-   color: #2e2f30;
-   font-size: 12px; /* 设置字体大小 */
-   font-family: "Microsoft YaHei"; /* 设置字体 */
-   border: none;
+/* -------------- 主界面 显示新消息的数量 -------------- */
+QLabel#new_msg_count_label {
+   background-color: #F44E4E;      /* 微信红色 */
+   color: white;                   /* 白色数字 */
+   border-radius: 9px;             /* 18px 的一半，完美圆形 */
+   font-size: 10px;                /* 适合 18px 高度的字体 */
+   font-weight: bold;
+   padding: 0px;                   /* 防止内边距挤变形 */
 }
 
 #new_friend_item {
@@ -445,3 +535,16 @@ LoadingDialog{
    background-color:rgb(247,247,247);
    border: none;
 }
+
+#friend_apply_label {
+   font-family: "Microsoft YaHei";
+   font-size: 18px;
+   font-weight: normal;
+}
+
+#friend_apply_widget {
+   background-color: #f1f2f3;
+   border-bottom: 1px solid #ede9e7;
+}
+
+

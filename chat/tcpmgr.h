@@ -7,6 +7,10 @@
 #include <QTcpSocket>
 #include "userdata.h"
 
+/**
+ * @brief The TcpMgr class
+ * tcp请求管理单例，tcp网络请求都从这里发出
+ */
 class TcpMgr : public QObject, public Singleton<TcpMgr>,
                public std::enable_shared_from_this<TcpMgr>
 {
@@ -47,7 +51,7 @@ signals:
      * @brief sig_send_data
      *
      */
-    void sig_send_data(ReqId reqId, QString data);
+    void sig_send_data(ReqId reqId, QByteArray data);
     /**
      * @brief sig_login_failed
      * @param error
@@ -59,8 +63,31 @@ signals:
      * 发送由登录窗口转换为聊天窗口的信号
      */
     void sig_login_switch_chat();
-
-    void sig_user_search(std::shared_ptr<SearchInfo>);
+    /**
+     * @brief sig_tcp_search_user_finish
+     * TCP请求，搜索用户的回包信号
+     */
+    void sig_tcp_search_user_finish(std::shared_ptr<SearchInfo>);
+    /**
+     * @brief sig_tcp_add_friend_apply
+     * 接收到添加好友申请后，发出信号
+     */
+    void sig_tcp_add_friend_apply(std::shared_ptr<ApplyInfo>);
+    /**
+     * @brief sig_tcp_add_auth_friend
+     * 添加好友认证，当我点击添加后，我添加对方的逻辑由此信号实现
+     */
+    void sig_tcp_add_auth_friend(std::shared_ptr<AuthInfo>);
+    /**
+     * @brief sig_tcp_notify_auth_friend
+     * 服务器通知我认证添加好友，当对方同意添加我为好友后，我添加对方的逻辑在此实现
+     */
+    void sig_tcp_notify_auth_friend(std::shared_ptr<AuthInfo>);
+    /**
+     * @brief sig_update_text_chat_msg
+     * 服务器通知我更新聊天数据，发出信号，通知前端界面更新
+     */
+    void sig_update_text_chat_msg(int, int, QJsonArray);
 public slots:
     /**
      * @brief slot_tcp_connect
@@ -70,6 +97,8 @@ public slots:
      * 在这里实现tcp连接
      */
     void slot_tcp_connect(ServerInfo si);
+
+private slots:
     /**
      * @brief slot_send_data
      * @param reqId
@@ -77,12 +106,13 @@ public slots:
      *
      * 通过_socket发送数据的槽函数
      */
-
-private slots:
-    void slot_send_data(ReqId reqId, QString data);
+    void slot_send_data(ReqId reqId, QByteArray data);
 private:
     friend class Singleton<TcpMgr>;
     TcpMgr();
+
+signals:
+
 };
 
 #endif // TCPMGR_H

@@ -9,10 +9,13 @@ namespace Ui {
 class FindSuccessDialog;
 }
 
+/**
+ * @brief The FindSuccessDialog class
+ * 搜索添加好友成功后的弹出框
+ */
 class FindSuccessDialog : public QDialog
 {
     Q_OBJECT
-
 public:
     explicit FindSuccessDialog(QWidget *parent = nullptr);
     ~FindSuccessDialog();

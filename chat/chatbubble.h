@@ -20,14 +20,11 @@ public:
     void setUserIcon(const QPixmap &icon);
 
 protected:
-    // void paintEvent(QPaintEvent *e) override;
-
     ChatRole _role;
-    QWidget* _chat_widget;
+    QWidget* _context_widget;
 
 private:
     Ui::Chat_Bubble_Widget *ui;
-    static const int WIDTH_SANJIAO = 8;
 };
 
 #endif // CHATBUBBLE_H

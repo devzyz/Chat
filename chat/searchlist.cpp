@@ -5,6 +5,10 @@
 #include "tcpmgr.h"
 #include "adduseritem.h"
 #include "findsuccessdialog.h"
+#include "customizeedit.h"
+#include <QJsonDocument>
+#include "findfaildialog.h"
+#include "usermgr.h"
 
 SearchList::SearchList(QWidget * parent)
     : QListWidget(parent) , _find_dialog(nullptr), _search_edit(nullptr), _send_pending(false) {
@@ -23,7 +27,7 @@ SearchList::SearchList(QWidget * parent)
     addTipItem();
 
     // 连接搜索条目
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_user_search, this, &SearchList::slot_user_search);
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_search_user_finish, this, &SearchList::slot_tcp_search_user_finish);
 }
 
 void SearchList::CloseFindDialog()
@@ -34,11 +38,23 @@ void SearchList::CloseFindDialog()
     }
 }
 
+/**
+ * @brief SearchList::SetSearchEdit
+ * @param edit
+ * 设置当前搜索框
+ */
 void SearchList::SetSearchEdit(QWidget *edit)
 {
-
+    _search_edit = edit;
 }
 
+/**
+ * @brief SearchList::eventFilter
+ * @param watched
+ * @param event
+ * @return
+ * 处理鼠标滚轮事件
+ */
 bool SearchList::eventFilter(QObject *watched, QEvent *event)
 {
     if (watched == this->viewport()) {
@@ -64,9 +80,23 @@ bool SearchList::eventFilter(QObject *watched, QEvent *event)
     return QListWidget::eventFilter(watched, event);
 }
 
+/**
+ * @brief SearchList::waitPending
+ * @param pending
+ * 因为发送网络请求可能要时间，通过这个创建一个等待
+ */
 void SearchList::waitPending(bool pending)
 {
-
+    if (pending) {
+        _loadingDialog = new LoadingDialog(this);
+        _loadingDialog->setModal(true);
+        _loadingDialog->show();
+        _send_pending = true;
+    }else {
+        _loadingDialog->hide();
+        _loadingDialog->deleteLater();
+        _send_pending = false;
+    }
 }
 
 // 添加测试提示
@@ -114,11 +144,28 @@ void SearchList::slot_item_clicked(QListWidgetItem *item)
 
     // 当点击的是添加用户的item
     if (itemType == ListItemType::ADD_USER_TIP_ITEM) {
-        // todo...
-        _find_dialog = std::make_shared<FindSuccessDialog> (this);
-        auto si = std::make_shared<SearchInfo> (0, "zyz", "zyz", "hello , my friend", 0);
-        std::dynamic_pointer_cast<FindSuccessDialog> (_find_dialog)->SetSearchInfo(si);
-        _find_dialog->show();
+        // 用一个变量来控制当前是否在查找
+        if (_send_pending) {
+            return ;
+        }
+
+        if (!_search_edit) {
+            return ;
+        }
+
+        // 添加一个正在等待的函数
+        waitPending(true);
+        // 准备发送tcp请求
+        auto search_edit = dynamic_cast<CustomizeEdit*> (_search_edit);
+        // 支持通过uid/name两种方式，当输入全为数字，判定为uid，否则判定为name
+        auto uid_name = search_edit->text();
+        QJsonObject jsonObj;
+        jsonObj["uid_name"] = uid_name;
+        // 将json数据转换为字节流数据
+        QJsonDocument doc(jsonObj);
+        QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
+        emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_SEARCH_USER_REQ, jsonData);
+
         return ;
     }
 
@@ -126,7 +173,37 @@ void SearchList::slot_item_clicked(QListWidgetItem *item)
     CloseFindDialog();
 }
 
-void SearchList::slot_user_search(std::shared_ptr<SearchInfo> si)
+/**
+ * @brief SearchList::slot_search_user_finish
+ * @param si
+ * 搜索用于的tcp请求结束
+ */
+void SearchList::slot_tcp_search_user_finish(std::shared_ptr<SearchInfo> si)
 {
+    // 网络请求结束，停止等待
+    waitPending(false);
+    if (si == nullptr) {
+        _find_dialog = std::make_shared<FindFailDialog> (this);
+    }else {
+        // 搜索到用户，存在三种逻辑，一不是我的好友，二是我的好友，三是我自己
+        // 是我自己, 直接返回，不做处理
+        auto self_uid = UserMgr::GetInstance()->GetUid();
+        if (si->_uid == self_uid) {
+            return ;
+        }
 
+        // 是我的好友逻辑，则直接跳转到聊天界面
+        auto isFriend = UserMgr::GetInstance()->CheckIsFriendById(si->_uid);
+        if (isFriend) {
+            emit sig_jump_chat_item(si);
+            return ;
+        }
+
+        // 不是我的好友逻辑
+        _find_dialog = std::make_shared<FindSuccessDialog> (this);
+        // 设置一下搜索成功的弹出框的信息
+        std::dynamic_pointer_cast<FindSuccessDialog>(_find_dialog)->SetSearchInfo(si);
+    }
+
+    _find_dialog->show();
 }

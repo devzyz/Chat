@@ -64,7 +64,7 @@
        </spacer>
       </item>
       <item>
-       <widget class="QLabel" name="friend_apply_title_label">
+       <widget class="QLabel" name="apply_friend_title_label">
         <property name="minimumSize">
          <size>
           <width>0</width>
@@ -117,13 +117,20 @@
        <number>0</number>
       </property>
       <item>
-       <widget class="QListWidget" name="apply_friend_list"/>
+       <widget class="ApplyFriendList" name="apply_friend_list"/>
       </item>
      </layout>
     </widget>
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ApplyFriendList</class>
+   <extends>QListWidget</extends>
+   <header>applyfriendlist.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

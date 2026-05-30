@@ -6,6 +6,7 @@ GroupTipItem::GroupTipItem(QWidget *parent)
     , ui(new Ui::GroupTipItem)
 {
     ui->setupUi(this);
+    // 设置当前type的类型
     SetItemType(ListItemType::GROUP_TIP_ITEM);
 }
 
@@ -21,7 +22,7 @@ QSize GroupTipItem::sizeHint() const
 
 void GroupTipItem::SetGroupTip(QString str)
 {
-    ui->label->setText(str);
+    ui->group_tip_label->setText(str);
 }
 
 

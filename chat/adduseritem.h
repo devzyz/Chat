@@ -8,6 +8,10 @@ namespace Ui {
 class AddUserItem;
 }
 
+/**
+ * @brief The AddUserItem class
+ * 添加新用户的Item
+ */
 class AddUserItem : public ListItemBase
 {
     Q_OBJECT

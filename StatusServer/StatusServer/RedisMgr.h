@@ -10,7 +10,7 @@ public:
 	~RedisConfigPool();
 
 	void close();
-	redisContext* GetConnection();
+	redisContext* getConnection();
 	void returnConnection(redisContext* context);
 
 private:
@@ -38,11 +38,12 @@ public:
 	bool HSet(const char* key, const char* hkey, const char* hvalue, size_t hvaluelen);
 	bool HGet(const std::string& key, const std::string& hkey, std::string& value);
 	bool Del(const std::string& key);
+	bool HDel(const std::string& first_key, const std::string& second_key);
 	bool ExistsKey(const std::string& key);
 	void Close();
 protected:
 	RedisMgr();
 
-	std::unique_ptr<RedisConfigPool> _redis_pool;
+	std::unique_ptr<RedisConfigPool> _pool;
 };
 

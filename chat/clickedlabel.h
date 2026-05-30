@@ -18,12 +18,15 @@ public:
     virtual void mouseReleaseEvent(QMouseEvent * Ev) override;
     virtual void enterEvent(QEnterEvent *event) override;
     virtual void leaveEvent(QEvent *event) override;
+    // 初始化图标的状态
     void SetState(QString normal_leave="", QString normal_hover="", QString normal_press="",
                   QString select_leave="", QString select_hover="", QString select_press="");
+    // 获取图标现在的状态
     ClickLabelState GetCurState();
+    // 设置当前的状态
     bool SetCurState(ClickLabelState state);
+    // 重置状态
     void ResetNormalState();
-
 private:
     QString _normal_leave;
     QString _normal_hover;

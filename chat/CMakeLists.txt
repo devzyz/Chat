@@ -44,33 +44,40 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         clickedbtn.h clickedbtn.cpp
         customizeedit.h customizeedit.cpp
         chatuserlist.h chatuserlist.cpp
-        chatuserwidget.h chatuserwidget.cpp chatuserwidget.ui
+        chatuseritem.h chatuseritem.cpp chatuseritem.ui
         listitembase.h listitembase.cpp
         loadingdialog.h loadingdialog.cpp loadingdialog.ui
         chatpage.h chatpage.cpp chatpage.ui
-        chatview.h chatview.cpp
-        chatitembase.h chatitembase.cpp
+
+
         bubbleframe.h bubbleframe.cpp
-        textbubble.h textbubble.cpp
-        picturebubble.h picturebubble.cpp
+
+
         messagetextedit.h messagetextedit.cpp
         statewidget.h statewidget.cpp
         searchlist.h searchlist.cpp
         userdata.h userdata.cpp
         adduseritem.h adduseritem.cpp adduseritem.ui
         findsuccessdialog.h findsuccessdialog.cpp findsuccessdialog.ui
-        applyfriend.h applyfriend.cpp applyfriend.ui
+        applyfrienddialog.h applyfrienddialog.cpp applyfrienddialog.ui
         clickedoncelabel.h clickedoncelabel.cpp
-        friendlabel.h friendlabel.cpp friendlabel.ui
+
         usermgr.h usermgr.cpp
         contactuserlist.h contactuserlist.cpp
         contactuseritem.h contactuseritem.cpp contactuseritem.ui
         grouptipitem.h grouptipitem.cpp grouptipitem.ui
-        chatdetailwidget.h chatdetailwidget.cpp chatdetailwidget.ui
+
         chatbubble.h chatbubble.cpp chatbubble.ui
         textchatbubble.h textchatbubble.cpp
         chatbubble.cpp chatbubble.h chatbubble.ui textchatbubble.cpp textchatbubble.h
         applyfriendpage.h applyfriendpage.cpp applyfriendpage.ui
+        applyfrienditem.h applyfrienditem.cpp applyfrienditem.ui
+        applyfriendlist.h applyfriendlist.cpp
+        findfaildialog.h findfaildialog.cpp findfaildialog.ui
+        authfrienddialog.h authfrienddialog.cpp authfrienddialog.ui
+        chatdetaillist.h chatdetaillist.cpp
+        picturechatbubble.h picturechatbubble.cpp
+        friendinfopage.h friendinfopage.cpp friendinfopage.ui
 
 
 

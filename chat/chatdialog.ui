@@ -260,7 +260,8 @@
    <item>
     <widget class="QStackedWidget" name="stackedWidget">
      <widget class="ChatPage" name="chat_page"/>
-     <widget class="QWidget" name="friend_apply_page"/>
+     <widget class="FriendInfoPage" name="friend_info_page"/>
+     <widget class="ApplyFriendPage" name="apply_friend_page"/>
     </widget>
    </item>
   </layout>
@@ -302,6 +303,18 @@
    <class>ContactUserList</class>
    <extends>QListWidget</extends>
    <header>contactuserlist.h</header>
+  </customwidget>
+  <customwidget>
+   <class>ApplyFriendPage</class>
+   <extends>QWidget</extends>
+   <header>applyfriendpage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>FriendInfoPage</class>
+   <extends>QWidget</extends>
+   <header>friendinfopage.h</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources/>

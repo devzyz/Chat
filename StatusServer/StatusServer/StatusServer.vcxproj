@@ -74,6 +74,9 @@
     <IncludePath>D:\VisualStudio\mysql_connect_c++\mysql-connector-c++-8.3.0-winx64-debug\mysql-connector-c++-8.3.0-winx64\include;D:\VisualStudio\boost\boost_1_90_0;$(IncludePath)</IncludePath>
     <LibraryPath>D:\VisualStudio\mysql_connect_c++\mysql-connector-c++-8.3.0-winx64-debug\mysql-connector-c++-8.3.0-winx64\lib64\vs14;D:\VisualStudio\boost\boost_1_90_0\stage\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgXUseBuiltInApplocalDeps>true</VcpkgXUseBuiltInApplocalDeps>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -130,6 +133,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AsioIOServicePool.cpp" />
+    <ClCompile Include="ChatGrpcClient.cpp" />
     <ClCompile Include="ConfigMgr.cpp" />
     <ClCompile Include="message.grpc.pb.cc" />
     <ClCompile Include="message.pb.cc" />
@@ -142,6 +146,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AsioIOServicePool.h" />
+    <ClInclude Include="ChatGrpcClient.h" />
     <ClInclude Include="ConfigMgr.h" />
     <ClInclude Include="const.h" />
     <ClInclude Include="message.grpc.pb.h" />
@@ -154,6 +159,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="config.ini" />
+    <None Include="message.proto" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

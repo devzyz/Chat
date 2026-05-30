@@ -125,9 +125,9 @@ MysqlDao::MysqlDao() {
 	const auto& host = configmgr["Mysql"]["Host"];
 	const auto& port = configmgr["Mysql"]["Port"];
 	const auto& user = configmgr["Mysql"]["User"];
-	const auto& passwd = configmgr["Mysql"]["Passwd"];
+	const auto& password = configmgr["Mysql"]["Password"];
 	const auto& schema = configmgr["Mysql"]["Schema"];
-	_pool.reset(new MysqlConnectionPool(host + ":" + port, user, passwd, schema, 5));
+	_pool.reset(new MysqlConnectionPool(host + ":" + port, user, password, schema, 5));
 }
 
 MysqlDao::~MysqlDao() {
@@ -225,7 +225,7 @@ bool MysqlDao::UpdatePassword(const std::string& username, const std::string& pa
 
 	try {
 		// 准备查询语句
-		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("UPDATE user SET pwd = ? WHERE name = ?"));
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("UPDATE user SET password = ? WHERE name = ?"));
 
 		// 绑定参数
 		pstmt->setString(1, password);
@@ -264,7 +264,7 @@ bool MysqlDao::CheckPassword(const std::string& email, const std::string& passwo
 
 		// 取到密码
 		while (res->next()) {
-			origin_password = res->getString("pwd");
+			origin_password = res->getString("password");
 			std::cout << "Password : " << origin_password << std::endl;
 			break;
 		}

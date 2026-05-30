@@ -13,6 +13,7 @@ class ClickedBtn : public QPushButton
 public:
     ClickedBtn(QWidget * parent = nullptr);
     ~ClickedBtn();
+    // 初始化按钮的状态设置
     void SetState(QString normal, QString hover, QString press);
 
 protected:

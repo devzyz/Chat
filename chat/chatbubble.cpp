@@ -1,6 +1,5 @@
 #include "chatbubble.h"
 #include "ui_chatbubble.h"
-#include <QPainter>
 #include <QBoxLayout>
 
 ChatBubble::ChatBubble(ChatRole role, QWidget *parent)
@@ -9,24 +8,24 @@ ChatBubble::ChatBubble(ChatRole role, QWidget *parent)
     , _role(role)
 {
     ui->setupUi(this);
-    _chat_widget = ui->bubble_placeholder;
+    _context_widget = nullptr;
 
     QFont font("Microsoft YaHei");
     font.setPointSize(9);
     ui->user_name_label->setFont(font);
-    ui->user_name_label->setFixedHeight(23);
+    ui->user_name_label->setFixedHeight(16);
 
     // 隐藏另一侧的头像，固定另一侧的弹簧
     if (_role == ChatRole::Self) {
         ui->left_head_widget->hide();
         ui->right_spacer->changeSize(10, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
         ui->user_name_label->setAlignment(Qt::AlignRight);
-        ui->user_name_label->setContentsMargins(0, 0, 8, 0);
+        ui->user_name_label->setContentsMargins(0, 0, 8, 0); // 对齐气泡三角的8
     } else {
         ui->right_head_widget->hide();
         ui->left_spacer->changeSize(10, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
         ui->user_name_label->setAlignment(Qt::AlignLeft);
-        ui->user_name_label->setContentsMargins(8, 0, 0, 0);
+        ui->user_name_label->setContentsMargins(8, 0, 0, 0); // 对齐气泡三角的8
     }
 }
 
@@ -43,24 +42,25 @@ ChatBubble::~ChatBubble()
 void ChatBubble::setWidget(QWidget *w)
 {
     // 将原来占位的bubble替换下来，换上自定义的
-    QVBoxLayout *layout = qobject_cast<QVBoxLayout *>(ui->chat_content_widget->layout());
-    int idx = layout->indexOf(_chat_widget);
-    layout->removeWidget(_chat_widget);
-    delete _chat_widget;
-    _chat_widget = w;
-    layout->insertWidget(idx, w);
+    QVBoxLayout *layout = qobject_cast<QVBoxLayout *>(ui->bubble_placeholder->layout());
 
-    ui->chat_content_widget->layout()->invalidate();
-    ui->horizontalLayout->invalidate();
+    // 这两个任意一个为空则返回
+    if (!layout || !w) {
+        return ;
+    }
 
-    // 根据内部的布局得到真实的高度
-    int idealHeight = ui->horizontalLayout->sizeHint().height();
+    // 删除现在layout内部的填充widget
+    if (_context_widget) {
+        layout->removeWidget(_context_widget);
+        _context_widget->deleteLater();
+    }
 
-    // 最小高度限制
-    int minHeight = 45;
+    // 替换为现在的widget
+    _context_widget = w;
+    layout->addWidget(_context_widget);
 
-    // 锁定当前widget的高度
-    this->setFixedHeight(qMax(idealHeight, minHeight));
+    adjustSize();
+    updateGeometry();
 }
 
 /**

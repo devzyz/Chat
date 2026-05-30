@@ -17,31 +17,19 @@ TextChatBubble::TextChatBubble(ChatRole role, const QString &text, const QString
     _text_edit->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     _text_edit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     _text_edit->installEventFilter(this);
-    _text_edit->setMaximumWidth(400); // 最大宽度
     _text_edit->setFrameShape(QFrame::NoFrame);  // 去除边框
-
     // 文本字体
     QFont font("Microsoft YaHei");
     font.setPixelSize(16);
     _text_edit->setFont(font);
+    _text_edit->setStyleSheet("QTextEdit{background: transparent; border: none}");
+
     // 创建交换区
-    QWidget *wrapper = new QWidget();
-    wrapper->setObjectName("text_bubble_wrapper");
-    QVBoxLayout *layout = new QVBoxLayout(wrapper);
-    layout->setContentsMargins(3, 3, 3, 3);
-    layout->setSpacing(0);
-    layout->addWidget(_text_edit);
+    _wrapper = new BubbleFrame(role);
+    _wrapper->setTextWidget(_text_edit);
 
-    // 设置文本的对齐方式
-    if (role == ChatRole::Other) {
-        layout->addWidget(_text_edit, 0, Qt::AlignLeft);
-    } else {
-        layout->addWidget(_text_edit, 0, Qt::AlignRight);
-    }
-
-    setPlainText(text, wrapper);
-    initStyleSheet(wrapper);
-    setWidget(wrapper);
+    setPlainText(text);
+    setWidget(_wrapper);
 }
 
 /**
@@ -50,63 +38,45 @@ TextChatBubble::TextChatBubble(ChatRole role, const QString &text, const QString
  * @param wrapper
  * 将文本信息填充进去，同时设置高度等信息
  */
-void TextChatBubble::setPlainText(const QString &text, QWidget * wrapper)
+void TextChatBubble::setPlainText(const QString &text)
 {
+    // 设置文本的内容
     _text_edit->setPlainText(text);
+    _text_edit->document()->setDocumentMargin(0);
 
-    // 禁用滚动条
-    _text_edit->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    _text_edit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    int TEXT_EDIT_MARGIN = 1;
-    _text_edit->setContentsMargins(TEXT_EDIT_MARGIN, TEXT_EDIT_MARGIN, TEXT_EDIT_MARGIN, TEXT_EDIT_MARGIN);
+    QTextDocument doc;
+    doc.setDefaultFont(_text_edit->font()); // 设置字体信息
+    doc.setDocumentMargin(0);
+    doc.setPlainText(text); // 设置文本内容
 
-    QTextDocument *doc = _text_edit->document();
-    doc->setDocumentMargin(2);
+    QTextOption option;
+    option.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere); // 设置换行模式
+    doc.setDefaultTextOption(option);
 
-    // 气泡最大宽度
-    int MAX_BUBBLE_WIDTH = 400;
-    doc->setTextWidth(MAX_BUBBLE_WIDTH);
+    // 文本区域最大宽度，不包含左右边距和三角
+    // 400为整个气泡的最大宽度
+    // 两个3分别为气泡与文本之间的左右间隔
+    // 8为气泡的宽度
+    int maxTextWidth = 400 - 6 - 6 - 8;
 
-    // 获取设置后，纯文本的的实际尺寸
-    qreal text_width = doc->idealWidth();
-    qreal text_height = doc->size().height();
+    // 自然宽度
+    qreal naturalTextWidth = doc.idealWidth();
 
-    // 得到精确宽高
-    int final_edit_width = qCeil(text_width) + TEXT_EDIT_MARGIN * 2;
-    int final_edit_height = qCeil(text_height) + TEXT_EDIT_MARGIN * 2;
-    // QTextEdit的最终高度
-    _text_edit->setFixedSize(final_edit_width, final_edit_height);
+    // 限制最大宽度
+    qreal finalTextWidth = qMin(naturalTextWidth, qreal(maxTextWidth));
+    doc.setTextWidth(finalTextWidth);
 
-    // 外层layout的margins
-    auto Margins = _chat_widget->layout()->contentsMargins();
-    int margin_width = Margins.left() + Margins.right();
-    int margin_height = Margins.top() + Margins.bottom();
+    // 设置textWidth会自动更新为正确大小
+    QSizeF textSize = doc.size();
 
-    // 外层widget的最终高度
-    int final_widget_width = final_edit_width + margin_width;
-    int final_widget_height = final_edit_height + margin_height;
-    wrapper->setFixedSize(final_widget_width, final_widget_height);
-}
+    int textWidgetWidth = qCeil(textSize.width());
+    int textWidgetHeight = qCeil(textSize.height());
 
-QSize TextChatBubble::sizeHint() const
-{
-    return QSize(width(), height());
-}
+    int bubbleWidth = textWidgetWidth + 4 + 4 + 8;
 
-/**
- * @brief TextChatBubble::initStyleSheet
- * @param wrapper
- * 绘制背景气泡框
- */
-void TextChatBubble::initStyleSheet(QWidget * wrapper)
-{
-    // 文本框本身透明无边框
-    _text_edit->setStyleSheet("QTextEdit{background: transparent; border: none}");
+    int bubbleHeight = qMax(10, textWidgetHeight + 4 + 4);
 
-    // 根据角色，直接给外壳 wrapper 画上颜色和圆角
-    if (_role == ChatRole::Other) {
-        wrapper->setStyleSheet("QWidget#text_bubble_wrapper { background-color: white; border-radius: 5px; }");
-    } else {
-        wrapper->setStyleSheet("QWidget#text_bubble_wrapper { background-color: #9EEA6A; border-radius: 5px; }");
-    }
+    // 设置尺寸大小
+    _text_edit->setFixedSize(textWidgetWidth, textWidgetHeight);
+    _wrapper->setFixedSize(bubbleWidth, bubbleHeight);
 }

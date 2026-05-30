@@ -2,8 +2,12 @@
 #include <QWheelEvent>
 #include <QEvent>
 #include <QScrollBar>
+#include "usermgr.h"
+#include <QTimer>
+#include <QCoreApplication>
 
-ChatUserList::ChatUserList(QWidget *parent) : QListWidget(parent){
+ChatUserList::ChatUserList(QWidget *parent) :
+    QListWidget(parent), _loading_chat(false){
     // 将滚动条关闭
     this->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     this->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -51,8 +55,21 @@ bool ChatUserList::eventFilter(QObject *watched, QEvent *event) {
         if (maxScrollValue - currentValue <= 0) {
             // 滚动到底部，加载新的联系人
             qDebug() << "load more chat user";
+            // 不能无限制的加载，如果已经加载完成了，则不触发加载信号
+            auto isLoadingFinish = UserMgr::GetInstance()->ChatIsLoadFinish();
+            if (isLoadingFinish) {
+                return true;
+            }
+            // 不能加载的太快，通过一个变量加一个定时器来实现控制加载间隔
+            if (_loading_chat) {
+                return true;
+            }
+            _loading_chat = true;
+            QTimer::singleShot(100, [this]() {
+                _loading_chat = false;
+            });
             // 发送信号通知聊天界面加载更多聊天内容
-            emit sig_loading_chat_user();
+            emit sig_loading_chat_list();
         }
 
         return true;
@@ -60,3 +77,4 @@ bool ChatUserList::eventFilter(QObject *watched, QEvent *event) {
 
     return QListWidget::eventFilter(watched, event);
 }
+

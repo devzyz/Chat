@@ -18,16 +18,40 @@ public:
 
     void SetState(QString leave="", QString hover="", QString select="");
 
+    /**
+     * @brief GetCurState
+     * @return
+     * 获取当前StateWidget的状态
+     */
     ClickLabelState GetCurState();
+    /**
+     * @brief ClearState
+     * 刷新状态
+     */
     void ClearState();
 
+    /**
+     * @brief SetSelected
+     * @param bselected
+     * 设置为选中状态
+     */
     void SetSelected(bool bselected);
+    /**
+     * @brief AddRedPoint
+     * 设置红点
+     */
     void AddRedPoint();
+    /**
+     * @brief ShowRedPoint
+     * @param show
+     * 是否展示红点
+     */
     void ShowRedPoint(bool show = true);
 
 protected:
     void paintEvent(QPaintEvent * event) override;
 
+    // 重写的一些鼠标点击释放，移入移出事件
     virtual void mousePressEvent(QMouseEvent * ev) override;
     virtual void mouseReleaseEvent(QMouseEvent * ev) override;
     virtual void enterEvent(QEnterEvent * event) override;

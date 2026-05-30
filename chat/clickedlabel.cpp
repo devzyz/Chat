@@ -1,7 +1,7 @@
 #include "clickedlabel.h"
 
 ClickedLabel::ClickedLabel(QWidget* parent) : QLabel(parent), _curState(ClickLabelState::Normal){
-    // 进入后选中为手
+    // 进入后鼠标选中为手
     this->setCursor(Qt::PointingHandCursor);
 }
 /**
@@ -13,13 +13,11 @@ ClickedLabel::ClickedLabel(QWidget* parent) : QLabel(parent), _curState(ClickLab
 void ClickedLabel::mousePressEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
         if(_curState == ClickLabelState::Normal){
-            // qDebug()<<"clicked , change to select hover: "<< _select_hover;
             _curState = ClickLabelState::Selected;
             setProperty("state",_select_press);
             repolish(this);
             update();
         }else{
-            // qDebug()<<"clicked , change to normal hover: "<< _normal_hover;
             _curState = ClickLabelState::Normal;
             setProperty("state",_normal_press);
             repolish(this);
@@ -32,19 +30,16 @@ void ClickedLabel::mousePressEvent(QMouseEvent *event) {
     QLabel::mousePressEvent(event);
 }
 
+// 点击后的释放事件，只需要转换为对应的hover状态即可
 void ClickedLabel::mouseReleaseEvent(QMouseEvent * event)
 {
     if (event->button() == Qt::LeftButton) {
         if(_curState == ClickLabelState::Normal){
-            // qDebug()<<"clicked , change to select hover: "<< _select_hover;
-            _curState = ClickLabelState::Selected;
-            setProperty("state",_select_hover);
+            setProperty("state",_normal_hover);
             repolish(this);
             update();
         }else{
-            // qDebug()<<"clicked , change to normal hover: "<< _normal_hover;
-            _curState = ClickLabelState::Normal;
-            setProperty("state",_normal_hover);
+            setProperty("state",_select_hover);
             repolish(this);
             update();
         }
@@ -66,12 +61,10 @@ void ClickedLabel::mouseReleaseEvent(QMouseEvent * event)
  */
 void ClickedLabel::enterEvent(QEnterEvent *event) {
     if (_curState == ClickLabelState::Normal) {
-        // qDebug()<<"hover , change to normal : "<< _normal_hover;
         setProperty("state", _normal_hover);
         repolish(this);
         update();
     }else {
-        // qDebug()<<"hover , change to select : "<< _select_hover;
         setProperty("state", _select_hover);
         repolish(this);
         update();
@@ -89,12 +82,10 @@ void ClickedLabel::enterEvent(QEnterEvent *event) {
  */
 void ClickedLabel::leaveEvent(QEvent *event) {
     if (_curState == ClickLabelState::Normal) {
-        // qDebug()<<"leave , change to normal : "<< _normal_leave;
         setProperty("state", _normal_leave);
         repolish(this);
         update();
     }else {
-        // qDebug()<<"leave , change to select : "<< _select_leave;
         setProperty("state", _select_leave);
         repolish(this);
         update();

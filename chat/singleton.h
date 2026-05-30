@@ -5,6 +5,10 @@
 #include <iostream>
 #include <mutex>
 
+/**
+ * @brief The Singleton class
+ * 单例模式
+ */
 template <typename T>
 class Singleton {
 private:

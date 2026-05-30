@@ -109,7 +109,26 @@
        </widget>
       </item>
       <item>
-       <widget class="ChatDetailWidget" name="chat_data_list" native="true"/>
+       <widget class="QWidget" name="split_line_widget" native="true">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>1</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>1</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: rgb(255, 255, 255)</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="ChatDetailList" name="chat_detail_data_list"/>
       </item>
       <item>
        <widget class="QWidget" name="tool_widget" native="true">
@@ -381,10 +400,9 @@
    <header>messagetextedit.h</header>
   </customwidget>
   <customwidget>
-   <class>ChatDetailWidget</class>
-   <extends>QWidget</extends>
-   <header>chatdetailwidget.h</header>
-   <container>1</container>
+   <class>ChatDetailList</class>
+   <extends>QListWidget</extends>
+   <header>chatdetaillist.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

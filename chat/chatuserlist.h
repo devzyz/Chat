@@ -27,7 +27,10 @@ protected:
 
 signals:
     // 发送加载用户更多聊天信息的信号
-    void sig_loading_chat_user();
+    void sig_loading_chat_list();
+
+private:
+    bool _loading_chat;
 };
 
 #endif // CHATUSERLIST_H

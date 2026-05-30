@@ -2,131 +2,137 @@
 #define USERDATA_H
 
 #include <QString>
-class SearchInfo {
-public:
-    SearchInfo(int uid, QString name, QString nick, QString desc, int sex);
+#include <vector>
+#include <QJsonArray>
+#include <memory>
+#include <QJsonObject>
+
+/**
+ * @brief The SearchInfo class
+ * 搜索好友的信息
+ */
+struct SearchInfo {
+    SearchInfo(int uid, QString name, QString description, QString icon, int sex) :
+        _uid(uid), _name(name), _description(description), _sex(sex), _icon(icon) {}
     int _uid;
     QString _name;
-    QString _nick;
-    QString _desc;
+    QString _description;
     QString _icon;
     int _sex;
 };
 
-class AddFriendApply {
-public:
-    AddFriendApply(int from_uid, QString name, QString desc);
-    int _from_uid;
-    QString _name;
-    QString _desc;
-};
-
+/**
+ * @brief The ApplyInfo class
+ * 这是ApplyFriendPage显示的新朋友申请列表的item的信息
+ */
 struct ApplyInfo {
-    ApplyInfo(int uid, QString name, QString desc,
-              QString icon, QString nick, int sex, int status)
-        :_uid(uid),_name(name),_desc(desc),
-        _icon(icon),_nick(nick),_sex(sex),_status(status){}
+    ApplyInfo(int uid, QString name, QString description,
+              QString icon, int sex, int status)
+        :_uid(uid),_name(name),_description(description),
+        _icon(icon),_sex(sex),_status(status){}
 
-    void SetIcon(QString head){
-        _icon = head;
-    }
-    int _uid;
-    QString _name;
-    QString _desc;
-    QString _icon;
-    QString _nick;
-    int _sex;
-    int _status;
+    int _uid; // 用户id
+    QString _name; // 用户名
+    QString _description; // 用户请求描述信息
+    QString _icon; // 头像
+    int _sex; // 性别
+    int _status; // 状态，是否添加
 };
 
+/**
+ * @brief The AuthInfo class
+ * 认证好友的信息
+ */
 struct AuthInfo {
-    AuthInfo(int uid, QString name,
-             QString nick, QString icon, int sex):
-        _uid(uid), _name(name), _nick(nick), _icon(icon),
+    AuthInfo(int uid, QString name, QString description, QString icon, int sex):
+        _uid(uid), _name(name), _description(description), _icon(icon),
         _sex(sex){}
     int _uid;
     QString _name;
-    QString _nick;
+    QString _description;
     QString _icon;
     int _sex;
 };
 
-struct AuthRsp {
-    AuthRsp(int peer_uid, QString peer_name,
-            QString peer_nick, QString peer_icon, int peer_sex)
-        :_uid(peer_uid),_name(peer_name),_nick(peer_nick),
-        _icon(peer_icon),_sex(peer_sex)
-    {}
+// 一条消息
+struct TextChatData {
+    TextChatData (int from_uid, int to_uid, QString msg_id, QString msg_content) :
+        _msg_id(msg_id), _msg_content(msg_content), _from_uid(from_uid), _to_uid(to_uid) {}
 
-    int _uid;
-    QString _name;
-    QString _nick;
-    QString _icon;
-    int _sex;
+    QString _msg_id;
+    QString _msg_content;
+    int _from_uid;
+    int _to_uid;
 };
 
+// 多条消息
+struct TextChatMsg {
+    TextChatMsg(int from_uid, int to_uid, QJsonArray array) :
+        _from_uid(from_uid), _to_uid(to_uid) {
+        // 取出每一条信息，放到vector里面
+        for (auto data : array) {
+            auto obj = data.toObject();
+            auto msg_id = obj["msg_id"].toString();
+            auto msg_content = obj["msg_content"].toString();
+            auto msg_ptr = std::make_shared<TextChatData> (from_uid, to_uid, msg_id, msg_content);
+            _chat_msgs.push_back(msg_ptr);
+        }
+    }
+
+    int _from_uid;
+    int _to_uid;
+    std::vector<std::shared_ptr<TextChatData>> _chat_msgs;
+};
+
+/**
+ * @brief The FriendInfo class
+ * 好友信息，包括好友的基本信息，以及聊天信息
+ */
 struct FriendInfo {
-    FriendInfo(int uid, QString name, QString nick, QString icon,
-               int sex, QString desc, QString back, QString last_msg=""):_uid(uid),
-        _name(name),_nick(nick),_icon(icon),_sex(sex),_desc(desc),
-        _back(back),_last_msg(last_msg){}
+    // 这个是为新的朋友item开放的接口
+    FriendInfo(int uid, QString name, QString icon) : _uid(uid), _name(name), _description(""),
+        _icon(icon), _sex(0), _back_name(""), _last_msg("") {}
 
-    FriendInfo(std::shared_ptr<AuthInfo> auth_info):_uid(auth_info->_uid),
-        _nick(auth_info->_nick),_icon(auth_info->_icon),_name(auth_info->_name),
-        _sex(auth_info->_sex){}
+    FriendInfo(int uid, QString name, QString description,
+               QString icon, QString back_name, int sex, QString last_msg="") :
+        _uid(uid), _name(name), _description(description), _icon(icon), _back_name(back_name),
+        _sex(sex), _last_msg(last_msg){}
 
-    FriendInfo(std::shared_ptr<AuthRsp> auth_rsp):_uid(auth_rsp->_uid),
-        _nick(auth_rsp->_nick),_icon(auth_rsp->_icon),_name(auth_rsp->_name),
-        _sex(auth_rsp->_sex){}
+    FriendInfo(int uid, QString name, QString description,
+               QString icon, int sex, QString last_msg="") :
+        _uid(uid), _name(name), _description(description), _icon(icon), _back_name(name),
+        _sex(sex), _last_msg(last_msg){}
+
+    FriendInfo(std::shared_ptr<AuthInfo> auth_info) : _uid(auth_info->_uid),
+        _name(auth_info->_name), _description(auth_info->_description), _icon(auth_info->_icon),
+        _sex(auth_info->_sex), _back_name(auth_info->_name), _last_msg(""){}
+
+    FriendInfo(std::shared_ptr<SearchInfo> search_info) : _uid(search_info->_uid),
+        _name(search_info->_name), _description(search_info->_description), _icon(search_info->_icon),
+        _sex(search_info->_sex), _back_name(""), _last_msg("") {}
+
+    void AddTextChatMsg(int from_uid, int to_uid, QJsonArray text_array);
 
     int _uid;
     QString _name;
-    QString _nick;
+    QString _description;
     QString _icon;
     int _sex;
-    QString _desc;
-    QString _back;
+    QString _back_name;
     QString _last_msg;
-
+    std::vector<std::shared_ptr<TextChatData>> _chat_msgs;
 };
 
 struct UserInfo {
-    UserInfo(int uid, QString name, QString nick, QString icon, int sex, QString last_msg = ""):
-        _uid(uid),_name(name),_nick(nick),_icon(icon),_sex(sex),_last_msg(last_msg){}
-
-    UserInfo(std::shared_ptr<AuthInfo> auth):
-        _uid(auth->_uid),_name(auth->_name),_nick(auth->_nick),
-        _icon(auth->_icon),_sex(auth->_sex),_last_msg(""){}
-
-    UserInfo(int uid, QString name, QString icon):
-        _uid(uid), _name(name), _icon(icon),_nick(_name),
-        _sex(0),_last_msg(""){
-
-    }
-
-    UserInfo(std::shared_ptr<AuthRsp> auth):
-        _uid(auth->_uid),_name(auth->_name),_nick(auth->_nick),
-        _icon(auth->_icon),_sex(auth->_sex),_last_msg(""){}
-
-    UserInfo(std::shared_ptr<SearchInfo> search_info):
-        _uid(search_info->_uid),_name(search_info->_name),_nick(search_info->_nick),
-        _icon(search_info->_icon),_sex(search_info->_sex),_last_msg(""){
-
-    }
-
-    UserInfo(std::shared_ptr<FriendInfo> friend_info):
-        _uid(friend_info->_uid),_name(friend_info->_name),_nick(friend_info->_nick),
-        _icon(friend_info->_icon),_sex(friend_info->_sex),_last_msg(""){
-
-    }
-
+    UserInfo(int uid, QString name, QString description,
+               QString icon, int sex) :
+        _uid(uid), _name(name), _description(description), _icon(icon),
+        _sex(sex){}
     int _uid;
     QString _name;
-    QString _nick;
+    QString _description;
     QString _icon;
     int _sex;
-    QString _last_msg;
-
 };
 
 #endif // USERDATA_H

@@ -1,7 +1,7 @@
 #include "findsuccessdialog.h"
 #include "ui_findsuccessdialog.h"
 #include <QDir>
-#include "applyfriend.h"
+#include "applyfrienddialog.h"
 
 FindSuccessDialog::FindSuccessDialog(QWidget *parent)
     : QDialog(parent), _parent(parent)
@@ -35,19 +35,28 @@ FindSuccessDialog::~FindSuccessDialog()
     qDebug() << "FindSuccessDialog is destructed";
 }
 
+/**
+ * @brief FindSuccessDialog::SetSearchInfo
+ * @param si
+ * 搜索到的用户信息
+ */
 void FindSuccessDialog::SetSearchInfo(std::shared_ptr<SearchInfo> si)
 {
     ui->name_label->setText(si->_name);
     _si = si;
 }
 
+/**
+ * @brief FindSuccessDialog::on_add_friend_btn_clicked
+ * 点击添加到通讯录后，弹出添加好友申请页面
+ */
 void FindSuccessDialog::on_add_friend_btn_clicked()
 {
     // 添加好友界面弹出 todo...
     this->hide();
     // 弹出添加好友界面
-    auto applyFriend = new ApplyFriend(_parent);
-    // applyFriend->SetSearchInfo(_si);
+    auto applyFriend = new ApplyFriendDialog(_parent);
+    applyFriend->SetSearchInfo(_si);
     applyFriend->setModal(true);
     applyFriend->show();
 }

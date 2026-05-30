@@ -36,6 +36,8 @@ enum ErrorCodes {
 	EmailNotMatch = 1007, // 邮箱不匹配
 	PasswdUpFailed = 1008, // 更新密码失败
 	PasswdInvalid = 1009, // 密码更新失败
+	UidInvalid = 1010, // 用户uid无效
+	TokenInvalid = 1011, // 用户登录的token无效
 };
 
 // 用于实现在defer类析构时，自动执行构造传递的lambda或者function函数
@@ -49,4 +51,8 @@ private:
 	std::function<void()> _func;
 };
 
-#define CODEPREFIX "code_"
+#define USER_IP_PREFIX "uip_"
+#define USER_TOKEN_PREFIX "utoken_"
+#define IP_COUNT_PREFIX "ipcount_"
+#define USER_BASE_INFO "ubaseinfo_" // 用户基本信息的uid前缀，ubaseinfo_1，即1号用户的基本信息
+#define LOGIN_COUNT "logincount" // 用来查询某个chatserver服务器，登录的客户端tcp连接数
