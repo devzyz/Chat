@@ -4,7 +4,8 @@
 #include <QFontMetricsF>
 #include <QVBoxLayout>
 
-TextChatBubble::TextChatBubble(ChatRole role, const QString &text, const QString& userName, const QString& userIcon, QWidget *parent)
+TextChatBubble::TextChatBubble(ChatRole role, const QString &text, const QString& userName,
+                               const QString& userIcon, const ChatStatus& status, QWidget *parent)
     : ChatBubble(role, parent)
 {
     // 设置用户的头像和昵称
@@ -30,6 +31,9 @@ TextChatBubble::TextChatBubble(ChatRole role, const QString &text, const QString
 
     setPlainText(text);
     setWidget(_wrapper);
+
+    // 设置发送状态
+    setChatStatus(status);
 }
 
 /**

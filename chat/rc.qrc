@@ -27,14 +27,20 @@
         <file>res/add_tip.png</file>
         <file>res/right_tip.png</file>
         <file>res/chat_hover.png</file>
-        <file>res/chat_leave.png</file>
         <file>res/chat_select.png</file>
-        <file>res/user_hover.png</file>
-        <file>res/user_leave.png</file>
         <file>res/user_select.png</file>
         <file>res/add_friend.png</file>
         <file>res/chat_label.png</file>
         <file>res/video_label.png</file>
         <file>res/voice_label.png</file>
+        <file>res/settings_hover.png</file>
+        <file>res/settings_leave.png</file>
+        <file>res/settings_select.png</file>
+        <file>res/chat_leave.png</file>
+        <file>res/user_hover.png</file>
+        <file>res/user_leave.png</file>
+        <file>res/status_already_read.png</file>
+        <file>res/status_no_read.png</file>
+        <file>res/status_send_failure.png</file>
     </qresource>
 </RCC>

@@ -23,8 +23,7 @@ void StateWidget::SetState(QString leave, QString hover, QString select)
     _leave = leave;
     _hover = hover;
     _select = select;
-
-    setProperty("state", leave);
+    setProperty("state", _leave);
     repolish(this);
 }
 

@@ -18,8 +18,8 @@ ApplyFriendPage::ApplyFriendPage(QWidget *parent)
     loadApplyList();
 
     // 当本客户端同意认证后，将添加按钮消除
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_add_auth_friend,
-            this, &ApplyFriendPage::slot_tcp_add_auth_friend);
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_add_auth_contact_list,
+            this, &ApplyFriendPage::slot_auth_finish);
 }
 
 ApplyFriendPage::~ApplyFriendPage()
@@ -41,10 +41,10 @@ void ApplyFriendPage::AddNewApply(std::shared_ptr<ApplyInfo> applyInfo)
     apply_item->ShowAddBtn(true);
 
     // 将item添加上apply_list上去
-    _apply_items_map.insert(applyInfo->_uid, apply_item);
+    _apply_items_map.insert(applyInfo->_apply_uid, apply_item);
 
     // 收到审核好友信号
-    connect(apply_item, &ApplyFriendItem::sig_auth_friend, [this](std::shared_ptr<ApplyInfo> apply_info) {
+    connect(apply_item, &ApplyFriendItem::sig_auth_friend, this, [this](std::shared_ptr<ApplyInfo> apply_info) {
         auto *authFriendDialog =  new AuthFriendDialog(this);
         authFriendDialog->setModal(true);
         authFriendDialog->SetApplyInfo(apply_info);
@@ -86,7 +86,7 @@ void ApplyFriendPage::loadApplyList()
         ui->apply_friend_list->setItemWidget(item, apply_item);
 
         // 将item添加上apply_list上去
-        _apply_items_map.insert(apply_list[i]->_uid, apply_item);
+        _apply_items_map.insert(apply_list[i]->_apply_uid, apply_item);
 
         // 给每一个item绑定一个槽函数，收到好友验证好友信号后，弹出验证对话框
         connect(apply_item, &ApplyFriendItem::sig_auth_friend, [this](std::shared_ptr<ApplyInfo> apply_info){
@@ -99,9 +99,9 @@ void ApplyFriendPage::loadApplyList()
 }
 
 // 当本客户端同意认证后，在服务器回包后，将添加按钮，变为已添加
-void ApplyFriendPage::slot_tcp_add_auth_friend(std::shared_ptr<AuthInfo> auth_info)
+void ApplyFriendPage::slot_auth_finish(std::shared_ptr<AuthInfo> auth_info)
 {
-    auto uid = auth_info->_uid;
+    auto uid = auth_info->_auth_uid;
     auto find_iter = _apply_items_map.find(uid);
     if (find_iter == _apply_items_map.end()) {
         return ;

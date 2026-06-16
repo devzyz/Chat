@@ -38,8 +38,10 @@ private:
      * @brief addContactUserList
      * 模拟添加新的已有联系人列表
      */
-    void addContactUserList();
+    void LoadContactUserList();
     bool _loading_contact;
+    // 添加联系人，参数为AuthInfo
+    void AddNewContact(std::shared_ptr<AuthInfo>);
 
 public slots:
     /**
@@ -50,14 +52,9 @@ public slots:
     void slot_item_clicked(QListWidgetItem * item);
     /**
      * @brief slot_tcp_add_auth_friend
-     * 当我点击好友同意后，服务器回包后，添加对方为好友
+     * 添加对方为好友通知
      */
-    void slot_tcp_add_auth_friend(std::shared_ptr<AuthInfo> );
-    /**
-     * @brief slot_tcp_notify_auth_friend
-     * 当对方点击同意后，服务器通知我，添加对方为好友
-     */
-    void slot_tcp_notify_auth_friend(std::shared_ptr<AuthInfo>);
+    void slot_tcp_add_friend(std::shared_ptr<AuthInfo> );
 signals:
     /**
      * @brief sig_loading_contact_user
@@ -73,7 +70,7 @@ signals:
      * @brief sig_switch_friend_info_page
      * 将右侧界面切换为已有联系人具体信息列表
      */
-    void sig_switch_friend_info_page(std::shared_ptr<FriendInfo>);
+    void sig_switch_friend_info_page(std::shared_ptr<UserInfo>);
 
 private:
     // 保存的是新的朋友item

@@ -98,7 +98,7 @@
             <item>
              <widget class="QLabel" name="title_label">
               <property name="text">
-               <string>我勒个豆</string>
+               <string/>
               </property>
              </widget>
             </item>

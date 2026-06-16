@@ -110,7 +110,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="send_apply_user_name_label">
+           <widget class="QLabel" name="send_apply_user_description_label">
             <property name="minimumSize">
              <size>
               <width>0</width>
@@ -129,7 +129,7 @@
            </widget>
           </item>
           <item>
-           <widget class="CustomizeEdit" name="send_apply_user_name_edit">
+           <widget class="CustomizeEdit" name="send_apply_user_description_edit">
             <property name="minimumSize">
              <size>
               <width>0</width>

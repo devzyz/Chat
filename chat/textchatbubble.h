@@ -21,7 +21,7 @@ public:
      * @param userIcon 头像
      * @param parent
      */
-    TextChatBubble(ChatRole role, const QString &text, const QString& userName, const QString& userIcon, QWidget *parent = nullptr);
+    TextChatBubble(ChatRole role, const QString &text, const QString& userName, const QString& userIcon, const ChatStatus& status, QWidget *parent = nullptr);
 
     /**
      * @brief setPlainText
@@ -31,7 +31,6 @@ public:
      */
     void setPlainText(const QString &text);
     QTextEdit *textEdit() const { return _text_edit;}
-
 protected:
 
 private:

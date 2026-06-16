@@ -1,7 +1,7 @@
 #include "usermgr.h"
 #include "global.h"
 
-UserMgr::UserMgr() : _chat_load_count(0), _contact_load_count(0)
+UserMgr::UserMgr() : _contact_load_count(0), _current_load_chat_id(0), _is_load_chat_finish(false)
 {
 
 }
@@ -36,14 +36,18 @@ void UserMgr::AddApply(int uid, std::shared_ptr<ApplyInfo> applyinfo)
 void UserMgr::AddApplyList(QJsonArray list) {
     // 遍历数据，添加数据
     for (const QJsonValue& value : list) {
-        auto uid = value["uid"].toInt();
-        auto name = value["name"].toString();
-        auto description = value["description"].toString();
-        auto icon = value["icon"].toString();
-        auto sex = value["sex"].toInt();
+        auto fromuid = value["fromuid"].toInt();
+        auto applyname = value["applyname"].toString();
+        auto applydescription = value["applydescription"].toString();
+        auto applyicon = value["applyicon"].toString();
+        auto applysex = value["applysex"].toInt();
         auto status = value["status"].toInt();
-        auto apply_info = std::make_shared<ApplyInfo> (uid, name, description, icon, sex, status);
-        _apply_map.insert(uid, apply_info);
+        auto description = value["description"].toString();
+        auto backname = value["backname"].toString();
+        auto touid = value["touid"].toInt();
+        auto apply_info = std::make_shared<ApplyInfo> (fromuid, applyname, applydescription, applyicon, applysex,
+                                                      status, touid, description, backname);
+        _apply_map.insert(fromuid, apply_info);
     }
 }
 
@@ -57,7 +61,8 @@ void UserMgr::AddFriendList(QJsonArray list)
         auto description = value["description"].toString();
         auto icon = value["icon"].toString();
         auto sex = value["sex"].toInt();
-        auto friend_info = std::make_shared<FriendInfo> (uid, name, description, icon, sex);
+        auto backname = value["backname"].toString();
+        auto friend_info = std::make_shared<UserInfo> (uid, name, description, icon, sex, backname);
         _friend_map.insert(uid, friend_info);
         _friend_list.push_back(friend_info);
     }
@@ -84,13 +89,13 @@ bool UserMgr::CheckIsFriendById(int uid)
 // 添加某个好友
 void UserMgr::AddFriend(std::shared_ptr<AuthInfo> auth_info)
 {
-    auto friend_info = std::make_shared<FriendInfo> (auth_info);;
-    _friend_map.insert(auth_info->_uid, friend_info);
+    auto friend_info = std::make_shared<UserInfo> (auth_info);
+    _friend_map.insert(auth_info->_auth_uid, friend_info);
     _friend_list.push_back(friend_info);
 }
 
 // 获取某个好友的信息
-std::shared_ptr<FriendInfo> UserMgr::GetFriendById(int uid)
+std::shared_ptr<UserInfo> UserMgr::GetFriendById(int uid)
 {
     auto iter_find = _friend_map.find(uid);
     if (iter_find == _friend_map.end()) {
@@ -104,32 +109,9 @@ UserMgr::~UserMgr()
 
 }
 
-// 取与一部分用户的聊天记录，因为要满足动态加载，不是一次性加载完所有的
-std::vector<std::shared_ptr<FriendInfo>> UserMgr::GetSomeChatList() {
-    std::vector<std::shared_ptr<FriendInfo>> friend_list;
-    int l = _chat_load_count;
-    int r = _chat_load_count + LOADING_STEP_LENGTH;
-
-    // 已经加载完成
-    if (l >= _friend_list.size()) {
-        return friend_list;
-    }
-
-    // 未加载完成，但本次加载不够LOADING_STEP_LENGTH的长度
-    if (r > _friend_list.size()) {
-        _friend_list = std::vector<std::shared_ptr<FriendInfo>> (_friend_list.begin() + l, _friend_list.end());
-        return _friend_list;
-    }
-
-    // 未加载完成，且剩余足够长
-    friend_list = std::vector<std::shared_ptr<FriendInfo>> (_friend_list.begin() + l, _friend_list.begin() + r);
-
-    return friend_list;
-}
-
 // 取一部分联系人
-std::vector<std::shared_ptr<FriendInfo>> UserMgr::GetSomeContactList() {
-    std::vector<std::shared_ptr<FriendInfo>> friend_list;
+std::vector<std::shared_ptr<UserInfo>> UserMgr::GetSomeContactList() {
+    std::vector<std::shared_ptr<UserInfo>> friend_list;
     int l = _contact_load_count;
     int r = _contact_load_count + LOADING_STEP_LENGTH;
 
@@ -140,44 +122,19 @@ std::vector<std::shared_ptr<FriendInfo>> UserMgr::GetSomeContactList() {
 
     // 未加载完成，但本次加载不够LOADING_STEP_LENGTH的长度
     if (r > _friend_list.size()) {
-        _friend_list = std::vector<std::shared_ptr<FriendInfo>> (_friend_list.begin() + l, _friend_list.end());
-        return _friend_list;
+        friend_list = std::vector<std::shared_ptr<UserInfo>> (_friend_list.begin() + l, _friend_list.end());
+        return friend_list;
     }
 
     // 未加载完成，且剩余足够长
-    friend_list = std::vector<std::shared_ptr<FriendInfo>> (_friend_list.begin() + l, _friend_list.begin() + r);
+    friend_list = std::vector<std::shared_ptr<UserInfo>> (_friend_list.begin() + l, _friend_list.begin() + r);
 
     return friend_list;
-}
-
-// 判断聊天列表是否加载完成
-bool UserMgr::ChatIsLoadFinish() {
-    return _chat_load_count >= _friend_list.size();
 }
 
 // 判断联系人是否加载完成
 bool UserMgr::ContactIsLoadFinish() {
     return _contact_load_count >= _friend_list.size();
-}
-
-// 在添加成功后，更新已添加的数量
-void UserMgr::UpdateChatLoadedCount() {
-    int l = _chat_load_count;
-    int r = _chat_load_count + LOADING_STEP_LENGTH;
-
-    // 已经加载完成
-    if (l >= _friend_list.size()) {
-        return;
-    }
-
-    // 未加载完成，但本次加载不够LOADING_STEP_LENGTH的长度
-    if (r > _friend_list.size()) {
-        _chat_load_count = _friend_list.size();
-        return;
-    }
-
-    // 未加载完成，且剩余足够长
-    _chat_load_count = r;
 }
 
 // 添加成功后，更新已添加的数量
@@ -205,13 +162,56 @@ std::shared_ptr<UserInfo> UserMgr::GetUserInfo()
     return _user_info;
 }
 
-// 添加来自from_uid的数据
-void UserMgr::AddTextChatMsg(int from_uid, int to_uid, QJsonArray text_array)
+int UserMgr::GetCurrentLoadChatId()
 {
-    auto iter_find = _friend_map.find(from_uid);
-    if (iter_find == _friend_map.end()) {
-        return ;
-    }
+    return _current_load_chat_id;
+}
 
-    iter_find.value()->AddTextChatMsg(from_uid, to_uid, text_array);
+void UserMgr::SetCurrentChatId(int current_chat_id)
+{
+    _current_load_chat_id = current_chat_id;
+}
+
+void UserMgr::SetUidToChatId(int other_id, int chat_id)
+{
+    if (_uid_to_chatId.find(other_id) != _uid_to_chatId.end()) {
+        return;
+    }
+    _uid_to_chatId.insert(other_id, chat_id);
+}
+
+int UserMgr::GetUidToChatId(int uid)
+{
+    auto iter_find = _uid_to_chatId.find(uid);
+    if (iter_find == _uid_to_chatId.end()) {
+        return -1;
+    }
+    return iter_find.value();
+}
+
+void UserMgr::SetIsLoadFinish(bool is_load_chat_finish)
+{
+    _is_load_chat_finish = is_load_chat_finish;
+}
+
+bool UserMgr::ChatIsLoadFinish()
+{
+    return _is_load_chat_finish;
+}
+
+void UserMgr::AddChatInfo(int chat_id, std::shared_ptr<ChatInfo> chat_info)
+{
+    if (_chat_map.find(chat_id) != _chat_map.end()) {
+        return;
+    }
+    _chat_map.insert(chat_id, chat_info);
+}
+
+std::shared_ptr<ChatInfo> UserMgr::GetChatInfo(int chat_id)
+{
+    auto find_iter = _chat_map.find(chat_id);
+    if (find_iter == _chat_map.end()) {
+        return nullptr;
+    }
+    return find_iter.value();
 }

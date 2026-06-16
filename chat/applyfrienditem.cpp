@@ -13,7 +13,7 @@ ApplyFriendItem::ApplyFriendItem(QWidget *parent)
     ui->apply_friend_add_friend_btn->hide();
 
     // 当点击添加后，发送认证成功信号
-    connect(ui->apply_friend_add_friend_btn, &ClickedBtn::clicked, [this]() {
+    connect(ui->apply_friend_add_friend_btn, &ClickedBtn::clicked, this, [this]() {
         emit this->sig_auth_friend(_apply_info);
     });
 }
@@ -26,13 +26,15 @@ ApplyFriendItem::ApplyFriendItem(QWidget *parent)
 void ApplyFriendItem::SetInfo(std::shared_ptr<ApplyInfo> apply_info) {
     _apply_info = apply_info;
     // 加载图片
-    QPixmap pixmap(_apply_info->_icon);
+    QPixmap pixmap(_apply_info->_apply_icon);
 
     // 设置图片大小以及自动缩放
     ui->apply_friend_head_label->setPixmap(pixmap.scaled(ui->apply_friend_head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     ui->apply_friend_head_label->setScaledContents(true);
 
-    ui->apply_friend_user_name_label->setText(_apply_info->_name);
+    // 添加昵称
+    ui->apply_friend_user_name_label->setText(_apply_info->_apply_name);
+    // 添加请求信息
     ui->apply_friend_user_chat_label->setText(_apply_info->_description);
 
     // 根据是否已添加来判断是否显示已添加按钮
@@ -65,7 +67,7 @@ QSize ApplyFriendItem::sizeHint() const
 
 int ApplyFriendItem::GetUid()
 {
-    return _apply_info->_uid;
+    return _apply_info->_apply_uid;
 }
 
 ApplyFriendItem::~ApplyFriendItem()

@@ -18,7 +18,7 @@ public:
     void setWidget(QWidget *w);
     void setUserName(const QString &name);
     void setUserIcon(const QPixmap &icon);
-
+    void setChatStatus(ChatStatus);
 protected:
     ChatRole _role;
     QWidget* _context_widget;

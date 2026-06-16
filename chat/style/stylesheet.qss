@@ -106,7 +106,8 @@ LoadingDialog{
    border-image: url(:/res/red_point.png);
 }
 
-/* -------------- 侧边栏 聊天、联系人 样式 -------------- */
+/* -------------- 侧边栏 聊天、联系人、设置 样式 -------------- */
+/* chat */
 #side_chat_label[state='leave']{
    border-image: url(:/res/chat_leave.png);
 }
@@ -119,6 +120,7 @@ LoadingDialog{
    border-image: url(:/res/chat_select.png);
 }
 
+/* user */
 #side_user_label[state='leave']{
    border-image: url(:/res/user_leave.png);
 }
@@ -130,6 +132,20 @@ LoadingDialog{
 #side_user_label[state='select']{
    border-image: url(:/res/user_select.png);
 }
+
+/* setting */
+#side_setting_label[state='leave']{
+   border-image: url(:/res/settings_leave.png);
+}
+
+#side_setting_label[state='hover']{
+   border-image: url(:/res/settings_hover.png);
+}
+
+#side_setting_label[state='select']{
+   border-image: url(:/res/settings_select.png);
+}
+
 
 /* -------------- 聊天列表 Item 样式 -------------- */
 #chat_user_Item {

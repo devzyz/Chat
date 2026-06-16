@@ -40,5 +40,7 @@ private:
 	std::vector<IOService> _ioServices;
 	std::vector<WorkPtr> _works;
 	std::vector<std::thread> _threads;
+
+	std::atomic<bool> _b_stop;
 };
 

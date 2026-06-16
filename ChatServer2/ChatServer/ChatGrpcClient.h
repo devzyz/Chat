@@ -24,6 +24,11 @@ using message::AuthFriendRsp;
 using message::TextChatMsgReq;
 using message::TextChatMsgRsp;
 
+using message::KickUserReq;
+using message::KickUserRsp;
+
+
+
 class ChatConnectionPool {
 public:
 	ChatConnectionPool(const std::string& _host, const std::string& port, std::size_t poolSize);
@@ -50,6 +55,7 @@ public:
 	AddFriendRsp NotifyOtherAddFriend(const std::string& serverIp, const AddFriendReq request);
 	AuthFriendRsp NotifyOtherAuthFriend(const std::string& serverIp, const AuthFriendReq request);
 	TextChatMsgRsp NotifyOtherReceiveTextChatMsg(const std::string& serverIp, const TextChatMsgReq request);
+	KickUserRsp NotifyOtherKickUser(const std::string& serverIp, const KickUserReq request);
 private:
 	ChatGrpcClient();
 	std::unordered_map<std::string, std::unique_ptr<ChatConnectionPool>> _pool;

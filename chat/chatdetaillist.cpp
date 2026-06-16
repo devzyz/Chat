@@ -17,6 +17,9 @@ void ChatDetailList::appendChatItem(QWidget * chatitem)
     // 将这个item放到QListWidget内部，然后将这个item设置成我自定义的widget
     this->addItem(listItem);
     this->setItemWidget(listItem, chatitem);
+
+    // 滚动到底部，使最新项可见
+    this->scrollToBottom();
 }
 
 // 删除当前QListWidget内的所有item

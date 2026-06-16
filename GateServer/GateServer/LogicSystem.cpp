@@ -238,6 +238,7 @@ LogicSystem::LogicSystem() {
 				return true;
 			}
 
+			// 通过grpc找到负载均衡的chatserver
 			auto reply = StatusGrpcClient::GetInstance()->GetChatServer(userInfo.uid);
 			if (reply.error()) {
 				std::cout << " grpc get chat server failed, error is " << reply.error() << std::endl;

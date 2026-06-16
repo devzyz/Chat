@@ -1,0 +1,11 @@
+#打包生成的文件
+build/
+
+# vs生成的缓存
+.vs/
+x64/
+
+# nodejs生成的依赖包
+node_modules/
+
+*.sln

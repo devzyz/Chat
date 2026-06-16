@@ -22,6 +22,13 @@ class MainWindow;
 }
 QT_END_NAMESPACE
 
+enum UIStatus{
+    LOGIN_UI,
+    REGISTER_UI,
+    RESET_UI,
+    CHAT_UI
+};
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -30,16 +37,28 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 public slots:
+    // 登录转注册槽函数
     void slot_login_switch_reg();
+    // 注册转登录槽函数
     void slot_reg_switch_login();
+    // 登录转重置槽函数
     void slot_login_switch_reset();
+    // 重置转登录槽函数
     void slot_reset_switch_login();
+    // 登录转聊天槽函数
     void slot_login_switch_chat();
+    // 服务器通知下线槽函数
+    void slot_notify_offline();
+    // 服务器断开连接
+    void slot_connection_close();
 private:
+    void offlineLogin();
+
     Ui::MainWindow *ui;
     LoginDialog * _login_dlg;
     RegisterDialog * _register_dlg;
     ResetDialog * _reset_dlg;
     ChatDialog * _chat_dlg;
+    UIStatus _ui_status;
 };
 #endif // MAINWINDOW_H

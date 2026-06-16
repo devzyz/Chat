@@ -3,8 +3,9 @@
 #include <boost/uuid.hpp>
 #include <iostream>
 #include "LogicSystem.h"
+#include "RedisMgr.h"
 
-CSession::CSession(boost::asio::io_context& ioc, CServer * server) : 
+CSession::CSession(boost::asio::io_context& ioc, std::shared_ptr<CServer> server) : 
 	_socket(ioc), _server(server), _b_stop(false), _b_head_parse(false) {
 	// 通过雪花算法，为每个session连接生成一个唯一的uuid，方便由server管理会话
 	boost::uuids::uuid a_uuid = boost::uuids::random_generator()();
@@ -39,12 +40,22 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 
 	asyncReadFull(head_total_len, [self, this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 		try {
+			// 如果是正常的可交互的，肯定不会走到这里，走到这里说明是有异常，例如客户端主动断开连接
 			if (ec) {
 				std::cout << "handle read failed, error is " << ec.what() << std::endl;
 				Close();
-				_server->ClearSession(_session_id);
+				// 出错后的处理
+				DealExceptionSession();
+
 				return;
 			}
+
+			// 判断连接是否有效
+			if (!_server->CheckSessionValid(_session_id)) {
+				Close();
+				return;
+			}
+
 			_recv_head_node->Clear();
 			memcpy(_recv_head_node->_data, _data, bytes_transferred);
 
@@ -75,6 +86,8 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 
 			_recv_msg_node = std::make_shared<RecvNode>(msg_len, msg_id);
 			AsyncReadBody(msg_len);
+
+			UpdateHeartBeat();
 		}
 		catch (std::exception& e) {
 			std::cout << "Exception : " << e.what();
@@ -133,11 +146,14 @@ void CSession::AsyncReadBody(std::size_t body_total_len) {
 
 	asyncReadFull(body_total_len, [self, this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 		try {
-			// 出现错误
+			// 出现错误，断开服务器的链接
+			// 因为服务器踢人逻辑中，都是通过给客户端发送一个信号，由客户端断开链接
+			// 因此当接受到错误信息后，代表此时客户端已经断开链接了，此时要清理到对应的session
 			if (ec) {
-				std::cout << "" << std::endl;
+				std::cout << "handler read failed, error is "<< ec.what() << std::endl;
 				Close();
-				_server->ClearSession(_session_id);
+
+				DealExceptionSession();
 				return;
 			}
 
@@ -150,6 +166,8 @@ void CSession::AsyncReadBody(std::size_t body_total_len) {
 			LogicSystem::GetInstance()->PostMsgToQue(std::make_shared<LogicNode>(shared_from_this(), _recv_msg_node));
 			// 继续接收完整的头部
 			AsyncReadHead(HEAD_TOTAL_LEN);
+
+			UpdateHeartBeat();
 		}
 		catch (std::exception& e) {
 			std::cout << "Exception : " << e.what() << std::endl;
@@ -204,7 +222,8 @@ void CSession::HandleWrite(const boost::system::error_code& ec, std::shared_ptr<
 		}
 		else {
 			Close();
-			_server->ClearSession(_session_id);
+		
+			DealExceptionSession();
 			return;
 		}
 	}
@@ -218,6 +237,10 @@ void CSession::Send(const std::string& msg, short msg_id) {
 }
 
 void CSession::Close() {
+	if (_b_stop) {
+		return;
+	}
+	std::lock_guard<std::mutex> lock(_session_mutex);
 	_socket.close();
 	_b_stop = true;
 }
@@ -233,6 +256,60 @@ void CSession::SetUserId(int uid) {
 
 int CSession::GetUserId() {
 	return _user_uid;
+}
+
+
+// 检测与当前session连接的客户端的心跳是否超时，心跳超时返回ture，否则返回false
+bool CSession::CheckHeartBeatAccurate(std::time_t& now) {
+	// 检测一下当前时间与上一次心跳时间之间的差值
+	double dlt = std::difftime(now, _last_heart_beat);
+	// 如果心跳间隔大于规定的心跳时间
+	if (dlt > HEARTBEAT_TIME_INTERVAL) {
+		return true;
+	}
+	return false;
+}
+
+// 更新当前的心跳时间
+void CSession::UpdateHeartBeat() {
+	std::time_t now = time(nullptr);
+	_last_heart_beat = now;
+}
+
+// 清除redis中当前session的连接信息
+void CSession::DealExceptionSession() {
+	// 添加分布式锁，清除redis中保存的session,ipserver信息等
+	auto uid_str = std::to_string(_user_uid);
+	auto lock_key = LOCK_PREFIX + uid_str;
+	// 获取到对uid的锁
+	auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, LOCK_ACQUIRE_TIME_OUT);
+	Defer defer([this, identifier, lock_key]() {
+		_server->ClearSession(_session_id); // 清除server中session连接
+		RedisMgr::GetInstance()->releaseLock(lock_key, identifier); // 释放锁
+		});
+
+	// 没有获得锁
+	if (identifier == "") {
+		return;
+	}
+
+	// 去redis中查看当前的uid对应的session_id是不是本session的，如果是，则清空redis,否则代表已被其他链接更新了，则不做其他处理
+	std::string redis_session_id_value = "";
+	auto redis_session_id_key = USER_SESSION_KEY + uid_str;
+	auto b_success = RedisMgr::GetInstance()->Get(redis_session_id_key, redis_session_id_value);
+	// 出现错误
+	if (!b_success) {
+		return;
+	}
+
+	// 如果不相同，代表已经再次登录了，则直接返回
+	if (redis_session_id_value != _session_id) {
+		return;
+	}
+
+	// 走到这里代表，当前session要断开链接，并且没有再次登录
+	RedisMgr::GetInstance()->Del(redis_session_id_key); // 清除session信息
+	RedisMgr::GetInstance()->Del(USER_IP_PREFIX + uid_str); // 清除ip信息
 }
 
 LogicNode::LogicNode(std::shared_ptr<CSession> session, std::shared_ptr<RecvNode> recvnode) 

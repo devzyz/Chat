@@ -7,6 +7,7 @@
 #include "usermgr.h"
 #include <QJsonDocument>
 #include "tcpmgr.h"
+#include "global.h"
 
 ChatPage::ChatPage(QWidget *parent)
     : QWidget(parent)
@@ -28,37 +29,106 @@ ChatPage::~ChatPage()
     delete ui;
 }
 
-void ChatPage::SetChatInfo(std::shared_ptr<FriendInfo> friend_info)
+void ChatPage::SetChatInfo(std::shared_ptr<ChatInfo> chat_info)
 {
-    _chat_info = friend_info;
-    ui->title_label->setText(_chat_info->_name);
+    _chat_info = chat_info;
+    _cache_chat_msg.clear();
 
-    ui->chat_detail_data_list->removeAllItem();
-    for (auto & msg : _chat_info->_chat_msgs) {
-        AppendChatMsg(msg);
+    // 私聊
+    if (chat_info->GetChatType() == ChatType::PRIVATE) {
+        auto info = UserMgr::GetInstance()->GetFriendById(chat_info->GetUid());
+
+        if (info == nullptr) {
+            return;
+        }
+
+        ui->title_label->setText(info->_name);
+        // 清空显示列表
+        ui->chat_detail_data_list->removeAllItem();
+
+        // 已经回复的数据
+        auto chat_msgs = chat_info->GetChatMsgs();
+        for (auto & msg : chat_msgs) {
+            AppendChatMsg(msg);
+        }
+
+        // 将缓存数据也刷新上去
+        auto chat_cache_msgs = chat_info->GetCacheChatMsgs();
+        for (auto &msg : chat_cache_msgs) {
+            AppendChatMsg(msg);
+        }
+    }else {
+        // 群聊 todo...
     }
 }
 
 // 往聊天记录显示列表里面添加数据
-void ChatPage::AppendChatMsg(std::shared_ptr<TextChatData> msg_data)
+void ChatPage::AppendChatMsg(std::shared_ptr<ChatDataBase> msg_data)
 {
     auto self_info = UserMgr::GetInstance()->GetUserInfo();
     ChatRole role;
-    if (msg_data->_from_uid == self_info->_uid) {
-        role = ChatRole::Self;
 
-        QWidget * pBubble = nullptr;
-        pBubble = new TextChatBubble(role, msg_data->_msg_content, self_info->_name, self_info->_icon);
-        ui->chat_detail_data_list->appendChatItem(pBubble);
-    }else {
-        role = ChatRole::Other;
+    // 文本消息
+    if (msg_data->GetChatMsgType() == ChatMessageType::TEXT_TYPE) {
+        if (msg_data->GetSendId() == self_info->_uid) {
+            role = ChatRole::Self;
 
-        if (_chat_info == nullptr) {
-            return;
+            QWidget * pBubble = nullptr;
+            pBubble = new TextChatBubble(role, msg_data->GetContent(), self_info->_name, self_info->_icon, msg_data->GetStatus());
+            if (msg_data->GetStatus() == ChatStatus::STATUS_NO_READ) {
+                _cache_chat_msg.insert(msg_data->GetCacheMsgId(), pBubble);
+            }
+
+            ui->chat_detail_data_list->appendChatItem(pBubble);
+        }else {
+            role = ChatRole::Other;
+
+            // 要查取对方的头像
+            if (_chat_info == nullptr) {
+                return;
+            }
+
+            auto chat_info = UserMgr::GetInstance()->GetFriendById(_chat_info->GetUid());
+
+            QWidget * pBubble = nullptr;
+            pBubble = new TextChatBubble(role, msg_data->GetContent(), chat_info->_name,
+                                         chat_info->_icon, ChatStatus::STATUS_EMPTY);
+            ui->chat_detail_data_list->appendChatItem(pBubble);
         }
-        QWidget * pBubble = nullptr;
-        pBubble = new TextChatBubble(role, msg_data->_msg_content, _chat_info->_name, _chat_info->_icon);
-        ui->chat_detail_data_list->appendChatItem(pBubble);
+
+        return ;
+    }
+
+    // 图片消息
+    if (msg_data->GetChatMsgType() == ChatMessageType::IMAGE_TYPE) {
+
+    }
+
+    // 文件消息
+    if (msg_data->GetChatMsgType() == ChatMessageType::FILE_TYPE) {
+
+    }
+}
+
+// 更新已读状态
+void ChatPage::UpdateChatUnreadStatus(std::vector<QString>& uuid_set)
+{
+    for (const auto &uuid : uuid_set) {
+        auto iter_find = _cache_chat_msg.find(uuid);
+        if (iter_find == _cache_chat_msg.end()) {
+            continue;
+        }
+
+        auto w = iter_find.value();
+        if (w == nullptr) {
+            continue;
+        }
+
+        TextChatBubble * text_chat_bubble = qobject_cast<TextChatBubble*> (w);
+        if (text_chat_bubble == nullptr) {
+            continue;
+        }
+        text_chat_bubble->setChatStatus(ChatStatus::STATUS_READ_ALREADY);
     }
 }
 
@@ -115,7 +185,7 @@ void ChatPage::on_send_btn_clicked()
         QWidget * pBubble = nullptr;
         if (type == "text") {
             // 这里是绘制到本地界面上
-            pBubble = new TextChatBubble(role, msgList[i].content, userName, userIcon);
+            pBubble = new TextChatBubble(role, msgList[i].content, userName, userIcon, ChatStatus::STATUS_NO_READ);
 
             // 为每个消息生成唯一的id
             QUuid uuid = QUuid::createUuid();
@@ -124,8 +194,9 @@ void ChatPage::on_send_btn_clicked()
             // 足够长了，则打包一起发送
             if (text_length + msgList[i].content.length() > 1024) {
                 textObj["from_uid"] = self_info->_uid;
-                textObj["to_uid"] = _chat_info->_uid;
+                textObj["to_uid"] = _chat_info->GetUid();
                 textObj["text_array"] = textArray;
+                textObj["chat_id"] = _chat_info->GetChatId();
                 QJsonDocument doc(textObj);
                 QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
                 // 将整个包发送
@@ -143,14 +214,17 @@ void ChatPage::on_send_btn_clicked()
             QJsonObject obj;
             QByteArray utf8Message = msgList[i].content.toUtf8();
             obj["msg_content"] = QString::fromUtf8(utf8Message);
-            obj["msg_id"] = uuid_string;
+            obj["msg_uuid"] = uuid_string;
             textArray.append(obj);
 
-            // 然后将发送的聊天记录保存到本地
-            auto text_msg = std::make_shared<TextChatData> (self_info->_uid, _chat_info->_uid,
-                                                           uuid_string, obj["msg_content"].toString());
-            // 发出信号，添加聊天记录到本地
-            emit sig_append_send_text_chat_msg(text_msg);
+            // 将发送的聊天记录保存到本地
+            auto text_msg = std::make_shared<TextChatData> (uuid_string, _chat_info->GetChatId(), _chat_info->GetChatType(),
+                                                           ChatMessageType::TEXT_TYPE, obj["msg_content"].toString(),
+                                                           self_info->_uid, QTime::currentTime());
+            // 将信息缓存到本地cache中
+            _cache_chat_msg.insert(uuid_string, pBubble);
+            // 发出信号，添加聊天记录缓存到本地
+            emit sig_append_send_text_cache_msg(uuid_string, text_msg);
         }else if (type == "image") {
             // todo... 发送图片
             pBubble = new PictureChatBubble(role, QPixmap(msgList[i].content), userName, userIcon);
@@ -169,7 +243,8 @@ void ChatPage::on_send_btn_clicked()
         //发送给服务器
         textObj["text_array"] = textArray;
         textObj["from_uid"] = self_info->_uid;
-        textObj["to_uid"] = _chat_info->_uid;
+        textObj["to_uid"] = _chat_info->GetUid();
+        textObj["chat_id"] = _chat_info->GetChatId();
         QJsonDocument doc(textObj);
         QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
         //发送tcp请求

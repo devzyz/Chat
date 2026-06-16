@@ -1,12 +1,13 @@
 #include "RedisMgr.h"
 #include "ConfigMgr.h"
 #include "Const.h"
+#include "DistLock.h"
 
 RedisConnectionPool::RedisConnectionPool(const std::string& host, const std::string& port, const std::string& password, int poolSize)
-	: _host(host), _port(port), _password(password), _pool_size(poolSize), _b_stop(false) {
+	: _host(host), _port(port), _password(password), _pool_size(poolSize), _b_stop(false), _fail_count(0) {
 	try {
 		for (int i = 0; i < _pool_size; i++) {
-			auto* context = redisConnect(host.c_str(), atoi(port.c_str()));
+			auto* context = redisConnect(_host.c_str(), atoi(_port.c_str()));
 
 			// 连接失败
 			if (context == nullptr || context->err != 0) {
@@ -16,10 +17,11 @@ RedisConnectionPool::RedisConnectionPool(const std::string& host, const std::str
 				return;
 			}
 
-			auto reply = (redisReply*)redisCommand(context, "AUTH %s", password.c_str());
+			auto reply = (redisReply*)redisCommand(context, "AUTH %s", _password.c_str());
 			if (reply->type == REDIS_REPLY_ERROR) {
 				std::cout << "认证失败" << std::endl; // 日志todo...
 				freeReplyObject(reply);
+				redisFree(context);
 				continue;
 			}
 
@@ -28,6 +30,20 @@ RedisConnectionPool::RedisConnectionPool(const std::string& host, const std::str
 			freeReplyObject(reply);
 			_que.push(context);
 		}
+
+		// 进行心跳
+		_check_thread = std::thread([this]() {
+			int count = 0;
+			while (!_b_stop) {
+				if (count >= 60) {
+					CheckConnection();
+					count = 0;
+					continue;
+				}
+				std::this_thread::sleep_for(std::chrono::seconds(1));
+				count++;
+			}
+			});
 	}
 	catch (std::exception& e) {
 		std::cout << "create RedisConnectionPool is failure, error is " << e.what() << std::endl; // 日志todo...
@@ -69,8 +85,120 @@ void RedisConnectionPool::returnConnection(redisContext* connection) {
 }
 
 void RedisConnectionPool::close() {
+	if (_b_stop) {
+		return;
+	}
 	_b_stop = true;
 	_cond.notify_all();
+	_check_thread.join();
+}
+
+// 心跳保活
+void RedisConnectionPool::CheckConnection() {
+	std::size_t target_count;
+	// 加锁获取到需要心跳的数量
+	{
+		std::lock_guard<std::mutex> lock(_que_mutex);
+		target_count = _que.size();
+	}
+
+	// 如果还需要保活的数量不为零，并且需要保活
+	while (target_count > 0 && !_b_stop) {
+		redisContext* context = nullptr;
+		// 取出一个连接
+		{
+			std::lock_guard<std::mutex> lock(_que_mutex);
+			// 如果为空，则说明当前时间间隔内，心跳已经完成
+			if (_que.empty()) {
+				break;
+			}
+
+			context = _que.front();
+			_que.pop();
+		}
+
+		// 开始进行心跳
+		redisReply* reply = nullptr;
+		try {
+			// 执行心跳
+			reply = (redisReply*)redisCommand(context, "PING");
+			
+			// 底层i/o协议有没有问题
+			if (context->err) {
+				std::cout << "Connection error : " << context->err << std::endl;
+				if (reply) {
+					freeReplyObject(reply);
+				}
+				redisFree(context);
+				_fail_count++;
+				continue;
+			}
+
+			// redis自身返回是不是error
+			if (!reply || reply->type == REDIS_REPLY_ERROR) {
+				std::cout << "reply is null,  error : " << context->err << std::endl;
+				if (reply) {
+					freeReplyObject(reply);
+				}
+				redisFree(context);
+				_fail_count++;
+				continue;
+			}
+
+			// 没问题，放回连接池
+			freeReplyObject(reply);
+			returnConnection(context);
+		}
+		catch (std::exception& e) {
+			// 如果失败，则将失败数量加一，等待后面重连
+			std::cout << "redis heart beat error : " << e.what() << std::endl;
+			if (reply) {
+				freeReplyObject(reply);
+			}
+			redisFree(context);
+			_fail_count++;
+		}
+	}
+	
+	int retry = 0;
+	while (_fail_count > 0 && retry < REDIS_MAX_RETRIES) {
+		bool success = reconnection();
+		if (success) {
+			_fail_count--;
+		}
+		else {
+			retry++;
+		}
+	}
+}
+
+bool RedisConnectionPool::reconnection() {
+	auto* context = redisConnect(_host.c_str(), atoi(_port.c_str()));
+
+	// 连接失败
+	if (context == nullptr || context->err != 0) {
+		if (context != nullptr) {
+			redisFree(context);
+		}
+		return false;
+	}
+
+	auto reply = (redisReply*)redisCommand(context, "AUTH %s", _password.c_str());
+	if (reply->type == REDIS_REPLY_ERROR) {
+		std::cout << "认证失败" << std::endl; // 日志todo...
+		freeReplyObject(reply);
+		redisFree(context);
+		return false;
+	}
+
+	// 认证成功
+	std::cout << "认证成功" << std::endl; // 日志todo...
+	freeReplyObject(reply);
+	{
+		std::lock_guard<std::mutex> lock(_que_mutex);
+		_que.push(context);
+	}
+	return true;
 }
 
 RedisMgr::RedisMgr() {
@@ -334,6 +462,40 @@ bool RedisMgr::Del(const std::string& key) {
 	std::cout << "Execut command [ Del " << key << " ] success ! " << std::endl; // 日志todo...
 
 	return true;
+}
+
+// 如果加锁成功，则返回一个锁的唯一标识
+std::string RedisMgr::acquireLock(const std::string& lockName, int lockTimeout, int acquireTimeout) {
+	auto connection = _pool->getConnection();
+
+	if (connection == nullptr) {
+		return "";
+	}
+
+	Defer defer([this, connection]() {
+		_pool->returnConnection(connection);
+		});
+
+	return DistLock::GetInstance()->acquireLock(connection, lockName, lockTimeout, acquireTimeout);
+}
+
+// 如果解锁成功，则返回true
+bool RedisMgr::releaseLock(const std::string& lockName, const std::string& identifier) {
+	if (identifier.empty()) {
+		return true;
+	}
+
+	auto connection = _pool->getConnection();
+
+	if (connection == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, connection]() {
+		_pool->returnConnection(connection);
+		});
+
+	return DistLock::GetInstance()->releaseLock(connection, lockName, identifier);
 }
 
 /**

@@ -29,7 +29,7 @@ enum ReqId {
     ID_REG_USER = 1002, // 注册用户
     ID_RESET_PWD = 1003, // 重置密码
     ID_LOGIN_UESR = 1004, // 用户登录
-    ID_CHAT_LOGIN = 1005, // 登录聊天服务器
+    ID_CHAT_LOGIN_REQ = 1005, // 登录聊天服务器
     ID_CHAT_LOGIN_RSP = 1006, // 登录聊天服务器回包
     ID_SEARCH_USER_REQ = 1007, // 用户搜索请求
     ID_SEARCH_USER_RSP = 1008, // 用户搜索请求回包
@@ -42,6 +42,15 @@ enum ReqId {
     ID_TEXT_CHAT_MSG_REQ = 1016, // 发送文本聊天数据请求
     ID_TEXT_CHAT_MSG_RSP = 1017, // 发送文本聊天数据请求回包
     ID_NOTIFY_CHAT_MSG_REQ = 1018, // 通知接收文本聊天数据
+    ID_NOTIFY_OFF_LINE_REQ = 1019, // 服务器通知客户端离线
+    ID_HEART_BEAT_REQ = 1020, // 客户端心跳请求
+    ID_HEART_BEAT_RSP = 1021, // 客户端心跳请求回包
+    ID_CREATE_PRIVATE_CHAT_REQ = 1023, // 创建私聊请求
+    ID_CREATE_PRIVATE_CHAT_RSP = 1024, // 创建私聊请求回包
+    ID_LOAD_CHAT_LIST_REQ = 1025, // 查询部分的聊天列表请求
+    ID_LOAD_CHAT_LIST_RSP = 1026, // 查询部分的聊天列表请求回包
+    ID_LOAD_CHAT_MESSAGE_REQ = 1027, // 增量拉取部分聊天数据
+    ID_LOAD_CHAT_MESSAGE_RSP = 1028, // 增量拉取部分聊天数据回包
 };
 
 enum Modules {
@@ -113,5 +122,26 @@ struct MsgInfo {
 };
 
 const int LOADING_STEP_LENGTH = 13;
+
+// 发送的聊天信息的状态
+enum ChatStatus {
+    STATUS_EMPTY = -1, // 无需设置
+    STATUS_NO_READ = 0, // 未读
+    STATUS_SEND_FAILURE = 1, // 发送失败
+    STATUS_READ_ALREADY = 2, // 已读
+};
+
+// 会话的类型
+enum ChatType {
+    PRIVATE = 0, // 私聊类型
+    GROUP = 1, // 群聊类型
+};
+
+// 消息的类型
+enum ChatMessageType {
+    TEXT_TYPE = 0, // 文本消息
+    IMAGE_TYPE = 1, // 图片消息
+    FILE_TYPE = 2, // 文件消息
+};
 
 #endif // GLOBAL_H

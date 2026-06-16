@@ -15,7 +15,7 @@ class CServer;
 class CSession : public std::enable_shared_from_this<CSession>
 {
 public:
-	CSession(boost::asio::io_context& ioc, CServer * server);
+	CSession(boost::asio::io_context& ioc, std::shared_ptr<CServer> server);
 	~CSession();
 
 	boost::asio::ip::tcp::socket& GetSocket();
@@ -41,6 +41,16 @@ public:
 	void Close();
 	void Send(const char* msg, short msg_id, short msg_len);
 	void Send(const std::string& msg, short msg_id);
+	// 检测与当前session连接的客户端的心跳是否正确,正确返回true,否则返回false
+	bool CheckHeartBeatAccurate(std::time_t& now);
+	// 更新当前的心跳时间
+	void UpdateHeartBeat();
+	/**
+	 * @brief
+	 * 处理异常的session链接，因为服务器踢人是通过通知客户端，由客户端断开链接的，当出现异常的session链接后
+	 * 可能是服务器踢人导致的，或者是出现了异常，不管哪种情况，都需要删除其session链接
+	 */
+	void DealExceptionSession();
 private:
 	/**
 	 * @brief 
@@ -71,7 +81,6 @@ private:
 	 */
 	void asyncReadLen(std::size_t read_len, std::size_t total_len,
 		std::function<void(const boost::system::error_code& ec, std::size_t bytestransferred)> handler);
-
 	/**
 	 * @brief 
 	 * @param ec 
@@ -81,7 +90,7 @@ private:
 	void HandleWrite(const boost::system::error_code& ec, std::shared_ptr<CSession> self);
 
 	boost::asio::ip::tcp::socket _socket;
-	CServer* _server;
+	std::shared_ptr<CServer> _server;
 	// 当前session的标识id
 	std::string _session_id;
 	char _data[MAX_LENGTH];
@@ -102,6 +111,12 @@ private:
 
 	// 用于保存当前session连接的哪一个tcp客户端uid
 	int _user_uid;
+
+	// 上次接受数据的时间，包括正常发送的数据以及心跳包
+	std::atomic<std::time_t> _last_heart_beat;
+
+	// 访问session的锁
+	std::mutex _session_mutex;
 };
 
 class LogicNode {

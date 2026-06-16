@@ -36,7 +36,7 @@ public:
      */
     void SetInfo(int uid, QString name, QString icon);
     // 设置当前item的信息
-    void SetInfo(std::shared_ptr<FriendInfo>);
+    void SetInfo(std::shared_ptr<UserInfo>);
     /**
      * @brief ShowRedPoint
      * @param show
@@ -44,12 +44,12 @@ public:
      */
     void ShowRedPoint(bool show = false);
     // 获取当前item的信息
-    std::shared_ptr<FriendInfo> GetFriendInfo();
+    std::shared_ptr<UserInfo> GetFriendInfo();
 
 private:
     Ui::ContactUserItem *ui;
     // 当前item保存的用户信息
-    std::shared_ptr<FriendInfo> _friend_info;
+    std::shared_ptr<UserInfo> _friend_info;
 };
 
 #endif // CONTACTUSERITEM_H

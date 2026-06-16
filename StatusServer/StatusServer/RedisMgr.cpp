@@ -1,5 +1,6 @@
 #include "RedisMgr.h"
 #include "ConfigMgr.h"
+#include "DistLock.h"
 
 RedisConfigPool::RedisConfigPool(size_t poolsize, const char* host, int port, const char* pwd) :
 	_poolSize(poolsize), _host(host), _port(port), _b_stop(false) {
@@ -510,4 +511,38 @@ bool RedisMgr::Del(const std::string& key) {
 	std::cout << "Execut command [ Del " << key << " ] success ! " << std::endl; // 日志todo...
 
 	return true;
+}
+
+// 如果加锁成功，则返回一个锁的唯一标识
+std::string RedisMgr::acquireLock(const std::string& lockName, int lockTimeout, int acquireTimeout) {
+	auto connection = _pool->getConnection();
+
+	if (connection == nullptr) {
+		return "";
+	}
+
+	Defer defer([this, connection]() {
+		_pool->returnConnection(connection);
+		});
+
+	return DistLock::GetInstance()->acquireLock(connection, lockName, lockTimeout, acquireTimeout);
+}
+
+// 如果解锁成功，则返回true
+bool RedisMgr::releaseLock(const std::string& lockName, const std::string& identifier) {
+	if (identifier.empty()) {
+		return true;
+	}
+
+	auto connection = _pool->getConnection();
+
+	if (connection == nullptr) {
+		return false;
+	}
+
+	Defer defer([this, connection]() {
+		_pool->returnConnection(connection);
+		});
+
+	return DistLock::GetInstance()->releaseLock(connection, lockName, identifier);
 }

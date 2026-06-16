@@ -6,10 +6,15 @@
 #include "MysqlMgr.h"
 #include "RedisMgr.h"
 #include <json/reader.h>
+#include "CServer.h"
 
-ChatServiceImpl::ChatServiceImpl()
+ChatServiceImpl::ChatServiceImpl() : _p_server(nullptr)
 {
 
+}
+
+void ChatServiceImpl::SetServer(std::shared_ptr<CServer> pserver) {
+	_p_server = pserver;
 }
 
 // 别的服务器通知本服务器进行好友申请信息
@@ -22,6 +27,12 @@ Status ChatServiceImpl::NotifyOtherAddFriend(ServerContext* context, const AddFr
 	response->set_error(ErrorCodes::Success);
 	response->set_applyuid(request->applyuid());
 	response->set_touid(request->touid());
+	response->set_applyname(request->applyname());
+	response->set_applydescription(request->applydescription());
+	response->set_applysex(request->applysex());
+	response->set_applyicon(request->applyicon());
+	response->set_description(request->description());
+	response->set_backname(request->backname());
 
 	// 用户会话连接已经断开，用户已下线
 	if (session == nullptr) {
@@ -31,11 +42,15 @@ Status ChatServiceImpl::NotifyOtherAddFriend(ServerContext* context, const AddFr
 	// 在内存中，则直接发送通知
 	Json::Value return_value;
 	return_value["error"] = ErrorCodes::Success;
-	return_value["applyuid"] = request->applyuid();
+	// 这里grpc传的是applyuid,对应的其实就是fromuid
+	return_value["fromuid"] = request->applyuid();
 	return_value["applyname"] = request->applyname();
 	return_value["applydescription"] = request->applydescription();
 	return_value["applyicon"] = request->applyicon();
 	return_value["applysex"] = request->applysex();
+	return_value["touid"] = request->touid();
+	return_value["description"] = request->description();
+	return_value["backname"] = request->backname();
 
 	session->Send(return_value.toStyledString(), MSG_NOTIFY_ADD_FRIEND_REQ);
 
@@ -46,8 +61,11 @@ Status ChatServiceImpl::NotifyOtherAddFriend(ServerContext* context, const AddFr
 Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const AuthFriendReq* request, AuthFriendRsp* response) {
 	std::cout << "NotifyOtherAuthFriend" << std::endl;
 	// 查看是否在本服务器，因为有可能已经离线了
-	auto touid = request->touid();
-	auto session = UserMgr::GetInstance()->GetSession(touid);
+	auto applyuid = request->applyuid();
+	auto authuid = request->authuid();
+	auto chatid = request->chatid();
+	// 由认证人发送到申请人
+	auto session = UserMgr::GetInstance()->GetSession(applyuid);
 
 	// 设置返回值
 	response->set_error(ErrorCodes::Success);
@@ -57,26 +75,59 @@ Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const Auth
 		return Status::OK;
 	}
 
+	std::cout << "jin lai ren zheng le" << std::endl;
+
 	// 当前连接还在，则进行通知
 	Json::Value notify;
 	notify["error"] = ErrorCodes::Success;
-	notify["uid"] = request->fromuid();
+	notify["applyuid"] = applyuid;
+	notify["authuid"] = authuid;
+	notify["chatid"] = chatid;
+	// 组装数据 申请人信息
+	{
+		auto applyinfo = request->applyinfo();
+		Json::Value info;
+		info["applyuid"] = applyinfo.applyuid();
+		info["applyname"] = applyinfo.applyname();
+		info["applydescription"] = applyinfo.applydescription();
+		info["applyicon"] = applyinfo.applyicon();
+		info["applysex"] = applyinfo.applysex();
+		info["touid"] = applyinfo.touid();
+		info["status"] = applyinfo.status();
+		info["description"] = applyinfo.description();
+		info["backname"] = applyinfo.backname();
+		notify["applyinfo"] = info;
+	}
+	// 组装数据 被申请人信息
+	{
+		auto authinfo = request->authinfo();
+		Json::Value info;
+		info["authuid"] = authinfo.authuid();
+		info["authname"] = authinfo.authname();
+		info["authdescription"] = authinfo.authdescription();
+		info["authicon"] = authinfo.authicon();
+		info["authsex"] = authinfo.authsex();
+		info["touid"] = authinfo.touid();
+		info["status"] = authinfo.status();
+		info["description"] = authinfo.description();
+		info["backname"] = authinfo.backname();
+		notify["authinfo"] = info;
+	}
+	// 组装数据 发送的打招呼聊天数据
+	{
+		for (auto msg : request->chatmessage()) {
+			Json::Value msg_info;
+			msg_info["message_id"] = msg.messageid();
+			msg_info["chat_id"] = msg.chatid();
+			msg_info["send_id"] = msg.sendid();
+			msg_info["recv_id"] = msg.recvid();
+			msg_info["content"] = msg.content();
+			msg_info["status"] = msg.status();
+			notify["chat_msgs"].append(msg_info);
+		}
+	}
 
-	auto fromuid = request->fromuid();
-	std::string fromuid_baseinfo_key = USER_BASE_INFO + std::to_string(fromuid);
-	auto fromuid_user_info = std::make_shared<UserInfo>();
-	bool isSuccess = GetUserBaseInfo(fromuid_baseinfo_key, fromuid, fromuid_user_info);
-	//std::cout << "isSuccess : " << isSuccess << std::endl;
-	// 因为这是在touid添加fromuid的信息，因此查询的是fromuid的个人信息
-	if (isSuccess) {
-		notify["name"] = fromuid_user_info->_name;
-		notify["description"] = fromuid_user_info->_description;
-		notify["icon"] = fromuid_user_info->_icon;
-		notify["sex"] = fromuid_user_info->_sex;
-	}
-	else {
-		notify["error"] = ErrorCodes::UidInvalid;
-	}
+	std::cout << "jin lai ren zheng le, jie shu le" << std::endl;
 
 	std::string notify_str = notify.toStyledString();
 	session->Send(notify_str, MSG_NOTIFY_AUTH_FRIEND_REQ);
@@ -96,6 +147,7 @@ Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, co
 
 	// 对方服务器也没有，则用户已下线
 	if (session == nullptr) {
+		std::cout << "session == nullptr" << std::endl;
 		return Status::OK;
 	}
 
@@ -104,21 +156,54 @@ Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, co
 	notify["error"] = ErrorCodes::Success;
 	notify["from_uid"] = request->fromuid();
 	notify["to_uid"] = request->touid();
+	notify["chat_id"] = request->chatid();
 
 	// 将通过grpc发送过来的信息转化为json数组
-	Json::Value text_array;
+	Json::Value notify_msgs;
 	for (auto& msg : request->textmsgs()) {
 		Json::Value value;
 		value["msg_content"] = msg.msgcontent();
-		value["msg_id"] = msg.msgid();
-		text_array.append(value);
+		value["message_id"] = msg.msgid();
+		notify_msgs.append(value);
 	}
 
-	notify["text_array"] = text_array;
+	notify["notify_msgs"] = notify_msgs;
 
 	// 通知对方服务器
 	std::string notify_str = notify.toStyledString();
 	session->Send(notify_str, MSG_NOTIFY_CHAT_MSG_REQ);
+	return Status::OK;
+}
+
+Status ChatServiceImpl::NotifyOtherKickUser(ServerContext* context, const KickUserReq* request, KickUserRsp* reponse) {
+	std::cout << "NotifyOtherKickUser" << std::endl;
+
+	int uid = request->uid();
+
+	// 查询用户是否在本服务器
+	auto session = UserMgr::GetInstance()->GetSession(uid);
+
+	reponse->set_error(ErrorCodes::Success);
+	reponse->set_uid(uid);
+
+	// 用户不在内存中，则直接返回
+	if (session == nullptr) {
+		return Status::OK;
+	}
+
+	// 在内存中则直接发送通知客户端下线
+	// 发送消息通知客户端，由客户端断开链接，不然会出现TIME_OUT
+	Json::Value notify;
+	notify["error"] = ErrorCodes::Success;
+	notify["uid"] = uid;
+
+	std::string return_str = notify.toStyledString();
+
+	session->Send(return_str, MSG_NOTIFY_OFF_LINE_REQ);
+	//session->NotifyOffline(uid);
+	// 清除旧的连接
+	_p_server->ClearSession(session->GetSessionId());
+
 	return Status::OK;
 }
 

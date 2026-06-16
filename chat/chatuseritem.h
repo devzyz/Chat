@@ -21,15 +21,15 @@ class ChatUserItem : public ListItemBase
 public:
     explicit ChatUserItem(QWidget *parent = nullptr);
     ~ChatUserItem();
-    void SetInfo(std::shared_ptr<FriendInfo>);
-    // 当点击认证后，添加条目
-    void SetInfo(std::shared_ptr<AuthInfo>);
     // 目的是为了设置外面的QListItem，因为QListWidget内部只能放这个类，所以要先放这个类，再在这个类内部放自己自定义的
     QSize sizeHint() const override;
 
-    std::shared_ptr<FriendInfo> GetChatInfo();
+    void SetChatInfo(std::shared_ptr<ChatInfo>);
+    std::shared_ptr<ChatInfo> GetChatInfo();
+    // 设置上一次聊天信息
+    void SetLastChatInfo();
     // 设置上一次聊天数据
-    void SetLastTextChatMsg(QString& last_text_msg);
+    void SetLastTextChatMsg(QString last_text_msg);
     // 通过判断_new_msg_count来决定是否显示新消息提醒
     void ShowNewMsgTip();
     // 更新_new_msg_count的数量
@@ -38,7 +38,7 @@ public:
     void ResetNewMsgCount();
 private:
     Ui::ChatUserItem *ui;
-    std::shared_ptr<FriendInfo> _chat_info;
+    std::shared_ptr<ChatInfo> _chat_info;
     int _new_msg_count;
 };
 

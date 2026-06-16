@@ -26,6 +26,7 @@ ChatBubble::ChatBubble(ChatRole role, QWidget *parent)
         ui->left_spacer->changeSize(10, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
         ui->user_name_label->setAlignment(Qt::AlignLeft);
         ui->user_name_label->setContentsMargins(8, 0, 0, 0); // 对齐气泡三角的8
+        ui->chat_status_widget->hide();
     }
 }
 
@@ -84,4 +85,31 @@ void ChatBubble::setUserIcon(const QPixmap &icon)
         ui->right_head_label->setPixmap(icon);
     else
         ui->left_head_label->setPixmap(icon);
+}
+
+void ChatBubble::setChatStatus(ChatStatus status)
+{
+    // 为STATUS_EMPTY表示不需要设置
+    if (status == ChatStatus::STATUS_EMPTY) {
+        return ;
+    }
+
+    QSize labelSize = ui->chat_status_label->size();  // 获取固定大小
+    if (status == ChatStatus::STATUS_SEND_FAILURE) {
+        QPixmap pix(":/res/status_send_failure.png");
+        ui->chat_status_label->setPixmap(
+            pix.scaled(labelSize, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+            );
+    } else if (status == ChatStatus::STATUS_READ_ALREADY) {
+        QPixmap pix(":/res/status_already_read.png");
+        ui->chat_status_label->setPixmap(
+            pix.scaled(labelSize, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+            );
+    } else {
+        QPixmap pix(":/res/status_no_read.png");
+        ui->chat_status_label->setPixmap(
+            pix.scaled(labelSize, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+            );
+    }
+    ui->chat_status_label->setScaledContents(true);
 }

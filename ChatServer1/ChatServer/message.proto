@@ -59,6 +59,7 @@ service ChatService {
 	rpc NotifyOtherAddFriend(AddFriendReq) returns (AddFriendRsp) {}
 	rpc NotifyOtherAuthFriend(AuthFriendReq) returns (AuthFriendRsp) {}
 	rpc NotifyOtherReceiveTextChatMsg(TextChatMsgReq) returns (TextChatMsgRsp) {}
+	rpc NotifyOtherKickUser(KickUserReq) returns (KickUserRsp) {}
 }
 
 // grpc通知另一个服务器添加好友请求
@@ -69,19 +70,67 @@ message AddFriendReq {
 	string applyicon = 4;
 	int32 applysex = 5;
 	int32 touid = 6;
+	string description = 7;
+	string backname = 8;
 }
 
 // grpc通知另一个服务器添加好友请求回包
 message AddFriendRsp {
 	int32 error = 1;
 	int32 applyuid = 2;
-	int32 touid = 3;
+	string applyname = 3;
+	string applydescription = 4;
+	string applyicon = 5;
+	int32 applysex = 6;
+	int32 touid = 7;
+	string description = 8;
+	string backname = 9;
+}
+
+// 申请信息
+message ApplyInfo {
+	int32 applyuid = 1;
+	string applyname = 2;
+	string applydescription = 3;
+	string applyicon = 4;
+	int32 applysex = 5;
+	int32 status = 6;
+	int32 touid = 7;
+	string description = 8;
+	string backname = 9;
+}
+
+// 认证信息
+message AuthInfo {
+	int32 authuid = 1;
+	string authname = 2;
+	string authdescription = 3;
+	string authicon = 4;
+	int32 authsex = 5;
+	int32 status = 6;
+	int32 touid = 7;
+	string description = 8;
+	string backname = 9;
+}
+
+// 聊天数据信息
+message ChatMessage{
+	int32 messageid = 1;
+	int32 chatid = 2;
+	int32 sendid = 3;
+	int32 recvid = 4;
+	string content = 5;
+	int32 status = 6;
 }
 
 // grpc通知另一个服务器认证好友
 message AuthFriendReq {
-	int32 fromuid = 1;
-	int32 touid = 2;
+	int32 applyuid = 1;
+	int32 authuid = 2;
+	ApplyInfo applyinfo = 3;
+	AuthInfo authinfo = 4;
+	int32 chatid = 5;
+	repeated ChatMessage chatmessage = 6;
 }
 
 // grpc通知另一个服务器认证好友回包
@@ -91,18 +140,31 @@ message AuthFriendRsp {
 
 // 文本消息的结构
 message TextChatData {
-	string msgid = 1;
+	string uuid = 1;
 	string msgcontent = 2;
+	int32 msgid = 3;
 }
 
 // grpc通知另一个服务器接收文本消息
 message TextChatMsgReq {
 	int32 fromuid = 1;
     int32 touid = 2;
-	repeated TextChatData textmsgs = 3;
+	int32 chatid = 3;
+	repeated TextChatData textmsgs = 4;
 }
 
 // grpc通知另一个服务器接收文本消息回包
 message TextChatMsgRsp {
 	int32 error = 1;
+}
+
+// grpc通知另一个服务器踢人请求
+message KickUserReq {
+	int32 uid = 1;
+}
+
+// grpc通知另一个服务器踢人回包
+message KickUserRsp {
+	int32 error = 1;
+	int32 uid = 2;
 }

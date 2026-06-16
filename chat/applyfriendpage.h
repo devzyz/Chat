@@ -39,7 +39,7 @@ signals:
     void sig_show_search(bool);
 
 public slots:
-    void slot_tcp_add_auth_friend(std::shared_ptr<AuthInfo>);
+    void slot_auth_finish(std::shared_ptr<AuthInfo>);
 };
 
 #endif // APPLYFRIENDPAGE_H

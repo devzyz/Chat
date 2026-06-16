@@ -270,7 +270,7 @@ void LoginDialog::slot_tcp_connect_finish(bool bSuccess)
         QByteArray jsonString = doc.toJson(QJsonDocument::Indented);
 
         // 发送tcp请求给chat server请求连接
-        emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_CHAT_LOGIN, jsonString);
+        emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_CHAT_LOGIN_REQ, jsonString);
     }else {
         showTip(tr("网络异常"), false);
         ui->login_btn->setEnabled(true);

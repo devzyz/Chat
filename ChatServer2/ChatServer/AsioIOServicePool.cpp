@@ -1,7 +1,7 @@
 #include "AsioIOServicePool.h"
 
 AsioIOServicePool::AsioIOServicePool(std::size_t poolSize) : 
-	_ioServices(poolSize), _works(poolSize), _nextIOService(0) {
+	_ioServices(poolSize), _works(poolSize), _nextIOService(0), _b_stop(false) {
 	for (int i = 0; i < poolSize; i++) {
 		_works[i] = std::unique_ptr<Work>(new Work(_ioServices[i].get_executor()));
 	}
@@ -29,6 +29,10 @@ boost::asio::io_context& AsioIOServicePool::GetIOService() {
  * 将每个线程的哨兵事件停止，这样每个线程在处理完所有异步操作后，就会返回
  */
 void AsioIOServicePool::stop() {
+	if (_b_stop) {
+		return;
+	}
+	_b_stop = true;
 	for (auto& work : _works) {
 		work->get_executor().context().stop();
 		work.reset();

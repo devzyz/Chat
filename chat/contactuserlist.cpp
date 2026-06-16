@@ -19,17 +19,14 @@ ContactUserList::ContactUserList(QWidget *parent) : QListWidget(parent), _loadin
     // 安装事件过滤器
     this->viewport()->installEventFilter(this);
 
-    addContactUserList();
+    LoadContactUserList();
 
     // 连接点击item的信号和槽
     connect(this, &QListWidget::itemClicked, this, &ContactUserList::slot_item_clicked);
 
     // 连接认证的服务器回包处理发出的更新信号
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_add_auth_friend,
-            this, &ContactUserList::slot_tcp_add_auth_friend);
-    // 连接通知认证的服务器回包处理发出的更新信号
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_notify_auth_friend,
-            this, &ContactUserList::slot_tcp_notify_auth_friend);
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_add_auth_contact_list,
+            this, &ContactUserList::slot_tcp_add_friend);
 }
 
 /**
@@ -97,6 +94,7 @@ bool ContactUserList::eventFilter(QObject *watched, QEvent *event)
                 return true;
             }
             _loading_contact = true;
+            // 放置短时间内重复加载
             QTimer::singleShot(100, this, [this]() {
                 _loading_contact = false;
             });
@@ -116,7 +114,7 @@ bool ContactUserList::eventFilter(QObject *watched, QEvent *event)
  * 新的朋友
  * 用户的联系人
  */
-void ContactUserList::addContactUserList()
+void ContactUserList::LoadContactUserList()
 {
     // 添加新的朋友分组标题item
     // 创建一个QListWidgetItem放入QListWidget,将item绑定到GroupTipItem上
@@ -162,6 +160,7 @@ void ContactUserList::addContactUserList()
             this->addItem(_friend_item);
             this->setItemWidget(_friend_item, _contact_user_item);
         }
+        UserMgr::GetInstance()->UpdateContactLoadedCount();
     }
 }
 
@@ -211,20 +210,12 @@ void ContactUserList::slot_item_clicked(QListWidgetItem * item)
     }
 }
 
-// 自己验证的添加
-void ContactUserList::slot_tcp_add_auth_friend(std::shared_ptr<AuthInfo> auth_info)
+// 添加联系人
+void ContactUserList::AddNewContact(std::shared_ptr<AuthInfo> auth_info)
 {
-    qDebug() << "slot add auth friend";
-    bool isFriend = UserMgr::GetInstance()->CheckIsFriendById(auth_info->_uid);
-    // 如果已经是好友了，则跳过
-    if (isFriend) {
-        return ;
-    }
-
     // 否则更新contactlist列表
     auto * contact_user_item = new ContactUserItem();
     contact_user_item->SetInfo(auth_info);
-    contact_user_item->SetItemType(ListItemType::CONTACT_USER_ITEM);
 
     QListWidgetItem *item = new QListWidgetItem();
     item->setSizeHint(contact_user_item->sizeHint());
@@ -236,27 +227,10 @@ void ContactUserList::slot_tcp_add_auth_friend(std::shared_ptr<AuthInfo> auth_in
     this->setItemWidget(item, contact_user_item);
 }
 
-// 服务器通知的添加
-void ContactUserList::slot_tcp_notify_auth_friend(std::shared_ptr<AuthInfo> auth_info)
+// Tcp发出添加好友
+void ContactUserList::slot_tcp_add_friend(std::shared_ptr<AuthInfo> auth_info)
 {
-    qDebug() << "slot notify auth friend";
-    bool isFriend = UserMgr::GetInstance()->CheckIsFriendById(auth_info->_uid);
-    // 如果已经是好友了，则跳过
-    if (isFriend) {
-        return ;
-    }
+    qDebug() << "slot add auth friend";
 
-    // 否则更新contactlist列表
-    auto * contact_user_item = new ContactUserItem();
-    contact_user_item->SetInfo(auth_info);
-    contact_user_item->SetItemType(ListItemType::CONTACT_USER_ITEM);
-
-    QListWidgetItem *item = new QListWidgetItem();
-    item->setSizeHint(contact_user_item->sizeHint());
-
-    int index = this->row(_contact_item);
-    // 在_contact_item后插入新的朋友
-    this->insertItem(index + 1, item);
-    // 设置QListWidgetItem的widget为自定义的widget
-    this->setItemWidget(item, contact_user_item);
+    AddNewContact(auth_info);
 }

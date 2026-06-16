@@ -146,6 +146,22 @@
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="StateWidget" name="side_setting_label" native="true">
+           <property name="minimumSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
+            </size>
+           </property>
+          </widget>
+         </item>
         </layout>
        </widget>
       </item>
@@ -260,6 +276,7 @@
    <item>
     <widget class="QStackedWidget" name="stackedWidget">
      <widget class="ChatPage" name="chat_page"/>
+     <widget class="UserInfoPage" name="user_info_page"/>
      <widget class="FriendInfoPage" name="friend_info_page"/>
      <widget class="ApplyFriendPage" name="apply_friend_page"/>
     </widget>
@@ -314,6 +331,12 @@
    <class>FriendInfoPage</class>
    <extends>QWidget</extends>
    <header>friendinfopage.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>UserInfoPage</class>
+   <extends>QWidget</extends>
+   <header>userinfopage.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

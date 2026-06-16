@@ -11,6 +11,7 @@
 #include <json/value.h>
 
 class CSession;
+class CServer;
 class LogicNode;
 typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> FunCallBack;
 class LogicSystem : public Singleton<LogicSystem>
@@ -19,6 +20,7 @@ class LogicSystem : public Singleton<LogicSystem>
 public:
 	~LogicSystem();
 	void PostMsgToQue(std::shared_ptr<LogicNode> msg);
+	void SetServer(std::shared_ptr<CServer> pserver);
 private:
 	LogicSystem();
 	void DealMsg();
@@ -72,6 +74,34 @@ private:
 	 * 获取用户好友列表
 	 */
 	bool GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& friend_list);
+	/**
+	 * @brief 
+	 * @param uid 用户的uid
+	 * @param next_chat_id 从哪一个chat_id开始查 
+	 * @param page_size 查page_size个
+	 * @param chat_list 返回的列表
+	 * @param load_more 是否已经查完
+	 * @param new_next_chat_id 下一次开始查的chat_id
+	 * @return 
+	 * 
+	 * 从数据库中获取用户uid的会话列表，从next_chat_id开始查，获取page_size个， 列表返回到chat_list中
+	 * load_more代表下一次还能不能查，new_next_chat_id表示下一次从哪一个开始查
+	 */
+	bool GetUserChatList(int uid, int current_load_id, int page_size,
+		std::vector<std::shared_ptr<ChatInfoBase>>& chat_list, bool& load_more, int& last_load_id);
+	/**
+	 * @brief 
+	 * @param uid 
+	 * @param current_load_id 
+	 * @param page_size 
+	 * @param chat_list 
+	 * @param load_more 
+	 * @param last_load_id 
+	 * @return 
+	 * 增量加载部分聊天数据
+	 */
+	bool GetChatMessageList(int chat_id, int current_msg_id, int page_size,
+		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
 	
 	/**
 	 * @brief 
@@ -93,5 +123,8 @@ private:
 	
 	// 回调函数集合， 根据msgid来调用不同的回调函数
 	std::map<short, FunCallBack> _fun_callbacks;
+
+	// 保存server
+	std::shared_ptr<CServer> _p_server;
 };
 

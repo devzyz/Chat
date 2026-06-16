@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include "userdata.h"
+#include <QListWidgetItem>
 
 namespace Ui {
 class ChatPage;
@@ -19,10 +20,11 @@ class ChatPage : public QWidget
 public:
     explicit ChatPage(QWidget *parent = nullptr);
     ~ChatPage();
-    void SetChatInfo(std::shared_ptr<FriendInfo>);
+    void SetChatInfo(std::shared_ptr<ChatInfo>);
     // 往QListWidget添加聊天记录
-    void AppendChatMsg(std::shared_ptr<TextChatData>);
-
+    void AppendChatMsg(std::shared_ptr<ChatDataBase>);
+    // 更新未读状态
+    void UpdateChatUnreadStatus(std::vector<QString>&);
 protected:
     void paintEvent(QPaintEvent * event) override;
 
@@ -30,11 +32,12 @@ private slots:
     void on_send_btn_clicked();
 
 signals:
-    void sig_append_send_text_chat_msg(std::shared_ptr<TextChatData>);
+    void sig_append_send_text_cache_msg(QString, std::shared_ptr<ChatDataBase>);
 
 private:
     Ui::ChatPage *ui;
-    std::shared_ptr<FriendInfo> _chat_info;
+    std::shared_ptr<ChatInfo> _chat_info;
+    QMap<QString, QWidget*> _cache_chat_msg;
 };
 
 #endif // CHATPAGE_H

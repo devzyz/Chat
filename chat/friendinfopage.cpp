@@ -13,7 +13,7 @@ FriendInfoPage::~FriendInfoPage()
     delete ui;
 }
 
-void FriendInfoPage::SetInfo(std::shared_ptr<FriendInfo> friend_info)
+void FriendInfoPage::SetInfo(std::shared_ptr<UserInfo> friend_info)
 {
     _friend_info = friend_info;
 

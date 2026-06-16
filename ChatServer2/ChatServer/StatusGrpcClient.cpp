@@ -50,6 +50,9 @@ void StatusConnectionPool::returnConnection(std::unique_ptr<StatusService::Stub>
 }
 
 void StatusConnectionPool::close() {
+	if (_b_stop) {
+		return;
+	}
 	_b_stop = true;
 	_cond.notify_all();
 }

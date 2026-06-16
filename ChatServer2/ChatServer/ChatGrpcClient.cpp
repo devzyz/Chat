@@ -48,6 +48,9 @@ std::unique_ptr<ChatService::Stub> ChatConnectionPool::getConnection() {
 }
 
 void ChatConnectionPool::close() {
+	if (_b_stop) {
+		return;
+	}
 	_b_stop = true;
 	_cond.notify_all();
 }
@@ -188,6 +191,42 @@ TextChatMsgRsp ChatGrpcClient::NotifyOtherReceiveTextChatMsg(const std::string& 
 	Status status = connection->NotifyOtherReceiveTextChatMsg(&context, request, &rsp);
 	
 	if(!status.ok()) {
+		rsp.set_error(ErrorCodes::RPCFailed);
+		return rsp;
+	}
+
+	return rsp;
+}
+
+KickUserRsp ChatGrpcClient::NotifyOtherKickUser(const std::string& serverIp, const KickUserReq request) {
+	KickUserRsp rsp;
+	rsp.set_error(ErrorCodes::Success);
+
+	// 查找对应的serverIp的grpc连接池
+	auto iter_find = _pool.find(serverIp);
+	if (iter_find == _pool.end()) {
+		rsp.set_error(ErrorCodes::RPCFailed);
+		return rsp;
+	}
+
+	auto &pool = iter_find->second;
+	ClientContext context;
+
+	// 取出这个serverIp连接池的一个连接
+	auto connection = pool->getConnection();
+	if (connection == nullptr) {
+		rsp.set_error(ErrorCodes::RPCFailed);
+		return rsp;
+	}
+
+	Defer defer([&pool, &connection]() {
+		pool->returnConnectioni(std::move(connection));
+		});
+
+	// 调用grpc服务
+	Status status = connection->NotifyOtherKickUser(&context, request, &rsp);
+
+	if (!status.ok()) {
 		rsp.set_error(ErrorCodes::RPCFailed);
 		return rsp;
 	}

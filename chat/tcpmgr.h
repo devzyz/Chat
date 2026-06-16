@@ -25,6 +25,9 @@ public:
     // 处理从粘包中拆分出单个包体后，应该对包体进行怎样的处理
     void handleMsg(ReqId id, int len, QByteArray data);
 
+    // 关闭连接
+    void CloseConnection();
+
     // 连接的tcp服务器的地址和端口号
     QString _host;
     quint16 _port;
@@ -74,20 +77,50 @@ signals:
      */
     void sig_tcp_add_friend_apply(std::shared_ptr<ApplyInfo>);
     /**
-     * @brief sig_tcp_add_auth_friend
-     * 添加好友认证，当我点击添加后，我添加对方的逻辑由此信号实现
-     */
-    void sig_tcp_add_auth_friend(std::shared_ptr<AuthInfo>);
-    /**
-     * @brief sig_tcp_notify_auth_friend
-     * 服务器通知我认证添加好友，当对方同意添加我为好友后，我添加对方的逻辑在此实现
-     */
-    void sig_tcp_notify_auth_friend(std::shared_ptr<AuthInfo>);
-    /**
      * @brief sig_update_text_chat_msg
      * 服务器通知我更新聊天数据，发出信号，通知前端界面更新
      */
-    void sig_update_text_chat_msg(int, int, QJsonArray);
+    void sig_update_text_chat_msg(int, int, int, std::vector<std::shared_ptr<ChatDataBase>>&);
+    /**
+     * @brief sig_notify_offline
+     * 服务器通知客户端下线，接受到回包后，发出此信号
+     */
+    void sig_notify_offline();
+    /**
+     * @brief sig_connection_close
+     * 服务器关闭连接信号
+     */
+    void sig_connection_close();
+    /**
+     * @brief sig_tcp_load_chat_finish
+     * 加载聊天会话完成信号
+     */
+    void sig_tcp_load_chat_finish(QJsonArray);
+    /**
+     * @brief sig_create_private_chat_finish
+     * 创建私聊完成
+     */
+    void sig_create_private_chat_finish(std::shared_ptr<ChatInfo>);
+    /**
+     * @brief sig_tcp_load_chat_msg_finish
+     * 增量加载聊天数据完成
+     */
+    void sig_tcp_load_chat_msg_finish(int, std::vector<std::shared_ptr<ChatDataBase>>);
+    /**
+     * @brief sig_tcp_add_contact_list
+     * 发送在好友列表中添加好友的通知
+     */
+    void sig_tcp_add_auth_contact_list(std::shared_ptr<AuthInfo> );
+    /**
+     * @brief sig_tcp_add_chat_list
+     * 发送在聊天列表中添加聊天的通知
+     */
+    void sig_tcp_add_auth_chat_list(std::shared_ptr<ChatInfo>);
+    /**
+     * @brief sig_text_chat_msg_rsp_finish
+     * 发送聊天文本回包，更新为已读状态
+     */
+    void sig_text_chat_msg_rsp_finish(int, std::vector<QString>&);
 public slots:
     /**
      * @brief slot_tcp_connect
@@ -110,8 +143,6 @@ private slots:
 private:
     friend class Singleton<TcpMgr>;
     TcpMgr();
-
-signals:
 
 };
 

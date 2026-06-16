@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>430</width>
-    <height>147</height>
+    <width>569</width>
+    <height>211</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -108,6 +108,46 @@
     </widget>
    </item>
    <item>
+    <widget class="QWidget" name="chat_status_widget" native="true">
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>25</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="chat_status_label">
+        <property name="minimumSize">
+         <size>
+          <width>15</width>
+          <height>15</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>15</width>
+          <height>15</height>
+         </size>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QWidget" name="chat_content_widget" native="true">
      <layout class="QVBoxLayout" name="verticalLayout_content">
       <property name="spacing">
@@ -127,6 +167,12 @@
       </property>
       <item>
        <widget class="QLabel" name="user_name_label">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>25</height>
+         </size>
+        </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>

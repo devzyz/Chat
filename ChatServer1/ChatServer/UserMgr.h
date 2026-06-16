@@ -16,7 +16,7 @@ public:
 	~UserMgr();
 	std::shared_ptr<CSession> GetSession(int uid);
 	void SetUserSession(int uid, std::shared_ptr<CSession> sesson);
-	void RemoveUserSession(int uid);
+	void RemoveUserSession(int uid, std::string session_id);
 private:
 	UserMgr();
 	std::mutex _session_mutex;

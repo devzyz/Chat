@@ -9,6 +9,8 @@
 #include "Const.h"
 #include "ChatServiceImpl.h"
 #include <memory>
+#include "LogicSystem.h"
+#include "RedisMgr.h"
 
 int main()
 {
@@ -18,7 +20,8 @@ int main()
     try {
         auto pool = AsioIOServicePool::GetInstance();
 
-        // 设置当前server的tcp客户端连接数为0
+        // 因为只写本服，所以直接初始化一下
+        // 但是状态服务器还是会查找，可能出现先查后写的情况，因为心跳60秒更新一次，允许出现一些小的误差，提高性能
         RedisMgr::GetInstance()->HSet(LOGIN_COUNT, self_server_name, "0");
 
         // chatserver对应的grpc服务器地址
@@ -40,15 +43,21 @@ int main()
 
         boost::asio::io_context io_context;
         boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
+
+        // 创建CServer
+        auto port_str = configMgr["SelfServer"]["Port"];
+        std::shared_ptr<CServer> p_server = std::make_shared<CServer>(io_context, atoi(port_str.c_str()));
+        p_server->init(); // 启动定时器
         // 优雅的退出
-        signals.async_wait([&io_context, pool, &server](auto, auto) {
+        signals.async_wait([&io_context, pool, &server, &p_server](auto, auto) {
+            p_server->stop();
             io_context.stop();
             pool->stop();
             server->Shutdown();
             });
-
-        auto port_str = configMgr["SelfServer"]["Port"];
-        CServer s(io_context, atoi(port_str.c_str()));
+        
+        LogicSystem::GetInstance()->SetServer(p_server);
+        service.SetServer(p_server);
         io_context.run(); // 通过signals来保活
 
         // 结束后将一些状态清空

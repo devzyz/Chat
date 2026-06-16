@@ -16,6 +16,11 @@ public:
 	void returnConnection(redisContext* connection);
 	void close();
 private:
+	// 心跳检测
+	void CheckConnection();
+	// 重建一个连接
+	bool reconnection();
+
 	std::atomic<bool> _b_stop;
 
 	const std::string _host;
@@ -26,6 +31,11 @@ private:
 	std::condition_variable _cond;
 	std::queue<redisContext*> _que;
 	int _pool_size;
+
+	// 心跳检查程序
+	std::thread _check_thread;
+	// 连接失效的数量
+	std::atomic<int> _fail_count;
 };
 
 /**
@@ -46,6 +56,9 @@ public:
 	bool HDel(const std::string& first_key, const std::string& second_key);
 	bool Del(const std::string& key);
 	void Close();
+
+	std::string acquireLock(const std::string& lockName, int lockTimeout, int acquireTimeout);
+	bool releaseLock(const std::string& lockName, const std::string& identifier);
 private:
 	RedisMgr();
 	std::unique_ptr<RedisConnectionPool> _pool;

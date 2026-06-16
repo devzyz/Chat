@@ -78,6 +78,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         chatdetaillist.h chatdetaillist.cpp
         picturechatbubble.h picturechatbubble.cpp
         friendinfopage.h friendinfopage.cpp friendinfopage.ui
+        userinfopage.h userinfopage.cpp userinfopage.ui
+        editavatardialog.h editavatardialog.cpp editavatardialog.ui
 
 
 

@@ -32,7 +32,7 @@ QSize ContactUserItem::sizeHint() const
 // 设置当前widget的一些信息
 void ContactUserItem::SetInfo(std::shared_ptr<AuthInfo> auth_info)
 {
-    _friend_info = std::make_shared<FriendInfo> (auth_info);
+    _friend_info = std::make_shared<UserInfo> (auth_info);
 
     // 加载图片
     QPixmap pixmap(_friend_info->_icon);
@@ -53,7 +53,7 @@ void ContactUserItem::SetInfo(std::shared_ptr<AuthInfo> auth_info)
  */
 void ContactUserItem::SetInfo(int uid, QString name, QString icon)
 {
-    _friend_info = std::make_shared<FriendInfo> (uid, name, icon);
+    _friend_info = std::make_shared<UserInfo> (uid, name, icon);
 
     QPixmap pixmap(_friend_info->_icon);
 
@@ -69,7 +69,7 @@ void ContactUserItem::SetInfo(int uid, QString name, QString icon)
  * @param friend_info
  * 设置当前的用户列表的信息，并且每个contactUserItem内部保存一个FriendInfo用于管理当前item
  */
-void ContactUserItem::SetInfo(std::shared_ptr<FriendInfo> friend_info)
+void ContactUserItem::SetInfo(std::shared_ptr<UserInfo> friend_info)
 {
     _friend_info = friend_info;
 
@@ -96,7 +96,7 @@ void ContactUserItem::ShowRedPoint(bool show)
     }
 }
 
-std::shared_ptr<FriendInfo> ContactUserItem::GetFriendInfo()
+std::shared_ptr<UserInfo> ContactUserItem::GetFriendInfo()
 {
     return _friend_info;
 }
