@@ -2,8 +2,8 @@
 #define SINGLETON_H
 
 #include <memory>
-#include <iostream>
 #include <mutex>
+#include <spdlog/spdlog.h>
 
 /**
  * @brief The Singleton class
@@ -30,11 +30,20 @@ public:
     }
 
     ~Singleton() {
-        std::cout << "this is singleton destruct" << std::endl;
+        const auto logger = spdlog::default_logger();
+        if (logger) {
+            SPDLOG_LOGGER_DEBUG(logger, "singleton destructed");
+        }
     }
 
     void PrintAddress() {
-        std::cout << "singleton address is " << _instance.get() << std::endl;
+        const auto logger = spdlog::default_logger();
+        if (logger) {
+            SPDLOG_LOGGER_DEBUG(
+                logger,
+                "singleton address={}",
+                static_cast<const void*>(_instance.get()));
+        }
     }
 };
 

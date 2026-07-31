@@ -1,4 +1,5 @@
 #include "chatpage.h"
+#include "logmgr.h"
 #include "ui_chatpage.h"
 #include <QStyleOption>
 #include <QPainter>
@@ -156,7 +157,7 @@ void ChatPage::paintEvent(QPaintEvent *event)
 void ChatPage::on_send_btn_clicked()
 {
     if (_chat_info == nullptr) {
-        qDebug() << "on send btn clicked _user_info is empty";
+        SPDLOG_WARN("send ignored because chat information is empty");
         return ;
     }
     auto self_info = UserMgr::GetInstance()->GetUserInfo();

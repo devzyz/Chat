@@ -1,4 +1,5 @@
 #include "findfaildialog.h"
+#include "logmgr.h"
 #include "ui_findfaildialog.h"
 
 FindFailDialog::FindFailDialog(QWidget *parent)
@@ -14,7 +15,7 @@ FindFailDialog::FindFailDialog(QWidget *parent)
 
 FindFailDialog::~FindFailDialog()
 {
-    qDebug() << "FindFailDialog destructed.";
+    SPDLOG_DEBUG("FindFailDialog destructed");
     delete ui;
 }
 

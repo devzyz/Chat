@@ -1,12 +1,28 @@
 #include "AsioIOServicePool.h"
+#include "LogMgr.h"
+
+std::size_t AsioIOServicePool::DefaultPoolSize() {
+	auto cpu_count = std::thread::hardware_concurrency();
+	if (cpu_count <= 1) {
+		return 1;
+	}
+	return static_cast<std::size_t>(cpu_count - 1);
+}
+
+std::size_t AsioIOServicePool::NormalizePoolSize(std::size_t size) {
+	return size == 0 ? 1 : size;
+}
+
+AsioIOServicePool::AsioIOServicePool() : AsioIOServicePool(DefaultPoolSize()) {
+}
 
 AsioIOServicePool::AsioIOServicePool(std::size_t poolSize) : 
-	_ioServices(poolSize), _works(poolSize), _nextIOService(0), _b_stop(false) {
-	for (int i = 0; i < poolSize; i++) {
+	_ioServices(NormalizePoolSize(poolSize)), _works(NormalizePoolSize(poolSize)), _nextIOService(0), _b_stop(false) {
+	for (std::size_t i = 0; i < _ioServices.size(); i++) {
 		_works[i] = std::unique_ptr<Work>(new Work(_ioServices[i].get_executor()));
 	}
 
-	for (int i = 0; i < _ioServices.size(); i++) {
+	for (std::size_t i = 0; i < _ioServices.size(); i++) {
 		_threads.emplace_back([this, i]() {
 			_ioServices[i].run();
 			});
@@ -15,7 +31,7 @@ AsioIOServicePool::AsioIOServicePool(std::size_t poolSize) :
 
 AsioIOServicePool::~AsioIOServicePool() {
 	stop();
-	std::cout << "AsioIOServicePool destruct" << std::endl;
+	SPDLOG_DEBUG("AsioIOServicePool destructed");
 }
 
 boost::asio::io_context& AsioIOServicePool::GetIOService() {

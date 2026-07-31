@@ -29,9 +29,11 @@ public:
 
 	ConfigMgr(const ConfigMgr& src);
 	ConfigMgr& operator = (const ConfigMgr& src);
+	void DumpLoadedConfig() const;
 
 private:
 	ConfigMgr();
 	std::map<std::string, SectionInfo> _config_map;
+	std::string _config_path;
 };
 

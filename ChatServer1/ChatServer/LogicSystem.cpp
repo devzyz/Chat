@@ -13,6 +13,7 @@
 #include "UserMgr.h"
 #include "ChatGrpcClient.h"
 #include "CServer.h"
+#include "LogMgr.h"
 
 LogicSystem::LogicSystem() : _b_stop(false), _p_server(nullptr) {
 	RegisterCallBacks();
@@ -33,7 +34,7 @@ void LogicSystem::PostMsgToQue(std::shared_ptr<LogicNode> msg) {
 	std::unique_lock<std::mutex> lock(_mutex);
 
 	if (_msg_que.size() > MAX_DEALQUE) {
-		std::cout << "Failed, deal queue is full, size is " << MAX_DEALQUE << std::endl;
+		SPDLOG_ERROR("logic queue full, max_size={}", MAX_DEALQUE);
 		return;
 	}
 
@@ -67,7 +68,7 @@ void LogicSystem::DealMsg() {
 
 				if (call_back_iter == _fun_callbacks.end()) {
 					_msg_que.pop();
-					std::cout << "msg id [" << msg->_recv_msg_node->_msg_id << "] handler not found" << std::endl; // 日志todo...
+					SPDLOG_WARN("message handler not found, msg_id={}", msg->_recv_msg_node->_msg_id);
 					continue;
 				}
 				call_back_iter->second(msg->_session, msg->_recv_msg_node->_msg_id,
@@ -80,11 +81,11 @@ void LogicSystem::DealMsg() {
 
 		// 未关闭，则取出队首进行处理
 		auto msg = _msg_que.front();
-		std::cout << "recv_msg id is " << msg->_recv_msg_node->_msg_id << std::endl; // 日志todo...
+		SPDLOG_DEBUG("logic recv msg, msg_id={}", msg->_recv_msg_node->_msg_id);
 		auto call_back_iter = _fun_callbacks.find(msg->_recv_msg_node->_msg_id);
 		if (call_back_iter == _fun_callbacks.end()) {
 			_msg_que.pop();
-			std::cout << "msg id [" << msg->_recv_msg_node->_msg_id << "] handler not found" << std::endl; // 日志todo...
+			SPDLOG_WARN("message handler not found, msg_id={}", msg->_recv_msg_node->_msg_id);
 			continue;
 		}
 		call_back_iter->second(msg->_session, msg->_recv_msg_node->_msg_id,
@@ -105,13 +106,13 @@ void LogicSystem::RegisterCallBacks() {
 		Json::Value root;
 		auto err = reader.parse(msg_data, root);
 		if (!err) {
-			std::cout << "Json parse failure" << std::endl;
+			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
 			return;
 		}
 
 		int uid = root["uid"].asInt();
 		std::string token = root["token"].asString();
-		std::cout << "user login uid is " << uid << " user token is " << token << std::endl;
+		SPDLOG_INFO("user login request, uid={}", uid);
 
 		// 主要目的是查询状态，看是否满足token条件
 		auto rsp = StatusGrpcClient::GetInstance()->Login(uid, token);
@@ -297,12 +298,12 @@ void LogicSystem::RegisterCallBacks() {
 		Json::Value root;
 		auto err = reader.parse(msg_data, root);
 		if (!err) {
-			std::cout << "Json parse failure" << std::endl;
+			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
 			return;
 		}
 
 		auto uid_name = root["uid_name"].asString();
-		std::cout << "user search uid_name is " << uid_name << std::endl;
+		SPDLOG_DEBUG("user search request, uid_name={}", uid_name);
 
 		Json::Value return_value;
 		Defer defer([this, &return_value, session]() {
@@ -328,7 +329,7 @@ void LogicSystem::RegisterCallBacks() {
 		Json::Value root;
 		auto err = reader.parse(msg_data, root);
 		if (!err) {
-			std::cout << "Json parse failure" << std::endl;
+			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
 			return;
 		}
 
@@ -341,8 +342,7 @@ void LogicSystem::RegisterCallBacks() {
 		auto description = root["description"].asString(); // 申请信息
 		auto backname = root["backname"].asString(); // 申请人给touid的备注名
 		
-		std::cout << "Json is : fromuid is " << fromuid << ", description is " << description << ", backname is " << backname
-			<< ", touid is " << touid << std::endl;
+		SPDLOG_DEBUG("add friend request, fromuid={}, touid={}, description_size={}, backname_size={}", fromuid, touid, description.size(), backname.size());
 
 		Json::Value return_value;
 		Defer defer([this, &return_value, session]() {
@@ -417,13 +417,13 @@ void LogicSystem::RegisterCallBacks() {
 
 	// 处理认证好友的请求
 	_fun_callbacks[MSG_AUTH_FRIEND_REQ] = [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
-		std::cout << "MST_AUTH_FRIEND_REQ : " << MSG_AUTH_FRIEND_REQ << std::endl;
+		SPDLOG_DEBUG("auth friend request, msg_id={}", static_cast<int>(MSG_AUTH_FRIEND_REQ));
 		// 解析json数据
 		Json::Reader reader;
 		Json::Value root;
 		auto err = reader.parse(msg_data, root);
 		if (!err) {
-			std::cout << "Json parse failure" << std::endl;
+			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
 			return;
 		}
 
@@ -448,7 +448,7 @@ void LogicSystem::RegisterCallBacks() {
 
 		std::vector<std::shared_ptr<ChatMessage>> _chat_msgs;
 		int chat_id = 0;
-		std::cout << "auth description : " << authinfo["description"].asString() << std::endl;
+		SPDLOG_DEBUG("auth friend description received, applyuid={}, authuid={}, description_size={}", applyuid, authuid, authinfo["description"].asString().size());
 		// 更新数据库
 		bool success = MysqlMgr::GetInstance()->AuthFriendApply(applyuid, authuid, 
 			applyinfo["backname"].asString(), authinfo["backname"].asString(), 
@@ -555,13 +555,13 @@ void LogicSystem::RegisterCallBacks() {
 
 	// 处理用户发送的文本请求
 	_fun_callbacks[MSG_TEXT_CHAT_MSG_REQ] = [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
-		std::cout << "MSG_TEXT_CHAT_MSG_REQ : " << MSG_TEXT_CHAT_MSG_REQ << std::endl;
+		SPDLOG_DEBUG("text chat message request, msg_id={}", static_cast<int>(MSG_TEXT_CHAT_MSG_REQ));
 		// 解析json数据
 		Json::Reader reader;
 		Json::Value root;
 		auto err = reader.parse(msg_data, root);
 		if (!err) {
-			std::cout << "Json parse failure" << std::endl;
+			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
 			return;
 		}
 
@@ -669,13 +669,13 @@ void LogicSystem::RegisterCallBacks() {
 
 	// 处理客户端心跳请求
 	_fun_callbacks[MSG_HEART_BEAT_REQ] = [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
-		std::cout << "MSG_HEART_BEAT_REQ : " << MSG_HEART_BEAT_REQ << std::endl;
+		SPDLOG_TRACE("heartbeat request, msg_id={}", static_cast<int>(MSG_HEART_BEAT_REQ));
 		// 解析json数据
 		Json::Reader reader;
 		Json::Value root;
 		auto err = reader.parse(msg_data, root);
 		if (!err) {
-			std::cout << "Json parse failure" << std::endl;
+			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
 			return;
 		}
 
@@ -689,13 +689,13 @@ void LogicSystem::RegisterCallBacks() {
 
 	// 创建一个私聊请求
 	_fun_callbacks[MSG_CREATE_PRIVATE_CHAT_REQ] = [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
-		std::cout << "MSG_CREATE_PRIVATE_CHAT_REQ : " << MSG_CREATE_PRIVATE_CHAT_REQ << std::endl;
+		SPDLOG_DEBUG("create private chat request, msg_id={}", static_cast<int>(MSG_CREATE_PRIVATE_CHAT_REQ));
 		// 解析json数据
 		Json::Reader reader;
 		Json::Value root;
 		auto err = reader.parse(msg_data, root);
 		if (!err) {
-			std::cout << "Json parse failure" << std::endl;
+			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
 			return;
 		}
 
@@ -725,13 +725,13 @@ void LogicSystem::RegisterCallBacks() {
 
 	// 加载一部分聊天列表请求
 	_fun_callbacks[MSG_LOAD_CHAT_LIST_REQ] = [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
-		std::cout << "MSG_LOAD_CHAT_LIST_REQ : " << MSG_LOAD_CHAT_LIST_REQ << std::endl;
+		SPDLOG_DEBUG("load chat list request, msg_id={}", static_cast<int>(MSG_LOAD_CHAT_LIST_REQ));
 		// 解析json数据
 		Json::Reader reader;
 		Json::Value root;
 		auto err = reader.parse(msg_data, root);
 		if (!err) {
-			std::cout << "Json parse failure" << std::endl;
+			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
 			return;
 		}
 
@@ -786,13 +786,13 @@ void LogicSystem::RegisterCallBacks() {
 
 	// 增量加载部分聊天数据
 	_fun_callbacks[MSG_LOAD_CHAT_MESSAGE_REQ] = [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
-		std::cout << "MSG_LOAD_CHAT_MESSAGE_REQ : " << MSG_LOAD_CHAT_MESSAGE_REQ << std::endl;
+		SPDLOG_DEBUG("load chat message request, msg_id={}", static_cast<int>(MSG_LOAD_CHAT_MESSAGE_REQ));
 		// 解析json数据
 		Json::Reader reader;
 		Json::Value root;
 		auto err = reader.parse(msg_data, root);
 		if (!err) {
-			std::cout << "Json parse failure" << std::endl;
+			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
 			return;
 		}
 
@@ -863,8 +863,7 @@ void LogicSystem::GetUserByUid(std::string uid, Json::Value& value) {
 		auto icon = root["icon"].asString();
 		auto sex = root["sex"].asInt();
 
-		std::cout << "search user : uid " << uid << ", name is " << name << ", description is " << description <<
-			", icon is " << icon << ", sex is " << sex << std::endl;
+		SPDLOG_DEBUG("search user cache hit by uid, uid={}", uid);
 		
 		value["error"] = ErrorCodes::Success;
 		value["uid"] = uid;
@@ -934,8 +933,7 @@ void LogicSystem::GetUserByName(std::string name, Json::Value& value) {
 		auto icon = root["icon"].asString();
 		auto sex = root["sex"].asInt();
 
-		std::cout << "search user : uid " << uid << ", name is " << name << ", description is " << description <<
-			", icon is " << icon << ", sex is " << sex << std::endl;
+		SPDLOG_DEBUG("search user cache hit by name, uid={}", uid);
 
 		value["error"] = ErrorCodes::Success;
 		value["uid"] = uid;

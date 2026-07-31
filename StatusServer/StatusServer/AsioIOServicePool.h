@@ -23,7 +23,10 @@ public:
 	void stop();
 
 private:
-	AsioIOServicePool(std::size_t size = 2); // 参数是线程的核数
+	static std::size_t DefaultPoolSize();
+	static std::size_t NormalizePoolSize(std::size_t size);
+	AsioIOServicePool();
+	AsioIOServicePool(std::size_t size); // 参数是线程的核数
 	std::vector<IOService> _ioServices;
 	std::vector<WorkPtr> _works; // 假任务，防止io_context内没任务，自动析构
 	std::vector<std::thread> _threads;

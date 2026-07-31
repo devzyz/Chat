@@ -12,7 +12,7 @@ StatusConnectionPool::StatusConnectionPool(const std::string& host, const std::s
 		}
 	}
 	catch (std::exception& e) {
-		std::cout << "create Status Connection Pool is failure, error is " << e.what() << std::endl;
+		SPDLOG_ERROR("create Status connection pool failed, error={}", e.what());
 	}
 }
 
@@ -58,7 +58,7 @@ void StatusConnectionPool::close() {
 }
 
 StatusGrpcClient::~StatusGrpcClient() {
-	std::cout << "StatusGrpcClient destructed." << std::endl;
+	SPDLOG_DEBUG("StatusGrpcClient destructed");
 }
 
 StatusGrpcClient::StatusGrpcClient() {

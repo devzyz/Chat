@@ -23,8 +23,10 @@ public:
 	ConfigMgr& operator = (const ConfigMgr& section);
 
 	static ConfigMgr& GetInstance();
+	void DumpLoadedConfig() const;
 private:
 	ConfigMgr();
 	std::map<std::string, SectionInfo> _config_map;
+	std::string _config_path;
 };
 

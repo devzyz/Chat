@@ -1,4 +1,5 @@
 #include "applyfrienddialog.h"
+#include "logmgr.h"
 #include "ui_applyfrienddialog.h"
 #include <QJsonObject>
 #include "usermgr.h"
@@ -26,7 +27,7 @@ ApplyFriendDialog::ApplyFriendDialog(QWidget *parent)
 ApplyFriendDialog::~ApplyFriendDialog()
 {
     delete ui;
-    qDebug() << "ApplyFriend is destructed";
+    SPDLOG_DEBUG("ApplyFriendDialog destructed");
 }
 
 void ApplyFriendDialog::SetSearchInfo(std::shared_ptr<SearchInfo> si)
@@ -40,7 +41,7 @@ void ApplyFriendDialog::SetSearchInfo(std::shared_ptr<SearchInfo> si)
  * 发送tcp添加好友请求
  */
 void ApplyFriendDialog::slot_send_apply_sure() {
-    qDebug() << "slot send apply sure";
+    SPDLOG_DEBUG("friend application confirmation submitted");
     // 设置发送请求的Json参数
     QJsonObject jsonObj;
     // 表示由谁发出申请好友请求
@@ -72,7 +73,7 @@ void ApplyFriendDialog::slot_send_apply_sure() {
 
     QJsonDocument doc(jsonObj);
     QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-    qDebug() << "apply friend tcp request already";
+    SPDLOG_DEBUG("friend application TCP request prepared");
 
     // 发送tcp请求
     emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_ADD_FRIEND_REQ, jsonData);

@@ -55,38 +55,38 @@ std::string generate_unique_string() {
 ChatServer StatusServiceImpl::getChatServer() {
 	std::lock_guard<std::mutex> lock(_server_mutex);
 	auto minServer = _servers.begin()->second;
-	std::string count_str;
-	// 为什么这里可能会存在另一个线程改，而这里会查询。可能会出现查询到旧值的情况
-	// 为什么不添加一个分布式锁。为了有更好的性能，允许有一些小的误差
-	// 我们通过心跳检测，每60秒更新一下当前的连接数
-	RedisMgr::GetInstance()->HGet(LOGIN_COUNT, minServer.name, count_str);
+	//std::string count_str;
+	//// 为什么这里可能会存在另一个线程改，而这里会查询。可能会出现查询到旧值的情况
+	//// 为什么不添加一个分布式锁。为了有更好的性能，允许有一些小的误差
+	//// 我们通过心跳检测，每60秒更新一下当前的连接数
+	//RedisMgr::GetInstance()->HGet(LOGIN_COUNT, minServer.name, count_str);
 
-	// 没找到，则默认负载最大
-	if (count_str.empty()) {
-		minServer.connection_count = INT_MAX;
-	}
-	else {
-		minServer.connection_count = std::stoi(count_str);
-	}
+	//// 没找到，则默认负载最大
+	//if (count_str.empty()) {
+	//	minServer.connection_count = INT_MAX;
+	//}
+	//else {
+	//	minServer.connection_count = std::stoi(count_str);
+	//}
 
-	// 通过for循环，依次枚举所有的chatserver找到tcp连接数最少的
-	for (auto& server : _servers) {
-		if (server.second.name == minServer.name) {
-			continue;
-		}
+	//// 通过for循环，依次枚举所有的chatserver找到tcp连接数最少的
+	//for (auto& server : _servers) {
+	//	if (server.second.name == minServer.name) {
+	//		continue;
+	//	}
 
-		RedisMgr::GetInstance()->HGet(LOGIN_COUNT, server.second.name, count_str);
-		if (count_str.empty()) {
-			server.second.connection_count = INT_MAX;
-		}
-		else {
-			server.second.connection_count = std::stoi(count_str);
-		}
+	//	RedisMgr::GetInstance()->HGet(LOGIN_COUNT, server.second.name, count_str);
+	//	if (count_str.empty()) {
+	//		server.second.connection_count = INT_MAX;
+	//	}
+	//	else {
+	//		server.second.connection_count = std::stoi(count_str);
+	//	}
 
-		if (minServer.connection_count > server.second.connection_count) {
-				minServer = server.second;
-		}
-	}
+	//	if (minServer.connection_count > server.second.connection_count) {
+	//			minServer = server.second;
+	//	}
+	//}
 
 	return minServer;
 }
@@ -114,7 +114,7 @@ void StatusServiceImpl::insertToken(int uid, std::string token) {
  * 重写的grpc方法，客户端实际希望调用的函数就是这个函数
  */
 Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatServerReq* request, GetChatServerRsp* reply) {
-	std::cout << "status server has received : " << std::endl;
+	SPDLOG_DEBUG("chat server selection request received, uid={}", request->uid());
 
 	const auto& server = getChatServer();
 

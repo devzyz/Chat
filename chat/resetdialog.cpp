@@ -1,4 +1,5 @@
 #include "resetdialog.h"
+#include "logmgr.h"
 #include "ui_resetdialog.h"
 #include "httpmgr.h"
 
@@ -109,7 +110,9 @@ void ResetDialog::initHttpHandlers()
 
         auto email = jsonObj["email"].toString();
         showTip(tr("验证码已经发送到邮箱，注意查收"), true);
-        qDebug() << "email is " << email;
+        SPDLOG_INFO(
+            "password-reset verification code sent, email_length={}",
+            email.size());
     });
 
     // 重置密码的回包逻辑
@@ -123,8 +126,10 @@ void ResetDialog::initHttpHandlers()
 
         auto email = jsonObj["email"].toString();
         showTip(tr("密码重置成功"), true);
-        qDebug() << "email is " << email;
-        qDebug() << "user uid is " << jsonObj["uid"].toString();
+        SPDLOG_INFO(
+            "password reset succeeded, uid={}, email_length={}",
+            LogMgr::ToUtf8(jsonObj["uid"].toString()),
+            email.size());
     });
 }
 

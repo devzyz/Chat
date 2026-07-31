@@ -1,6 +1,7 @@
 #pragma once
 #include <iostream>
 #include <memory>
+#include <spdlog/spdlog.h>
 
 template <typename T>
 class Singleton {
@@ -15,7 +16,7 @@ public:
 	//}
 
 	~Singleton() {
-		std::cout << "Singleton destructed." << std::endl;
+		SPDLOG_DEBUG("Singleton destructed");
 	}
 protected:
 	Singleton() = default;

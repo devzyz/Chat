@@ -15,7 +15,7 @@ AsioIOServicePool::AsioIOServicePool(std::size_t poolSize) :
 
 AsioIOServicePool::~AsioIOServicePool() {
 	stop();
-	std::cout << "AsioIOServicePool destruct" << std::endl;
+	SPDLOG_DEBUG("AsioIOServicePool destructed");
 }
 
 boost::asio::io_context& AsioIOServicePool::GetIOService() {

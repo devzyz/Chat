@@ -1,0 +1,27 @@
+#pragma once
+#include "Singleton.h"
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/rotating_file_sink.h>
+#include <atomic>
+
+class LogMgr : public Singleton<LogMgr>
+{
+	friend class Singleton<LogMgr>;
+public:
+	~LogMgr();
+
+	// 关闭日志单例
+	void Close();
+	// 初始化日志系统
+	bool InitLogMgr();
+private:
+	LogMgr();
+	
+	// 将config.ini中的日志等级转换为spdlog中的日志等级枚举
+	spdlog::level::level_enum GetLevel(const std::string& level, spdlog::level::level_enum default_level);
+
+	std::atomic<bool> _b_stop;
+
+	std::shared_ptr<spdlog::logger> _logger;
+};
+

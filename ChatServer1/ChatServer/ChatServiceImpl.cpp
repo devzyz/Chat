@@ -7,6 +7,7 @@
 #include "RedisMgr.h"
 #include <json/reader.h>
 #include "CServer.h"
+#include "LogMgr.h"
 
 ChatServiceImpl::ChatServiceImpl() : _p_server(nullptr)
 {
@@ -59,7 +60,7 @@ Status ChatServiceImpl::NotifyOtherAddFriend(ServerContext* context, const AddFr
 
 // 别的服务器通知本服务其进行认证信息
 Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const AuthFriendReq* request, AuthFriendRsp* response) {
-	std::cout << "NotifyOtherAuthFriend" << std::endl;
+	SPDLOG_DEBUG("notify auth friend request, applyuid={}, authuid={}, chatid={}", request->applyuid(), request->authuid(), request->chatid());
 	// 查看是否在本服务器，因为有可能已经离线了
 	auto applyuid = request->applyuid();
 	auto authuid = request->authuid();
@@ -75,7 +76,7 @@ Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const Auth
 		return Status::OK;
 	}
 
-	std::cout << "jin lai ren zheng le" << std::endl;
+	SPDLOG_DEBUG("auth friend notify session found, applyuid={}, authuid={}", applyuid, authuid);
 
 	// 当前连接还在，则进行通知
 	Json::Value notify;
@@ -127,7 +128,7 @@ Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const Auth
 		}
 	}
 
-	std::cout << "jin lai ren zheng le, jie shu le" << std::endl;
+	SPDLOG_DEBUG("auth friend notify prepared, applyuid={}, authuid={}, chatid={}", applyuid, authuid, chatid);
 
 	std::string notify_str = notify.toStyledString();
 	session->Send(notify_str, MSG_NOTIFY_AUTH_FRIEND_REQ);
@@ -136,7 +137,7 @@ Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const Auth
 
 // 别的服务器通知接收数据
 Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, const TextChatMsgReq* request, TextChatMsgRsp* response) {
-	std::cout << "NotifyOtherReceiveTextChatMsg" << std::endl;
+	SPDLOG_DEBUG("notify text chat message request, from_uid={}, to_uid={}, chat_id={}, msg_count={}", request->fromuid(), request->touid(), request->chatid(), request->textmsgs_size());
 
 	// 查看是否在本服务器，因为有可能已经离线了
 	auto touid = request->touid();
@@ -147,7 +148,7 @@ Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, co
 
 	// 对方服务器也没有，则用户已下线
 	if (session == nullptr) {
-		std::cout << "session == nullptr" << std::endl;
+		SPDLOG_DEBUG("notify text chat skipped, target session not found, to_uid={}", touid);
 		return Status::OK;
 	}
 
@@ -176,7 +177,7 @@ Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, co
 }
 
 Status ChatServiceImpl::NotifyOtherKickUser(ServerContext* context, const KickUserReq* request, KickUserRsp* reponse) {
-	std::cout << "NotifyOtherKickUser" << std::endl;
+	SPDLOG_INFO("notify kick user request, uid={}", request->uid());
 
 	int uid = request->uid();
 
@@ -210,14 +211,16 @@ Status ChatServiceImpl::NotifyOtherKickUser(ServerContext* context, const KickUs
 bool ChatServiceImpl::GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared_ptr<UserInfo>& user_info) {
 	std::string info_str = "";
 	bool success = RedisMgr::GetInstance()->Get(baseinfo_key, info_str);
-	//std::cout << info_str << std::endl;
+
 	// 能够从redis中查询到
 	if (success) {
+		SPDLOG_DEBUG("redis user base info loaded, uid={}, key={}, value_size={}", uid, baseinfo_key, info_str.size());
+
 		Json::Reader reader;
 		Json::Value root;
 		int b_parse = reader.parse(info_str, root);
 		if (!b_parse) {
-			std::cout << "json failure" << std::endl;
+			SPDLOG_WARN("redis user base info json parse failed, uid={}, key={}", uid, baseinfo_key);
 			return false;
 		}
 		user_info->_uid = uid;

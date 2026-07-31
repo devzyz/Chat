@@ -1,4 +1,5 @@
 #include "chatdialog.h"
+#include "logmgr.h"
 #include "ui_chatdialog.h"
 #include <QAction>
 #include <QRandomGenerator>
@@ -304,7 +305,7 @@ void ChatDialog::slot_loading_chat_list()
  */
 void ChatDialog::slot_midlist_to_chat_list()
 {
-    qDebug() << "receive side chat clicked";
+    SPDLOG_DEBUG("chat navigation selected");
     // 传入聊天StateWidget
     ClearLabelState(ui->side_chat_label);
     ui->side_chat_label->ShowRedPoint(false); // 选中后取消红点
@@ -320,7 +321,7 @@ void ChatDialog::slot_midlist_to_chat_list()
  */
 void ChatDialog::slot_midlist_to_user_list()
 {
-    qDebug() << "receive side user clicked";
+    SPDLOG_DEBUG("contacts navigation selected");
     ClearLabelState(ui->side_user_label);
     ui->side_user_label->ShowRedPoint(false); // 选中后取消红点
     // 设置右面为好友申请列表
@@ -343,7 +344,7 @@ void ChatDialog::slot_search_edit_text_changed(const QString &str)
  */
 void ChatDialog::slot_switch_apply_friend_list_page()
 {
-    qDebug() << "chatdialog : slot switch apply friend list page";
+    SPDLOG_DEBUG("switching to friend application page");
     ui->stackedWidget->setCurrentWidget(ui->apply_friend_page);
 }
 
@@ -375,14 +376,14 @@ void ChatDialog::AddNewChat(std::shared_ptr<ChatInfo> chat_info) {
  */
 void ChatDialog::slot_tcp_add_chat_list(std::shared_ptr<ChatInfo> chat_info)
 {
-    qDebug() << "chatdialog : slot tcp add auth friend";
+    SPDLOG_DEBUG("authenticated friend received from TCP");
     AddNewChat(chat_info);
 }
 
 // 搜索到的人是好友后，跳转到与该好友的聊天界面
 void ChatDialog::slot_from_search_jump_chat_item(std::shared_ptr<SearchInfo> si)
 {
-    qDebug() << "chatdialog : search info -> slot jump chat item";
+    SPDLOG_DEBUG("opening chat from search result");
     auto chat_id = UserMgr::GetInstance()->GetUidToChatId(si->_uid);
 
     if (chat_id == -1) {
@@ -401,7 +402,7 @@ void ChatDialog::slot_from_search_jump_chat_item(std::shared_ptr<SearchInfo> si)
     // 取出他对应的item
     auto find_iter = _chat_item_map.find(chat_id);
     if (find_iter == _chat_item_map.end()) {
-        qDebug() << "find_iter = nullptr";
+        SPDLOG_WARN("chat item not found for search result");
         return;
     }
     ui->chat_user_list->scrollToItem(find_iter.value()); // 将列表滚动到用户可以见的viewport区域
@@ -442,7 +443,7 @@ void ChatDialog::slot_create_private_chat_finish(std::shared_ptr<ChatInfo> chat_
 // 在好友详细信息界面，点击聊天后跳转到聊天界面
 void ChatDialog::slot_from_friend_jump_chat_item(std::shared_ptr<UserInfo> si)
 {
-    qDebug() << "chatdialog : user info -> slot jump chat item";
+    SPDLOG_DEBUG("opening chat from user information");
     auto chat_id = UserMgr::GetInstance()->GetUidToChatId(si->_uid);
 
     if (chat_id == -1) {
@@ -461,7 +462,7 @@ void ChatDialog::slot_from_friend_jump_chat_item(std::shared_ptr<UserInfo> si)
     // 取出他对应的item
     auto find_iter = _chat_item_map.find(chat_id);
     if (find_iter == _chat_item_map.end()) {
-        qDebug() << "find_iter = nullptr";
+        SPDLOG_WARN("chat item not found for user information");
         return;
     }
     ui->chat_user_list->scrollToItem(find_iter.value()); // 将列表滚动到用户可以见的viewport区域
@@ -492,7 +493,7 @@ void ChatDialog::LoadOncePrivateChat(int self_id, int other_id, QJsonObject json
 // 右侧跳转到好友详细信息界面
 void ChatDialog::slot_switch_friend_info_page(std::shared_ptr<UserInfo> friend_info)
 {
-    qDebug() << "chatdialog : slot switch friend info page";
+    SPDLOG_DEBUG("switching to friend information page");
     ui->stackedWidget->setCurrentWidget(ui->friend_info_page);
     ui->friend_info_page->SetInfo(friend_info);
 }
@@ -503,14 +504,14 @@ void ChatDialog::slot_chat_item_clicked(QListWidgetItem * item)
     // 获取到这个item内部绑定的自定义item
     QWidget *widget = ui->chat_user_list->itemWidget(item);
     if (!widget) {
-        qDebug() << "slot chat item clicked widget is nullptr";
+        SPDLOG_WARN("clicked chat list widget is null");
         return ;
     }
 
     // 转成通用的基类
     ListItemBase * itembase = qobject_cast<ListItemBase*> (widget);
     if (!itembase) {
-        qDebug() << "slot item clicked widget is nullptr";
+        SPDLOG_WARN("clicked chat list item is null");
         return ;
     }
 
@@ -518,13 +519,13 @@ void ChatDialog::slot_chat_item_clicked(QListWidgetItem * item)
     auto itemType = itembase->GetItemType();
     if (itemType == ListItemType::INVALID_ITEM ||
         itemType == ListItemType::GROUP_TIP_ITEM) {
-        qDebug() << "slot invalid item clicked";
+        SPDLOG_WARN("invalid chat list item clicked");
         return ;
     }
 
     // 如果是聊天类型，则进行转换
     if (itemType == ListItemType::CHAT_USER_ITEM) {
-        qDebug() << "chat user item clicked";
+        SPDLOG_DEBUG("chat user item clicked");
 
         auto chat_item = qobject_cast<ChatUserItem*> (itembase);
         auto chat_info = chat_item->GetChatInfo();
@@ -544,7 +545,7 @@ void ChatDialog::slot_chat_item_clicked(QListWidgetItem * item)
 // 将发送的文本插入到聊天缓存中
 void ChatDialog::slot_append_send_text_cache_msg(QString uuid, std::shared_ptr<ChatDataBase> text_chat_data)
 {
-    qDebug() <<"chat dialog : slot append send text chat msg";
+    SPDLOG_DEBUG("appending outgoing text chat message");
     int chat_id = text_chat_data->GetChatId();
     // 找不到对应的item
     auto find_iter = _chat_item_map.find(chat_id);
@@ -632,8 +633,8 @@ void ChatDialog::slot_update_text_chat_msg(int from_uid, int to_uid, int chat_id
 
 void ChatDialog::slot_switch_user_info_page()
 {
-    qDebug() << "receive side setting clicked";
-    qDebug() << "chatdialog : slot switch apply friend list page";
+    SPDLOG_DEBUG("settings navigation selected");
+    SPDLOG_DEBUG("switching to settings page");
     // 传入聊天StateWidget
     ClearLabelState(ui->side_setting_label);
     ui->side_setting_label->ShowRedPoint(false); // 选中后取消红点
@@ -687,7 +688,9 @@ void ChatDialog::SetSelectChatItem(int uid) {
 
     // 如果uid小于等于0，则表示非法，默认选中第一个
     if (uid <= 0) {
-        qDebug() << "set uid : " << uid << " failure, set current row 0";
+        SPDLOG_WARN(
+            "invalid chat uid={}, selecting first row",
+            uid);
         ui->chat_user_list->setCurrentRow(0);
 
         // 设置_cur_chat_uid为第0行的
@@ -861,7 +864,7 @@ void ChatDialog::LoadingMoreContact() {
 // 加载更多联系人列表槽函数
 void ChatDialog::slot_loading_contact_list()
 {
-    qDebug() << "chatdialog : slot loading contact list";
+    SPDLOG_DEBUG("loading contact list");
 
     // 判断当前是否在加载
     if (_b_contact_loading) {
@@ -883,12 +886,12 @@ void ChatDialog::slot_loading_contact_list()
 // 别人添加我为好友，好友列表显示逻辑
 void ChatDialog::slot_tcp_add_friend_apply(std::shared_ptr<ApplyInfo> applyInfo)
 {
-    qDebug() << "chatdialog : slot tcp add friend apply";
+    SPDLOG_DEBUG("friend application received from TCP");
 
     // 先判断是否已经添加过请求
     int b_already_apply = UserMgr::GetInstance()->AlreadyApplyAddFriend(applyInfo->_apply_uid);
     if (b_already_apply) {
-        qDebug() << "already apply";
+        SPDLOG_DEBUG("duplicate friend application ignored");
         return ;
     }
 

@@ -1,4 +1,5 @@
 #include "findsuccessdialog.h"
+#include "logmgr.h"
 #include "ui_findsuccessdialog.h"
 #include <QDir>
 #include "applyfrienddialog.h"
@@ -32,7 +33,7 @@ FindSuccessDialog::FindSuccessDialog(QWidget *parent)
 FindSuccessDialog::~FindSuccessDialog()
 {
     delete ui;
-    qDebug() << "FindSuccessDialog is destructed";
+    SPDLOG_DEBUG("FindSuccessDialog destructed");
 }
 
 /**

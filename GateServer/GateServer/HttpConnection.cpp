@@ -18,7 +18,7 @@ void HttpConnection::Start() {
 	http::async_read(_socket, _buffer, _request, [self](beast::error_code ec, std::size_t bytes_transferred) {
 		try {
 			if (ec) {
-				std::cout << "http read err is " << ec.what() << std::endl;
+				SPDLOG_WARN("HTTP request read failed: {}", ec.message());
 				return;
 			}
 
@@ -27,7 +27,7 @@ void HttpConnection::Start() {
 			self->CheckDeadline();
 		}
 		catch (std::exception& e) {
-			std::cout << "exception : " << e.what                                                                               () << std::endl;
+			SPDLOG_ERROR("HTTP request handling exception: {}", e.what());
 		}
 		});
 }

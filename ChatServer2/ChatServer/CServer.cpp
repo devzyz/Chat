@@ -7,7 +7,7 @@
 
 CServer::CServer(boost::asio::io_context& ioc, short port) : _ioc(ioc), _port(port),
 	_acceptor(ioc, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port)), _timer(ioc, std::chrono::seconds(60)) {
-	std::cout << "Server start success, on port : " << port << std::endl; // 日志todo...
+	SPDLOG_INFO("TCP server started, port={}", port); // 日志todo...
 	
 }
 
@@ -22,7 +22,7 @@ void CServer::init() {
 }
 
 CServer::~CServer() {
-	std::cout << "Server destruct listen on posrt : " << _port << std::endl; // 日志todo...	
+	SPDLOG_INFO("TCP server destructed, port={}", _port);
 }
 
 void CServer::stop() {
@@ -92,7 +92,7 @@ bool CServer::CheckSessionValid(std::string session_id) {
 // 定时器，触发对当前session连接的检测
 void CServer::on_timer(const boost::system::error_code& e) {
 	if (e) {
-		std::cout << "CServer Timer Error : " << e.what() << std::endl;
+		SPDLOG_WARN("server timer error: {}", e.message());
 		return;
 	}
 	// 暂存已过期的session

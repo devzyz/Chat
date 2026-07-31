@@ -1,4 +1,5 @@
 #include "searchlist.h"
+#include "logmgr.h"
 #include <QEvent>
 #include <QWheelEvent>
 #include <QScrollBar>
@@ -124,21 +125,21 @@ void SearchList::slot_item_clicked(QListWidgetItem *item)
     // 获取自定义的widget对象
     QWidget * widget = this->itemWidget(item);
     if (!widget) {
-        qDebug() << "slot item clicked widget is nullptr";
+        SPDLOG_WARN("clicked search list widget is null");
         return ;
     }
 
     // 自定义了很多item，先将item转换为基类的
     ListItemBase * customItem = qobject_cast<ListItemBase * > (widget);
     if (!customItem) {
-        qDebug() << "slot item clicked widget is nullptr";
+        SPDLOG_WARN("clicked search list item is null");
         return ;
     }
 
     // 判断type是不是invalid_item
     auto itemType = customItem->GetItemType();
     if (itemType == ListItemType::INVALID_ITEM) {
-        qDebug() << "slot invalid itme clicked";
+        SPDLOG_WARN("invalid search list item clicked");
         return ;
     }
 

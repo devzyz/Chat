@@ -1,4 +1,5 @@
 #include "ConfigMgr.h"
+#include "LogMgr.h"
 #include <boost/asio.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -38,7 +39,8 @@ std::string SectionInfo::operator [] (const std::string key) {
 ConfigMgr::ConfigMgr() {
 	boost::filesystem::path current_path = boost::filesystem::current_path();
 	boost::filesystem::path config_path = current_path / "config.ini";
-	std::cout << "config path : " << config_path << std::endl;
+	_config_path = config_path.string();
+	SPDLOG_DEBUG("config path: {}", _config_path);
 
 	boost::property_tree::ptree pt;
 	boost::property_tree::read_ini(config_path.string(), pt);
@@ -47,14 +49,14 @@ ConfigMgr::ConfigMgr() {
 		const std::string sectionInfo_name = section_pair.first;
 		const boost::property_tree::ptree sectionInfo_pt = section_pair.second;
 
-		std::cout << "[" << sectionInfo_name << "]" << std::endl;
+		SPDLOG_DEBUG("load config section [{}]", sectionInfo_name);
 
 		std::map<std::string, std::string> section_config;
 		for (const auto& key_value_pair : sectionInfo_pt) {
 			const std::string key = key_value_pair.first;
 			const std::string value = key_value_pair.second.get_value<std::string>();
 
-			std::cout << key << " = " << value << std::endl;
+			SPDLOG_DEBUG("config [{}].{} = xxx", sectionInfo_name, key);
 
 			section_config[key] = value;
 		}
@@ -71,6 +73,7 @@ ConfigMgr::~ConfigMgr() {
 
 ConfigMgr::ConfigMgr(const ConfigMgr& src) {
 	_config_data = src._config_data;
+	_config_path = src._config_path;
 }
 
 ConfigMgr& ConfigMgr::operator = (const ConfigMgr& src) {
@@ -78,12 +81,27 @@ ConfigMgr& ConfigMgr::operator = (const ConfigMgr& src) {
 		return *this;
 	}
 	_config_data = src._config_data;
+	_config_path = src._config_path;
 	return *this;
 }
 
 ConfigMgr& ConfigMgr::GetInstance() {
 	static ConfigMgr configMgr;
 	return configMgr;
+}
+
+
+void ConfigMgr::DumpLoadedConfig() const {
+	SPDLOG_DEBUG("config path: {}", _config_path);
+	for (const auto& section_pair : _config_data) {
+		const auto& section_name = section_pair.first;
+		const auto& section_info = section_pair.second;
+
+		SPDLOG_DEBUG("load config section [{}]", section_name);
+		for (const auto& key_value_pair : section_info._sectionInfo_data) {
+			SPDLOG_DEBUG("config [{}].{} = xxx", section_name, key_value_pair.first);
+		}
+	}
 }
 
 SectionInfo ConfigMgr::operator [] (const std::string& key) {

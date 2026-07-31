@@ -19,14 +19,14 @@ RedisConnectionPool::RedisConnectionPool(const std::string& host, const std::str
 
 			auto reply = (redisReply*)redisCommand(context, "AUTH %s", _password.c_str());
 			if (reply->type == REDIS_REPLY_ERROR) {
-				std::cout << "认证失败" << std::endl; // 日志todo...
+				SPDLOG_ERROR("redis auth failed while initializing pool, host={}, port={}", _host, _port); // 日志todo...
 				freeReplyObject(reply);
 				redisFree(context);
 				continue;
 			}
 
 			// 认证成功
-			std::cout << "认证成功" << std::endl; // 日志todo...
+			SPDLOG_DEBUG("redis auth succeeded while initializing pool, host={}, port={}", _host, _port); // 日志todo...
 			freeReplyObject(reply);
 			_que.push(context);
 		}
@@ -46,7 +46,7 @@ RedisConnectionPool::RedisConnectionPool(const std::string& host, const std::str
 			});
 	}
 	catch (std::exception& e) {
-		std::cout << "create RedisConnectionPool is failure, error is " << e.what() << std::endl; // 日志todo...
+		SPDLOG_ERROR("create Redis connection pool failed, error={}", e.what()); // 日志todo...
 	}
 }
 
@@ -125,7 +125,7 @@ void RedisConnectionPool::CheckConnection() {
 			
 			// 底层i/o协议有没有问题
 			if (context->err) {
-				std::cout << "Connection error : " << context->err << std::endl;
+				SPDLOG_WARN("redis heartbeat connection error, err={}, fail_count={}", context->err, _fail_count.load());
 				if (reply) {
 					freeReplyObject(reply);
 				}
@@ -136,7 +136,7 @@ void RedisConnectionPool::CheckConnection() {
 
 			// redis自身返回是不是error
 			if (!reply || reply->type == REDIS_REPLY_ERROR) {
-				std::cout << "reply is null,  error : " << context->err << std::endl;
+				SPDLOG_WARN("redis heartbeat reply invalid, err={}, fail_count={}", context->err, _fail_count.load());
 				if (reply) {
 					freeReplyObject(reply);
 				}
@@ -151,7 +151,7 @@ void RedisConnectionPool::CheckConnection() {
 		}
 		catch (std::exception& e) {
 			// 如果失败，则将失败数量加一，等待后面重连
-			std::cout << "redis heart beat error : " << e.what() << std::endl;
+			SPDLOG_WARN("redis heartbeat exception, error={}, fail_count={}", e.what(), _fail_count.load());
 			if (reply) {
 				freeReplyObject(reply);
 			}
@@ -185,14 +185,14 @@ bool RedisConnectionPool::reconnection() {
 
 	auto reply = (redisReply*)redisCommand(context, "AUTH %s", _password.c_str());
 	if (reply->type == REDIS_REPLY_ERROR) {
-		std::cout << "认证失败" << std::endl; // 日志todo...
+		SPDLOG_WARN("redis auth failed while reconnecting, host={}, port={}", _host, _port); // 日志todo...
 		freeReplyObject(reply);
 		redisFree(context);
 		return false;
 	}
 
 	// 认证成功
-	std::cout << "认证成功" << std::endl; // 日志todo...
+	SPDLOG_INFO("redis auth succeeded while reconnecting, host={}, port={}", _host, _port); // 日志todo...
 	freeReplyObject(reply);
 	{
 		std::lock_guard<std::mutex> lock(_que_mutex);
@@ -233,7 +233,7 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
 	auto reply = (redisReply*)redisCommand(connection, "GET %s", key.c_str());
 
 	if (reply == nullptr) {
-		std::cout << "Execute command [ Get " << key << " ]  failure !" << std::endl; // 日志todo...
+		SPDLOG_ERROR("redis GET failed, key={}, reason=null_reply", key); // 日志todo...
 		value = "";
 		_pool->returnConnection(connection);
 		return false;
@@ -245,18 +245,18 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
 		});
 
 	if (reply->type == REDIS_REPLY_NIL) {
-		std::cout << "Execute command [ Get " << key << " ]  failure !" << std::endl; // 日志todo...
+		SPDLOG_DEBUG("redis GET miss, key={}", key); // 日志todo...
 		value = "";
 		return false;
 	}
 
 	if (reply->type != REDIS_REPLY_STRING) {
-		std::cout << "Execute command [ Get " << key << " ]  failure !" << std::endl; // 日志todo...
+		SPDLOG_WARN("redis GET failed, key={}, reason=unexpected_type, type={}", key, reply->type); // 日志todo...
 		return false;
 	}
 
 	value = reply->str;
-	std::cout << "Execute command [ GET " << key << " ] success !" << std::endl; // 日志todo...
+	SPDLOG_DEBUG("redis GET success, key={}, value_size={}", key, value.size()); // 日志todo...
 
 	return true;
 }
@@ -279,7 +279,7 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
 	auto reply = (redisReply*)redisCommand(connection, "SET %s %s", key.c_str(), value.c_str());
 
 	if (reply == nullptr) {
-		std::cout << "Execute command [ SET " << key << " " << value << " ]  failure !" << std::endl; // 日志todo...
+		SPDLOG_ERROR("redis SET failed, key={}, value_size={}, reason=null_reply", key, value.size()); // 日志todo...
 		_pool->returnConnection(connection);
 		return false;
 	}
@@ -291,11 +291,11 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
 
 	if (!(reply->type == REDIS_REPLY_STATUS &&
 		(strcmp(reply->str, "OK") == 0 || strcmp(reply->str, "ok") == 0))) {
-		std::cout << "Execute command [ SET " << key << " " << value << " ]  failure !" << std::endl; // 日志todo...
+		SPDLOG_ERROR("redis SET failed, key={}, value_size={}, reason=unexpected_status", key, value.size()); // 日志todo...
 		return false;
 	}
 
-	std::cout << "Execute command [ SET " << key << " " << value << " ] success !" << std::endl; // 日志todo...
+	SPDLOG_DEBUG("redis SET success, key={}, value_size={}", key, value.size()); // 日志todo...
 	return true;
 }
 
@@ -319,7 +319,7 @@ bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key,
 	auto reply = (redisReply*)redisCommand(connection, "HGET %s %s", first_key.c_str(), second_key.c_str());
 
 	if (reply == nullptr) {
-		std::cout << "Execut command [ HGet " << first_key << " " << second_key << "  ] failure ! " << std::endl; // 日志todo...
+		SPDLOG_ERROR("redis HGET failed, key={}, field={}, reason=null_reply", first_key, second_key); // 日志todo...
 		value = "";
 		_pool->returnConnection(connection);
 		return false;
@@ -331,19 +331,19 @@ bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key,
 		});
 
 	if (reply->type == REDIS_REPLY_NIL) {
-		std::cout << "Execut command [ HGet " << first_key << " " << second_key << "  ] failure ! " << std::endl; // 日志todo...
+		SPDLOG_DEBUG("redis HGET miss, key={}, field={}", first_key, second_key); // 日志todo...
 		value = "";
 		return false;
 	}
 
 	if (reply->type != REDIS_REPLY_STRING) {
-		std::cout << "Execut command [ HGet " << first_key << " " << second_key << "  ] failure ! " << std::endl; // 日志todo...
+		SPDLOG_WARN("redis HGET failed, key={}, field={}, reason=unexpected_type, type={}", first_key, second_key, reply->type); // 日志todo...
 		value = "";
 		return false;
 	}
 
 	value = reply->str;
-	std::cout << "Execute command [ HGET " << first_key << " " << second_key << " ] success !" << std::endl; //日志todo...
+	SPDLOG_DEBUG("redis HGET success, key={}, field={}, value_size={}", first_key, second_key, value.size()); //日志todo...
 	return true;
 }
 
@@ -365,8 +365,7 @@ bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key,
 	auto reply = (redisReply*)redisCommand(connection, "HSET %s %s %s", first_key.c_str(), second_key.c_str(), value.c_str());
 
 	if (reply == nullptr) {
-		std::cout << "Execute command [ HSET " << first_key << " " << second_key << " " << value << " ] failure !"
-			<< std::endl; // 日志todo...
+		SPDLOG_ERROR("redis HSET failed, key={}, field={}, value_size={}, reason=null_reply", first_key, second_key, value.size()); // 日志todo...
 		_pool->returnConnection(connection);
 		return false;
 	}
@@ -377,13 +376,11 @@ bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key,
 		});
 
 	if (reply->type != REDIS_REPLY_INTEGER) {
-		std::cout << "Execute command [ HSET " << first_key << " " << second_key << " " << value << " ] failure !"
-			<< std::endl; // 日志todo...
+		SPDLOG_ERROR("redis HSET failed, key={}, field={}, value_size={}, reason=unexpected_type, type={}", first_key, second_key, value.size(), reply->type); // 日志todo...
 		return false;
 	}
 
-	std::cout << "Execute command [ HSET " << first_key << " " << second_key << " " << value << " ] success !"
-		<< std::endl; //  日志todo...
+	SPDLOG_DEBUG("redis HSET success, key={}, field={}, value_size={}", first_key, second_key, value.size()); //  日志todo...
 
 	return true;
 }
@@ -405,8 +402,7 @@ bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key)
 	auto reply = (redisReply*)redisCommand(connection, "HDEL %s %s", first_key.c_str(), second_key.c_str());
 
 	if (reply == nullptr) {
-		std::cout << "Execute command [ HDEL " << first_key << " " << second_key << " ] failure !"
-			<< std::endl; // 日志todo...
+		SPDLOG_ERROR("redis HDEL failed, key={}, field={}, reason=null_reply", first_key, second_key); // 日志todo...
 		_pool->returnConnection(connection);
 		return false;
 	}
@@ -417,13 +413,11 @@ bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key)
 		});
 
 	if (reply->type != REDIS_REPLY_INTEGER) {
-		std::cout << "Execute command [ HDEL " << first_key << " " << second_key << " ] failure !"
-			<< std::endl; // 日志todo...
+		SPDLOG_ERROR("redis HDEL failed, key={}, field={}, reason=unexpected_type, type={}", first_key, second_key, reply->type); // 日志todo...
 		return false;
 	}
 
-	std::cout << "Execute command [ HDEL " << first_key << " " << second_key << " ] success !"
-		<< std::endl; // 日志todo...
+	SPDLOG_DEBUG("redis HDEL success, key={}, field={}", first_key, second_key); // 日志todo...
 
 	return true;
 }
@@ -444,7 +438,7 @@ bool RedisMgr::Del(const std::string& key) {
 	auto reply = (redisReply*)redisCommand(connection, "DEL %s", key.c_str());
 
 	if (reply == nullptr) {
-		std::cout << "Execute command [ DEL " << key << " ] failure !" << std::endl; // 日志todo...
+		SPDLOG_ERROR("redis DEL failed, key={}, reason=null_reply", key); // 日志todo...
 		_pool->returnConnection(connection);
 		return false;
 	}
@@ -455,11 +449,11 @@ bool RedisMgr::Del(const std::string& key) {
 		});
 
 	if (reply->type != REDIS_REPLY_INTEGER) {
-		std::cout << "Execute command [ DEL " << key << " ] failure !" << std::endl; // 日志todo...
+		SPDLOG_ERROR("redis DEL failed, key={}, reason=unexpected_type, type={}", key, reply->type); // 日志todo...
 		return false;
 	}
 
-	std::cout << "Execut command [ Del " << key << " ] success ! " << std::endl; // 日志todo...
+	SPDLOG_DEBUG("redis DEL success, key={}", key); // 日志todo...
 
 	return true;
 }

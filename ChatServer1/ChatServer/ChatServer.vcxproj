@@ -74,6 +74,10 @@
     <IncludePath>D:\VisualStudio\mysql_connect_c++\mysql-connector-c++-8.3.0-winx64-debug\mysql-connector-c++-8.3.0-winx64\include;D:\VisualStudio\boost\boost_1_90_0;$(IncludePath)</IncludePath>
     <LibraryPath>D:\VisualStudio\mysql_connect_c++\mysql-connector-c++-8.3.0-winx64-debug\mysql-connector-c++-8.3.0-winx64\lib64\vs14;D:\VisualStudio\boost\boost_1_90_0\stage\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>D:\VisualStudio\boost\boost_1_90_0;D:\VisualStudio\mysql_connect_c++\mysql-connector-c++-8.3.0-winx64\include;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\VisualStudio\boost\boost_1_90_0\stage\lib;D:\VisualStudio\mysql_connect_c++\mysql-connector-c++-8.3.0-winx64\lib64\vs14;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <PropertyGroup Label="Vcpkg">
     <VcpkgXUseBuiltInApplocalDeps>true</VcpkgXUseBuiltInApplocalDeps>
   </PropertyGroup>
@@ -107,9 +111,10 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -126,13 +131,19 @@
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
+      <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>mysqlcppconn.lib;
+mysqlcppconn8.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -146,6 +157,7 @@
     <ClCompile Include="CSession.cpp" />
     <ClCompile Include="DistLock.cpp" />
     <ClCompile Include="LogicSystem.cpp" />
+    <ClCompile Include="LogMgr.cpp" />
     <ClCompile Include="message.grpc.pb.cc" />
     <ClCompile Include="message.pb.cc" />
     <ClCompile Include="MsgNode.cpp" />
@@ -167,6 +179,7 @@
     <ClInclude Include="Data.h" />
     <ClInclude Include="DistLock.h" />
     <ClInclude Include="LogicSystem.h" />
+    <ClInclude Include="LogMgr.h" />
     <ClInclude Include="message.grpc.pb.h" />
     <ClInclude Include="message.pb.h" />
     <ClInclude Include="MsgNode.h" />

@@ -5,6 +5,7 @@
 #include "ConfigMgr.h"
 #include "StatusServiceImpl.h"
 #include "const.h"
+#include "LogMgr.h"
 
 void RunServer() {
 	auto& configMgr = ConfigMgr::GetInstance();
@@ -22,7 +23,7 @@ void RunServer() {
 
 	// 构建并启动gRPC服务器
 	std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-	std::cout << "Server listening on " << server_address << std::endl;
+	SPDLOG_INFO("StatusServer listening on {}", server_address);
 
 	// 下面的逻辑是用来优雅关闭的
 	// io_context的目的是为了构造signal_set，signal_set将异步等待函数注册到io_context内
@@ -38,7 +39,7 @@ void RunServer() {
 	// 异步等待停止信号
 	signals.async_wait([&server](const boost::system::error_code& error, int signal_number) {
 		if (!error) {
-			std::cout << "Shutting down server..." << std::endl;
+			SPDLOG_INFO("StatusServer shutting down");
 			server->Shutdown(); // 优雅地关闭服务器
 		}
 		});
@@ -55,11 +56,15 @@ void RunServer() {
 
 int main()
 {
+	auto logger = LogMgr::GetInstance();
+	if (!logger->InitLogMgr()) {
+		return EXIT_FAILURE;
+	}
 	try {
 		RunServer();
 	}
 	catch (std::exception& e) {
-		std::cout << "Exception : " << e.what() << std::endl;
+		SPDLOG_ERROR("StatusServer exception: {}", e.what());
 		return EXIT_FAILURE;
 	}
 

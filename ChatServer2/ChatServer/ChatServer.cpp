@@ -11,9 +11,14 @@
 #include <memory>
 #include "LogicSystem.h"
 #include "RedisMgr.h"
+#include "LogMgr.h"
 
 int main()
 {
+    auto logger = LogMgr::GetInstance();
+    if (!logger->InitLogMgr()) {
+        return EXIT_FAILURE;
+    }
     auto& configMgr = ConfigMgr::GetInstance();
     // chatserver服务器启动后，将连接数更新到redis中
     auto self_server_name = configMgr["SelfServer"]["Name"];
@@ -34,7 +39,7 @@ int main()
 
         // 构建并启动gRPC服务器
         std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-        std::cout << "chat grpc Server listening on " << server_address << std::endl;
+        SPDLOG_INFO("chat grpc server listening on {}", server_address);
 
         // 创建一个单独的线程等待grpc
         std::thread grpc_server_thread([&server]() {
@@ -66,7 +71,7 @@ int main()
         grpc_server_thread.join(); // 等待线程结束
     }
     catch (std::exception& e) {
-        std::cerr << "Exception : " << e.what();
+        SPDLOG_ERROR("ChatServer exception: {}", e.what());
         return EXIT_FAILURE;
     }
 

@@ -69,6 +69,6 @@ ChatGrpcClient::ChatGrpcClient() {
 		if (configMgr[name]["Name"].empty()) {
 			return;
 		}
-		_pool[configMgr[name]["Name"]] = std::make_unique<ChatConnectionPool>(configMgr[name]["Host"], configMgr[name]["Port"], 2);
+		_pool[configMgr[name]["Name"]] = std::make_unique<ChatConnectionPool>(configMgr[name]["Host"], configMgr[name]["Port"], 5);
 	}
 }

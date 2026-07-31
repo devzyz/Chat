@@ -1,4 +1,5 @@
 #include "ConfigMgr.h"
+#include "LogMgr.h"
 #include <boost/filesystem.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
@@ -44,7 +45,7 @@ SectionInfo ConfigMgr::operator[](const std::string& section) {
 ConfigMgr::ConfigMgr() {
 	boost::filesystem::path current_path = boost::filesystem::current_path();
 	boost::filesystem::path config_path = current_path / "config.ini";
-	std::cout << "Config path : " << config_path << std::endl;
+	_config_path = config_path.string();
 
 	boost::property_tree::ptree pt;
 	boost::property_tree::read_ini(config_path.string(), pt);
@@ -69,9 +70,21 @@ ConfigMgr::ConfigMgr() {
 
 ConfigMgr::ConfigMgr(const ConfigMgr& src) {
 	_config_map = src._config_map;
+	_config_path = src._config_path;
 }
 ConfigMgr& ConfigMgr::operator = (const ConfigMgr& src) {
 	if (&src == this) return *this;
 	_config_map = src._config_map;
+	_config_path = src._config_path;
 	return *this;
+}
+
+void ConfigMgr::DumpLoadedConfig() const {
+	SPDLOG_DEBUG("config path: {}", _config_path);
+	for (const auto& section_pair : _config_map) {
+		SPDLOG_DEBUG("load config section [{}]", section_pair.first);
+		for (const auto& key_value_pair : section_pair.second._section_datas) {
+			SPDLOG_DEBUG("config [{}].{} = xxx", section_pair.first, key_value_pair.first);
+		}
+	}
 }

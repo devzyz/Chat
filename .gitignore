@@ -1,11 +1,46 @@
-#打包生成的文件
+# Build output
 build/
-
-# vs生成的缓存
-.vs/
+Build/
+Debug/
+Release/
 x64/
+x86/
+out/
 
-# nodejs生成的依赖包
+# Visual Studio / Qt Creator user state
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+CMakeLists.txt.user*
+
+# Compiler and linker artifacts
+*.obj
+*.o
+*.idb
+*.pdb
+*.ilk
+*.tlog
+*.lastbuildstate
+*.dll
+*.exe
+
+# Runtime logs, caches, and temporary files
+Cache/
+Log/
+Logs/
+*.log
+*.tmp
+*.bak
+
+# Dependency/build caches
 node_modules/
+.cache/
 
+# Solution files are generated locally in this repository
 *.sln
+
+# OS metadata
+.DS_Store
+Thumbs.db

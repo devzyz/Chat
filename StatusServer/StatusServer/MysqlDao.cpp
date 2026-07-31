@@ -37,7 +37,7 @@ MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::stri
 			});
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "mysql pool init failed, error is " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql pool init failed, error={}", e.what());
 	}
 }
 
@@ -67,10 +67,10 @@ void MysqlConnectionPool::checkConnection() {
 			std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
 			stmt->executeQuery("SELECT 1");
 			con->_last_oper_time = timestamp;
-			std::cout << "execute timer alive query, cur is " << timestamp << std::endl;
+			SPDLOG_TRACE("mysql keepalive succeeded, timestamp={}", timestamp);
 		}
 		catch (sql::SQLException& e) {
-			std::cout << "Error keeping connection alive : " << e.what() << std::endl;
+			SPDLOG_WARN("mysql keepalive failed, error={}", e.what());
 			// 重新创建连接，并替换旧的连接
 			sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 			auto* newcon = driver->connect(_url, _user, _pass);
@@ -127,7 +127,7 @@ MysqlDao::MysqlDao() {
 	const auto& user = configmgr["Mysql"]["User"];
 	const auto& password = configmgr["Mysql"]["Password"];
 	const auto& schema = configmgr["Mysql"]["Schema"];
-	_pool.reset(new MysqlConnectionPool(host + ":" + port, user, password, schema, 5));
+	_pool.reset(new MysqlConnectionPool(host + ":" + port, user, password, schema, 8));
 }
 
 MysqlDao::~MysqlDao() {
@@ -160,7 +160,7 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
 		std::unique_ptr<sql::ResultSet> res(stmtResult->executeQuery("SELECT @result AS result"));
 		if (res->next()) {
 			int result = res->getInt("result");
-			std::cout << "Result : " << result << std::endl;
+			SPDLOG_DEBUG("mysql user registration completed, uid={}", result);
 			_pool->returnConnection(std::move(con));
 			return result;
 		}
@@ -169,9 +169,7 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
 	}
 	catch (sql::SQLException& e) {
 		_pool->returnConnection(std::move(con));
-		std::cerr << "SQLException: " << e.what();
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
-		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		SPDLOG_ERROR("mysql RegUser failed, name={}, error={}, code={}, state={}", name, e.what(), e.getErrorCode(), e.getSQLState().c_str());
 		return -1;
 	}
 }
@@ -199,7 +197,7 @@ bool MysqlDao::CheckEmail(const std::string& username, const std::string& email)
 
 		// 遍历结果集
 		while (res->next()) {
-			std::cout << "Check Email : " << res->getString("email") << std::endl;
+			SPDLOG_TRACE("mysql CheckEmail candidate loaded, username={}", username);
 			if (email != res->getString("email")) {
 				return false;
 			}
@@ -209,7 +207,7 @@ bool MysqlDao::CheckEmail(const std::string& username, const std::string& email)
 		return false;
 	}
 	catch (sql::SQLException& e) {
-		std::cerr << "SQLException: " << e.what();
+		SPDLOG_ERROR("mysql CheckEmail failed, username={}, error={}", username, e.what());
 		return false;
 	}
 }
@@ -234,11 +232,11 @@ bool MysqlDao::UpdatePassword(const std::string& username, const std::string& pa
 		// 执行查询
 		int updateCount = pstmt->executeUpdate();
 
-		std::cout << "Updated rows: " << updateCount << std::endl;
+		SPDLOG_DEBUG("mysql password update completed, username={}, updated_rows={}", username, updateCount);
 		return true;
 	}
 	catch (sql::SQLException& e) {
-		std::cerr << "SQLException: " << e.what();
+		SPDLOG_ERROR("mysql UpdatePassword failed, username={}, error={}", username, e.what());
 		return false;
 	}
 }
@@ -265,7 +263,7 @@ bool MysqlDao::CheckPassword(const std::string& email, const std::string& passwo
 		// 取到密码
 		while (res->next()) {
 			origin_password = res->getString("password");
-			std::cout << "Password : " << origin_password << std::endl;
+			SPDLOG_TRACE("mysql password hash loaded");
 			break;
 		}
 
@@ -283,7 +281,7 @@ bool MysqlDao::CheckPassword(const std::string& email, const std::string& passwo
 		return true;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLException : " << e.what();
+		SPDLOG_ERROR("mysql CheckPassword failed, error={}", e.what());
 		return false;
 	}
 }

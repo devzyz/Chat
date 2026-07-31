@@ -1,18 +1,19 @@
 #include "tcpmgr.h"
 #include <QJsonDocument>
+#include "logmgr.h"
 #include "usermgr.h"
 
 TcpMgr::TcpMgr() : _host(""), _port(0), _b_recv_pending(false),
     _message_id(0), _message_len(0){
 
     // 绑定连接完成信号到lambda槽函数上
-    connect(&_socket, &QTcpSocket::connected, [&]() {
-        qDebug() << "Connected to server";
+    connect(&_socket, &QTcpSocket::connected, this, [&]() {
+        SPDLOG_INFO("connected to chat server");
         emit sig_tcp_connect_success(true);
     });
 
     // 绑定socket可读取信号到lambda槽函数上
-    connect(&_socket, &QTcpSocket::readyRead, [&]() {
+    connect(&_socket, &QTcpSocket::readyRead, this, [&]() {
         // 通过追加的方式将_socket的缓冲区内可读的信息读取到程序的_buffer缓存内
         _buffer.append(_socket.readAll());
 
@@ -48,21 +49,21 @@ TcpMgr::TcpMgr() : _host(""), _port(0), _b_recv_pending(false),
             // 先取子串，通过mid函数
             QByteArray messageBody = _buffer.mid(0, _message_len);
             _buffer.remove(0, _message_len);
-            qDebug() << "Message ID : " << _message_id << ". Message Len : " << _message_len
-                     << ". Message Body : " << messageBody;
 
             handleMsg(ReqId(_message_id), _message_len, messageBody);
         }
     });
 
     // 处理错误信号
-    connect(&_socket, &QTcpSocket::errorOccurred, [&](QAbstractSocket::SocketError socketError) {
-        qDebug() << "Socket error:" << socketError << _socket.errorString();
+    connect(&_socket, &QTcpSocket::errorOccurred, this, [&](QAbstractSocket::SocketError socketError) {
+        SPDLOG_WARN("chat server socket error, code={}, message={}",
+                    static_cast<int>(socketError),
+                    LogMgr::ToUtf8(_socket.errorString()));
     });
 
     // 处理断开连接信号
-    connect(&_socket, &QTcpSocket::disconnected, [&]() {
-        qDebug() << "Disconnected from server.";
+    connect(&_socket, &QTcpSocket::disconnected, this, [&]() {
+        SPDLOG_INFO("disconnected from chat server");
         emit sig_connection_close();
     });
 
@@ -78,14 +79,16 @@ void TcpMgr::initHandlers()
     // 登录请求的回包处理逻辑
     _handlers.insert(ReqId::ID_CHAT_LOGIN_RSP, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_CHAT_LOGIN_RSP, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received chat login response, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse chat login response as JSON, msg_id={}",
+                        static_cast<int>(id));
             emit sig_login_failed(ErrorCodes::ERR_JSON);
             return ;
         }
@@ -93,14 +96,16 @@ void TcpMgr::initHandlers()
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("chat login response contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             emit sig_login_failed(ErrorCodes::ERR_JSON);
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Login Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("chat login response is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             emit sig_login_failed(ErrorCodes::ERR_JSON);
             return ;
         }
@@ -108,7 +113,8 @@ void TcpMgr::initHandlers()
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Login Failed, error is " << err;
+            SPDLOG_WARN("chat login failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             emit sig_login_failed(err);
             return ;
         }
@@ -179,14 +185,16 @@ void TcpMgr::initHandlers()
     // 搜索用户请求的回包处理逻辑
     _handlers.insert(ReqId::ID_SEARCH_USER_RSP, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_SEARCH_USER_RSP, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received search user response, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse search user response as JSON, msg_id={}",
+                        static_cast<int>(id));
             emit sig_tcp_search_user_finish(nullptr);
             return ;
         }
@@ -194,14 +202,16 @@ void TcpMgr::initHandlers()
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("search user response contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             emit sig_tcp_search_user_finish(nullptr);
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Search user Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("search user response is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             emit sig_tcp_search_user_finish(nullptr);
             return ;
         }
@@ -209,7 +219,8 @@ void TcpMgr::initHandlers()
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Search user Failed, error is " << err;
+            SPDLOG_WARN("search user failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             emit sig_tcp_search_user_finish(nullptr);
             return ;
         }
@@ -228,34 +239,39 @@ void TcpMgr::initHandlers()
     // 申请添加好友的回包处理逻辑
     _handlers.insert(ReqId::ID_ADD_FRIEND_RSP, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_ADD_FRIEND_RSP, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received add friend response, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse add friend response as JSON, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("add friend response contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Add Friend Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("add friend response is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             return ;
         }
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Add Friend Failed, error is " << err;
+            SPDLOG_WARN("add friend failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             return ;
         }
     });
@@ -263,34 +279,39 @@ void TcpMgr::initHandlers()
     // 服务器通知我申请添加好友逻辑
     _handlers.insert(ReqId::ID_NOTIFY_ADD_FRIEND_REQ, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_NOTIFY_ADD_FRIEND_REQ, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received add friend notification, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse add friend notification as JSON, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("add friend notification contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Notify Add Friend Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("add friend notification is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             return ;
         }
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Notify Add Friend Failed, error is " << err;
+            SPDLOG_WARN("add friend notification failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             return ;
         }
 
@@ -313,34 +334,39 @@ void TcpMgr::initHandlers()
     // 服务器认证添加好友逻辑
     _handlers.insert(ReqId::ID_AUTH_FRIEND_RSP, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_AUTH_FRIEND_RSP, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received authorize friend response, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse authorize friend response as JSON, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("authorize friend response contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Auth Friend Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("authorize friend response is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             return ;
         }
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Auth Friend Failed, error is " << err;
+            SPDLOG_WARN("authorize friend failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             return ;
         }
 
@@ -389,34 +415,39 @@ void TcpMgr::initHandlers()
     // 服务器通知我认证添加好友
     _handlers.insert(ReqId::ID_NOTIFY_AUTH_FRIEND_REQ, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_NOTIFY_AUTH_FRIEND_REQ, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received authorize friend notification, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse authorize friend notification as JSON, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("authorize friend notification contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Notify Auth Friend Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("authorize friend notification is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             return ;
         }
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Notify Auth Friend Failed, error is " << err;
+            SPDLOG_WARN("authorize friend notification failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             return ;
         }
 
@@ -466,34 +497,39 @@ void TcpMgr::initHandlers()
     // 发送文本聊天数据请求回包
     _handlers.insert(ReqId::ID_TEXT_CHAT_MSG_RSP, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_TEXT_CHAT_MSG_RSP, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received text chat response, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse text chat response as JSON, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("text chat response contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Text Chat Msg Rsp Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("text chat response is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             return ;
         }
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Text Chat Msg Rsp Failed, error is " << err;
+            SPDLOG_WARN("text chat response failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             return ;
         }
 
@@ -527,34 +563,39 @@ void TcpMgr::initHandlers()
     // 服务器通知接收文本聊天数据
     _handlers.insert(ReqId::ID_NOTIFY_CHAT_MSG_REQ, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_NOTIFY_CHAT_MSG_REQ, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received chat message notification, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse chat message notification as JSON, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("chat message notification contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Notify Chat Msg Req Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("chat message notification is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             return ;
         }
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Notify Chat Msg Req Failed, error is " << err;
+            SPDLOG_WARN("chat message notification failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             return ;
         }
 
@@ -582,34 +623,39 @@ void TcpMgr::initHandlers()
     // 服务器通知客户端下线
     _handlers.insert(ReqId::ID_NOTIFY_OFF_LINE_REQ, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_NOTIFY_OFF_LINE_REQ, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received offline notification, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse offline notification as JSON, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("offline notification contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Notify Off Line Req Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("offline notification is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             return ;
         }
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Notify Off Line Req Failed, error is " << err;
+            SPDLOG_WARN("offline notification failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             return ;
         }
 
@@ -619,34 +665,39 @@ void TcpMgr::initHandlers()
     // 心跳检测回包
     _handlers.insert(ReqId::ID_HEART_BEAT_RSP, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_HEART_BEAT_RSP, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received heartbeat response, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse heartbeat response as JSON, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("heartbeat response contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Heart beat Req Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("heartbeat response is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             return ;
         }
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Heart beat Req Failed, error is " << err;
+            SPDLOG_WARN("heartbeat response failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             return ;
         }
     });
@@ -654,34 +705,39 @@ void TcpMgr::initHandlers()
     // 从服务器加载一部分聊天列表
     _handlers.insert(ReqId::ID_LOAD_CHAT_LIST_RSP, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_LOAD_CHAT_LIST_RSP, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received load chat list response, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse load chat list response as JSON, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("load chat list response contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Load Chat List Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("load chat list response is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             return ;
         }
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Load Chat List Failed, error is " << err;
+            SPDLOG_WARN("load chat list response failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             return ;
         }
 
@@ -727,34 +783,39 @@ void TcpMgr::initHandlers()
     // 创建私有聊天请求回包
     _handlers.insert(ReqId::ID_CREATE_PRIVATE_CHAT_RSP, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_CREATE_PRIVATE_CHAT_RSP, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received create private chat response, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse create private chat response as JSON, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("create private chat response contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Create Private Chat Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("create private chat response is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             return ;
         }
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Create Private Chat Failed, error is " << err;
+            SPDLOG_WARN("create private chat response failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             return ;
         }
 
@@ -776,34 +837,39 @@ void TcpMgr::initHandlers()
     // 增量拉取聊天记录回包
     _handlers.insert(ReqId::ID_LOAD_CHAT_MESSAGE_RSP, [this](ReqId id, int len, QByteArray data) {
         Q_UNUSED(len);
-        qDebug() << "handle ID_LOAD_CHAT_MESSAGE_RSP, handle id is " << id << ". data is " << data;
+        SPDLOG_DEBUG("received load chat message response, msg_id={}, payload_size={}",
+                     static_cast<int>(id), data.size());
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {
-            qDebug() << "Failed to create QJsonDocument.";
+            SPDLOG_WARN("failed to parse load chat message response as JSON, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.isEmpty()) {
-            qDebug() << "JsonObject is empty.";
+            SPDLOG_WARN("load chat message response contains an empty JSON object, msg_id={}",
+                        static_cast<int>(id));
             return ;
         }
 
         // 如果结果内不包含error键，则说明json不正确
         if (!jsonObj.contains("error")) {
-            qDebug() << "Load Chat Message Failed, err is Json Parse Err : " << ErrorCodes::ERR_JSON;
+            SPDLOG_WARN("load chat message response is missing error field, msg_id={}, error={}",
+                        static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
             return ;
         }
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         if (err != ErrorCodes::SUCCESS) {
-            qDebug() << "Load Chat Message Failed, error is " << err;
+            SPDLOG_WARN("load chat message response failed, msg_id={}, error={}",
+                        static_cast<int>(id), err);
             return ;
         }
 
@@ -843,7 +909,7 @@ void TcpMgr::initHandlers()
 void TcpMgr::handleMsg(ReqId id, int len, QByteArray data)
 {
     if (_handlers.find(id) == _handlers.end()) {
-        qDebug() << "not found id [" << id << "] to handle";
+        SPDLOG_WARN("no TCP handler registered for msg_id={}", static_cast<int>(id));
         return ;
     }
     _handlers[id](id, len, data);
@@ -892,9 +958,11 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
  */
 void TcpMgr::slot_tcp_connect(ServerInfo si)
 {
-    qDebug() << "receive tcp connect signal";
+    SPDLOG_DEBUG("received TCP connect signal");
     // 尝试连接到服务器
-    qDebug() << "Connecting to server ...";
+    SPDLOG_INFO("connecting to chat server, host={}, port={}",
+                LogMgr::ToUtf8(si.Host),
+                LogMgr::ToUtf8(si.Port));
     _host = si.Host;
     _port = static_cast<quint16> (si.Port.toUInt());
 

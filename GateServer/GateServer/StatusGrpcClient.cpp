@@ -46,7 +46,7 @@ std::unique_ptr<StatusService::Stub> RPCConnection::getConnection() {
 
 void RPCConnection::returnConnection(std::unique_ptr<StatusService::Stub> context) {
 	std::unique_lock<std::mutex> lock(_mutex);
-	if (!_b_stop) {
+	if (_b_stop) {
 		return;
 	}
 	_connections.push(std::move(context));

@@ -1,4 +1,5 @@
 #include "chatuserlist.h"
+#include "logmgr.h"
 #include <QWheelEvent>
 #include <QEvent>
 #include <QScrollBar>
@@ -54,7 +55,7 @@ bool ChatUserList::eventFilter(QObject *watched, QEvent *event) {
 
         if (maxScrollValue - currentValue <= 0) {
             // 滚动到底部，加载新的联系人
-            qDebug() << "load more chat user";
+            SPDLOG_DEBUG("loading more chat users");
             // 不能无限制的加载，如果已经加载完成了，则不触发加载信号
             auto isLoadingFinish = UserMgr::GetInstance()->ChatIsLoadFinish();
             if (isLoadingFinish) {

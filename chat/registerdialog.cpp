@@ -1,4 +1,5 @@
 #include "registerdialog.h"
+#include "logmgr.h"
 #include "ui_registerdialog.h"
 #include "global.h"
 #include "httpmgr.h"
@@ -166,7 +167,9 @@ void RegisterDialog::initHttpHandlers()
 
         auto email = jsonObj["email"].toString();
         showTip(tr("验证码已经发送到邮箱，注意查收"), true);
-        qDebug() << "email is " << email;
+        SPDLOG_INFO(
+            "registration verification code sent, email_length={}",
+            email.size());
     });
 
     // 注册的回包逻辑
@@ -181,8 +184,10 @@ void RegisterDialog::initHttpHandlers()
         auto email = jsonObj["email"].toString();
         changeTipPage();
         showTip(tr("用户注册成功"), true);
-        qDebug() << "email is " << email;
-        qDebug() << "user uid is " << jsonObj["uid"].toString();
+        SPDLOG_INFO(
+            "user registration succeeded, uid={}, email_length={}",
+            LogMgr::ToUtf8(jsonObj["uid"].toString()),
+            email.size());
     });
 }
 

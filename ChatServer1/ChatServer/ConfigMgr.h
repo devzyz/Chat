@@ -1,6 +1,7 @@
 #pragma once
 #include "Singleton.h"
 #include <map>
+#include <string>
 
 struct SectionInfo {
 public:
@@ -32,7 +33,9 @@ public:
 	 */
 	static ConfigMgr& GetInstance();
 	SectionInfo operator [] (const std::string& key);
+	void DumpLoadedConfig() const;
 private:
 	std::map<std::string, SectionInfo> _config_data;
+	std::string _config_path;
 };
 

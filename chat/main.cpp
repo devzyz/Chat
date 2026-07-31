@@ -1,21 +1,32 @@
 #include "mainwindow.h"
+#include "logmgr.h"
 
 #include <QApplication>
 #include <QFile>
+#include <QMessageBox>
 
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
 
+    auto logger = LogMgr::GetInstance();
+    if (!logger->InitLogMgr()) {
+        QMessageBox::critical(
+            nullptr,
+            QObject::tr("日志初始化失败"),
+            QObject::tr("无法创建或打开日志文件，客户端将退出。"));
+        return EXIT_FAILURE;
+    }
+
     QFile qss(":/style/stylesheet.qss");
 
     if (qss.open(QFile::ReadOnly)) {
-        qDebug("open successed");
+        SPDLOG_DEBUG("stylesheet loaded");
         QString style = QLatin1String(qss.readAll());
         a.setStyleSheet(style);
         qss.close();
     }else {
-        qDebug("open failed");
+        SPDLOG_WARN("stylesheet could not be opened");
     }
 
     // 通过config.ini配置url

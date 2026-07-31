@@ -25,7 +25,7 @@ void CServer::Start() {
 			self->Start();
 		}
 		catch (std::exception& e) {
-			std::cout << "exception : " << e.what() << std::endl;
+			SPDLOG_ERROR("accept connection exception: {}", e.what());
 		}
 		});
 }

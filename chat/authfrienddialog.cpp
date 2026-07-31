@@ -1,4 +1,5 @@
 #include "authfrienddialog.h"
+#include "logmgr.h"
 #include "ui_authfrienddialog.h"
 #include <QJsonObject>
 #include "usermgr.h"
@@ -26,7 +27,7 @@ AuthFriendDialog::AuthFriendDialog(QWidget *parent)
 AuthFriendDialog::~AuthFriendDialog()
 {
     delete ui;
-    qDebug() << "Auth Friend Dialog is destructed";
+    SPDLOG_DEBUG("AuthFriendDialog destructed");
 }
 
 void AuthFriendDialog::SetApplyInfo(std::shared_ptr<ApplyInfo> applyinfo)
@@ -46,7 +47,7 @@ void AuthFriendDialog::slot_auth_apply_cancel()
  */
 void AuthFriendDialog::slot_auth_apply_sure()
 {
-    qDebug() << "send auth apply sure";
+    SPDLOG_DEBUG("friend authentication confirmation submitted");
     // 准备tcp请求，发送认证信息
     QJsonObject jsonObj;
     auto uid = UserMgr::GetInstance()->GetUid();

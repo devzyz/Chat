@@ -1,4 +1,5 @@
 #include "friendinfopage.h"
+#include "logmgr.h"
 #include "ui_friendinfopage.h"
 
 FriendInfoPage::FriendInfoPage(QWidget *parent)
@@ -27,6 +28,6 @@ void FriendInfoPage::SetInfo(std::shared_ptr<UserInfo> friend_info)
 
 void FriendInfoPage::on_info_chat_label_clicked()
 {
-    qDebug() << "on info chat label clicked";
+    SPDLOG_DEBUG("chat action selected from friend information page");
     emit sig_jump_chat_item(_friend_info);
 }

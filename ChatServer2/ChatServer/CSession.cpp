@@ -15,7 +15,7 @@ CSession::CSession(boost::asio::io_context& ioc, std::shared_ptr<CServer> server
 }
 
 CSession::~CSession() {
-	std::cout << "~CSession destruct" << std::endl; // 日志todo...
+	SPDLOG_DEBUG("CSession destructed, session_id={}", _session_id); // 日志todo...
 }
 
 boost::asio::ip::tcp::socket& CSession::GetSocket() {
@@ -42,7 +42,7 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 		try {
 			// 如果是正常的可交互的，肯定不会走到这里，走到这里说明是有异常，例如客户端主动断开连接
 			if (ec) {
-				std::cout << "handle read failed, error is " << ec.what() << std::endl;
+				SPDLOG_DEBUG("session header read failed, session_id={}, error={}", _session_id, ec.message());
 				Close();
 				// 出错后的处理
 				DealExceptionSession();
@@ -67,7 +67,7 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 
 			// id非法，断开连接
 			if (msg_id > MAX_LENGTH) {
-				std::cout << "invalid msg_id is " << msg_id << std::endl;
+				SPDLOG_WARN("invalid msg_id, session_id={}, msg_id={}", _session_id, msg_id);
 				_server->ClearSession(_session_id);
 				return;
 			}
@@ -79,7 +79,7 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 
 			// 长度非法，断开连接
 			if (msg_len > MAX_LENGTH) {
-				std::cout << "invalid msg_len is " << msg_len << std::endl;
+				SPDLOG_WARN("invalid msg_len, session_id={}, msg_len={}", _session_id, msg_len);
 				_server->ClearSession(_session_id);
 				return;
 			}
@@ -90,7 +90,7 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 			UpdateHeartBeat();
 		}
 		catch (std::exception& e) {
-			std::cout << "Exception : " << e.what();
+			SPDLOG_ERROR("session header read exception, session_id={}, error={}", _session_id, e.what());
 		}
 	});
 }
@@ -150,7 +150,7 @@ void CSession::AsyncReadBody(std::size_t body_total_len) {
 			// 因为服务器踢人逻辑中，都是通过给客户端发送一个信号，由客户端断开链接
 			// 因此当接受到错误信息后，代表此时客户端已经断开链接了，此时要清理到对应的session
 			if (ec) {
-				std::cout << "handler read failed, error is "<< ec.what() << std::endl;
+				SPDLOG_DEBUG("session body read failed, session_id={}, error={}", _session_id, ec.message());
 				Close();
 
 				DealExceptionSession();
@@ -170,7 +170,7 @@ void CSession::AsyncReadBody(std::size_t body_total_len) {
 			UpdateHeartBeat();
 		}
 		catch (std::exception& e) {
-			std::cout << "Exception : " << e.what() << std::endl;
+			SPDLOG_ERROR("session body read exception, session_id={}, error={}", _session_id, e.what());
 		}
 	});
 }
@@ -186,7 +186,7 @@ void CSession::Send(const char* msg, short msg_id, short msg_len) {
 	std::lock_guard<std::mutex> lock(_send_mutex);
 	auto send_que_size = _send_que.size();
 	if (_send_que.size() > MAX_SENDQUE) {
-		std::cout << "session : " << _session_id << " send que fulled, size is " << MAX_SENDQUE << std::endl;
+		SPDLOG_ERROR("session send queue full, session_id={}, max_size={}", _session_id, MAX_SENDQUE);
 		return;
 	}
 	_send_que.push(std::make_shared<SendNode>(msg, msg_id, msg_len));
@@ -228,7 +228,7 @@ void CSession::HandleWrite(const boost::system::error_code& ec, std::shared_ptr<
 		}
 	}
 	catch (std::exception& e) {
-		std::cout << "Exception : " << e.what() << std::endl;
+		SPDLOG_ERROR("session send exception, session_id={}, error={}", _session_id, e.what());
 	}
 }
 

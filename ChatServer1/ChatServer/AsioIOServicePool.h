@@ -2,6 +2,7 @@
 #include "Singleton.h"
 #include <boost/asio.hpp>
 #include <vector>
+#include <thread>
 #include <memory>
 
 /**
@@ -35,7 +36,10 @@ public:
 	void stop();
 
 private:
-	AsioIOServicePool(std::size_t size = 2);
+	static std::size_t DefaultPoolSize();
+	static std::size_t NormalizePoolSize(std::size_t size);
+	AsioIOServicePool();
+	AsioIOServicePool(std::size_t size);
 	std::size_t _nextIOService; // 通过轮询的方式，返回下一个将要被使用的io_context
 	std::vector<IOService> _ioServices;
 	std::vector<WorkPtr> _works;

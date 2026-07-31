@@ -1,4 +1,5 @@
 #include "contactuserlist.h"
+#include "logmgr.h"
 #include "contactuseritem.h"
 #include "grouptipitem.h"
 #include <QListWidgetItem>
@@ -83,7 +84,7 @@ bool ContactUserList::eventFilter(QObject *watched, QEvent *event)
 
         if (maxScrollValue - currentValue <= 0) {
             // 滚动到底部，加载新的联系人
-            qDebug() << "load more contact user";
+            SPDLOG_DEBUG("loading more contacts");
             // 判断联系人是否加载完成
             auto isLoadingFinish = UserMgr::GetInstance()->ContactIsLoadFinish();
             if (isLoadingFinish) {
@@ -173,14 +174,14 @@ void ContactUserList::slot_item_clicked(QListWidgetItem * item)
     // 先转换为基类
     QWidget * widget = this->itemWidget(item);
     if (!widget) {
-        qDebug() << "slot item clicked widget is nullptr";
+        SPDLOG_WARN("clicked contact list widget is null");
         return ;
     }
 
     // 对自定义widget进行操作，将item转化为基类的ListItemBase
     ListItemBase * customItem = qobject_cast<ListItemBase*> (widget);
     if (!customItem) {
-        qDebug() << "slot item clicked widget is nullptr";
+        SPDLOG_WARN("clicked contact list item is null");
         return ;
     }
 
@@ -188,13 +189,13 @@ void ContactUserList::slot_item_clicked(QListWidgetItem * item)
     auto itemType = customItem->GetItemType();
     if (itemType == ListItemType::INVALID_ITEM ||
         itemType == ListItemType::GROUP_TIP_ITEM) {
-        qDebug() << "slot invalid item clicked";
+        SPDLOG_WARN("invalid contact list item clicked");
         return ;
     }
 
     // 查看新朋友的item被点击，发出信号
     if (itemType == ListItemType::APPLY_FRIEND_ITEM) {
-        qDebug() << "apply friend item clicked";
+        SPDLOG_DEBUG("friend application item clicked");
         ContactUserItem * contact_friend_item = qobject_cast<ContactUserItem*> (customItem);
         contact_friend_item->ShowRedPoint(false); // 点击后关闭红点提示
         emit sig_switch_apply_friend_list_page();
@@ -204,7 +205,7 @@ void ContactUserList::slot_item_clicked(QListWidgetItem * item)
     // 已有联系人的item被点击
     if (itemType == ListItemType::CONTACT_USER_ITEM) {
         ContactUserItem * contact_friend_item = qobject_cast<ContactUserItem*> (customItem);
-        qDebug() << "contact user item clicked";
+        SPDLOG_DEBUG("contact user item clicked");
         emit sig_switch_friend_info_page(contact_friend_item->GetFriendInfo());
         return ;
     }
@@ -230,7 +231,7 @@ void ContactUserList::AddNewContact(std::shared_ptr<AuthInfo> auth_info)
 // Tcp发出添加好友
 void ContactUserList::slot_tcp_add_friend(std::shared_ptr<AuthInfo> auth_info)
 {
-    qDebug() << "slot add auth friend";
+    SPDLOG_DEBUG("authenticated friend added to contact list");
 
     AddNewContact(auth_info);
 }

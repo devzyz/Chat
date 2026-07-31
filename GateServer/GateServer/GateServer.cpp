@@ -3,6 +3,7 @@
 #include "ConfigMgr.h"
 #include <hiredis/hiredis.h>
 #include "RedisMgr.h"
+#include "LogMgr.h"
 
 void TestRedisMgr() {
     assert(RedisMgr::GetInstance()->Set("blogwebsite", "llfc.club"));
@@ -28,6 +29,10 @@ void TestRedisMgr() {
 int main()
 {
     //TestRedisMgr();
+    auto logger = LogMgr::GetInstance();
+    if (!logger->InitLogMgr()) {
+        return EXIT_FAILURE;
+    }
     ConfigMgr& gCfgMgr = ConfigMgr::GetInstance();
     // 获取当前服务的端口信息
     std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
@@ -47,11 +52,11 @@ int main()
             });
         
         std::make_shared<CServer>(ioc, port)->Start();
-        std::cout << "Gate Server listen on port: " << port << std::endl;
+        SPDLOG_INFO("GateServer listening on port={}", port);
         ioc.run();
     }
     catch (std::exception& e) {
-        std::cerr<< "exception : " << e.what() << std::endl;
+        SPDLOG_ERROR("GateServer exception: {}", e.what());
         return EXIT_FAILURE;
     }
 

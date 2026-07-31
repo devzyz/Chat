@@ -1,4 +1,5 @@
 #include "httpmgr.h"
+#include "logmgr.h"
 
 HttpMgr::HttpMgr() {
     // 连接信号与槽
@@ -19,7 +20,11 @@ void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod)
     QObject::connect(reply, &QNetworkReply::finished, [self, reply, req_id, mod]() {
         // 处理错误
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << reply->errorString();
+            SPDLOG_ERROR(
+                "HTTP request failed, request_id={}, module={}, error={}",
+                static_cast<int>(req_id),
+                static_cast<int>(mod),
+                LogMgr::ToUtf8(reply->errorString()));
             // 发送信号通知完成
             emit self->sig_http_finish(req_id, mod, "", ErrorCodes::ERR_NETWORK);
             reply->deleteLater();

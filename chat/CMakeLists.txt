@@ -12,6 +12,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Network)
 
+set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Build spdlog as a static library" FORCE)
+set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "Disable spdlog examples" FORCE)
+set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "Disable spdlog tests" FORCE)
+set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "Disable spdlog benchmarks" FORCE)
+set(SPDLOG_INSTALL OFF CACHE BOOL "Disable spdlog install target" FORCE)
+set(SPDLOG_FMT_EXTERNAL OFF CACHE BOOL "Use spdlog bundled fmt" FORCE)
+add_subdirectory(packages/spdlog EXCLUDE_FROM_ALL)
+
 set(PROJECT_SOURCES
         main.cpp
         mainwindow.cpp
@@ -80,6 +88,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         friendinfopage.h friendinfopage.cpp friendinfopage.ui
         userinfopage.h userinfopage.cpp userinfopage.ui
         editavatardialog.h editavatardialog.cpp editavatardialog.ui
+        logmgr.h logmgr.cpp
 
 
 
@@ -120,7 +129,13 @@ add_custom_command(
 
 target_include_directories(chat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(chat PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
+target_compile_definitions(chat PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
+
+target_link_libraries(chat PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Network
+    spdlog::spdlog
+)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

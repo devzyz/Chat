@@ -1,6 +1,7 @@
 #include "StatusGrpcClient.h"
 #include "ConfigMgr.h"
 #include "const.h"
+#include "LogMgr.h"
 
 StatusConnectionPool::StatusConnectionPool(const std::string& host, const std::string& port, int poolSize) 
 	: _host(host), _port(port), _pool_size(poolSize) {
@@ -12,7 +13,7 @@ StatusConnectionPool::StatusConnectionPool(const std::string& host, const std::s
 		}
 	}
 	catch (std::exception& e) {
-		std::cout << "create Status Connection Pool is failure, error is " << e.what() << std::endl;
+		SPDLOG_ERROR("create Status connection pool failed, error={}", e.what());
 	}
 }
 
@@ -58,7 +59,7 @@ void StatusConnectionPool::close() {
 }
 
 StatusGrpcClient::~StatusGrpcClient() {
-	std::cout << "StatusGrpcClient destructed." << std::endl;
+	SPDLOG_DEBUG("StatusGrpcClient destructed");
 }
 
 StatusGrpcClient::StatusGrpcClient() {
@@ -67,7 +68,7 @@ StatusGrpcClient::StatusGrpcClient() {
 	std::string host = configMgr["StatusServer"]["Host"];
 	std::string port = configMgr["StatusServer"]["Port"];
 
-	_pool.reset(new StatusConnectionPool(host, port, 3));
+	_pool.reset(new StatusConnectionPool(host, port, 5));
 }
 
 LoginRsp StatusGrpcClient::Login(int uid, std::string token) {

@@ -2,6 +2,7 @@
 #include <string>
 #include <chrono>
 #include "ConfigMgr.h"
+#include "LogMgr.h"
 
 SQLConnection::SQLConnection(sql::Connection* connection, int64_t lasttime) 
 	: _connection(connection), _last_operator_time(lasttime) {
@@ -43,7 +44,7 @@ MysqlPool::MysqlPool(const std::string& url, const std::string& user, const std:
 		_check_thread.detach();
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "mysql pool init failed, error is " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql pool init failed, error={}", e.what());
 	}
 }
 
@@ -88,7 +89,7 @@ void MysqlPool::CheckConnection() {
 			con->_last_operator_time = timestamp;
 		}
 		catch (sql::SQLException& e) {
-			std::cout << "Error keeping connection alive: " << e.what() << std::endl;
+			SPDLOG_WARN("mysql keepalive failed, error={}", e.what());
 
 			// 创建新连接，替换旧连接
 			sql::mysql::MySQL_Driver* driver = sql::mysql::get_driver_instance();
@@ -150,7 +151,7 @@ void MysqlPool::CheckConnectionPro() {
 				connection->_last_operator_time = timestamp;
 			}
 			catch (sql::SQLException& e) {
-				std::cout << "Error keeping connection alive: " << e.what() << std::endl;
+				SPDLOG_WARN("mysql keepalive failed, error={}", e.what());
 				// 连接不正常，则记录一下，在心跳完成后，进行重连
 				healthy = false;
 				_fail_count++;
@@ -202,7 +203,7 @@ bool MysqlPool::reconnection(long long timestamp) {
 		return true;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLException : " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql reconnect failed, error={}", e.what());
 		return false;
 	}
 }
@@ -272,7 +273,7 @@ MysqlDao::MysqlDao() {
 	std::string password = configMgr["Mysql"]["Password"];
 	std::string schema = configMgr["Mysql"]["Schema"];
 
-	_pool.reset(new MysqlPool(host + ":" + port, user, password, schema, 5));
+	_pool.reset(new MysqlPool(host + ":" + port, user, password, schema, 8));
 }
 
 MysqlDao::~MysqlDao() {
@@ -315,9 +316,7 @@ std::shared_ptr<UserInfo> MysqlDao::GetUser(int uid) {
 		return user_ptr;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLException : " << e.what() << std::endl;
-		std::cerr << " (MySQL error code: " << e.getErrorCode();
-		std::cerr << ", SQLState: " << e.getSQLState() << " )" << std::endl;
+		SPDLOG_ERROR("mysql GetUser failed, uid={}, error={}, code={}, state={}", uid, e.what(), e.getErrorCode(), e.getSQLState().c_str());
 		return nullptr;
 	}
 }
@@ -357,7 +356,7 @@ std::shared_ptr<UserInfo> MysqlDao::GetUserByName(const std::string name) {
 		return user_ptr;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLException : " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql GetUserByName failed, name={}, error={}", name, e.what());
 		return nullptr;
 	}
 }
@@ -393,7 +392,7 @@ bool MysqlDao::AddFriendApply(const int& from_uid, const int& to_uid, const std:
 		return true;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLException : " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql AddFriendApply failed, from_uid={}, to_uid={}, description_size={}, backname_size={}, error={}", from_uid, to_uid, description.size(), backname.size(), e.what());
 		return false;
 	}
 
@@ -446,7 +445,7 @@ bool MysqlDao::GetApplyFriendList(int to_uid, std::vector<std::shared_ptr<ApplyI
 		return true;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLExceptioni : " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql GetApplyFriendList failed, to_uid={}, start={}, limit={}, error={}", to_uid, start, limit, e.what());
 		return false;
 	}
 }
@@ -622,7 +621,7 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 				chat_msgs.push_back(chat_msg);
 			}
 
-			std::cout << "auth_description : " << auth_description << "---" << std::endl;
+			SPDLOG_DEBUG("auth friend db message, apply_uid={}, auth_uid={}, auth_description_size={}", apply_uid, auth_uid, auth_description.size());
 			// 被申请人发送的验证信息
 			if (!auth_description.empty()) {
 				// 准备查询语句
@@ -665,7 +664,7 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 		return true;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLException : " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql AuthFriendApply failed, apply_uid={}, auth_uid={}, error={}", apply_uid, auth_uid, e.what());
 		// 有错误，则回滚
 		connection->_connection->rollback();
 		return false;
@@ -707,7 +706,7 @@ bool MysqlDao::GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& fr
 		return true;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLException : " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql GetFriendList failed, uid={}, error={}", uid, e.what());
 		return false;
 	}
 }
@@ -789,7 +788,7 @@ bool MysqlDao::GetUserChatList(int uid, int current_chat_id, int page_size,
 		return true;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLException : " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql GetUserChatList failed, uid={}, current_chat_id={}, page_size={}, error={}", uid, current_chat_id, page_size, e.what());
 		return false;
 	}
 }
@@ -880,7 +879,7 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 		return true;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLException : " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql CreatePrivateChat failed, user1_id={}, user2_id={}, error={}", user1_id, user2_id, e.what());
 		return false;
 	}
 }
@@ -933,7 +932,7 @@ bool MysqlDao::AddChatMessageList(int from_uid, int to_uid, int chat_id, std::ve
 		return true;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLException : " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql AddChatMessageList failed, from_uid={}, to_uid={}, chat_id={}, msg_count={}, error={}", from_uid, to_uid, chat_id, cache_msgs.size(), e.what());
 		return false;
 	}
 }
@@ -992,7 +991,7 @@ bool MysqlDao::GetChatMessageList(int chat_id, int current_msg_id, int page_size
 		return true;
 	}
 	catch (sql::SQLException& e) {
-		std::cout << "SQLException : " << e.what() << std::endl;
+		SPDLOG_ERROR("mysql GetChatMessageList failed, chat_id={}, current_msg_id={}, page_size={}, error={}", chat_id, current_msg_id, page_size, e.what());
 		return false;
 	}
 }

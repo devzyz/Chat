@@ -1,4 +1,5 @@
 #include "messagetextedit.h"
+#include "logmgr.h"
 #include <QDebug>
 #include <QMessageBox>
 
@@ -142,7 +143,9 @@ void MessageTextEdit::insertImages(const QString &url)
     QString new_url = url + "_" + QString::number(_file_uid);
     _file_uid ++;
 
-    qDebug() << "new_url" + new_url;
+    SPDLOG_DEBUG(
+        "URL inserted into message editor, url_length={}",
+        new_url.size());
 
     // 插入到输入框中
     cursor.insertImage(image, new_url);
@@ -166,7 +169,9 @@ void MessageTextEdit::insertFromMimeData(const QMimeData *source)
     // 取出url的内容
     QStringList urls = getUrl(source->text());
 
-    qDebug() << urls;
+    SPDLOG_DEBUG(
+        "message editor received dropped URLs, count={}",
+        urls.size());
 
     if(urls.isEmpty())
         return;

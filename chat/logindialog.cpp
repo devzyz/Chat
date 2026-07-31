@@ -1,4 +1,5 @@
 #include "logindialog.h"
+#include "logmgr.h"
 #include "ui_logindialog.h"
 #include "httpmgr.h"
 #include <QPainter>
@@ -145,7 +146,12 @@ void LoginDialog::initHead()
     // 加载图片
     QPixmap originalPixmap(":/res/head_1.jpg");
     // 设置图片自动缩放
-    qDebug() << originalPixmap.size() << ui->head_label->size();
+    SPDLOG_DEBUG(
+        "login avatar scaled, source={}x{}, target={}x{}",
+        originalPixmap.width(),
+        originalPixmap.height(),
+        ui->head_label->width(),
+        ui->head_label->height());
 
     // 缩放到head_label的尺寸。保持原来的宽高比。采用平滑缩放算法，避免锯齿
     originalPixmap = originalPixmap.scaled(ui->head_label->size(),
@@ -195,8 +201,11 @@ void LoginDialog::initHttpHandlers()
         _uid = si.Uid;
         _token = si.Token;
 
-        qDebug() << "email is " << email << " uid is " << si.Uid << " host is " << si.Host
-                 << " Port is " << si.Port << " Token is " << si.Token;
+        SPDLOG_INFO(
+            "login succeeded, uid={}, host={}, port={}",
+            si.Uid,
+            LogMgr::ToUtf8(si.Host),
+            LogMgr::ToUtf8(si.Port));
         emit sig_connect_tcp(si);
     });
 }

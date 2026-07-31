@@ -1,4 +1,5 @@
 #include "timerbtn.h"
+#include "logmgr.h"
 #include <QMouseEvent>
 #include <QDebug>
 
@@ -26,7 +27,7 @@ TimerBtn::~TimerBtn() {
 void TimerBtn::mouseReleaseEvent(QMouseEvent *e) {
     if (e->button() == Qt::LeftButton) {
         // 触发鼠标释放事件
-        qDebug() << "MyButton was released!";
+        SPDLOG_DEBUG("timer button released");
         this->setEnabled(false);
         this->setText(QString::number(_counter));
         _timer->start(1000);
