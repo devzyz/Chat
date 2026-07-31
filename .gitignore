@@ -38,6 +38,10 @@ Logs/
 node_modules/
 .cache/
 
+# Local notes and reference material
+help/
+interview/
+
 # Solution files are generated locally in this repository
 *.sln
 
