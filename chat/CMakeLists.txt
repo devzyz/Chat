@@ -56,11 +56,10 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         listitembase.h listitembase.cpp
         loadingdialog.h loadingdialog.cpp loadingdialog.ui
         chatpage.h chatpage.cpp chatpage.ui
-
-
-        bubbleframe.h bubbleframe.cpp
-
-
+        messagerecord.h
+        messagelistmodel.h messagelistmodel.cpp
+        messagemodelstore.h messagemodelstore.cpp
+        messageitemdelegate.h messageitemdelegate.cpp
         messagetextedit.h messagetextedit.cpp
         statewidget.h statewidget.cpp
         searchlist.h searchlist.cpp
@@ -75,16 +74,12 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         contactuseritem.h contactuseritem.cpp contactuseritem.ui
         grouptipitem.h grouptipitem.cpp grouptipitem.ui
 
-        chatbubble.h chatbubble.cpp chatbubble.ui
-        textchatbubble.h textchatbubble.cpp
-        chatbubble.cpp chatbubble.h chatbubble.ui textchatbubble.cpp textchatbubble.h
         applyfriendpage.h applyfriendpage.cpp applyfriendpage.ui
         applyfrienditem.h applyfrienditem.cpp applyfrienditem.ui
         applyfriendlist.h applyfriendlist.cpp
         findfaildialog.h findfaildialog.cpp findfaildialog.ui
         authfrienddialog.h authfrienddialog.cpp authfrienddialog.ui
         chatdetaillist.h chatdetaillist.cpp
-        picturechatbubble.h picturechatbubble.cpp
         friendinfopage.h friendinfopage.cpp friendinfopage.ui
         userinfopage.h userinfopage.cpp userinfopage.ui
         editavatardialog.h editavatardialog.cpp editavatardialog.ui
@@ -160,4 +155,23 @@ install(TARGETS chat
 
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(chat)
+endif()
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(message_model_tests
+        tests/messagelistmodel_test.cpp
+        messagerecord.h
+        messagelistmodel.h messagelistmodel.cpp
+        messagemodelstore.h messagemodelstore.cpp
+        messageitemdelegate.h messageitemdelegate.cpp
+    )
+    target_include_directories(message_model_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(message_model_tests PRIVATE
+        Qt${QT_VERSION_MAJOR}::Widgets
+    )
+    add_test(NAME message_model_tests COMMAND message_model_tests)
+    set_tests_properties(message_model_tests PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=minimal"
+    )
 endif()

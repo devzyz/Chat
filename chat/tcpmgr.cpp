@@ -527,9 +527,19 @@ void TcpMgr::initHandlers()
 
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
+        const int responseChatId = jsonObj["chat_id"].toInt();
+        QVector<QString> pendingClientIds;
+        for (qsizetype i = 0; i < _pendingTextBatches.size(); ++i) {
+            if (_pendingTextBatches.at(i).chatId == responseChatId) {
+                pendingClientIds = _pendingTextBatches.at(i).clientMessageIds;
+                _pendingTextBatches.removeAt(i);
+                break;
+            }
+        }
         if (err != ErrorCodes::SUCCESS) {
             SPDLOG_WARN("text chat response failed, msg_id={}, error={}",
                         static_cast<int>(id), err);
+            emit sig_text_chat_msg_failed(responseChatId, pendingClientIds);
             return ;
         }
 
@@ -540,24 +550,26 @@ void TcpMgr::initHandlers()
         const auto json = jsonObj["uuid_msgId"].toArray();
         auto chat_info = UserMgr::GetInstance()->GetChatInfo(chat_id);
 
-        std::vector<QString> uuid_set;
+        QVector<MessageAcknowledgement> acknowledgements;
 
         for (const auto& msg : json) {
             auto info = msg.toObject();
             auto uuid = info["msg_uuid"].toString();
             auto msgid = info["message_id"].toInt();
-            // 获取内存中的uuid
-            auto text_msg = chat_info->GetCacheChatMessage(uuid);
-            chat_info->EraseCacheChatMessage(uuid);
-
-            text_msg->SetMessageId(msgid);
-            text_msg->SetStatus(ChatStatus::STATUS_READ_ALREADY);
-            chat_info->AddChatData(text_msg);
-
-            uuid_set.push_back(uuid);
+            // ChatInfo 缓存暂时保留给左侧摘要兼容；右侧状态由 Model 独立更新。
+            if (chat_info) {
+                auto text_msg = chat_info->GetCacheChatMessage(uuid);
+                chat_info->EraseCacheChatMessage(uuid);
+                if (text_msg) {
+                    text_msg->SetMessageId(msgid);
+                    text_msg->SetStatus(ChatStatus::STATUS_READ_ALREADY);
+                    chat_info->AddChatData(text_msg);
+                }
+            }
+            acknowledgements.push_back({uuid, msgid});
         }
 
-        emit sig_text_chat_msg_rsp_finish(chat_id, uuid_set);
+        emit sig_text_chat_msg_rsp_finish(chat_id, acknowledgements);
     });
 
     // 服务器通知接收文本聊天数据
@@ -870,6 +882,7 @@ void TcpMgr::initHandlers()
         if (err != ErrorCodes::SUCCESS) {
             SPDLOG_WARN("load chat message response failed, msg_id={}, error={}",
                         static_cast<int>(id), err);
+            emit sig_tcp_load_chat_msg_failed(jsonObj["chat_id"].toInt());
             return ;
         }
 
@@ -879,7 +892,6 @@ void TcpMgr::initHandlers()
         auto current_msg_id = jsonObj["current_msg_id"].toInt();
         const auto msgs = jsonObj["msgs"].toArray();
 
-        auto chat_info = UserMgr::GetInstance()->GetChatInfo(chat_id);
         std::vector<std::shared_ptr<ChatDataBase>> chat_msgs;
         for (const auto &msg : msgs) {
             const auto msg_obj = msg.toObject();
@@ -893,15 +905,14 @@ void TcpMgr::initHandlers()
 
             auto msg_info = std::make_shared<TextChatData> (message_id, chat_id, ChatType::PRIVATE,
                                                            ChatMessageType::TEXT_TYPE,
-                                                            content, send_id, dt.time());
-
-            chat_info->AddChatData(msg_info);
+                                                            content, send_id, dt);
+            if (status >= ChatStatus::STATUS_EMPTY && status <= ChatStatus::STATUS_READ_ALREADY) {
+                msg_info->SetStatus(static_cast<ChatStatus>(status));
+            }
             chat_msgs.push_back(msg_info);
         }
-        chat_info->SetIsCanLoadMore(load_more);
-        chat_info->SetLastMsgId(current_msg_id);
 
-        emit sig_tcp_load_chat_msg_finish(chat_id, chat_msgs);
+        emit sig_tcp_load_chat_msg_finish(chat_id, chat_msgs, load_more, current_msg_id);
     });
 }
 
@@ -929,6 +940,21 @@ void TcpMgr::CloseConnection()
  */
 void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
 {
+    if (reqId == ReqId::ID_TEXT_CHAT_MSG_REQ) {
+        const QJsonDocument document = QJsonDocument::fromJson(dataBytes);
+        if (document.isObject()) {
+            const QJsonObject object = document.object();
+            PendingTextBatch batch;
+            batch.chatId = object["chat_id"].toInt();
+            for (const auto &entry : object["text_array"].toArray()) {
+                batch.clientMessageIds.push_back(entry.toObject()["msg_uuid"].toString());
+            }
+            if (batch.chatId > 0 && !batch.clientMessageIds.isEmpty()) {
+                _pendingTextBatches.enqueue(std::move(batch));
+            }
+        }
+    }
+
     uint16_t id = reqId;
 
     // 计算长度

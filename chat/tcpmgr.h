@@ -5,7 +5,9 @@
 #include <QObject>
 #include <functional>
 #include <QTcpSocket>
+#include <QQueue>
 #include "userdata.h"
+#include "messagerecord.h"
 
 /**
  * @brief The TcpMgr class
@@ -105,7 +107,8 @@ signals:
      * @brief sig_tcp_load_chat_msg_finish
      * 增量加载聊天数据完成
      */
-    void sig_tcp_load_chat_msg_finish(int, std::vector<std::shared_ptr<ChatDataBase>>);
+    void sig_tcp_load_chat_msg_finish(int, std::vector<std::shared_ptr<ChatDataBase>>, bool, qint64);
+    void sig_tcp_load_chat_msg_failed(int);
     /**
      * @brief sig_tcp_add_contact_list
      * 发送在好友列表中添加好友的通知
@@ -120,7 +123,8 @@ signals:
      * @brief sig_text_chat_msg_rsp_finish
      * 发送聊天文本回包，更新为已读状态
      */
-    void sig_text_chat_msg_rsp_finish(int, std::vector<QString>&);
+    void sig_text_chat_msg_rsp_finish(int, QVector<MessageAcknowledgement>);
+    void sig_text_chat_msg_failed(int, QVector<QString>);
 public slots:
     /**
      * @brief slot_tcp_connect
@@ -143,6 +147,12 @@ private slots:
 private:
     friend class Singleton<TcpMgr>;
     TcpMgr();
+
+    struct PendingTextBatch {
+        int chatId = 0;
+        QVector<QString> clientMessageIds;
+    };
+    QQueue<PendingTextBatch> _pendingTextBatches;
 
 };
 

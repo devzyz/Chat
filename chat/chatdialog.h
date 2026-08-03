@@ -5,6 +5,7 @@
 #include "global.h"
 #include "statewidget.h"
 #include "userdata.h"
+#include "messagerecord.h"
 #include <QListWidgetItem>
 
 namespace Ui {
@@ -48,7 +49,7 @@ private:
     // 更新当前用户对应的聊天记录
     void SetSelectChatPage(int uid = 0);
     // 加载更多聊天记录
-    void TcpLoadingMoreChatMsg(std::shared_ptr<ChatInfo>);
+    void TcpLoadingMoreChatMsg(int chatId, qint64 beforeMessageId);
     // 加载更多联系人
     void LoadingMoreContact();
     // 当搜索到聊天或者是从好友列表点击聊天后，如果在当前item中找不到
@@ -108,9 +109,11 @@ private slots:
     // 创建私聊完成槽函数
     void slot_create_private_chat_finish(std::shared_ptr<ChatInfo>);
     // 增量加载聊天记录完成处理函数
-    void slot_tcp_loading_more_chat_finish(int, std::vector<std::shared_ptr<ChatDataBase>>);
+    void slot_tcp_loading_more_chat_finish(int, std::vector<std::shared_ptr<ChatDataBase>>, bool, qint64);
+    void slot_tcp_loading_more_chat_failed(int);
     // 发送消息后回后，在这里将聊天的未读信息进行更新
-    void slot_text_chat_msg_rsp_finish(int, std::vector<QString>&);
+    void slot_text_chat_msg_rsp_finish(int, QVector<MessageAcknowledgement>);
+    void slot_text_chat_msg_failed(int, QVector<QString>);
 public slots:
     void slot_tcp_add_friend_apply(std::shared_ptr<ApplyInfo>);
 };

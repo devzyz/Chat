@@ -1,255 +1,441 @@
 #include "chatpage.h"
-#include "logmgr.h"
-#include "ui_chatpage.h"
-#include <QStyleOption>
-#include <QPainter>
-#include "textchatbubble.h"
-#include "picturechatbubble.h"
-#include "usermgr.h"
-#include <QJsonDocument>
-#include "tcpmgr.h"
+
 #include "global.h"
+#include "logmgr.h"
+#include "messageitemdelegate.h"
+#include "tcpmgr.h"
+#include "ui_chatpage.h"
+#include "usermgr.h"
+
+#include <QJsonDocument>
+#include <QPainter>
+#include <QPersistentModelIndex>
+#include <QScrollBar>
+#include <QStyleOption>
+#include <QThread>
+#include <QTimer>
+#include <QUuid>
+#include <algorithm>
 
 ChatPage::ChatPage(QWidget *parent)
-    : QWidget(parent)
-    , ui(new Ui::ChatPage)
+    : QWidget(parent), ui(new Ui::ChatPage)
 {
     ui->setupUi(this);
 
-    // 设置按钮样式
     ui->receive_btn->SetState("normal", "hover", "press");
     ui->send_btn->SetState("normal", "hover", "press");
-
-    // 设置图标样式
     ui->emoij_label->SetState("normal", "hover", "press", "normal", "hover", "press");
     ui->file_label->SetState("normal", "hover", "press", "normal", "hover", "press");
+
+    _messageDelegate = new MessageItemDelegate(ui->chat_detail_data_list);
+    ui->chat_detail_data_list->setItemDelegate(_messageDelegate);
+    connect(ui->chat_detail_data_list, &ChatDetailList::viewportResized, this, [this]() {
+        _messageDelegate->clearSizeCache();
+        ui->chat_detail_data_list->doItemsLayout();
+        ui->chat_detail_data_list->viewport()->update();
+    });
+    connect(ui->chat_detail_data_list, &ChatDetailList::nearTopReached,
+            this, &ChatPage::requestOlderHistory);
 }
 
 ChatPage::~ChatPage()
 {
+    // QListView does not own the model. Detach it before MessageModelStore is destroyed.
+    ui->chat_detail_data_list->setModel(nullptr);
     delete ui;
+    ui = nullptr;
 }
 
-void ChatPage::SetChatInfo(std::shared_ptr<ChatInfo> chat_info)
+void ChatPage::SetChatInfo(std::shared_ptr<ChatInfo> chatInfo)
 {
-    _chat_info = chat_info;
-    _cache_chat_msg.clear();
+    Q_ASSERT(QThread::currentThread() == thread());
+    if (!chatInfo) {
+        return;
+    }
 
-    // 私聊
-    if (chat_info->GetChatType() == ChatType::PRIVATE) {
-        auto info = UserMgr::GetInstance()->GetFriendById(chat_info->GetUid());
+    saveCurrentScrollAnchor();
+    _chatInfo = std::move(chatInfo);
+    _currentChatId = _chatInfo->GetChatId();
 
-        if (info == nullptr) {
+    if (_chatInfo->GetChatType() == ChatType::PRIVATE) {
+        const auto friendInfo = UserMgr::GetInstance()->GetFriendById(_chatInfo->GetUid());
+        if (friendInfo) {
+            ui->title_label->setText(friendInfo->_name);
+        }
+    }
+
+    auto *model = _messageStore.getOrCreate(_currentChatId);
+    seedModelFromLegacyData(model, _chatInfo);
+    _suppressHistoryRequests = true;
+    ui->chat_detail_data_list->setModel(model);
+    _messageDelegate->clearSizeCache();
+
+    const ScrollAnchor anchor = _scrollAnchors.value(_currentChatId);
+    if (anchor.valid) {
+        restoreScrollAnchor(_currentChatId, anchor);
+    } else {
+        queueScrollToBottom(_currentChatId);
+    }
+    const int selectedChatId = _currentChatId;
+    QTimer::singleShot(0, this, [this, selectedChatId]() {
+        if (_currentChatId == selectedChatId) {
+            _suppressHistoryRequests = false;
+        }
+    });
+
+    if (!model->hasLoadedInitialPage() && !model->isLoadingHistory()) {
+        requestHistory(model);
+    }
+}
+
+void ChatPage::AppendChatMsg(const std::shared_ptr<ChatDataBase> &message)
+{
+    Q_ASSERT(QThread::currentThread() == thread());
+    if (!message) {
+        return;
+    }
+
+    MessageRecord record = toMessageRecord(message);
+    auto *model = _messageStore.getOrCreate(record.chatId);
+    const bool isCurrent = record.chatId == _currentChatId
+        && ui->chat_detail_data_list->model() == model;
+    const bool shouldFollow = isCurrent
+        && (record.isSelf || ui->chat_detail_data_list->isNearBottom());
+
+    if (model->appendMessage(record) > 0 && shouldFollow) {
+        queueScrollToBottom(record.chatId);
+    }
+}
+
+void ChatPage::ApplyHistoryPage(int chatId,
+                                const std::vector<std::shared_ptr<ChatDataBase>> &messages,
+                                bool canLoadMore, qint64 nextCursor)
+{
+    Q_ASSERT(QThread::currentThread() == thread());
+    auto *model = _messageStore.getOrCreate(chatId);
+    const bool initialPage = !model->hasLoadedInitialPage();
+    const bool affectsCurrentView = chatId == _currentChatId
+        && ui->chat_detail_data_list->model() == model;
+    if (affectsCurrentView) {
+        _suppressHistoryRequests = true;
+    }
+    const ScrollAnchor anchor = (!initialPage && affectsCurrentView)
+        ? captureScrollAnchor() : ScrollAnchor{};
+
+    QVector<MessageRecord> records;
+    records.reserve(static_cast<qsizetype>(messages.size()));
+    for (const auto &message : messages) {
+        if (message) {
+            records.push_back(toMessageRecord(message));
+        }
+    }
+
+    // The required cursor contract returns ids older than the current first row.
+    // Refuse a legacy forward page instead of prepending newer records out of order.
+    const qint64 currentOldestId = model->oldestMessageId();
+    if (!initialPage && currentOldestId > 0) {
+        const bool incompatibleDirection = std::any_of(
+            records.cbegin(), records.cend(), [currentOldestId](const MessageRecord &record) {
+                return record.messageId > 0 && record.messageId >= currentOldestId;
+            });
+        if (incompatibleDirection) {
+            SPDLOG_WARN("history response direction is incompatible for chat_id={}", chatId);
+            model->setCanLoadMore(false);
+            model->setLoadingHistory(false);
+            if (affectsCurrentView) {
+                QTimer::singleShot(0, this, [this, chatId]() {
+                    if (_currentChatId == chatId) _suppressHistoryRequests = false;
+                });
+            }
             return;
         }
-
-        ui->title_label->setText(info->_name);
-        // 清空显示列表
-        ui->chat_detail_data_list->removeAllItem();
-
-        // 已经回复的数据
-        auto chat_msgs = chat_info->GetChatMsgs();
-        for (auto & msg : chat_msgs) {
-            AppendChatMsg(msg);
-        }
-
-        // 将缓存数据也刷新上去
-        auto chat_cache_msgs = chat_info->GetCacheChatMsgs();
-        for (auto &msg : chat_cache_msgs) {
-            AppendChatMsg(msg);
-        }
-    }else {
-        // 群聊 todo...
     }
+
+    model->prependHistory(records);
+    model->setCanLoadMore(canLoadMore);
+    model->setHistoryCursor(nextCursor > 0 ? nextCursor : model->oldestMessageId());
+    model->setInitialPageLoaded(true);
+    model->setLoadingHistory(false);
+
+    if (!affectsCurrentView) {
+        return;
+    }
+    if (initialPage) {
+        queueScrollToBottom(chatId);
+    } else if (anchor.valid) {
+        restoreScrollAnchor(chatId, anchor);
+    }
+    QTimer::singleShot(0, this, [this, chatId]() {
+        if (_currentChatId == chatId) {
+            _suppressHistoryRequests = false;
+        }
+    });
 }
 
-// 往聊天记录显示列表里面添加数据
-void ChatPage::AppendChatMsg(std::shared_ptr<ChatDataBase> msg_data)
+void ChatPage::HistoryLoadFailed(int chatId)
 {
-    auto self_info = UserMgr::GetInstance()->GetUserInfo();
-    ChatRole role;
-
-    // 文本消息
-    if (msg_data->GetChatMsgType() == ChatMessageType::TEXT_TYPE) {
-        if (msg_data->GetSendId() == self_info->_uid) {
-            role = ChatRole::Self;
-
-            QWidget * pBubble = nullptr;
-            pBubble = new TextChatBubble(role, msg_data->GetContent(), self_info->_name, self_info->_icon, msg_data->GetStatus());
-            if (msg_data->GetStatus() == ChatStatus::STATUS_NO_READ) {
-                _cache_chat_msg.insert(msg_data->GetCacheMsgId(), pBubble);
-            }
-
-            ui->chat_detail_data_list->appendChatItem(pBubble);
-        }else {
-            role = ChatRole::Other;
-
-            // 要查取对方的头像
-            if (_chat_info == nullptr) {
-                return;
-            }
-
-            auto chat_info = UserMgr::GetInstance()->GetFriendById(_chat_info->GetUid());
-
-            QWidget * pBubble = nullptr;
-            pBubble = new TextChatBubble(role, msg_data->GetContent(), chat_info->_name,
-                                         chat_info->_icon, ChatStatus::STATUS_EMPTY);
-            ui->chat_detail_data_list->appendChatItem(pBubble);
-        }
-
-        return ;
-    }
-
-    // 图片消息
-    if (msg_data->GetChatMsgType() == ChatMessageType::IMAGE_TYPE) {
-
-    }
-
-    // 文件消息
-    if (msg_data->GetChatMsgType() == ChatMessageType::FILE_TYPE) {
-
+    Q_ASSERT(QThread::currentThread() == thread());
+    if (auto *model = _messageStore.find(chatId)) {
+        model->setLoadingHistory(false);
     }
 }
 
-// 更新已读状态
-void ChatPage::UpdateChatUnreadStatus(std::vector<QString>& uuid_set)
+void ChatPage::ApplyDeliveryAcknowledgements(
+    int chatId, const QVector<MessageAcknowledgement> &acknowledgements)
 {
-    for (const auto &uuid : uuid_set) {
-        auto iter_find = _cache_chat_msg.find(uuid);
-        if (iter_find == _cache_chat_msg.end()) {
-            continue;
-        }
-
-        auto w = iter_find.value();
-        if (w == nullptr) {
-            continue;
-        }
-
-        TextChatBubble * text_chat_bubble = qobject_cast<TextChatBubble*> (w);
-        if (text_chat_bubble == nullptr) {
-            continue;
-        }
-        text_chat_bubble->setChatStatus(ChatStatus::STATUS_READ_ALREADY);
+    Q_ASSERT(QThread::currentThread() == thread());
+    auto *model = _messageStore.find(chatId);
+    if (!model) {
+        return;
+    }
+    for (const auto &acknowledgement : acknowledgements) {
+        model->acknowledgeMessage(acknowledgement.clientMessageId,
+                                  acknowledgement.messageId,
+                                  DeliveryStatus::Sent);
     }
 }
 
-// 让 ChatPage 能完整显示样式表定义的背景颜色、背景图片、边框
+void ChatPage::MarkMessagesFailed(int chatId, const QVector<QString> &clientMessageIds)
+{
+    Q_ASSERT(QThread::currentThread() == thread());
+    auto *model = _messageStore.find(chatId);
+    if (!model) {
+        return;
+    }
+    for (const auto &clientMessageId : clientMessageIds) {
+        model->updateStatusByClientId(clientMessageId, DeliveryStatus::Failed);
+    }
+}
+
 void ChatPage::paintEvent(QPaintEvent *event)
 {
-    QStyleOption opt;
-    opt.initFrom(this);
-    QPainter p(this);
-    style()->drawPrimitive(QStyle::PE_Widget, &opt, &p, this);
+    Q_UNUSED(event);
+    QStyleOption option;
+    option.initFrom(this);
+    QPainter painter(this);
+    style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
 }
 
-/**
- * @brief ChatPage::on_send_btn_clicked
- * 点击发送数据所做的操作
- * 文本数据，可以通过网络发送到对端
- * 图片数据，本地气泡可绘制，无法通过网络发送 待做 todo...
- * 文件数据 待做 todo...
- *
- * 聊天数据需要添加到三个地方
- * 其一，通过tcp请求，发往对端
- * 其二，添加到聊天显示QListWidget内
- * 其三，添加到聊天记录本地内存中
- */
 void ChatPage::on_send_btn_clicked()
 {
-    if (_chat_info == nullptr) {
+    if (!_chatInfo) {
         SPDLOG_WARN("send ignored because chat information is empty");
-        return ;
+        return;
     }
-    auto self_info = UserMgr::GetInstance()->GetUserInfo();
-    auto pTextEdit = ui->chat_edit;
-    ChatRole role = ChatRole::Self;
-    QString userName = self_info->_name;
-    QString userIcon = self_info->_icon;
 
-    // 获取到输入框内的所有待发送数据,每一个MsgInfo作为一条数据发出
-    const QVector<MsgInfo>& msgList = pTextEdit->getMsgList();
+    const auto selfInfo = UserMgr::GetInstance()->GetUserInfo();
+    if (!selfInfo) {
+        return;
+    }
 
-    // 因为如果发送的信息很短，每次都调用网络发送会占用空间
-    // 因此通过textArray来进行累计，当text_length发送长度超过1k的时候，将所有的文本信息打包一起发送
-    int text_length = 0;
-    QJsonObject textObj;
+    const QVector<MsgInfo> &messages = ui->chat_edit->getMsgList();
+    int textLength = 0;
+    QJsonObject textObject;
     QJsonArray textArray;
 
-    for (int i = 0; i < msgList.size(); i ++ ) {
-        // 判断是否发送的太长了最大为1k
-        if (msgList[i].content.length() > 1024) {
+    auto sendTextBatch = [this, selfInfo, &textObject, &textArray, &textLength]() {
+        if (textArray.isEmpty()) {
+            return;
+        }
+        textObject["from_uid"] = selfInfo->_uid;
+        textObject["to_uid"] = _chatInfo->GetUid();
+        textObject["text_array"] = textArray;
+        textObject["chat_id"] = _chatInfo->GetChatId();
+        const QByteArray data = QJsonDocument(textObject).toJson(QJsonDocument::Compact);
+        emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, data);
+        textLength = 0;
+        textArray = QJsonArray();
+        textObject = QJsonObject();
+    };
+
+    for (const auto &message : messages) {
+        if (message.msgFlag != QStringLiteral("text") || message.content.isEmpty()
+            || message.content.length() > 1024) {
+            // Image/video/file records are represented by MessageType but upload is not part of this phase.
             continue;
         }
 
-        QString type = msgList[i].msgFlag;
-
-        QWidget * pBubble = nullptr;
-        if (type == "text") {
-            // 这里是绘制到本地界面上
-            pBubble = new TextChatBubble(role, msgList[i].content, userName, userIcon, ChatStatus::STATUS_NO_READ);
-
-            // 为每个消息生成唯一的id
-            QUuid uuid = QUuid::createUuid();
-            QString uuid_string = uuid.toString();
-
-            // 足够长了，则打包一起发送
-            if (text_length + msgList[i].content.length() > 1024) {
-                textObj["from_uid"] = self_info->_uid;
-                textObj["to_uid"] = _chat_info->GetUid();
-                textObj["text_array"] = textArray;
-                textObj["chat_id"] = _chat_info->GetChatId();
-                QJsonDocument doc(textObj);
-                QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-                // 将整个包发送
-                text_length = 0;
-                textArray = QJsonArray();
-                textObj = QJsonObject();
-
-                // 发送tcp请求
-                emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, jsonData);
-            }
-
-            // 不够长，则进行累计
-            text_length += msgList[i].content.length();
-            // 将本次要发送的文本数据打包放入textArray中
-            QJsonObject obj;
-            QByteArray utf8Message = msgList[i].content.toUtf8();
-            obj["msg_content"] = QString::fromUtf8(utf8Message);
-            obj["msg_uuid"] = uuid_string;
-            textArray.append(obj);
-
-            // 将发送的聊天记录保存到本地
-            auto text_msg = std::make_shared<TextChatData> (uuid_string, _chat_info->GetChatId(), _chat_info->GetChatType(),
-                                                           ChatMessageType::TEXT_TYPE, obj["msg_content"].toString(),
-                                                           self_info->_uid, QTime::currentTime());
-            // 将信息缓存到本地cache中
-            _cache_chat_msg.insert(uuid_string, pBubble);
-            // 发出信号，添加聊天记录缓存到本地
-            emit sig_append_send_text_cache_msg(uuid_string, text_msg);
-        }else if (type == "image") {
-            // todo... 发送图片
-            pBubble = new PictureChatBubble(role, QPixmap(msgList[i].content), userName, userIcon);
-        }else if (type == "file") {
-            // todo... 发送文件
+        if (textLength + message.content.length() > 1024) {
+            sendTextBatch();
         }
 
-        // 添加数据到聊天显示区域
-        if (pBubble != nullptr) {
-            ui->chat_detail_data_list->appendChatItem(pBubble);
-        }
+        const QString uuid = QUuid::createUuid().toString();
+        QJsonObject payload;
+        payload["msg_content"] = message.content;
+        payload["msg_uuid"] = uuid;
+        textArray.append(payload);
+        textLength += message.content.length();
+
+        auto textMessage = std::make_shared<TextChatData>(
+            uuid, _chatInfo->GetChatId(), _chatInfo->GetChatType(),
+            ChatMessageType::TEXT_TYPE, message.content, selfInfo->_uid,
+            QTime::currentTime());
+        AppendChatMsg(textMessage);
+        emit sig_append_send_text_cache_msg(uuid, textMessage);
     }
 
-    // 还有未发完的
-    if (text_length > 0) {
-        //发送给服务器
-        textObj["text_array"] = textArray;
-        textObj["from_uid"] = self_info->_uid;
-        textObj["to_uid"] = _chat_info->GetUid();
-        textObj["chat_id"] = _chat_info->GetChatId();
-        QJsonDocument doc(textObj);
-        QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-        //发送tcp请求
-        emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, jsonData);
+    sendTextBatch();
+}
+
+void ChatPage::requestOlderHistory()
+{
+    auto *model = _messageStore.find(_currentChatId);
+    if (_suppressHistoryRequests || !model || !model->hasLoadedInitialPage() || !model->canLoadMore()
+        || model->isLoadingHistory()) {
+        return;
+    }
+    requestHistory(model);
+}
+
+MessageRecord ChatPage::toMessageRecord(const std::shared_ptr<ChatDataBase> &message)
+{
+    MessageRecord record;
+    record.messageId = message->GetMsgId();
+    record.clientMessageId = message->GetCacheMsgId();
+    record.chatId = message->GetChatId();
+    record.senderId = message->GetSendId();
+    record.sentAt = message->GetSentAt();
+    record.text = message->GetContent();
+
+    switch (message->GetChatMsgType()) {
+    case ChatMessageType::TEXT_TYPE: record.messageType = MessageType::Text; break;
+    case ChatMessageType::IMAGE_TYPE: record.messageType = MessageType::Image; break;
+    case ChatMessageType::FILE_TYPE: record.messageType = MessageType::File; break;
+    }
+
+    const auto selfInfo = UserMgr::GetInstance()->GetUserInfo();
+    record.isSelf = selfInfo && record.senderId == selfInfo->_uid;
+    if (record.isSelf) {
+        record.senderName = selfInfo->_name;
+        record.avatarKey = selfInfo->_icon;
+    } else {
+        const auto chatInfo = UserMgr::GetInstance()->GetChatInfo(record.chatId);
+        const auto friendInfo = chatInfo
+            ? UserMgr::GetInstance()->GetFriendById(chatInfo->GetUid()) : nullptr;
+        if (friendInfo) {
+            record.senderName = friendInfo->_name;
+            record.avatarKey = friendInfo->_icon;
+        }
+    }
+    record.avatar = cachedAvatar(record.avatarKey);
+
+    if (!record.isSelf) {
+        record.deliveryStatus = DeliveryStatus::None;
+    } else if (message->GetStatus() == ChatStatus::STATUS_SEND_FAILURE) {
+        record.deliveryStatus = DeliveryStatus::Failed;
+    } else if (record.messageId <= 0 && !record.clientMessageId.isEmpty()) {
+        record.deliveryStatus = DeliveryStatus::Sending;
+    } else if (message->GetStatus() == ChatStatus::STATUS_READ_ALREADY) {
+        record.deliveryStatus = DeliveryStatus::Read;
+    } else {
+        record.deliveryStatus = DeliveryStatus::Sent;
+    }
+    return record;
+}
+
+QPixmap ChatPage::cachedAvatar(const QString &avatarKey)
+{
+    if (avatarKey.isEmpty()) {
+        return {};
+    }
+    const auto found = _avatarCache.constFind(avatarKey);
+    if (found != _avatarCache.cend()) {
+        return found.value();
+    }
+    QPixmap avatar(avatarKey);
+    _avatarCache.insert(avatarKey, avatar);
+    return avatar;
+}
+
+void ChatPage::seedModelFromLegacyData(MessageListModel *model,
+                                       const std::shared_ptr<ChatInfo> &chatInfo)
+{
+    if (!model || _legacySeededChats.contains(model->chatId())) {
+        return;
+    }
+    _legacySeededChats.insert(model->chatId());
+
+    // Temporary compatibility: pending DTOs may predate creation of this Model.
+    // Confirmed/history DTOs are deliberately not copied; the Model is their source of truth.
+    QVector<MessageRecord> records;
+    const auto pending = chatInfo->GetCacheChatMsgs();
+    records.reserve(pending.size());
+    for (const auto &message : pending) records.push_back(toMessageRecord(message));
+    model->appendMessages(records);
+}
+
+void ChatPage::requestHistory(MessageListModel *model)
+{
+    if (!model || model->isLoadingHistory() || !model->canLoadMore()) {
+        return;
+    }
+    model->setLoadingHistory(true);
+    const qint64 cursor = model->hasLoadedInitialPage()
+        ? (model->historyCursor() > 0 ? model->historyCursor() : model->oldestMessageId())
+        : 0;
+    emit sig_request_history(model->chatId(), cursor);
+}
+
+ChatPage::ScrollAnchor ChatPage::captureScrollAnchor() const
+{
+    ScrollAnchor anchor;
+    auto *model = qobject_cast<MessageListModel *>(ui->chat_detail_data_list->model());
+    if (!model) {
+        return anchor;
+    }
+    anchor.wasAtBottom = ui->chat_detail_data_list->isNearBottom();
+    anchor.valid = true;
+    if (anchor.wasAtBottom || model->rowCount() == 0) {
+        return anchor;
+    }
+
+    QModelIndex first = ui->chat_detail_data_list->indexAt(QPoint(2, 2));
+    if (!first.isValid()) {
+        first = model->index(0, 0);
+    }
+    anchor.messageId = first.data(MessageListModel::MessageIdRole).toLongLong();
+    anchor.clientMessageId = first.data(MessageListModel::ClientMessageIdRole).toString();
+    anchor.viewportOffset = ui->chat_detail_data_list->visualRect(first).top();
+    return anchor;
+}
+
+void ChatPage::saveCurrentScrollAnchor()
+{
+    if (_currentChatId > 0 && ui->chat_detail_data_list->model()) {
+        _scrollAnchors.insert(_currentChatId, captureScrollAnchor());
     }
 }
 
+void ChatPage::restoreScrollAnchor(int chatId, const ScrollAnchor &anchor)
+{
+    QTimer::singleShot(0, this, [this, chatId, anchor]() {
+        auto *model = _messageStore.find(chatId);
+        if (chatId != _currentChatId || !model
+            || ui->chat_detail_data_list->model() != model) {
+            return;
+        }
+        if (anchor.wasAtBottom) {
+            ui->chat_detail_data_list->scrollToBottom();
+            return;
+        }
+        const QModelIndex index = model->indexForStableId(anchor.messageId,
+                                                          anchor.clientMessageId);
+        if (!index.isValid()) {
+            return;
+        }
+        ui->chat_detail_data_list->scrollTo(index, QAbstractItemView::PositionAtTop);
+        auto *bar = ui->chat_detail_data_list->verticalScrollBar();
+        bar->setValue(bar->value() - anchor.viewportOffset);
+    });
+}
+
+void ChatPage::queueScrollToBottom(int chatId)
+{
+    QTimer::singleShot(0, this, [this, chatId]() {
+        auto *model = _messageStore.find(chatId);
+        if (chatId == _currentChatId && model
+            && ui->chat_detail_data_list->model() == model) {
+            ui->chat_detail_data_list->scrollToBottom();
+        }
+    });
+}

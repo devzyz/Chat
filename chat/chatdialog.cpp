@@ -132,6 +132,8 @@ ChatDialog::ChatDialog(QWidget *parent)
     // 连接发送文本信息后，将发送的文本插入到聊天记录中
     connect(ui->chat_page, &ChatPage::sig_append_send_text_cache_msg,
             this, &ChatDialog::slot_append_send_text_cache_msg);
+    connect(ui->chat_page, &ChatPage::sig_request_history,
+            this, &ChatDialog::TcpLoadingMoreChatMsg);
 
     // 连接服务器通知我添加消息后的信号，将服务器通知的信息刷新到聊天界面上
     connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_update_text_chat_msg,
@@ -163,10 +165,14 @@ ChatDialog::ChatDialog(QWidget *parent)
     // 连接增量加载聊天记录完成
     connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_load_chat_msg_finish,
             this, &ChatDialog::slot_tcp_loading_more_chat_finish);
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_load_chat_msg_failed,
+            this, &ChatDialog::slot_tcp_loading_more_chat_failed);
 
     // 连接服务器回包之后的状态更新
     connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_text_chat_msg_rsp_finish,
             this, &ChatDialog::slot_text_chat_msg_rsp_finish);
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_text_chat_msg_failed,
+            this, &ChatDialog::slot_text_chat_msg_failed);
 }
 
 ChatDialog::~ChatDialog()
@@ -531,11 +537,7 @@ void ChatDialog::slot_chat_item_clicked(QListWidgetItem * item)
         auto chat_info = chat_item->GetChatInfo();
         chat_item->ResetNewMsgCount(); // 被点击后，重置红点的刷新
 
-        // 如果当前列表没有加载完，则先加载完
         _cur_chat_id = chat_info->GetChatId();
-        if (chat_info->IsEmpty() && chat_info->GetIsCanLoadMore()) {
-            TcpLoadingMoreChatMsg(chat_info);
-        }
         // 设置右侧的聊天界面
         ui->chat_page->SetChatInfo(chat_info);
         _cur_chat_id = chat_info->GetChatId();
@@ -584,6 +586,13 @@ void ChatDialog::slot_append_send_text_cache_msg(QString uuid, std::shared_ptr<C
 // 将服务器通知的信息，刷新到界面上
 void ChatDialog::slot_update_text_chat_msg(int from_uid, int to_uid, int chat_id, std::vector<std::shared_ptr<ChatDataBase>>& msgs)
 {
+    Q_UNUSED(from_uid);
+    Q_UNUSED(to_uid);
+    // 始终写入 chatId 对应的常驻 Model；非当前会话不会操作当前 View。
+    for (const auto &msg : msgs) {
+        ui->chat_page->AppendChatMsg(msg);
+    }
+
     // 如果不在聊天界面，则将聊天界面红点显示出来
     auto _side_chat_label_isSelect = ui->side_chat_label->GetCurState();
     if (_side_chat_label_isSelect == ClickLabelState::Normal) {
@@ -624,10 +633,6 @@ void ChatDialog::slot_update_text_chat_msg(int from_uid, int to_uid, int chat_id
             return ;
         }
         return ;
-    }
-    // 将聊天数据显示上去
-    for (const auto& msg : msgs) {
-        ui->chat_page->AppendChatMsg(msg);
     }
 }
 
@@ -769,10 +774,6 @@ void ChatDialog::SetSelectChatPage(int uid) {
 
         // 设置信息
         auto chat_info = chatListItem->GetChatInfo();
-        // 如果没有加载完，则先加载
-        if (chat_info->IsEmpty() && chat_info->GetIsCanLoadMore()) {
-            TcpLoadingMoreChatMsg(chat_info);
-        }
         ui->chat_page->SetChatInfo(chat_info);
         return;
     }
@@ -797,18 +798,14 @@ void ChatDialog::SetSelectChatPage(int uid) {
 
     // 设置信息
     auto chat_info = chatListItem->GetChatInfo();
-    // 如果没有加载完，则先加载
-    if (chat_info->IsEmpty() && chat_info->GetIsCanLoadMore()) {
-        TcpLoadingMoreChatMsg(chat_info);
-    }
     ui->chat_page->SetChatInfo(chat_info);
 }
 
 // TCP请求加载更多聊天记录
-void ChatDialog::TcpLoadingMoreChatMsg(std::shared_ptr<ChatInfo> chat_info) {
+void ChatDialog::TcpLoadingMoreChatMsg(int chatId, qint64 beforeMessageId) {
     QJsonObject obj;
-    obj["chat_id"] = chat_info->GetChatId();
-    obj["current_msg_id"] = chat_info->GetLastMsgId();
+    obj["chat_id"] = chatId;
+    obj["current_msg_id"] = beforeMessageId;
 
     QJsonDocument doc(obj);
     QByteArray data = doc.toJson(QJsonDocument::Compact);
@@ -817,29 +814,33 @@ void ChatDialog::TcpLoadingMoreChatMsg(std::shared_ptr<ChatInfo> chat_info) {
 }
 
 // TCP加载更多聊天记录完成
-void ChatDialog::slot_tcp_loading_more_chat_finish(int chat_id, std::vector<std::shared_ptr<ChatDataBase>> chat_msgs) {
-    if (_cur_chat_id != chat_id) return;
-
-    for (auto &msg : chat_msgs) {
-        ui->chat_page->AppendChatMsg(msg);
-    }
-
+void ChatDialog::slot_tcp_loading_more_chat_finish(
+    int chat_id, std::vector<std::shared_ptr<ChatDataBase>> chat_msgs,
+    bool can_load_more, qint64 next_cursor) {
     auto chat_info = UserMgr::GetInstance()->GetChatInfo(chat_id);
-    // 如果没有加载完，则继续进行加载
-    if (chat_info->GetIsCanLoadMore()) {
-        TcpLoadingMoreChatMsg(chat_info);
+    if (chat_info) {
+        // 仅保留分页元数据兼容旧代码，不再把整页复制进 ChatInfo::_chat_msgs。
+        chat_info->SetIsCanLoadMore(can_load_more);
+        chat_info->SetLastMsgId(static_cast<int>(next_cursor));
     }
+    ui->chat_page->ApplyHistoryPage(chat_id, chat_msgs, can_load_more, next_cursor);
 }
 
-// 更新现在的ui界面，将未读转换为已读
-void ChatDialog::slot_text_chat_msg_rsp_finish(int chat_id, std::vector<QString>& uuid_set)
+void ChatDialog::slot_tcp_loading_more_chat_failed(int chat_id)
 {
-    // 如果当前正在聊天的已经不是这个人了，则直接返回
-    if (_cur_chat_id != chat_id) {
-        return ;
-    }
-    // 否则更新
-    ui->chat_page->UpdateChatUnreadStatus(uuid_set);
+    ui->chat_page->HistoryLoadFailed(chat_id);
+}
+
+// 服务器确认后按 UUID 更新正式 messageId 与发送状态。
+void ChatDialog::slot_text_chat_msg_rsp_finish(
+    int chat_id, QVector<MessageAcknowledgement> acknowledgements)
+{
+    ui->chat_page->ApplyDeliveryAcknowledgements(chat_id, acknowledgements);
+}
+
+void ChatDialog::slot_text_chat_msg_failed(int chat_id, QVector<QString> client_message_ids)
+{
+    ui->chat_page->MarkMessagesFailed(chat_id, client_message_ids);
 }
 
 // 加载更多联系人

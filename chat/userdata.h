@@ -7,6 +7,7 @@
 #include <memory>
 #include <QJsonObject>
 #include "global.h"
+#include <QDateTime>
 #include <QTime>
 
 /**
@@ -79,6 +80,9 @@ public:
     ChatDataBase(QString client_msg_id, int chat_id, ChatType chat_type,
                  ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time);
 
+    ChatDataBase(int msg_id, int chat_id, ChatType chat_type,
+                 ChatMessageType chat_msg_type, QString content, int send_uid, QDateTime sent_at);
+
     int GetMsgId();
     int GetChatId();
     ChatType GetChatTpe();
@@ -86,6 +90,7 @@ public:
     QString GetContent();
     int GetSendId();
     QTime GetSendTime();
+    QDateTime GetSentAt();
     void SetMessageId(int msg_id);
     void SetStatus(ChatStatus status);
     ChatStatus GetStatus();
@@ -106,7 +111,7 @@ private:
     // 发送者uid
     int _send_uid;
     // 消息的发送时间
-    QTime _send_time;
+    QDateTime _sent_at;
     // 消息的状态，-1无需设置，0未读，1发送失败，2已读
     ChatStatus _status;
 };
@@ -119,6 +124,9 @@ public:
 
     TextChatData (QString client_msg_id, int chat_id, ChatType chat_type,
                  ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time);
+
+    TextChatData (int msg_id, int chat_id, ChatType chat_type,
+                  ChatMessageType chat_msg_type, QString content, int send_uid, QDateTime sent_at);
 };
 
 /**

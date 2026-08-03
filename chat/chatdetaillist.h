@@ -1,21 +1,23 @@
 #ifndef CHATDETAILLIST_H
 #define CHATDETAILLIST_H
 
-#include <QListWidget>
+#include <QListView>
 
-class ChatDetailList : public QListWidget
+class ChatDetailList : public QListView
 {
     Q_OBJECT
 public:
-    ChatDetailList(QWidget *parent = nullptr);
+    explicit ChatDetailList(QWidget *parent = nullptr);
 
-    // 在末尾添加一个新的聊天对话
-    void appendChatItem(QWidget *item);
-    // 删除所有的item
-    void removeAllItem();
+    bool isNearBottom(int tolerance = 24) const;
+
+signals:
+    void nearTopReached();
+    void viewportResized();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 };
 
 #endif // CHATDETAILLIST_H
