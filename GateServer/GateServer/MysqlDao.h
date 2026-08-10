@@ -9,8 +9,8 @@
 #include <jdbc/cppconn/statement.h>
 
 /**
- * ����ά��ÿ�����ӵĻ���, ��һ���߳�û��һ��ʱ�䣬�ͼ��һ��ÿ�������ϴθ�sqlͨ�Ź�ȥ����ˣ����������һ��ʱ�䣬���߳̾�ͨ��������
- * ��sqlͨ��һ�£���sql֪��������ӻ������õ�
+ * 用于维持每个链接的活性, 有一个线程没隔一段时间，就检测一下每个连接上次跟sql通信过去多久了，如果超过了一定时间，此线程就通过该链接
+ * 与sql通信一下，让sql知道这个链接还是有用的
  */
 
 class SqlConnection {
@@ -33,8 +33,8 @@ private:
 	std::string _user;
 	std::string _pass;
 	std::string _schema;
-	int _poolSize; // ���ӳش�С
-	std::queue<std::unique_ptr<SqlConnection>> _pool; // ���ӳ�
+	int _poolSize; // 连接池大小
+	std::queue<std::unique_ptr<SqlConnection>> _pool; // 连接池
 	std::mutex _mutex;
 	std::condition_variable _cond;
 	std::atomic<bool> _b_stop;

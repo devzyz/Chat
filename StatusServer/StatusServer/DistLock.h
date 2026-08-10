@@ -7,9 +7,9 @@ class DistLock : public Singleton<DistLock>
 	friend class Singleton<DistLock>;
 public:
 	~DistLock();
-	// »ñÈ¡Ëø
+	// è·å–é”
 	std::string acquireLock(redisContext* context, const std::string& lockName, int lockTimeout, int acquireTimeout);
-	// ÊÍ·ÅËø
+	// é‡Šæ”¾é”
 	bool releaseLock(redisContext* context, const std::string& lockName, const std::string& identifier);
 private:
 	DistLock() = default;

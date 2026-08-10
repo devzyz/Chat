@@ -19,33 +19,33 @@ void MsgNode::Clear() {
  * @param msg 
  * @param msgId 
  * @param msgLen 
- * ×¢ÒâÒª½«±¾µØ×Ö½ÚĞò×ª»»ÎªÍøÂç×Ö½ÚĞò
+ * æ³¨æ„è¦å°†æœ¬åœ°å­—èŠ‚åºè½¬æ¢ä¸ºç½‘ç»œå­—èŠ‚åº
  */
 SendNode::SendNode(const char* msg, short msgId, short msgLen) : MsgNode(msgLen + HEAD_TOTAL_LEN), _msg_id(msgId) {
-	// id±¾µØ×ªÍøÂç
+	// idæœ¬åœ°è½¬ç½‘ç»œ
 	int netMsgId = boost::asio::detail::socket_ops::host_to_network_short(msgId);
 	memcpy(_data, &netMsgId, HEAD_ID_LEN);
-	// msgLen±¾µØ×ªÍøÂç
+	// msgLenæœ¬åœ°è½¬ç½‘ç»œ
 	int netMsgLen = boost::asio::detail::socket_ops::host_to_network_short(msgLen);
 	memcpy(_data + HEAD_ID_LEN, &netMsgLen, HEAD_DATA_LEN);
-	// Êı¾İ
+	// æ•°æ®
 	memcpy(_data + HEAD_TOTAL_LEN, msg, msgLen);
 }
 /**
  * @brief 
- * @param msg Òª·¢ËÍµÄÊı¾İ
- * @param msgId Òª·¢µÄÊı¾İid
- * @param msgLen Òª·¢ËÍµÄÊı¾İ³¤¶È
- * ×¢ÒâÒª½«±¾µØ×Ö½ÚĞò×ª»»ÎªÍøÂç×Ö½ÚĞò
+ * @param msg è¦å‘é€çš„æ•°æ®
+ * @param msgId è¦å‘çš„æ•°æ®id
+ * @param msgLen è¦å‘é€çš„æ•°æ®é•¿åº¦
+ * æ³¨æ„è¦å°†æœ¬åœ°å­—èŠ‚åºè½¬æ¢ä¸ºç½‘ç»œå­—èŠ‚åº
  */
 SendNode::SendNode(const std::string& msg, short msgId, short msgLen) : MsgNode(msgLen + HEAD_TOTAL_LEN), _msg_id(msgId) {
-	// id±¾µØ×ªÍøÂç
+	// idæœ¬åœ°è½¬ç½‘ç»œ
 	int netMsgId = boost::asio::detail::socket_ops::host_to_network_short(msgId);
 	memcpy(_data, &netMsgId, HEAD_ID_LEN);
-	// msgLen±¾µØ×ªÍøÂç
+	// msgLenæœ¬åœ°è½¬ç½‘ç»œ
 	int netMsgLen = boost::asio::detail::socket_ops::host_to_network_short(msgLen);
 	memcpy(_data + HEAD_ID_LEN, &netMsgLen, HEAD_DATA_LEN);
-	// Êı¾İ
+	// æ•°æ®
 	memcpy(_data + HEAD_TOTAL_LEN, msg.c_str(), msgLen);
 }
 

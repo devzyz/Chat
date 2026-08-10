@@ -54,8 +54,11 @@ void RunServer() {
 	io_context.stop();
 }
 
-int main()
+int main(int argc, char* argv[])
 {
+	if (argc == 3 && std::string(argv[1]) == "--config") {
+		ConfigMgr::SetConfigPath(argv[2]);
+	}
 	auto logger = LogMgr::GetInstance();
 	if (!logger->InitLogMgr()) {
 		return EXIT_FAILURE;

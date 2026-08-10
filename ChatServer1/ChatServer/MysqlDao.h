@@ -14,8 +14,8 @@
 
 /**
  * @brief 
- * sqlµÄÃ¿¸öÁ¬½Ó°üº¬µÄĞÅÏ¢£¬Ò»¸öÊÇsqlÁ¬½ÓÖ¸Õë£¬ÁíÒ»¸öÊÇ×îºó²Ù×÷Ê±¼ä
- * ÒòÎªsql³¤Ê±¼ä²»²Ù×÷£¬Á¬½Ó¿ÉÄÜ»á±»¶Ï¿ª£¬¿ÉÒÔÍ¨¹ı¼ì²é×îºó²Ù×÷Ê±¼äÀ´ÊµÏÖĞÄÌøº¯Êı£¬ÈÃsqlÁ¬½Ó±£³Ö´æ»î
+ * sqlçš„æ¯ä¸ªè¿æ¥åŒ…å«çš„ä¿¡æ¯ï¼Œä¸€ä¸ªæ˜¯sqlè¿æ¥æŒ‡é’ˆï¼Œå¦ä¸€ä¸ªæ˜¯æœ€åæ“ä½œæ—¶é—´
+ * å› ä¸ºsqlé•¿æ—¶é—´ä¸æ“ä½œï¼Œè¿æ¥å¯èƒ½ä¼šè¢«æ–­å¼€ï¼Œå¯ä»¥é€šè¿‡æ£€æŸ¥æœ€åæ“ä½œæ—¶é—´æ¥å®ç°å¿ƒè·³å‡½æ•°ï¼Œè®©sqlè¿æ¥ä¿æŒå­˜æ´»
  */
 class SQLConnection {
 public:
@@ -26,7 +26,7 @@ public:
 
 /**
  * @brief 
- * sqlµÄÁ¬½Ó³Ø
+ * sqlçš„è¿æ¥æ± 
  */
 class MysqlPool {
 public:
@@ -38,32 +38,32 @@ public:
 	void returnConnection(std::unique_ptr<SQLConnection> connection);
 	void close();
 private:
-	// ĞÄÌø¼ì²â1.0
+	// å¿ƒè·³æ£€æµ‹1.0
 	void CheckConnection();
-	// ĞÄÌø¼ì²â2.0
+	// å¿ƒè·³æ£€æµ‹2.0
 	void CheckConnectionPro();
-	// ÖØÁ¬Ò»¸öÁ¬½Ó
+	// é‡è¿ä¸€ä¸ªè¿æ¥
 	bool reconnection(long long);
-	// Á¬½Ó³Ø¶ÓÁĞ£¬ÒÔ¼°»¥³â·ÃÎÊÁ¬½Ó³ØµÄĞÅºÅ
+	// è¿æ¥æ± é˜Ÿåˆ—ï¼Œä»¥åŠäº’æ–¥è®¿é—®è¿æ¥æ± çš„ä¿¡å·
 	std::mutex _que_mutex;
 	std::queue<std::unique_ptr<SQLConnection>> _que;
 
 	std::atomic<bool> _b_stop;
 
-	// µ±Á¬½Ó³ØÎª¿ÕµÄÊ±ºò£¬ĞèÒªÍ¨¹ıÌõ¼ş±äÁ¿ÊÍ·ÅËø²¢µÈ´ı
+	// å½“è¿æ¥æ± ä¸ºç©ºçš„æ—¶å€™ï¼Œéœ€è¦é€šè¿‡æ¡ä»¶å˜é‡é‡Šæ”¾é”å¹¶ç­‰å¾…
 	std::condition_variable _cond;
 
-	// Á¬½ÓĞèÒªµÄÊı¾İ
+	// è¿æ¥éœ€è¦çš„æ•°æ®
 	int _pool_size;
-	std::string _url; // Êı¾İ¿âµØÖ·
-	std::string _user; // ÓÃ»§Ãû
-	std::string _password; // ÃÜÂë
-	std::string _schema; // ·Ö×é
+	std::string _url; // æ•°æ®åº“åœ°å€
+	std::string _user; // ç”¨æˆ·å
+	std::string _password; // å¯†ç 
+	std::string _schema; // åˆ†ç»„
 
-	// ĞÄÌø¼ì²é³ÌĞò
+	// å¿ƒè·³æ£€æŸ¥ç¨‹åº
 	std::thread _check_thread;
 
-	// Í³¼ÆÔÚÄ³´ÎĞÄÌøÊ±Á¬½ÓÊ§Ğ§µÄÊıÁ¿£¬ºóĞøÓÃÓÚ½øĞĞÖØÁ¬
+	// ç»Ÿè®¡åœ¨æŸæ¬¡å¿ƒè·³æ—¶è¿æ¥å¤±æ•ˆçš„æ•°é‡ï¼Œåç»­ç”¨äºè¿›è¡Œé‡è¿
 	std::atomic<int> _fail_count;
 };
 
@@ -76,22 +76,22 @@ public:
 	std::shared_ptr<UserInfo> GetUser(int uid);
 	std::shared_ptr<UserInfo> GetUserByName(const std::string name);
 	bool AddFriendApply(const int& from_uid, const int& to_uid, const std::string& description, const std::string& backname);
-	// »ñÈ¡ÉêÇëÌí¼Óto_uidÎªºÃÓÑµÄÓÃ»§ÁĞ±í
+	// è·å–ç”³è¯·æ·»åŠ to_uidä¸ºå¥½å‹çš„ç”¨æˆ·åˆ—è¡¨
 	bool  GetApplyFriendList(int to_uid, std::vector<std::shared_ptr<ApplyInfo>>& applylist, int start, int limit);
-	// ¸üĞÂºÃÓÑÉêÇë±íºÍºÃÓÑ±í
+	// æ›´æ–°å¥½å‹ç”³è¯·è¡¨å’Œå¥½å‹è¡¨
 	bool AuthFriendApply(int apply_uid, int auth_uid, std::string auth_backname, std::string apply_backname,
 		std::string apply_description, std::string auth_description, std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, int& chat_id);
-	// »ñÈ¡ÓÃ»§ºÃÓÑÁĞ±í
+	// è·å–ç”¨æˆ·å¥½å‹åˆ—è¡¨
 	bool GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& friendList);
-	// »ñÈ¡Ò»Ò³µÄ»á»°ÁĞ±í
+	// è·å–ä¸€é¡µçš„ä¼šè¯åˆ—è¡¨
 	bool GetUserChatList(int uid, int current_chat_id, int page_size,
 		std::vector<std::shared_ptr<ChatInfoBase>>& chat_list, bool& load_more, int& last_chat_id);
-	// ´´½¨Ë½ÁÄ»á»°
+	// åˆ›å»ºç§èŠä¼šè¯
 	bool CreatePrivateChat(int user1_id, int user2_id, int& chat_id);
-	// ²åÈëfrom_uid·¢¸øto_uidµÄ¶Ô»°
+	// æ’å…¥from_uidå‘ç»™to_uidçš„å¯¹è¯
 	bool AddChatMessageList(int from_uid, int to_uid, int chat_id, std::vector<std::pair<std::string, std::string>> cache_msgs,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_msgs);
-	// ÔöÁ¿¼ÓÔØ²¿·ÖÁÄÌìÊı¾İ
+	// å¢é‡åŠ è½½éƒ¨åˆ†èŠå¤©æ•°æ®
 	bool GetChatMessageList(int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
 private:

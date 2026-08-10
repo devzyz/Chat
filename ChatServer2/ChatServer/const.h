@@ -6,11 +6,11 @@
 #define MAX_SENDQUE 1000
 #define MAX_DEALQUE 1000
 
-// Í·²¿×Ü³¤¶È
+// å¤´éƒ¨æ€»é•¿åº¦
 #define HEAD_TOTAL_LEN 4
-// Í·²¿id³¤¶È
+// å¤´éƒ¨idé•¿åº¦
 #define HEAD_ID_LEN 2
-// Í·²¿Êý¾Ý³¤¶È
+// å¤´éƒ¨æ•°æ®é•¿åº¦
 #define HEAD_DATA_LEN 2
 
 class Defer {
@@ -23,63 +23,63 @@ private:
 
 enum ErrorCodes {
 	Success = 0,
-	Error_Json = 1001, // json½âÎö´íÎó
-	RPCFailed = 1002, // rpcÇëÇó´íÎó
-	VarifyExpired = 1003, // ÑéÖ¤Âë¹ýÆÚ
-	VarifyCodeErr = 1004, // ÑéÖ¤Âë´íÎó
-	UserExist = 1005, // ÓÃ»§ÒÑ´æÔÚ
-	PasswdErr = 1006, // ÃÜÂë´íÎó
-	EmailNotMatch = 1007, // ÓÊÏä²»Æ¥Åä
-	PasswdUpFailed = 1008, // ¸üÐÂÃÜÂëÊ§°Ü
-	PasswdInvalid = 1009, // ÃÜÂë¸üÐÂÊ§°Ü
-	TokenInvalid = 1010,   //TokenÊ§Ð§
-	UidInvalid = 1011,  //uidÎÞÐ§
+	Error_Json = 1001, // jsonè§£æžé”™è¯¯
+	RPCFailed = 1002, // rpcè¯·æ±‚é”™è¯¯
+	VarifyExpired = 1003, // éªŒè¯ç è¿‡æœŸ
+	VarifyCodeErr = 1004, // éªŒè¯ç é”™è¯¯
+	UserExist = 1005, // ç”¨æˆ·å·²å­˜åœ¨
+	PasswdErr = 1006, // å¯†ç é”™è¯¯
+	EmailNotMatch = 1007, // é‚®ç®±ä¸åŒ¹é…
+	PasswdUpFailed = 1008, // æ›´æ–°å¯†ç å¤±è´¥
+	PasswdInvalid = 1009, // å¯†ç æ›´æ–°å¤±è´¥
+	TokenInvalid = 1010,   //Tokenå¤±æ•ˆ
+	UidInvalid = 1011,  //uidæ— æ•ˆ
 };
 
 enum MSG_IDS {
-	MSG_CHAT_LOGIN_REQ = 1005, // ÓÃ»§µÇÂ½
-	MSG_CHAT_LOGIN_RSP = 1006, // ÓÃ»§µÇÂ½»Ø°ü
-	MSG_SEARCH_USER_REQ = 1007, // ËÑË÷ÓÃ»§ÇëÇó
-	MSG_SEARCH_USER_RSP = 1008, // ËÑË÷ÓÃ»§ÇëÇó»Ø°ü
-	MSG_ADD_FRIEND_REQ = 1009, // ÉêÇëÌí¼ÓºÃÓÑÇëÇó
-	MSG_ADD_FRIEND_RSP = 1010, // ÉêÇëÌí¼ÓºÃÓÑÇëÇó»Ø°ü
-	MSG_NOTIFY_ADD_FRIEND_REQ = 1011, // Í¨Öª¶Ô·½ÓÐÌí¼ÓºÃÓÑÇëÇó
-	MSG_NOTIFY_ADD_FRIEND_RSP = 1012, // Í¨Öª¶Ô·½ÓÐÌí¼ÓºÃÓÑÇëÇó»Ø°ü
-	MSG_AUTH_FRIEND_REQ = 1013, // ÈÏÖ¤Ìí¼ÓºÃÓÑÇëÇó
-	MSG_AUTH_FRIEND_RSP = 1014, // ÈÏÖ¤Ìí¼ÓºÃÓÑÇëÇó»Ø°ü
-	MSG_NOTIFY_AUTH_FRIEND_REQ = 1015, // Í¨ÖªÈÏÖ¤ºÃÓÑÇëÇó
-	MSG_TEXT_CHAT_MSG_REQ = 1016, // ·¢ËÍÎÄ±¾ÁÄÌìÊý¾ÝÇëÇó
-	MSG_TEXT_CHAT_MSG_RSP = 1017, // ·¢ËÍÎÄ±¾ÁÄÌìÊý¾ÝÇëÇó»Ø°ü
-	MSG_NOTIFY_CHAT_MSG_REQ = 1018, // Í¨Öª½ÓÊÕÎÄ±¾ÁÄÌìÊý¾Ý
-	MSG_NOTIFY_OFF_LINE_REQ = 1019, // ·þÎñÆ÷Í¨Öª¿Í»§¶ËÀëÏß
-	MSG_HEART_BEAT_REQ = 1020, // ¿Í»§¶ËÐÄÌøÇëÇó
-	MSG_HEART_BEAT_RSP = 1021, // ¿Í»§¶ËÐÄÌøÇëÇó»Ø°ü
-	MSG_CREATE_PRIVATE_CHAT_REQ = 1023, // ´´½¨ÐÂµÄË½ÁÄÇëÇó
-	MSG_CREATE_PRIVATE_CHAT_RSP = 1024, // ´´½¨ÐÂµÄË½ÁÄÇëÇó»Ø°ü
-	MSG_LOAD_CHAT_LIST_REQ = 1025, // ²éÑ¯²¿·ÖµÄÁÄÌìÁÐ±íÇëÇó
-	MSG_LOAD_CHAT_LIST_RSP = 1026, // ²éÑ¯²¿·ÖµÄÁÄÌìÁÐ±íÇëÇó»Ø°ü
-	MSG_LOAD_CHAT_MESSAGE_REQ = 1027, // ÔöÁ¿¼ÓÔØ²¿·ÖÁÄÌì¼ÇÂ¼
-	MSG_LOAD_CHAT_MESSAGE_RSP = 1028, // ÔöÁ¿¼ÓÔØ²¿·ÖÁÄÌì¼ÇÂ¼»Ø°ü
+	MSG_CHAT_LOGIN_REQ = 1005, // ç”¨æˆ·ç™»é™†
+	MSG_CHAT_LOGIN_RSP = 1006, // ç”¨æˆ·ç™»é™†å›žåŒ…
+	MSG_SEARCH_USER_REQ = 1007, // æœç´¢ç”¨æˆ·è¯·æ±‚
+	MSG_SEARCH_USER_RSP = 1008, // æœç´¢ç”¨æˆ·è¯·æ±‚å›žåŒ…
+	MSG_ADD_FRIEND_REQ = 1009, // ç”³è¯·æ·»åŠ å¥½å‹è¯·æ±‚
+	MSG_ADD_FRIEND_RSP = 1010, // ç”³è¯·æ·»åŠ å¥½å‹è¯·æ±‚å›žåŒ…
+	MSG_NOTIFY_ADD_FRIEND_REQ = 1011, // é€šçŸ¥å¯¹æ–¹æœ‰æ·»åŠ å¥½å‹è¯·æ±‚
+	MSG_NOTIFY_ADD_FRIEND_RSP = 1012, // é€šçŸ¥å¯¹æ–¹æœ‰æ·»åŠ å¥½å‹è¯·æ±‚å›žåŒ…
+	MSG_AUTH_FRIEND_REQ = 1013, // è®¤è¯æ·»åŠ å¥½å‹è¯·æ±‚
+	MSG_AUTH_FRIEND_RSP = 1014, // è®¤è¯æ·»åŠ å¥½å‹è¯·æ±‚å›žåŒ…
+	MSG_NOTIFY_AUTH_FRIEND_REQ = 1015, // é€šçŸ¥è®¤è¯å¥½å‹è¯·æ±‚
+	MSG_TEXT_CHAT_MSG_REQ = 1016, // å‘é€æ–‡æœ¬èŠå¤©æ•°æ®è¯·æ±‚
+	MSG_TEXT_CHAT_MSG_RSP = 1017, // å‘é€æ–‡æœ¬èŠå¤©æ•°æ®è¯·æ±‚å›žåŒ…
+	MSG_NOTIFY_CHAT_MSG_REQ = 1018, // é€šçŸ¥æŽ¥æ”¶æ–‡æœ¬èŠå¤©æ•°æ®
+	MSG_NOTIFY_OFF_LINE_REQ = 1019, // æœåŠ¡å™¨é€šçŸ¥å®¢æˆ·ç«¯ç¦»çº¿
+	MSG_HEART_BEAT_REQ = 1020, // å®¢æˆ·ç«¯å¿ƒè·³è¯·æ±‚
+	MSG_HEART_BEAT_RSP = 1021, // å®¢æˆ·ç«¯å¿ƒè·³è¯·æ±‚å›žåŒ…
+	MSG_CREATE_PRIVATE_CHAT_REQ = 1023, // åˆ›å»ºæ–°çš„ç§èŠè¯·æ±‚
+	MSG_CREATE_PRIVATE_CHAT_RSP = 1024, // åˆ›å»ºæ–°çš„ç§èŠè¯·æ±‚å›žåŒ…
+	MSG_LOAD_CHAT_LIST_REQ = 1025, // æŸ¥è¯¢éƒ¨åˆ†çš„èŠå¤©åˆ—è¡¨è¯·æ±‚
+	MSG_LOAD_CHAT_LIST_RSP = 1026, // æŸ¥è¯¢éƒ¨åˆ†çš„èŠå¤©åˆ—è¡¨è¯·æ±‚å›žåŒ…
+	MSG_LOAD_CHAT_MESSAGE_REQ = 1027, // å¢žé‡åŠ è½½éƒ¨åˆ†èŠå¤©è®°å½•
+	MSG_LOAD_CHAT_MESSAGE_RSP = 1028, // å¢žé‡åŠ è½½éƒ¨åˆ†èŠå¤©è®°å½•å›žåŒ…
 };
 
 #define USER_IP_PREFIX "uip_"
 #define USER_TOKEN_PREFIX "utoken_"
 #define IP_COUNT_PREFIX "ipcount_"
-#define USER_BASE_INFO "ubaseinfo_" // ÓÃ»§»ù±¾ÐÅÏ¢µÄuidÇ°×º£¬ubaseinfo_1£¬¼´1ºÅÓÃ»§µÄ»ù±¾ÐÅÏ¢
-#define LOGIN_COUNT "logincount" // ÓÃÀ´²éÑ¯Ä³¸öchatserver·þÎñÆ÷£¬µÇÂ¼µÄ¿Í»§¶ËtcpÁ¬½ÓÊý
-#define USER_NAME_INFO "unameinfo_" // Í¨¹ýname²éÑ¯ÓÃ»§ÐÅÏ¢µÄÇ°×º£¬unameinfo_zzzyz
-#define LOCK_PREFIX "lock_" // ·Ö²¼Ê½ËøµÄÃû×ÖÇ°×º£¬ÀýÈçlock_1001
+#define USER_BASE_INFO "ubaseinfo_" // ç”¨æˆ·åŸºæœ¬ä¿¡æ¯çš„uidå‰ç¼€ï¼Œubaseinfo_1ï¼Œå³1å·ç”¨æˆ·çš„åŸºæœ¬ä¿¡æ¯
+#define LOGIN_COUNT "logincount" // ç”¨æ¥æŸ¥è¯¢æŸä¸ªchatserveræœåŠ¡å™¨ï¼Œç™»å½•çš„å®¢æˆ·ç«¯tcpè¿žæŽ¥æ•°
+#define USER_NAME_INFO "unameinfo_" // é€šè¿‡nameæŸ¥è¯¢ç”¨æˆ·ä¿¡æ¯çš„å‰ç¼€ï¼Œunameinfo_zzzyz
+#define LOCK_PREFIX "lock_" // åˆ†å¸ƒå¼é”çš„åå­—å‰ç¼€ï¼Œä¾‹å¦‚lock_1001
 #define USER_SESSION_KEY "usessionid_"
 
-// ËøµÄ³ÖÓÐÊ±¼ä
+// é”çš„æŒæœ‰æ—¶é—´
 #define LOCK_TIME_OUT 10
-// »ñÈ¡ËøµÄ³¢ÊÔÊ±¼ä
+// èŽ·å–é”çš„å°è¯•æ—¶é—´
 #define LOCK_ACQUIRE_TIME_OUT 5
-// ÐÄÌø³¬Ê±µÄÊ±¼ä¼ä¸ô µ¥Î»Ãë
+// å¿ƒè·³è¶…æ—¶çš„æ—¶é—´é—´éš” å•ä½ç§’
 #define HEARTBEAT_TIME_INTERVAL 20
-// Êý¾Ý¿â³¢ÊÔÖØÁ¬µÄ×î´óÖØÊÔ´ÎÊý£¬Èç¹û´Ë´Î²»³É¹¦£¬ÔòÏÂ´ÎÐÄÌøÊ±ÔÙ½øÐÐÖØÊÔ
+// æ•°æ®åº“å°è¯•é‡è¿žçš„æœ€å¤§é‡è¯•æ¬¡æ•°ï¼Œå¦‚æžœæ­¤æ¬¡ä¸æˆåŠŸï¼Œåˆ™ä¸‹æ¬¡å¿ƒè·³æ—¶å†è¿›è¡Œé‡è¯•
 #define MYSQL_MAX_RETRIES 5
-// redis³¢ÊÔÖØÁ¬µÄ×î´óÖØÊÔ´ÎÊý£¬Èç¹û´Ë´Î²»³É¹¦£¬ÔòÏÂ´ÎÐÄÌøÊ±ÔÙ½øÐÐÖØÊÔ
+// rediså°è¯•é‡è¿žçš„æœ€å¤§é‡è¯•æ¬¡æ•°ï¼Œå¦‚æžœæ­¤æ¬¡ä¸æˆåŠŸï¼Œåˆ™ä¸‹æ¬¡å¿ƒè·³æ—¶å†è¿›è¡Œé‡è¯•
 #define REDIS_MAX_RETRIES 5
 
 #define PAGE_SIZE 10

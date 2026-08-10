@@ -12,14 +12,14 @@ CServer::CServer(boost::asio::io_context& ioc, short port) : _ioc(ioc), _port(po
 	
 }
 
-// ºóÖÃ³õÊ¼»¯£¬±£Ö¤shared_from_thisÒÑ¾­´æÔÚ
+// åç½®åˆå§‹åŒ–ï¼Œä¿è¯shared_from_thiså·²ç»å­˜åœ¨
 void CServer::init() {
-	// µÈ´ı60Ãëºó´¥·¢Lambda»Øµ÷
+	// ç­‰å¾…60ç§’åè§¦å‘Lambdaå›è°ƒ
 	_timer.async_wait([self = shared_from_this()](const boost::system::error_code& e) {
 		self->on_timer(e);
 		});
 
-	StartAcceptor(); // ¿ªÊ¼¼àÌı
+	StartAcceptor(); // å¼€å§‹ç›‘å¬
 }
 
 CServer::~CServer() {
@@ -33,7 +33,7 @@ void CServer::stop() {
 
 /**
  * @brief 
- * ÓÃÓÚÒì²½½ÓÊÕÁ¬½Ó
+ * ç”¨äºå¼‚æ­¥æ¥æ”¶è¿æ¥
  * 
  */
 void CServer::StartAcceptor() {
@@ -47,7 +47,7 @@ void CServer::StartAcceptor() {
  * @brief 
  * @param new_session 
  * @param error 
- * ÓÃÓÚ´¦ÀíÁ¬½ÓµÄ»Øµ÷
+ * ç”¨äºå¤„ç†è¿æ¥çš„å›è°ƒ
  */
 void CServer::HandleAcceptor(std::shared_ptr<CSession> new_session, const boost::system::error_code& error) {
 	if (!error) {
@@ -64,23 +64,23 @@ void CServer::HandleAcceptor(std::shared_ptr<CSession> new_session, const boost:
 /**
  * @brief 
  * @param session_id 
- * CServerÄÚµÄÄ³¸öCSession±»ÒÆ³ıÁË£¬´ú±íÕâ¸Ã·şÎñÆ÷ÓëtcpµÄÁ¬½Ó¹Ø±ÕÁË£¬´ËÊ±Òª½«CServerÖĞ±£´æµÄCSession
- * ÒÔ¼°UserMgrÖĞ±£´æµÄCSession¶¼Çå¿Õ
+ * CServerå†…çš„æŸä¸ªCSessionè¢«ç§»é™¤äº†ï¼Œä»£è¡¨è¿™è¯¥æœåŠ¡å™¨ä¸tcpçš„è¿æ¥å…³é—­äº†ï¼Œæ­¤æ—¶è¦å°†CServerä¸­ä¿å­˜çš„CSession
+ * ä»¥åŠUserMgrä¸­ä¿å­˜çš„CSessionéƒ½æ¸…ç©º
  */
 void CServer::ClearSession(std::string session_id) {
 	std::lock_guard<std::mutex> lock(_mutex);
 	if (_sessions.find(session_id) != _sessions.end()) {
 		auto uid = _sessions[session_id]->GetUserId();
-		// ÒÆ³ıUserMgr¹ØÁªµÄCSession
-		// UserMgrÖĞ¿ÉÄÜÒÑ¾­±»ÆäËû½ø³Ì¸üĞÂÎª×îĞÂµÄsessionÁ¬½ÓÁË£¬Òò´Ë¿ÉÄÜÄÚ²¿Êµ¼Ê²»ĞèÒªÉ¾³ı
+		// ç§»é™¤UserMgrå…³è”çš„CSession
+		// UserMgrä¸­å¯èƒ½å·²ç»è¢«å…¶ä»–è¿›ç¨‹æ›´æ–°ä¸ºæœ€æ–°çš„sessionè¿æ¥äº†ï¼Œå› æ­¤å¯èƒ½å†…éƒ¨å®é™…ä¸éœ€è¦åˆ é™¤
 		UserMgr::GetInstance()->RemoveUserSession(uid, session_id);
 	}
 	
-	// ´Ó±¾µØµÄsessionsÖĞÇå³ıÓë¿Í»§¶ËµÄÁ¬½Ó
+	// ä»æœ¬åœ°çš„sessionsä¸­æ¸…é™¤ä¸å®¢æˆ·ç«¯çš„è¿æ¥
 	_sessions.erase(session_id);
 }
 
-// ¼ì²éµ±Ç°µÄsession_idÊÇÄÜ¹»Õı³£Ê¹ÓÃ
+// æ£€æŸ¥å½“å‰çš„session_idæ˜¯èƒ½å¤Ÿæ­£å¸¸ä½¿ç”¨
 bool CServer::CheckSessionValid(std::string session_id) {
 	std::lock_guard<std::mutex> lock(_mutex);
 	auto it = _sessions.find(session_id);
@@ -90,7 +90,7 @@ bool CServer::CheckSessionValid(std::string session_id) {
 	return false;
 }
 
-// ¶¨Ê±Æ÷£¬´¥·¢¶Ôµ±Ç°sessionÁ¬½ÓµÄ¼ì²â
+// å®šæ—¶å™¨ï¼Œè§¦å‘å¯¹å½“å‰sessionè¿æ¥çš„æ£€æµ‹
 void CServer::on_timer(const boost::system::error_code& e) {
 	if (e) {
 		if (e == boost::asio::error::operation_aborted) {
@@ -101,14 +101,14 @@ void CServer::on_timer(const boost::system::error_code& e) {
 		}
 		return;
 	}
-	// Ôİ´æÒÑ¹ıÆÚµÄsession
+	// æš‚å­˜å·²è¿‡æœŸçš„session
 	std::vector<std::shared_ptr<CSession>> _expired_sessions;
-	int session_count = 0; // ¼ÆËã»¹´æ»îµÄsession
+	int session_count = 0; // è®¡ç®—è¿˜å­˜æ´»çš„session
 
-	// ÒòÎªÕâÀïµÄË¼Â·¾ÍÊÇ±éÀúÒ»ÏÂËùÓĞµÄsession£¬²é¿´Ò»ÏÂÊÇ·ñ³¬Ê±
-	// Òò´ËÎÒÃÇ¿ÉÒÔÍ¨¹ıÏÈ¼ÓËø£¬È»ºó½«_sessions¿½±´Ò»·İ£¬È»ºóÍ¨¹ı¶Ô¸±±¾À´½øĞĞ´¦Àí
-	// ÕâÑùÄÜ¹»Ìá¸ßËøµÄ¾«¶È
-	// Í¬Ê±¿ÉÒÔ±£Ö¤·ÃÎÊµÄCSessionÒ»¶¨ÊÇÓĞĞ§µÄ
+	// å› ä¸ºè¿™é‡Œçš„æ€è·¯å°±æ˜¯éå†ä¸€ä¸‹æ‰€æœ‰çš„sessionï¼ŒæŸ¥çœ‹ä¸€ä¸‹æ˜¯å¦è¶…æ—¶
+	// å› æ­¤æˆ‘ä»¬å¯ä»¥é€šè¿‡å…ˆåŠ é”ï¼Œç„¶åå°†_sessionsæ‹·è´ä¸€ä»½ï¼Œç„¶åé€šè¿‡å¯¹å‰¯æœ¬æ¥è¿›è¡Œå¤„ç†
+	// è¿™æ ·èƒ½å¤Ÿæé«˜é”çš„ç²¾åº¦
+	// åŒæ—¶å¯ä»¥ä¿è¯è®¿é—®çš„CSessionä¸€å®šæ˜¯æœ‰æ•ˆçš„
 	std::map<std::string, std::shared_ptr<CSession>> _sessions_copy;
 	{
 		std::lock_guard<std::mutex> lock(_mutex);
@@ -117,10 +117,10 @@ void CServer::on_timer(const boost::system::error_code& e) {
 
 	std::time_t now = time(nullptr);
 	for (auto it = _sessions_copy.begin(); it != _sessions_copy.end(); it++) {
-		// ¼ì²ésessionĞÄÌøÊÇ·ñ³¬Ê±
+		// æ£€æŸ¥sessionå¿ƒè·³æ˜¯å¦è¶…æ—¶
 		auto b_expired = it->second->CheckHeartBeatAccurate(now);
 		if (b_expired) {
-			// Èç¹û³¬Ê±£¬Ôò¹Ø±ÕÁ¬½Ó£¬_socket¹Ø±ÕÁË£¬Ôò»á´¥·¢async_readµÄ´íÎóÊÂ¼ş
+			// å¦‚æœè¶…æ—¶ï¼Œåˆ™å…³é—­è¿æ¥ï¼Œ_socketå…³é—­äº†ï¼Œåˆ™ä¼šè§¦å‘async_readçš„é”™è¯¯äº‹ä»¶
 			it->second->Close();
 
 			_expired_sessions.push_back(it->second);
@@ -130,22 +130,22 @@ void CServer::on_timer(const boost::system::error_code& e) {
 		}
 	}
 
-	// ´ËÊ±session_count¼ÇÂ¼ÁËµ±Ç°server»¹Á¬½ÓµÄsessionÊıÁ¿
-	// ¿ÉÒÔÖ±½Ó½«Æä¸üĞÂµ½redisÖĞ£¬×÷Îª¸ºÔØ¾ùºâµÄ²Î¿¼
-	// ÎªÊ²Ã´ÕâÀï²»ĞèÒª¼ÓËø£¬Ê×ÏÈÕâÊÇ¶¨Ê±²Ù×÷£¬Í¬Ò»¸ö½ø³ÌÖĞÖ»»á´¥·¢Ò»´Î
-	// ¶ø¶à½ø³Ì²Ù×÷µÄÓÖ²»ÊÇÍ¬Ò»¸ö±äÁ¿£¬Í¬Ò»¸ö·şÎñÆ÷Ö»»á¶ÁÈ¡ºÍĞŞ¸Ä±¾·şÎñÆ÷µÄcountÊıÁ¿
+	// æ­¤æ—¶session_countè®°å½•äº†å½“å‰serverè¿˜è¿æ¥çš„sessionæ•°é‡
+	// å¯ä»¥ç›´æ¥å°†å…¶æ›´æ–°åˆ°redisä¸­ï¼Œä½œä¸ºè´Ÿè½½å‡è¡¡çš„å‚è€ƒ
+	// ä¸ºä»€ä¹ˆè¿™é‡Œä¸éœ€è¦åŠ é”ï¼Œé¦–å…ˆè¿™æ˜¯å®šæ—¶æ“ä½œï¼ŒåŒä¸€ä¸ªè¿›ç¨‹ä¸­åªä¼šè§¦å‘ä¸€æ¬¡
+	// è€Œå¤šè¿›ç¨‹æ“ä½œçš„åˆä¸æ˜¯åŒä¸€ä¸ªå˜é‡ï¼ŒåŒä¸€ä¸ªæœåŠ¡å™¨åªä¼šè¯»å–å’Œä¿®æ”¹æœ¬æœåŠ¡å™¨çš„countæ•°é‡
 	auto& configMgr = ConfigMgr::GetInstance();
 	auto self_server_name = configMgr["SelfServer"]["Name"];
 	auto count_str = std::to_string(session_count);
 	RedisMgr::GetInstance()->HSet(LOGIN_COUNT, self_server_name, count_str);
 
-	// ´¦Àí¹ıÆÚµÄsession
-	// É¾³ıredisÖĞµÄÏàÓ¦µÄĞÅÏ¢
+	// å¤„ç†è¿‡æœŸçš„session
+	// åˆ é™¤redisä¸­çš„ç›¸åº”çš„ä¿¡æ¯
 	for (auto& session : _expired_sessions) {
 		session->DealExceptionSession();
 	}
 
-	// ÉèÖÃÏÂÒ»¸ö60ÃëµÄ¼ì²â
+	// è®¾ç½®ä¸‹ä¸€ä¸ª60ç§’çš„æ£€æµ‹
 	_timer.expires_after(std::chrono::seconds(60));
 	_timer.async_wait([self = shared_from_this()](const boost::system::error_code& e) {
 		self->on_timer(e);

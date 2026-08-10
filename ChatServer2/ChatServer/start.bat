@@ -1,7 +1,9 @@
 @echo off
-set PROTOC_PATH=D:\vcpkg\vcpkg\installed\x64-windows\tools\protobuf\protoc.exe
-set GRPC_PLUGIN_PATH=D:\vcpkg\vcpkg\installed\x64-windows\tools\grpc\grpc_cpp_plugin.exe
-set PROTO_FILE=message.proto
+if not defined VCPKG_TARGET_TRIPLET set VCPKG_TARGET_TRIPLET=x64-windows-static
+set "VCPKG_INSTALLED_DIR=%~dp0..\..\vcpkg_installed\%VCPKG_TARGET_TRIPLET%"
+set "PROTOC_PATH=%VCPKG_INSTALLED_DIR%\tools\protobuf\protoc.exe"
+set "GRPC_PLUGIN_PATH=%VCPKG_INSTALLED_DIR%\tools\grpc\grpc_cpp_plugin.exe"
+set "PROTO_FILE=message.proto"
 
 echo Generating gRPC code ...
 %PROTOC_PATH% -I="." --grpc_out="." --plugin=protoc-gen-grpc="%GRPC_PLUGIN_PATH%" "%PROTO_FILE%"

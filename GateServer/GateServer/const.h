@@ -24,18 +24,18 @@ using tcp = boost::asio::ip::tcp;
 
 enum ErrorCodes {
 	Success = 0,
-	Error_Json = 1001, // json½âÎö´íÎó
-	RPCFailed = 1002, // rpcÇëÇó´íÎó
-	VarifyExpired = 1003, // ÑéÖ¤Âë¹ıÆÚ
-	VarifyCodeErr = 1004, // ÑéÖ¤Âë´íÎó
-	UserExist = 1005, // ÓÃ»§ÒÑ´æÔÚ
-	PasswdErr = 1006, // ÃÜÂë´íÎó
-	EmailNotMatch = 1007, // ÓÊÏä²»Æ¥Åä
-	PasswdUpFailed = 1008, // ¸üĞÂÃÜÂëÊ§°Ü
-	PasswdInvalid = 1009, // ÃÜÂë¸üĞÂÊ§°Ü
+	Error_Json = 1001, // jsonè§£æé”™è¯¯
+	RPCFailed = 1002, // rpcè¯·æ±‚é”™è¯¯
+	VarifyExpired = 1003, // éªŒè¯ç è¿‡æœŸ
+	VarifyCodeErr = 1004, // éªŒè¯ç é”™è¯¯
+	UserExist = 1005, // ç”¨æˆ·å·²å­˜åœ¨
+	PasswdErr = 1006, // å¯†ç é”™è¯¯
+	EmailNotMatch = 1007, // é‚®ç®±ä¸åŒ¹é…
+	PasswdUpFailed = 1008, // æ›´æ–°å¯†ç å¤±è´¥
+	PasswdInvalid = 1009, // å¯†ç æ›´æ–°å¤±è´¥
 };
 
-// ÓÃÓÚÊµÏÖÔÚdeferÀàÎö¹¹Ê±£¬×Ô¶¯Ö´ĞĞ¹¹Ôì´«µİµÄlambda»òÕßfunctionº¯Êı
+// ç”¨äºå®ç°åœ¨deferç±»ææ„æ—¶ï¼Œè‡ªåŠ¨æ‰§è¡Œæ„é€ ä¼ é€’çš„lambdaæˆ–è€…functionå‡½æ•°
 class Defer {
 public :
 	Defer(std::function<void()> func) : _func(func) {}

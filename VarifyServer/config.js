@@ -1,6 +1,11 @@
 const fs = require('fs'); // js内的文件读写库
 
-let config = JSON.parse(fs.readFileSync('config.json', 'utf-8'));
+let configPath = process.env.CHAT_CONFIG || 'config.json';
+const configArgIndex = process.argv.indexOf('--config');
+if (configArgIndex !== -1 && process.argv[configArgIndex + 1]) {
+    configPath = process.argv[configArgIndex + 1];
+}
+let config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 let email_user = config.email.user;
 let email_pass = config.email.pass;
 let mysql_host = config.mysql.host;

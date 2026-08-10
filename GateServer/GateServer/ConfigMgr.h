@@ -11,7 +11,7 @@ struct SectionInfo {
 
 	SectionInfo& operator = (const SectionInfo& src);
 	
-	// 为了通过对SectionInfo[key]直接取到key对应的value,而不是先取到SectionInfo._section_datas[key]取到value
+	// 涓轰簡閫氳繃瀵筍ectionInfo[key]鐩存帴鍙栧埌key瀵瑰簲鐨剉alue,鑰屼笉鏄厛鍙栧埌SectionInfo._section_datas[key]鍙栧埌value
 	std::string operator[](const std::string& key);
 };
 
@@ -26,6 +26,7 @@ public:
 		static ConfigMgr configMgr;
 		return configMgr;
 	}
+	static void SetConfigPath(const std::string& path);
 
 	ConfigMgr(const ConfigMgr& src);
 	ConfigMgr& operator = (const ConfigMgr& src);
@@ -33,7 +34,7 @@ public:
 
 private:
 	ConfigMgr();
+	static std::string _config_path_override;
 	std::map<std::string, SectionInfo> _config_map;
 	std::string _config_path;
 };
-

@@ -7,19 +7,19 @@ class HttpConnection : public std::enable_shared_from_this<HttpConnection>
 public:
 	HttpConnection(boost::asio::io_context & ioc);
 	/**
-	 * @brief Óë¿Í»§¶ËÍ¨ĞÅ£¬¶ÁÈ¡¿Í»§¶Ë·¢À´µÄÊı¾İ
+	 * @brief ä¸å®¢æˆ·ç«¯é€šä¿¡ï¼Œè¯»å–å®¢æˆ·ç«¯å‘æ¥çš„æ•°æ®
 	 */
 	void Start();
 	tcp::socket& GetSocket();
 private:
 	void CheckDeadline();
 	/**
-	 * @brief Óë¿Í»§¶ËÍ¨ĞÅ£¬½«Êı¾İ·¢Íù¿Í»§¶Ë
+	 * @brief ä¸å®¢æˆ·ç«¯é€šä¿¡ï¼Œå°†æ•°æ®å‘å¾€å®¢æˆ·ç«¯
 	 */
 	void WriteResponse();
 
 	/**
-	 * @brief ´¦Àí¿Í»§¶Ë·¢À´µÄÇëÇó
+	 * @brief å¤„ç†å®¢æˆ·ç«¯å‘æ¥çš„è¯·æ±‚
 	 */
 	void HandleReq();
 	

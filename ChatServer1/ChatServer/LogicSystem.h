@@ -31,7 +31,7 @@ private:
 	 * @param  
 	 * @param msg_id 
 	 * @param msg_data 
-	 * µÇÂ¼ÇëÇóµÄ´¦ÀíÂß¼­
+	 * ç™»å½•è¯·æ±‚çš„å¤„ç†é€»è¾‘
 	 */
 	void LoginHandler(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data);
 
@@ -41,21 +41,21 @@ private:
 	 * @param uid 
 	 * @param userinfo 
 	 * @return 
-	 * ´ÓredisÖĞ»ñÈ¡ÓÃ»§ĞÅÏ¢
+	 * ä»redisä¸­è·å–ç”¨æˆ·ä¿¡æ¯
 	 */
 	bool GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared_ptr<UserInfo>& userinfo);
 	/**
 	 * @brief 
 	 * @param uid_name 
 	 * @param value 
-	 * Í¨¹ıuid»ñÈ¡µ½ÓÃ»§ĞÅÏ¢£¬·ÅÈëµ½valueÖĞ
+	 * é€šè¿‡uidè·å–åˆ°ç”¨æˆ·ä¿¡æ¯ï¼Œæ”¾å…¥åˆ°valueä¸­
 	 */
 	void GetUserByUid(std::string uid, Json::Value& value);
 	/**
 	 * @brief 
 	 * @param uid_name 
 	 * @param value 
-	 * Í¨¹ıname»ñÈ¡µ½ÓÃ»§ĞÅÏ¢£¬·ÅÈëµ½valueÖĞ
+	 * é€šè¿‡nameè·å–åˆ°ç”¨æˆ·ä¿¡æ¯ï¼Œæ”¾å…¥åˆ°valueä¸­
 	 */
 	void GetUserByName(std::string name, Json::Value& value);
 	/**
@@ -63,7 +63,7 @@ private:
 	 * @param uid 
 	 * @param applylist 
 	 * @return 
-	 * »ñÈ¡ºÃÓÑÉêÇëÁĞ±í
+	 * è·å–å¥½å‹ç”³è¯·åˆ—è¡¨
 	 */
 	bool GetApplyFriendList(int uid, std::vector<std::shared_ptr<ApplyInfo>>& applylist);
 	/**
@@ -71,21 +71,21 @@ private:
 	 * @param uid 
 	 * @param friend_list 
 	 * @return 
-	 * »ñÈ¡ÓÃ»§ºÃÓÑÁĞ±í
+	 * è·å–ç”¨æˆ·å¥½å‹åˆ—è¡¨
 	 */
 	bool GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& friend_list);
 	/**
 	 * @brief 
-	 * @param uid ÓÃ»§µÄuid
-	 * @param next_chat_id ´ÓÄÄÒ»¸öchat_id¿ªÊ¼²é 
-	 * @param page_size ²épage_size¸ö
-	 * @param chat_list ·µ»ØµÄÁĞ±í
-	 * @param load_more ÊÇ·ñÒÑ¾­²éÍê
-	 * @param new_next_chat_id ÏÂÒ»´Î¿ªÊ¼²éµÄchat_id
+	 * @param uid ç”¨æˆ·çš„uid
+	 * @param next_chat_id ä»å“ªä¸€ä¸ªchat_idå¼€å§‹æŸ¥
+	 * @param page_size æŸ¥page_sizeä¸ª
+	 * @param chat_list è¿”å›çš„åˆ—è¡¨
+	 * @param load_more æ˜¯å¦å·²ç»æŸ¥å®Œ
+	 * @param new_next_chat_id ä¸‹ä¸€æ¬¡å¼€å§‹æŸ¥çš„chat_id
 	 * @return 
 	 * 
-	 * ´ÓÊı¾İ¿âÖĞ»ñÈ¡ÓÃ»§uidµÄ»á»°ÁĞ±í£¬´Ónext_chat_id¿ªÊ¼²é£¬»ñÈ¡page_size¸ö£¬ ÁĞ±í·µ»Øµ½chat_listÖĞ
-	 * load_more´ú±íÏÂÒ»´Î»¹ÄÜ²»ÄÜ²é£¬new_next_chat_id±íÊ¾ÏÂÒ»´Î´ÓÄÄÒ»¸ö¿ªÊ¼²é
+	 * ä»æ•°æ®åº“ä¸­è·å–ç”¨æˆ·uidçš„ä¼šè¯åˆ—è¡¨ï¼Œä»next_chat_idå¼€å§‹æŸ¥ï¼Œè·å–page_sizeä¸ªï¼Œ åˆ—è¡¨è¿”å›åˆ°chat_listä¸­
+	 * load_moreä»£è¡¨ä¸‹ä¸€æ¬¡è¿˜èƒ½ä¸èƒ½æŸ¥ï¼Œnew_next_chat_idè¡¨ç¤ºä¸‹ä¸€æ¬¡ä»å“ªä¸€ä¸ªå¼€å§‹æŸ¥
 	 */
 	bool GetUserChatList(int uid, int current_load_id, int page_size,
 		std::vector<std::shared_ptr<ChatInfoBase>>& chat_list, bool& load_more, int& last_load_id);
@@ -98,7 +98,7 @@ private:
 	 * @param load_more 
 	 * @param last_load_id 
 	 * @return 
-	 * ÔöÁ¿¼ÓÔØ²¿·ÖÁÄÌìÊı¾İ
+	 * å¢é‡åŠ è½½éƒ¨åˆ†èŠå¤©æ•°æ®
 	 */
 	bool GetChatMessageList(int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
@@ -107,24 +107,23 @@ private:
 	 * @brief 
 	 * @param uid_name 
 	 * @return 
-	 * ÅĞ¶ÏÄ³¸ö×Ö·û´®ÊÇ²»ÊÇÖ»°üº¬Êı×Ö£¬ÊÇÔò·µ»Øtrue
+	 * åˆ¤æ–­æŸä¸ªå­—ç¬¦ä¸²æ˜¯ä¸æ˜¯åªåŒ…å«æ•°å­—ï¼Œæ˜¯åˆ™è¿”å›true
 	 */
 	bool IsOnlyDigit(std::string& uid_name);
-	// ¹¤×÷Ïß³Ì£¬ÓÃÓÚ´ÓÂß¼­¶ÓÁĞÖĞÈ¡Êı¾İ½øĞĞ´¦Àí£¬µ±Ã»ÓĞÊı¾İµÄÊ±ºòÔòĞèÒª¹ÒÆğµÈ´ı£¬ÅäºÏÌõ¼ş±äÁ¿Ê¹ÓÃ
+	// å·¥ä½œçº¿ç¨‹ï¼Œç”¨äºä»é€»è¾‘é˜Ÿåˆ—ä¸­å–æ•°æ®è¿›è¡Œå¤„ç†ï¼Œå½“æ²¡æœ‰æ•°æ®çš„æ—¶å€™åˆ™éœ€è¦æŒ‚èµ·ç­‰å¾…ï¼Œé…åˆæ¡ä»¶å˜é‡ä½¿ç”¨
 	std::thread _worker_thread;
 	std::condition_variable _cond;
 	std::mutex _mutex;
 
-	// Âß¼­¶ÓÁĞ
+	// é€»è¾‘é˜Ÿåˆ—
 	std::queue<std::shared_ptr<LogicNode>> _msg_que;
 
-	// µ±Ç°¹¤×÷Ïß³ÌÊÇ·ñ¹Ø±Õ
+	// å½“å‰å·¥ä½œçº¿ç¨‹æ˜¯å¦å…³é—­
 	std::atomic<bool> _b_stop;
 	
-	// »Øµ÷º¯Êı¼¯ºÏ£¬ ¸ù¾İmsgidÀ´µ÷ÓÃ²»Í¬µÄ»Øµ÷º¯Êı
+	// å›è°ƒå‡½æ•°é›†åˆï¼Œ æ ¹æ®msgidæ¥è°ƒç”¨ä¸åŒçš„å›è°ƒå‡½æ•°
 	std::map<short, FunCallBack> _fun_callbacks;
 
-	// ±£´æserver
+	// ä¿å­˜server
 	std::shared_ptr<CServer> _p_server;
 };
-

@@ -13,34 +13,37 @@
 #include "RedisMgr.h"
 #include "LogMgr.h"
 
-int main()
+int main(int argc, char* argv[])
 {
+    if (argc == 3 && std::string(argv[1]) == "--config") {
+        ConfigMgr::SetConfigPath(argv[2]);
+    }
     auto logger = LogMgr::GetInstance();
     logger->InitLogMgr();
     auto& configMgr = ConfigMgr::GetInstance();
-    // chatserver·şÎñÆ÷Æô¶¯ºó£¬½«Á¬½ÓÊı¸üĞÂµ½redisÖĞ
+    // chatserveræœåŠ¡å™¨å¯åŠ¨åï¼Œå°†è¿æ¥æ•°æ›´æ–°åˆ°redisä¸­
     auto self_server_name = configMgr["SelfServer"]["Name"];
     try {
         auto pool = AsioIOServicePool::GetInstance();
 
-        // ÒòÎªÖ»Ğ´±¾·ş£¬ËùÒÔÖ±½Ó³õÊ¼»¯Ò»ÏÂ
-        // µ«ÊÇ×´Ì¬·şÎñÆ÷»¹ÊÇ»á²éÕÒ£¬¿ÉÄÜ³öÏÖÏÈ²éºóĞ´µÄÇé¿ö£¬ÒòÎªĞÄÌø60Ãë¸üĞÂÒ»´Î£¬ÔÊĞí³öÏÖÒ»Ğ©Ğ¡µÄÎó²î£¬Ìá¸ßĞÔÄÜ
+        // å› ä¸ºåªå†™æœ¬æœï¼Œæ‰€ä»¥ç›´æ¥åˆå§‹åŒ–ä¸€ä¸‹
+        // ä½†æ˜¯çŠ¶æ€æœåŠ¡å™¨è¿˜æ˜¯ä¼šæŸ¥æ‰¾ï¼Œå¯èƒ½å‡ºç°å…ˆæŸ¥åå†™çš„æƒ…å†µï¼Œå› ä¸ºå¿ƒè·³60ç§’æ›´æ–°ä¸€æ¬¡ï¼Œå…è®¸å‡ºç°ä¸€äº›å°çš„è¯¯å·®ï¼Œæé«˜æ€§èƒ½
         RedisMgr::GetInstance()->HSet(LOGIN_COUNT, self_server_name, "0");
 
-        // chatserver¶ÔÓ¦µÄgrpc·şÎñÆ÷µØÖ·
+        // chatserverå¯¹åº”çš„grpcæœåŠ¡å™¨åœ°å€
         std::string server_address = configMgr["SelfServer"]["Host"] + ":" + configMgr["SelfServer"]["RPCPort"];
         ChatServiceImpl service;
         grpc::ServerBuilder builder;
-        // Ìí¼Ó¼àÌıµÄ¶Ë¿Ú£¬ÒÔ¼°×¢²ágrpc·şÎñ
+        // æ·»åŠ ç›‘å¬çš„ç«¯å£ï¼Œä»¥åŠæ³¨å†ŒgrpcæœåŠ¡
         builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
         builder.RegisterService(&service);
 
-        // ¹¹½¨²¢Æô¶¯gRPC·şÎñÆ÷
+        // æ„å»ºå¹¶å¯åŠ¨gRPCæœåŠ¡å™¨
         std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
         SPDLOG_INFO("chat grpc Server listening on {}\n", server_address);
 
 
-        // ´´½¨Ò»¸öµ¥¶ÀµÄÏß³ÌµÈ´ıgrpc
+        // åˆ›å»ºä¸€ä¸ªå•ç‹¬çš„çº¿ç¨‹ç­‰å¾…grpc
         std::thread grpc_server_thread([&server]() {
             server->Wait();
             });
@@ -48,11 +51,11 @@ int main()
         boost::asio::io_context io_context;
         boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
 
-        // ´´½¨CServer
+        // åˆ›å»ºCServer
         auto port_str = configMgr["SelfServer"]["Port"];
         std::shared_ptr<CServer> p_server = std::make_shared<CServer>(io_context, atoi(port_str.c_str()));
-        p_server->init(); // Æô¶¯¶¨Ê±Æ÷
-        // ÓÅÑÅµÄÍË³ö
+        p_server->init(); // å¯åŠ¨å®šæ—¶å™¨
+        // ä¼˜é›…çš„é€€å‡º
         signals.async_wait([&io_context, pool, &server, &p_server](auto, auto) {
             p_server->stop();
             io_context.stop();
@@ -62,12 +65,12 @@ int main()
         
         LogicSystem::GetInstance()->SetServer(p_server);
         service.SetServer(p_server);
-        io_context.run(); // Í¨¹ısignalsÀ´±£»î
+        io_context.run(); // é€šè¿‡signalsæ¥ä¿æ´»
 
-        // ½áÊøºó½«Ò»Ğ©×´Ì¬Çå¿Õ
+        // ç»“æŸåå°†ä¸€äº›çŠ¶æ€æ¸…ç©º
         RedisMgr::GetInstance()->HDel(LOGIN_COUNT, self_server_name);
         RedisMgr::GetInstance()->Close();
-        grpc_server_thread.join(); // µÈ´ıÏß³Ì½áÊø
+        grpc_server_thread.join(); // ç­‰å¾…çº¿ç¨‹ç»“æŸ
     }
     catch (std::exception& e) {
         SPDLOG_ERROR("ChatServer exception: {}", e.what());

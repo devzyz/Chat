@@ -10,7 +10,7 @@ RedisConnectionPool::RedisConnectionPool(const std::string& host, const std::str
 		for (int i = 0; i < _pool_size; i++) {
 			auto* context = redisConnect(_host.c_str(), atoi(_port.c_str()));
 
-			// Á¬½ÓÊ§°Ü
+			// è¿æ¥å¤±è´¥
 			if (context == nullptr || context->err != 0) {
 				if (context != nullptr) {
 					redisFree(context);
@@ -31,7 +31,7 @@ RedisConnectionPool::RedisConnectionPool(const std::string& host, const std::str
 			_que.push(context);
 		}
 
-		// ½øĞĞĞÄÌø
+		// è¿›è¡Œå¿ƒè·³
 		_check_thread = std::thread([this]() {
 			int count = 0;
 			while (!_b_stop) {
@@ -50,7 +50,7 @@ RedisConnectionPool::RedisConnectionPool(const std::string& host, const std::str
 	}
 }
 
-// Îö¹¹£¬ÊÍ·ÅËùÓĞµÄÓëredisµÄÁ¬½Ó
+// ææ„ï¼Œé‡Šæ”¾æ‰€æœ‰çš„ä¸redisçš„è¿æ¥
 RedisConnectionPool::~RedisConnectionPool() {
 	std::lock_guard<std::mutex> lock(_que_mutex);
 	close();
@@ -93,22 +93,22 @@ void RedisConnectionPool::close() {
 	_check_thread.join();
 }
 
-// ĞÄÌø±£»î
+// å¿ƒè·³ä¿æ´»
 void RedisConnectionPool::CheckConnection() {
 	std::size_t target_count;
-	// ¼ÓËø»ñÈ¡µ½ĞèÒªĞÄÌøµÄÊıÁ¿
+	// åŠ é”è·å–åˆ°éœ€è¦å¿ƒè·³çš„æ•°é‡
 	{
 		std::lock_guard<std::mutex> lock(_que_mutex);
 		target_count = _que.size();
 	}
 
-	// Èç¹û»¹ĞèÒª±£»îµÄÊıÁ¿²»ÎªÁã£¬²¢ÇÒĞèÒª±£»î
+	// å¦‚æœè¿˜éœ€è¦ä¿æ´»çš„æ•°é‡ä¸ä¸ºé›¶ï¼Œå¹¶ä¸”éœ€è¦ä¿æ´»
 	while (target_count > 0 && !_b_stop) {
 		redisContext* context = nullptr;
-		// È¡³öÒ»¸öÁ¬½Ó
+		// å–å‡ºä¸€ä¸ªè¿æ¥
 		{
 			std::lock_guard<std::mutex> lock(_que_mutex);
-			// Èç¹ûÎª¿Õ£¬ÔòËµÃ÷µ±Ç°Ê±¼ä¼ä¸ôÄÚ£¬ĞÄÌøÒÑ¾­Íê³É
+			// å¦‚æœä¸ºç©ºï¼Œåˆ™è¯´æ˜å½“å‰æ—¶é—´é—´éš”å†…ï¼Œå¿ƒè·³å·²ç»å®Œæˆ
 			if (_que.empty()) {
 				break;
 			}
@@ -117,13 +117,13 @@ void RedisConnectionPool::CheckConnection() {
 			_que.pop();
 		}
 
-		// ¿ªÊ¼½øĞĞĞÄÌø
+		// å¼€å§‹è¿›è¡Œå¿ƒè·³
 		redisReply* reply = nullptr;
 		try {
-			// Ö´ĞĞĞÄÌø
+			// æ‰§è¡Œå¿ƒè·³
 			reply = (redisReply*)redisCommand(context, "PING");
 			
-			// µ×²ãi/oĞ­ÒéÓĞÃ»ÓĞÎÊÌâ
+			// åº•å±‚i/oåè®®æœ‰æ²¡æœ‰é—®é¢˜
 			if (context->err) {
 				SPDLOG_WARN("redis heartbeat connection error, err={}, fail_count={}", context->err, _fail_count.load());
 				if (reply) {
@@ -134,7 +134,7 @@ void RedisConnectionPool::CheckConnection() {
 				continue;
 			}
 
-			// redis×ÔÉí·µ»ØÊÇ²»ÊÇerror
+			// redisè‡ªèº«è¿”å›æ˜¯ä¸æ˜¯error
 			if (!reply || reply->type == REDIS_REPLY_ERROR) {
 				SPDLOG_WARN("redis heartbeat reply invalid, err={}, fail_count={}", context->err, _fail_count.load());
 				if (reply) {
@@ -145,12 +145,12 @@ void RedisConnectionPool::CheckConnection() {
 				continue;
 			}
 
-			// Ã»ÎÊÌâ£¬·Å»ØÁ¬½Ó³Ø
+			// æ²¡é—®é¢˜ï¼Œæ”¾å›è¿æ¥æ± 
 			freeReplyObject(reply);
 			returnConnection(context);
 		}
 		catch (std::exception& e) {
-			// Èç¹ûÊ§°Ü£¬Ôò½«Ê§°ÜÊıÁ¿¼ÓÒ»£¬µÈ´ıºóÃæÖØÁ¬
+			// å¦‚æœå¤±è´¥ï¼Œåˆ™å°†å¤±è´¥æ•°é‡åŠ ä¸€ï¼Œç­‰å¾…åé¢é‡è¿
 			SPDLOG_WARN("redis heartbeat exception, error={}, fail_count={}", e.what(), _fail_count.load());
 			if (reply) {
 				freeReplyObject(reply);
@@ -175,7 +175,7 @@ void RedisConnectionPool::CheckConnection() {
 bool RedisConnectionPool::reconnection() {
 	auto* context = redisConnect(_host.c_str(), atoi(_port.c_str()));
 
-	// Á¬½ÓÊ§°Ü
+	// è¿æ¥å¤±è´¥
 	if (context == nullptr || context->err != 0) {
 		if (context != nullptr) {
 			redisFree(context);
@@ -216,11 +216,11 @@ RedisMgr::~RedisMgr() {
 /**
  * @brief
  * @param key
- * @param value ½á¹û±£´æÎ»ÖÃ
+ * @param value ç»“æœä¿å­˜ä½ç½®
  * @return
- * 1. ÅĞ¶Ï·µ»Ø·Ç¿Õ
- * 2. ÅĞ¶Ï·µ»Ø·ÇÎŞĞ§Öµ
- * 3. ·µ»ØÖµÀàĞÍ±ØĞëÎªstring
+ * 1. åˆ¤æ–­è¿”å›éç©º
+ * 2. åˆ¤æ–­è¿”å›éæ— æ•ˆå€¼
+ * 3. è¿”å›å€¼ç±»å‹å¿…é¡»ä¸ºstring
  */
 bool RedisMgr::Get(const std::string& key, std::string& value) {
 	auto connection = _pool->getConnection();
@@ -265,9 +265,9 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
  * @param key
  * @param value
  * @return
- * 1. ·µ»Ø·Ç¿Õ
- * 2. ·µ»ØµÄÀàĞÍÎªstatusÀàĞÍ
- * 3. statusµÄÄÚÈİ×´Ì¬Îªok
+ * 1. è¿”å›éç©º
+ * 2. è¿”å›çš„ç±»å‹ä¸ºstatusç±»å‹
+ * 3. statusçš„å†…å®¹çŠ¶æ€ä¸ºok
  */
 bool RedisMgr::Set(const std::string& key, const std::string& value) {
 	auto connection = _pool->getConnection();
@@ -302,11 +302,11 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
  * @brief
  * @param first_key
  * @param second_key
- * @param value ½á¹û±£´æÎ»ÖÃ
+ * @param value ç»“æœä¿å­˜ä½ç½®
  * @return
- * 1. ·µ»Ø·Ç¿Õ
- * 2. ·µ»ØÖµ·ÇÎŞĞ§Öµ
- * 3. ·µ»ØÀàĞÍ±ØĞëÎªstring
+ * 1. è¿”å›éç©º
+ * 2. è¿”å›å€¼éæ— æ•ˆå€¼
+ * 3. è¿”å›ç±»å‹å¿…é¡»ä¸ºstring
  */
 bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key, std::string& value) {
 	auto connection = _pool->getConnection();
@@ -352,8 +352,8 @@ bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key,
  * @param second_key
  * @param value
  * @return
- * 1. ·µ»Ø·Ç¿Õ
- * 2. ·µ»ØÀàĞÍ±ØĞëÎªinteger £¨1ÎªĞÂÔö£¬0Îª¸üĞÂÒÑÓĞ£©
+ * 1. è¿”å›éç©º
+ * 2. è¿”å›ç±»å‹å¿…é¡»ä¸ºinteger ï¼ˆ1ä¸ºæ–°å¢ï¼Œ0ä¸ºæ›´æ–°å·²æœ‰ï¼‰
  */
 bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key, const std::string& value) {
 	auto connection = _pool->getConnection();
@@ -389,8 +389,8 @@ bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key,
  * @param first_key
  * @param second_key
  * @return
- * 1. ·µ»Ø·Ç¿Õ
- * 2. ·µ»ØÀàĞÍ±ØĞëÎªÕûÊı
+ * 1. è¿”å›éç©º
+ * 2. è¿”å›ç±»å‹å¿…é¡»ä¸ºæ•´æ•°
  */
 bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key) {
 	auto connection = _pool->getConnection();
@@ -425,8 +425,8 @@ bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key)
  * @brief
  * @param key
  * @return
- * 1. ·µ»Ø·Ç¿Õ
- * 2. ·µ»ØÀàĞÍ±ØĞëÎªÕûÊı
+ * 1. è¿”å›éç©º
+ * 2. è¿”å›ç±»å‹å¿…é¡»ä¸ºæ•´æ•°
  */
 bool RedisMgr::Del(const std::string& key) {
 	auto connection = _pool->getConnection();
@@ -457,7 +457,7 @@ bool RedisMgr::Del(const std::string& key) {
 	return true;
 }
 
-// Èç¹û¼ÓËø³É¹¦£¬Ôò·µ»ØÒ»¸öËøµÄÎ¨Ò»±êÊ¶
+// å¦‚æœåŠ é”æˆåŠŸï¼Œåˆ™è¿”å›ä¸€ä¸ªé”çš„å”¯ä¸€æ ‡è¯†
 std::string RedisMgr::acquireLock(const std::string& lockName, int lockTimeout, int acquireTimeout) {
 	auto connection = _pool->getConnection();
 
@@ -472,7 +472,7 @@ std::string RedisMgr::acquireLock(const std::string& lockName, int lockTimeout, 
 	return DistLock::GetInstance()->acquireLock(connection, lockName, lockTimeout, acquireTimeout);
 }
 
-// Èç¹û½âËø³É¹¦£¬Ôò·µ»Øtrue
+// å¦‚æœè§£é”æˆåŠŸï¼Œåˆ™è¿”å›true
 bool RedisMgr::releaseLock(const std::string& lockName, const std::string& identifier) {
 	if (identifier.empty()) {
 		return true;

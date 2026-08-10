@@ -16,7 +16,7 @@ public:
 
 /**
  * @brief 
- * 配置文件管理类，读取config.ini内的配置信息
+ * 閰嶇疆鏂囦欢绠＄悊绫伙紝璇诲彇config.ini鍐呯殑閰嶇疆淇℃伅
  */
 class ConfigMgr
 {
@@ -29,13 +29,14 @@ public:
 	/**
 	 * @brief 
 	 * @return 
-	 * 通过静态变量获取静态实例，作为单例实例使用
+	 * 閫氳繃闈欐�佸彉閲忚幏鍙栭潤鎬佸疄渚嬶紝浣滀负鍗曚緥瀹炰緥浣跨敤
 	 */
 	static ConfigMgr& GetInstance();
+	static void SetConfigPath(const std::string& path);
 	SectionInfo operator [] (const std::string& key);
 	void DumpLoadedConfig() const;
 private:
 	std::map<std::string, SectionInfo> _config_data;
 	std::string _config_path;
+	static std::string _config_path_override;
 };
-

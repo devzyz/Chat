@@ -37,14 +37,14 @@ RedisConfigPool::~RedisConfigPool() {
 }
 
 void RedisConfigPool::close() {
-	// Á¬½Ó³ØÒª¹Ø±ÕÁË£¬½«¹Ø±Õ×´Ì¬ÖÃÎªtrue£¬Í¬Ê±»½ĞÑËùÓĞ»¹ÔÚµÈ´ıÁ¬½ÓµÄÏß³Ì
+	// è¿æ¥æ± è¦å…³é—­äº†ï¼Œå°†å…³é—­çŠ¶æ€ç½®ä¸ºtrueï¼ŒåŒæ—¶å”¤é†’æ‰€æœ‰è¿˜åœ¨ç­‰å¾…è¿æ¥çš„çº¿ç¨‹
 	_b_stop = true;
 	_conf.notify_all();
 }
 
 redisContext* RedisConfigPool::GetConnection() {
 	std::unique_lock<std::mutex> lock(_mutex);
-	// µ±Á¬½Ó³ØÃ»ÓĞÔİÍ££¬Í¬Ê±Á¬½Ó³ØÄÚÎŞ¿ÕÁ¬½ÓÊ±£¬ĞèÒª×èÈûµÈ´ı
+	// å½“è¿æ¥æ± æ²¡æœ‰æš‚åœï¼ŒåŒæ—¶è¿æ¥æ± å†…æ— ç©ºè¿æ¥æ—¶ï¼Œéœ€è¦é˜»å¡ç­‰å¾…
 	_conf.wait(lock, [this] {
 		if (_b_stop) {
 			return true;
@@ -71,7 +71,7 @@ RedisMgr::RedisMgr() {
 	auto& grcpConfigMgr = ConfigMgr::GetInstance();
 	auto host = grcpConfigMgr["Redis"]["Host"];
 	auto port = grcpConfigMgr["Redis"]["Port"];
-	auto pwd = grcpConfigMgr["Redis"]["Passwd"];
+	auto pwd = grcpConfigMgr["Redis"]["Password"];
 	_redis_pool = std::make_unique<RedisConfigPool>(8, host.c_str(), atoi(port.c_str()), pwd.c_str());
 }
 
@@ -118,7 +118,7 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
 }
 
 bool RedisMgr::Set(const std::string& key, const std::string& value) {
-	// Ö´ĞĞsetÃüÁî
+	// æ‰§è¡Œsetå‘½ä»¤
 	auto connect = _redis_pool->GetConnection();
 	if (connect == nullptr) {
 		return false;
@@ -133,7 +133,7 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
 		return false;
 	}
 
-	// Ö´ĞĞÊ§°Ü
+	// æ‰§è¡Œå¤±è´¥
 	if (!(reply->type == REDIS_REPLY_STATUS &&
 		(strcmp(reply->str, "OK") == 0 || strcmp(reply->str, "ok") == 0))) {
 
@@ -165,7 +165,7 @@ bool RedisMgr::LPush(const std::string& key, const std::string& value) {
 		return false;
 	}
 
-	// Ö´ĞĞÊ§°Ü
+	// æ‰§è¡Œå¤±è´¥
 	if (reply->type != REDIS_REPLY_INTEGER || reply->integer <= 0) {
 		SPDLOG_WARN("redis LPUSH failed, key={}, value_size={}, reason=unexpected_reply", key, value.size());
 		freeReplyObject(reply);
@@ -222,7 +222,7 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value) {
 		return false;
 	}
 
-	// Ö´ĞĞÊ§°Ü
+	// æ‰§è¡Œå¤±è´¥
 	if (reply->type == REDIS_REPLY_INTEGER || reply->integer <= 0) {
 		SPDLOG_WARN("redis RPUSH failed, key={}, value_size={}, reason=unexpected_reply", key, value.size());
 		freeReplyObject(reply);

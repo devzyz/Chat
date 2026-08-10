@@ -24,7 +24,7 @@ LogicSystem::LogicSystem() {
 		}
 	});
 
-	// ½ÓÊÕÑéÖ¤ÂëµÄ´¦ÀíÂß¼­
+	// æ¥æ”¶éªŒè¯ç çš„å¤„ç†é€»è¾‘
 	RegPost("/get_varifycode", [](std::shared_ptr<HttpConnection> connection) {
 		auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
 		SPDLOG_DEBUG("verification-code request received, body_size={}", body_str.size());
@@ -60,14 +60,14 @@ LogicSystem::LogicSystem() {
 		return true;
 	});
 
-	// ×¢²áµÄ´¦ÀíÂß¼­
+	// æ³¨å†Œçš„å¤„ç†é€»è¾‘
 	RegPost("/user_register", [](std::shared_ptr<HttpConnection> connection) {
 		auto body_str = boost::beast::buffers_to_string(connection->_request.body().data());
 		SPDLOG_DEBUG("registration request received, body_size={}", body_str.size());
 		connection->_response.set(http::field::content_type, "text/json");
-		Json::Value root; // ·µ»ØµÄjsonÊı¾İ
+		Json::Value root; // è¿”å›çš„jsonæ•°æ®
 		Json::Reader reader; 
-		Json::Value src_root; // ½ÓÊÕµÄjsonÊı¾İ
+		Json::Value src_root; // æ¥æ”¶çš„jsonæ•°æ®
 		bool parse_success = reader.parse(body_str, src_root);
 		if (!parse_success) {
 			SPDLOG_WARN("registration request JSON parse failed");
@@ -82,7 +82,7 @@ LogicSystem::LogicSystem() {
 		auto password = src_root["passwd"].asString();
 		auto confirm = src_root["confirm"].asString();
 
-		// Ë«±£ÏÕÑéÖ¤£¬Èç¹ûÇ°¶Ë´«¹ıÀ´µÄÃÜÂëÓëÑéÖ¤Âë²»Æ¥Åä£¬Ôò·µ»Ø´íÎó
+		// åŒä¿é™©éªŒè¯ï¼Œå¦‚æœå‰ç«¯ä¼ è¿‡æ¥çš„å¯†ç ä¸éªŒè¯ç ä¸åŒ¹é…ï¼Œåˆ™è¿”å›é”™è¯¯
 		if (password != confirm) {
 			SPDLOG_WARN("registration password confirmation mismatch");
 			root["error"] = ErrorCodes::PasswdErr;
@@ -91,11 +91,11 @@ LogicSystem::LogicSystem() {
 			return true;
 		}
 
-		// ÏÈ²éÕÒÇëÇóÊı¾İÓëredisÄÚµÄÑéÖ¤ÂëÊÇ·ñÆ¥Åä
+		// å…ˆæŸ¥æ‰¾è¯·æ±‚æ•°æ®ä¸rediså†…çš„éªŒè¯ç æ˜¯å¦åŒ¹é…
 		std::string varify_code;
 		bool b_get_varify = RedisMgr::GetInstance()->Get(CODEPREFIX + src_root["email"].asString(), varify_code);
 
-		// ²éÕÒÊ§°Ü
+		// æŸ¥æ‰¾å¤±è´¥
 		if (!b_get_varify) {
 			SPDLOG_WARN("registration verification code expired");
 			root["error"] = ErrorCodes::VarifyExpired;
@@ -104,7 +104,7 @@ LogicSystem::LogicSystem() {
 			return true;
 		}
 
-		// ²éÕÒ³É¹¦£¬µ«ÊÇÑéÖ¤Âë²»Æ¥Åä
+		// æŸ¥æ‰¾æˆåŠŸï¼Œä½†æ˜¯éªŒè¯ç ä¸åŒ¹é…
 		if (varify_code != src_root["varifycode"].asString()) {
 			SPDLOG_WARN("registration verification code mismatch");
 			root["error"] = ErrorCodes::VarifyCodeErr;
@@ -113,7 +113,7 @@ LogicSystem::LogicSystem() {
 			return true;
 		}
 
-		// ²éÕÒÊı¾İ¿âÅĞ¶ÏÓÃ»§ÊÇ·ñ´æÔÚ
+		// æŸ¥æ‰¾æ•°æ®åº“åˆ¤æ–­ç”¨æˆ·æ˜¯å¦å­˜åœ¨
 		int uid = MysqlMgr::GetInstance()->RegUser(username, email, password);
 		if (uid == 0 || uid == -1) {
 			SPDLOG_WARN("registration rejected because user or email exists");
@@ -123,7 +123,7 @@ LogicSystem::LogicSystem() {
 			return true;
 		}
 
-		// ÎŞ´íÎó
+		// æ— é”™è¯¯
 		root["error"] = 0;
 		root["email"] = src_root["email"];
 		root["uid"] = uid;
@@ -168,7 +168,7 @@ LogicSystem::LogicSystem() {
 				return true;
 			}
 
-			// ÊäÈëµÄÑéÖ¤ÂëÓëredisÄÚµÄÑéÖ¤Âë²»Æ¥Åä
+			// è¾“å…¥çš„éªŒè¯ç ä¸rediså†…çš„éªŒè¯ç ä¸åŒ¹é…
 			if (varify_code != varify) {
 				SPDLOG_WARN("password-reset verification code mismatch");
 				root["error"] = ErrorCodes::VarifyCodeErr;
@@ -177,7 +177,7 @@ LogicSystem::LogicSystem() {
 				return true;
 			}
 
-			// ²éÑ¯Êı¾İ¿â£¬ÅĞ¶ÏÓÃ»§ÃûºÍÓÊÏäÊÇ·ñÆ¥Åä
+			// æŸ¥è¯¢æ•°æ®åº“ï¼Œåˆ¤æ–­ç”¨æˆ·åå’Œé‚®ç®±æ˜¯å¦åŒ¹é…
 			bool email_valid = MysqlMgr::GetInstance()->CheckEmail(user, email);
 			if (!email_valid) {
 				SPDLOG_WARN("password-reset username and email mismatch");
@@ -215,7 +215,7 @@ LogicSystem::LogicSystem() {
 			Json::Value root;
 			Json::Reader reader;
 			Json::Value src_root;
-			bool parse_success = reader.parse(body_str, src_root); // ½âÎöjsonÊı¾İ£¬½«½âÎöºóµÄÊı¾İ±£´æµ½src_rootÖĞ
+			bool parse_success = reader.parse(body_str, src_root); // è§£æjsonæ•°æ®ï¼Œå°†è§£æåçš„æ•°æ®ä¿å­˜åˆ°src_rootä¸­
 			if (!parse_success) {
 				SPDLOG_WARN("login request JSON parse failed");
 				root["error"] = ErrorCodes::Error_Json;
@@ -228,7 +228,7 @@ LogicSystem::LogicSystem() {
 			auto password = src_root["password"].asString();
 			UserInfo userInfo;
 
-			// ²éÑ¯Êı¾İ¿â£¬ÅĞ¶ÏÓÃ»§ÃûºÍÓÊÏäÊÇ·ñÆ¥Åä
+			// æŸ¥è¯¢æ•°æ®åº“ï¼Œåˆ¤æ–­ç”¨æˆ·åå’Œé‚®ç®±æ˜¯å¦åŒ¹é…
 			bool password_valid = MysqlMgr::GetInstance()->CheckPassword(email, password, userInfo);
 			if (!password_valid) {
 				SPDLOG_WARN("login credentials rejected");
@@ -238,7 +238,7 @@ LogicSystem::LogicSystem() {
 				return true;
 			}
 
-			// Í¨¹ıgrpcÕÒµ½¸ºÔØ¾ùºâµÄchatserver
+			// é€šè¿‡grpcæ‰¾åˆ°è´Ÿè½½å‡è¡¡çš„chatserver
 			auto reply = StatusGrpcClient::GetInstance()->GetChatServer(userInfo.uid);
 			if (reply.error()) {
 				SPDLOG_ERROR("chat server selection RPC failed, error={}", reply.error());

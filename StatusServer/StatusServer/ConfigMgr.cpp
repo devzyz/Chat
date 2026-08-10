@@ -1,5 +1,12 @@
 #include "ConfigMgr.h"
 #include "LogMgr.h"
+#include <cstdlib>
+
+std::string ConfigMgr::_config_path_override;
+
+void ConfigMgr::SetConfigPath(const std::string& path) {
+	_config_path_override = path;
+}
 
 SectionInfo::SectionInfo() {
 
@@ -30,7 +37,10 @@ std::string SectionInfo::operator [] (const std::string& key) {
 
 ConfigMgr::ConfigMgr() {
 	boost::filesystem::path current_path = boost::filesystem::current_path();
-	boost::filesystem::path config_path = current_path / "config.ini";
+	const char* env_config = std::getenv("CHAT_CONFIG");
+	boost::filesystem::path config_path = !_config_path_override.empty()
+		? _config_path_override
+		: (env_config ? env_config : (current_path / "config.ini").string());
 	_config_path = config_path.string();
 
 	boost::property_tree::ptree pt;
@@ -43,7 +53,7 @@ ConfigMgr::ConfigMgr() {
 		std::map<std::string, std::string> section_config;
 		for (const auto& key_value_pair : section_tree) {
 			const std::string& key = key_value_pair.first;
-			// second仍然是ptree类型
+			// second浠嶇劧鏄痯tree绫诲瀷
 			const std::string& value = key_value_pair.second.get_value<std::string>();
 			section_config[key] = value;
 		}

@@ -7,13 +7,13 @@ SqlConnection::SqlConnection(sql::Connection* con, int64_t lasttime) : _con(con)
 
 /**
  * @brief 
- * @param url ipµØÖ·
- * @param user ÓÃ»§Ãû
- * @param pass ÃÜÂë
- * @param schema ÊôÓÚÄÇ¸ö·şÎñ
- * @param poolsize Á¬½Ó³Ø´óĞ¡
+ * @param url ipåœ°å€
+ * @param user ç”¨æˆ·å
+ * @param pass å¯†ç 
+ * @param schema å±äºé‚£ä¸ªæœåŠ¡
+ * @param poolsize è¿æ¥æ± å¤§å°
  * 
- * ´´½¨sqlÁ¬½Ó³Ø£¬²¢Æô¶¯ĞÄÌø¼ì²âÏß³Ì
+ * åˆ›å»ºsqlè¿æ¥æ± ï¼Œå¹¶å¯åŠ¨å¿ƒè·³æ£€æµ‹çº¿ç¨‹
  */
 MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::string& user, const std::string& pass, const std::string& schema, int poolsize) : 
 	_url(url), _user(user), _pass(pass), _schema(schema), _poolSize(poolsize), _b_stop(false) {
@@ -22,9 +22,9 @@ MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::stri
 			sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 			auto* con = driver->connect(_url, _user, _pass);
 			con->setSchema(_schema);
-			// »ñÈ¡µ±Ç°Ê±¼ä´Á
+			// è·å–å½“å‰æ—¶é—´æˆ³
 			auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-			// ½«Ê±¼ä´Á×ª»»ÎªÃë
+			// å°†æ—¶é—´æˆ³è½¬æ¢ä¸ºç§’
 			long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
 			_pool.push(std::make_unique<SqlConnection>(con, timestamp));
 		}
@@ -41,20 +41,20 @@ MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::stri
 	}
 }
 
-// ÓÃÓÚ±£Ö¤Ã¿¸ösqlÁ¬½ÓµÄ»îĞÔ
+// ç”¨äºä¿è¯æ¯ä¸ªsqlè¿æ¥çš„æ´»æ€§
 void MysqlConnectionPool::checkConnection() {
 	std::lock_guard<std::mutex> lock(_mutex);
 	int poolsize = _pool.size();
-	// »ñÈ¡µ±Ç°Ê±¼ä´Á
+	// è·å–å½“å‰æ—¶é—´æˆ³
 	auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-	// ½«Ê±¼ä´Á×ª»»ÎªÃë
+	// å°†æ—¶é—´æˆ³è½¬æ¢ä¸ºç§’
 	long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
 
 	for (int i = 0; i < poolsize; i++) {
 		auto con = std::move(_pool.front());
 		_pool.pop();
 
-		// Ã¿´ÎÑ­»·½áÊø£¬¶¼»á×Ô¶¯Ö´ĞĞÕâ¸öº¯Êı
+		// æ¯æ¬¡å¾ªç¯ç»“æŸï¼Œéƒ½ä¼šè‡ªåŠ¨æ‰§è¡Œè¿™ä¸ªå‡½æ•°
 		Defer defer([this, &con]() {
 			_pool.push(std::move(con));
 			});
@@ -71,7 +71,7 @@ void MysqlConnectionPool::checkConnection() {
 		}
 		catch (sql::SQLException& e) {
 			SPDLOG_WARN("mysql keepalive failed, error={}", e.what());
-			// ÖØĞÂ´´½¨Á¬½Ó£¬²¢Ìæ»»¾ÉµÄÁ¬½Ó
+			// é‡æ–°åˆ›å»ºè¿æ¥ï¼Œå¹¶æ›¿æ¢æ—§çš„è¿æ¥
 			sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 			auto* newcon = driver->connect(_url, _user, _pass);
 			newcon->setSchema(_schema);
@@ -142,9 +142,9 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
 			return false;
 		}
 
-		// ×¼±¸µ÷ÓÃ´æ´¢¹ı³Ì
+		// å‡†å¤‡è°ƒç”¨å­˜å‚¨è¿‡ç¨‹
 		std::unique_ptr<sql::PreparedStatement> stmt(con->_con->prepareStatement("CALL reg_user(?,?,?,@result)"));
-		// ÉèÖÃÊäÈë²ÎÊı
+		// è®¾ç½®è¾“å…¥å‚æ•°
 		stmt->setString(1, name);
 		stmt->setString(2, email);
 		stmt->setString(3, pwd);
@@ -152,9 +152,9 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
 		stmt->execute();
 
 		/**
-		 * ÓÉÓÚPreparedStatement²»Ö±½ÓÖ§³Ö×¢²áÊä³ö²ÎÊı£¬ÎÒÃÇĞèÒªÊ¹ÓÃ»á»°±äÁ¿»òÆäËû·½·¨À´»ñÈ¡Êä³ö²ÎÊıµÄÖµ
-		 * Èç¹û´æ´¢¹ı³ÌÉèÖÃÁË»á»°±äÁ¿»òÓĞÆäËû·½Ê½»ñÈ¡Êä³ö²ÎÊıµÄÖµ£¬Äã¿ÉÒÔÔÚÕâÀïÖ´ĞĞSELECT²éÑ¯À´»ñÈ¡Ëü
-         * ÀıÈç£¬Èç¹û´æ´¢¹ı³ÌÉèÖÃÁËÒ»¸ö»á»°±äÁ¿@resultÀ´´æ´¢Êä³ö½á¹û£¬¿ÉÒÔÕâÑù»ñÈ¡£º
+		 * ç”±äºPreparedStatementä¸ç›´æ¥æ”¯æŒæ³¨å†Œè¾“å‡ºå‚æ•°ï¼Œæˆ‘ä»¬éœ€è¦ä½¿ç”¨ä¼šè¯å˜é‡æˆ–å…¶ä»–æ–¹æ³•æ¥è·å–è¾“å‡ºå‚æ•°çš„å€¼
+		 * å¦‚æœå­˜å‚¨è¿‡ç¨‹è®¾ç½®äº†ä¼šè¯å˜é‡æˆ–æœ‰å…¶ä»–æ–¹å¼è·å–è¾“å‡ºå‚æ•°çš„å€¼ï¼Œä½ å¯ä»¥åœ¨è¿™é‡Œæ‰§è¡ŒSELECTæŸ¥è¯¢æ¥è·å–å®ƒ
+         * ä¾‹å¦‚ï¼Œå¦‚æœå­˜å‚¨è¿‡ç¨‹è®¾ç½®äº†ä¸€ä¸ªä¼šè¯å˜é‡@resultæ¥å­˜å‚¨è¾“å‡ºç»“æœï¼Œå¯ä»¥è¿™æ ·è·å–ï¼š
 		 */
 		std::unique_ptr<sql::Statement> stmtResult(con->_con->createStatement());
 		std::unique_ptr<sql::ResultSet> res(stmtResult->executeQuery("SELECT @result AS result"));
@@ -186,16 +186,16 @@ bool MysqlDao::CheckEmail(const std::string& username, const std::string& email)
 		});
 
 	try {
-		// ×¼±¸²éÑ¯Óï¾ä
+		// å‡†å¤‡æŸ¥è¯¢è¯­å¥
 		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("SELECT email FROM user WHERE name = ?"));
 
-		// °ó¶¨²ÎÊı
+		// ç»‘å®šå‚æ•°
 		pstmt->setString(1, username);
 
-		// Ö´ĞĞ²éÑ¯
+		// æ‰§è¡ŒæŸ¥è¯¢
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 		
-		// ±éÀú½á¹û¼¯
+		// éå†ç»“æœé›†
 		while (res->next()) {
 			SPDLOG_TRACE("mysql CheckEmail candidate loaded, username={}", username);
 			if (email != res->getString("email")) {
@@ -222,14 +222,14 @@ bool MysqlDao::UpdatePassword(const std::string& username, const std::string& pa
 		});
 
 	try {
-		// ×¼±¸²éÑ¯Óï¾ä
+		// å‡†å¤‡æŸ¥è¯¢è¯­å¥
 		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("UPDATE user SET password = ? WHERE name = ?"));
 
-		// °ó¶¨²ÎÊı
+		// ç»‘å®šå‚æ•°
 		pstmt->setString(1, password);
 		pstmt->setString(2, username);
 
-		// Ö´ĞĞ²éÑ¯
+		// æ‰§è¡ŒæŸ¥è¯¢
 		int updateCount =  pstmt->executeUpdate();
 
 		SPDLOG_DEBUG("mysql password update completed, username={}, updated_rows={}", username, updateCount);
@@ -255,24 +255,24 @@ bool MysqlDao::CheckPassword(const std::string& email, const std::string& passwo
 	try {
 		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("SELECT * FROM user WHERE email = ?"));
 
-		pstmt->setString(1, email); // °ó¶¨²ÎÊı
+		pstmt->setString(1, email); // ç»‘å®šå‚æ•°
 
 		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 		std::string origin_password = "";
 
-		// È¡µ½ÃÜÂë
+		// å–åˆ°å¯†ç 
 		while (res->next()) {
 			origin_password = res->getString("password");
 			SPDLOG_TRACE("mysql password hash loaded");
 			break;
 		}
 
-		// ÃÜÂë´íÎó
+		// å¯†ç é”™è¯¯
 		if (password != origin_password) {
 			return false;
 		}
 
-		// ÃÜÂëÕıÈ·
+		// å¯†ç æ­£ç¡®
 		userinfo.name = res->getString("name");
 		userinfo.email = email;
 		userinfo.pwd = password;

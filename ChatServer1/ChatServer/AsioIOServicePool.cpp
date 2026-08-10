@@ -42,7 +42,7 @@ boost::asio::io_context& AsioIOServicePool::GetIOService() {
 
 /**
  * @brief 
- * ��ÿ���̵߳��ڱ��¼�ֹͣ������ÿ���߳��ڴ����������첽�����󣬾ͻ᷵��
+ * 将每个线程的哨兵事件停止，这样每个线程在处理完所有异步操作后，就会返回
  */
 void AsioIOServicePool::stop() {
 	if (_b_stop) {

@@ -4,6 +4,13 @@
 #include <boost/filesystem.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <cstdlib>
+
+std::string ConfigMgr::_config_path_override;
+
+void ConfigMgr::SetConfigPath(const std::string& path) {
+	_config_path_override = path;
+}
 
 SectionInfo::SectionInfo() {
 
@@ -34,11 +41,14 @@ std::string SectionInfo::operator [] (const std::string key) {
 
 /**
  * @brief 
- * 从config.ini中读取到配置信息
+ * 浠巆onfig.ini涓鍙栧埌閰嶇疆淇℃伅
  */
 ConfigMgr::ConfigMgr() {
 	boost::filesystem::path current_path = boost::filesystem::current_path();
-	boost::filesystem::path config_path = current_path / "config.ini";
+	const char* env_config = std::getenv("CHAT_CONFIG");
+	boost::filesystem::path config_path = !_config_path_override.empty()
+		? _config_path_override
+		: (env_config ? env_config : (current_path / "config.ini").string());
 	_config_path = config_path.string();
 	SPDLOG_DEBUG("config path: {}", _config_path);
 

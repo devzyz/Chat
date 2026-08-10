@@ -23,10 +23,11 @@ public:
 	ConfigMgr& operator = (const ConfigMgr& section);
 
 	static ConfigMgr& GetInstance();
+	static void SetConfigPath(const std::string& path);
 	void DumpLoadedConfig() const;
 private:
 	ConfigMgr();
+	static std::string _config_path_override;
 	std::map<std::string, SectionInfo> _config_map;
 	std::string _config_path;
 };
-

@@ -4,7 +4,7 @@
 class HttpConnection;
 typedef std::function<void(std::shared_ptr<HttpConnection>)>HttpHandler;
 /**
- * @brief ´¦ÀíÏµÍ³£¬¿Í»§¶ËµÄÇëÇóĞÅÏ¢ÔÚ±»½øĞĞÔ¤´¦Àíºó£¬Í¨¹ıµ÷ÓÃ´¦ÀíÏµÍ³À´ÊµÏÖ¶ÔÊı¾İµÄ´¦Àí
+ * @brief å¤„ç†ç³»ç»Ÿï¼Œå®¢æˆ·ç«¯çš„è¯·æ±‚ä¿¡æ¯åœ¨è¢«è¿›è¡Œé¢„å¤„ç†åï¼Œé€šè¿‡è°ƒç”¨å¤„ç†ç³»ç»Ÿæ¥å®ç°å¯¹æ•°æ®çš„å¤„ç†
  */
 class LogicSystem : public Singleton<LogicSystem>
 {
@@ -18,7 +18,7 @@ public:
 	 * @param  
 	 * @return 
 	 * 
-	 * Êµ¼ÊµÄ´¦ÀíÎ»ÖÃ£¬Íâ²¿Í¨¹ıµ÷ÓÃÕâÀï£¬½øĞĞ¶ÔÓ¦µÄ´¦Àí
+	 * å®é™…çš„å¤„ç†ä½ç½®ï¼Œå¤–éƒ¨é€šè¿‡è°ƒç”¨è¿™é‡Œï¼Œè¿›è¡Œå¯¹åº”çš„å¤„ç†
 	 */
 	bool HandleGet(std::string, std::shared_ptr<HttpConnection>);
 	bool HandlePost(std::string, std::shared_ptr<HttpConnection>);
@@ -28,8 +28,8 @@ public:
 	 * @param  
 	 * @param  
 	 * 
-	 * ×¢²ágetÇëÇóµ½_get_handlersÄÚ
-	 * ×¢²ápostÇëÇóµ½_post_handlersÄÚ
+	 * æ³¨å†Œgetè¯·æ±‚åˆ°_get_handlerså†…
+	 * æ³¨å†Œpostè¯·æ±‚åˆ°_post_handlerså†…
 	 */
 	void RegGet(std::string, HttpHandler);
 	void RegPost(std::string, HttpHandler);
@@ -37,7 +37,7 @@ private:
 	/**
 	 * @brief 
 	 * 
-	 * ¹¹Ôìº¯Êı£¬Í¬Ê±½«¶ÔÓ¦µÄ´¦ÀíÂß¼­½øĞĞ×¢²á
+	 * æ„é€ å‡½æ•°ï¼ŒåŒæ—¶å°†å¯¹åº”çš„å¤„ç†é€»è¾‘è¿›è¡Œæ³¨å†Œ
 	 */
 	LogicSystem();
 	std::map<std::string, HttpHandler> _post_handlers;

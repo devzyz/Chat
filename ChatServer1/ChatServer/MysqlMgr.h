@@ -11,28 +11,28 @@ class MysqlMgr : public Singleton<MysqlMgr>
 	friend class Singleton<MysqlMgr>;
 public:
 	~MysqlMgr();
-	// ¸ù¾İuid²éÑ¯ÓÃ»§ÏêÏ¸ĞÅÏ¢
+	// æ ¹æ®uidæŸ¥è¯¢ç”¨æˆ·è¯¦ç»†ä¿¡æ¯
 	std::shared_ptr<UserInfo> GetUesr(int uid);
-	// ¸ù¾İname²éÑ¯ÓÃ»§ÏêÏ¸ĞÅÏ¢
+	// æ ¹æ®nameæŸ¥è¯¢ç”¨æˆ·è¯¦ç»†ä¿¡æ¯
 	std::shared_ptr<UserInfo> GetUserByName(const std::string name);
-	// ÍùºÃÓÑÉêÇë±íÖĞ²åÈëÊı¾İ
+	// å¾€å¥½å‹ç”³è¯·è¡¨ä¸­æ’å…¥æ•°æ®
 	bool AddFriendApply(const int& from_uid, const int& to_uid, const std::string& description, const std::string& backanme);
-	// ¶ÁÈ¡ÉêÇëÌí¼Óto_uidÎªºÃÓÑµÄÓÃ»§ĞÅÏ¢ÁĞ±í
+	// è¯»å–ç”³è¯·æ·»åŠ to_uidä¸ºå¥½å‹çš„ç”¨æˆ·ä¿¡æ¯åˆ—è¡¨
 	bool GetApplyFriendList(int to_uid, std::vector<std::shared_ptr<ApplyInfo>>& applylist, int start, int limit);
-	// ¸üĞÂºÃÓÑÉêÇë±íºÍºÃÓÑ±í
+	// æ›´æ–°å¥½å‹ç”³è¯·è¡¨å’Œå¥½å‹è¡¨
 	bool AuthFriendApply(int apply_uid, int auth_uid, std::string auth_backname, std::string apply_backname, 
 		std::string apply_description, std::string auth_description, std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, int& chat_id);
-	// »ñÈ¡ÓÃ»§ºÃÓÑÁĞ±í
+	// è·å–ç”¨æˆ·å¥½å‹åˆ—è¡¨
 	bool GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& friendList);
-	// »ñÈ¡Ò»Ò³µÄ»á»°ÁĞ±í
+	// è·å–ä¸€é¡µçš„ä¼šè¯åˆ—è¡¨
 	bool GetUserChatList(int uid, int next_chat_id, int page_size,
 		std::vector<std::shared_ptr<ChatInfoBase>>& chat_list, bool& load_more, int& new_next_chat_id);
-	// ´´½¨Ë½ÁÄ»á»°
+	// åˆ›å»ºç§èŠä¼šè¯
 	bool CreatePrivateChat(int user1_id, int user2_id, int& chat_id);
-	// ²åÈëfrom_uid·¢¸øto_uidµÄ¶Ô»°
+	// æ’å…¥from_uidå‘ç»™to_uidçš„å¯¹è¯
 	bool AddChatMessageList(int from_uid, int to_uid, int chat_id, std::vector<std::pair<std::string, std::string>> cache_msgs,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_msgs);
-	// ÔöÁ¿¼ÓÔØ²¿·ÖÁÄÌìÊı¾İ
+	// å¢é‡åŠ è½½éƒ¨åˆ†èŠå¤©æ•°æ®
 	bool GetChatMessageList(int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
 private:

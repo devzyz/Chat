@@ -2,38 +2,38 @@ syntax = "proto3";
 
 package message;
 
-// ÑéÖ¤Âë·şÎñgrpc
-// GetVarifyCodeÎª¡°»ñÈ¡ÑéÖ¤Âë¡±Ô¶³Ìµ÷ÓÃº¯ÊıÃû
+// éªŒè¯ç æœåŠ¡grpc
+// GetVarifyCodeä¸ºâ€œè·å–éªŒè¯ç â€è¿œç¨‹è°ƒç”¨å‡½æ•°å
 service VarifyService {
 	rpc GetVarifyCode (GetVarifyReq) returns (GetVarifyRsp) {}
 }
 
-// ÇëÇó½á¹¹
+// è¯·æ±‚ç»“æ„
 message GetVarifyReq {
 	string email = 1;
 }
 
-// »Ø°ü½á¹¹
+// å›åŒ…ç»“æ„
 message GetVarifyRsp {
 	int32 error = 1;
 	string email = 2;
 	string code = 3;
 }
 
-// ×´Ì¬·şÎñgrpc
-// GetChatServerÎª»ñÈ¡ÁÄÌì·şÎñÆ÷×´Ì¬
-// LoginÎªÔÚµÇÂ¼Ê±½øĞĞuid/tokenÑéÖ¤
+// çŠ¶æ€æœåŠ¡grpc
+// GetChatServerä¸ºè·å–èŠå¤©æœåŠ¡å™¨çŠ¶æ€
+// Loginä¸ºåœ¨ç™»å½•æ—¶è¿›è¡Œuid/tokenéªŒè¯
 service StatusService {
 	rpc GetChatServer (GetChatServerReq) returns (GetChatServerRsp) {}
 	rpc Login(LoginReq) returns (LoginRsp) {}
 }
 
-// ÇëÇó½á¹¹
+// è¯·æ±‚ç»“æ„
 message GetChatServerReq {
 	int32 uid = 1;
 }
 
-// »Ø°ü½á¹¹
+// å›åŒ…ç»“æ„
 message GetChatServerRsp {
 	int32 error = 1;
 	string host = 2;
@@ -41,20 +41,20 @@ message GetChatServerRsp {
 	string token = 4;
 }
 
-// ÇëÇó½á¹¹
+// è¯·æ±‚ç»“æ„
 message LoginReq {
 	int32 uid = 1;
 	string token = 2;
 }
 
-// »Ø°ü½á¹¹
+// å›åŒ…ç»“æ„
 message LoginRsp {
 	int32 error = 1;
 	int32 uid = 2;
 	string token = 3;
 }
 
-// tcpÁÄÌì·şÎñÆ÷µÄgrpc·şÎñ
+// tcpèŠå¤©æœåŠ¡å™¨çš„grpcæœåŠ¡
 service ChatService {
 	rpc NotifyOtherAddFriend(AddFriendReq) returns (AddFriendRsp) {}
 	rpc NotifyOtherAuthFriend(AuthFriendReq) returns (AuthFriendRsp) {}
@@ -62,7 +62,7 @@ service ChatService {
 	rpc NotifyOtherKickUser(KickUserReq) returns (KickUserRsp) {}
 }
 
-// grpcÍ¨ÖªÁíÒ»¸ö·şÎñÆ÷Ìí¼ÓºÃÓÑÇëÇó
+// grpcé€šçŸ¥å¦ä¸€ä¸ªæœåŠ¡å™¨æ·»åŠ å¥½å‹è¯·æ±‚
 message AddFriendReq {
 	int32 applyuid = 1;
 	string applyname = 2;
@@ -74,7 +74,7 @@ message AddFriendReq {
 	string backname = 8;
 }
 
-// grpcÍ¨ÖªÁíÒ»¸ö·şÎñÆ÷Ìí¼ÓºÃÓÑÇëÇó»Ø°ü
+// grpcé€šçŸ¥å¦ä¸€ä¸ªæœåŠ¡å™¨æ·»åŠ å¥½å‹è¯·æ±‚å›åŒ…
 message AddFriendRsp {
 	int32 error = 1;
 	int32 applyuid = 2;
@@ -87,7 +87,7 @@ message AddFriendRsp {
 	string backname = 9;
 }
 
-// ÉêÇëĞÅÏ¢
+// ç”³è¯·ä¿¡æ¯
 message ApplyInfo {
 	int32 applyuid = 1;
 	string applyname = 2;
@@ -100,7 +100,7 @@ message ApplyInfo {
 	string backname = 9;
 }
 
-// ÈÏÖ¤ĞÅÏ¢
+// è®¤è¯ä¿¡æ¯
 message AuthInfo {
 	int32 authuid = 1;
 	string authname = 2;
@@ -113,7 +113,7 @@ message AuthInfo {
 	string backname = 9;
 }
 
-// ÁÄÌìÊı¾İĞÅÏ¢
+// èŠå¤©æ•°æ®ä¿¡æ¯
 message ChatMessage{
 	int32 messageid = 1;
 	int32 chatid = 2;
@@ -123,7 +123,7 @@ message ChatMessage{
 	int32 status = 6;
 }
 
-// grpcÍ¨ÖªÁíÒ»¸ö·şÎñÆ÷ÈÏÖ¤ºÃÓÑ
+// grpcé€šçŸ¥å¦ä¸€ä¸ªæœåŠ¡å™¨è®¤è¯å¥½å‹
 message AuthFriendReq {
 	int32 applyuid = 1;
 	int32 authuid = 2;
@@ -133,19 +133,19 @@ message AuthFriendReq {
 	repeated ChatMessage chatmessage = 6;
 }
 
-// grpcÍ¨ÖªÁíÒ»¸ö·şÎñÆ÷ÈÏÖ¤ºÃÓÑ»Ø°ü
+// grpcé€šçŸ¥å¦ä¸€ä¸ªæœåŠ¡å™¨è®¤è¯å¥½å‹å›åŒ…
 message AuthFriendRsp {
 	int32 error = 1;
 }
 
-// ÎÄ±¾ÏûÏ¢µÄ½á¹¹
+// æ–‡æœ¬æ¶ˆæ¯çš„ç»“æ„
 message TextChatData {
 	string uuid = 1;
 	string msgcontent = 2;
 	int32 msgid = 3;
 }
 
-// grpcÍ¨ÖªÁíÒ»¸ö·şÎñÆ÷½ÓÊÕÎÄ±¾ÏûÏ¢
+// grpcé€šçŸ¥å¦ä¸€ä¸ªæœåŠ¡å™¨æ¥æ”¶æ–‡æœ¬æ¶ˆæ¯
 message TextChatMsgReq {
 	int32 fromuid = 1;
     int32 touid = 2;
@@ -153,17 +153,17 @@ message TextChatMsgReq {
 	repeated TextChatData textmsgs = 4;
 }
 
-// grpcÍ¨ÖªÁíÒ»¸ö·şÎñÆ÷½ÓÊÕÎÄ±¾ÏûÏ¢»Ø°ü
+// grpcé€šçŸ¥å¦ä¸€ä¸ªæœåŠ¡å™¨æ¥æ”¶æ–‡æœ¬æ¶ˆæ¯å›åŒ…
 message TextChatMsgRsp {
 	int32 error = 1;
 }
 
-// grpcÍ¨ÖªÁíÒ»¸ö·şÎñÆ÷ÌßÈËÇëÇó
+// grpcé€šçŸ¥å¦ä¸€ä¸ªæœåŠ¡å™¨è¸¢äººè¯·æ±‚
 message KickUserReq {
 	int32 uid = 1;
 }
 
-// grpcÍ¨ÖªÁíÒ»¸ö·şÎñÆ÷ÌßÈË»Ø°ü
+// grpcé€šçŸ¥å¦ä¸€ä¸ªæœåŠ¡å™¨è¸¢äººå›åŒ…
 message KickUserRsp {
 	int32 error = 1;
 	int32 uid = 2;

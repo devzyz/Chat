@@ -32,7 +32,7 @@ public:
 private:
 	ChatServer getChatServer();
 	void insertToken(int uid, std::string token);
-	// 保存所有的启用的ChatServer服务器的信息
+	// 淇濆瓨鎵�鏈夌殑鍚敤鐨凜hatServer鏈嶅姟鍣ㄧ殑淇℃伅
 	std::unordered_map<std::string, ChatServer> _servers;
 	std::mutex _server_mutex;
 };

@@ -4,10 +4,10 @@
 RPCConnection::RPCConnection(std::size_t poolsize, std::string host, std::string port) :
 	_poolSize(poolsize), _host(host), _port(port), _b_stop(false) {
 	for (std::size_t i = 0; i < _poolSize; i++) {
-		// ´´½¨Á¬½ÓÍ¨µÀ
+		// åˆ›å»ºè¿æ¥é€šé“
 		std::shared_ptr<Channel> channel = grpc::CreateChannel(host + ":" + port,
 			grpc::InsecureChannelCredentials());
-		// ´´½¨Í¨µÀ¹ÜÀíÔ±
+		// åˆ›å»ºé€šé“ç®¡ç†å‘˜
 		_connections.push(StatusService::NewStub(channel));
 	}
 }
@@ -38,7 +38,7 @@ std::unique_ptr<StatusService::Stub> RPCConnection::getConnection() {
 		return nullptr;
 	}
 
-	// ·µ»Ø¶ÓÊ×
+	// è¿”å›é˜Ÿé¦–
 	auto con = std::move(_connections.front());
 	_connections.pop();
 	return con;

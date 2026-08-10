@@ -3,6 +3,13 @@
 #include <boost/filesystem.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <cstdlib>
+
+std::string ConfigMgr::_config_path_override;
+
+void ConfigMgr::SetConfigPath(const std::string& path) {
+	_config_path_override = path;
+}
 
 SectionInfo::SectionInfo() {
 
@@ -22,7 +29,7 @@ SectionInfo& SectionInfo::operator = (const SectionInfo& src) {
 	return *this;
 }
 
-// 为了通过对SectionInfo[key]直接取到key对应的value,而不是先取到SectionInfo._section_datas[key]取到value
+// 涓轰簡閫氳繃瀵筍ectionInfo[key]鐩存帴鍙栧埌key瀵瑰簲鐨剉alue,鑰屼笉鏄厛鍙栧埌SectionInfo._section_datas[key]鍙栧埌value
 std::string SectionInfo::operator[](const std::string& key) {
 	if (_section_datas.find(key) == _section_datas.end()) return "";
 	return _section_datas[key];
@@ -40,11 +47,14 @@ SectionInfo ConfigMgr::operator[](const std::string& section) {
 }
 
 /**
- * 从config.ini文件内，读取对应的服务的配置信息
+ * 浠巆onfig.ini鏂囦欢鍐咃紝璇诲彇瀵瑰簲鐨勬湇鍔＄殑閰嶇疆淇℃伅
  */
 ConfigMgr::ConfigMgr() {
 	boost::filesystem::path current_path = boost::filesystem::current_path();
-	boost::filesystem::path config_path = current_path / "config.ini";
+	const char* env_config = std::getenv("CHAT_CONFIG");
+	boost::filesystem::path config_path = !_config_path_override.empty()
+		? _config_path_override
+		: (env_config ? env_config : (current_path / "config.ini").string());
 	_config_path = config_path.string();
 
 	boost::property_tree::ptree pt;
@@ -57,7 +67,7 @@ ConfigMgr::ConfigMgr() {
 		std::map<std::string, std::string> section_config;
 		for (const auto& key_value_pair : section_tree) {
 			const std::string& key = key_value_pair.first;
-			// second仍然是ptree类型
+			// second浠嶇劧鏄痯tree绫诲瀷
 			const std::string& value = key_value_pair.second.get_value<std::string>();
 			section_config[key] = value;
 		}

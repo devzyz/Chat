@@ -1,20 +1,20 @@
 #pragma once
 #include <string>
 
-// ÓÃ»§»ù±¾ĞÅÏ¢
+// ç”¨æˆ·åŸºæœ¬ä¿¡æ¯
 struct UserInfo {
 	UserInfo() : _uid(0), _name(""), _password(""), _email(""), _description(""), _icon(""), _sex(0) {}
 	int _uid; // id
-	std::string _name; // êÇ³Æ
-	std::string _password; // ÃÜÂë
-	std::string _email; // ÓÊÏä
-	std::string _description; // ¸öĞÔÇ©Ãû
-	std::string _icon; // Í·Ïñ
-	int _sex; // ĞÔ±ğ
-    std::string _backname; // Ä³¸ö¿Í»§¶Ë¸øµÄµ±Ç°uidµÄ±¸×¢Ãû
+	std::string _name; // æ˜µç§°
+	std::string _password; // å¯†ç 
+	std::string _email; // é‚®ç®±
+	std::string _description; // ä¸ªæ€§ç­¾å
+	std::string _icon; // å¤´åƒ
+	int _sex; // æ€§åˆ«
+    std::string _backname; // æŸä¸ªå®¢æˆ·ç«¯ç»™çš„å½“å‰uidçš„å¤‡æ³¨å
 };
 
-// ÉêÇëºÃÓÑµÄĞÅÏ¢
+// ç”³è¯·å¥½å‹çš„ä¿¡æ¯
 class ApplyInfo {
 public:
     ApplyInfo() {};
@@ -25,18 +25,18 @@ public:
         _description(description), _backname(backanme) {
     }
 
-    int _apply_uid; // ÉêÇëÈËid
-    std::string _apply_name; // ÉêÇëÈËÓÃ»§Ãû
-    std::string _apply_description; // ÉêÇëÈËÓÃ»§ÇëÇóÃèÊöĞÅÏ¢
-    std::string _apply_icon; // ÉêÇëÈËÍ·Ïñ
-    int _apply_sex; // ÉêÇëÈËĞÔ±ğ
-    int _status; // ×´Ì¬£¬ÊÇ·ñÌí¼Ó
-    int _to_uid; // ±»ÉêÇëÈËid
-    std::string _description; // ÉêÇëÈË·¢ËÍµÄÃèÊöĞÅÏ¢
-    std::string _backname; // ÉêÇëÈË¸ø±»ÉêÇëÈËµÄ±¸×¢Ãû
+    int _apply_uid; // ç”³è¯·äººid
+    std::string _apply_name; // ç”³è¯·äººç”¨æˆ·å
+    std::string _apply_description; // ç”³è¯·äººç”¨æˆ·è¯·æ±‚æè¿°ä¿¡æ¯
+    std::string _apply_icon; // ç”³è¯·äººå¤´åƒ
+    int _apply_sex; // ç”³è¯·äººæ€§åˆ«
+    int _status; // çŠ¶æ€ï¼Œæ˜¯å¦æ·»åŠ 
+    int _to_uid; // è¢«ç”³è¯·äººid
+    std::string _description; // ç”³è¯·äººå‘é€çš„æè¿°ä¿¡æ¯
+    std::string _backname; // ç”³è¯·äººç»™è¢«ç”³è¯·äººçš„å¤‡æ³¨å
 };
 
-// ÈÏÖ¤ºÃÓÑµÄĞÅÏ¢
+// è®¤è¯å¥½å‹çš„ä¿¡æ¯
 class AuthInfo {
 public:
     AuthInfo() {};
@@ -47,15 +47,15 @@ public:
         _description(description), _backname(backanme) {
     }
 
-    int _auth_uid; // ÈÏÖ¤ÈËid
-    std::string _auth_name; // ÈÏÖ¤ÈËÓÃ»§Ãû
-    std::string _auth_description; // ÈÏÖ¤ÈËÓÃ»§ÇëÇóÃèÊöĞÅÏ¢
-    std::string _auth_icon; // ÈÏÖ¤ÈËÍ·Ïñ
-    int _auth_sex; // ÈÏÖ¤ÈËĞÔ±ğ
-    int _status; // ×´Ì¬£¬ÊÇ·ñÌí¼Ó
-    int _to_uid; // ±»ÈÏÖ¤ÈËid
-    std::string _description; // ÈÏÖ¤ÈË·¢ËÍµÄÃèÊöĞÅÏ¢
-    std::string _backname; // ÈÏÖ¤ÈË¸ø±»ÈÏÖ¤ÈËµÄ±¸×¢Ãû
+    int _auth_uid; // è®¤è¯äººid
+    std::string _auth_name; // è®¤è¯äººç”¨æˆ·å
+    std::string _auth_description; // è®¤è¯äººç”¨æˆ·è¯·æ±‚æè¿°ä¿¡æ¯
+    std::string _auth_icon; // è®¤è¯äººå¤´åƒ
+    int _auth_sex; // è®¤è¯äººæ€§åˆ«
+    int _status; // çŠ¶æ€ï¼Œæ˜¯å¦æ·»åŠ 
+    int _to_uid; // è¢«è®¤è¯äººid
+    std::string _description; // è®¤è¯äººå‘é€çš„æè¿°ä¿¡æ¯
+    std::string _backname; // è®¤è¯äººç»™è¢«è®¤è¯äººçš„å¤‡æ³¨å
 };
 
 class ChatMessage {
@@ -84,9 +84,9 @@ public:
     ChatInfoBase(){}
     ChatInfoBase(std::string type, int chat_id) : _type(type), _chat_id(chat_id) {}
     virtual ~ChatInfoBase() = default;
-    // µ±Ç°»á»°µÄÀàĞÍ£¬Ë½ÁÄ»òÈºÁÄ
+    // å½“å‰ä¼šè¯çš„ç±»å‹ï¼Œç§èŠæˆ–ç¾¤èŠ
     std::string _type;
-    // »á»°µÄÎ¨Ò»id
+    // ä¼šè¯çš„å”¯ä¸€id
     int _chat_id;
 };
 
@@ -104,6 +104,6 @@ public:
     GroupChatInfo() {}
     GroupChatInfo(std::string type, int chat_id, std::string group_name) : 
         ChatInfoBase(type, chat_id), _group_name(group_name) {}
-    // ÈºÁÄµÄÃû³Æ
+    // ç¾¤èŠçš„åç§°
     std::string _group_name; 
 };

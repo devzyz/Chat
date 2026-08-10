@@ -27,20 +27,20 @@ using tcp = boost::asio::ip::tcp;
 
 enum ErrorCodes {
 	Success = 0,
-	Error_Json = 1001, // json½âÎö´íÎó
-	RPCFailed = 1002, // rpcÇëÇó´íÎó
-	VarifyExpired = 1003, // ÑéÖ¤Âë¹ıÆÚ
-	VarifyCodeErr = 1004, // ÑéÖ¤Âë´íÎó
-	UserExist = 1005, // ÓÃ»§ÒÑ´æÔÚ
-	PasswdErr = 1006, // ÃÜÂë´íÎó
-	EmailNotMatch = 1007, // ÓÊÏä²»Æ¥Åä
-	PasswdUpFailed = 1008, // ¸üĞÂÃÜÂëÊ§°Ü
-	PasswdInvalid = 1009, // ÃÜÂë¸üĞÂÊ§°Ü
-	UidInvalid = 1010, // ÓÃ»§uidÎŞĞ§
-	TokenInvalid = 1011, // ÓÃ»§µÇÂ¼µÄtokenÎŞĞ§
+	Error_Json = 1001, // jsonè§£æé”™è¯¯
+	RPCFailed = 1002, // rpcè¯·æ±‚é”™è¯¯
+	VarifyExpired = 1003, // éªŒè¯ç è¿‡æœŸ
+	VarifyCodeErr = 1004, // éªŒè¯ç é”™è¯¯
+	UserExist = 1005, // ç”¨æˆ·å·²å­˜åœ¨
+	PasswdErr = 1006, // å¯†ç é”™è¯¯
+	EmailNotMatch = 1007, // é‚®ç®±ä¸åŒ¹é…
+	PasswdUpFailed = 1008, // æ›´æ–°å¯†ç å¤±è´¥
+	PasswdInvalid = 1009, // å¯†ç æ›´æ–°å¤±è´¥
+	UidInvalid = 1010, // ç”¨æˆ·uidæ— æ•ˆ
+	TokenInvalid = 1011, // ç”¨æˆ·ç™»å½•çš„tokenæ— æ•ˆ
 };
 
-// ÓÃÓÚÊµÏÖÔÚdeferÀàÎö¹¹Ê±£¬×Ô¶¯Ö´ĞĞ¹¹Ôì´«µİµÄlambda»òÕßfunctionº¯Êı
+// ç”¨äºå®ç°åœ¨deferç±»ææ„æ—¶ï¼Œè‡ªåŠ¨æ‰§è¡Œæ„é€ ä¼ é€’çš„lambdaæˆ–è€…functionå‡½æ•°
 class Defer {
 public :
 	Defer(std::function<void()> func) : _func(func) {}
@@ -54,8 +54,8 @@ private:
 #define USER_IP_PREFIX "uip_"
 #define USER_TOKEN_PREFIX "utoken_"
 #define IP_COUNT_PREFIX "ipcount_"
-#define USER_BASE_INFO "ubaseinfo_" // ÓÃ»§»ù±¾ĞÅÏ¢µÄuidÇ°×º£¬ubaseinfo_1£¬¼´1ºÅÓÃ»§µÄ»ù±¾ĞÅÏ¢
-#define LOGIN_COUNT "logincount" // ÓÃÀ´²éÑ¯Ä³¸öchatserver·şÎñÆ÷£¬µÇÂ¼µÄ¿Í»§¶ËtcpÁ¬½ÓÊı
-#define LOCK_PREFIX "lock_" // ·Ö²¼Ê½ËøµÄÃû×ÖÇ°×º£¬ÀıÈçlock_1001
-#define LOCK_TIME_OUT 5 // ËøµÄ³ÖÓĞÊ±¼ä
-#define LOCK_ACQUIRE_TIME_OUT 10 // »ñÈ¡ËøµÄ³¢ÊÔÊ±¼ä
+#define USER_BASE_INFO "ubaseinfo_" // ç”¨æˆ·åŸºæœ¬ä¿¡æ¯çš„uidå‰ç¼€ï¼Œubaseinfo_1ï¼Œå³1å·ç”¨æˆ·çš„åŸºæœ¬ä¿¡æ¯
+#define LOGIN_COUNT "logincount" // ç”¨æ¥æŸ¥è¯¢æŸä¸ªchatserveræœåŠ¡å™¨ï¼Œç™»å½•çš„å®¢æˆ·ç«¯tcpè¿æ¥æ•°
+#define LOCK_PREFIX "lock_" // åˆ†å¸ƒå¼é”çš„åå­—å‰ç¼€ï¼Œä¾‹å¦‚lock_1001
+#define LOCK_TIME_OUT 5 // é”çš„æŒæœ‰æ—¶é—´
+#define LOCK_ACQUIRE_TIME_OUT 10 // è·å–é”çš„å°è¯•æ—¶é—´

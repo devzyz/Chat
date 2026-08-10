@@ -7,7 +7,7 @@
 #include <atomic>
 #include <hiredis/hiredis.h>
 
-// redisÁ¬½Ó³Ø
+// redisè¿æ¥æ± 
 class RedisConnectionPool {
 public:
 	RedisConnectionPool(const std::string& host, const std::string& port, const std::string& password, int poolSize);
@@ -16,9 +16,9 @@ public:
 	void returnConnection(redisContext* connection);
 	void close();
 private:
-	// ĞÄÌø¼ì²â
+	// å¿ƒè·³æ£€æµ‹
 	void CheckConnection();
-	// ÖØ½¨Ò»¸öÁ¬½Ó
+	// é‡å»ºä¸€ä¸ªè¿æ¥
 	bool reconnection();
 
 	std::atomic<bool> _b_stop;
@@ -32,25 +32,25 @@ private:
 	std::queue<redisContext*> _que;
 	int _pool_size;
 
-	// ĞÄÌø¼ì²é³ÌĞò
+	// å¿ƒè·³æ£€æŸ¥ç¨‹åº
 	std::thread _check_thread;
-	// Á¬½ÓÊ§Ğ§µÄÊıÁ¿
+	// è¿æ¥å¤±æ•ˆçš„æ•°é‡
 	std::atomic<int> _fail_count;
 };
 
 /**
  * @brief 
- * Á¬½ÓredisµÄµ¥ÀıÀà
+ * è¿æ¥redisçš„å•ä¾‹ç±»
  */
 class RedisMgr : public Singleton<RedisMgr>
 {
 	friend class Singleton<RedisMgr>;
 public:
 	~RedisMgr();
-	// ½á¹û±£´æµ½valueÄÚ
+	// ç»“æœä¿å­˜åˆ°valueå†…
 	bool Get(const std::string& key, std::string& value);
 	bool Set(const std::string& key, const std::string& value);
-	// ½á¹û±£´æµ½valueÄÚ
+	// ç»“æœä¿å­˜åˆ°valueå†…
 	bool HGet(const std::string& first_key, const std::string& second_key, std::string& value);
 	bool HSet(const std::string& first_key, const std::string& second_key, const std::string& value);
 	bool HDel(const std::string& first_key, const std::string& second_key);

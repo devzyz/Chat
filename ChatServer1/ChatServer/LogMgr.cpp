@@ -13,12 +13,12 @@ LogMgr::~LogMgr() {
 
 void LogMgr::Close() {
     if (_b_stop) return;
-    // Èç¹ûlogger´æÔÚ£¬ÏÈflush,È·±£»º³åÈÕÖ¾ÂäÅÌ
+    // å¦‚æœloggerå­˜åœ¨ï¼Œå…ˆflush,ç¡®ä¿ç¼“å†²æ—¥å¿—è½ç›˜
     if (_logger) {
         _logger->flush();
     }
 
-    // ÇåÀíspdlogÈ«¾Ö×ÊÔ´
+    // æ¸…ç†spdlogå…¨å±€èµ„æº
     spdlog::shutdown();
 }
 
@@ -49,60 +49,60 @@ bool LogMgr::InitLogMgr() {
     auto& config_mgr = ConfigMgr::GetInstance();
     auto log_config = config_mgr["Log"];
 
-    // µ±Ç°ÈÕÖ¾ËùÊôµÄ·şÎñÃû
+    // å½“å‰æ—¥å¿—æ‰€å±çš„æœåŠ¡å
     auto log_name = log_config["Name"];
-    // ÈÕÖ¾¸ùÄ¿Â¼Ãû
+    // æ—¥å¿—æ ¹ç›®å½•å
     auto log_dir = log_config["LogDir"];
-    // µ¥¸öÈÕÖ¾ÎÄ¼ş×î´ó¶àÉÙMB
+    // å•ä¸ªæ—¥å¿—æ–‡ä»¶æœ€å¤§å¤šå°‘MB
     auto log_max_size_mb = log_config["MaxSizeMB"];
-    // ÔÊĞí×î¶à´æÔÚ¶àÉÙÈÕÖ¾ÎÄ¼ş
+    // å…è®¸æœ€å¤šå­˜åœ¨å¤šå°‘æ—¥å¿—æ–‡ä»¶
     auto log_max_total_files = log_config["MaxTotalFiles"];
-    // ÔÊĞí¼ÇÂ¼µ½ÈÕÖ¾ÖĞµÄµÈ¼¶
+    // å…è®¸è®°å½•åˆ°æ—¥å¿—ä¸­çš„ç­‰çº§
     auto log_level = log_config["Level"];
-    // ĞèÒªÂíÉÏ¼ÇÂ¼µ½ÈÕÖ¾ÖĞµÄµÈ¼¶
+    // éœ€è¦é©¬ä¸Šè®°å½•åˆ°æ—¥å¿—ä¸­çš„ç­‰çº§
     auto log_flush_level = log_config["FlushLevel"];
 
-    // »ñÈ¡Ã¿¸öÎÄ¼ş×î´óÄÜ´æ¶àÉÙ×Ö½Ú
+    // è·å–æ¯ä¸ªæ–‡ä»¶æœ€å¤§èƒ½å­˜å¤šå°‘å­—èŠ‚
     const auto max_file_size = std::stoi(log_max_size_mb) * 1024 * 1024;
-    // spdlog¿âÒªÇóµÄmax_fileÎª³ıÈ¥µ±Ç°ÕıÔÚĞ´µÄÎÄ¼ş£¬»¹ÔÊĞí¶àÉÙ´æÔÚ
+    // spdlogåº“è¦æ±‚çš„max_fileä¸ºé™¤å»å½“å‰æ­£åœ¨å†™çš„æ–‡ä»¶ï¼Œè¿˜å…è®¸å¤šå°‘å­˜åœ¨
     const auto rotated_files = std::stoi(log_max_total_files) - 1;
 
     try {
-        // ÄÃµ½µ±Ç°·şÎñµÄÊä³öÄ¿Â¼£¬Èç¹û²»´æÔÚÔò´´½¨Ä¿Â¼
+        // æ‹¿åˆ°å½“å‰æœåŠ¡çš„è¾“å‡ºç›®å½•ï¼Œå¦‚æœä¸å­˜åœ¨åˆ™åˆ›å»ºç›®å½•
         const std::filesystem::path service_log_dir =
             std::filesystem::path(log_dir) / log_name;
         std::filesystem::create_directories(service_log_dir);
 
-        // ÄÃµ½ÒªÊä³öµÄµ±Ç°ÈÕÖ¾ÎÄ¼ş
+        // æ‹¿åˆ°è¦è¾“å‡ºçš„å½“å‰æ—¥å¿—æ–‡ä»¶
         const auto log_file =
             (service_log_dir / (log_name + ".txt")).string();
 
-        // ´´½¨¶àÏß³Ì°²È«µÄlogger
+        // åˆ›å»ºå¤šçº¿ç¨‹å®‰å…¨çš„logger
         _logger = spdlog::rotating_logger_mt(
             log_name,
             log_file,
             max_file_size,
             rotated_files);
 
-        // ÉèÖÃ×îµÍÊä³ö¼¶±ğ
+        // è®¾ç½®æœ€ä½è¾“å‡ºçº§åˆ«
         _logger->set_level(GetLevel(log_level, spdlog::level::info));
 
-        // ÉèÖÃflush¼¶±ğ
+        // è®¾ç½®flushçº§åˆ«
         _logger->flush_on(GetLevel(log_flush_level, spdlog::level::warn));
 
-        // ¸ñÊ½»¯ÈÕÖ¾ÕıÎÄ
-        // [%Y-%m-%d %H:%M:%S.%e] Ê±¼ä
-        // [%n] loggerÃû£¬ÆäÊµ¾ÍÊÇµ±Ç°µÄ·şÎñÆ÷Ãû
-        // [%l] ÈÕÖ¾¼¶±ğ
-        // [tid:%t] Ïß³ÌID
-        // [%s:%#] Ô´ÎÄ¼şÃûºÍĞĞºÅ
-        // %v ÈÕÖ¾ÕıÎÄ
+        // æ ¼å¼åŒ–æ—¥å¿—æ­£æ–‡
+        // [%Y-%m-%d %H:%M:%S.%e] æ—¶é—´
+        // [%n] loggeråï¼Œå…¶å®å°±æ˜¯å½“å‰çš„æœåŠ¡å™¨å
+        // [%l] æ—¥å¿—çº§åˆ«
+        // [tid:%t] çº¿ç¨‹ID
+        // [%s:%#] æºæ–‡ä»¶åå’Œè¡Œå·
+        // %v æ—¥å¿—æ­£æ–‡
         _logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] [tid:%t] [%s:%#] %v");
 
-        // ÉèÖÃÎªµ±Ç°·şÎñµÄÄ¬ÈÏLogger
+        // è®¾ç½®ä¸ºå½“å‰æœåŠ¡çš„é»˜è®¤Logger
         spdlog::set_default_logger(_logger);
 
-        // ÖÜÆÚĞÔflushÒ»´Î
+        // å‘¨æœŸæ€§flushä¸€æ¬¡
         spdlog::flush_every(std::chrono::seconds(3));
 
         config_mgr.DumpLoadedConfig();

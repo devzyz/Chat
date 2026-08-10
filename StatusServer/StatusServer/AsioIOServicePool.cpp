@@ -20,7 +20,7 @@ AsioIOServicePool::~AsioIOServicePool() {
 	SPDLOG_DEBUG("AsioIOServicePool destructed");
 }
 
-// ·µ»ØÒ»¸öio_context
+// è¿”å›ä¸€ä¸ªio_context
 boost::asio::io_context& AsioIOServicePool::GetIOService() {
 	auto& service = _ioServices[_nextIOService];
 	_nextIOService = (_nextIOService + 1) % _ioServices.size();
@@ -28,9 +28,9 @@ boost::asio::io_context& AsioIOServicePool::GetIOService() {
 }
 
 void AsioIOServicePool::stop() {
-	// ½«¼ÙÈÎÎñÏû³ı
+	// å°†å‡ä»»åŠ¡æ¶ˆé™¤
 	for (auto& work : _works) {
-		// °Ñ·şÎñÏÈÍ£Ö¹£¬·ÀÖ¹ÆäËûÈËÔÙ½øĞĞ×¢²á
+		// æŠŠæœåŠ¡å…ˆåœæ­¢ï¼Œé˜²æ­¢å…¶ä»–äººå†è¿›è¡Œæ³¨å†Œ
 		work->get_executor().context().stop();
 		work.reset();
 	}
@@ -40,7 +40,7 @@ void AsioIOServicePool::stop() {
 	}
 }
 
-// ²ÎÊıÊÇÏß³ÌµÄºËÊı
+// å‚æ•°æ˜¯çº¿ç¨‹çš„æ ¸æ•°
 AsioIOServicePool::AsioIOServicePool(std::size_t size) : _ioServices(NormalizePoolSize(size)), _works(NormalizePoolSize(size)), _nextIOService(0) {
 	for (std::size_t i = 0; i < _ioServices.size(); i++) {
 		_works[i] = std::unique_ptr<Work>(new Work(_ioServices[i].get_executor()));

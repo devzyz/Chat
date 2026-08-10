@@ -12,7 +12,7 @@ RPCConnectionPool::RPCConnectionPool(std::size_t poolsize, std::string host, std
 }
 
 RPCConnectionPool::~RPCConnectionPool() {
-	// »¥³â·ÃÎÊqueue
+	// äº’æ–¥è®¿é—®queue
 	std::lock_guard<std::mutex> lock(_mutex);
 	Close();
 	while (!_connections.empty()) {
@@ -20,16 +20,16 @@ RPCConnectionPool::~RPCConnectionPool() {
 	}
 }
 
-// ÔÚÎö¹¹Ê±£¬Í¨ÖªËùÓĞÆäËûÏß³Ì£¬µ±Ç°³Ø×ÓÒÑ¾­±»Îö¹¹ÁË
+// åœ¨ææ„æ—¶ï¼Œé€šçŸ¥æ‰€æœ‰å…¶ä»–çº¿ç¨‹ï¼Œå½“å‰æ± å­å·²ç»è¢«ææ„äº†
 void RPCConnectionPool::Close() {
 	_b_stop = true;
 	_cond.notify_all();
 }
 
-// ´Ó³Ø×ÓÀïÈ¡Êı¾İ
+// ä»æ± å­é‡Œå–æ•°æ®
 std::unique_ptr<VarifyService::Stub> RPCConnectionPool::getConnection() {
 	std::unique_lock<std::mutex> lock(_mutex);
-	// wait µ±lambdaº¯Êı·µ»ØtrueÊ±£¬¼ÌĞøÍùÏÂ×ß£¬·ñÔòÔò»á½«lock½âËø£¬²¢µÈ´ı£¬Ö±µ½ÄÜ¹»Ê¹µÃlambdaÎªtrue
+	// wait å½“lambdaå‡½æ•°è¿”å›trueæ—¶ï¼Œç»§ç»­å¾€ä¸‹èµ°ï¼Œå¦åˆ™åˆ™ä¼šå°†lockè§£é”ï¼Œå¹¶ç­‰å¾…ï¼Œç›´åˆ°èƒ½å¤Ÿä½¿å¾—lambdaä¸ºtrue
 	_cond.wait(lock, [this]() {
 		if (_b_stop) {
 			return true;
@@ -37,18 +37,18 @@ std::unique_ptr<VarifyService::Stub> RPCConnectionPool::getConnection() {
 		return !_connections.empty();
 		});
 
-	// Èç¹ûÒÑ¾­Í£Ö¹·şÎñ£¬Ôò·µ»Ø¿Õ
+	// å¦‚æœå·²ç»åœæ­¢æœåŠ¡ï¼Œåˆ™è¿”å›ç©º
 	if (_b_stop) {
 		return nullptr;
 	}
 
-	// ·ñÔò·µ»Ø¶ÓÊ×
+	// å¦åˆ™è¿”å›é˜Ÿé¦–
 	auto context = std::move(_connections.front());
 	_connections.pop();
 	return context;
 }
 
-// ½«Êı¾İ¹é»¹¸ø³Ø×Ó
+// å°†æ•°æ®å½’è¿˜ç»™æ± å­
 void RPCConnectionPool::returnConnection(std::unique_ptr<VarifyService::Stub> context) {
 	std::lock_guard<std::mutex> lock(_mutex);
 	if (_b_stop) {

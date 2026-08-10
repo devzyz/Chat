@@ -10,14 +10,14 @@ class LogMgr : public Singleton<LogMgr>
 public:
 	~LogMgr();
 
-	// ¹Ø±ÕÈÕÖ¾µ¥Àı
+	// å…³é—­æ—¥å¿—å•ä¾‹
 	void Close();
-	// ³õÊ¼»¯ÈÕÖ¾ÏµÍ³
+	// åˆå§‹åŒ–æ—¥å¿—ç³»ç»Ÿ
 	bool InitLogMgr();
 private:
 	LogMgr();
 	
-	// ½«config.iniÖĞµÄÈÕÖ¾µÈ¼¶×ª»»ÎªspdlogÖĞµÄÈÕÖ¾µÈ¼¶Ã¶¾Ù
+	// å°†config.iniä¸­çš„æ—¥å¿—ç­‰çº§è½¬æ¢ä¸ºspdlogä¸­çš„æ—¥å¿—ç­‰çº§æšä¸¾
 	spdlog::level::level_enum GetLevel(const std::string& level, spdlog::level::level_enum default_level);
 
 	std::atomic<bool> _b_stop;

@@ -9,11 +9,11 @@
 CSession::CSession(boost::asio::io_context& ioc, std::shared_ptr<CServer> server) : 
 	_socket(ioc), _server(server), _b_stop(false), _user_uid(0),
 	_last_heart_beat(time(nullptr)), _b_head_parse(false) {
-	// Í¨¹ıÑ©»¨Ëã·¨£¬ÎªÃ¿¸ösessionÁ¬½ÓÉú³ÉÒ»¸öÎ¨Ò»µÄuuid£¬·½±ãÓÉserver¹ÜÀí»á»°
+	// é€šè¿‡é›ªèŠ±ç®—æ³•ï¼Œä¸ºæ¯ä¸ªsessionè¿æ¥ç”Ÿæˆä¸€ä¸ªå”¯ä¸€çš„uuidï¼Œæ–¹ä¾¿ç”±serverç®¡ç†ä¼šè¯
 	boost::uuids::uuid a_uuid = boost::uuids::random_generator()();
 	_session_id = boost::uuids::to_string(a_uuid);
 
-	_recv_head_node = std::make_shared<MsgNode>(HEAD_TOTAL_LEN); // ½ÓÊÕÍ·²¿½Úµã
+	_recv_head_node = std::make_shared<MsgNode>(HEAD_TOTAL_LEN); // æ¥æ”¶å¤´éƒ¨èŠ‚ç‚¹
 }
 
 CSession::~CSession() {
@@ -26,7 +26,7 @@ boost::asio::ip::tcp::socket& CSession::GetSocket() {
 
 /**
  * @brief 
- * ¿ªÊ¼½ÓÊÕ
+ * å¼€å§‹æ¥æ”¶
  */
 void CSession::Start() {
 	AsyncReadHead(HEAD_TOTAL_LEN);
@@ -34,25 +34,25 @@ void CSession::Start() {
 
 /**
  * @brief 
- * @param head_total_len Í·²¿ĞèÒª¶ÁÈ¡µÄ³¤¶È
- * ½ÓÊÕÍê³ÉµÄÍ·²¿
+ * @param head_total_len å¤´éƒ¨éœ€è¦è¯»å–çš„é•¿åº¦
+ * æ¥æ”¶å®Œæˆçš„å¤´éƒ¨
  */
 void CSession::AsyncReadHead(std::size_t head_total_len) {
 	auto self = shared_from_this();
 
 	asyncReadFull(head_total_len, [self, this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 		try {
-			// Èç¹ûÊÇÕı³£µÄ¿É½»»¥µÄ£¬¿Ï¶¨²»»á×ßµ½ÕâÀï£¬×ßµ½ÕâÀïËµÃ÷ÊÇÓĞÒì³££¬ÀıÈç¿Í»§¶ËÖ÷¶¯¶Ï¿ªÁ¬½Ó
+			// å¦‚æœæ˜¯æ­£å¸¸çš„å¯äº¤äº’çš„ï¼Œè‚¯å®šä¸ä¼šèµ°åˆ°è¿™é‡Œï¼Œèµ°åˆ°è¿™é‡Œè¯´æ˜æ˜¯æœ‰å¼‚å¸¸ï¼Œä¾‹å¦‚å®¢æˆ·ç«¯ä¸»åŠ¨æ–­å¼€è¿æ¥
 			if (ec) {
 				SPDLOG_DEBUG("session header read failed, session_id={}, error={}", _session_id, ec.message());
 				Close();
-				// ³ö´íºóµÄ´¦Àí
+				// å‡ºé”™åçš„å¤„ç†
 				DealExceptionSession();
 
 				return;
 			}
 
-			// ÅĞ¶ÏÁ¬½ÓÊÇ·ñÓĞĞ§
+			// åˆ¤æ–­è¿æ¥æ˜¯å¦æœ‰æ•ˆ
 			if (!_server->CheckSessionValid(_session_id)) {
 				Close();
 				return;
@@ -61,25 +61,25 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 			_recv_head_node->Clear();
 			memcpy(_recv_head_node->_data, _data, bytes_transferred);
 
-			// ÄÃµ½ÁËÍ·²¿µÄ×Ö½ÚÁ÷Êı¾İ£¬½ÓÏÂÀ´¿ªÊ¼½âÎö
-			// ½âÎöid
+			// æ‹¿åˆ°äº†å¤´éƒ¨çš„å­—èŠ‚æµæ•°æ®ï¼Œæ¥ä¸‹æ¥å¼€å§‹è§£æ
+			// è§£æid
 			short msg_id = 0;
 			memcpy(&msg_id, _recv_head_node->_data, HEAD_ID_LEN);
 			msg_id = boost::asio::detail::socket_ops::network_to_host_short(msg_id);
 
-			// id·Ç·¨£¬¶Ï¿ªÁ¬½Ó
+			// idéæ³•ï¼Œæ–­å¼€è¿æ¥
 			if (msg_id > MAX_LENGTH) {
 				SPDLOG_WARN("invalid msg_id, session_id={}, msg_id={}", _session_id, msg_id);
 				_server->ClearSession(_session_id);
 				return;
 			}
 
-			// ½âÎödata_len
+			// è§£ædata_len
 			short msg_len = 0;
 			memcpy(&msg_len, _recv_head_node->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
 			msg_len = boost::asio::detail::socket_ops::network_to_host_short(msg_len);
 
-			// ³¤¶È·Ç·¨£¬¶Ï¿ªÁ¬½Ó
+			// é•¿åº¦éæ³•ï¼Œæ–­å¼€è¿æ¥
 			if (msg_len > MAX_LENGTH) {
 				SPDLOG_WARN("invalid msg_len, session_id={}, msg_len={}", _session_id, msg_len);
 				_server->ClearSession(_session_id);
@@ -101,7 +101,7 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
  * @brief 
  * @param maxLength 
  * @param handler 
- * ·â×°µÄÒì²½¶Áº¯Êı£¬ÍêÕûµÄ¶ÁÈ¡³¤¶ÈmaxLength»òÕß·¢³É´íÎóºó£¬´¥·¢handler»Øµ÷
+ * å°è£…çš„å¼‚æ­¥è¯»å‡½æ•°ï¼Œå®Œæ•´çš„è¯»å–é•¿åº¦maxLengthæˆ–è€…å‘æˆé”™è¯¯åï¼Œè§¦å‘handlerå›è°ƒ
  */
 void CSession::asyncReadFull(std::size_t maxLength,
 	std::function<void(const boost::system::error_code& ec, std::size_t bytestransferred)> handler) {
@@ -111,10 +111,10 @@ void CSession::asyncReadFull(std::size_t maxLength,
 
 /**
  * @brief
- * @param read_len Ä¿Ç°ÒÑ¾­¶ÁÈ¡ÁË¶àÉÙ
- * @param total_len ×Ü¹²ĞèÒª¶Á¶àÉÙ
- * @param handler »Øµ÷º¯Êı
- * ¶ÁÈ¡Ö¸¶¨µÄ×Ö½ÚÊı
+ * @param read_len ç›®å‰å·²ç»è¯»å–äº†å¤šå°‘
+ * @param total_len æ€»å…±éœ€è¦è¯»å¤šå°‘
+ * @param handler å›è°ƒå‡½æ•°
+ * è¯»å–æŒ‡å®šçš„å­—èŠ‚æ•°
  */
 void CSession::asyncReadLen(std::size_t read_len, std::size_t total_len,
 	std::function<void(const boost::system::error_code& ec, std::size_t bytestransferred)> handler) {
@@ -123,34 +123,34 @@ void CSession::asyncReadLen(std::size_t read_len, std::size_t total_len,
 	_socket.async_read_some(boost::asio::buffer(_data + read_len, total_len - read_len),
 		[read_len, total_len, handler, self](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 			if (ec) {
-				// ³öÏÖ´íÎó£¬µ÷ÓÃ»Øµ÷º¯Êı;read_len + bytes_transferred±íÊ¾Ò»¹²¶ÁÈ¡ÁË¶àÉÙ
+				// å‡ºç°é”™è¯¯ï¼Œè°ƒç”¨å›è°ƒå‡½æ•°;read_len + bytes_transferredè¡¨ç¤ºä¸€å…±è¯»å–äº†å¤šå°‘
 				handler(ec, read_len + bytes_transferred);
 				return;
 			}
 
 			if (read_len + bytes_transferred >= total_len) {
-				// ³¤¶È¹»ÁË£¬µ÷ÓÃ»Øµ÷º¯Êı
+				// é•¿åº¦å¤Ÿäº†ï¼Œè°ƒç”¨å›è°ƒå‡½æ•°
 				handler(ec, read_len + bytes_transferred);
 				return;
 			}
 
-			// Ã»ÓĞ´íÎó£¬ÇÒ³¤¶È²»¹»£¬Ôò¼ÌĞø¶ÁÈ¡
+			// æ²¡æœ‰é”™è¯¯ï¼Œä¸”é•¿åº¦ä¸å¤Ÿï¼Œåˆ™ç»§ç»­è¯»å–
 			self->asyncReadLen(read_len + bytes_transferred, total_len, handler);
 	});
 }
 /**
  * @brief 
- * @param body_total_len Êı¾İ³¤¶È
- * ¶ÁÈ¡Í·²¿ºóÃæ¶ÔÓ¦µÄÊı¾İ
+ * @param body_total_len æ•°æ®é•¿åº¦
+ * è¯»å–å¤´éƒ¨åé¢å¯¹åº”çš„æ•°æ®
  */
 void CSession::AsyncReadBody(std::size_t body_total_len) {
 	auto self = shared_from_this();
 
 	asyncReadFull(body_total_len, [self, this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
 		try {
-			// ³öÏÖ´íÎó£¬¶Ï¿ª·şÎñÆ÷µÄÁ´½Ó
-			// ÒòÎª·şÎñÆ÷ÌßÈËÂß¼­ÖĞ£¬¶¼ÊÇÍ¨¹ı¸ø¿Í»§¶Ë·¢ËÍÒ»¸öĞÅºÅ£¬ÓÉ¿Í»§¶Ë¶Ï¿ªÁ´½Ó
-			// Òò´Ëµ±½ÓÊÜµ½´íÎóĞÅÏ¢ºó£¬´ú±í´ËÊ±¿Í»§¶ËÒÑ¾­¶Ï¿ªÁ´½ÓÁË£¬´ËÊ±ÒªÇåÀíµ½¶ÔÓ¦µÄsession
+			// å‡ºç°é”™è¯¯ï¼Œæ–­å¼€æœåŠ¡å™¨çš„é“¾æ¥
+			// å› ä¸ºæœåŠ¡å™¨è¸¢äººé€»è¾‘ä¸­ï¼Œéƒ½æ˜¯é€šè¿‡ç»™å®¢æˆ·ç«¯å‘é€ä¸€ä¸ªä¿¡å·ï¼Œç”±å®¢æˆ·ç«¯æ–­å¼€é“¾æ¥
+			// å› æ­¤å½“æ¥å—åˆ°é”™è¯¯ä¿¡æ¯åï¼Œä»£è¡¨æ­¤æ—¶å®¢æˆ·ç«¯å·²ç»æ–­å¼€é“¾æ¥äº†ï¼Œæ­¤æ—¶è¦æ¸…ç†åˆ°å¯¹åº”çš„session
 			if (ec) {
 				SPDLOG_DEBUG("session body read failed, session_id={}, error={}", _session_id, ec.message());
 				Close();
@@ -159,14 +159,14 @@ void CSession::AsyncReadBody(std::size_t body_total_len) {
 				return;
 			}
 
-			// ¿½±´Êı¾İ
+			// æ‹·è´æ•°æ®
 			memcpy(_recv_msg_node->_data, _data, bytes_transferred);
 			_recv_msg_node->_cur_len += bytes_transferred;
 			_recv_msg_node->_data[_recv_msg_node->_total_len] = '\0';
 
-			// ½«ÏûÏ¢ÌåÍ¶µİµ½Âß¼­¶ÓÁĞÖĞ½øĞĞ´¦Àí
+			// å°†æ¶ˆæ¯ä½“æŠ•é€’åˆ°é€»è¾‘é˜Ÿåˆ—ä¸­è¿›è¡Œå¤„ç†
 			LogicSystem::GetInstance()->PostMsgToQue(std::make_shared<LogicNode>(shared_from_this(), _recv_msg_node));
-			// ¼ÌĞø½ÓÊÕÍêÕûµÄÍ·²¿
+			// ç»§ç»­æ¥æ”¶å®Œæ•´çš„å¤´éƒ¨
 			AsyncReadHead(HEAD_TOTAL_LEN);
 
 			UpdateHeartBeat();
@@ -182,7 +182,7 @@ void CSession::AsyncReadBody(std::size_t body_total_len) {
  * @param msg 
  * @param msg_id 
  * @param msg_len 
- * Òì²½·¢ËÍº¯Êı
+ * å¼‚æ­¥å‘é€å‡½æ•°
  */
 void CSession::Send(const char* msg, short msg_id, short msg_len) {
 	std::lock_guard<std::mutex> lock(_send_mutex);
@@ -192,11 +192,11 @@ void CSession::Send(const char* msg, short msg_id, short msg_len) {
 		return;
 	}
 	_send_que.push(std::make_shared<SendNode>(msg, msg_id, msg_len));
-	// ±¾À´¶ÓÁĞÖĞ¾ÍÓÖÔÚ·¢ËÍµÄÊı¾İ
+	// æœ¬æ¥é˜Ÿåˆ—ä¸­å°±åˆåœ¨å‘é€çš„æ•°æ®
 	if (send_que_size > 0) {
 		return;
 	}
-	// Ô­±¾¶ÓÁĞÖĞÃ»ÓĞÔÚ·¢ËÍµÄÊı¾İ£»Ôò½«µ±Ç°µÄÕâ¸öÒª·¢ËÍµÄÊı¾İ·¢³ö
+	// åŸæœ¬é˜Ÿåˆ—ä¸­æ²¡æœ‰åœ¨å‘é€çš„æ•°æ®ï¼›åˆ™å°†å½“å‰çš„è¿™ä¸ªè¦å‘é€çš„æ•°æ®å‘å‡º
 	auto& msgnode = _send_que.front();
 	boost::asio::async_write(_socket, boost::asio::buffer(msgnode->_data, msgnode->_total_len),
 		std::bind(&CSession::HandleWrite, this, std::placeholders::_1, shared_from_this()));
@@ -206,9 +206,9 @@ void CSession::Send(const char* msg, short msg_id, short msg_len) {
  * @brief 
  * @param ec 
  * @param self 
- * async_writeÄÚ²¿ÓÉ¶à´Îasync_write_some£¬Èç¹ûÈç¹ûÎÒÍ¬Ê±async_writeÁ½´Î£¬ÄÇÃ´¿ÉÄÜÕâÁ½¸ö¶¼»áÍùsocketĞ´Êı¾İ¾Í»á·¢Éú´íÎó
- * Òò´ËÎÒ±ØĞë±£Ö¤ÉÏÒ»´ÎÍêÕû·¢ËÍÍê³ÉÖ®ºó£¬ÎÒÔÙ·¢ËÍÏÂÒ»¸ö£¬¿ÉÒÔÓÃÒ»¸ö¶ÓÁĞÀ´±£´æÒª·¢ËÍµÄÊı¾İ£¬È»ºóÔÚasync_writeµÄ
- * »Øµ÷º¯ÊıÄÚ²¿À´½øĞĞÏÂÒ»¸ö°üµÄ·¢ËÍ
+ * async_writeå†…éƒ¨ç”±å¤šæ¬¡async_write_someï¼Œå¦‚æœå¦‚æœæˆ‘åŒæ—¶async_writeä¸¤æ¬¡ï¼Œé‚£ä¹ˆå¯èƒ½è¿™ä¸¤ä¸ªéƒ½ä¼šå¾€socketå†™æ•°æ®å°±ä¼šå‘ç”Ÿé”™è¯¯
+ * å› æ­¤æˆ‘å¿…é¡»ä¿è¯ä¸Šä¸€æ¬¡å®Œæ•´å‘é€å®Œæˆä¹‹åï¼Œæˆ‘å†å‘é€ä¸‹ä¸€ä¸ªï¼Œå¯ä»¥ç”¨ä¸€ä¸ªé˜Ÿåˆ—æ¥ä¿å­˜è¦å‘é€çš„æ•°æ®ï¼Œç„¶ååœ¨async_writeçš„
+ * å›è°ƒå‡½æ•°å†…éƒ¨æ¥è¿›è¡Œä¸‹ä¸€ä¸ªåŒ…çš„å‘é€
  */
 void CSession::HandleWrite(const boost::system::error_code& ec, std::shared_ptr<CSession> self) {
 	try {
@@ -261,62 +261,62 @@ int CSession::GetUserId() {
 }
 
 
-// ¼ì²âÓëµ±Ç°sessionÁ¬½ÓµÄ¿Í»§¶ËµÄĞÄÌøÊÇ·ñ³¬Ê±£¬ĞÄÌø³¬Ê±·µ»Øture£¬·ñÔò·µ»Øfalse
+// æ£€æµ‹ä¸å½“å‰sessionè¿æ¥çš„å®¢æˆ·ç«¯çš„å¿ƒè·³æ˜¯å¦è¶…æ—¶ï¼Œå¿ƒè·³è¶…æ—¶è¿”å›tureï¼Œå¦åˆ™è¿”å›false
 bool CSession::CheckHeartBeatAccurate(std::time_t& now) {
-	// ¼ì²âÒ»ÏÂµ±Ç°Ê±¼äÓëÉÏÒ»´ÎĞÄÌøÊ±¼äÖ®¼äµÄ²îÖµ
+	// æ£€æµ‹ä¸€ä¸‹å½“å‰æ—¶é—´ä¸ä¸Šä¸€æ¬¡å¿ƒè·³æ—¶é—´ä¹‹é—´çš„å·®å€¼
 	double dlt = std::difftime(now, _last_heart_beat);
-	// Èç¹ûĞÄÌø¼ä¸ô´óÓÚ¹æ¶¨µÄĞÄÌøÊ±¼ä
+	// å¦‚æœå¿ƒè·³é—´éš”å¤§äºè§„å®šçš„å¿ƒè·³æ—¶é—´
 	if (dlt > HEARTBEAT_TIME_INTERVAL) {
 		return true;
 	}
 	return false;
 }
 
-// ¸üĞÂµ±Ç°µÄĞÄÌøÊ±¼ä
+// æ›´æ–°å½“å‰çš„å¿ƒè·³æ—¶é—´
 void CSession::UpdateHeartBeat() {
 	std::time_t now = time(nullptr);
 	_last_heart_beat = now;
 }
 
-// Çå³ıredisÖĞµ±Ç°sessionµÄÁ¬½ÓĞÅÏ¢
+// æ¸…é™¤redisä¸­å½“å‰sessionçš„è¿æ¥ä¿¡æ¯
 void CSession::DealExceptionSession() {
 	if (_user_uid <= 0) {
 		_server->ClearSession(_session_id);
 		return;
 	}
 
-	// Ìí¼Ó·Ö²¼Ê½Ëø£¬Çå³ıredisÖĞ±£´æµÄsession,ipserverĞÅÏ¢µÈ
+	// æ·»åŠ åˆ†å¸ƒå¼é”ï¼Œæ¸…é™¤redisä¸­ä¿å­˜çš„session,ipserverä¿¡æ¯ç­‰
 	auto uid_str = std::to_string(_user_uid);
 	auto lock_key = LOCK_PREFIX + uid_str;
-	// »ñÈ¡µ½¶ÔuidµÄËø
+	// è·å–åˆ°å¯¹uidçš„é”
 	auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, LOCK_ACQUIRE_TIME_OUT);
 	Defer defer([this, identifier, lock_key]() {
-		_server->ClearSession(_session_id); // Çå³ıserverÖĞsessionÁ¬½Ó
-		RedisMgr::GetInstance()->releaseLock(lock_key, identifier); // ÊÍ·ÅËø
+		_server->ClearSession(_session_id); // æ¸…é™¤serverä¸­sessionè¿æ¥
+		RedisMgr::GetInstance()->releaseLock(lock_key, identifier); // é‡Šæ”¾é”
 		});
 
-	// Ã»ÓĞ»ñµÃËø
+	// æ²¡æœ‰è·å¾—é”
 	if (identifier == "") {
 		return;
 	}
 
-	// È¥redisÖĞ²é¿´µ±Ç°µÄuid¶ÔÓ¦µÄsession_idÊÇ²»ÊÇ±¾sessionµÄ£¬Èç¹ûÊÇ£¬ÔòÇå¿Õredis,·ñÔò´ú±íÒÑ±»ÆäËûÁ´½Ó¸üĞÂÁË£¬Ôò²»×öÆäËû´¦Àí
+	// å»redisä¸­æŸ¥çœ‹å½“å‰çš„uidå¯¹åº”çš„session_idæ˜¯ä¸æ˜¯æœ¬sessionçš„ï¼Œå¦‚æœæ˜¯ï¼Œåˆ™æ¸…ç©ºredis,å¦åˆ™ä»£è¡¨å·²è¢«å…¶ä»–é“¾æ¥æ›´æ–°äº†ï¼Œåˆ™ä¸åšå…¶ä»–å¤„ç†
 	std::string redis_session_id_value = "";
 	auto redis_session_id_key = USER_SESSION_KEY + uid_str;
 	auto b_success = RedisMgr::GetInstance()->Get(redis_session_id_key, redis_session_id_value);
-	// ³öÏÖ´íÎó
+	// å‡ºç°é”™è¯¯
 	if (!b_success) {
 		return;
 	}
 
-	// Èç¹û²»ÏàÍ¬£¬´ú±íÒÑ¾­ÔÙ´ÎµÇÂ¼ÁË£¬ÔòÖ±½Ó·µ»Ø
+	// å¦‚æœä¸ç›¸åŒï¼Œä»£è¡¨å·²ç»å†æ¬¡ç™»å½•äº†ï¼Œåˆ™ç›´æ¥è¿”å›
 	if (redis_session_id_value != _session_id) {
 		return;
 	}
 
-	// ×ßµ½ÕâÀï´ú±í£¬µ±Ç°sessionÒª¶Ï¿ªÁ´½Ó£¬²¢ÇÒÃ»ÓĞÔÙ´ÎµÇÂ¼
-	RedisMgr::GetInstance()->Del(redis_session_id_key); // Çå³ısessionĞÅÏ¢
-	RedisMgr::GetInstance()->Del(USER_IP_PREFIX + uid_str); // Çå³ıipĞÅÏ¢
+	// èµ°åˆ°è¿™é‡Œä»£è¡¨ï¼Œå½“å‰sessionè¦æ–­å¼€é“¾æ¥ï¼Œå¹¶ä¸”æ²¡æœ‰å†æ¬¡ç™»å½•
+	RedisMgr::GetInstance()->Del(redis_session_id_key); // æ¸…é™¤sessionä¿¡æ¯
+	RedisMgr::GetInstance()->Del(USER_IP_PREFIX + uid_str); // æ¸…é™¤ipä¿¡æ¯
 }
 
 LogicNode::LogicNode(std::shared_ptr<CSession> session, std::shared_ptr<RecvNode> recvnode) 

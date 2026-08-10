@@ -6,7 +6,7 @@
 
 /**
  * @brief 
- * ¶ÁÈ¡ËùÓĞµÄChatServer·şÎñÆ÷ĞÅÏ¢
+ * è¯»å–æ‰€æœ‰çš„ChatServeræœåŠ¡å™¨ä¿¡æ¯
  */
 StatusServiceImpl::StatusServiceImpl() {
 	auto& configMgr = ConfigMgr::GetInstance();
@@ -36,12 +36,12 @@ StatusServiceImpl::StatusServiceImpl() {
 /**
  * @brief 
  * @return
- * Éú³Étoken
+ * ç”Ÿæˆtoken
  */
 std::string generate_unique_string() {
-	// ´´½¨UUID¶ÔÏó
+	// åˆ›å»ºUUIDå¯¹è±¡
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	// ½«UUID×ª»»Îª×Ö·û´®
+	// å°†UUIDè½¬æ¢ä¸ºå­—ç¬¦ä¸²
 	std::string unique_string = to_string(uuid);
 	return unique_string;
 }
@@ -50,18 +50,18 @@ std::string generate_unique_string() {
 /**
  * @brief 
  * @return
- * ÕÒµ½¸ºÔØ×îĞ¡µÄ·şÎñÆ÷
+ * æ‰¾åˆ°è´Ÿè½½æœ€å°çš„æœåŠ¡å™¨
  */
 ChatServer StatusServiceImpl::getChatServer() {
 	std::lock_guard<std::mutex> lock(_server_mutex);
 	auto minServer = _servers.begin()->second;
 	//std::string count_str;
-	//// ÎªÊ²Ã´ÕâÀï¿ÉÄÜ»á´æÔÚÁíÒ»¸öÏß³Ì¸Ä£¬¶øÕâÀï»á²éÑ¯¡£¿ÉÄÜ»á³öÏÖ²éÑ¯µ½¾ÉÖµµÄÇé¿ö
-	//// ÎªÊ²Ã´²»Ìí¼ÓÒ»¸ö·Ö²¼Ê½Ëø¡£ÎªÁËÓĞ¸üºÃµÄĞÔÄÜ£¬ÔÊĞíÓĞÒ»Ğ©Ğ¡µÄÎó²î
-	//// ÎÒÃÇÍ¨¹ıĞÄÌø¼ì²â£¬Ã¿60Ãë¸üĞÂÒ»ÏÂµ±Ç°µÄÁ¬½ÓÊı
+	//// ä¸ºä»€ä¹ˆè¿™é‡Œå¯èƒ½ä¼šå­˜åœ¨å¦ä¸€ä¸ªçº¿ç¨‹æ”¹ï¼Œè€Œè¿™é‡Œä¼šæŸ¥è¯¢ã€‚å¯èƒ½ä¼šå‡ºç°æŸ¥è¯¢åˆ°æ—§å€¼çš„æƒ…å†µ
+	//// ä¸ºä»€ä¹ˆä¸æ·»åŠ ä¸€ä¸ªåˆ†å¸ƒå¼é”ã€‚ä¸ºäº†æœ‰æ›´å¥½çš„æ€§èƒ½ï¼Œå…è®¸æœ‰ä¸€äº›å°çš„è¯¯å·®
+	//// æˆ‘ä»¬é€šè¿‡å¿ƒè·³æ£€æµ‹ï¼Œæ¯60ç§’æ›´æ–°ä¸€ä¸‹å½“å‰çš„è¿æ¥æ•°
 	//RedisMgr::GetInstance()->HGet(LOGIN_COUNT, minServer.name, count_str);
 
-	//// Ã»ÕÒµ½£¬ÔòÄ¬ÈÏ¸ºÔØ×î´ó
+	//// æ²¡æ‰¾åˆ°ï¼Œåˆ™é»˜è®¤è´Ÿè½½æœ€å¤§
 	//if (count_str.empty()) {
 	//	minServer.connection_count = INT_MAX;
 	//}
@@ -69,7 +69,7 @@ ChatServer StatusServiceImpl::getChatServer() {
 	//	minServer.connection_count = std::stoi(count_str);
 	//}
 
-	//// Í¨¹ıforÑ­»·£¬ÒÀ´ÎÃ¶¾ÙËùÓĞµÄchatserverÕÒµ½tcpÁ¬½ÓÊı×îÉÙµÄ
+	//// é€šè¿‡forå¾ªç¯ï¼Œä¾æ¬¡æšä¸¾æ‰€æœ‰çš„chatserveræ‰¾åˆ°tcpè¿æ¥æ•°æœ€å°‘çš„
 	//for (auto& server : _servers) {
 	//	if (server.second.name == minServer.name) {
 	//		continue;
@@ -95,7 +95,7 @@ ChatServer StatusServiceImpl::getChatServer() {
  * @brief 
  * @param uid 
  * @param token 
- * ½«token²åÈëµ½redisÖĞ
+ * å°†tokenæ’å…¥åˆ°redisä¸­
  */
 void StatusServiceImpl::insertToken(int uid, std::string token) {
 	std::string uid_str = std::to_string(uid);
@@ -109,9 +109,9 @@ void StatusServiceImpl::insertToken(int uid, std::string token) {
  * @param request 
  * @param reply 
  * @return 
- * »ñÈ¡¸ºÔØ×îĞ¡µÄ·şÎñÆ÷
+ * è·å–è´Ÿè½½æœ€å°çš„æœåŠ¡å™¨
  * 
- * ÖØĞ´µÄgrpc·½·¨£¬¿Í»§¶ËÊµ¼ÊÏ£Íûµ÷ÓÃµÄº¯Êı¾ÍÊÇÕâ¸öº¯Êı
+ * é‡å†™çš„grpcæ–¹æ³•ï¼Œå®¢æˆ·ç«¯å®é™…å¸Œæœ›è°ƒç”¨çš„å‡½æ•°å°±æ˜¯è¿™ä¸ªå‡½æ•°
  */
 Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatServerReq* request, GetChatServerRsp* reply) {
 	SPDLOG_DEBUG("chat server selection request received, uid={}", request->uid());
@@ -132,7 +132,7 @@ Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatSer
  * @param request 
  * @param response 
  * @return 
- * ¶ÔµÇÂ¼·şÎñÆ÷µÄtoken½øĞĞĞ£Ñé
+ * å¯¹ç™»å½•æœåŠ¡å™¨çš„tokenè¿›è¡Œæ ¡éªŒ
  */
 Status StatusServiceImpl::Login(ServerContext* context, const LoginReq* request, LoginRsp* response)
 {

@@ -21,7 +21,7 @@ using message::StatusService;
 
 /**
  * @brief 
- * ×´Ì¬·şÎñÁ¬½Ó³Ø
+ * çŠ¶æ€æœåŠ¡è¿æ¥æ± 
  */
 class StatusConnectionPool {
 public:
@@ -34,12 +34,12 @@ private:
 	std::atomic<bool> _b_stop;
 	std::queue<std::unique_ptr<StatusService::Stub>> _que;
 
-	// Ìõ¼ş±äÁ¿£¬ÎªÁËÊµÏÖÉú²úÕßÏû·ÑÕßÄ£ĞÍ
+	// æ¡ä»¶å˜é‡ï¼Œä¸ºäº†å®ç°ç”Ÿäº§è€…æ¶ˆè´¹è€…æ¨¡å‹
 	std::condition_variable _cond;
-	// »¥³â·ÃÎÊ¶ÓÁĞµÄĞÅºÅÁ¿
+	// äº’æ–¥è®¿é—®é˜Ÿåˆ—çš„ä¿¡å·é‡
 	std::mutex _que_mutex;
 
-	// Á¬½Ó³Ø´óĞ¡
+	// è¿æ¥æ± å¤§å°
 	int _pool_size;
 	std::string _host;
 	std::string _port;

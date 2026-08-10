@@ -6,20 +6,20 @@
 class CSession;
 /**
  * @brief 
- * ServerÀà£¬ÓÃÀ´¹ÜÀíËùÓĞµÄSessionÁ¬½Ó
+ * Serverç±»ï¼Œç”¨æ¥ç®¡ç†æ‰€æœ‰çš„Sessionè¿æ¥
  */
 class CServer : public std::enable_shared_from_this<CServer>
 {
 public:
 	CServer(boost::asio::io_context& ioc, short port);
 	~CServer();
-	// Çå³ı¸ù¾İÄ³¸ösession_idÇå³ıÄ³¸ösession
+	// æ¸…é™¤æ ¹æ®æŸä¸ªsession_idæ¸…é™¤æŸä¸ªsession
 	void ClearSession(std::string session_id);
 	bool CheckSessionValid(std::string session_id);
 	void on_timer(const boost::system::error_code& e);
-	// ºóÖÃ³õÊ¼»¯£¬±£Ö¤shared_from_thisÒÑ¾­´æÔÚ
+	// åç½®åˆå§‹åŒ–ï¼Œä¿è¯shared_from_thiså·²ç»å­˜åœ¨
 	void init();
-	// io_context stopÇ°µÄ´¦Àí
+	// io_context stopå‰çš„å¤„ç†
 	void stop();
 private:
 	void StartAcceptor();
@@ -27,12 +27,12 @@ private:
 	boost::asio::io_context& _ioc;
 	short _port;
 	boost::asio::ip::tcp::acceptor _acceptor;
-	// ÓÃÀ´¸ù¾İsession_id¹ÜÀíËùÓĞµÄsession
+	// ç”¨æ¥æ ¹æ®session_idç®¡ç†æ‰€æœ‰çš„session
 	std::map<std::string, std::shared_ptr<CSession>> _sessions;
-	std::mutex _mutex; // ±£Ö¤»¥³â·ÃÎÊmap
+	std::mutex _mutex; // ä¿è¯äº’æ–¥è®¿é—®map
 
-	// ¶¨Ê±¼ì²âÆ÷£¬Ã¿¸ôÒ»¶ÎÊ±¼ä£¬ÅĞ¶ÏÒ»ÏÂ¿Í»§¶ËµÄĞÄÌøÊ±¼ä¼ä¸ôÊÇ·ñÕıÈ·
-	// Èç¹û²»ÕıÈ·£¬´ú±í¿Í»§¶ËÒì³££¬ÔòÖ±½Ó¶Ï¿ªÓë¿Í»§¶ËµÄÁ¬½Ó
+	// å®šæ—¶æ£€æµ‹å™¨ï¼Œæ¯éš”ä¸€æ®µæ—¶é—´ï¼Œåˆ¤æ–­ä¸€ä¸‹å®¢æˆ·ç«¯çš„å¿ƒè·³æ—¶é—´é—´éš”æ˜¯å¦æ­£ç¡®
+	// å¦‚æœä¸æ­£ç¡®ï¼Œä»£è¡¨å®¢æˆ·ç«¯å¼‚å¸¸ï¼Œåˆ™ç›´æ¥æ–­å¼€ä¸å®¢æˆ·ç«¯çš„è¿æ¥
 	boost::asio::steady_timer _timer;
 };
 

@@ -1,0 +1,23 @@
+{
+  "name": "chat-services",
+  "version-string": "0.1.0",
+  "builtin-baseline": "fc3be1ebea7eaeb3071fe716ac65713af1f3a146",
+  "dependencies": [
+    "boost-asio",
+    "boost-beast",
+    "boost-filesystem",
+    "boost-property-tree",
+    "boost-uuid",
+    "grpc",
+    "hiredis",
+    "jsoncpp",
+    {
+      "name": "mysql-connector-cpp",
+      "features": [
+        "jdbc"
+      ]
+    },
+    "protobuf",
+    "spdlog"
+  ]
+}

@@ -61,7 +61,7 @@ ChatGrpcClient::~ChatGrpcClient() {
 
 /**
  * @brief 
- * ÒòÎª¿ÉÄÜÓÐ¶à¸öÁÄÌì·þÎñÆ÷£¬Òò´ËÐèÒª¶ÁÈ¡µ½ËùÓÐµÄPeerServer·þÎñÆ÷£¬²¢ÓëÃ¿¸ö·þÎñÆ÷½¨Á¢grpcÍ¨ÐÅ
+ * å› ä¸ºå¯èƒ½æœ‰å¤šä¸ªèŠå¤©æœåŠ¡å™¨ï¼Œå› æ­¤éœ€è¦è¯»å–åˆ°æ‰€æœ‰çš„PeerServeræœåŠ¡å™¨ï¼Œå¹¶ä¸Žæ¯ä¸ªæœåŠ¡å™¨å»ºç«‹grpcé€šä¿¡
  */
 ChatGrpcClient::ChatGrpcClient() {
 	auto& configMgr = ConfigMgr::GetInstance();
@@ -88,7 +88,7 @@ ChatGrpcClient::ChatGrpcClient() {
  * @param serverIp 
  * @param req 
  * @return 
- * ÉêÇëÌí¼ÓºÃÓÑÊ±£¬Èç¹ûºÃÓÑ²»ÔÚ±¾·þÎñÆ÷£¬ÔòÐèÍ¨¹ýgrpcÍ¨ÖªÁíÒ»¸ö·þÎñÆ÷
+ * ç”³è¯·æ·»åŠ å¥½å‹æ—¶ï¼Œå¦‚æžœå¥½å‹ä¸åœ¨æœ¬æœåŠ¡å™¨ï¼Œåˆ™éœ€é€šè¿‡grpcé€šçŸ¥å¦ä¸€ä¸ªæœåŠ¡å™¨
  */
 AddFriendRsp ChatGrpcClient::NotifyOtherAddFriend(const std::string& serverIp, const AddFriendReq req) {
 	AddFriendRsp rsp;
@@ -124,22 +124,22 @@ AddFriendRsp ChatGrpcClient::NotifyOtherAddFriend(const std::string& serverIp, c
 	return rsp;
 }
 
-// Í¨ÖªserverIp·þÎñÆ÷£¬ÈÏÖ¤ºÃÓÑ
+// é€šçŸ¥serverIpæœåŠ¡å™¨ï¼Œè®¤è¯å¥½å‹
 AuthFriendRsp ChatGrpcClient::NotifyOtherAuthFriend(const std::string& serverIp, const AuthFriendReq request) {
 	AuthFriendRsp rsp;
 	rsp.set_error(ErrorCodes::Success);
 
-	// Èç¹ûÕÒ²»µ½·þÎñÆ÷£¬Ôò·µ»Ø
+	// å¦‚æžœæ‰¾ä¸åˆ°æœåŠ¡å™¨ï¼Œåˆ™è¿”å›ž
 	auto iter_find = _pool.find(serverIp);
 	if (iter_find == _pool.end()) {
 		rsp.set_error(ErrorCodes::RPCFailed);
 		return rsp;
 	}
 
-	// ÏÈÈ¡³ö¶ÔÓ¦Õâ¸ö·þÎñÆ÷µÄÁ¬½Ó³Ø
+	// å…ˆå–å‡ºå¯¹åº”è¿™ä¸ªæœåŠ¡å™¨çš„è¿žæŽ¥æ± 
 	auto& pool = iter_find->second;
 	ClientContext context;
-	// ´ÓÁ¬½Ó³ØÀïÃæÈ¡Ò»¸öÁ¬½Ó
+	// ä»Žè¿žæŽ¥æ± é‡Œé¢å–ä¸€ä¸ªè¿žæŽ¥
 	auto connection = pool->getConnection();
 	if (connection == nullptr) {
 		rsp.set_error(ErrorCodes::RPCFailed);
@@ -150,7 +150,7 @@ AuthFriendRsp ChatGrpcClient::NotifyOtherAuthFriend(const std::string& serverIp,
 		pool->returnConnectioni(std::move(connection));
 		});
 	
-	// µ÷ÓÃgrpc·þÎñ
+	// è°ƒç”¨grpcæœåŠ¡
 	Status status = connection->NotifyOtherAuthFriend(&context, request, &rsp);
 
 	if (!status.ok()) {
@@ -165,18 +165,18 @@ TextChatMsgRsp ChatGrpcClient::NotifyOtherReceiveTextChatMsg(const std::string& 
 	TextChatMsgRsp rsp;
 	rsp.set_error(ErrorCodes::Success);
 
-	// Èç¹ûÕÒ²»µ½·þÎñÆ÷£¬Ôò·µ»Ø
+	// å¦‚æžœæ‰¾ä¸åˆ°æœåŠ¡å™¨ï¼Œåˆ™è¿”å›ž
 	auto iter_find = _pool.find(serverIp);
 	if (iter_find == _pool.end()) {
 		rsp.set_error(ErrorCodes::RPCFailed);
 		return rsp;
 	}
 
-	// È¡³öÁ¬½ÓÕâ¸ö·þÎñµÄgrpcÁ¬½Ó³Ø
+	// å–å‡ºè¿žæŽ¥è¿™ä¸ªæœåŠ¡çš„grpcè¿žæŽ¥æ± 
 	auto& pool = iter_find->second;
 	ClientContext context;
 
-	// È¡³öÒ»¸öÁ¬½Ó
+	// å–å‡ºä¸€ä¸ªè¿žæŽ¥
 	auto connection = pool->getConnection();
 	if (connection == nullptr) {
 		rsp.set_error(ErrorCodes::RPCFailed);
@@ -187,7 +187,7 @@ TextChatMsgRsp ChatGrpcClient::NotifyOtherReceiveTextChatMsg(const std::string& 
 		pool->returnConnectioni(std::move(connection));
 		});
 
-	// µ÷ÓÃgrpc·þÎñ
+	// è°ƒç”¨grpcæœåŠ¡
 	Status status = connection->NotifyOtherReceiveTextChatMsg(&context, request, &rsp);
 	
 	if(!status.ok()) {
@@ -202,7 +202,7 @@ KickUserRsp ChatGrpcClient::NotifyOtherKickUser(const std::string& serverIp, con
 	KickUserRsp rsp;
 	rsp.set_error(ErrorCodes::Success);
 
-	// ²éÕÒ¶ÔÓ¦µÄserverIpµÄgrpcÁ¬½Ó³Ø
+	// æŸ¥æ‰¾å¯¹åº”çš„serverIpçš„grpcè¿žæŽ¥æ± 
 	auto iter_find = _pool.find(serverIp);
 	if (iter_find == _pool.end()) {
 		rsp.set_error(ErrorCodes::RPCFailed);
@@ -212,7 +212,7 @@ KickUserRsp ChatGrpcClient::NotifyOtherKickUser(const std::string& serverIp, con
 	auto &pool = iter_find->second;
 	ClientContext context;
 
-	// È¡³öÕâ¸öserverIpÁ¬½Ó³ØµÄÒ»¸öÁ¬½Ó
+	// å–å‡ºè¿™ä¸ªserverIpè¿žæŽ¥æ± çš„ä¸€ä¸ªè¿žæŽ¥
 	auto connection = pool->getConnection();
 	if (connection == nullptr) {
 		rsp.set_error(ErrorCodes::RPCFailed);
@@ -223,7 +223,7 @@ KickUserRsp ChatGrpcClient::NotifyOtherKickUser(const std::string& serverIp, con
 		pool->returnConnectioni(std::move(connection));
 		});
 
-	// µ÷ÓÃgrpc·þÎñ
+	// è°ƒç”¨grpcæœåŠ¡
 	Status status = connection->NotifyOtherKickUser(&context, request, &rsp);
 
 	if (!status.ok()) {

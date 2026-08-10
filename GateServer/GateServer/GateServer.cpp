@@ -26,8 +26,11 @@ void TestRedisMgr() {
     RedisMgr::GetInstance()->Close();
 }
 
-int main()
+int main(int argc, char* argv[])
 {
+    if (argc == 3 && std::string(argv[1]) == "--config") {
+        ConfigMgr::SetConfigPath(argv[2]);
+    }
     //TestRedisMgr();
     auto logger = LogMgr::GetInstance();
     if (!logger->InitLogMgr()) {

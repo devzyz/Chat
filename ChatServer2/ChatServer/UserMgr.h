@@ -7,7 +7,7 @@
 class CSession;
 /**
  * @brief 
- * 管理所有连接到本服务器的session
+ * 绠＄悊鎵�鏈夎繛鎺ュ埌鏈湇鍔″櫒鐨剆ession
  */
 class UserMgr : public Singleton<UserMgr>
 {

@@ -28,8 +28,8 @@
 
 namespace message {
 
-// ÑéÖ¤Âë·şÎñgrpc
-// GetVarifyCodeÎª¡°»ñÈ¡ÑéÖ¤Âë¡±Ô¶³Ìµ÷ÓÃº¯ÊıÃû
+// éªŒè¯ç æœåŠ¡grpc
+// GetVarifyCodeä¸ºâ€œè·å–éªŒè¯ç â€è¿œç¨‹è°ƒç”¨å‡½æ•°å
 class VarifyService final {
  public:
   static constexpr char const* service_full_name() {
@@ -237,9 +237,9 @@ class VarifyService final {
   typedef WithStreamedUnaryMethod_GetVarifyCode<Service > StreamedService;
 };
 
-// ×´Ì¬·şÎñgrpc
-// GetChatServerÎª»ñÈ¡ÁÄÌì·şÎñÆ÷×´Ì¬
-// LoginÎªÔÚµÇÂ¼Ê±½øĞĞuid/tokenÑéÖ¤
+// çŠ¶æ€æœåŠ¡grpc
+// GetChatServerä¸ºè·å–èŠå¤©æœåŠ¡å™¨çŠ¶æ€
+// Loginä¸ºåœ¨ç™»å½•æ—¶è¿›è¡Œuid/tokenéªŒè¯
 class StatusService final {
  public:
   static constexpr char const* service_full_name() {
@@ -604,7 +604,7 @@ class StatusService final {
   typedef WithStreamedUnaryMethod_GetChatServer<WithStreamedUnaryMethod_Login<Service > > StreamedService;
 };
 
-// tcpÁÄÌì·şÎñÆ÷µÄgrpc·şÎñ
+// tcpèŠå¤©æœåŠ¡å™¨çš„grpcæœåŠ¡
 class ChatService final {
  public:
   static constexpr char const* service_full_name() {

@@ -2,38 +2,38 @@ syntax = "proto3";
 
 package message;
 
-// ÑéÖ¤Âë·şÎñgrpc
-// GetVarifyCodeÎª¡°»ñÈ¡ÑéÖ¤Âë¡±Ô¶³Ìµ÷ÓÃº¯ÊıÃû
+// éªŒè¯ç æœåŠ¡grpc
+// GetVarifyCodeä¸ºâ€œè·å–éªŒè¯ç â€è¿œç¨‹è°ƒç”¨å‡½æ•°å
 service VarifyService {
 	rpc GetVarifyCode (GetVarifyReq) returns (GetVarifyRsp) {}
 }
 
-// ÇëÇó½á¹¹
+// è¯·æ±‚ç»“æ„
 message GetVarifyReq {
 	string email = 1;
 }
 
-// »Ø°ü½á¹¹
+// å›åŒ…ç»“æ„
 message GetVarifyRsp {
 	int32 error = 1;
 	string email = 2;
 	string code = 3;
 }
 
-// ×´Ì¬·şÎñgrpc
-// GetChatServerÎª»ñÈ¡ÁÄÌì·şÎñÆ÷×´Ì¬
-// LoginÎªÔÚµÇÂ¼Ê±½øĞĞuid/tokenÑéÖ¤
+// çŠ¶æ€æœåŠ¡grpc
+// GetChatServerä¸ºè·å–èŠå¤©æœåŠ¡å™¨çŠ¶æ€
+// Loginä¸ºåœ¨ç™»å½•æ—¶è¿›è¡Œuid/tokenéªŒè¯
 service StatusService {
 	rpc GetChatServer (GetChatServerReq) returns (GetChatServerRsp) {}
 	rpc Login(LoginReq) returns (LoginRsp) {}
 }
 
-// ÇëÇó½á¹¹
+// è¯·æ±‚ç»“æ„
 message GetChatServerReq {
 	int32 uid = 1;
 }
 
-// »Ø°ü½á¹¹
+// å›åŒ…ç»“æ„
 message GetChatServerRsp {
 	int32 error = 1;
 	string host = 2;
@@ -41,20 +41,20 @@ message GetChatServerRsp {
 	string token = 4;
 }
 
-// ÇëÇó½á¹¹
+// è¯·æ±‚ç»“æ„
 message LoginReq {
 	int32 uid = 1;
 	string token = 2;
 }
 
-// »Ø°ü½á¹¹
+// å›åŒ…ç»“æ„
 message LoginRsp {
 	int32 error = 1;
 	int32 uid = 2;
 	string token = 3;
 }
 
-// tcpÁÄÌì·şÎñÆ÷µÄgrpc·şÎñ
+// tcpèŠå¤©æœåŠ¡å™¨çš„grpcæœåŠ¡
 service ChatService {
 
 }

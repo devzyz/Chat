@@ -38,14 +38,14 @@ RedisConfigPool::~RedisConfigPool() {
 }
 
 void RedisConfigPool::close() {
-	// Á¬½Ó³ØÒª¹Ø±ÕÁË£¬½«¹Ø±Õ×´Ì¬ÖÃÎªtrue£¬Í¬Ê±»½ĞÑËùÓĞ»¹ÔÚµÈ´ıÁ¬½ÓµÄÏß³Ì
+	// è¿æ¥æ± è¦å…³é—­äº†ï¼Œå°†å…³é—­çŠ¶æ€ç½®ä¸ºtrueï¼ŒåŒæ—¶å”¤é†’æ‰€æœ‰è¿˜åœ¨ç­‰å¾…è¿æ¥çš„çº¿ç¨‹
 	_b_stop = true;
 	_conf.notify_all();
 }
 
 redisContext* RedisConfigPool::getConnection() {
 	std::unique_lock<std::mutex> lock(_mutex);
-	// µ±Á¬½Ó³ØÃ»ÓĞÔİÍ££¬Í¬Ê±Á¬½Ó³ØÄÚÎŞ¿ÕÁ¬½ÓÊ±£¬ĞèÒª×èÈûµÈ´ı
+	// å½“è¿æ¥æ± æ²¡æœ‰æš‚åœï¼ŒåŒæ—¶è¿æ¥æ± å†…æ— ç©ºè¿æ¥æ—¶ï¼Œéœ€è¦é˜»å¡ç­‰å¾…
 	_conf.wait(lock, [this] {
 		if (_b_stop) {
 			return true;
@@ -95,7 +95,7 @@ bool RedisMgr::LPush(const std::string& key, const std::string& value) {
 		return false;
 	}
 
-	// Ö´ĞĞÊ§°Ü
+	// æ‰§è¡Œå¤±è´¥
 	if (reply->type != REDIS_REPLY_INTEGER || reply->integer <= 0) {
 		SPDLOG_WARN("redis LPUSH failed, key={}, value_size={}, reason=unexpected_reply", key, value.size());
 		freeReplyObject(reply);
@@ -152,7 +152,7 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value) {
 		return false;
 	}
 
-	// Ö´ĞĞÊ§°Ü
+	// æ‰§è¡Œå¤±è´¥
 	if (reply->type == REDIS_REPLY_INTEGER || reply->integer <= 0) {
 		SPDLOG_WARN("redis RPUSH failed, key={}, value_size={}, reason=unexpected_reply", key, value.size());
 		freeReplyObject(reply);
@@ -267,11 +267,11 @@ void RedisMgr::Close() {
 /**
  * @brief
  * @param key
- * @param value ½á¹û±£´æÎ»ÖÃ
+ * @param value ç»“æœä¿å­˜ä½ç½®
  * @return
- * 1. ÅĞ¶Ï·µ»Ø·Ç¿Õ
- * 2. ÅĞ¶Ï·µ»Ø·ÇÎŞĞ§Öµ
- * 3. ·µ»ØÖµÀàĞÍ±ØĞëÎªstring
+ * 1. åˆ¤æ–­è¿”å›éç©º
+ * 2. åˆ¤æ–­è¿”å›éæ— æ•ˆå€¼
+ * 3. è¿”å›å€¼ç±»å‹å¿…é¡»ä¸ºstring
  */
 bool RedisMgr::Get(const std::string& key, std::string& value) {
 	auto connection = _pool->getConnection();
@@ -283,7 +283,7 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
 	auto reply = (redisReply*)redisCommand(connection, "GET %s", key.c_str());
 
 	if (reply == nullptr) {
-		SPDLOG_ERROR("redis GET failed, key={}, reason=null_reply", key); // ÈÕÖ¾todo...
+		SPDLOG_ERROR("redis GET failed, key={}, reason=null_reply", key); // æ—¥å¿—todo...
 		value = "";
 		_pool->returnConnection(connection);
 		return false;
@@ -295,18 +295,18 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
 		});
 
 	if (reply->type == REDIS_REPLY_NIL) {
-		SPDLOG_DEBUG("redis GET miss, key={}", key); // ÈÕÖ¾todo...
+		SPDLOG_DEBUG("redis GET miss, key={}", key); // æ—¥å¿—todo...
 		value = "";
 		return false;
 	}
 
 	if (reply->type != REDIS_REPLY_STRING) {
-		SPDLOG_WARN("redis GET failed, key={}, reason=unexpected_type, type={}", key, reply->type); // ÈÕÖ¾todo...
+		SPDLOG_WARN("redis GET failed, key={}, reason=unexpected_type, type={}", key, reply->type); // æ—¥å¿—todo...
 		return false;
 	}
 
 	value = reply->str;
-	SPDLOG_DEBUG("redis GET success, key={}, value_size={}", key, value.size()); // ÈÕÖ¾todo...
+	SPDLOG_DEBUG("redis GET success, key={}, value_size={}", key, value.size()); // æ—¥å¿—todo...
 
 	return true;
 }
@@ -316,9 +316,9 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
  * @param key
  * @param value
  * @return
- * 1. ·µ»Ø·Ç¿Õ
- * 2. ·µ»ØµÄÀàĞÍÎªstatusÀàĞÍ
- * 3. statusµÄÄÚÈİ×´Ì¬Îªok
+ * 1. è¿”å›éç©º
+ * 2. è¿”å›çš„ç±»å‹ä¸ºstatusç±»å‹
+ * 3. statusçš„å†…å®¹çŠ¶æ€ä¸ºok
  */
 bool RedisMgr::Set(const std::string& key, const std::string& value) {
 	auto connection = _pool->getConnection();
@@ -329,7 +329,7 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
 	auto reply = (redisReply*)redisCommand(connection, "SET %s %s", key.c_str(), value.c_str());
 
 	if (reply == nullptr) {
-		SPDLOG_ERROR("redis SET failed, key={}, value_size={}, reason=null_reply", key, value.size()); // ÈÕÖ¾todo...
+		SPDLOG_ERROR("redis SET failed, key={}, value_size={}, reason=null_reply", key, value.size()); // æ—¥å¿—todo...
 		_pool->returnConnection(connection);
 		return false;
 	}
@@ -341,11 +341,11 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
 
 	if (!(reply->type == REDIS_REPLY_STATUS &&
 		(strcmp(reply->str, "OK") == 0 || strcmp(reply->str, "ok") == 0))) {
-		SPDLOG_ERROR("redis SET failed, key={}, value_size={}, reason=unexpected_status, type={}", key, value.size(), reply->type); // ÈÕÖ¾todo...
+		SPDLOG_ERROR("redis SET failed, key={}, value_size={}, reason=unexpected_status, type={}", key, value.size(), reply->type); // æ—¥å¿—todo...
 		return false;
 	}
 
-	SPDLOG_DEBUG("redis SET success, key={}, value_size={}", key, value.size()); // ÈÕÖ¾todo...
+	SPDLOG_DEBUG("redis SET success, key={}, value_size={}", key, value.size()); // æ—¥å¿—todo...
 	return true;
 }
 
@@ -353,11 +353,11 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
  * @brief
  * @param first_key
  * @param second_key
- * @param value ½á¹û±£´æÎ»ÖÃ
+ * @param value ç»“æœä¿å­˜ä½ç½®
  * @return
- * 1. ·µ»Ø·Ç¿Õ
- * 2. ·µ»ØÖµ·ÇÎŞĞ§Öµ
- * 3. ·µ»ØÀàĞÍ±ØĞëÎªstring
+ * 1. è¿”å›éç©º
+ * 2. è¿”å›å€¼éæ— æ•ˆå€¼
+ * 3. è¿”å›ç±»å‹å¿…é¡»ä¸ºstring
  */
 bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key, std::string& value) {
 	auto connection = _pool->getConnection();
@@ -369,7 +369,7 @@ bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key,
 	auto reply = (redisReply*)redisCommand(connection, "HGET %s %s", first_key.c_str(), second_key.c_str());
 
 	if (reply == nullptr) {
-		SPDLOG_ERROR("redis HGET failed, key={}, field={}, reason=null_reply", first_key, second_key); // ÈÕÖ¾todo...
+		SPDLOG_ERROR("redis HGET failed, key={}, field={}, reason=null_reply", first_key, second_key); // æ—¥å¿—todo...
 		value = "";
 		_pool->returnConnection(connection);
 		return false;
@@ -380,19 +380,19 @@ bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key,
 		});
 
 	if (reply->type == REDIS_REPLY_NIL) {
-		SPDLOG_DEBUG("redis HGET miss, key={}, field={}", first_key, second_key); // ÈÕÖ¾todo...
+		SPDLOG_DEBUG("redis HGET miss, key={}, field={}", first_key, second_key); // æ—¥å¿—todo...
 		value = "";
 		return false;
 	}
 
 	if (reply->type != REDIS_REPLY_STRING) {
-		SPDLOG_WARN("redis HGET failed, key={}, field={}, reason=unexpected_type, type={}", first_key, second_key, reply->type); // ÈÕÖ¾todo...
+		SPDLOG_WARN("redis HGET failed, key={}, field={}, reason=unexpected_type, type={}", first_key, second_key, reply->type); // æ—¥å¿—todo...
 		value = "";
 		return false;
 	}
 
 	value = reply->str;
-	SPDLOG_DEBUG("redis HGET success, key={}, field={}, value_size={}", first_key, second_key, value.size()); //ÈÕÖ¾todo...
+	SPDLOG_DEBUG("redis HGET success, key={}, field={}, value_size={}", first_key, second_key, value.size()); //æ—¥å¿—todo...
 	return true;
 }
 
@@ -402,8 +402,8 @@ bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key,
  * @param second_key
  * @param value
  * @return
- * 1. ·µ»Ø·Ç¿Õ
- * 2. ·µ»ØÀàĞÍ±ØĞëÎªinteger £¨1ÎªĞÂÔö£¬0Îª¸üĞÂÒÑÓĞ£©
+ * 1. è¿”å›éç©º
+ * 2. è¿”å›ç±»å‹å¿…é¡»ä¸ºinteger ï¼ˆ1ä¸ºæ–°å¢ï¼Œ0ä¸ºæ›´æ–°å·²æœ‰ï¼‰
  */
 bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key, const std::string& value) {
 	auto connection = _pool->getConnection();
@@ -414,7 +414,7 @@ bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key,
 	auto reply = (redisReply*)redisCommand(connection, "HSET %s %s %s", first_key.c_str(), second_key.c_str(), value.c_str());
 
 	if (reply == nullptr) {
-		SPDLOG_ERROR("redis HSET failed, key={}, field={}, value_size={}, reason=null_reply", first_key, second_key, value.size()); // ÈÕÖ¾todo...
+		SPDLOG_ERROR("redis HSET failed, key={}, field={}, value_size={}, reason=null_reply", first_key, second_key, value.size()); // æ—¥å¿—todo...
 		_pool->returnConnection(connection);
 		return false;
 	}
@@ -425,11 +425,11 @@ bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key,
 		});
 
 	if (reply->type != REDIS_REPLY_INTEGER) {
-		SPDLOG_WARN("redis HSET failed, key={}, field={}, value_size={}, reason=unexpected_type, type={}", first_key, second_key, value.size(), reply->type); // ÈÕÖ¾todo...
+		SPDLOG_WARN("redis HSET failed, key={}, field={}, value_size={}, reason=unexpected_type, type={}", first_key, second_key, value.size(), reply->type); // æ—¥å¿—todo...
 		return false;
 	}
 
-	SPDLOG_DEBUG("redis HSET success, key={}, field={}, value_size={}", first_key, second_key, value.size()); //  ÈÕÖ¾todo...
+	SPDLOG_DEBUG("redis HSET success, key={}, field={}, value_size={}", first_key, second_key, value.size()); //  æ—¥å¿—todo...
 
 	return true;
 }
@@ -439,8 +439,8 @@ bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key,
  * @param first_key
  * @param second_key
  * @return
- * 1. ·µ»Ø·Ç¿Õ
- * 2. ·µ»ØÀàĞÍ±ØĞëÎªÕûÊı
+ * 1. è¿”å›éç©º
+ * 2. è¿”å›ç±»å‹å¿…é¡»ä¸ºæ•´æ•°
  */
 bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key) {
 	auto connection = _pool->getConnection();
@@ -451,7 +451,7 @@ bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key)
 	auto reply = (redisReply*)redisCommand(connection, "HDEL %s %s", first_key.c_str(), second_key.c_str());
 
 	if (reply == nullptr) {
-		SPDLOG_ERROR("redis HDEL failed, key={}, field={}, reason=null_reply", first_key, second_key); // ÈÕÖ¾todo...
+		SPDLOG_ERROR("redis HDEL failed, key={}, field={}, reason=null_reply", first_key, second_key); // æ—¥å¿—todo...
 		_pool->returnConnection(connection);
 		return false;
 	}
@@ -462,11 +462,11 @@ bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key)
 		});
 
 	if (reply->type != REDIS_REPLY_INTEGER) {
-		SPDLOG_WARN("redis HDEL failed, key={}, field={}, reason=unexpected_type, type={}", first_key, second_key, reply->type); // ÈÕÖ¾todo...
+		SPDLOG_WARN("redis HDEL failed, key={}, field={}, reason=unexpected_type, type={}", first_key, second_key, reply->type); // æ—¥å¿—todo...
 		return false;
 	}
 
-	SPDLOG_DEBUG("redis HDEL success, key={}, field={}", first_key, second_key); // ÈÕÖ¾todo...
+	SPDLOG_DEBUG("redis HDEL success, key={}, field={}", first_key, second_key); // æ—¥å¿—todo...
 
 	return true;
 }
@@ -475,8 +475,8 @@ bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key)
  * @brief
  * @param key
  * @return
- * 1. ·µ»Ø·Ç¿Õ
- * 2. ·µ»ØÀàĞÍ±ØĞëÎªÕûÊı
+ * 1. è¿”å›éç©º
+ * 2. è¿”å›ç±»å‹å¿…é¡»ä¸ºæ•´æ•°
  */
 bool RedisMgr::Del(const std::string& key) {
 	auto connection = _pool->getConnection();
@@ -487,7 +487,7 @@ bool RedisMgr::Del(const std::string& key) {
 	auto reply = (redisReply*)redisCommand(connection, "DEL %s", key.c_str());
 
 	if (reply == nullptr) {
-		SPDLOG_ERROR("redis DEL failed, key={}, reason=null_reply", key); // ÈÕÖ¾todo...
+		SPDLOG_ERROR("redis DEL failed, key={}, reason=null_reply", key); // æ—¥å¿—todo...
 		_pool->returnConnection(connection);
 		return false;
 	}
@@ -498,16 +498,16 @@ bool RedisMgr::Del(const std::string& key) {
 		});
 
 	if (reply->type != REDIS_REPLY_INTEGER) {
-		SPDLOG_WARN("redis DEL failed, key={}, reason=unexpected_type, type={}", key, reply->type); // ÈÕÖ¾todo...
+		SPDLOG_WARN("redis DEL failed, key={}, reason=unexpected_type, type={}", key, reply->type); // æ—¥å¿—todo...
 		return false;
 	}
 
-	SPDLOG_DEBUG("redis DEL success, key={}", key); // ÈÕÖ¾todo...
+	SPDLOG_DEBUG("redis DEL success, key={}", key); // æ—¥å¿—todo...
 
 	return true;
 }
 
-// Èç¹û¼ÓËø³É¹¦£¬Ôò·µ»ØÒ»¸öËøµÄÎ¨Ò»±êÊ¶
+// å¦‚æœåŠ é”æˆåŠŸï¼Œåˆ™è¿”å›ä¸€ä¸ªé”çš„å”¯ä¸€æ ‡è¯†
 std::string RedisMgr::acquireLock(const std::string& lockName, int lockTimeout, int acquireTimeout) {
 	auto connection = _pool->getConnection();
 
@@ -522,7 +522,7 @@ std::string RedisMgr::acquireLock(const std::string& lockName, int lockTimeout, 
 	return DistLock::GetInstance()->acquireLock(connection, lockName, lockTimeout, acquireTimeout);
 }
 
-// Èç¹û½âËø³É¹¦£¬Ôò·µ»Øtrue
+// å¦‚æœè§£é”æˆåŠŸï¼Œåˆ™è¿”å›true
 bool RedisMgr::releaseLock(const std::string& lockName, const std::string& identifier) {
 	if (identifier.empty()) {
 		return true;

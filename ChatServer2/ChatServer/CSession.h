@@ -10,7 +10,7 @@ class LogicSystem;
 class CServer;
 /**
  * @brief 
- * Óëtcp¿Í»§¶ËÍ¨ĞÅµÄ»á»°Àà
+ * ä¸tcpå®¢æˆ·ç«¯é€šä¿¡çš„ä¼šè¯ç±»
  */
 class CSession : public std::enable_shared_from_this<CSession>
 {
@@ -23,61 +23,61 @@ public:
 	/**
 	 * @brief 
 	 * @return 
-	 * Ã¿¸ösessionÓĞÎ¨Ò»µÄÒ»¸öid,¿ÉÒÔÓĞCServer¹ÜÀí£¬·½±ãÍ¨¹ıCServer½«¶ÔÓ¦µÄSessionÒÆ³ı
+	 * æ¯ä¸ªsessionæœ‰å”¯ä¸€çš„ä¸€ä¸ªid,å¯ä»¥æœ‰CServerç®¡ç†ï¼Œæ–¹ä¾¿é€šè¿‡CServerå°†å¯¹åº”çš„Sessionç§»é™¤
 	 */
 	std::string& GetSessionId();
 	/**
 	 * @brief 
 	 * @param uid 
-	 * Ã¿¸ösession»á¸úÒ»¸ötcp¿Í»§¶Ë½¨Á¢Í¨ĞÅ£¬ÕâÀïÓÃÀ´ÉèÖÃsession¶ÔÓ¦µÄtcp¿Í»§¶ËµÄuid
+	 * æ¯ä¸ªsessionä¼šè·Ÿä¸€ä¸ªtcpå®¢æˆ·ç«¯å»ºç«‹é€šä¿¡ï¼Œè¿™é‡Œç”¨æ¥è®¾ç½®sessionå¯¹åº”çš„tcpå®¢æˆ·ç«¯çš„uid
 	 */
 	void SetUserId(int uid);
 	/**
 	 * @brief 
 	 * @return 
-	 * »ñÈ¡µ±Ç°session¶ÔÓ¦µÄtcp¿Í»§¶ËµÄuid
+	 * è·å–å½“å‰sessionå¯¹åº”çš„tcpå®¢æˆ·ç«¯çš„uid
 	 */
 	int GetUserId();
 	void Close();
 	void Send(const char* msg, short msg_id, short msg_len);
 	void Send(const std::string& msg, short msg_id);
-	// ¼ì²âÓëµ±Ç°sessionÁ¬½ÓµÄ¿Í»§¶ËµÄĞÄÌøÊÇ·ñÕıÈ·,ÕıÈ··µ»Øtrue,·ñÔò·µ»Øfalse
+	// æ£€æµ‹ä¸å½“å‰sessionè¿æ¥çš„å®¢æˆ·ç«¯çš„å¿ƒè·³æ˜¯å¦æ­£ç¡®,æ­£ç¡®è¿”å›true,å¦åˆ™è¿”å›false
 	bool CheckHeartBeatAccurate(std::time_t& now);
-	// ¸üĞÂµ±Ç°µÄĞÄÌøÊ±¼ä
+	// æ›´æ–°å½“å‰çš„å¿ƒè·³æ—¶é—´
 	void UpdateHeartBeat();
 	/**
 	 * @brief
-	 * ´¦ÀíÒì³£µÄsessionÁ´½Ó£¬ÒòÎª·şÎñÆ÷ÌßÈËÊÇÍ¨¹ıÍ¨Öª¿Í»§¶Ë£¬ÓÉ¿Í»§¶Ë¶Ï¿ªÁ´½ÓµÄ£¬µ±³öÏÖÒì³£µÄsessionÁ´½Óºó
-	 * ¿ÉÄÜÊÇ·şÎñÆ÷ÌßÈËµ¼ÖÂµÄ£¬»òÕßÊÇ³öÏÖÁËÒì³££¬²»¹ÜÄÄÖÖÇé¿ö£¬¶¼ĞèÒªÉ¾³ıÆäsessionÁ´½Ó
+	 * å¤„ç†å¼‚å¸¸çš„sessioné“¾æ¥ï¼Œå› ä¸ºæœåŠ¡å™¨è¸¢äººæ˜¯é€šè¿‡é€šçŸ¥å®¢æˆ·ç«¯ï¼Œç”±å®¢æˆ·ç«¯æ–­å¼€é“¾æ¥çš„ï¼Œå½“å‡ºç°å¼‚å¸¸çš„sessioné“¾æ¥å
+	 * å¯èƒ½æ˜¯æœåŠ¡å™¨è¸¢äººå¯¼è‡´çš„ï¼Œæˆ–è€…æ˜¯å‡ºç°äº†å¼‚å¸¸ï¼Œä¸ç®¡å“ªç§æƒ…å†µï¼Œéƒ½éœ€è¦åˆ é™¤å…¶sessioné“¾æ¥
 	 */
 	void DealExceptionSession();
 private:
 	/**
 	 * @brief 
 	 * @param head_total_len 
-	 * Òì²½¶ÁÈ¡ÍêÕûµÄ°üÍ·
+	 * å¼‚æ­¥è¯»å–å®Œæ•´çš„åŒ…å¤´
 	 */
 	void AsyncReadHead(std::size_t head_total_len);
 	/**
 	 * @brief 
 	 * @param body_total_len 
-	 * Òì²½¶ÁÈ¡ÍêÕûµÄ°üÌå
+	 * å¼‚æ­¥è¯»å–å®Œæ•´çš„åŒ…ä½“
 	 */
 	void AsyncReadBody(std::size_t body_total_len);
 	/**
 	 * @brief 
 	 * @param maxLength 
 	 * @param handler 
-	 * Òì²½¶ÁÈ¡ÍêÕûµÄ³É¶¼maxLength
+	 * å¼‚æ­¥è¯»å–å®Œæ•´çš„æˆéƒ½maxLength
 	 */
 	void asyncReadFull(std::size_t maxLength,
 		std::function<void(const boost::system::error_code& ec, std::size_t bytestransferred)> handler);
 	/**
 	 * @brief 
-	 * @param read_len µ±Ç°ÒÑ¶Á×Ö½Ú
-	 * @param total_len ×Ü×Ö½Ú
-	 * @param handler »Øµ÷º¯Êı
-	 * Òì²½¶ÁÈ¡ÍêÕûµÄtotal_len³¤¶È×Ö½ÚµÄÊı¾İ
+	 * @param read_len å½“å‰å·²è¯»å­—èŠ‚
+	 * @param total_len æ€»å­—èŠ‚
+	 * @param handler å›è°ƒå‡½æ•°
+	 * å¼‚æ­¥è¯»å–å®Œæ•´çš„total_lené•¿åº¦å­—èŠ‚çš„æ•°æ®
 	 */
 	void asyncReadLen(std::size_t read_len, std::size_t total_len,
 		std::function<void(const boost::system::error_code& ec, std::size_t bytestransferred)> handler);
@@ -85,37 +85,37 @@ private:
 	 * @brief 
 	 * @param ec 
 	 * @param self 
-	 * Òì²½Ğ´µÄ»Øµ÷º¯Êı
+	 * å¼‚æ­¥å†™çš„å›è°ƒå‡½æ•°
 	 */
 	void HandleWrite(const boost::system::error_code& ec, std::shared_ptr<CSession> self);
 
 	boost::asio::ip::tcp::socket _socket;
 	std::shared_ptr<CServer> _server;
-	// µ±Ç°sessionµÄ±êÊ¶id
+	// å½“å‰sessionçš„æ ‡è¯†id
 	std::string _session_id;
 	char _data[MAX_LENGTH];
 
-	// ÊÕµ½µÄÏûÏ¢Ìå
+	// æ”¶åˆ°çš„æ¶ˆæ¯ä½“
 	std::shared_ptr<RecvNode> _recv_msg_node;
-	// µ±Ç°°üÍ·²¿ÊÇ·ñ´¦ÀíÍê³É
+	// å½“å‰åŒ…å¤´éƒ¨æ˜¯å¦å¤„ç†å®Œæˆ
 	bool _b_head_parse;
-	// ÊÕµ½µÄÍ·²¿
+	// æ”¶åˆ°çš„å¤´éƒ¨
 	std::shared_ptr<MsgNode> _recv_head_node;
 
-	// Òì²½·¢ËÍ¶ÓÁĞ£¬±£Ö¤·¢ËÍµÄÒì²½ÓĞĞòĞÔ
+	// å¼‚æ­¥å‘é€é˜Ÿåˆ—ï¼Œä¿è¯å‘é€çš„å¼‚æ­¥æœ‰åºæ€§
 	std::queue<std::shared_ptr<SendNode>> _send_que;
 	std::mutex _send_mutex;
 
-	// ÓÃÓÚ±ê¼Çµ±Ç°sessionÓĞÃ»ÓĞ±³¹Ø±Õ
+	// ç”¨äºæ ‡è®°å½“å‰sessionæœ‰æ²¡æœ‰èƒŒå…³é—­
 	std::atomic<bool> _b_stop;
 
-	// ÓÃÓÚ±£´æµ±Ç°sessionÁ¬½ÓµÄÄÄÒ»¸ötcp¿Í»§¶Ëuid
+	// ç”¨äºä¿å­˜å½“å‰sessionè¿æ¥çš„å“ªä¸€ä¸ªtcpå®¢æˆ·ç«¯uid
 	int _user_uid;
 
-	// ÉÏ´Î½ÓÊÜÊı¾İµÄÊ±¼ä£¬°üÀ¨Õı³£·¢ËÍµÄÊı¾İÒÔ¼°ĞÄÌø°ü
+	// ä¸Šæ¬¡æ¥å—æ•°æ®çš„æ—¶é—´ï¼ŒåŒ…æ‹¬æ­£å¸¸å‘é€çš„æ•°æ®ä»¥åŠå¿ƒè·³åŒ…
 	std::atomic<std::time_t> _last_heart_beat;
 
-	// ·ÃÎÊsessionµÄËø
+	// è®¿é—®sessionçš„é”
 	std::mutex _session_mutex;
 };
 

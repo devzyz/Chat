@@ -12,16 +12,16 @@ void CServer::Start() {
 	std::shared_ptr<HttpConnection> new_con = std::make_shared<HttpConnection>(io_context);
 	_acceptor.async_accept(new_con->GetSocket(), [self, new_con](beast::error_code ec) {
 		try {
-			// ³ö´í·ÅÆúÕâ¸öÁ´½Ó£¬¼ÌÐø¼àÌýÆäËûÁ´½Ó
+			// å‡ºé”™æ”¾å¼ƒè¿™ä¸ªé“¾æŽ¥ï¼Œç»§ç»­ç›‘å¬å…¶ä»–é“¾æŽ¥
 			if (ec) {
 				self->Start();
 				return;
 			}
 
-			// ´´½¨ÐÂÁ¬½Ó£¬²¢ÇÒ´´½¨HttpConnectionÀà¹ÜÀíÕâ¸öÁ´½Ó
+			// åˆ›å»ºæ–°è¿žæŽ¥ï¼Œå¹¶ä¸”åˆ›å»ºHttpConnectionç±»ç®¡ç†è¿™ä¸ªé“¾æŽ¥
 			new_con->Start();
 
-			// ¼ÌÐø¼àÌý
+			// ç»§ç»­ç›‘å¬
 			self->Start();
 		}
 		catch (std::exception& e) {

@@ -18,16 +18,16 @@ public :
 
 	~RPCConnectionPool();
 	
-	// ÔÚÎö¹¹Ê±£¬Í¨ÖªËùÓĞÆäËûÏß³Ì£¬µ±Ç°³Ø×ÓÒÑ¾­±»Îö¹¹ÁË
+	// åœ¨ææ„æ—¶ï¼Œé€šçŸ¥æ‰€æœ‰å…¶ä»–çº¿ç¨‹ï¼Œå½“å‰æ± å­å·²ç»è¢«ææ„äº†
 	void Close();
 
-	// unique_lock<std::mutex> ¿ÉÊÖ¶¯½âËø£¬¿ÉÒÔ´îÅäcondition_variableÊ¹ÓÃ
-	// lock_guard<std::mutex> ²»ÄÜ¹»ÊÖ¶¯½âËø
+	// unique_lock<std::mutex> å¯æ‰‹åŠ¨è§£é”ï¼Œå¯ä»¥æ­é…condition_variableä½¿ç”¨
+	// lock_guard<std::mutex> ä¸èƒ½å¤Ÿæ‰‹åŠ¨è§£é”
 
-	// ´Ó³Ø×ÓÀïÈ¡Êı¾İ
+	// ä»æ± å­é‡Œå–æ•°æ®
 	std::unique_ptr<VarifyService::Stub> getConnection();
 
-	// ½«Êı¾İ¹é»¹¸ø³Ø×Ó
+	// å°†æ•°æ®å½’è¿˜ç»™æ± å­
 	void returnConnection(std::unique_ptr<VarifyService::Stub> context);
 
 private:

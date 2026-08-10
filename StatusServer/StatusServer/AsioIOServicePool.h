@@ -17,7 +17,7 @@ public:
 	AsioIOServicePool& operator = (const AsioIOServicePool&) = delete;
 	~AsioIOServicePool();
 
-	// ·µ»ØÒ»¸öio_context
+	// è¿”å›ä¸€ä¸ªio_context
 	boost::asio::io_context& GetIOService();
 
 	void stop();
@@ -26,9 +26,9 @@ private:
 	static std::size_t DefaultPoolSize();
 	static std::size_t NormalizePoolSize(std::size_t size);
 	AsioIOServicePool();
-	AsioIOServicePool(std::size_t size); // ²ÎÊıÊÇÏß³ÌµÄºËÊı
+	AsioIOServicePool(std::size_t size); // å‚æ•°æ˜¯çº¿ç¨‹çš„æ ¸æ•°
 	std::vector<IOService> _ioServices;
-	std::vector<WorkPtr> _works; // ¼ÙÈÎÎñ£¬·ÀÖ¹io_contextÄÚÃ»ÈÎÎñ£¬×Ô¶¯Îö¹¹
+	std::vector<WorkPtr> _works; // å‡ä»»åŠ¡ï¼Œé˜²æ­¢io_contextå†…æ²¡ä»»åŠ¡ï¼Œè‡ªåŠ¨ææ„
 	std::vector<std::thread> _threads;
 	std::size_t _nextIOService;
 };
