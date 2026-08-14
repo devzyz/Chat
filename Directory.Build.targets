@@ -1,3 +1,37 @@
 <Project>
-  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets" />
+  <ItemDefinitionGroup Condition="'$(Configuration)' == 'Debug'">
+    <ClCompile>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)' == 'Release'">
+    <ClCompile>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <Target Name="ValidateVcpkgRoot" BeforeTargets="PrepareForBuild"
+          Condition="!Exists('$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets')">
+    <Error Text="vcpkg MSBuild integration was not found. Set VCPKG_ROOT to a vcpkg checkout, or pass /p:VcpkgRoot=&quot;path\to\vcpkg&quot;." />
+  </Target>
+
+  <Target Name="CopyServerConfig" AfterTargets="Build"
+          Condition="'$(Platform)' == 'x64' and '$(ServerUnitName)' != '' and Exists('$(MSBuildProjectDirectory)\config.ini')">
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\config.ini"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyChatServerInstanceConfigs" AfterTargets="Build"
+          Condition="'$(Platform)' == 'x64' and '$(MSBuildProjectName)' == 'ChatServer' and Exists('$(MSBuildProjectDirectory)\configs')">
+    <ItemGroup>
+      <ChatServerInstanceConfig Include="$(MSBuildProjectDirectory)\configs\*.ini" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ChatServerInstanceConfig)"
+          DestinationFolder="$(OutDir)configs"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets"
+          Condition="Exists('$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets')" />
 </Project>

@@ -4,8 +4,24 @@
     <VcpkgRoot Condition="'$(VcpkgRoot)' == ''">$(VCPKG_ROOT)</VcpkgRoot>
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
     <VcpkgManifestRoot>$(MSBuildThisFileDirectory)</VcpkgManifestRoot>
-    <VcpkgTriplet Condition="'$(Platform)' == 'x64'">x64-windows-static</VcpkgTriplet>
-    <VcpkgTriplet Condition="'$(Platform)' == 'Win32'">x86-windows-static</VcpkgTriplet>
+    <VcpkgInstalledDir>$(MSBuildThisFileDirectory)vcpkg_installed</VcpkgInstalledDir>
+    <VcpkgTriplet Condition="'$(Platform)' == 'x64'">x64-windows-chat</VcpkgTriplet>
+    <VcpkgTriplet Condition="'$(Platform)' == 'Win32'">x86-windows</VcpkgTriplet>
+    <VcpkgBuildtreesRoot Condition="'$(VcpkgBuildtreesRoot)' == '' and '$(VCPKG_BUILDTREES_ROOT)' != ''">$(VCPKG_BUILDTREES_ROOT)</VcpkgBuildtreesRoot>
+    <VcpkgBuildtreesRoot Condition="'$(VcpkgBuildtreesRoot)' == ''">D:\vcpkg-chat-temp\buildtrees</VcpkgBuildtreesRoot>
+    <VcpkgPackagesRoot Condition="'$(VcpkgPackagesRoot)' == '' and '$(VCPKG_PACKAGES_ROOT)' != ''">$(VCPKG_PACKAGES_ROOT)</VcpkgPackagesRoot>
+    <VcpkgPackagesRoot Condition="'$(VcpkgPackagesRoot)' == ''">D:\vcpkg-chat-temp\packages</VcpkgPackagesRoot>
+    <VcpkgAdditionalInstallOptions Condition="'$(Platform)' == 'x64'">--overlay-triplets=&quot;$(MSBuildThisFileDirectory)triplets&quot; --x-buildtrees-root=&quot;$(VcpkgBuildtreesRoot)&quot; --x-packages-root=&quot;$(VcpkgPackagesRoot)&quot; --clean-buildtrees-after-build --clean-packages-after-build</VcpkgAdditionalInstallOptions>
+    <VcpkgXUseBuiltInApplocalDeps>true</VcpkgXUseBuiltInApplocalDeps>
+
+    <ServerUnitName Condition="'$(MSBuildProjectName)' == 'GateServer'">GateServer</ServerUnitName>
+    <ServerUnitName Condition="'$(MSBuildProjectName)' == 'StatusServer'">StatusServer</ServerUnitName>
+    <ServerUnitName Condition="'$(MSBuildProjectName)' == 'ChatServer'">ChatServer</ServerUnitName>
+    <ServerIntermediateRoot Condition="'$(ServerIntermediateRoot)' == '' and '$(CHAT_SERVER_INTERMEDIATE_ROOT)' != ''">$(CHAT_SERVER_INTERMEDIATE_ROOT)</ServerIntermediateRoot>
+    <ServerIntermediateRoot Condition="'$(ServerIntermediateRoot)' == ''">$(MSBuildThisFileDirectory)build\windows-servers-obj</ServerIntermediateRoot>
+    <OutDir Condition="'$(Platform)' == 'x64' and '$(ServerUnitName)' != ''">$(MSBuildThisFileDirectory)build\windows-servers\$(Configuration)\$(ServerUnitName)\</OutDir>
+    <IntDir Condition="'$(Platform)' == 'x64' and '$(ServerUnitName)' != ''">$(ServerIntermediateRoot)\$(Configuration)\$(ServerUnitName)\</IntDir>
   </PropertyGroup>
-  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.props" />
+  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.props"
+          Condition="Exists('$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.props')" />
 </Project>
