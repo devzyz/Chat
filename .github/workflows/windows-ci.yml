@@ -243,3 +243,137 @@ jobs:
           path: dist/windows-servers/*.zip
           if-no-files-found: error
           retention-days: 7
+
+  client-release:
+    name: Qt client Release
+    needs: static-check
+    runs-on: windows-2022
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Qt 6.5.3 and MinGW 11.2
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: 6.5.3
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          tools: tools_mingw1120
+          cache: false
+
+      - name: Build Qt client
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = Get-Command g++.exe -ErrorAction Stop
+          $mingwRoot = Split-Path -Parent (Split-Path -Parent $compiler.Source)
+          & .\scripts\windows-local.ps1 `
+              -Task BuildClient `
+              -Configuration Release `
+              -QtRoot $env:QT_ROOT_DIR `
+              -MinGwRoot $mingwRoot
+
+      - name: Run Qt client tests
+        shell: pwsh
+        run: |
+          ctest --test-dir .\build\windows-client\Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) {
+              throw "Qt client tests failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Deploy and package Qt client
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = Join-Path $env:GITHUB_WORKSPACE 'build\windows-client\Release'
+          $stage = Join-Path $env:GITHUB_WORKSPACE 'dist\windows-client\chat-client'
+          [void](New-Item -ItemType Directory -Path $stage -Force)
+          Copy-Item -LiteralPath (Join-Path $source 'chat.exe') -Destination $stage
+          Copy-Item -LiteralPath (Join-Path $source 'config.ini') -Destination $stage
+          Copy-Item -LiteralPath (Join-Path $source 'static') -Destination $stage -Recurse
+
+          $deployTool = Join-Path $env:QT_ROOT_DIR 'bin\windeployqt.exe'
+          & $deployTool --release --compiler-runtime --no-translations (Join-Path $stage 'chat.exe')
+          if ($LASTEXITCODE -ne 0) {
+              throw "windeployqt failed with exit code $LASTEXITCODE."
+          }
+          foreach ($required in @('Qt6Core.dll', 'Qt6Widgets.dll', 'platforms\qwindows.dll')) {
+              if (-not (Test-Path -LiteralPath (Join-Path $stage $required) -PathType Leaf)) {
+                  throw "Qt client package is missing $required"
+              }
+          }
+
+          $zipPath = Join-Path $env:GITHUB_WORKSPACE 'dist\windows-client\chat-client.zip'
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal
+
+      - name: Upload Qt client ZIP
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-chat-client-release
+          path: dist/windows-client/chat-client.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  varify-release:
+    name: VarifyServer dependency and package check
+    needs: static-check
+    runs-on: windows-2022
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@1e60f620b9541d209ded1f2a8c04a270e244d1d4 # v4.0.3
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: VarifyServer/package-lock.json
+
+      - name: Restore locked VarifyServer dependencies
+        shell: cmd
+        working-directory: VarifyServer
+        run: npm ci --ignore-scripts
+
+      - name: Validate JavaScript and dependency tree
+        shell: pwsh
+        working-directory: VarifyServer
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($sourceFile in Get-ChildItem -LiteralPath . -Filter '*.js' -File) {
+              node --check $sourceFile.FullName
+              if ($LASTEXITCODE -ne 0) {
+                  throw "JavaScript syntax check failed: $($sourceFile.Name)"
+              }
+          }
+          npm.cmd ls --omit=dev
+          if ($LASTEXITCODE -ne 0) {
+              throw "npm dependency validation failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Package VarifyServer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = Join-Path $env:GITHUB_WORKSPACE 'VarifyServer'
+          $stage = Join-Path $env:GITHUB_WORKSPACE 'dist\varify-server\VarifyServer'
+          [void](New-Item -ItemType Directory -Path $stage -Force)
+          foreach ($pattern in @('*.js', '*.json', '*.proto')) {
+              Get-ChildItem -LiteralPath $source -Filter $pattern -File |
+                  Copy-Item -Destination $stage
+          }
+          Copy-Item -LiteralPath (Join-Path $source 'node_modules') -Destination $stage -Recurse
+          $zipPath = Join-Path $env:GITHUB_WORKSPACE 'dist\varify-server\VarifyServer.zip'
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal
+
+      - name: Upload VarifyServer ZIP
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-varify-server-release
+          path: dist/varify-server/VarifyServer.zip
+          if-no-files-found: error
+          retention-days: 7
