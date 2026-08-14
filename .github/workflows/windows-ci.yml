@@ -1,0 +1,245 @@
+name: Windows CI
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-check:
+    name: Static configuration checks
+    runs-on: windows-2022
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validate build configuration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+
+          $solutionText = Get-Content -LiteralPath 'Chat.sln' -Raw
+          $chatProject = '"ChatServer", "ChatServer\ChatServer\ChatServer.vcxproj"'
+          if (($solutionText.Split($chatProject).Count - 1) -ne 1) {
+              throw 'Chat.sln must contain exactly one canonical ChatServer project.'
+          }
+          if ($solutionText -match 'ChatServer1|ChatServer2') {
+              throw 'Chat.sln still references a legacy ChatServer1/ChatServer2 project.'
+          }
+
+          $projectFiles = @(
+              'GateServer/GateServer/GateServer.vcxproj'
+              'StatusServer/StatusServer/StatusServer.vcxproj'
+              'ChatServer/ChatServer/ChatServer.vcxproj'
+          )
+          foreach ($projectFile in $projectFiles) {
+              try {
+                  [void][xml](Get-Content -LiteralPath $projectFile -Raw)
+              } catch {
+                  throw "Invalid MSBuild XML in ${projectFile}: $($_.Exception.Message)"
+              }
+          }
+
+          $manifest = Get-Content -LiteralPath 'vcpkg.json' -Raw | ConvertFrom-Json
+          if ($manifest.'builtin-baseline' -ne 'fc3be1ebea7eaeb3071fe716ac65713af1f3a146') {
+              throw 'vcpkg.json does not use the expected pinned registry baseline.'
+          }
+          $dependencyNames = @($manifest.dependencies | ForEach-Object {
+              if ($_ -is [string]) { $_ } else { $_.name }
+          })
+          $requiredDependencies = @(
+              'boost-asio', 'boost-beast', 'boost-filesystem', 'boost-property-tree',
+              'boost-uuid', 'grpc', 'hiredis', 'jsoncpp', 'mysql-connector-cpp',
+              'protobuf', 'spdlog'
+          )
+          foreach ($dependency in $requiredDependencies) {
+              if ($dependency -notin $dependencyNames) {
+                  throw "vcpkg.json is missing required dependency: $dependency"
+              }
+          }
+
+          $tripletText = Get-Content -LiteralPath 'triplets/x64-windows-chat-release.cmake' -Raw
+          foreach ($setting in @(
+              'set(VCPKG_TARGET_ARCHITECTURE x64)',
+              'set(VCPKG_CRT_LINKAGE dynamic)',
+              'set(VCPKG_LIBRARY_LINKAGE dynamic)',
+              'set(VCPKG_BUILD_TYPE release)'
+          )) {
+              if (-not $tripletText.Contains($setting)) {
+                  throw "Release-only triplet is missing: $setting"
+              }
+          }
+
+          $activeBuildInputs = @(git ls-files -- '*.sln' '*.vcxproj' '*.props' '*.targets' '*.ps1' 'vcpkg.json' 'triplets/*.cmake')
+          if ($LASTEXITCODE -ne 0) {
+              throw 'Unable to enumerate tracked build configuration files.'
+          }
+          $legacyMatches = @(git grep -n -E 'ChatServer1[\\/]|ChatServer2[\\/]|x64-windows-static' -- $activeBuildInputs)
+          if ($LASTEXITCODE -notin @(0, 1)) {
+              throw 'Unable to scan active build configuration files.'
+          }
+          if ($legacyMatches.Count -gt 0) {
+              $legacyMatches | ForEach-Object { Write-Error $_.Line }
+              throw 'Active build configuration still references a legacy ChatServer path or static triplet.'
+          }
+
+  servers-release:
+    name: Server Release cold build
+    needs: static-check
+    runs-on: windows-2022
+    timeout-minutes: 180
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}\.ci\vcpkg
+      VCPKG_BINARY_SOURCES: clear
+      VCPKG_DISABLE_METRICS: "1"
+      VCPKG_BUILDTREES_ROOT: ${{ runner.temp }}\vcpkg-buildtrees
+      VCPKG_PACKAGES_ROOT: ${{ runner.temp }}\vcpkg-packages
+      CHAT_SERVER_INTERMEDIATE_ROOT: ${{ runner.temp }}\server-msbuild
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Free ephemeral runner disk space
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Show-SystemDriveSpace([string]$Label) {
+              $drive = Get-PSDrive -Name C
+              Write-Host ("{0}: C: free {1:N2} GB of {2:N2} GB" -f $Label, ($drive.Free / 1GB), (($drive.Free + $drive.Used) / 1GB))
+          }
+
+          Show-SystemDriveSpace 'Before cleanup'
+          $androidPath = 'C:\Android'
+          if (Test-Path -LiteralPath $androidPath) {
+              $resolvedAndroidPath = (Resolve-Path -LiteralPath $androidPath).Path
+              if ($resolvedAndroidPath -ne $androidPath) {
+                  throw "Refusing to remove unexpected path: $resolvedAndroidPath"
+              }
+              Remove-Item -LiteralPath $resolvedAndroidPath -Recurse -Force
+              Write-Host "Removed ephemeral runner directory: $resolvedAndroidPath"
+          } else {
+              Write-Host 'Ephemeral runner directory C:\Android is not present.'
+          }
+          Show-SystemDriveSpace 'After cleanup'
+
+      - name: Check out pinned vcpkg
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: microsoft/vcpkg
+          ref: 4b3e4c276b5b87a649e66341e11553e8c577459c
+          path: .ci/vcpkg
+          fetch-depth: 0
+
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) {
+              throw "vcpkg bootstrap failed with exit code $LASTEXITCODE."
+          }
+          & "$env:VCPKG_ROOT\vcpkg.exe" version
+          if ($LASTEXITCODE -ne 0) {
+              throw "vcpkg version check failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Restore server dependencies without binary cache
+        shell: pwsh
+        run: |
+          & .\scripts\windows-local.ps1 `
+              -Task RestoreServers `
+              -Configuration Release `
+              -VcpkgRoot $env:VCPKG_ROOT `
+              -VcpkgBuildtreesRoot $env:VCPKG_BUILDTREES_ROOT `
+              -VcpkgPackagesRoot $env:VCPKG_PACKAGES_ROOT `
+              -ServerIntermediateRoot $env:CHAT_SERVER_INTERMEDIATE_ROOT `
+              -ServerTriplet x64-windows-chat-release `
+              -ServerHostTriplet x64-windows-chat-release
+
+      - name: Build GateServer, StatusServer, and ChatServer
+        shell: pwsh
+        run: |
+          & .\scripts\windows-local.ps1 `
+              -Task BuildServers `
+              -Configuration Release `
+              -VcpkgRoot $env:VCPKG_ROOT `
+              -VcpkgBuildtreesRoot $env:VCPKG_BUILDTREES_ROOT `
+              -VcpkgPackagesRoot $env:VCPKG_PACKAGES_ROOT `
+              -ServerIntermediateRoot $env:CHAT_SERVER_INTERMEDIATE_ROOT `
+              -ServerTriplet x64-windows-chat-release `
+              -ServerHostTriplet x64-windows-chat-release
+
+      - name: Verify independent app-local server directories
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseRoot = Join-Path $env:GITHUB_WORKSPACE 'build\windows-servers\Release'
+          $coreAppLocalDlls = @(
+              'abseil_dll.dll',
+              'hiredis.dll',
+              'libcrypto-3-x64.dll',
+              'libprotobuf.dll',
+              'libssl-3-x64.dll',
+              'zlib1.dll'
+          )
+
+          foreach ($serverName in @('GateServer', 'StatusServer', 'ChatServer')) {
+              $serverDirectory = Join-Path $releaseRoot $serverName
+              $requiredFiles = @("$serverName.exe", 'config.ini') + $coreAppLocalDlls
+              foreach ($fileName in $requiredFiles) {
+                  $filePath = Join-Path $serverDirectory $fileName
+                  if (-not (Test-Path -LiteralPath $filePath -PathType Leaf)) {
+                      throw "$serverName is not self-contained; missing $fileName in $serverDirectory"
+                  }
+              }
+              Write-Host "$serverName app-local directory verified: $serverDirectory"
+          }
+
+          $chatConfigs = Join-Path $releaseRoot 'ChatServer\configs'
+          foreach ($configName in @('chat-01.ini', 'chat-02.ini')) {
+              if (-not (Test-Path -LiteralPath (Join-Path $chatConfigs $configName) -PathType Leaf)) {
+                  throw "ChatServer release is missing example instance config: $configName"
+              }
+          }
+
+      - name: Create independent server ZIP packages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseRoot = Join-Path $env:GITHUB_WORKSPACE 'build\windows-servers\Release'
+          $packageRoot = Join-Path $env:GITHUB_WORKSPACE 'dist\windows-servers'
+          [void](New-Item -ItemType Directory -Path $packageRoot -Force)
+
+          foreach ($serverName in @('GateServer', 'StatusServer', 'ChatServer')) {
+              $source = Join-Path $releaseRoot $serverName
+              $stage = Join-Path $packageRoot $serverName
+              [void](New-Item -ItemType Directory -Path $stage -Force)
+              Copy-Item -LiteralPath (Join-Path $source "$serverName.exe") -Destination $stage
+              Copy-Item -LiteralPath (Join-Path $source 'config.ini') -Destination $stage
+              Get-ChildItem -LiteralPath $source -Filter '*.dll' -File |
+                  Copy-Item -Destination $stage
+              if ($serverName -eq 'ChatServer') {
+                  Copy-Item -LiteralPath (Join-Path $source 'configs') -Destination $stage -Recurse
+              }
+              Compress-Archive -Path (Join-Path $stage '*') `
+                  -DestinationPath (Join-Path $packageRoot "$serverName.zip") `
+                  -CompressionLevel Optimal
+          }
+
+      - name: Upload server release directories
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-servers-release
+          path: dist/windows-servers/*.zip
+          if-no-files-found: error
+          retention-days: 7
