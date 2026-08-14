@@ -139,7 +139,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: microsoft/vcpkg
-          ref: 4b3e4c276b5b87a649e66341e11553e8c577459c
+          ref: fc3be1ebea7eaeb3071fe716ac65713af1f3a146
           path: .ci/vcpkg
           fetch-depth: 0
 
@@ -263,7 +263,7 @@ jobs:
           host: windows
           target: desktop
           arch: win64_mingw
-          tools: tools_mingw1120
+          tools: tools_mingw90
           cache: false
 
       - name: Build Qt client
@@ -330,7 +330,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Set up Node.js 22
-        uses: actions/setup-node@1e60f620b9541d209ded1f2a8c04a270e244d1d4 # v4.0.3
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
