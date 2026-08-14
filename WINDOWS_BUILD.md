@@ -35,6 +35,13 @@ unit. The helper script places them under
 The tracked legacy MySQL DLLs remain in the repository for now, but the projects
 no longer copy or link against them.
 
+CI uses `x64-windows-chat-release` for both target and host tools. It keeps the
+same dynamic CRT/library policy while setting `VCPKG_BUILD_TYPE=release`, so a
+clean runner does not store unused Debug libraries. Using the same release-only
+triplet for host tools also avoids a second full `x64-windows` install tree.
+Local development keeps `x64-windows-chat` plus the normal `x64-windows` host
+triplet so Debug builds remain available.
+
 ## Environment
 
 Set paths for your installation. Do not add personal paths to project files.
@@ -60,6 +67,14 @@ Run all commands from the repository root:
     # Build the three C++ service executables.
     .\scripts\windows-local.ps1 -Task BuildServers -Configuration Debug
     .\scripts\windows-local.ps1 -Task BuildServers -Configuration Release
+
+    # CI-equivalent Release-only dependency layout (normally used on a clean tree).
+    .\scripts\windows-local.ps1 -Task RestoreServers `
+      -ServerTriplet x64-windows-chat-release `
+      -ServerHostTriplet x64-windows-chat-release
+    .\scripts\windows-local.ps1 -Task BuildServers -Configuration Release `
+      -ServerTriplet x64-windows-chat-release `
+      -ServerHostTriplet x64-windows-chat-release
 
     # Configure and build the Qt client.
     .\scripts\windows-local.ps1 -Task BuildClient -Configuration Debug

@@ -10,6 +10,8 @@ param(
     [string]$VcpkgBuildtreesRoot = $env:VCPKG_BUILDTREES_ROOT,
     [string]$VcpkgPackagesRoot = $env:VCPKG_PACKAGES_ROOT,
     [string]$ServerIntermediateRoot = $env:CHAT_SERVER_INTERMEDIATE_ROOT,
+    [string]$ServerTriplet = 'x64-windows-chat',
+    [string]$ServerHostTriplet = 'x64-windows',
     [string]$QtRoot = $env:QT_ROOT,
     [string]$MinGwRoot = $env:MINGW_ROOT
 )
@@ -23,7 +25,6 @@ $manifest = Join-Path $repoRoot 'vcpkg.json'
 $clientSource = Join-Path $repoRoot 'chat'
 $clientBuild = Join-Path $repoRoot "build\windows-client\$Configuration"
 $varifySource = Join-Path $repoRoot 'VarifyServer'
-$serverTriplet = 'x64-windows-chat'
 $overlayTriplets = Join-Path $repoRoot 'triplets'
 $expectedQtVersion = '6.5.3'
 $expectedVcpkgCommit = '4b3e4c276b5b87a649e66341e11553e8c577459c'
@@ -149,7 +150,8 @@ function Restore-Servers {
     }
     $arguments = @(
         'install'
-        '--triplet', $serverTriplet
+        '--triplet', $ServerTriplet
+        '--host-triplet', $ServerHostTriplet
         "--overlay-triplets=$overlayTriplets"
         "--x-manifest-root=$repoRoot"
         "--x-install-root=$(Join-Path $repoRoot 'vcpkg_installed')"
@@ -178,6 +180,8 @@ function Build-Servers {
         "/p:Configuration=$Configuration"
         '/p:Platform=x64'
         "/p:VcpkgRoot=$($vcpkg.Root)"
+        "/p:VcpkgTriplet=$ServerTriplet"
+        "/p:VcpkgHostTriplet=$ServerHostTriplet"
         "/p:ServerIntermediateRoot=$ServerIntermediateRoot"
     )
     & $msbuild @arguments
