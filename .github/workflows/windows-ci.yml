@@ -96,6 +96,7 @@ jobs:
               $legacyMatches | ForEach-Object { Write-Error $_.Line }
               throw 'Active build configuration still references a legacy ChatServer path or static triplet.'
           }
+          $global:LASTEXITCODE = 0
 
   servers-release:
     name: Server Release cold build
