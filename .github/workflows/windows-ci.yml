@@ -30,7 +30,11 @@ jobs:
 
           $solutionText = Get-Content -LiteralPath 'Chat.sln' -Raw
           $chatProject = '"ChatServer", "ChatServer\ChatServer\ChatServer.vcxproj"'
-          if (($solutionText.Split($chatProject).Count - 1) -ne 1) {
+          $chatProjectCount = [regex]::Matches(
+              $solutionText,
+              [regex]::Escape($chatProject)
+          ).Count
+          if ($chatProjectCount -ne 1) {
               throw 'Chat.sln must contain exactly one canonical ChatServer project.'
           }
           if ($solutionText -match 'ChatServer1|ChatServer2') {
