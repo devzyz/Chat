@@ -1,87 +1,92 @@
 {
   "version": "1.0",
-  "timestamp": "2026-08-12T17:32:44.794Z",
-  "phase": "1",
-  "phase_name": "windows-local-baseline",
+  "timestamp": "2026-08-14T14:16:10.319Z",
+  "phase": "2",
+  "phase_name": "windows-github-ci-and-release-packaging",
   "phase_dir": null,
   "plan": 1,
-  "task": 3,
-  "total_tasks": 5,
+  "task": 5,
+  "total_tasks": 6,
   "status": "paused",
   "completed_tasks": [
     {
       "id": 1,
-      "name": "Migrate complete vcpkg checkout while preserving the existing installation",
-      "status": "done"
+      "name": "Commit the Phase 1 baseline and consolidated ChatServer implementation",
+      "status": "done",
+      "commit": "e134e2c"
     },
     {
       "id": 2,
-      "name": "Create reproducible Windows dynamic-link build configuration and local driver",
-      "status": "done"
+      "name": "Add a release-only CI triplet with a shared target and host dependency graph",
+      "status": "done",
+      "commit": "7d8b6d7"
     },
     {
       "id": 3,
-      "name": "Restore pinned server dependencies",
+      "name": "Add the Windows server cold-build and independent ZIP workflow",
+      "status": "done",
+      "commit": "b502174"
+    },
+    {
+      "id": 4,
+      "name": "Add Qt client and VarifyServer build, test, and ZIP jobs",
+      "status": "done",
+      "commit": "b58c878"
+    },
+    {
+      "id": 5,
+      "name": "Validate Phase 2 on GitHub Actions",
       "status": "in_progress",
-      "progress": "gRPC, hiredis, jsoncpp, protobuf, OpenSSL and most Boost dependencies are installed. The latest incremental run had 45 packages remaining, installed boost-xpressive, then stopped at boost-tti because GitHub download failed with curl error 35. Approximately 44 packages remain."
+      "progress": "Run 31803503805 is still active. Static checks and VarifyServer passed. Qt install, Release build, and CTest passed; packaging failed because Qt 6.5.3 MinGW windeployqt rejects forced --release. Removing that flag is prepared but uncommitted and was locally verified with --dry-run. The server job is still performing its cache-free vcpkg restore."
     }
   ],
   "remaining_tasks": [
     {
-      "id": 3,
-      "name": "Finish pinned server dependency restore",
+      "id": 5,
+      "name": "Inspect the final result of GitHub run 31803503805 and address any server cold-build failure",
       "status": "in_progress"
     },
     {
-      "id": 4,
-      "name": "Build and verify all four C++ servers in Debug and Release",
-      "status": "not_started"
-    },
-    {
-      "id": 5,
-      "name": "Reverify Qt client, tests, VarifyServer npm restore, app-local DLL output, docs and diff",
+      "id": 6,
+      "name": "Enable and verify the vcpkg binary cache, rerun all jobs, verify artifacts, and finalize documentation",
       "status": "not_started"
     }
   ],
   "blockers": [
     {
-      "description": "Intermittent proxy SSL handshake failures when vcpkg downloads GitHub archives; the current missing archive is boostorg-tti-boost-1.90.0.tar.gz.",
+      "description": "GitHub Actions run 31803503805 is still compiling the full server dependency graph without a binary cache.",
       "type": "external",
-      "workaround": "Read the boost-tti versioned portfile for its exact REF and SHA512, download the matching codeload.github.com archive through http://127.0.0.1:7890 into D:\\vcpkg\\vcpkg\\downloads, verify SHA512, then rerun RestoreServers."
+      "workaround": "Do not cancel or duplicate the run. Query its final job and step conclusions tomorrow before changing or pushing the workflow."
     }
   ],
   "human_actions_pending": [],
   "decisions": [
     {
-      "decision": "Use dynamic CRT and dynamic third-party libraries by default, with mysql-connector-cpp and libmysql static in the custom x64-windows-chat triplet.",
-      "rationale": "The pinned mysql-connector-cpp JDBC feature is static-only; this keeps all other dependencies and deployment app-local behavior aligned with the desired dynamic baseline.",
-      "phase": "1"
+      "decision": "Use x64-windows-chat-release for both vcpkg target and host triplets in CI.",
+      "rationale": "It keeps dynamic CRT/dynamic libraries while building Release only and avoids separate target and host installation trees on the 14 GB runner.",
+      "phase": "2"
     },
     {
-      "decision": "Use D:\\vcpkg\\test-vcpkg as the complete pinned registry checkout while preserving D:\\vcpkg\\vcpkg.",
-      "rationale": "The old checkout is shallow and cannot resolve the pinned baseline, but its downloads, installed tree and binary cache remain useful for reuse.",
-      "phase": "1"
+      "decision": "Keep GateServer, StatusServer, and the single ChatServer target in one heavy CI job, but publish three independent ZIPs.",
+      "rationale": "The services share an expensive dependency restore while remaining independent deployment units.",
+      "phase": "2"
     },
     {
-      "decision": "Place vcpkg buildtrees and packages on C: and clean them after every port.",
-      "rationale": "The first gRPC attempt filled D:. Moving regenerable temporary data to C: allowed gRPC to finish without deleting the old installation or final project dependencies.",
-      "phase": "1"
+      "decision": "Cache only vcpkg binary archives after the cache-free build succeeds.",
+      "rationale": "Installed trees, buildtrees, packages, intermediates, and release directories remain derived state that CI must recreate and verify.",
+      "phase": "2"
+    },
+    {
+      "decision": "Let Qt 6.5.3 MinGW windeployqt auto-detect the Release executable instead of forcing --release.",
+      "rationale": "The forced flag incorrectly filters out qwindows.dll; the same Release executable deploys Qt and compiler runtime dependencies successfully when auto-detected.",
+      "phase": "2"
     }
   ],
   "uncommitted_files": [
-    "ChatServer1/ChatServer/ChatServer.vcxproj",
-    "ChatServer1/ChatServer/start.bat",
-    "ChatServer2/ChatServer/ChatServer.vcxproj",
-    "ChatServer2/ChatServer/start.bat",
-    "Directory.Build.props",
-    "Directory.Build.targets",
-    "GateServer/GateServer/GateServer.vcxproj",
-    "StatusServer/StatusServer/StatusServer.vcxproj",
-    "WINDOWS_BUILD.md",
-    "scripts/windows-local.ps1",
-    "triplets/x64-windows-chat.cmake",
-    "tests/auto/ (pre-existing user-owned untracked content; do not modify)"
+    ".github/workflows/windows-ci.yml (removes the broken forced --release argument from windeployqt)",
+    "WINDOWS_BUILD.md (Phase 2 CI and packaging documentation; needs final cache wording review)",
+    "tests/auto/ (pre-existing user-owned untracked content; never modify or commit)"
   ],
-  "next_action": "Confirm no vcpkg/build process is running, inspect C:\\vcpkg-chat-temp\\buildtrees\\versioning_\\versions\\boost-tti\\588fcdc557083ba15d53f09526ae7c9cbf4a1a9a\\portfile.cmake, download and SHA512-verify boostorg-tti-boost-1.90.0.tar.gz into the old downloads cache, then rerun RestoreServers with the recorded proxy/cache/temp environment.",
-  "context_notes": "No code build has been attempted after the dependency restore. gRPC x64-windows-chat completed in about 30 minutes and its temporary files were cleaned. At pause there are no active vcpkg/cmake/ninja/cl/link processes. C: has about 41.23 GB free; D: has about 7.84 GB free."
+  "next_action": "Query GitHub Actions run 31803503805. If the server job passed, record the cache-free acceptance result; if it failed, inspect public job annotations and fix only the build/CI cause. Then review the two intentional uncommitted files, add the vcpkg binary archive cache with observable miss/hit steps, run actionlint and diff checks, commit and push without tests/auto, and verify one cache-miss run followed by one exact cache-hit run plus all four artifacts/jobs.",
+  "context_notes": "No local build or monitoring process remains. The only matching node.exe belongs to Adobe Creative Cloud and was intentionally left running. The remote GitHub run must continue unattended. Current develop HEAD is 45adfac. All CI configuration fixes through valid vcpkg/Qt/Node sources are pushed. The worktree intentionally contains only the pending Qt deployment flag change, the updated Windows build document, and user-owned tests/auto."
 }
