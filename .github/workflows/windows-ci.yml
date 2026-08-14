@@ -102,9 +102,6 @@ jobs:
       VCPKG_ROOT: ${{ github.workspace }}\.ci\vcpkg
       VCPKG_BINARY_SOURCES: clear
       VCPKG_DISABLE_METRICS: "1"
-      VCPKG_BUILDTREES_ROOT: ${{ runner.temp }}\vcpkg-buildtrees
-      VCPKG_PACKAGES_ROOT: ${{ runner.temp }}\vcpkg-packages
-      CHAT_SERVER_INTERMEDIATE_ROOT: ${{ runner.temp }}\server-msbuild
 
     steps:
       - name: Check out repository
@@ -160,9 +157,9 @@ jobs:
               -Task RestoreServers `
               -Configuration Release `
               -VcpkgRoot $env:VCPKG_ROOT `
-              -VcpkgBuildtreesRoot $env:VCPKG_BUILDTREES_ROOT `
-              -VcpkgPackagesRoot $env:VCPKG_PACKAGES_ROOT `
-              -ServerIntermediateRoot $env:CHAT_SERVER_INTERMEDIATE_ROOT `
+              -VcpkgBuildtreesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-buildtrees') `
+              -VcpkgPackagesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-packages') `
+              -ServerIntermediateRoot (Join-Path $env:RUNNER_TEMP 'server-msbuild') `
               -ServerTriplet x64-windows-chat-release `
               -ServerHostTriplet x64-windows-chat-release
 
@@ -173,9 +170,9 @@ jobs:
               -Task BuildServers `
               -Configuration Release `
               -VcpkgRoot $env:VCPKG_ROOT `
-              -VcpkgBuildtreesRoot $env:VCPKG_BUILDTREES_ROOT `
-              -VcpkgPackagesRoot $env:VCPKG_PACKAGES_ROOT `
-              -ServerIntermediateRoot $env:CHAT_SERVER_INTERMEDIATE_ROOT `
+              -VcpkgBuildtreesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-buildtrees') `
+              -VcpkgPackagesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-packages') `
+              -ServerIntermediateRoot (Join-Path $env:RUNNER_TEMP 'server-msbuild') `
               -ServerTriplet x64-windows-chat-release `
               -ServerHostTriplet x64-windows-chat-release
 
