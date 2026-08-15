@@ -99,7 +99,7 @@ jobs:
           $global:LASTEXITCODE = 0
 
   servers-release:
-    name: Server Release cold build
+    name: Server Release build
     needs: static-check
     runs-on: windows-2022
     timeout-minutes: 180
@@ -155,9 +155,20 @@ jobs:
               throw "vcpkg version check failed with exit code $LASTEXITCODE."
           }
 
-      - name: Restore server dependencies without binary cache
+      - name: Restore vcpkg binary archives
+        id: vcpkg-binary-cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ runner.temp }}\vcpkg-binary-cache
+          key: vcpkg-binary-${{ runner.os }}-fc3be1ebea7eaeb3071fe716ac65713af1f3a146-${{ hashFiles('vcpkg.json', 'triplets/x64-windows-chat-release.cmake') }}
+
+      - name: Restore server dependencies with binary archives
         shell: pwsh
         run: |
+          $binaryCache = Join-Path $env:RUNNER_TEMP 'vcpkg-binary-cache'
+          [void](New-Item -ItemType Directory -Path $binaryCache -Force)
+          $env:VCPKG_BINARY_SOURCES = "clear;files,$binaryCache,readwrite"
+
           & .\scripts\windows-local.ps1 `
               -Task RestoreServers `
               -Configuration Release `
@@ -167,6 +178,37 @@ jobs:
               -ServerIntermediateRoot (Join-Path $env:RUNNER_TEMP 'server-msbuild') `
               -ServerTriplet x64-windows-chat-release `
               -ServerHostTriplet x64-windows-chat-release
+
+      - name: Save vcpkg binary archives after cache miss
+        if: steps.vcpkg-binary-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ runner.temp }}\vcpkg-binary-cache
+          key: ${{ steps.vcpkg-binary-cache.outputs.cache-primary-key }}
+
+      - name: Confirm exact vcpkg binary cache hit
+        if: steps.vcpkg-binary-cache.outputs.cache-hit == 'true'
+        shell: pwsh
+        run: Write-Host 'The exact vcpkg binary archive cache key was restored.'
+
+      - name: Remove vcpkg binary archives before MSBuild
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $runnerTemp = [System.IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\')
+          $expectedCache = Join-Path $runnerTemp 'vcpkg-binary-cache'
+
+          if (Test-Path -LiteralPath $expectedCache) {
+              $cacheItem = Get-Item -LiteralPath $expectedCache -Force
+              if ($cacheItem.FullName -ne $expectedCache -or
+                  ($cacheItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+                  throw "Refusing to remove unexpected binary cache path: $($cacheItem.FullName)"
+              }
+              Remove-Item -LiteralPath $expectedCache -Recurse -Force
+              Write-Host "Removed vcpkg binary archive cache: $expectedCache"
+          } else {
+              Write-Host "vcpkg binary archive cache already absent: $expectedCache"
+          }
 
       - name: Build GateServer, StatusServer, and ChatServer
         shell: pwsh
@@ -298,7 +340,7 @@ jobs:
           Copy-Item -LiteralPath (Join-Path $source 'static') -Destination $stage -Recurse
 
           $deployTool = Join-Path $env:QT_ROOT_DIR 'bin\windeployqt.exe'
-          & $deployTool --release --compiler-runtime --no-translations (Join-Path $stage 'chat.exe')
+          & $deployTool --compiler-runtime --no-translations (Join-Path $stage 'chat.exe')
           if ($LASTEXITCODE -ne 0) {
               throw "windeployqt failed with exit code $LASTEXITCODE."
           }

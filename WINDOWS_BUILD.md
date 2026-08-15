@@ -1,21 +1,24 @@
-# Windows local build
+# Windows local build and CI
 
-This is the phase-one Windows baseline. It restores and builds the existing
-projects without changing their build systems:
+This document describes the shared Windows baseline used by local development
+and the phase-two GitHub Actions workflow. It builds the existing projects
+without changing their build systems:
 
 - GateServer, StatusServer and ChatServer: Visual Studio/MSBuild
 - chat: CMake with the existing Qt 6.5.3 MinGW 64-bit kit
 - VarifyServer: npm ci
 
-Linux, packaging, windeployqt and GitHub Actions are intentionally outside
-this phase.
+Linux remains outside the current phase. Windows CI validates the configuration
+from a clean runner, builds and tests the deliverables, and creates independent
+ZIP packages suitable for release testing.
 
 ## Toolchain baseline
 
 - Visual Studio 2022, v143 toolset, Windows 10 SDK
-- vcpkg checkout 4b3e4c276b5b87a649e66341e11553e8c577459c
-- dependency baseline from the root vcpkg.json:
-  fc3be1ebea7eaeb3071fe716ac65713af1f3a146
+- vcpkg dependency registry checkout/baseline from the root `vcpkg.json`:
+  `fc3be1ebea7eaeb3071fe716ac65713af1f3a146`
+- vcpkg tool version:
+  `4b3e4c276b5b87a649e66341e11553e8c577459c`
 - Qt 6.5.3 MinGW 64-bit and its bundled MinGW compiler
 - CMake 3.16 or newer and Ninja
 - Node.js and npm with support for npm ci
@@ -41,6 +44,45 @@ clean runner does not store unused Debug libraries. Using the same release-only
 triplet for host tools also avoids a second full `x64-windows` install tree.
 Local development keeps `x64-windows-chat` plus the normal `x64-windows` host
 triplet so Debug builds remain available.
+
+## GitHub Actions phase-two baseline
+
+`.github/workflows/windows-ci.yml` runs four Windows Server 2022 jobs. The
+three build/package jobs depend on the static configuration check, but are
+otherwise independent:
+
+1. `static-check` validates the solution and MSBuild XML, the pinned manifest
+   baseline, the repository triplets, and the absence of legacy ChatServer or
+   static-triplet references in active build inputs.
+2. `servers-release` checks out the pinned vcpkg source baseline, restores both
+   target and host dependencies with `x64-windows-chat-release`, and builds
+   GateServer, StatusServer and ChatServer in Release. It verifies that each
+   app-local directory contains its executable, configuration and required
+   DLLs, then uploads three independent ZIP files in the
+   `windows-servers-release` artifact.
+3. `client-release` installs Qt 6.5.3 with its MinGW toolchain, invokes the same
+   `BuildClient -Configuration Release` entry point used locally, runs CTest,
+   and stages `chat.exe`, `config.ini` and `static`. `windeployqt` auto-detects
+   the Release executable and adds the Qt and compiler runtime DLLs; CI verifies
+   the core Qt and Windows platform plugin before uploading `chat-client.zip`.
+4. `varify-release` uses Node.js 22 and `npm ci --ignore-scripts` from the
+   committed lockfile. It syntax-checks the project JavaScript, validates the
+   production dependency tree, and packages the tracked JavaScript, JSON and
+   proto files together with `node_modules` as `VarifyServer.zip`.
+
+GitHub Actions run `31803503805` proved that the server job can restore and
+build successfully on a clean runner with the vcpkg binary cache disabled. Its
+cache-free `RestoreServers` step completed in 68 minutes 37 seconds. The
+workflow now caches only vcpkg binary archives. It does not cache
+`vcpkg_installed`, buildtrees, packages, MSBuild intermediates or final release
+directories: those are derived state and are recreated and verified by every
+run. After dependency restoration, the archive directory is saved on a new-key
+miss or reported by a separate step on an exact-key hit, then removed before
+MSBuild to reduce runner disk use. Acceptance of the cache change requires one
+new-key miss-and-save run followed by one same-key exact-hit run; those two
+outcomes have not yet been verified. The Node setup step may cache npm's
+download cache keyed by `package-lock.json`; it does not cache `node_modules`,
+which is always recreated by `npm ci`.
 
 ## Environment
 
@@ -134,12 +176,13 @@ If PowerShell script execution is disabled, use a process-scoped policy:
 RestoreServers and RestoreVarify may access the network when their local
 caches do not contain the locked dependencies.
 
-The complete checkout at `D:\vcpkg\test-vcpkg` is the vcpkg root on the
-current development machine. On other machines or in CI, point `VCPKG_ROOT`
-at a full checkout at the same pinned commit. The older `D:\vcpkg\vcpkg`
-checkout is not a valid manifest root because it is shallow; only its reusable
-download cache is retained. The old global `installed` tree has been removed.
-For example:
+The complete vcpkg source tree at `D:\vcpkg\test-vcpkg` is the vcpkg root on
+the current development machine. On other machines or in CI, point
+`VCPKG_ROOT` at a full source tree that can resolve the registry baseline and
+whose bootstrapped executable reports the expected vcpkg tool version. The
+older `D:\vcpkg\vcpkg` tree is not a valid manifest root because its Git
+history is shallow; only its reusable download cache is retained. The old
+global `installed` tree has been removed. For example:
 
     $env:VCPKG_DOWNLOADS = 'D:\vcpkg\vcpkg\downloads'
     $env:VCPKG_BINARY_SOURCES = 'clear;files,C:\Users\Lenovo\AppData\Local\vcpkg\archives,readwrite'
