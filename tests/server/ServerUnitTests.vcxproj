@@ -46,18 +46,23 @@
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\ChatServer\ChatServer;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32_WINNT=0x0601;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>gtest.lib;gtest_main.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(Configuration)'=='Debug'">gtest.lib;gtest_main.lib;libprotobufd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(Configuration)'=='Release'">gtest.lib;gtest_main.lib;libprotobuf.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="config_mgr_tests.cpp" />
     <ClCompile Include="msg_node_tests.cpp" />
+    <ClCompile Include="asio_pool_tests.cpp" />
+    <ClCompile Include="protobuf_contract_tests.cpp" />
+    <ClCompile Include="..\..\ChatServer\ChatServer\AsioIOServicePool.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\ConfigMgr.cpp" />
+    <ClCompile Include="..\..\ChatServer\ChatServer\message.pb.cc" />
     <ClCompile Include="..\..\ChatServer\ChatServer\MsgNode.cpp" />
   </ItemGroup>
   <ItemGroup>

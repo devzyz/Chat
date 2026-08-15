@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Check', 'RestoreServers', 'BuildServers', 'BuildClient', 'RestoreVarify', 'RunServerTests', 'RunClientTests', 'RunScriptTests', 'TestPhase1', 'BuildAll')]
+    [ValidateSet('Check', 'RestoreServers', 'BuildServers', 'BuildClient', 'RestoreVarify', 'RunServerTests', 'RunClientTests', 'RunScriptTests', 'RunVarifyTests', 'TestPhase1', 'BuildAll')]
     [string]$Task = 'Check',
 
     [ValidateSet('Debug', 'Release')]
@@ -272,13 +272,37 @@ function Run-ClientTests {
 }
 
 function Run-ScriptTests {
-    $testScript = Require-File (Join-Path $repoRoot 'tests\scripts\chatserver-instances.validation.tests.ps1') `
-        'The ChatServer instance validation tests are missing.'
     $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $windowsPowerShell = Require-File $windowsPowerShell 'Windows PowerShell 5.1 is required for script tests.'
-    & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $testScript
-    if ($LASTEXITCODE -ne 0) {
-        throw "ChatServer instance script tests failed with exit code $LASTEXITCODE."
+    $testScripts = @(
+        'tests\scripts\chatserver-instances.validation.tests.ps1'
+        'tests\scripts\chatserver-instances.lifecycle.tests.ps1'
+    )
+    foreach ($relativePath in $testScripts) {
+        $testScript = Require-File (Join-Path $repoRoot $relativePath) 'A ChatServer instance script test is missing.'
+        & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $testScript
+        if ($LASTEXITCODE -ne 0) {
+            throw "ChatServer instance script tests failed with exit code $LASTEXITCODE`: $relativePath"
+        }
+    }
+}
+
+function Run-VarifyTests {
+    $node = Require-Command 'node.exe' 'Install Node.js before running VarifyServer tests.'
+    [void](Require-File (Join-Path $varifySource 'node_modules\@grpc\grpc-js\package.json') `
+        'Restore VarifyServer dependencies with RestoreVarify or npm ci first.')
+    $testFile = Require-File (Join-Path $varifySource 'test\config-and-proto.test.js') `
+        'The VarifyServer unit tests are missing.'
+    [void](New-Item -ItemType Directory -Path $testResults -Force)
+    $report = Join-Path $testResults 'varify_unit.xml'
+    Push-Location $varifySource
+    try {
+        & $node --test --test-reporter=junit --test-reporter-destination=$report $testFile
+        if ($LASTEXITCODE -ne 0) {
+            throw "VarifyServer unit tests failed with exit code $LASTEXITCODE. Report: $report"
+        }
+    } finally {
+        Pop-Location
     }
 }
 
@@ -326,10 +350,12 @@ switch ($Task) {
     'RunServerTests' { Run-ServerTests }
     'RunClientTests' { Run-ClientTests }
     'RunScriptTests' { Run-ScriptTests }
+    'RunVarifyTests' { Run-VarifyTests }
     'TestPhase1' {
         Run-ScriptTests
         Run-ServerTests
         Run-ClientTests
+        Run-VarifyTests
     }
     'BuildAll' {
         Check-Toolchains

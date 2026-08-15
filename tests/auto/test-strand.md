@@ -20,12 +20,12 @@
 
 | 单元 | 当前构建方式 | 当前自动检查 | 阶段三测试入口 |
 | --- | --- | --- | --- |
-| GateServer / StatusServer / ChatServer | Visual Studio MSBuild + vcpkg | Release 构建、独立 app-local 目录和 ZIP 校验；ChatServer Config/MsgNode GoogleTest | `RunServerTests`，JUnit XML 保存到 `build/test-results/server_unit.xml` |
+| GateServer / StatusServer / ChatServer | Visual Studio MSBuild + vcpkg | Release 构建、独立 app-local 目录和 ZIP 校验；ChatServer Config/MsgNode/Asio/protobuf GoogleTest | `RunServerTests`，JUnit XML 保存到 `build/test-results/server_unit.xml` |
 | Qt Windows 客户端 | CMake + Ninja + Qt 6.5.3 MinGW | `message_model_tests` + CTest | `RunClientTests`，JUnit XML 保存到 `build/test-results/client_unit.xml` |
-| VarifyServer | Node.js 22 + `npm ci` | 语法、依赖树和 ZIP 校验 | 优先使用 Node 内置 `node:test`，避免无必要引入大型框架 |
-| ChatServer 实例管理脚本 | PowerShell | 配置输入与冲突校验 | `RunScriptTests`；仓库内轻量运行器，不需要联网安装 Pester |
+| VarifyServer | Node.js 22 + `npm ci` | 配置优先级、畸形配置、常量和 proto 契约；语法、依赖树和 ZIP 校验 | `RunVarifyTests`，JUnit XML 保存到 `build/test-results/varify_unit.xml` |
+| ChatServer 实例管理脚本 | PowerShell | 配置输入、冲突、启动失败和陈旧 PID 防护 | `RunScriptTests`；仓库内轻量运行器，不需要联网安装 Pester |
 
-`scripts/windows-local.ps1 -Task TestPhase1` 是上述三类测试的统一入口；CI 为复用各自工具链和依赖缓存，在现有 `static-check`、`servers-release`、`client-release` job 中调用对应的 `Run*Tests` 子任务。脚本测试没有采用 Pester，是因为 GitHub 干净 runner 不应为九个纯 CLI 契约用例联网安装模块；轻量运行器仍保证隔离临时目录、逐项诊断和非零失败退出码。
+`scripts/windows-local.ps1 -Task TestPhase1` 是上述四类测试的统一入口；CI 为复用各自工具链和依赖缓存，在现有 `static-check`、`servers-release`、`client-release`、`varify-release` job 中调用对应的 `Run*Tests` 子任务。脚本测试没有采用 Pester，是因为 GitHub 干净 runner 不应为纯 CLI 契约用例联网安装模块；轻量运行器仍保证隔离临时目录、逐项诊断和非零失败退出码。
 
 ## 3. 测试分层
 

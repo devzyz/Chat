@@ -129,6 +129,15 @@ Run all commands from the repository root:
     # Recreate VarifyServer dependencies from package-lock.json.
     .\scripts\windows-local.ps1 -Task RestoreVarify
 
+    # Run each phase-one behavior test group.
+    .\scripts\windows-local.ps1 -Task RunScriptTests
+    .\scripts\windows-local.ps1 -Task RunServerTests -Configuration Release
+    .\scripts\windows-local.ps1 -Task RunClientTests -Configuration Release
+    .\scripts\windows-local.ps1 -Task RunVarifyTests
+
+    # Run all four test groups with the configured toolchains and restored dependencies.
+    .\scripts\windows-local.ps1 -Task TestPhase1 -Configuration Release
+
     # Run all of the above in order.
     .\scripts\windows-local.ps1 -Task BuildAll -Configuration Debug
 
