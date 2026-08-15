@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Check', 'RestoreServers', 'BuildServers', 'BuildClient', 'RestoreVarify', 'BuildAll')]
+    [ValidateSet('Check', 'RestoreServers', 'BuildServers', 'BuildClient', 'RestoreVarify', 'RunServerTests', 'RunClientTests', 'RunScriptTests', 'TestPhase1', 'BuildAll')]
     [string]$Task = 'Check',
 
     [ValidateSet('Debug', 'Release')]
@@ -25,6 +25,8 @@ $manifest = Join-Path $repoRoot 'vcpkg.json'
 $clientSource = Join-Path $repoRoot 'chat'
 $clientBuild = Join-Path $repoRoot "build\windows-client\$Configuration"
 $varifySource = Join-Path $repoRoot 'VarifyServer'
+$serverTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\server_unit_tests.exe"
+$testResults = Join-Path $repoRoot 'build\test-results'
 $overlayTriplets = Join-Path $repoRoot 'triplets'
 $expectedQtVersion = '6.5.3'
 $expectedVcpkgCommit = '4b3e4c276b5b87a649e66341e11553e8c577459c'
@@ -190,6 +192,39 @@ function Build-Servers {
     }
 }
 
+function Run-ServerTests {
+    $vcpkg = Resolve-Vcpkg
+    $msbuild = Resolve-MSBuild
+    $arguments = @(
+        $solution
+        '/m'
+        '/t:ServerUnitTests'
+        "/p:Configuration=$Configuration"
+        '/p:Platform=x64'
+        "/p:VcpkgRoot=$($vcpkg.Root)"
+        "/p:VcpkgTriplet=$ServerTriplet"
+        "/p:VcpkgHostTriplet=$ServerHostTriplet"
+        "/p:ServerIntermediateRoot=$ServerIntermediateRoot"
+    )
+    & $msbuild @arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Server unit test build failed with exit code $LASTEXITCODE."
+    }
+
+    $testBinary = Require-File $serverTestExecutable 'Build the ServerUnitTests target first.'
+    [void](New-Item -ItemType Directory -Path $testResults -Force)
+    $report = Join-Path $testResults 'server_unit.xml'
+    Push-Location (Split-Path -Parent $testBinary)
+    try {
+        & $testBinary "--gtest_output=xml:$report"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Server unit tests failed with exit code $LASTEXITCODE. Report: $report"
+        }
+    } finally {
+        Pop-Location
+    }
+}
+
 function Build-Client {
     $cmake = Require-Command 'cmake.exe' 'Install CMake 3.16 or newer and add it to PATH.'
     $qt = Resolve-QtToolchain
@@ -222,6 +257,28 @@ function Build-Client {
     & $cmake --build $clientBuild
     if ($LASTEXITCODE -ne 0) {
         throw "Client build failed with exit code $LASTEXITCODE."
+    }
+}
+
+function Run-ClientTests {
+    Build-Client
+    $ctest = Require-Command 'ctest.exe' 'Install CMake 3.16 or newer and add it to PATH.'
+    [void](New-Item -ItemType Directory -Path $testResults -Force)
+    $report = Join-Path $testResults 'client_unit.xml'
+    & $ctest --test-dir $clientBuild --output-on-failure --output-junit $report
+    if ($LASTEXITCODE -ne 0) {
+        throw "Qt client tests failed with exit code $LASTEXITCODE. Report: $report"
+    }
+}
+
+function Run-ScriptTests {
+    $testScript = Require-File (Join-Path $repoRoot 'tests\scripts\chatserver-instances.validation.tests.ps1') `
+        'The ChatServer instance validation tests are missing.'
+    $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $windowsPowerShell = Require-File $windowsPowerShell 'Windows PowerShell 5.1 is required for script tests.'
+    & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $testScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "ChatServer instance script tests failed with exit code $LASTEXITCODE."
     }
 }
 
@@ -266,6 +323,14 @@ switch ($Task) {
     'BuildServers' { Build-Servers }
     'BuildClient' { Build-Client }
     'RestoreVarify' { Restore-Varify }
+    'RunServerTests' { Run-ServerTests }
+    'RunClientTests' { Run-ClientTests }
+    'RunScriptTests' { Run-ScriptTests }
+    'TestPhase1' {
+        Run-ScriptTests
+        Run-ServerTests
+        Run-ClientTests
+    }
     'BuildAll' {
         Check-Toolchains
         Restore-Servers

@@ -63,7 +63,7 @@ jobs:
           })
           $requiredDependencies = @(
               'boost-asio', 'boost-beast', 'boost-filesystem', 'boost-property-tree',
-              'boost-uuid', 'grpc', 'hiredis', 'jsoncpp', 'mysql-connector-cpp',
+              'boost-uuid', 'grpc', 'gtest', 'hiredis', 'jsoncpp', 'mysql-connector-cpp',
               'protobuf', 'spdlog'
           )
           foreach ($dependency in $requiredDependencies) {
@@ -97,6 +97,10 @@ jobs:
               throw 'Active build configuration still references a legacy ChatServer path or static triplet.'
           }
           $global:LASTEXITCODE = 0
+
+      - name: Run ChatServer instance configuration tests
+        shell: pwsh
+        run: .\scripts\windows-local.ps1 -Task RunScriptTests
 
   servers-release:
     name: Server Release build
@@ -161,6 +165,8 @@ jobs:
         with:
           path: ${{ runner.temp }}\vcpkg-binary-cache
           key: vcpkg-binary-${{ runner.os }}-fc3be1ebea7eaeb3071fe716ac65713af1f3a146-${{ hashFiles('vcpkg.json', 'triplets/x64-windows-chat-release.cmake') }}
+          restore-keys: |
+            vcpkg-binary-${{ runner.os }}-fc3be1ebea7eaeb3071fe716ac65713af1f3a146-
 
       - name: Restore server dependencies with binary archives
         shell: pwsh
@@ -222,6 +228,28 @@ jobs:
               -ServerIntermediateRoot (Join-Path $env:RUNNER_TEMP 'server-msbuild') `
               -ServerTriplet x64-windows-chat-release `
               -ServerHostTriplet x64-windows-chat-release
+
+      - name: Build and run Server unit tests
+        shell: pwsh
+        run: |
+          & .\scripts\windows-local.ps1 `
+              -Task RunServerTests `
+              -Configuration Release `
+              -VcpkgRoot $env:VCPKG_ROOT `
+              -VcpkgBuildtreesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-buildtrees') `
+              -VcpkgPackagesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-packages') `
+              -ServerIntermediateRoot (Join-Path $env:RUNNER_TEMP 'server-msbuild') `
+              -ServerTriplet x64-windows-chat-release `
+              -ServerHostTriplet x64-windows-chat-release
+
+      - name: Upload Server unit test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-server-unit-results
+          path: build/test-results/server_unit.xml
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Verify independent app-local server directories
         shell: pwsh
@@ -308,25 +336,26 @@ jobs:
           tools: tools_mingw90
           cache: false
 
-      - name: Build Qt client
+      - name: Build and test Qt client
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $compiler = Get-Command g++.exe -ErrorAction Stop
           $mingwRoot = Split-Path -Parent (Split-Path -Parent $compiler.Source)
           & .\scripts\windows-local.ps1 `
-              -Task BuildClient `
+              -Task RunClientTests `
               -Configuration Release `
               -QtRoot $env:QT_ROOT_DIR `
               -MinGwRoot $mingwRoot
 
-      - name: Run Qt client tests
-        shell: pwsh
-        run: |
-          ctest --test-dir .\build\windows-client\Release --output-on-failure
-          if ($LASTEXITCODE -ne 0) {
-              throw "Qt client tests failed with exit code $LASTEXITCODE."
-          }
+      - name: Upload Qt client test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-client-unit-results
+          path: build/test-results/client_unit.xml
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Deploy and package Qt client
         shell: pwsh

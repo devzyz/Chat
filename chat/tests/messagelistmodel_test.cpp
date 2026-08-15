@@ -65,6 +65,30 @@ int main(int argc, char **argv)
     passed &= check(removed == 1 && model.rowCount() == 0,
                     "remove emits rowsRemoved and erases the row");
 
+    MessageListModel unknownIdModel(7);
+    unknownIdModel.appendMessage(message(101, QStringLiteral("known-client")));
+    int unknownIdChanges = 0;
+    int unknownIdRemovals = 0;
+    QObject::connect(&unknownIdModel, &QAbstractItemModel::dataChanged,
+                     [&unknownIdChanges]() { ++unknownIdChanges; });
+    QObject::connect(&unknownIdModel, &QAbstractItemModel::rowsRemoved,
+                     [&unknownIdRemovals]() { ++unknownIdRemovals; });
+    passed &= check(!unknownIdModel.acknowledgeMessage(QStringLiteral("missing-client"), 202,
+                                                       DeliveryStatus::Sent)
+                        && !unknownIdModel.updateStatusByClientId(
+                            QStringLiteral("missing-client"), DeliveryStatus::Failed)
+                        && !unknownIdModel.updateStatusByMessageId(202, DeliveryStatus::Failed)
+                        && !unknownIdModel.removeByMessageId(202),
+                    "operations for unknown stable ids report no change");
+    passed &= check(unknownIdChanges == 0 && unknownIdRemovals == 0
+                        && unknownIdModel.rowCount() == 1
+                        && unknownIdModel.rowForMessageId(101) == 0
+                        && unknownIdModel.data(
+                               unknownIdModel.index(0),
+                               MessageListModel::DeliveryStatusRole).toInt()
+                            == static_cast<int>(DeliveryStatus::Read),
+                    "unknown stable ids leave the model and indexes unchanged");
+
     model.appendMessage(message(30, {}));
     const QVector<MessageRecord> history = {
         message(20, {}, QStringLiteral("中文")),
@@ -82,6 +106,77 @@ int main(int argc, char **argv)
     passed &= check(model.data(model.index(0), MessageListModel::TextRole).toString()
                         == QStringLiteral("English 😀\nmanual wrap"),
                     "multilingual text and manual newlines remain intact");
+
+    MessageListModel pagedHistoryModel(7);
+    pagedHistoryModel.appendMessage(message(50, QStringLiteral("server-50")));
+    passed &= check(pagedHistoryModel.prependHistory({
+                        message(40, QStringLiteral("server-40")),
+                        message(30, QStringLiteral("server-30"))
+                    }) == 2,
+                    "first history page is inserted");
+    passed &= check(pagedHistoryModel.prependHistory({
+                        message(20, QStringLiteral("server-20")),
+                        message(10, QStringLiteral("server-10")),
+                        message(30, QStringLiteral("duplicate-message-id")),
+                        message(15, QStringLiteral("server-20"))
+                    }) == 2,
+                    "later history page deduplicates ids seen in earlier pages");
+    const QVector<qint64> expectedPagedIds = {10, 20, 30, 40, 50};
+    bool pagesRemainChronological = pagedHistoryModel.rowCount() == expectedPagedIds.size();
+    for (int row = 0; row < expectedPagedIds.size() && pagesRemainChronological; ++row) {
+        pagesRemainChronological = pagedHistoryModel.data(
+            pagedHistoryModel.index(row), MessageListModel::MessageIdRole).toLongLong()
+            == expectedPagedIds.at(row);
+    }
+    passed &= check(pagesRemainChronological,
+                    "history remains chronological across multiple older pages");
+    passed &= check(pagedHistoryModel.oldestMessageId() == 10,
+                    "oldest message id follows the earliest retained history row");
+
+    MessageListModel indexModel(7);
+    indexModel.appendMessages({
+        message(100, QStringLiteral("client-100")),
+        message(200, QStringLiteral("client-200")),
+        message(300, QStringLiteral("client-300"))
+    });
+    passed &= check(indexModel.removeByMessageId(100)
+                        && indexModel.rowForMessageId(100) == -1
+                        && indexModel.rowForClientMessageId(QStringLiteral("client-100")) == -1
+                        && indexModel.rowForMessageId(200) == 0
+                        && indexModel.rowForMessageId(300) == 1,
+                    "removal rebuilds message and client indexes for shifted rows");
+    passed &= check(indexModel.acknowledgeMessage(
+                        QStringLiteral("client-200"), 250, DeliveryStatus::Sent)
+                        && indexModel.rowForMessageId(200) == -1
+                        && indexModel.rowForMessageId(250) == 0
+                        && indexModel.indexForStableId(
+                               0, QStringLiteral("client-200")).row() == 0,
+                    "acknowledgement replaces the formal id without desynchronizing indexes");
+
+    MessageListModel textModel(7);
+    const QString unicodeText = QStringLiteral("你好，مرحبا，😀\nsecond line");
+    passed &= check(textModel.appendMessages({
+                        message(1, QStringLiteral("unicode"), unicodeText),
+                        message(2, QStringLiteral("empty"), QString())
+                    }) == 2,
+                    "unicode and empty text messages are accepted");
+    passed &= check(textModel.data(textModel.index(0), MessageListModel::TextRole).toString()
+                            == unicodeText
+                        && textModel.data(textModel.index(0), Qt::DisplayRole).toString()
+                            == unicodeText
+                        && textModel.data(textModel.index(1), MessageListModel::TextRole).toString()
+                            .isEmpty()
+                        && textModel.recordAt(1) != nullptr
+                        && textModel.recordAt(1)->text.isEmpty(),
+                    "unicode, newlines, and empty text round-trip without normalization");
+
+    MessageRecord wrongChat = message(999, QStringLiteral("wrong-chat"));
+    wrongChat.chatId = 8;
+    const int textRowsBeforeWrongChat = textModel.rowCount();
+    passed &= check(textModel.appendMessage(wrongChat) == 0
+                        && textModel.rowCount() == textRowsBeforeWrongChat
+                        && textModel.rowForMessageId(999) == -1,
+                    "messages belonging to another chat are ignored");
 
     MessageModelStore store;
     auto *first = store.getOrCreate(7);

@@ -9,6 +9,7 @@
     "boost-property-tree",
     "boost-uuid",
     "grpc",
+    "gtest",
     "hiredis",
     "jsoncpp",
     {
