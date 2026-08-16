@@ -1,0 +1,27 @@
+# 实例配置校验测试
+
+## 被测代码与契约
+
+- 生产入口：`scripts/chatserver-instances.ps1 -Task Start` 的启动前校验。
+- 契约：实例名、日志名和监听端口全局唯一；端口比较前规范化；配置文件名安全且唯一；配置文件、参数和
+  必填值缺失时在创建 Server 进程前失败。
+
+## 用例、依赖与隔离
+
+`chatserver-instances.tests.ps1` 包含 9 个用例。每次运行创建 GUID 命名的临时 fixture/state 目录，使用
+`cmd.exe` 作为不会真正启动 ChatServer 的占位可执行文件，并在 `finally` 中清理。它不访问网络、数据库或个人配置。
+依赖 Windows PowerShell 5.1。
+
+## 运行与 CI
+
+```powershell
+.\scripts\windows-local.ps1 -Task RunScriptTests
+powershell.exe -NoProfile -File .\tests\scripts\validation\chatserver-instances.tests.ps1
+```
+
+CI job 为 `static-check`。结果写到控制台，任一用例失败均返回非零退出码；当前没有独立 XML 报告。
+
+## 已知缺口
+
+- 未验证合法配置能够启动真实 ChatServer；真实二进制和端口属于 Integration 测试。
+- 未覆盖跨批次生命周期状态，本部分由 `lifecycle` 模块负责。

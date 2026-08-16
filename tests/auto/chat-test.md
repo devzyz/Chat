@@ -17,23 +17,30 @@
 
 ### 已存在
 
-- `chat/tests/messagelistmodel_test.cpp`
+- `chat/tests/message-model/message_model_tests.cpp`
   - 消息插入、确认、状态更新、删除。
   - 历史消息去重和顺序。
   - 多语言文本与换行。
   - 每个 chat 的模型缓存与分页状态。
   - delegate 在不同宽度下重新布局。
 - Qt CMake 已注册 `message_model_tests`，CI 使用 `ctest --output-on-failure`。
-- `tests/server/ServerUnitTests.vcxproj`
+- `tests/server/config/config_mgr_tests.cpp`
   - ChatServer `ConfigMgr` 的显式路径、有效实例配置、必填字段、端口和 peer 校验。
+- `tests/server/messaging/msg_node_tests.cpp`
   - `MsgNode`、`SendNode`、`RecvNode` 的网络字节序、复制、清理和长度边界。
-  - ChatServer `AsioIOServicePool` 的任务执行与幂等停止，以及项目 protobuf 消息的序列化契约。
-- `tests/scripts/chatserver-instances.validation.tests.ps1`
+- `tests/server/concurrency/asio_pool_tests.cpp`
+  - ChatServer `AsioIOServicePool` 的任务执行与幂等停止。
+- `tests/server/protocol/protobuf_contract_tests.cpp`
+  - 项目 protobuf 消息的序列化契约。
+- `tests/server/ServerUnitTests.vcxproj` 统一注册上述模块并生成一个 GoogleTest 报告。
+- `tests/scripts/validation/chatserver-instances.tests.ps1`
   - 实例配置的 Name、Log.Name、TCP/RPC、文件名和缺失输入校验。
-- `tests/scripts/chatserver-instances.lifecycle.tests.ps1`
+- `tests/scripts/lifecycle/chatserver-instances.tests.ps1`
   - 子进程启动失败诊断、陈旧 PID 防误杀、Status 状态判定和跨批次实例冲突。
-- `VarifyServer/test/config-and-proto.test.js`
-  - `--config`/`CHAT_CONFIG`/默认路径优先级、畸形 JSON 非零退出、错误常量和 gRPC proto 描述符。
+- `VarifyServer/test/config/config.test.js`
+  - `--config`/`CHAT_CONFIG`/默认路径优先级和畸形 JSON 非零退出。
+- `VarifyServer/test/protocol/protocol.test.js`
+  - 错误常量和 gRPC proto 描述符。
 - `scripts/windows-local.ps1` 已提供 `RunServerTests`、`RunClientTests`、`RunScriptTests`、`RunVarifyTests` 和统一的 `TestPhase1` 入口。
 - CI 已验证 Server/Qt/VarifyServer 发布目录和 ZIP 的基本完整性。
 

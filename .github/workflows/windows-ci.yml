@@ -98,7 +98,7 @@ jobs:
           }
           $global:LASTEXITCODE = 0
 
-      - name: Run ChatServer instance configuration tests
+      - name: Run ChatServer instance script test modules
         shell: pwsh
         run: .\scripts\windows-local.ps1 -Task RunScriptTests
 
@@ -428,7 +428,7 @@ jobs:
               throw "npm dependency validation failed with exit code $LASTEXITCODE."
           }
 
-      - name: Run VarifyServer unit tests
+      - name: Run VarifyServer unit test modules
         shell: pwsh
         run: .\scripts\windows-local.ps1 -Task RunVarifyTests
 

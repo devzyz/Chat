@@ -1,7 +1,7 @@
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $subject = Join-Path $repoRoot 'scripts\chatserver-instances.ps1'
 $powershell = Join-Path $PSHOME 'powershell.exe'
 if (-not (Test-Path -LiteralPath $powershell -PathType Leaf)) {

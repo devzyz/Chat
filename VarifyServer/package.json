@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "serve": "node server.js",
-    "test": "node --test test/config-and-proto.test.js"
+    "test": "node --test test/config/config.test.js test/protocol/protocol.test.js"
   },
   "author": "",
   "license": "ISC",

@@ -7,7 +7,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 
-const serverRoot = path.resolve(__dirname, '..');
+const serverRoot = path.resolve(__dirname, '..', '..');
 const configModule = path.join(serverRoot, 'config.js');
 
 function writeConfig(directory, marker) {
@@ -87,21 +87,4 @@ test('malformed configuration exits with a failure status', (t) => {
     const result = loadConfigInChild({ cwd: root, argumentConfig: malformed });
 
     assert.notEqual(result.status, 0);
-});
-
-test('shared verification constants keep their wire-visible values', () => {
-    const { code_prefix, Errors } = require('../const');
-
-    assert.equal(code_prefix, 'code_');
-    assert.deepEqual(Errors, { Success: 0, RedisErr: 1, Exception: 2 });
-});
-
-test('loaded protobuf exposes the verification RPC request and response types', () => {
-    const messageProto = require('../proto');
-
-    assert.equal(typeof messageProto.VarifyService, 'function');
-    assert.equal(typeof messageProto.VarifyService.service.GetVarifyCode, 'object');
-    assert.equal(messageProto.VarifyService.service.GetVarifyCode.path, '/message.VarifyService/GetVarifyCode');
-    assert.equal(typeof messageProto.GetVarifyReq, 'object');
-    assert.equal(typeof messageProto.GetVarifyRsp, 'object');
 });

@@ -160,7 +160,7 @@ endif()
 include(CTest)
 if(BUILD_TESTING)
     add_executable(message_model_tests
-        tests/messagelistmodel_test.cpp
+        tests/message-model/message_model_tests.cpp
         messagerecord.h
         messagelistmodel.h messagelistmodel.cpp
         messagemodelstore.h messagemodelstore.cpp

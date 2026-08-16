@@ -56,10 +56,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="config_mgr_tests.cpp" />
-    <ClCompile Include="msg_node_tests.cpp" />
-    <ClCompile Include="asio_pool_tests.cpp" />
-    <ClCompile Include="protobuf_contract_tests.cpp" />
+    <ClCompile Include="config\config_mgr_tests.cpp" />
+    <ClCompile Include="messaging\msg_node_tests.cpp" />
+    <ClCompile Include="concurrency\asio_pool_tests.cpp" />
+    <ClCompile Include="protocol\protobuf_contract_tests.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\AsioIOServicePool.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\ConfigMgr.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\message.pb.cc" />

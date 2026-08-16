@@ -27,6 +27,22 @@
 
 `scripts/windows-local.ps1 -Task TestPhase1` 是上述四类测试的统一入口；CI 为复用各自工具链和依赖缓存，在现有 `static-check`、`servers-release`、`client-release`、`varify-release` job 中调用对应的 `Run*Tests` 子任务。脚本测试没有采用 Pester，是因为 GitHub 干净 runner 不应为纯 CLI 契约用例联网安装模块；轻量运行器仍保证隔离临时目录、逐项诊断和非零失败退出码。
 
+### 测试目录组织
+
+测试源码 MUST 按被测生产模块放入明确的子目录，不能按语言或 runner 把所有源码堆在同一级。当前结构为：
+
+```text
+tests/server/{config,messaging,concurrency,protocol}
+tests/scripts/{validation,lifecycle}
+chat/tests/message-model
+VarifyServer/test/{config,protocol}
+```
+
+中央 runner、MSBuild project 或父目录索引可以保留在集合根目录。每个测试模块子目录 MUST 包含
+`README.md`，至少说明被测生产代码/契约、用例范围、依赖与隔离、运行命令、CI job/报告和已知缺口。
+移动或拆分测试时 MUST 同步 MSBuild/CMake/npm/PowerShell/CI 与本文件引用，不得复制测试维持旧路径，
+也不得减少用例或弱化断言。新增测试应进入已有职责匹配的模块；没有匹配模块时，先定义新模块边界及 README。
+
 ## 3. 测试分层
 
 - **Unit**：纯逻辑、小范围、快速、无真实网络和外部服务。

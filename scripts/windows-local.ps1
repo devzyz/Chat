@@ -275,8 +275,8 @@ function Run-ScriptTests {
     $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $windowsPowerShell = Require-File $windowsPowerShell 'Windows PowerShell 5.1 is required for script tests.'
     $testScripts = @(
-        'tests\scripts\chatserver-instances.validation.tests.ps1'
-        'tests\scripts\chatserver-instances.lifecycle.tests.ps1'
+        'tests\scripts\validation\chatserver-instances.tests.ps1'
+        'tests\scripts\lifecycle\chatserver-instances.tests.ps1'
     )
     foreach ($relativePath in $testScripts) {
         $testScript = Require-File (Join-Path $repoRoot $relativePath) 'A ChatServer instance script test is missing.'
@@ -291,13 +291,17 @@ function Run-VarifyTests {
     $node = Require-Command 'node.exe' 'Install Node.js before running VarifyServer tests.'
     [void](Require-File (Join-Path $varifySource 'node_modules\@grpc\grpc-js\package.json') `
         'Restore VarifyServer dependencies with RestoreVarify or npm ci first.')
-    $testFile = Require-File (Join-Path $varifySource 'test\config-and-proto.test.js') `
-        'The VarifyServer unit tests are missing.'
+    $testFiles = @(
+        Require-File (Join-Path $varifySource 'test\config\config.test.js') `
+            'The VarifyServer configuration unit tests are missing.'
+        Require-File (Join-Path $varifySource 'test\protocol\protocol.test.js') `
+            'The VarifyServer protocol unit tests are missing.'
+    )
     [void](New-Item -ItemType Directory -Path $testResults -Force)
     $report = Join-Path $testResults 'varify_unit.xml'
     Push-Location $varifySource
     try {
-        & $node --test --test-reporter=junit --test-reporter-destination=$report $testFile
+        & $node --test --test-reporter=junit --test-reporter-destination=$report @testFiles
         if ($LASTEXITCODE -ne 0) {
             throw "VarifyServer unit tests failed with exit code $LASTEXITCODE. Report: $report"
         }
