@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "serve": "node server.js",
-    "test": "node --test test/config/config.test.js test/protocol/protocol.test.js"
+    "test": "node --test test/config/config.test.js test/protocol/protocol.test.js test/handler/handler.test.js test/rpc/rpc-routing.test.js"
   },
   "author": "",
   "license": "ISC",

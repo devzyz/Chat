@@ -10,5 +10,8 @@ Qt 测试由 `chat/CMakeLists.txt` 显式注册，测试源码按客户端模块
 .\scripts\windows-local.ps1 -Task RunClientTests -Configuration Release
 ```
 
+- [network-state](network-state/README.md): the `TcpMgr` frame decoder's partial-read,
+  adjacent-frame, byte-order, and zero-body state transitions.
+
 CI 的 `client-release` job 运行 CTest，并生成 `build/test-results/client_unit.xml`。新增模块必须创建独立
 子目录和 `README.md`，并在 CMake 中显式注册，不能依赖目录通配符发现。

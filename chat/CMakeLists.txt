@@ -48,6 +48,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         resetdialog.ui
         resetdialog.h resetdialog.cpp
         tcpmgr.h tcpmgr.cpp
+        tcpframedecoder.h tcpframedecoder.cpp
         chatdialog.h chatdialog.cpp chatdialog.ui
         clickedbtn.h clickedbtn.cpp
         customizeedit.h customizeedit.cpp
@@ -174,4 +175,14 @@ if(BUILD_TESTING)
     set_tests_properties(message_model_tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=minimal"
     )
+
+    add_executable(network_state_tests
+        tests/network-state/tcp_frame_decoder_tests.cpp
+        tcpframedecoder.h tcpframedecoder.cpp
+    )
+    target_include_directories(network_state_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(network_state_tests PRIVATE
+        Qt${QT_VERSION_MAJOR}::Core
+    )
+    add_test(NAME network_state_tests COMMAND network_state_tests)
 endif()

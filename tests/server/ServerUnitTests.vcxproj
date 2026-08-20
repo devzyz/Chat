@@ -51,19 +51,29 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies Condition="'$(Configuration)'=='Debug'">gtest.lib;gtest_main.lib;libprotobufd.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalDependencies Condition="'$(Configuration)'=='Release'">gtest.lib;gtest_main.lib;libprotobuf.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(Configuration)'=='Debug'">gtest.lib;gtest_main.lib;libprotobufd.lib;hiredis.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(Configuration)'=='Release'">gtest.lib;gtest_main.lib;libprotobuf.lib;hiredis.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="config\config_mgr_tests.cpp" />
+    <ClCompile Include="startup\startup_config_tests.cpp" />
     <ClCompile Include="messaging\msg_node_tests.cpp" />
     <ClCompile Include="concurrency\asio_pool_tests.cpp" />
+    <ClCompile Include="transport\chat_frame_codec_tests.cpp" />
+    <ClCompile Include="lifecycle\server_asio_pool_tests.cpp" />
+    <ClCompile Include="data\server_redis_pool_tests.cpp" />
+    <ClCompile Include="rpc\peer_server_routing_tests.cpp" />
     <ClCompile Include="protocol\protobuf_contract_tests.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\AsioIOServicePool.cpp" />
+    <ClCompile Include="..\..\ChatServer\ChatServer\ChatFrameCodec.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\ConfigMgr.cpp" />
+    <ClCompile Include="..\..\ChatServer\ChatServer\Const.cpp" />
+    <ClCompile Include="..\..\ChatServer\ChatServer\DistLock.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\message.pb.cc" />
     <ClCompile Include="..\..\ChatServer\ChatServer\MsgNode.cpp" />
+    <ClCompile Include="..\..\ChatServer\ChatServer\PeerServerRouting.cpp" />
+    <ClCompile Include="..\..\ChatServer\ChatServer\RedisMgr.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\ChatServer\ChatServer\configs\chat-01.ini">

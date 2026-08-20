@@ -3,8 +3,7 @@
 #include "logmgr.h"
 #include "usermgr.h"
 
-TcpMgr::TcpMgr() : _host(""), _port(0), _b_recv_pending(false),
-    _message_id(0), _message_len(0){
+TcpMgr::TcpMgr() : _host(""), _port(0) {
 
     // 绑定连接完成信号到lambda槽函数上
     connect(&_socket, &QTcpSocket::connected, this, [&]() {
@@ -14,43 +13,9 @@ TcpMgr::TcpMgr() : _host(""), _port(0), _b_recv_pending(false),
 
     // 绑定socket可读取信号到lambda槽函数上
     connect(&_socket, &QTcpSocket::readyRead, this, [&]() {
-        // 通过追加的方式将_socket的缓冲区内可读的信息读取到程序的_buffer缓存内
-        _buffer.append(_socket.readAll());
-
-        forever {
-            // _buffer是一个字节流缓冲区，不方便直接读取
-            // 通过_buffer构造一个stream流，可以通过这个流读取字节流数据
-            QDataStream stream(&_buffer, QIODevice::ReadOnly);
-            stream.setVersion(QDataStream::Qt_6_0);
-
-            if (!_b_recv_pending) {
-                // 如果长度不够头部长度，则返回继续等待接收
-                if (_buffer.size() < static_cast<qsizetype> (sizeof(quint16) * 2)) {
-                    return ;
-                }
-
-                // 从数据中读取出头部id和数据长度len
-                stream >> _message_id;
-                stream >> _message_len;
-
-                // 将读取的数据从_buffer中删除，stream不需要删除，他会自己移动
-                _buffer.remove(0, static_cast<qsizetype> (sizeof(quint16) * 2));
-            }
-
-            // 如果当前剩余长度不够其要求的数据长度，则将接下来需要继续读取数据置为true
-            if (_buffer.size() < static_cast<qsizetype> (sizeof(char) * _message_len)) {
-                _b_recv_pending = true;
-                return ;
-            }
-
-            // 走到这里代表_buffer内的数据满足长度要求
-            _b_recv_pending = false;
-
-            // 先取子串，通过mid函数
-            QByteArray messageBody = _buffer.mid(0, _message_len);
-            _buffer.remove(0, _message_len);
-
-            handleMsg(ReqId(_message_id), _message_len, messageBody);
+        const auto frames = _frameDecoder.append(_socket.readAll());
+        for (const auto &frame : frames) {
+            handleMsg(ReqId(frame.messageId), frame.body.size(), frame.body);
         }
     });
 

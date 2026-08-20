@@ -1,8 +1,8 @@
 #include "ChatGrpcClient.h"
 #include "ConfigMgr.h"
 #include <string.h>
-#include <sstream>
 #include "Const.h"
+#include "PeerServerRouting.h"
 
 ChatConnectionPool::ChatConnectionPool(const std::string& host, const std::string& port, std::size_t poolSize) 
 	: _host(host), _port(port), _pool_size(poolSize), _b_stop(false) {
@@ -68,18 +68,15 @@ ChatGrpcClient::ChatGrpcClient() {
 
 	auto server_list = configMgr["PeerServer"]["Servers"];
 
-	std::vector<std::string> servers;
-	std::stringstream ss(server_list);
-	std::string server;
-	while (std::getline(ss, server, ',')) {
-		servers.push_back(server);
-	}
+	const auto endpoints = ResolvePeerServerEndpoints(
+		server_list,
+		[&configMgr](const std::string& section, const std::string& key) {
+			return configMgr[section][key];
+		});
 
-	for (auto& server : servers) {
-		if (configMgr[server]["Name"].empty()) {
-			continue;
-		}
-		_pool[configMgr[server]["Name"]] = std::make_unique<ChatConnectionPool>(configMgr[server]["Host"], configMgr[server]["Port"], 5);
+	for (const auto& endpoint : endpoints) {
+		_pool[endpoint.first] = std::make_unique<ChatConnectionPool>(
+			endpoint.second.host, endpoint.second.port, 5);
 	}
 }
 

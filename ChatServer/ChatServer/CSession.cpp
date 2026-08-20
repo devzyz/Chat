@@ -1,4 +1,5 @@
 #include "CSession.h"
+#include "ChatFrameCodec.h"
 #include "CServer.h"
 #include <boost/uuid.hpp>
 #include <iostream>
@@ -63,9 +64,8 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 
 			// 拿到了头部的字节流数据，接下来开始解析
 			// 解析id
-			short msg_id = 0;
-			memcpy(&msg_id, _recv_head_node->_data, HEAD_ID_LEN);
-			msg_id = boost::asio::detail::socket_ops::network_to_host_short(msg_id);
+			const auto header = ChatFrameCodec::DecodeHeader(_recv_head_node->_data);
+			const auto msg_id = static_cast<short>(header.message_id);
 
 			// id非法，断开连接
 			if (msg_id > MAX_LENGTH) {
@@ -75,9 +75,7 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 			}
 
 			// 解析data_len
-			short msg_len = 0;
-			memcpy(&msg_len, _recv_head_node->_data + HEAD_ID_LEN, HEAD_DATA_LEN);
-			msg_len = boost::asio::detail::socket_ops::network_to_host_short(msg_len);
+			const auto msg_len = static_cast<short>(header.body_length);
 
 			// 长度非法，断开连接
 			if (msg_len > MAX_LENGTH) {

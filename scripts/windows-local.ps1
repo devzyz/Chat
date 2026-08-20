@@ -25,6 +25,7 @@ $manifest = Join-Path $repoRoot 'vcpkg.json'
 $clientSource = Join-Path $repoRoot 'chat'
 $clientBuild = Join-Path $repoRoot "build\windows-client\$Configuration"
 $varifySource = Join-Path $repoRoot 'VarifyServer'
+$chatServerExecutable = Join-Path $repoRoot "build\windows-servers\$Configuration\ChatServer\ChatServer.exe"
 $serverTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\server_unit_tests.exe"
 $testResults = Join-Path $repoRoot 'build\test-results'
 $overlayTriplets = Join-Path $repoRoot 'triplets'
@@ -198,7 +199,7 @@ function Run-ServerTests {
     $arguments = @(
         $solution
         '/m'
-        '/t:ServerUnitTests'
+        '/t:ChatServer;ServerUnitTests'
         "/p:Configuration=$Configuration"
         '/p:Platform=x64'
         "/p:VcpkgRoot=$($vcpkg.Root)"
@@ -211,12 +212,36 @@ function Run-ServerTests {
         throw "Server unit test build failed with exit code $LASTEXITCODE."
     }
 
+    $chatBinary = Require-File $chatServerExecutable 'Build the ChatServer target first.'
+    $installedBin = Join-Path $repoRoot "vcpkg_installed\$ServerTriplet\bin"
+    if ($Configuration -eq 'Debug') {
+        $installedBin = Join-Path $repoRoot "vcpkg_installed\$ServerTriplet\debug\bin"
+    }
+    if (-not (Test-Path -LiteralPath $installedBin -PathType Container)) {
+        throw "The vcpkg app-local dependency directory is missing: $installedBin"
+    }
+    & $vcpkg.Exe z-applocal "--target-binary=$chatBinary" "--installed-bin-dir=$installedBin"
+    if ($LASTEXITCODE -ne 0) {
+        throw "ChatServer app-local deployment failed with exit code $LASTEXITCODE."
+    }
+
     $testBinary = Require-File $serverTestExecutable 'Build the ServerUnitTests target first.'
+    & $vcpkg.Exe z-applocal "--target-binary=$testBinary" "--installed-bin-dir=$installedBin"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Server unit test app-local deployment failed with exit code $LASTEXITCODE."
+    }
+
     [void](New-Item -ItemType Directory -Path $testResults -Force)
     $report = Join-Path $testResults 'server_unit.xml'
+    if (Test-Path -LiteralPath $report) {
+        Remove-Item -LiteralPath $report -Force
+    }
     Push-Location (Split-Path -Parent $testBinary)
     try {
         & $testBinary "--gtest_output=xml:$report"
+        if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
+            throw "Server unit test report was not created: $report"
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "Server unit tests failed with exit code $LASTEXITCODE. Report: $report"
         }
@@ -296,6 +321,10 @@ function Run-VarifyTests {
             'The VarifyServer configuration unit tests are missing.'
         Require-File (Join-Path $varifySource 'test\protocol\protocol.test.js') `
             'The VarifyServer protocol unit tests are missing.'
+        Require-File (Join-Path $varifySource 'test\handler\handler.test.js') `
+            'The VarifyServer handler unit tests are missing.'
+        Require-File (Join-Path $varifySource 'test\rpc\rpc-routing.test.js') `
+            'The VarifyServer RPC routing component tests are missing.'
     )
     [void](New-Item -ItemType Directory -Path $testResults -Force)
     $report = Join-Path $testResults 'varify_unit.xml'

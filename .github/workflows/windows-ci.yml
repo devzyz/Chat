@@ -248,7 +248,7 @@ jobs:
         with:
           name: windows-server-unit-results
           path: build/test-results/server_unit.xml
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
       - name: Verify independent app-local server directories
@@ -354,7 +354,7 @@ jobs:
         with:
           name: windows-client-unit-results
           path: build/test-results/client_unit.xml
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
       - name: Deploy and package Qt client
@@ -438,7 +438,7 @@ jobs:
         with:
           name: windows-varify-unit-results
           path: build/test-results/varify_unit.xml
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
       - name: Package VarifyServer

@@ -1,4 +1,5 @@
 #include "MsgNode.h"
+#include "ChatFrameCodec.h"
 
 MsgNode::MsgNode(short total_len) : _cur_len(0), _total_len(total_len){
 	_data = new char[_total_len + 1]();
@@ -23,11 +24,10 @@ void MsgNode::Clear() {
  */
 SendNode::SendNode(const char* msg, short msgId, short msgLen) : MsgNode(msgLen + HEAD_TOTAL_LEN), _msg_id(msgId) {
 	// id本地转网络
-	int netMsgId = boost::asio::detail::socket_ops::host_to_network_short(msgId);
-	memcpy(_data, &netMsgId, HEAD_ID_LEN);
+	const auto header = ChatFrameCodec::EncodeHeader(
+		static_cast<std::uint16_t>(msgId), static_cast<std::uint16_t>(msgLen));
+	memcpy(_data, header.data(), header.size());
 	// msgLen本地转网络
-	int netMsgLen = boost::asio::detail::socket_ops::host_to_network_short(msgLen);
-	memcpy(_data + HEAD_ID_LEN, &netMsgLen, HEAD_DATA_LEN);
 	// 数据
 	memcpy(_data + HEAD_TOTAL_LEN, msg, msgLen);
 }
@@ -40,11 +40,10 @@ SendNode::SendNode(const char* msg, short msgId, short msgLen) : MsgNode(msgLen 
  */
 SendNode::SendNode(const std::string& msg, short msgId, short msgLen) : MsgNode(msgLen + HEAD_TOTAL_LEN), _msg_id(msgId) {
 	// id本地转网络
-	int netMsgId = boost::asio::detail::socket_ops::host_to_network_short(msgId);
-	memcpy(_data, &netMsgId, HEAD_ID_LEN);
+	const auto header = ChatFrameCodec::EncodeHeader(
+		static_cast<std::uint16_t>(msgId), static_cast<std::uint16_t>(msgLen));
+	memcpy(_data, header.data(), header.size());
 	// msgLen本地转网络
-	int netMsgLen = boost::asio::detail::socket_ops::host_to_network_short(msgLen);
-	memcpy(_data + HEAD_ID_LEN, &netMsgLen, HEAD_DATA_LEN);
 	// 数据
 	memcpy(_data + HEAD_TOTAL_LEN, msg.c_str(), msgLen);
 }

@@ -129,6 +129,7 @@
   <ItemGroup>
     <ClCompile Include="AsioIOServicePool.cpp" />
     <ClCompile Include="ChatGrpcClient.cpp" />
+    <ClCompile Include="ChatFrameCodec.cpp" />
     <ClCompile Include="ChatServer.cpp" />
     <ClCompile Include="ChatServiceImpl.cpp" />
     <ClCompile Include="ConfigMgr.cpp" />
@@ -143,6 +144,7 @@
     <ClCompile Include="MsgNode.cpp" />
     <ClCompile Include="MysqlDao.cpp" />
     <ClCompile Include="MysqlMgr.cpp" />
+    <ClCompile Include="PeerServerRouting.cpp" />
     <ClCompile Include="RedisMgr.cpp" />
     <ClCompile Include="Singleton.cpp" />
     <ClCompile Include="StatusGrpcClient.cpp" />
@@ -151,6 +153,7 @@
   <ItemGroup>
     <ClInclude Include="AsioIOServicePool.h" />
     <ClInclude Include="ChatGrpcClient.h" />
+    <ClInclude Include="ChatFrameCodec.h" />
     <ClInclude Include="ChatServiceImpl.h" />
     <ClInclude Include="ConfigMgr.h" />
     <ClInclude Include="Const.h" />
@@ -165,6 +168,7 @@
     <ClInclude Include="MsgNode.h" />
     <ClInclude Include="MysqlDao.h" />
     <ClInclude Include="MysqlMgr.h" />
+    <ClInclude Include="PeerServerRouting.h" />
     <ClInclude Include="RedisMgr.h" />
     <ClInclude Include="Singleton.h" />
     <ClInclude Include="StatusGrpcClient.h" />

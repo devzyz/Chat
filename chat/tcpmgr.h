@@ -8,6 +8,7 @@
 #include <QQueue>
 #include "userdata.h"
 #include "messagerecord.h"
+#include "tcpframedecoder.h"
 
 /**
  * @brief The TcpMgr class
@@ -38,12 +39,9 @@ public:
     QTcpSocket _socket;
 
     // tlv存储结构
-    quint16 _message_id;
-    quint16 _message_len;
-    QByteArray _buffer;
+    TcpFrameDecoder _frameDecoder;
 
     // 用于标记当前包的包头是否收全了
-    bool _b_recv_pending;
 signals:
     /**
      * @brief sig_connected_server

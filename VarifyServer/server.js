@@ -1,77 +1,87 @@
-const grpc = require('@grpc/grpc-js')
-const message_proto = require('./proto')
-const const_module = require('./const')
-const { v4 : uuidv4 } = require('uuid')
-const emailModule = require('./email')
-const redis_module = require('./redis')
+const grpc = require('@grpc/grpc-js');
+const messageProto = require('./proto');
+const constModule = require('./const');
+const { v4: uuidv4 } = require('uuid');
 
-async function GetVarifyCode(call, callback) {
-    console.log("email is ", call.request.email)
+function createGetVarifyCodeHandler({ redisModule, emailModule, generateUuid = uuidv4, logger = console }) {
+    return async function GetVarifyCode(call, callback) {
+        logger.log('email is ', call.request.email);
 
-    try {
-        let query_res = await redis_module.GetRedis(const_module.code_prefix + call.request.email);
-        let uniqueId = query_res;
-        if (query_res == null) {
-            uniqueId = uuidv4();
-            if (uniqueId.length > 4) {
-                uniqueId = uniqueId.substring(0, 4);
+        try {
+            const key = constModule.code_prefix + call.request.email;
+            const queryResult = await redisModule.GetRedis(key);
+            let uniqueId = queryResult;
+            if (queryResult == null) {
+                uniqueId = generateUuid();
+                if (uniqueId.length > 4) {
+                    uniqueId = uniqueId.substring(0, 4);
+                }
+                const stored = await redisModule.setRedisExpire(key, uniqueId, 600);
+
+                if (!stored) {
+                    callback(null, {
+                        email: call.request.email,
+                        error: constModule.Errors.RedisErr
+                    });
+                    return;
+                }
             }
-            let bres = await redis_module.setRedisExpire(const_module.code_prefix + call.request.email, 
-                uniqueId, 600
-            );
+            logger.log('uniqueId is ', uniqueId);
+            const text = '您的验证码为' + uniqueId + '请十分钟内完成注册';
+            const mailOptions = {
+                from: '1358451905@qq.com',
+                to: call.request.email,
+                subject: '验证码',
+                text
+            };
 
+            const sendResult = await emailModule.SendMail(mailOptions);
+            logger.log('send res is ', sendResult);
 
-            if (!bres) {
+            if (!sendResult) {
                 callback(null, {
-                    email : call.request.email,
-                    error : const_module.Errors.RedisErr
+                    email: call.request.email,
+                    error: constModule.Errors.Exception
                 });
-                return;
+            } else {
+                callback(null, {
+                    email: call.request.email,
+                    error: constModule.Errors.Success
+                });
             }
-        }
-        console.log("uniqueId is ", uniqueId)
-        let text_str = '您的验证码为' + uniqueId + '请十分钟内完成注册'
-        // 发送邮件
-        let mailOptions = {
-            from: '1358451905@qq.com',
-            to: call.request.email,
-            subject: '验证码',
-            text: text_str,
-        };
-
-        // 异步变同步，等待邮件发送完成
-        let send_res = await emailModule.SendMail(mailOptions);
-        console.log("send res is ", send_res)
-
-        if (!send_res) {
-            callback(null, {   
-                email : call.request.email, 
-                error : const_module.Errors.Exception
-            });
-        }else {
-            callback(null, {   
-                email : call.request.email, 
-                error : const_module.Errors.Success
+        } catch (error) {
+            logger.log('catch error is ', error);
+            callback(null, {
+                email: call.request.email,
+                error: constModule.Errors.Exception
             });
         }
+    };
+}
 
-    }catch(error) {
-        console.log("catch error is ", error)
-        
-        callback(null, {
-            email : call.request.email,
-            error : const_module.Errors.Exception
-        });
-    }
+function createDefaultHandler() {
+    const emailModule = require('./email');
+    const redisModule = require('./redis');
+    return createGetVarifyCodeHandler({ redisModule, emailModule });
+}
+
+function createServer(handler = createDefaultHandler()) {
+    const server = new grpc.Server();
+    server.addService(messageProto.VarifyService.service, { GetVarifyCode: handler });
+    return server;
 }
 
 function main() {
-    var server = new grpc.Server()
-    server.addService(message_proto.VarifyService.service, {GetVarifyCode : GetVarifyCode})
+    const server = createServer();
     server.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), () => {
         server.start();
-        console.log('grpc server started')
-    })
+        console.log('grpc server started');
+    });
+    return server;
 }
 
-main()
+if (require.main === module) {
+    main();
+}
+
+module.exports = { createGetVarifyCodeHandler, createServer, main };

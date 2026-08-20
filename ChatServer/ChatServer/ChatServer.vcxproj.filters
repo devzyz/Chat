@@ -63,6 +63,12 @@
     <ClCompile Include="ChatGrpcClient.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="ChatFrameCodec.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="PeerServerRouting.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="UserMgr.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -123,6 +129,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="ChatGrpcClient.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ChatFrameCodec.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="PeerServerRouting.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="UserMgr.h">
