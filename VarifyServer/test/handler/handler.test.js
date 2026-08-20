@@ -222,3 +222,34 @@ test('mail rejection returns Exception', async () => {
     // Assert
     assert.equal(response.error, constModule.Errors.Exception);
 });
+
+// V06-LOG-01
+test('default handler events never disclose the recipient or verification code', async () => {
+    const entries = [];
+    const logger = {
+        log(...values) {
+            entries.push(values.map(String).join(' '));
+        }
+    };
+    const handler = createGetVarifyCodeHandler({
+        redisModule: {
+            async GetRedis() {
+                return 'S3CR';
+            }
+        },
+        emailModule: {
+            async SendMail() {
+                return 'accepted-with-provider-detail';
+            }
+        },
+        logger
+    });
+
+    const response = await invoke(handler);
+
+    assert.equal(response.error, constModule.Errors.Success);
+    const output = entries.join('\n');
+    assert.doesNotMatch(output, /recipient@example\.test/);
+    assert.doesNotMatch(output, /S3CR/);
+    assert.doesNotMatch(output, /accepted-with-provider-detail/);
+});

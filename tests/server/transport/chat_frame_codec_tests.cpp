@@ -5,36 +5,32 @@
 namespace {
 
 // T02-FRM-01
-TEST(ChatFrameCodecTests, HeaderUsesBigEndianMessageIdAndBodyLength) {
-    const auto bytes = ChatFrameCodec::EncodeHeader(0x1234, 0x0201);
+TEST(ChatFrameCodecTests, ValidatedHeaderPreservesHighBitMessageIdInNetworkOrder) {
+    const auto bytes = ChatFrameCodec::EncodeHeader(0x9234, 0x0201);
 
-    EXPECT_EQ(bytes, (ChatFrameCodec::HeaderBytes{0x12, 0x34, 0x02, 0x01}));
-    const auto decoded = ChatFrameCodec::DecodeHeader(bytes.data());
-    EXPECT_EQ(decoded.message_id, 0x1234);
-    EXPECT_EQ(decoded.body_length, 0x0201);
+    EXPECT_EQ(bytes, (ChatFrameCodec::HeaderBytes{0x92, 0x34, 0x02, 0x01}));
+    const auto decoded = ChatFrameCodec::DecodeValidatedHeader(bytes.data(), MAX_LENGTH);
+    ASSERT_TRUE(decoded.has_value());
+    EXPECT_EQ(decoded->message_id, 0x9234);
+    EXPECT_EQ(decoded->body_length, 0x0201);
 }
 
 // T02-FRM-02
-TEST(ChatFrameCodecTests, ZeroLengthAndMaximumLengthHeadersAreSupported) {
-    const auto empty_bytes = ChatFrameCodec::EncodeHeader(7, 0);
-    const auto maximum_bytes = ChatFrameCodec::EncodeHeader(MAX_LENGTH, MAX_LENGTH);
-    const auto empty = ChatFrameCodec::DecodeHeader(empty_bytes.data());
-    const auto maximum = ChatFrameCodec::DecodeHeader(maximum_bytes.data());
+TEST(ChatFrameCodecTests, MaximumBodyLengthAcceptsAnUnknownMessageId) {
+    const auto bytes = ChatFrameCodec::EncodeHeader(0xffff, MAX_LENGTH);
 
-    EXPECT_TRUE(ChatFrameCodec::IsSupported(empty));
-    EXPECT_EQ(empty.body_length, 0);
-    EXPECT_TRUE(ChatFrameCodec::IsSupported(maximum));
+    const auto decoded = ChatFrameCodec::DecodeValidatedHeader(bytes.data(), MAX_LENGTH);
+
+    ASSERT_TRUE(decoded.has_value());
+    EXPECT_EQ(decoded->message_id, 0xffff);
+    EXPECT_EQ(decoded->body_length, MAX_LENGTH);
 }
 
 // T02-FRM-03
-TEST(ChatFrameCodecTests, ValuesAboveTheCurrentProtocolMaximumAreRejected) {
-    const auto invalid_id_bytes = ChatFrameCodec::EncodeHeader(MAX_LENGTH + 1, 1);
-    const auto invalid_length_bytes = ChatFrameCodec::EncodeHeader(1, MAX_LENGTH + 1);
-    const auto invalid_id = ChatFrameCodec::DecodeHeader(invalid_id_bytes.data());
-    const auto invalid_length = ChatFrameCodec::DecodeHeader(invalid_length_bytes.data());
+TEST(ChatFrameCodecTests, BodyLengthAboveTheReceiveBufferLimitIsRejected) {
+    const auto bytes = ChatFrameCodec::EncodeHeader(1, 0x8000);
 
-    EXPECT_FALSE(ChatFrameCodec::IsSupported(invalid_id));
-    EXPECT_FALSE(ChatFrameCodec::IsSupported(invalid_length));
+    EXPECT_FALSE(ChatFrameCodec::DecodeValidatedHeader(bytes.data(), MAX_LENGTH).has_value());
 }
 
 } // namespace

@@ -1,18 +1,13 @@
-# VarifyServer 测试
+# VarifyServer tests
 
-VarifyServer 使用 Node.js 内置 `node:test`，测试按被测模块组织：
+The Node 22 `node:test` suite is organized by production contract:
 
-- [config](config/README.md)：配置来源优先级和畸形配置。
-- [protocol](protocol/README.md)：错误常量及 protobuf/gRPC 描述符。
-- [handler](handler/README.md)：验证码复用/生成、TTL、依赖错误与单次 callback。
+- `config`: configuration precedence and malformed input.
+- `protocol`: error constants and generated service descriptors.
+- `handler`: injected Redis/SMTP/UUID/logger behavior, including log redaction.
+- `rpc`: real dynamic-loopback gRPC route registration.
+- `startup`: bind/start lifecycle through the production `startServer` interface.
 
-从仓库根目录运行：
+Run `npm test` in `VarifyServer` or `RunVarifyTests` from the repository root. Both execute the same explicit file list and write `build/test-results/varify_unit.xml` in CI. No test connects to Redis, SMTP, or a public network.
 
-```powershell
-.\scripts\windows-local.ps1 -Task RunVarifyTests
-```
-
-- [rpc](rpc/README.md): real loopback gRPC registration, routing, response, and bounded deadline behavior.
-
-也可在 `VarifyServer` 目录执行 `npm test`。CI 的 `varify-release` job 运行相同文件集合，并生成
-`build/test-results/varify_unit.xml`。新增模块必须建立子目录与 `README.md`，且显式加入 npm 和统一本地入口。
+The real loopback protocol route is Integration coverage. Default-process startup, real adapters, signals, cross-language C++ calls, and C++ deadline behavior remain gaps.

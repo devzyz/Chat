@@ -45,16 +45,18 @@ boost::asio::io_context& AsioIOServicePool::GetIOService() {
  * 将每个线程的哨兵事件停止，这样每个线程在处理完所有异步操作后，就会返回
  */
 void AsioIOServicePool::stop() {
-	if (_b_stop) {
+	bool expected = false;
+	if (!_b_stop.compare_exchange_strong(expected, true)) {
 		return;
 	}
-	_b_stop = true;
 	for (auto& work : _works) {
 		work->get_executor().context().stop();
 		work.reset();
 	}
 
 	for (auto& thread : _threads) {
-		thread.join();
+		if (thread.joinable()) {
+			thread.join();
+		}
 	}
 }

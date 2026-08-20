@@ -24,10 +24,10 @@ function SendMail(mailOptions_) {
     return new Promise(function(resolve, reject) {
         transport.sendMail(mailOptions_, function(error, info) {
             if (error) {
-                console.log(error);
+                console.log('SMTP delivery failed');
                 reject(error);
             }else {
-                console.log('邮件已成功发送：' + info.response);
+                console.log('SMTP delivery succeeded');
                 resolve(info.response);
             }
         });

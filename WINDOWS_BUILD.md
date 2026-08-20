@@ -20,7 +20,7 @@ ZIP packages suitable for release testing.
 - vcpkg tool version:
   `4b3e4c276b5b87a649e66341e11553e8c577459c`
 - Qt 6.5.3 MinGW 64-bit and its bundled MinGW compiler
-- CMake 3.16 or newer and Ninja
+- CMake 3.21 or newer and Ninja (required for the JUnit-capable CTest runner)
 - Node.js and npm with support for npm ci
 
 The server triplet is the repository-owned `x64-windows-chat` overlay. The MSVC
@@ -194,7 +194,7 @@ history is shallow; only its reusable download cache is retained. The old
 global `installed` tree has been removed. For example:
 
     $env:VCPKG_DOWNLOADS = 'D:\vcpkg\vcpkg\downloads'
-    $env:VCPKG_BINARY_SOURCES = 'clear;files,C:\Users\Lenovo\AppData\Local\vcpkg\archives,readwrite'
+    $env:VCPKG_BINARY_SOURCES = "clear;files,$env:LOCALAPPDATA\vcpkg\archives,readwrite"
 
 `RestoreServers` and MSBuild place temporary build/package trees under
 `D:\vcpkg-chat-temp` by default and remove each port's trees after installation.

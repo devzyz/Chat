@@ -16,7 +16,7 @@ struct CompletionState {
     std::condition_variable condition;
 };
 
-TEST(AsioIOServicePoolTests, PostedTaskCompletesBeforeScopedDestruction) {
+TEST(AsioPoolContractTests, PostedTaskCompletesBeforeScopedDestruction) {
     auto state = std::make_shared<CompletionState>();
     {
         AsioIOServicePool pool(1);
@@ -34,7 +34,7 @@ TEST(AsioIOServicePoolTests, PostedTaskCompletesBeforeScopedDestruction) {
     EXPECT_EQ(state->completed.load(), 1);
 }
 
-TEST(AsioIOServicePoolTests, RepeatedStopAndDestructionCompleteWithinTheDeadline) {
+TEST(AsioPoolContractTests, RepeatedStopAndDestructionCompleteWithinTheDeadline) {
     const auto started = std::chrono::steady_clock::now();
     {
         AsioIOServicePool pool(1);

@@ -1,34 +1,35 @@
 #pragma once
 #include <iostream>
+#include <cstddef>
+#include <cstdint>
 #include "Const.h"
 #include <boost/asio.hpp>
 
 class MsgNode
 {
 public:
-	MsgNode(short total_len);
+	MsgNode(std::size_t total_len);
 	~MsgNode();
 	void Clear();
 
-	short _cur_len;
-	short _total_len;
+	std::size_t _cur_len;
+	std::size_t _total_len;
 	char* _data;
 };
 
 class SendNode : public MsgNode {
 public:
-	SendNode(const char* msg, short msgId, short msgLen);
-	SendNode(const std::string& msg, short msgId, short msgLen);
+	SendNode(const char* msg, std::uint16_t msgId, std::size_t msgLen);
+	SendNode(const std::string& msg, std::uint16_t msgId, std::size_t msgLen);
 	~SendNode();
 
-	short _msg_id;
+	std::uint16_t _msg_id;
 };
 
 class RecvNode : public MsgNode {
 public:
-	RecvNode(short maxLen, short msgId);
+	RecvNode(std::size_t maxLen, std::uint16_t msgId);
 	~RecvNode();
 
-	short _msg_id;
+	std::uint16_t _msg_id;
 };
-

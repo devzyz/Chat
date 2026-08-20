@@ -12,10 +12,10 @@ ChatServer 配置字段、端口范围和 peer 校验已由 `tests/server/config
 
 ## 用例类型、隔离与清理
 
-`startup_config_tests.cpp` 包含 7 个 Windows Component 测试。每个用例创建唯一临时工作目录，通过
+`startup_config_tests.cpp` 包含 7 个 Windows process Integration 测试。每个用例创建唯一临时工作目录，通过
 `CreateProcessW` 黑盒启动当前配置对应的 `ChatServer.exe`，并分别捕获 stdout/stderr。配置优先级用三份
 故意畸形且名称可区分的临时 INI 观察实际选择路径；TCP 冲突用例占用 wildcard 临时端口，gRPC 冲突用例占用
-loopback 临时端口。配置中的 Redis、MySQL 和 Status endpoint 均为不可用的本地占位，且执行路径在访问这些依赖前失败。测试不访问真实 Redis、
+loopback 临时端口，并设置 Windows `SO_EXCLUSIVEADDRUSE` 保证占用合同。配置中的 Redis、MySQL 和 Status endpoint 均为不可用的本地占位，且执行路径在访问这些依赖前失败。测试不访问真实 Redis、
 MySQL、SMTP 或公网，不使用仓库开发配置。
 
 每个子进程有 10 秒硬超时；超时进程会被终止。fixture 析构时只清理本次唯一临时目录，端口由 RAII acceptor

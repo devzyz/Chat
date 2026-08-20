@@ -27,6 +27,10 @@ $clientBuild = Join-Path $repoRoot "build\windows-client\$Configuration"
 $varifySource = Join-Path $repoRoot 'VarifyServer'
 $chatServerExecutable = Join-Path $repoRoot "build\windows-servers\$Configuration\ChatServer\ChatServer.exe"
 $serverTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\server_unit_tests.exe"
+$gateAsioTestProject = Join-Path $repoRoot 'tests\server\lifecycle\GateAsioPoolTests.vcxproj'
+$statusAsioTestProject = Join-Path $repoRoot 'tests\server\lifecycle\StatusAsioPoolTests.vcxproj'
+$gateAsioTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\gate_asio_pool_tests.exe"
+$statusAsioTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\status_asio_pool_tests.exe"
 $testResults = Join-Path $repoRoot 'build\test-results'
 $overlayTriplets = Join-Path $repoRoot 'triplets'
 $expectedQtVersion = '6.5.3'
@@ -59,6 +63,18 @@ function Require-Command {
         throw "$Hint Command not found: $Name"
     }
     return $command.Source
+}
+
+function Resolve-CMake {
+    $cmake = Require-Command 'cmake.exe' 'Install CMake 3.21 or newer and add it to PATH.'
+    $versionText = (& $cmake --version 2>&1 | Select-Object -First 1)
+    if ($LASTEXITCODE -ne 0 -or $versionText -notmatch '(\d+\.\d+(?:\.\d+)?)') {
+        throw "Unable to determine the CMake version: $versionText"
+    }
+    if ([version]$Matches[1] -lt [version]'3.21') {
+        throw "CMake 3.21 or newer is required; found $($Matches[1])."
+    }
+    return $cmake
 }
 
 function Resolve-Vcpkg {
@@ -207,12 +223,43 @@ function Run-ServerTests {
         "/p:VcpkgHostTriplet=$ServerHostTriplet"
         "/p:ServerIntermediateRoot=$ServerIntermediateRoot"
     )
+    $reports = @(
+        (Join-Path $testResults 'server_unit.xml')
+        (Join-Path $testResults 'server_gate_asio.xml')
+        (Join-Path $testResults 'server_status_asio.xml')
+    )
+    [void](New-Item -ItemType Directory -Path $testResults -Force)
+    foreach ($report in $reports) {
+        if (Test-Path -LiteralPath $report) {
+            Remove-Item -LiteralPath $report -Force
+        }
+    }
+
     & $msbuild @arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Server unit test build failed with exit code $LASTEXITCODE."
     }
 
-    $chatBinary = Require-File $chatServerExecutable 'Build the ChatServer target first.'
+    $installedRoot = Join-Path $repoRoot 'vcpkg_installed'
+    foreach ($project in @($gateAsioTestProject, $statusAsioTestProject)) {
+        $poolArguments = @(
+            $project
+            '/m'
+            "/p:Configuration=$Configuration"
+            '/p:Platform=x64'
+            "/p:VcpkgRoot=$($vcpkg.Root)"
+            "/p:VcpkgTriplet=$ServerTriplet"
+            "/p:VcpkgHostTriplet=$ServerHostTriplet"
+            "/p:ServerIntermediateRoot=$ServerIntermediateRoot"
+            '/p:VcpkgManifestInstall=false'
+            "/p:VcpkgInstalledDir=$installedRoot\"
+        )
+        & $msbuild @poolArguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Server Asio lifecycle test build failed with exit code $LASTEXITCODE`: $project"
+        }
+    }
+
     $installedBin = Join-Path $repoRoot "vcpkg_installed\$ServerTriplet\bin"
     if ($Configuration -eq 'Debug') {
         $installedBin = Join-Path $repoRoot "vcpkg_installed\$ServerTriplet\debug\bin"
@@ -220,38 +267,46 @@ function Run-ServerTests {
     if (-not (Test-Path -LiteralPath $installedBin -PathType Container)) {
         throw "The vcpkg app-local dependency directory is missing: $installedBin"
     }
+    $chatBinary = Require-File $chatServerExecutable 'Build the ChatServer target first.'
     & $vcpkg.Exe z-applocal "--target-binary=$chatBinary" "--installed-bin-dir=$installedBin"
     if ($LASTEXITCODE -ne 0) {
         throw "ChatServer app-local deployment failed with exit code $LASTEXITCODE."
     }
 
     $testBinary = Require-File $serverTestExecutable 'Build the ServerUnitTests target first.'
-    & $vcpkg.Exe z-applocal "--target-binary=$testBinary" "--installed-bin-dir=$installedBin"
-    if ($LASTEXITCODE -ne 0) {
-        throw "Server unit test app-local deployment failed with exit code $LASTEXITCODE."
-    }
 
-    [void](New-Item -ItemType Directory -Path $testResults -Force)
-    $report = Join-Path $testResults 'server_unit.xml'
-    if (Test-Path -LiteralPath $report) {
-        Remove-Item -LiteralPath $report -Force
-    }
-    Push-Location (Split-Path -Parent $testBinary)
-    try {
-        & $testBinary "--gtest_output=xml:$report"
-        if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
-            throw "Server unit test report was not created: $report"
-        }
+    $executions = @(
+        @{ Binary = $testBinary; Report = $reports[0] }
+        @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[1] }
+        @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[2] }
+    )
+    $failures = @()
+    foreach ($execution in $executions) {
+        & $vcpkg.Exe z-applocal "--target-binary=$($execution.Binary)" "--installed-bin-dir=$installedBin"
         if ($LASTEXITCODE -ne 0) {
-            throw "Server unit tests failed with exit code $LASTEXITCODE. Report: $report"
+            throw "Server test app-local deployment failed with exit code $LASTEXITCODE`: $($execution.Binary)"
         }
-    } finally {
-        Pop-Location
+        Push-Location (Split-Path -Parent $execution.Binary)
+        try {
+            & $execution.Binary "--gtest_output=xml:$($execution.Report)"
+            $exitCode = $LASTEXITCODE
+        } finally {
+            Pop-Location
+        }
+        if (-not (Test-Path -LiteralPath $execution.Report -PathType Leaf)) {
+            throw "Server test report was not created: $($execution.Report)"
+        }
+        if ($exitCode -ne 0) {
+            $failures += "$($execution.Binary) (exit $exitCode)"
+        }
+    }
+    if ($failures.Count -gt 0) {
+        throw "Server tests failed: $($failures -join '; ')"
     }
 }
 
 function Build-Client {
-    $cmake = Require-Command 'cmake.exe' 'Install CMake 3.16 or newer and add it to PATH.'
+    $cmake = Resolve-CMake
     $qt = Resolve-QtToolchain
     $cache = Join-Path $clientBuild 'CMakeCache.txt'
     if (Test-Path -LiteralPath $cache) {
@@ -287,10 +342,16 @@ function Build-Client {
 
 function Run-ClientTests {
     Build-Client
-    $ctest = Require-Command 'ctest.exe' 'Install CMake 3.16 or newer and add it to PATH.'
+    $ctest = Require-Command 'ctest.exe' 'Install CMake 3.21 or newer and add it to PATH.'
     [void](New-Item -ItemType Directory -Path $testResults -Force)
     $report = Join-Path $testResults 'client_unit.xml'
+    if (Test-Path -LiteralPath $report) {
+        Remove-Item -LiteralPath $report -Force
+    }
     & $ctest --test-dir $clientBuild --output-on-failure --output-junit $report
+    if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
+        throw "Qt client test report was not created: $report"
+    }
     if ($LASTEXITCODE -ne 0) {
         throw "Qt client tests failed with exit code $LASTEXITCODE. Report: $report"
     }
@@ -303,12 +364,62 @@ function Run-ScriptTests {
         'tests\scripts\validation\chatserver-instances.tests.ps1'
         'tests\scripts\lifecycle\chatserver-instances.tests.ps1'
     )
+    [void](New-Item -ItemType Directory -Path $testResults -Force)
+    $report = Join-Path $testResults 'script_unit.xml'
+    if (Test-Path -LiteralPath $report) {
+        Remove-Item -LiteralPath $report -Force
+    }
+    $results = @()
     foreach ($relativePath in $testScripts) {
         $testScript = Require-File (Join-Path $repoRoot $relativePath) 'A ChatServer instance script test is missing.'
-        & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $testScript
-        if ($LASTEXITCODE -ne 0) {
-            throw "ChatServer instance script tests failed with exit code $LASTEXITCODE`: $relativePath"
+        $started = [DateTime]::UtcNow
+        $output = (& $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $testScript 2>&1 | Out-String)
+        $results += [pscustomobject]@{
+            Name = $relativePath
+            ExitCode = $LASTEXITCODE
+            Duration = ([DateTime]::UtcNow - $started).TotalSeconds
+            Output = $output
         }
+        Write-Host $output
+    }
+    $settings = New-Object System.Xml.XmlWriterSettings
+    $settings.Indent = $true
+    $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
+    $writer = [System.Xml.XmlWriter]::Create($report, $settings)
+    try {
+        $writer.WriteStartDocument()
+        $writer.WriteStartElement('testsuites')
+        $writer.WriteAttributeString('tests', [string]$results.Count)
+        $writer.WriteAttributeString('failures', [string]@($results | Where-Object { $_.ExitCode -ne 0 }).Count)
+        $writer.WriteStartElement('testsuite')
+        $writer.WriteAttributeString('name', 'PowerShellScriptTests')
+        $writer.WriteAttributeString('tests', [string]$results.Count)
+        $writer.WriteAttributeString('failures', [string]@($results | Where-Object { $_.ExitCode -ne 0 }).Count)
+        foreach ($result in $results) {
+            $writer.WriteStartElement('testcase')
+            $writer.WriteAttributeString('classname', 'scripts.chatserver-instances')
+            $writer.WriteAttributeString('name', $result.Name)
+            $writer.WriteAttributeString('time', $result.Duration.ToString('0.000', [Globalization.CultureInfo]::InvariantCulture))
+            if ($result.ExitCode -ne 0) {
+                $writer.WriteStartElement('failure')
+                $writer.WriteAttributeString('message', "exit code $($result.ExitCode)")
+                $writer.WriteString($result.Output)
+                $writer.WriteEndElement()
+            }
+            $writer.WriteStartElement('system-out')
+            $writer.WriteString($result.Output)
+            $writer.WriteEndElement()
+            $writer.WriteEndElement()
+        }
+        $writer.WriteEndElement()
+        $writer.WriteEndElement()
+        $writer.WriteEndDocument()
+    } finally {
+        $writer.Dispose()
+    }
+    $failedScripts = @($results | Where-Object { $_.ExitCode -ne 0 })
+    if ($failedScripts.Count -gt 0) {
+        throw "ChatServer instance script tests failed. Report: $report"
     }
 }
 
@@ -325,12 +436,20 @@ function Run-VarifyTests {
             'The VarifyServer handler unit tests are missing.'
         Require-File (Join-Path $varifySource 'test\rpc\rpc-routing.test.js') `
             'The VarifyServer RPC routing component tests are missing.'
+        Require-File (Join-Path $varifySource 'test\startup\startup.test.js') `
+            'The VarifyServer startup lifecycle tests are missing.'
     )
     [void](New-Item -ItemType Directory -Path $testResults -Force)
     $report = Join-Path $testResults 'varify_unit.xml'
+    if (Test-Path -LiteralPath $report) {
+        Remove-Item -LiteralPath $report -Force
+    }
     Push-Location $varifySource
     try {
         & $node --test --test-reporter=junit --test-reporter-destination=$report @testFiles
+        if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
+            throw "VarifyServer unit test report was not created: $report"
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "VarifyServer unit tests failed with exit code $LASTEXITCODE. Report: $report"
         }
@@ -356,7 +475,7 @@ function Restore-Varify {
 function Check-Toolchains {
     $vcpkg = Resolve-Vcpkg
     $msbuild = Resolve-MSBuild
-    $cmake = Require-Command 'cmake.exe' 'Install CMake 3.16 or newer and add it to PATH.'
+    $cmake = Resolve-CMake
     $qt = Resolve-QtToolchain
     $node = Require-Command 'node.exe' 'Install Node.js before restoring VarifyServer.'
     $npm = Require-Command 'npm.cmd' 'Install npm before restoring VarifyServer.'

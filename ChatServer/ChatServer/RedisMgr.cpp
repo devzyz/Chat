@@ -33,15 +33,13 @@ RedisConnectionPool::RedisConnectionPool(const std::string& host, const std::str
 
 		// 进行心跳
 		_check_thread = std::thread([this]() {
-			int count = 0;
-			while (!_b_stop) {
-				if (count >= 60) {
-					CheckConnection();
-					count = 0;
-					continue;
-				}
-				std::this_thread::sleep_for(std::chrono::seconds(1));
-				count++;
+			std::unique_lock<std::mutex> lock(_que_mutex);
+			while (!_cond.wait_for(lock, std::chrono::seconds(60), [this]() {
+				return _b_stop.load();
+				})) {
+				lock.unlock();
+				CheckConnection();
+				lock.lock();
 			}
 			});
 	}
@@ -52,8 +50,8 @@ RedisConnectionPool::RedisConnectionPool(const std::string& host, const std::str
 
 // 析构，释放所有的与redis的连接
 RedisConnectionPool::~RedisConnectionPool() {
-	std::lock_guard<std::mutex> lock(_que_mutex);
 	close();
+	std::lock_guard<std::mutex> lock(_que_mutex);
 	while (_que.size()) {
 		auto* context = _que.front();
 		redisFree(context);
@@ -61,16 +59,16 @@ RedisConnectionPool::~RedisConnectionPool() {
 	}
 }
 
-redisContext* RedisConnectionPool::getConnection() {
+redisContext* RedisConnectionPool::getConnection(std::chrono::milliseconds wait_timeout) {
 	std::unique_lock<std::mutex> lock(_que_mutex);
-	_cond.wait(lock, [this]() {
+	const bool available = _cond.wait_for(lock, wait_timeout, [this]() {
 		if (_b_stop) {
 			return true;
 		}
 		return !_que.empty();
 		});
 
-	if (_b_stop) {
+	if (!available || _b_stop) {
 		return nullptr;
 	}
 	auto connection = _que.front();
@@ -79,18 +77,29 @@ redisContext* RedisConnectionPool::getConnection() {
 }
 
 void RedisConnectionPool::returnConnection(redisContext* connection) {
-	std::lock_guard<std::mutex> lock(_que_mutex);
-	_que.push(connection);
+	if (connection == nullptr) {
+		return;
+	}
+	{
+		std::lock_guard<std::mutex> lock(_que_mutex);
+		if (_b_stop) {
+			redisFree(connection);
+			return;
+		}
+		_que.push(connection);
+	}
 	_cond.notify_one();
 }
 
 void RedisConnectionPool::close() {
-	if (_b_stop) {
+	bool expected = false;
+	if (!_b_stop.compare_exchange_strong(expected, true)) {
 		return;
 	}
-	_b_stop = true;
 	_cond.notify_all();
-	_check_thread.join();
+	if (_check_thread.joinable()) {
+		_check_thread.join();
+	}
 }
 
 // 心跳保活

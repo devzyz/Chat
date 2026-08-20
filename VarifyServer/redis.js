@@ -24,14 +24,14 @@ async function GetRedis(key) {
     try {
         const result = await RedisCli.get(key);
         if (result == null) {
-            console.log('result:', '<' + result + '>', 'This key cannot be find ...');
+            console.log('Redis key not found');
             return null;
         }
 
-        console.log('result:', '<' + result + '>', 'Get key success! ...');
+        console.log('Redis key read succeeded');
         return result;
     }catch(error) {
-        console.log('GetRedis error is', error);
+        console.log('Redis key read failed');
         return null;
     }
 }
@@ -45,13 +45,13 @@ async function QueryRedis(key) {
         const result = await RedisCli.exists(key);
         // 
         if (result == 0) {
-            console.log('result:', '<' + result + '>', 'This key is null ...');
+            console.log('Redis key not found');
             return null;
         }
-        console.log('result:', '<' + result + '>', 'With this value! ...');
+        console.log('Redis key exists');
         return result;
     }catch(error) {
-        console.log('QueryRedis error is', error);
+        console.log('Redis key query failed');
         return null;
     }
 }
@@ -71,7 +71,7 @@ async function setRedisExpire(key, value, exptime) {
         await RedisCli.expire(key, exptime);
         return true;
     }catch(error) {
-        console.log('setRedisExpire error is', error);
+        console.log('Redis key write failed');
         return false;
     }
 }

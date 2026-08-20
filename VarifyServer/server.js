@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 
 function createGetVarifyCodeHandler({ redisModule, emailModule, generateUuid = uuidv4, logger = console }) {
     return async function GetVarifyCode(call, callback) {
-        logger.log('email is ', call.request.email);
+        logger.log('verification request received');
 
         try {
             const key = constModule.code_prefix + call.request.email;
@@ -26,7 +26,6 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, generateUuid = u
                     return;
                 }
             }
-            logger.log('uniqueId is ', uniqueId);
             const text = '您的验证码为' + uniqueId + '请十分钟内完成注册';
             const mailOptions = {
                 from: '1358451905@qq.com',
@@ -36,8 +35,6 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, generateUuid = u
             };
 
             const sendResult = await emailModule.SendMail(mailOptions);
-            logger.log('send res is ', sendResult);
-
             if (!sendResult) {
                 callback(null, {
                     email: call.request.email,
@@ -50,7 +47,8 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, generateUuid = u
                 });
             }
         } catch (error) {
-            logger.log('catch error is ', error);
+            const logError = typeof logger.error === 'function' ? logger.error.bind(logger) : logger.log.bind(logger);
+            logError('verification request failed');
             callback(null, {
                 email: call.request.email,
                 error: constModule.Errors.Exception
@@ -71,11 +69,33 @@ function createServer(handler = createDefaultHandler()) {
     return server;
 }
 
-function main() {
-    const server = createServer();
-    server.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), () => {
-        server.start();
-        console.log('grpc server started');
+function startServer({ server, address, credentials, logger = console }) {
+    return new Promise((resolve, reject) => {
+        server.bindAsync(address, credentials, (error, boundPort) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+            if (!Number.isInteger(boundPort) || boundPort <= 0) {
+                reject(new Error('gRPC server did not bind a port'));
+                return;
+            }
+            server.start();
+            logger.log(`grpc server started on port ${boundPort}`);
+            resolve(boundPort);
+        });
+    });
+}
+
+function main({ server = createServer(), logger = console } = {}) {
+    void startServer({
+        server,
+        address: '0.0.0.0:50051',
+        credentials: grpc.ServerCredentials.createInsecure(),
+        logger
+    }).catch(() => {
+        const logError = typeof logger.error === 'function' ? logger.error.bind(logger) : logger.log.bind(logger);
+        logError('grpc server failed to start');
     });
     return server;
 }
@@ -84,4 +104,4 @@ if (require.main === module) {
     main();
 }
 
-module.exports = { createGetVarifyCodeHandler, createServer, main };
+module.exports = { createGetVarifyCodeHandler, createServer, startServer, main };

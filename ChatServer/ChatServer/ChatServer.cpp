@@ -46,7 +46,6 @@ int main(int argc, char* argv[])
     std::thread grpc_server_thread;
     bool login_count_registered = false;
     try {
-        pool = AsioIOServicePool::GetInstance();
         boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
 
         // 先完成所有本地端口绑定。任何端口冲突都必须在启动线程和登记Redis状态前失败。
@@ -68,6 +67,8 @@ int main(int argc, char* argv[])
         }
         SPDLOG_INFO("chat grpc Server listening on {}\n", server_address);
 
+        // Start workers only after both local listeners are known-good.
+        pool = AsioIOServicePool::GetInstance();
         p_server->init(); // 启动定时器
 
         // 所有监听端口均已成功绑定后，才向Redis登记本实例。
@@ -121,6 +122,7 @@ int main(int argc, char* argv[])
             redis->Close();
         }
         SPDLOG_ERROR("ChatServer exception: {}", e.what());
+        LogMgr::GetInstance()->Close();
         std::cerr << "ChatServer startup error: " << e.what() << std::endl;
         return EXIT_FAILURE;
     }

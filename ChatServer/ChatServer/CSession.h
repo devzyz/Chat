@@ -39,8 +39,8 @@ public:
 	 */
 	int GetUserId();
 	void Close();
-	void Send(const char* msg, short msg_id, short msg_len);
-	void Send(const std::string& msg, short msg_id);
+	void Send(const char* msg, std::uint16_t msg_id, std::size_t msg_len);
+	void Send(const std::string& msg, std::uint16_t msg_id);
 	// 检测与当前session连接的客户端的心跳是否正确,正确返回true,否则返回false
 	bool CheckHeartBeatAccurate(std::time_t& now);
 	// 更新当前的心跳时间
@@ -127,4 +127,3 @@ public:
 	std::shared_ptr<CSession> _session;
 	std::shared_ptr<RecvNode> _recv_msg_node;
 };
-

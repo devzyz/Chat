@@ -28,6 +28,10 @@ boost::asio::io_context& AsioIOServicePool::GetIOService() {
 }
 
 void AsioIOServicePool::stop() {
+	bool expected = false;
+	if (!_b_stop.compare_exchange_strong(expected, true)) {
+		return;
+	}
 	// 将假任务消除
 	for (auto& work : _works) {
 		// 把服务先停止，防止其他人再进行注册
@@ -36,7 +40,9 @@ void AsioIOServicePool::stop() {
 	}
 
 	for (auto& t : _threads) {
-		t.join();
+		if (t.joinable()) {
+			t.join();
+		}
 	}
 }
 

@@ -12,7 +12,10 @@ LogMgr::~LogMgr() {
 }
 
 void LogMgr::Close() {
-    if (_b_stop) return;
+    bool expected = false;
+    if (!_b_stop.compare_exchange_strong(expected, true)) {
+        return;
+    }
     // 如果logger存在，先flush,确保缓冲日志落盘
     if (_logger) {
         _logger->flush();

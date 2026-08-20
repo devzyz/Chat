@@ -30,6 +30,8 @@ public:
 	
 	~AsioIOServicePool();
 	boost::asio::io_context& GetIOService();
+	AsioIOServicePool();
+	explicit AsioIOServicePool(std::size_t size);
 
 	AsioIOServicePool(const AsioIOServicePool&) = delete;
 	AsioIOServicePool& operator = (const AsioIOServicePool&) = delete;
@@ -38,8 +40,6 @@ public:
 private:
 	static std::size_t DefaultPoolSize();
 	static std::size_t NormalizePoolSize(std::size_t size);
-	AsioIOServicePool();
-	AsioIOServicePool(std::size_t size);
 	std::size_t _nextIOService; // 通过轮询的方式，返回下一个将要被使用的io_context
 	std::vector<IOService> _ioServices;
 	std::vector<WorkPtr> _works;
@@ -47,4 +47,3 @@ private:
 
 	std::atomic<bool> _b_stop;
 };
-

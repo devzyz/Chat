@@ -195,6 +195,15 @@ void WriteText(const std::filesystem::path& path, const std::string& content) {
 
 unsigned short ReservePort(boost::asio::ip::tcp::acceptor& acceptor) {
     acceptor.open(boost::asio::ip::tcp::v4());
+    const BOOL exclusive = TRUE;
+    if (setsockopt(
+            acceptor.native_handle(),
+            SOL_SOCKET,
+            SO_EXCLUSIVEADDRUSE,
+            reinterpret_cast<const char*>(&exclusive),
+            sizeof(exclusive)) == SOCKET_ERROR) {
+        throw std::runtime_error("unable to reserve an exclusive loopback port");
+    }
     acceptor.bind({boost::asio::ip::address_v4::loopback(), 0});
     acceptor.listen();
     return acceptor.local_endpoint().port();
@@ -202,6 +211,15 @@ unsigned short ReservePort(boost::asio::ip::tcp::acceptor& acceptor) {
 
 unsigned short ReserveWildcardPort(boost::asio::ip::tcp::acceptor& acceptor) {
     acceptor.open(boost::asio::ip::tcp::v4());
+    const BOOL exclusive = TRUE;
+    if (setsockopt(
+            acceptor.native_handle(),
+            SOL_SOCKET,
+            SO_EXCLUSIVEADDRUSE,
+            reinterpret_cast<const char*>(&exclusive),
+            sizeof(exclusive)) == SOCKET_ERROR) {
+        throw std::runtime_error("unable to reserve an exclusive wildcard port");
+    }
     acceptor.bind({boost::asio::ip::address_v4::any(), 0});
     acceptor.listen();
     return acceptor.local_endpoint().port();
@@ -349,7 +367,8 @@ TEST(StartupConfigTests, OccupiedTcpPortFailsBeforeExternalDependencies) {
 
     const auto result = RunProcess(executable, {L"--config", config_path.wstring()}, fixture.Path());
 
-    EXPECT_FALSE(result.timed_out) << "ChatServer did not fail fast for occupied TCP port " << tcp_port;
+    EXPECT_FALSE(result.timed_out) << "ChatServer did not fail fast for occupied TCP port " << tcp_port
+        << "\nstderr: " << result.stderr_text << "\nstdout: " << result.stdout_text;
     EXPECT_NE(result.exit_code, 0U);
     EXPECT_NE(result.stderr_text.find("ChatServer startup error:"), std::string::npos) << result.stderr_text;
 }
@@ -369,7 +388,8 @@ TEST(StartupConfigTests, OccupiedGrpcPortFailureReleasesTcpPort) {
 
     const auto result = RunProcess(executable, {L"--config", config_path.wstring()}, fixture.Path());
 
-    EXPECT_FALSE(result.timed_out) << "ChatServer did not fail fast for occupied gRPC port " << grpc_port;
+    EXPECT_FALSE(result.timed_out) << "ChatServer did not fail fast for occupied gRPC port " << grpc_port
+        << "\nstderr: " << result.stderr_text << "\nstdout: " << result.stdout_text;
     EXPECT_NE(result.exit_code, 0U);
     EXPECT_NE(result.stderr_text.find("failed to listen on gRPC address"), std::string::npos) << result.stderr_text;
 

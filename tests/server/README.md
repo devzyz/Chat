@@ -1,25 +1,18 @@
-# Server 测试
+# Windows Server tests
 
-本目录是 Windows C++ Server 快速测试的统一入口。`ServerUnitTests.vcxproj` 负责构建一个 GoogleTest
-可执行文件，测试源码按被测模块拆分，生产源码仍来自 `ChatServer/ChatServer`。
+`RunServerTests` is the single local/CI entry. It builds the ChatServer test executable plus independent Gate/Status Asio lifecycle executables, all against real production sources and the already-restored vcpkg tree.
 
-| 模块 | 目录 | 主要契约 |
+| Module | Directory | Scope |
 | --- | --- | --- |
-| 配置 | [config](config/README.md) | ChatServer 配置路径、必填项、端口与 peer 校验 |
-| 启动 | [startup](startup/README.md) | ChatServer CLI、配置来源优先级与本地端口绑定失败清理 |
-| 消息帧 | [messaging](messaging/README.md) | MsgNode 缓冲区、网络字节序和长度边界 |
-| 并发 | [concurrency](concurrency/README.md) | Asio 工作分派与幂等停止 |
-| 协议 | [protocol](protocol/README.md) | protobuf 消息序列化契约 |
-
-从仓库根目录运行：
+| Configuration | `config` | INI selection and validation |
+| Startup | `startup` | ChatServer subprocess CLI/bind failure lifecycle |
+| Messaging/transport | `messaging`, `transport` | Buffer ownership and production frame validation |
+| Concurrency/lifecycle | `concurrency`, `lifecycle` | Chat/Gate/Status task dispatch and idempotent shutdown |
+| Protocol/RPC | `protocol`, `rpc` | protobuf contracts and route mapping |
+| Data | `data` | service-free Redis pool close/finite borrow |
 
 ```powershell
 .\scripts\windows-local.ps1 -Task RunServerTests -Configuration Release
 ```
 
-Phase 2 adds [transport](transport/README.md), [lifecycle](lifecycle/README.md),
-[data](data/README.md), and [rpc](rpc/README.md). The data and RPC documents explicitly
-separate deterministic coverage from service-backed Integration gaps.
-
-该入口由 CI 的 `servers-release` job 调用，并生成 `build/test-results/server_unit.xml`。新增测试 MUST
-放入对应模块目录；若没有合适模块，应先创建边界明确的子目录及其 `README.md`，不得把源码重新堆到本目录。
+The runner removes stale files, reuses the one Server dependency restore, and writes `server_unit.xml`, `server_gate_asio.xml`, and `server_status_asio.xml`. CI always uploads `build/test-results/server_*.xml`; a missing report is an error. Startup tests are process Integration tests; the remaining in-process modules follow their own README classifications.

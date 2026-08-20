@@ -27,12 +27,12 @@
 - `tests/server/config/config_mgr_tests.cpp`
   - ChatServer `ConfigMgr` 的显式路径、有效实例配置、必填字段、端口和 peer 校验。
 - `tests/server/messaging/msg_node_tests.cpp`
-  - `MsgNode`、`SendNode`、`RecvNode` 的网络字节序、复制、清理和长度边界。
+  - `MsgNode`、`SendNode`、`RecvNode` 的 buffer ownership、复制、清理和无符号 ID 保留；网络字节序与长度安全由 `transport/ChatFrameCodec` 覆盖。
 - `tests/server/concurrency/asio_pool_tests.cpp`
   - ChatServer `AsioIOServicePool` 的任务执行与幂等停止。
 - `tests/server/protocol/protobuf_contract_tests.cpp`
   - 项目 protobuf 消息的序列化契约。
-- `tests/server/ServerUnitTests.vcxproj` 统一注册上述模块并生成一个 GoogleTest 报告。
+- `tests/server/ServerUnitTests.vcxproj` 注册 ChatServer 模块；Gate/Status Asio 使用两个独立正常链接的测试项目。统一 runner 生成三份 Server GoogleTest 报告。
 - `tests/scripts/validation/chatserver-instances.tests.ps1`
   - 实例配置的 Name、Log.Name、TCP/RPC、文件名和缺失输入校验。
 - `tests/scripts/lifecycle/chatserver-instances.tests.ps1`
@@ -41,13 +41,16 @@
   - `--config`/`CHAT_CONFIG`/默认路径优先级和畸形 JSON 非零退出。
 - `VarifyServer/test/protocol/protocol.test.js`
   - 错误常量和 gRPC proto 描述符。
+- `VarifyServer/test/handler`、`rpc`、`startup`
+  - 注入式 Redis/SMTP/UUID/logger handler、动态 loopback 真实 service route，以及 bind/start 生命周期；生产 `server.js` 已存在 `createServer`、`startServer`、`main`。
+- `tests/server/{transport,lifecycle,data,rpc,startup}`
+  - 生产 frame validation、三服务 Asio 生命周期、有限 Redis borrow/close、路由映射与 ChatServer 子进程启动失败。
 - `scripts/windows-local.ps1` 已提供 `RunServerTests`、`RunClientTests`、`RunScriptTests`、`RunVarifyTests` 和统一的 `TestPhase1` 入口。
 - CI 已验证 Server/Qt/VarifyServer 发布目录和 ZIP 的基本完整性。
 
 ### 尚不存在
 
-- GateServer、StatusServer 的 Config/main 参数单元测试，以及 ChatServer 的 main 参数子进程测试。
-- VarifyServer 验证码 handler 的 Redis/SMTP/UUID 行为测试。
+- GateServer、StatusServer 的 Config/main 参数进程测试。
 - Redis、MySQL、gRPC 的可重复 Integration 环境。
 - 跨服务业务 E2E。
 
@@ -64,7 +67,7 @@
 - 为 Server 增加独立 GoogleTest 测试目标，不把测试源码编入发布 EXE。
 - 测试目标使用和 Server 相同的 MSVC、`/MD`/`/MDd`、vcpkg triplet及头文件配置。
 - 在 `scripts/windows-local.ps1` 中增加统一测试任务，支持 Debug/Release 和失败退出码。
-- Server 测试输出 JUnit/XML；Qt 继续使用 CTest；VarifyServer 使用 `node --test`；PowerShell 配置和生命周期测试均使用仓库内无网络轻量运行器。
+- Server 测试输出三份 JUnit/XML；Qt 继续使用 CTest；VarifyServer 使用 `node --test`；PowerShell 无网络轻量运行器输出 `script_unit.xml`。
 - CI 在现有 job 内运行对应测试，避免重复恢复大体积 Server 依赖。
 
 **验收：** 空白/示例测试能在本地命令和 GitHub CI 中被发现、执行并正确传播失败。
@@ -74,8 +77,8 @@
 | Test ID | 接口与行为 | 类型 / 输入 | Expected Result / Invariant | 外部依赖与超时 | 本地入口 / CI / 报告 |
 | --- | --- | --- | --- | --- | --- |
 | F01-CFG | `ConfigMgr::SetConfigPath`、构造函数和 `operator[]` | Unit；临时 INI、两份发布示例配置、缺失字段、非法端口、peer 边界 | 显式路径优先；有效单/双实例加载；必填项、端口冲突、自引用、重复和空 peer 项立即抛出可诊断错误 | 无 Redis/MySQL/网络；单例未用于用例隔离；通常小于 1 秒 | `RunServerTests` / `servers-release` / `server_unit.xml` |
-| F02-MSG | `MsgNode`、`SendNode`、`RecvNode` 公开字段与 `Clear()` | Unit；空、嵌入 NUL、UTF-8 字节、`MAX_LENGTH` | header 为网络字节序；body 按指定长度复制；Clear 清零并重置进度；RecvNode 保留 ID | 无外部服务；通常小于 1 秒 | `RunServerTests` / `servers-release` / `server_unit.xml` |
-| A02-PS | `chatserver-instances.ps1 -Task Start` 的启动前校验边界 | Component；临时配置和无效占位 EXE | 重复 Name/LogName、跨类型端口冲突、`08090`、危险/重复文件名和缺失输入在创建进程前失败 | 不启动真实 Server；每个子进程有同步退出边界；通常小于 10 秒 | `RunScriptTests` / `static-check` / 控制台逐项 PASS/FAIL |
+| F02-MSG | `MsgNode`、`SendNode`、`RecvNode` 公开字段与 `Clear()` | Unit；空、嵌入 NUL、`MAX_LENGTH` | body 按指定长度复制；Clear 清零并重置进度；RecvNode 保留 uint16 ID | 无外部服务；通常小于 1 秒 | `RunServerTests` / `servers-release` / `server_unit.xml` |
+| A02-PS | `chatserver-instances.ps1 -Task Start` 的启动前校验边界 | Component；临时配置和无效占位 EXE | 重复 Name/LogName、跨类型端口冲突、`08090`、危险/重复文件名和缺失输入在创建进程前失败 | 不启动真实 Server；每个子进程有同步退出边界；通常小于 10 秒 | `RunScriptTests` / `static-check` / `script_unit.xml` |
 | Q01-MODEL | `MessageListModel`、`MessageModelStore` | Unit；未知 ID、多批历史、删除/ack、Unicode/空文本 | 未知 ID 不改变模型；跨批去重且顺序稳定；索引随删除/ack 同步；文本无损 round-trip | Qt minimal/offscreen，无显示器/网络；通常小于 1 秒 | `RunClientTests` / `client-release` / `client_unit.xml` |
 
 RED-GREEN 证据要求：四组测试至少各有一个可恢复的故障探针；临时更改断言或 fixture 后必须观察非零退出/CTest 失败，并在提交前完全恢复且复跑 GREEN。不得把故意失败内容提交到分支。
@@ -91,9 +94,9 @@ RED-GREEN 证据要求：四组测试至少各有一个可恢复的故障探针�
 
 | Test ID | 接口与行为 | 类型 / 输入 | Expected Result / Invariant | 外部依赖与超时 | 本地入口 / CI / 报告 |
 | --- | --- | --- | --- | --- | --- |
-| F03-ASIO | ChatServer `AsioIOServicePool::GetIOService`、`stop` | Unit；16 个异步任务、重复 stop | 已提交任务各执行一次并在 5 秒内完成；重复 stop 不抛异常、不二次 join | 无网络和外部服务；条件变量硬超时 5 秒 | `RunServerTests` / `servers-release` / `server_unit.xml` |
+| F03-ASIO | ChatServer `AsioIOServicePool::GetIOService`、`stop`、析构 | Unit；共享 RAII 同步状态、重复 stop | 已提交任务完成；首次/重复 stop 与析构在 2 秒内完成 | 无网络和外部服务；callback 不捕获易悬空栈引用 | `RunServerTests` / `servers-release` / `server_unit.xml` |
 | F02-PROTO | `TextChatMsgReq`、`GetVarifyRsp` 生成类型 | Unit；路由字段、重复消息、嵌入 NUL、UTF-8、错误码 | 序列化/反序列化后字段值、消息顺序和二进制字符串完全保留 | 仅使用已锁定 protobuf；通常小于 1 秒 | `RunServerTests` / `servers-release` / `server_unit.xml` |
-| A02-LIFE | `chatserver-instances.ps1` Start/Status/Stop | Component；立即退出子进程、当前测试进程的匹配/不匹配状态记录 | 启动失败包含退出码且无状态残留；陈旧 PID 显示 Stopped 且 Stop 不误杀；运行实例冲突在启动前失败 | 不启动真实 ChatServer，不占固定监听端口；启动失败上限 2 秒 | `RunScriptTests` / `static-check` / 控制台逐项 PASS/FAIL |
+| A02-LIFE | `chatserver-instances.ps1` Start/Status/Stop | Component；立即退出子进程、当前测试进程的匹配/不匹配状态记录 | 启动失败包含退出码且无状态残留；陈旧 PID 显示 Stopped 且 Stop 不误杀；运行实例冲突在启动前失败 | 不启动真实 ChatServer，不占固定监听端口；启动失败上限 2 秒 | `RunScriptTests` / `static-check` / `script_unit.xml` |
 | V01-CONFIG | VarifyServer `config.js`、`const.js`、`proto.js` | Unit；隔离子进程和临时 JSON | 显式参数高于环境变量和默认文件；畸形 JSON 非零退出；错误常量与 RPC 路径保持稳定 | 无 Redis/SMTP/公网；使用 `node:test`；通常小于 1 秒 | `RunVarifyTests` / `varify-release` / `varify_unit.xml` |
 
 本批 RED-GREEN 已分别用临时坏断言验证：C++ GoogleTest、PowerShell 生命周期测试和 Node 测试都产生非零退出；恢复后 Server 28/28、脚本 13/13、Varify 6/6 全部 GREEN。
@@ -101,11 +104,11 @@ RED-GREEN 证据要求：四组测试至少各有一个可恢复的故障探针�
 本批仍保留的覆盖缺口：
 
 - GateServer/StatusServer 的 ConfigMgr 构造入口私有且与 ChatServer 存在重复类型；在不复制解析逻辑、不扩展生产接口的前提下不生成伪单元测试，留待统一配置模块或独立进程测试。
-- GateServer/StatusServer 的 Asio pool 与 ChatServer 已有实现漂移；本批只锁定合并后主 ChatServer 的幂等停止契约，另外两份实现若要套用同一 contract test，需要先统一公开 seam。
+- GateServer/StatusServer 的 Asio pool 已通过两个独立 test target 复用同一 contract source；三份实现均覆盖任务执行和幂等有限停止，仍未统一成一个生产模块。
 - `LogicSystem` 紧耦合 Singleton、Session、Redis/MySQL/gRPC 回调且没有可注入队列处理边界；不为测试而修改业务逻辑，留待后续最小 test seam 设计。
-- VarifyServer `server.js` 加载即监听端口，handler 直接引用 Redis/SMTP/UUID；本批不改变启动逻辑，只覆盖可隔离的配置和协议模块。
+- VarifyServer `server.js` 已用 `require.main === module` 隔离默认启动，并公开 handler/createServer/startServer/main；真实 Redis/SMTP adapter Integration 仍未建立。
 - 畸形 JSON 的 Node 解析错误可能包含损坏配置行；若配置可能含秘密，应在后续安全修复中净化错误输出，而不是在本批测试中假定当前已经具备该行为。
-- 批量启动中后续实例失败时对既有状态文件的回滚策略、真实端口占用、Redis 登记清理及优雅停止仍属于 Integration/缺陷修复范围。
+- 批量启动中后续实例失败时对既有状态文件的回滚策略、Redis 登记清理及优雅停止仍属于 Integration/缺陷修复范围；真实动态端口占用的 fail-fast/release 已由 ChatServer 进程测试覆盖。
 
 ---
 

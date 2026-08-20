@@ -11,14 +11,16 @@ ChatFrameCodec::HeaderBytes ChatFrameCodec::EncodeHeader(
     };
 }
 
-ChatFrameHeader ChatFrameCodec::DecodeHeader(const void* bytes) {
+std::optional<ChatFrameHeader> ChatFrameCodec::DecodeValidatedHeader(
+    const void* bytes,
+    std::size_t maximum_body_length) {
     const auto* header = static_cast<const std::uint8_t*>(bytes);
-    return {
+    const ChatFrameHeader decoded{
         static_cast<std::uint16_t>((header[0] << 8) | header[1]),
         static_cast<std::uint16_t>((header[2] << 8) | header[3])
     };
-}
-
-bool ChatFrameCodec::IsSupported(const ChatFrameHeader& header) {
-    return header.message_id <= MAX_LENGTH && header.body_length <= MAX_LENGTH;
+    if (decoded.body_length > maximum_body_length) {
+        return std::nullopt;
+    }
+    return decoded;
 }

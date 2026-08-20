@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <memory>
 #include <atomic>
+#include <chrono>
 #include <hiredis/hiredis.h>
 
 // redis连接池
@@ -12,7 +13,8 @@ class RedisConnectionPool {
 public:
 	RedisConnectionPool(const std::string& host, const std::string& port, const std::string& password, int poolSize);
 	~RedisConnectionPool();
-	redisContext* getConnection();
+	redisContext* getConnection(
+		std::chrono::milliseconds wait_timeout = std::chrono::milliseconds(2000));
 	void returnConnection(redisContext* connection);
 	void close();
 private:
@@ -63,4 +65,3 @@ private:
 	RedisMgr();
 	std::unique_ptr<RedisConnectionPool> _pool;
 };
-

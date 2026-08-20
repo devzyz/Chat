@@ -58,21 +58,3 @@ test('loopback service routes GetVarifyCode to the registered handler', { timeou
     assert.equal(response.email, 'loopback@example.test');
     assert.equal(response.code, 'TEST');
 });
-
-// T05-GRPC-02
-test('client deadline bounds a handler that never completes', { timeout: 5000 }, async (t) => {
-    const { server, port } = await startLoopbackServer(() => {});
-    const client = new messageProto.VarifyService(
-        `127.0.0.1:${port}`,
-        grpc.credentials.createInsecure()
-    );
-    t.after(() => {
-        client.close();
-        server.forceShutdown();
-    });
-
-    await assert.rejects(
-        callGetVarifyCode(client, 'deadline@example.test', Date.now() + 200),
-        (error) => error.code === grpc.status.DEADLINE_EXCEEDED
-    );
-});

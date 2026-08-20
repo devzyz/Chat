@@ -55,9 +55,10 @@
 .\scripts\windows-local.ps1 -Task TestPhase1 -Configuration Release
 ```
 
-- Server GoogleTest 报告：`build/test-results/server_unit.xml`。
+- Server GoogleTest 报告：`build/test-results/server_unit.xml`、`server_gate_asio.xml`、`server_status_asio.xml`。
 - Qt CTest 报告：`build/test-results/client_unit.xml`。
 - VarifyServer Node Test 报告：`build/test-results/varify_unit.xml`。
+- PowerShell 轻量测试报告：`build/test-results/script_unit.xml`。
 - PowerShell 轻量 runner 通过逐项 PASS/FAIL 和非零退出传播失败。
 
 ## CI 门禁

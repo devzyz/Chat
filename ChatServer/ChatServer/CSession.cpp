@@ -64,25 +64,16 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 
 			// 拿到了头部的字节流数据，接下来开始解析
 			// 解析id
-			const auto header = ChatFrameCodec::DecodeHeader(_recv_head_node->_data);
-			const auto msg_id = static_cast<short>(header.message_id);
-
-			// id非法，断开连接
-			if (msg_id > MAX_LENGTH) {
-				SPDLOG_WARN("invalid msg_id, session_id={}, msg_id={}", _session_id, msg_id);
+			const auto header = ChatFrameCodec::DecodeValidatedHeader(
+				_recv_head_node->_data, sizeof(_data));
+			if (!header) {
+				SPDLOG_WARN("invalid frame body length, session_id={}", _session_id);
 				_server->ClearSession(_session_id);
 				return;
 			}
 
-			// 解析data_len
-			const auto msg_len = static_cast<short>(header.body_length);
-
-			// 长度非法，断开连接
-			if (msg_len > MAX_LENGTH) {
-				SPDLOG_WARN("invalid msg_len, session_id={}, msg_len={}", _session_id, msg_len);
-				_server->ClearSession(_session_id);
-				return;
-			}
+			const std::uint16_t msg_id = header->message_id;
+			const std::size_t msg_len = header->body_length;
 
 			_recv_msg_node = std::make_shared<RecvNode>(msg_len, msg_id);
 			AsyncReadBody(msg_len);
@@ -182,7 +173,7 @@ void CSession::AsyncReadBody(std::size_t body_total_len) {
  * @param msg_len 
  * 异步发送函数
  */
-void CSession::Send(const char* msg, short msg_id, short msg_len) {
+void CSession::Send(const char* msg, std::uint16_t msg_id, std::size_t msg_len) {
 	std::lock_guard<std::mutex> lock(_send_mutex);
 	auto send_que_size = _send_que.size();
 	if (_send_que.size() > MAX_SENDQUE) {
@@ -232,7 +223,7 @@ void CSession::HandleWrite(const boost::system::error_code& ec, std::shared_ptr<
 	}
 }
 
-void CSession::Send(const std::string& msg, short msg_id) {
+void CSession::Send(const std::string& msg, std::uint16_t msg_id) {
 	Send(msg.c_str(), msg_id, msg.size());
 }
 

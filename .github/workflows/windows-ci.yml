@@ -45,6 +45,9 @@ jobs:
               'GateServer/GateServer/GateServer.vcxproj'
               'StatusServer/StatusServer/StatusServer.vcxproj'
               'ChatServer/ChatServer/ChatServer.vcxproj'
+              'tests/server/ServerUnitTests.vcxproj'
+              'tests/server/lifecycle/GateAsioPoolTests.vcxproj'
+              'tests/server/lifecycle/StatusAsioPoolTests.vcxproj'
           )
           foreach ($projectFile in $projectFiles) {
               try {
@@ -101,6 +104,15 @@ jobs:
       - name: Run ChatServer instance script test modules
         shell: pwsh
         run: .\scripts\windows-local.ps1 -Task RunScriptTests
+
+      - name: Upload script test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-script-unit-results
+          path: build/test-results/script_unit.xml
+          if-no-files-found: error
+          retention-days: 7
 
   servers-release:
     name: Server Release build
@@ -247,7 +259,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-server-unit-results
-          path: build/test-results/server_unit.xml
+          path: build/test-results/server_*.xml
           if-no-files-found: error
           retention-days: 7
 
