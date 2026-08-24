@@ -11,5 +11,5 @@
 .\scripts\windows-local.ps1 -Task RunScriptTests
 ```
 
-统一入口依次运行两个模块并传播非零退出码。CI 的 `static-check` job 执行该入口；当前轻量 runner
-输出逐项 PASS/FAIL，尚未生成 JUnit。新增脚本测试必须放入对应模块目录并更新统一入口，不能只依赖测试发现通配符。
+统一入口依次运行两个模块并传播非零退出码。CI 的 `static-check` job 执行该入口；轻量 runner
+输出逐项 PASS/FAIL，并把两个模块汇总到 `build/test-results/script_unit.xml` 后由 CI 上传。新增脚本测试必须放入对应模块目录并更新统一入口，不能只依赖测试发现通配符。

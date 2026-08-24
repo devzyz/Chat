@@ -28,7 +28,7 @@
   - ChatServer `ConfigMgr` 的显式路径、有效实例配置、必填字段、端口和 peer 校验。
 - `tests/server/messaging/msg_node_tests.cpp`
   - `MsgNode`、`SendNode`、`RecvNode` 的 buffer ownership、复制、清理和无符号 ID 保留；网络字节序与长度安全由 `transport/ChatFrameCodec` 覆盖。
-- `tests/server/concurrency/asio_pool_tests.cpp`
+- `tests/server/lifecycle/asio_pool_contract_tests.cpp`（三服务测试目标复用同一契约源文件）
   - ChatServer `AsioIOServicePool` 的任务执行与幂等停止。
 - `tests/server/protocol/protobuf_contract_tests.cpp`
   - 项目 protobuf 消息的序列化契约。

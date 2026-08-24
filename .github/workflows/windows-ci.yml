@@ -352,13 +352,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $compiler = Get-Command g++.exe -ErrorAction Stop
-          $mingwRoot = Split-Path -Parent (Split-Path -Parent $compiler.Source)
           & .\scripts\windows-local.ps1 `
               -Task RunClientTests `
               -Configuration Release `
-              -QtRoot $env:QT_ROOT_DIR `
-              -MinGwRoot $mingwRoot
+              -QtRoot $env:QT_ROOT_DIR
 
       - name: Upload Qt client test report
         if: always()
@@ -366,7 +363,7 @@ jobs:
         with:
           name: windows-client-unit-results
           path: build/test-results/client_unit.xml
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Deploy and package Qt client

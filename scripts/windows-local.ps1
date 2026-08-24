@@ -68,11 +68,13 @@ function Require-Command {
 function Resolve-CMake {
     $cmake = Require-Command 'cmake.exe' 'Install CMake 3.21 or newer and add it to PATH.'
     $versionText = (& $cmake --version 2>&1 | Select-Object -First 1)
-    if ($LASTEXITCODE -ne 0 -or $versionText -notmatch '(\d+\.\d+(?:\.\d+)?)') {
+    $versionMatch = [regex]::Match([string]$versionText, '(\d+\.\d+(?:\.\d+)?)')
+    if ($LASTEXITCODE -ne 0 -or -not $versionMatch.Success) {
         throw "Unable to determine the CMake version: $versionText"
     }
-    if ([version]$Matches[1] -lt [version]'3.21') {
-        throw "CMake 3.21 or newer is required; found $($Matches[1])."
+    $cmakeVersion = $versionMatch.Groups[1].Value
+    if ([version]$cmakeVersion -lt [version]'3.21') {
+        throw "CMake 3.21 or newer is required; found $cmakeVersion."
     }
     return $cmake
 }
@@ -134,6 +136,8 @@ function Resolve-QtToolchain {
             Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'bin\g++.exe') })
         if ($candidates.Count -eq 1) {
             $script:MinGwRoot = $candidates[0].FullName
+        } elseif ($candidates.Count -gt 1) {
+            throw "Multiple Qt MinGW toolchains were found; pass -MinGwRoot explicitly: $($candidates.FullName -join ', ')"
         }
     }
     if ([string]::IsNullOrWhiteSpace($MinGwRoot)) {
@@ -143,6 +147,14 @@ function Resolve-QtToolchain {
     $resolvedMinGw = (Resolve-Path -LiteralPath $MinGwRoot).Path
     $cxx = Require-File (Join-Path $resolvedMinGw 'bin\g++.exe') 'The Qt MinGW compiler was not found.'
     $cc = Require-File (Join-Path $resolvedMinGw 'bin\gcc.exe') 'The Qt MinGW compiler was not found.'
+    $compilerVersion = (& $cxx -dumpfullversion -dumpversion 2>&1 | Select-Object -First 1).Trim()
+    if ($LASTEXITCODE -ne 0 -or $compilerVersion -ne '11.2.0') {
+        throw "Expected the Qt MinGW 11.2.0 compiler; found '$compilerVersion' at $cxx."
+    }
+    $compilerTarget = (& $cxx -dumpmachine 2>&1 | Select-Object -First 1).Trim()
+    if ($LASTEXITCODE -ne 0 -or $compilerTarget -ne 'x86_64-w64-mingw32') {
+        throw "Expected a 64-bit Windows MinGW compiler; found '$compilerTarget' at $cxx."
+    }
 
     $qtInstallRoot = Split-Path -Parent (Split-Path -Parent $resolvedQt)
     $bundledNinja = Join-Path $qtInstallRoot 'Tools\Ninja\ninja.exe'
@@ -308,6 +320,9 @@ function Run-ServerTests {
 function Build-Client {
     $cmake = Resolve-CMake
     $qt = Resolve-QtToolchain
+    Write-Host "Qt root: $($qt.Root)"
+    Write-Host "Qt C++ compiler: $($qt.CxxCompiler)"
+    Write-Host "Ninja: $($qt.Ninja)"
     $cache = Join-Path $clientBuild 'CMakeCache.txt'
     if (Test-Path -LiteralPath $cache) {
         $cacheText = Get-Content -LiteralPath $cache -Raw
@@ -349,11 +364,12 @@ function Run-ClientTests {
         Remove-Item -LiteralPath $report -Force
     }
     & $ctest --test-dir $clientBuild --output-on-failure --output-junit $report
+    $testExitCode = $LASTEXITCODE
     if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
         throw "Qt client test report was not created: $report"
     }
-    if ($LASTEXITCODE -ne 0) {
-        throw "Qt client tests failed with exit code $LASTEXITCODE. Report: $report"
+    if ($testExitCode -ne 0) {
+        throw "Qt client tests failed with exit code $testExitCode. Report: $report"
     }
 }
 

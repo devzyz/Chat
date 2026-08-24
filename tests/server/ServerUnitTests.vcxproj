@@ -59,7 +59,7 @@
     <ClCompile Include="config\config_mgr_tests.cpp" />
     <ClCompile Include="startup\startup_config_tests.cpp" />
     <ClCompile Include="messaging\msg_node_tests.cpp" />
-    <ClCompile Include="concurrency\asio_pool_tests.cpp" />
+    <ClCompile Include="lifecycle\asio_pool_contract_tests.cpp" />
     <ClCompile Include="transport\chat_frame_codec_tests.cpp" />
     <ClCompile Include="data\server_redis_pool_tests.cpp" />
     <ClCompile Include="rpc\peer_server_routing_tests.cpp" />

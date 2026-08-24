@@ -88,20 +88,19 @@ function startServer({ server, address, credentials, logger = console }) {
 }
 
 function main({ server = createServer(), logger = console } = {}) {
-    void startServer({
+    return startServer({
         server,
         address: '0.0.0.0:50051',
         credentials: grpc.ServerCredentials.createInsecure(),
         logger
-    }).catch(() => {
-        const logError = typeof logger.error === 'function' ? logger.error.bind(logger) : logger.log.bind(logger);
-        logError('grpc server failed to start');
-    });
-    return server;
+    }).then(() => server);
 }
 
 if (require.main === module) {
-    main();
+    main().catch(() => {
+        console.error('grpc server failed to start');
+        process.exitCode = 1;
+    });
 }
 
 module.exports = { createGetVarifyCodeHandler, createServer, startServer, main };

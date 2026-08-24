@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 
 namespace {
@@ -52,6 +53,18 @@ TEST(SendNodeTests, MaximumApplicationBodyLengthIsCopiedWithoutTruncation) {
 
     EXPECT_EQ(node._total_len, MAX_LENGTH + HEAD_TOTAL_LEN);
     EXPECT_EQ(std::memcmp(node._data + HEAD_TOTAL_LEN, body.data(), body.size()), 0);
+}
+
+TEST(SendNodeTests, OversizedApplicationBodyIsRejectedBeforeAllocation) {
+    const std::string body(MAX_LENGTH + 1, 'x');
+
+    EXPECT_THROW(SendNode(body, 1024, body.size()), std::length_error);
+}
+
+TEST(SendNodeTests, DeclaredLengthCannotExceedTheSourceString) {
+    const std::string body("short");
+
+    EXPECT_THROW(SendNode(body, 1024, body.size() + 1), std::invalid_argument);
 }
 
 TEST(RecvNodeTests, ConstructorRetainsMessageIdentityAndClearReusesBuffer) {

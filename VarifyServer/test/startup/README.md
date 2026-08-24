@@ -7,5 +7,6 @@ The production `startServer` interface owns bind validation and the start transi
 | V07-START-01 | Unit | A bind error rejects and never calls `start`. |
 | V07-START-02 | Unit | A zero/invalid bound port rejects and never calls `start`. |
 | V07-START-03 | Unit | A successful bind starts once and returns the actual port. |
+| V07-START-04 | Process | Direct `node server.js` exits nonzero when port 50051 is occupied and does not expose configured credentials. |
 
-Tests use a fake server and capture logger; they open no port. RED was `startServer is not a function`; GREEN is 3/3. `node server.js` still starts on `0.0.0.0:50051`, now only after a successful bind. Signal-driven graceful shutdown remains a process Integration gap.
+The first three tests use a fake server and capture logger. The process test reserves port 50051 with a loopback fixture and launches the real direct entry with an isolated temporary config. RED was a direct-process exit status of zero after bind failure; GREEN is a generic error plus nonzero exit. A successful direct-process readiness probe and signal-driven graceful shutdown remain Integration gaps.

@@ -19,7 +19,7 @@
 powershell.exe -NoProfile -File .\tests\scripts\validation\chatserver-instances.tests.ps1
 ```
 
-CI job 为 `static-check`。结果写到控制台，任一用例失败均返回非零退出码；当前没有独立 XML 报告。
+CI job 为 `static-check`。结果写到控制台，任一用例失败均返回非零退出码；统一入口把本模块结果写入汇总报告 `build/test-results/script_unit.xml`。
 
 ## 已知缺口
 
