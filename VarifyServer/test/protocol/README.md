@@ -8,7 +8,7 @@
 
 ## 用例、依赖与隔离
 
-`protocol.test.js` 包含 6 个 Foundation / Unit 用例（V02-PROTO-01..06）：保留两个既有合同，并保护 canonical authority、固定生成/descriptor check、隔离字段号/RPC 变异 RED，以及 Node 对旧 wire/unknown-field fixture 的消费。依赖由 `npm ci` 安装的 `@grpc/grpc-js` 与 `@grpc/proto-loader`，不使用 Redis、SMTP 或凭据。
+`protocol.test.js` 包含 6 个 Foundation / Unit 用例（V02-PROTO-01..06）：保留两个既有合同，并保护 canonical authority、生成 consumer 注册、descriptor 语义兼容、隔离字段号/RPC 变异 RED，以及 Node 对旧 wire/unknown-field fixture 的消费。`check-contract` 与 `check-compatibility` 使用锁定的 `protobufjs`，不依赖 C++/vcpkg codegen 工具；固定 `protoc` 的生成物字节漂移仍由 Server job 的 `CheckProtocols` 独立拥有。依赖由 `npm ci` 安装，不使用 Redis、SMTP 或凭据。
 
 真实跨语言 T05-GRPC-02 由 `tests/server/protocol` 的 Integration GTest 拥有；`node-varify-loopback-server.js` 只通过生产 `createServer` 提供动态 loopback server，不是独立 testcase。
 

@@ -53,12 +53,12 @@ test('repository canonical proto module is the sole editable wire authority', ()
 test('protocol compatibility command accepts the canonical contract and generated consumers', () => {
     const command = spawnSync(
         process.execPath,
-        [path.join(repositoryRoot, 'scripts', 'protocol-compatibility.js'), 'check'],
+        [path.join(repositoryRoot, 'scripts', 'protocol-compatibility.js'), 'check-contract'],
         { cwd: repositoryRoot, encoding: 'utf8', timeout: 15000 }
     );
 
     assert.equal(command.status, 0, `${command.stdout}\n${command.stderr}`);
-    assert.match(command.stdout, /Protocol compatibility and generated-source drift checks passed/);
+    assert.match(command.stdout, /Protocol contract and generated consumer registration checks passed/);
 });
 
 // V02-PROTO-05

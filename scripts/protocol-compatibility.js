@@ -125,6 +125,15 @@ function verifyToolchain() {
     assert.equal(lockedPackageVersion('protobufjs'), '7.5.5');
 }
 
+function verifyNodeProtocolToolchain() {
+    const protobufRoot = path.join(repositoryRoot, 'VarifyServer', 'node_modules', 'protobufjs');
+    requireFile(path.join(protobufRoot, 'package.json'));
+    assert.equal(lockedPackageVersion('@grpc/grpc-js'), '1.14.3');
+    assert.equal(lockedPackageVersion('@grpc/proto-loader'), '0.8.0');
+    assert.equal(lockedPackageVersion('protobufjs'), '7.5.5');
+    return protobufRoot;
+}
+
 function generateCpp(outputRoot) {
     fs.mkdirSync(outputRoot, { recursive: true });
     run(protoc, [
@@ -254,8 +263,8 @@ function parseDescriptorSet(buffer) {
     });
 }
 
-function descriptorModel(file) {
-    const set = { file: parseDescriptorSet(fs.readFileSync(file)) };
+function descriptorModelFromBuffer(buffer) {
+    const set = { file: parseDescriptorSet(buffer) };
     const messages = new Map();
     const services = new Map();
 
@@ -278,14 +287,46 @@ function descriptorModel(file) {
     return { messages, services };
 }
 
+function descriptorModel(file) {
+    return descriptorModelFromBuffer(fs.readFileSync(file));
+}
+
+function nodeDescriptor(sourceRoot) {
+    const protobufRoot = verifyNodeProtocolToolchain();
+    const protobuf = require(protobufRoot);
+    require(path.join(protobufRoot, 'ext', 'descriptor'));
+    const root = new protobuf.Root();
+    root.loadSync(canonicalFiles.map((file) => path.join(sourceRoot, file)), { keepCase: true });
+    root.resolveAll();
+    const descriptor = root.toDescriptor('proto3');
+    for (const file of descriptor.file) {
+        const prefix = file.package ? `.${file.package}.` : '.';
+        for (const message of file.messageType || []) {
+            for (const field of message.field || []) {
+                if (field.typeName && !field.typeName.startsWith('.')) {
+                    field.typeName = `${prefix}${field.typeName}`;
+                }
+            }
+        }
+        for (const service of file.service || []) {
+            for (const method of service.method || []) {
+                if (method.inputType && !method.inputType.startsWith('.')) {
+                    method.inputType = `${prefix}${method.inputType}`;
+                }
+                if (method.outputType && !method.outputType.startsWith('.')) {
+                    method.outputType = `${prefix}${method.outputType}`;
+                }
+            }
+        }
+    }
+    return Buffer.from(descriptor.$type.encode(descriptor).finish());
+}
+
 function numberIsReserved(message, number) {
     return message.reservedRanges.some((range) => number >= range.start && number < range.end);
 }
 
-function compareCompatibility(baselineFile, currentFile) {
-    const baseline = descriptorModel(baselineFile);
-    const current = descriptorModel(currentFile);
-
+function compareCompatibilityModels(baseline, current) {
     for (const [messageName, oldMessage] of baseline.messages) {
         const newMessage = current.messages.get(messageName);
         if (!newMessage) {
@@ -332,6 +373,17 @@ function compareCompatibility(baselineFile, currentFile) {
     }
 }
 
+function compareCompatibility(baselineFile, currentFile) {
+    compareCompatibilityModels(descriptorModel(baselineFile), descriptorModel(currentFile));
+}
+
+function compareCompatibilityBuffer(baselineFile, currentBuffer) {
+    compareCompatibilityModels(
+        descriptorModel(baselineFile),
+        descriptorModelFromBuffer(currentBuffer)
+    );
+}
+
 function compareGenerated(expectedRoot, actualRoot) {
     const actualGeneratedFiles = fs.readdirSync(actualRoot)
         .filter((file) => /(?:\.grpc)?\.pb\.(?:cc|h)$/.test(file))
@@ -349,6 +401,21 @@ function compareGenerated(expectedRoot, actualRoot) {
         if (!fs.readFileSync(expected).equals(fs.readFileSync(actual))) {
             fail(`generated source drift: generated/proto/cpp/${file}; run GenerateProtocols`);
         }
+    }
+}
+
+function verifyGeneratedConsumers() {
+    const actualGeneratedFiles = fs.readdirSync(generatedRoot)
+        .filter((file) => /(?:\.grpc)?\.pb\.(?:cc|h)$/.test(file))
+        .sort();
+    const expectedGeneratedFiles = [...generatedFiles].sort();
+    assert.deepEqual(
+        actualGeneratedFiles,
+        expectedGeneratedFiles,
+        'generated/proto/cpp must contain exactly the registered canonical consumers'
+    );
+    for (const file of expectedGeneratedFiles) {
+        requireFile(path.join(generatedRoot, file));
     }
 }
 
@@ -384,21 +451,21 @@ function check() {
     process.stdout.write('Protocol compatibility and generated-source drift checks passed.\n');
 }
 
+function checkContract() {
+    verifyCanonicalSources(protoRoot, true);
+    requireFile(baselinePath);
+    verifyGeneratedConsumers();
+    compareCompatibilityBuffer(baselinePath, nodeDescriptor(protoRoot));
+    process.stdout.write('Protocol contract and generated consumer registration checks passed.\n');
+}
+
 function checkCompatibilitySource(sourceRoot) {
     if (!sourceRoot) {
         fail('check-compatibility requires a proto source directory');
     }
-    verifyToolchain();
     requireFile(baselinePath);
     verifyCanonicalSources(sourceRoot);
-    const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-descriptor-check-'));
-    try {
-        const candidateDescriptor = path.join(temporaryRoot, 'candidate.pb');
-        generateDescriptor(candidateDescriptor, sourceRoot);
-        compareCompatibility(baselinePath, candidateDescriptor);
-    } finally {
-        fs.rmSync(temporaryRoot, { recursive: true, force: true });
-    }
+    compareCompatibilityBuffer(baselinePath, nodeDescriptor(sourceRoot));
     process.stdout.write('Protocol descriptor is compatible with the initial release baseline.\n');
 }
 
@@ -414,10 +481,12 @@ if (require.main === module) {
         createInitialBaseline(process.argv[3] || initialReleaseProtoBlob);
     } else if (task === 'check') {
         check();
+    } else if (task === 'check-contract') {
+        checkContract();
     } else if (task === 'check-compatibility') {
         checkCompatibilitySource(process.argv[3]);
     } else {
-        process.stderr.write('Usage: node scripts/protocol-compatibility.js <generate|create-initial-baseline|check|check-compatibility> [path-or-ref]\n');
+        process.stderr.write('Usage: node scripts/protocol-compatibility.js <generate|create-initial-baseline|check|check-contract|check-compatibility> [path-or-ref]\n');
         process.exitCode = 2;
     }
 }

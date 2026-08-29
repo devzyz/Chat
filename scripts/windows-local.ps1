@@ -18,6 +18,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$global:LASTEXITCODE = 0
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $repoRoot 'Chat.sln'
@@ -750,6 +751,13 @@ function Confirm-TestStructure {
         -Raw | ConvertFrom-Json
     $runnerRegistration = Get-Content -LiteralPath $PSCommandPath -Raw
     $normalizedRunnerRegistration = $runnerRegistration.Replace('\', '/')
+    $lastExitInitialization = $runnerRegistration.IndexOf('$global:LASTEXITCODE = 0')
+    $firstFunction = $runnerRegistration.IndexOf('function ')
+    if ($lastExitInitialization -lt 0 -or
+        $firstFunction -lt 0 -or
+        $lastExitInitialization -gt $firstFunction) {
+        throw 'The public runner must initialize LASTEXITCODE before StrictMode functions read it on a fresh CI process.'
+    }
     $runServerTests = [regex]::Match(
         $runnerRegistration,
         '(?ms)^function\s+Run-ServerTests\s*\{(?<body>.*?)(?=^function\s+|\z)'
@@ -812,6 +820,15 @@ function Confirm-TestStructure {
     }
     if ($workflow -match '(?m)^\s*continue-on-error\s*:') {
         throw 'Windows CI must not weaken a required test or package step with continue-on-error.'
+    }
+    $serverJob = [regex]::Match(
+        $workflow,
+        '(?ms)^  servers-release:\s*$(?<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\z)'
+    )
+    if (-not $serverJob.Success -or
+        $serverJob.Groups['body'].Value -notmatch 'actions/setup-node@' -or
+        $serverJob.Groups['body'].Value -notmatch '(?m)^\s*run:\s+npm ci --ignore-scripts\s*$') {
+        throw 'The Server CI job must restore locked VarifyServer Node dependencies for the C++ to Node loopback contract.'
     }
     foreach ($upload in @(
         @{ Artifact = 'windows-script-test-results'; Path = 'build/test-results/script_\*\.xml' }

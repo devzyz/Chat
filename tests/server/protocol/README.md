@@ -20,7 +20,7 @@
 .\build\windows-tests\Release\server_integration_tests.exe --gtest_filter=CrossLanguageProtocolTests.*
 ```
 
-CI job 为 `servers-release`；Unit 写入 `server_unit.xml`，跨语言 Integration 写入 `server_integration.xml`。
+CI job 为 `servers-release`；该 job 使用 Node 22 与锁文件恢复 VarifyServer 依赖，再运行生产 `createServer` helper。Unit 写入 `server_unit.xml`，跨语言 Integration 写入 `server_integration.xml`。固定 vcpkg `protoc`/gRPC plugin 的生成物字节漂移只由这里的 `CheckProtocols` 拥有；Varify job 使用纯 Node descriptor 语义检查，不重复恢复 C++ 工具链。
 
 ## 已知缺口
 

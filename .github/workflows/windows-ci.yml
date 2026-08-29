@@ -137,6 +137,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      - name: Set up Node.js 22 for cross-language tests
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: VarifyServer/package-lock.json
+
       - name: Free ephemeral runner disk space
         shell: pwsh
         run: |
@@ -249,6 +256,11 @@ jobs:
               -ServerIntermediateRoot (Join-Path $env:RUNNER_TEMP 'server-msbuild') `
               -ServerTriplet x64-windows-chat-release `
               -ServerHostTriplet x64-windows-chat-release
+
+      - name: Restore locked VarifyServer dependencies for cross-language tests
+        shell: cmd
+        working-directory: VarifyServer
+        run: npm ci --ignore-scripts
 
       - name: Build and run layered Server tests
         shell: pwsh

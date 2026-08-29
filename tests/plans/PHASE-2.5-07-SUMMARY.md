@@ -102,7 +102,7 @@ The first aggregate invocation stopped before Server build because the shell did
 
 The original Plan 2.5-07 execution stopped before any remote mutation because GitHub CLI was unavailable. Submission resumed after authentication: the same local evidence, current `origin/develop` baseline, candidate scope, added-line secret scan, and whitespace checks were revalidated before creating a topic branch and PR. Local success is still not presented as clean-runner success; the PR run is the owning remote evidence.
 
-Stable candidate check names, awaiting a real PR run, are:
+The first real PR run established these stable check names:
 
 - `Static configuration checks`
 - `Server Release build`
@@ -110,6 +110,16 @@ Stable candidate check names, awaiting a real PR run, are:
 - `VarifyServer dependency and package check`
 
 After a clean PR establishes those names, an administrator must merge them into the existing `develop` protection rules without weakening any current rule. This task cannot be marked remotely complete before that evidence exists.
+
+### First clean-runner feedback
+
+PR run `33251104463` made `Static configuration checks` green and exposed three clean-only ownership gaps before resubmission:
+
+- the public PowerShell runner did not initialize `$LASTEXITCODE` before StrictMode code read it in a fresh Qt process;
+- the Server job launched the C++ to Node loopback helper without restoring its locked Node dependencies;
+- the Varify job invoked the C++ codegen drift command even though that job owns only Node dependencies.
+
+The runner now initializes the native exit code before any function, and the structure gate protects that ordering. The Server job restores Node 22 dependencies before the loopback test. Varify owns a pure `protobufjs` descriptor semantic check, while the Server job remains the single owner of pinned `protoc`/gRPC generated-byte drift. Local focused verification is green: Qt Unit 7/7 and Component 5/5 from a fresh exit-code state, Varify protocol 6/6 plus the full Varify runner, `CheckProtocols`, and the C++ to Node loopback 1/1. The full local Server rebuild reached its one-time 300-second build limit without an error result; the next clean PR run is the final Server lane evidence.
 
 ## Remaining Phase 3 Scope
 
