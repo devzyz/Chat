@@ -1,63 +1,62 @@
 #pragma once
-#include <grpcpp/grpcpp.h>
-#include "message.grpc.pb.h"
-#include "message.pb.h"
-#include <atomic>
-#include <memory>
-#include <queue>
-#include <mutex>
-#include <condition_variable>
+
+#include "../../common/grpc/GrpcClientRuntime.h"
+#include "Const.h"
+#include "chat.grpc.pb.h"
 #include "singleton.h"
 
-using grpc::Channel;
-using grpc::Status;
+#include <chrono>
+#include <cstddef>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <utility>
+
 using grpc::ClientContext;
-
-using message::ChatService;
-
 using message::AddFriendReq;
 using message::AddFriendRsp;
-
 using message::AuthFriendReq;
 using message::AuthFriendRsp;
-
+using message::ChatService;
+using message::KickUserReq;
+using message::KickUserRsp;
 using message::TextChatMsgReq;
 using message::TextChatMsgRsp;
 
-using message::KickUserReq;
-using message::KickUserRsp;
-
-
-
-class ChatConnectionPool {
+class ChatConnectionPool : public rpc::BoundedPool<ChatService::Stub> {
 public:
-	ChatConnectionPool(const std::string& _host, const std::string& port, std::size_t poolSize);
-	~ChatConnectionPool();
-	void returnConnectioni(std::unique_ptr<ChatService::Stub>);
-	std::unique_ptr<ChatService::Stub> getConnection();
-	void close();
-private:
-	std::atomic<bool> _b_stop;
-	std::size_t _pool_size;
-	std::string _host;
-	std::string _port;
-	std::queue<std::unique_ptr<ChatService::Stub>> _connection;
-
-	std::mutex _que_mutex;
-	std::condition_variable _cond;
+    ChatConnectionPool(
+        const std::string& host,
+        const std::string& port,
+        std::size_t pool_size,
+        std::chrono::milliseconds acquire_timeout)
+        : rpc::BoundedPool<ChatService::Stub>(
+              pool_size,
+              acquire_timeout,
+              [endpoint = host + ":" + port] {
+                  return ChatService::NewStub(grpc::CreateChannel(
+                      endpoint,
+                      grpc::InsecureChannelCredentials()));
+              }) {}
 };
 
-class ChatGrpcClient : public Singleton<ChatGrpcClient>
-{
-	friend class Singleton<ChatGrpcClient>;
-public:
-	~ChatGrpcClient();
-	AddFriendRsp NotifyOtherAddFriend(const std::string& serverIp, const AddFriendReq request);
-	AuthFriendRsp NotifyOtherAuthFriend(const std::string& serverIp, const AuthFriendReq request);
-	TextChatMsgRsp NotifyOtherReceiveTextChatMsg(const std::string& serverIp, const TextChatMsgReq request);
-	KickUserRsp NotifyOtherKickUser(const std::string& serverIp, const KickUserReq request);
-private:
-	ChatGrpcClient();
-	std::unordered_map<std::string, std::unique_ptr<ChatConnectionPool>> _pool;
-};
+class ChatGrpcClient : public Singleton<ChatGrpcClient> {
+    friend class Singleton<ChatGrpcClient>;
 
+public:
+    using EndpointMap = std::unordered_map<std::string, std::pair<std::string, std::string>>;
+
+    ~ChatGrpcClient() = default;
+    ChatGrpcClient(EndpointMap endpoints, rpc::ClientPolicy policy, std::size_t pool_size = 5);
+
+    AddFriendRsp NotifyOtherAddFriend(const std::string& server_name, const AddFriendReq& request);
+    AuthFriendRsp NotifyOtherAuthFriend(const std::string& server_name, const AuthFriendReq& request);
+    TextChatMsgRsp NotifyOtherReceiveTextChatMsg(const std::string& server_name, const TextChatMsgReq& request);
+    KickUserRsp NotifyOtherKickUser(const std::string& server_name, const KickUserReq& request);
+
+private:
+    ChatGrpcClient();
+
+    std::unordered_map<std::string, std::unique_ptr<ChatConnectionPool>> _pool;
+    rpc::ClientPolicy _policy;
+};

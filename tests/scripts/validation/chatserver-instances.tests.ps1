@@ -1,3 +1,7 @@
+param(
+    [string]$JUnitPath
+)
+
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
@@ -19,6 +23,57 @@ $stateRoot = Join-Path $testRoot 'state'
 $invoker = Join-Path $testRoot 'invoke-subject.ps1'
 $script:passed = 0
 $script:failed = 0
+$script:results = @()
+
+function Write-JUnitReport {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $parent = Split-Path -Parent $Path
+    if (-not [string]::IsNullOrWhiteSpace($parent)) {
+        [void](New-Item -ItemType Directory -Path $parent -Force)
+    }
+    $failures = @($script:results | Where-Object { -not $_.Passed }).Count
+    $duration = ($script:results | Measure-Object -Property Duration -Sum).Sum
+    $settings = New-Object System.Xml.XmlWriterSettings
+    $settings.Indent = $true
+    $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
+    $writer = [System.Xml.XmlWriter]::Create($Path, $settings)
+    try {
+        $writer.WriteStartDocument()
+        $writer.WriteStartElement('testsuites')
+        $writer.WriteAttributeString('tests', [string]$script:results.Count)
+        $writer.WriteAttributeString('failures', [string]$failures)
+        $writer.WriteAttributeString('errors', '0')
+        $writer.WriteStartElement('testsuite')
+        $writer.WriteAttributeString('name', 'ChatServerInstanceValidation')
+        $writer.WriteAttributeString('tests', [string]$script:results.Count)
+        $writer.WriteAttributeString('failures', [string]$failures)
+        $writer.WriteAttributeString('errors', '0')
+        $writer.WriteAttributeString('time', $duration.ToString('0.000', [Globalization.CultureInfo]::InvariantCulture))
+        foreach ($result in $script:results) {
+            $writer.WriteStartElement('testcase')
+            $writer.WriteAttributeString('classname', 'scripts.chatserver-instances.validation')
+            $writer.WriteAttributeString('name', $result.TestId)
+            $writer.WriteAttributeString('time', $result.Duration.ToString('0.000', [Globalization.CultureInfo]::InvariantCulture))
+            if (-not $result.Passed) {
+                $writer.WriteStartElement('failure')
+                $writer.WriteAttributeString('message', $result.Failure)
+                $writer.WriteString($result.Failure)
+                $writer.WriteEndElement()
+            }
+            $writer.WriteStartElement('system-out')
+            $writer.WriteString($result.Name)
+            $writer.WriteEndElement()
+            $writer.WriteEndElement()
+        }
+        $writer.WriteEndElement()
+        $writer.WriteEndElement()
+        $writer.WriteEndDocument()
+    }
+    finally {
+        $writer.Dispose()
+    }
+}
 
 function Write-ConfigFixture {
     param(
@@ -54,6 +109,9 @@ function Write-ConfigFixture {
 function Invoke-ExpectedValidationFailure {
     param(
         [Parameter(Mandatory = $true)]
+        [ValidatePattern('^A02-VAL-\d{2}$')]
+        [string]$TestId,
+        [Parameter(Mandatory = $true)]
         [string]$Name,
         [string[]]$Configs,
         [Parameter(Mandatory = $true)]
@@ -61,6 +119,7 @@ function Invoke-ExpectedValidationFailure {
         [switch]$NoConfigArgument
     )
 
+    $started = [DateTime]::UtcNow
     $caseRoot = Join-Path $stateRoot ($Name -replace '[^A-Za-z0-9._-]', '_')
     $configList = Join-Path $caseRoot 'configs.txt'
     [void](New-Item -ItemType Directory -Path $caseRoot -Force)
@@ -102,11 +161,18 @@ function Invoke-ExpectedValidationFailure {
 
     if ($failure) {
         $script:failed++
-        Write-Host "FAIL $Name - $failure" -ForegroundColor Red
+        Write-Host "FAIL $TestId $Name - $failure" -ForegroundColor Red
     }
     else {
         $script:passed++
-        Write-Host "PASS $Name"
+        Write-Host "PASS $TestId $Name"
+    }
+    $script:results += [pscustomobject]@{
+        TestId = $TestId
+        Name = $Name
+        Passed = -not [bool]$failure
+        Failure = [string]$failure
+        Duration = ([DateTime]::UtcNow - $started).TotalSeconds
     }
 }
 
@@ -132,52 +198,52 @@ if (-not [string]::IsNullOrWhiteSpace($ConfigList)) {
     Write-ConfigFixture $duplicateNameA 'chat-shared' '8090' '50051' 'log-a'
     Write-ConfigFixture $duplicateNameB 'chat-shared' '8091' '50052' 'log-b'
     $duplicateNamePattern = 'SelfServer\.Name must be unique'
-    Invoke-ExpectedValidationFailure 'Duplicate SelfServer.Name is rejected' `
+    Invoke-ExpectedValidationFailure 'A02-VAL-01' 'Duplicate SelfServer.Name is rejected' `
         @($duplicateNameA, $duplicateNameB) $duplicateNamePattern
 
     $duplicateLogA = Join-Path $fixtureRoot 'duplicate-log-a.ini'
     $duplicateLogB = Join-Path $fixtureRoot 'duplicate-log-b.ini'
     Write-ConfigFixture $duplicateLogA 'chat-a' '8090' '50051' 'shared-log'
     Write-ConfigFixture $duplicateLogB 'chat-b' '8091' '50052' 'shared-log'
-    Invoke-ExpectedValidationFailure 'Duplicate Log.Name is rejected' `
+    Invoke-ExpectedValidationFailure 'A02-VAL-02' 'Duplicate Log.Name is rejected' `
         @($duplicateLogA, $duplicateLogB) 'Log\.Name must be unique'
 
     $crossTypeA = Join-Path $fixtureRoot 'cross-type-a.ini'
     $crossTypeB = Join-Path $fixtureRoot 'cross-type-b.ini'
     Write-ConfigFixture $crossTypeA 'chat-a' '8090' '50051' 'log-a'
     Write-ConfigFixture $crossTypeB 'chat-b' '8091' '8090' 'log-b'
-    Invoke-ExpectedValidationFailure 'TCP and RPC cross-type collision is rejected' `
+    Invoke-ExpectedValidationFailure 'A02-VAL-03' 'TCP and RPC cross-type collision is rejected' `
         @($crossTypeA, $crossTypeB) "listener ports must be unique; port '8090'"
 
     $normalizedA = Join-Path $fixtureRoot 'normalized-a.ini'
     $normalizedB = Join-Path $fixtureRoot 'normalized-b.ini'
     Write-ConfigFixture $normalizedA 'chat-a' '08090' '50051' 'log-a'
     Write-ConfigFixture $normalizedB 'chat-b' '8091' '8090' 'log-b'
-    Invoke-ExpectedValidationFailure 'Port 08090 is normalized to 8090 before comparison' `
+    Invoke-ExpectedValidationFailure 'A02-VAL-04' 'Port 08090 is normalized to 8090 before comparison' `
         @($normalizedA, $normalizedB) "listener ports must be unique; port '8090'"
 
     $unsafeName = Join-Path $fixtureRoot 'unsafe name.ini'
     Write-ConfigFixture $unsafeName 'chat-a' '8090' '50051' 'log-a'
-    Invoke-ExpectedValidationFailure 'Unsafe config file name is rejected' `
+    Invoke-ExpectedValidationFailure 'A02-VAL-05' 'Unsafe config file name is rejected' `
         @($unsafeName) 'Config file name must contain only letters, digits, dot, dash or underscore'
 
     $duplicateIdA = Join-Path $fixtureRoot 'first\duplicate.ini'
     $duplicateIdB = Join-Path $fixtureRoot 'second\duplicate.ini'
     Write-ConfigFixture $duplicateIdA 'chat-a' '8090' '50051' 'log-a'
     Write-ConfigFixture $duplicateIdB 'chat-b' '8091' '50052' 'log-b'
-    Invoke-ExpectedValidationFailure 'Duplicate config base names are rejected' `
+    Invoke-ExpectedValidationFailure 'A02-VAL-06' 'Duplicate config base names are rejected' `
         @($duplicateIdA, $duplicateIdB) 'Config file names must be unique: duplicate'
 
     $missingPath = Join-Path $fixtureRoot 'missing.ini'
-    Invoke-ExpectedValidationFailure 'Missing config file is rejected' `
+    Invoke-ExpectedValidationFailure 'A02-VAL-07' 'Missing config file is rejected' `
         @($missingPath) 'Config file does not exist'
 
-    Invoke-ExpectedValidationFailure 'Missing config argument is rejected' `
+    Invoke-ExpectedValidationFailure 'A02-VAL-08' 'Missing config argument is rejected' `
         -ExpectedMessage 'Provide -Config and/or -ConfigDirectory when starting instances' -NoConfigArgument
 
     $missingValue = Join-Path $fixtureRoot 'missing-log-name.ini'
     Write-ConfigFixture $missingValue 'chat-a' '8090' '50051' '' -OmitLogName
-    Invoke-ExpectedValidationFailure 'Missing required config value is rejected' `
+    Invoke-ExpectedValidationFailure 'A02-VAL-09' 'Missing required config value is rejected' `
         @($missingValue) 'Required config value .* is missing'
 }
 finally {
@@ -186,6 +252,9 @@ finally {
     }
 }
 
+if (-not [string]::IsNullOrWhiteSpace($JUnitPath)) {
+    Write-JUnitReport -Path $JUnitPath
+}
 Write-Host "ChatServer instance validation tests: $script:passed passed, $script:failed failed."
 if ($script:failed -ne 0) {
     exit 1

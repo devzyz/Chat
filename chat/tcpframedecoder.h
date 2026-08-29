@@ -14,6 +14,7 @@ class TcpFrameDecoder
 {
 public:
     QVector<DecodedTcpFrame> append(const QByteArray &bytes);
+    void reset();
     qsizetype bufferedBytes() const;
 
 private:

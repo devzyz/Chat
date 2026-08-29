@@ -13,6 +13,12 @@
 
 不得把访问开发者本机 Redis/MySQL 的测试标成 Unit，也不得只运行代码不做断言来制造覆盖率。
 
+测试结构使用两个独立维度：`Foundation / Architecture / Business` 表示被保护的领域，
+`Unit / Component / Integration / E2E` 表示执行边界。目录按生产模块组织，层级通过 Test ID、
+README、runner 分组和报告名表达；不得建立平行的 `tests/unit`、`tests/component` 目录树。
+真实 loopback 协议或子进程属于 Integration，即使运行很快且不访问公网。完整规则见
+`tests/README.md` 和 `tests/auto/test-strand.md`。
+
 ## 新代码要求
 
 - 新纯逻辑 MUST 有 Unit Test。
@@ -48,18 +54,38 @@
 从仓库根目录执行：
 
 ```powershell
+.\scripts\windows-local.ps1 -Task CheckTestStructure
+.\scripts\windows-local.ps1 -Task CheckTestReports
 .\scripts\windows-local.ps1 -Task RunScriptTests
 .\scripts\windows-local.ps1 -Task RunServerTests -Configuration Release
 .\scripts\windows-local.ps1 -Task RunClientTests -Configuration Release
 .\scripts\windows-local.ps1 -Task RunVarifyTests
-.\scripts\windows-local.ps1 -Task TestPhase1 -Configuration Release
+.\scripts\windows-local.ps1 -Task RunAllTests -Configuration Release
 ```
 
-- Server GoogleTest 报告：`build/test-results/server_unit.xml`、`server_gate_asio.xml`、`server_status_asio.xml`。
-- Qt CTest 报告：`build/test-results/client_unit.xml`。
-- VarifyServer Node Test 报告：`build/test-results/varify_unit.xml`。
-- PowerShell 轻量测试报告：`build/test-results/script_unit.xml`。
+`CheckTestStructure` verifies that every test source is registered in the real
+MSBuild/CMake/npm/PowerShell runner and that every CTest target declares a test
+Level. The permanent regression baseline and future-module admission contract
+are defined in `tests/REGRESSION.md`.
+
+The confirmed branch/release gate policy is defined in
+`tests/CI-GOVERNANCE.md`; the current Test ID and gap inventory is
+`tests/TEST-CONTRACT-MATRIX.md`; the next baseline-hardening execution plan is
+`tests/plans/PHASE-2.5-PLAN.md`. These documents are planning and governance
+contracts: they do not claim a gate is implemented until its verification and
+clean-runner acceptance criteria pass.
+
+- Server GoogleTest 报告：`server_unit.xml`、`server_component.xml`、`server_integration.xml`、
+  `server_chat_grpc_integration.xml`、`server_gate_unit.xml`、`server_status_unit.xml`。
+- Qt CTest 报告：`client_unit.xml`、`client_component.xml`。
+- VarifyServer Node Test 报告：`varify_unit.xml`、`varify_integration.xml`。
+- PowerShell 轻量测试报告：`script_component.xml`、`script_integration.xml`。
+- 上述报告均位于 `build/test-results`。
+- 当前精确基线为 12 份报告、173 个 testcase；`CheckTestReports` 对缺失、数量漂移、
+  failure/error 节点返回非零，`RunAllTests` 结束前调用同一审计。
 - PowerShell 轻量 runner 通过逐项 PASS/FAIL 和非零退出传播失败。
+
+Qt 当前精确基线为 Unit 7、Component 5。Component 中的 `ClientSession` 合同要求登出、切号、被踢和异常掉线返回登录页前清除账号/connection transient state，并销毁旧页面与消息模型；预期关闭不得复用异常掉线提示路径。
 
 ## CI 门禁
 
@@ -69,6 +95,10 @@
 - `servers-release`：干净 vcpkg 恢复、Server Release、GoogleTest、自包含目录和三个 ZIP。
 - `client-release`：Qt Release、CTest、windeployqt 和客户端 ZIP。
 - `varify-release`：Node.js 22、`npm ci`、语法/依赖、Node Test 和 ZIP。
+
+稳定的 Required Check 候选名称是 `Static configuration checks`、`Server Release build`、
+`Qt client Release` 和 `VarifyServer dependency and package check`。只有对应 clean PR
+在提交 SHA 上实际全绿后，管理员才能把这些名称合并进 `develop` 保护规则。
 
 - 不得通过 `continue-on-error`、吞掉 `$LASTEXITCODE` 或无条件成功来绕过 required 行为。
 - 自动重试不得用于把 flaky test 刷成通过；必须定位不稳定原因。

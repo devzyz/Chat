@@ -20,12 +20,13 @@
 ## gRPC
 
 - 每个 RPC MUST 定义成功、业务失败、依赖失败、超时和远端不可用的行为。
-- 客户端调用 SHOULD 设置有限 deadline；无 deadline 的长期调用必须有明确说明。
+- 客户端调用 MUST 设置有限 deadline。当前生产默认值为：连接池借用 1000 ms、Status/Chat RPC 3000 ms、Varify RPC 15000 ms；配置值必须为 100..60000 ms 的正整数。
 - callback 或 completion MUST 只完成一次。
 - 服务启动 MUST 检查 `BuildAndStart()` 或 `bindAsync` 的结果，端口绑定失败不得报告 ready。
 - 连接池 MUST 遵循 [Concurrency.md](Concurrency.md) 的借用、归还和关闭规则。
 - 错误码优先使用项目稳定枚举或 gRPC status，不应依赖自然语言文本供程序判断。
 - RPC 日志可以包含方法名、对端、deadline 和非敏感标识，不得记录 Token、验证码或密码。
+- 连接池耗尽、连接池关闭、deadline exceeded、unavailable 与 cancelled 在内部保留稳定分类；当前公开兼容行为统一映射为 `RPCFailed`，且不自动重试。
 
 ## ChatServer TCP
 

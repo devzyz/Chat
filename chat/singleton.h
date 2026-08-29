@@ -29,6 +29,10 @@ public:
         return _instance;
     }
 
+    static void ReleaseInstance() {
+        _instance.reset();
+    }
+
     ~Singleton() {
         const auto logger = spdlog::default_logger();
         if (logger) {

@@ -236,7 +236,8 @@ unsigned short FindAvailablePort() {
 void WriteValidStartupConfig(
     const std::filesystem::path& path,
     unsigned short tcp_port,
-    unsigned short grpc_port) {
+    unsigned short grpc_port,
+    const std::string& grpc_settings = {}) {
     std::ostringstream config;
     config << "[SelfServer]\n"
            << "Name = StartupTest\n"
@@ -264,7 +265,8 @@ void WriteValidStartupConfig(
            << "MaxSizeMB = 1\n"
            << "MaxTotalFiles = 2\n"
            << "Level = info\n"
-           << "FlushLevel = warn\n";
+           << "FlushLevel = warn\n"
+           << grpc_settings;
     WriteText(path, config.str());
 }
 
@@ -350,6 +352,26 @@ TEST(StartupConfigTests, WorkingDirectoryConfigIsTheDefault) {
     EXPECT_FALSE(result.timed_out);
     EXPECT_NE(result.exit_code, 0U);
     EXPECT_NE(result.stderr_text.find("config.ini"), std::string::npos) << result.stderr_text;
+}
+
+// S01-GRPC-CFG-01
+TEST(StartupConfigTests, OutOfRangeGrpcTimeoutReturnsNonZeroBeforeListening) {
+    TempDirectory fixture;
+    const auto config_path = fixture.Path() / "invalid-grpc-timeout.ini";
+    WriteValidStartupConfig(
+        config_path,
+        FindAvailablePort(),
+        FindAvailablePort(),
+        "[Grpc]\nChatDeadlineMs = 60001\n");
+    ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
+    const auto executable = FindChatServerExecutable();
+    ASSERT_TRUE(std::filesystem::is_regular_file(executable)) << executable.string();
+
+    const auto result = RunProcess(executable, {L"--config", config_path.wstring()}, fixture.Path());
+
+    EXPECT_FALSE(result.timed_out) << result.stderr_text;
+    EXPECT_NE(result.exit_code, 0U);
+    EXPECT_NE(result.stderr_text.find("ChatDeadlineMs"), std::string::npos) << result.stderr_text;
 }
 
 // S01-BIND-01

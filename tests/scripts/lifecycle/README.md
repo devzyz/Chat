@@ -8,9 +8,16 @@
 
 ## 用例、依赖与隔离
 
-`chatserver-instances.tests.ps1` 包含 4 个用例。测试用当前 PowerShell 进程构造受控 PID 身份边界，并用临时
+Domain 为 Architecture，Level 为 Integration。`chatserver-instances.tests.ps1` 包含 4 个用例。测试用当前 PowerShell 进程构造受控 PID 身份边界，并用临时
 目录保存 config、stdout/stderr 和 state；teardown 只清理本次 GUID 目录。测试不会终止身份不匹配的进程，
 也不连接外部服务。依赖 Windows PowerShell 5.1。
+
+| Test ID | Contract |
+| --- | --- |
+| A02-LIFE-01 | A child startup failure reports diagnostics and leaves no state. |
+| A02-LIFE-02 | Status treats a reused PID with a different start time as stopped. |
+| A02-LIFE-03 | Stop never terminates a process whose recorded identity is stale. |
+| A02-LIFE-04 | Start rejects conflicts from an independently running instance. |
 
 ## 运行与 CI
 
@@ -19,7 +26,8 @@
 powershell.exe -NoProfile -File .\tests\scripts\lifecycle\chatserver-instances.tests.ps1
 ```
 
-CI job 为 `static-check`。结果写到控制台，任一用例失败均返回非零退出码；统一入口把本模块结果写入汇总报告 `build/test-results/script_unit.xml`。
+CI job 为 `static-check`。控制台保留逐 Test ID 的 PASS/FAIL，任一用例失败均返回非零退出码；统一入口把 4 个独立
+JUnit `testcase` 写入 `build/test-results/script_integration.xml`，报告创建或解析失败同样使 runner 失败。
 
 ## 已知缺口
 

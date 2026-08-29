@@ -1,6 +1,52 @@
 #include "ConfigMgr.h"
 #include "LogMgr.h"
+#include <boost/algorithm/string/trim.hpp>
 #include <cstdlib>
+#include <set>
+#include <sstream>
+#include <stdexcept>
+
+namespace {
+void ValidatePort(const std::string& value, const std::string& key) {
+	std::size_t parsed = 0;
+	int port = 0;
+	try {
+		port = std::stoi(value, &parsed);
+	}
+	catch (const std::exception&) {
+		throw std::invalid_argument(key + " must be a number between 1 and 65535");
+	}
+	if (parsed != value.size() || port < 1 || port > 65535) {
+		throw std::invalid_argument(key + " must be a number between 1 and 65535");
+	}
+}
+
+void RequireValue(SectionInfo section, const char* section_name, const char* key) {
+	if (section[key].empty()) {
+		throw std::invalid_argument(std::string("[") + section_name + "]." + key + " must not be empty");
+	}
+}
+
+void ValidateEndpoint(SectionInfo section, const char* section_name) {
+	RequireValue(section, section_name, "Host");
+	ValidatePort(section["Port"], std::string("[") + section_name + "].Port");
+}
+
+void ValidatePositiveInteger(SectionInfo section, const char* section_name, const char* key) {
+	RequireValue(section, section_name, key);
+	std::size_t parsed = 0;
+	unsigned long long value = 0;
+	try {
+		value = std::stoull(section[key], &parsed);
+	}
+	catch (const std::exception&) {
+		throw std::invalid_argument(std::string("[") + section_name + "]." + key + " must be a positive integer");
+	}
+	if (parsed != section[key].size() || value == 0) {
+		throw std::invalid_argument(std::string("[") + section_name + "]." + key + " must be a positive integer");
+	}
+}
+}
 
 std::string ConfigMgr::_config_path_override;
 
@@ -62,6 +108,38 @@ ConfigMgr::ConfigMgr() {
 		sectionInfo._section_datas = section_config;
 		_config_map[section_name] = sectionInfo;
 	}
+
+	ValidateEndpoint((*this)["StatusServer"], "StatusServer");
+	ValidateEndpoint((*this)["Redis"], "Redis");
+	ValidateEndpoint((*this)["Mysql"], "Mysql");
+	RequireValue((*this)["Mysql"], "Mysql", "User");
+	RequireValue((*this)["Mysql"], "Mysql", "Schema");
+
+	auto server_list = (*this)["ChatServers"]["Name"];
+	if (server_list.empty()) {
+		throw std::invalid_argument("[ChatServers].Name must not be empty");
+	}
+	std::set<std::string> runtime_names;
+	std::stringstream stream(server_list);
+	std::string section_name;
+	while (std::getline(stream, section_name, ',')) {
+		boost::algorithm::trim(section_name);
+		if (section_name.empty()) {
+			throw std::invalid_argument("[ChatServers].Name contains an empty section name");
+		}
+		auto server = (*this)[section_name];
+		RequireValue(server, section_name.c_str(), "Name");
+		ValidateEndpoint(server, section_name.c_str());
+		if (!runtime_names.insert(server["Name"]).second) {
+			throw std::invalid_argument("[ChatServers].Name contains duplicate runtime server name " + server["Name"]);
+		}
+	}
+
+	auto log = (*this)["Log"];
+	RequireValue(log, "Log", "Name");
+	RequireValue(log, "Log", "LogDir");
+	ValidatePositiveInteger(log, "Log", "MaxSizeMB");
+	ValidatePositiveInteger(log, "Log", "MaxTotalFiles");
 }
 
 ConfigMgr::~ConfigMgr() {

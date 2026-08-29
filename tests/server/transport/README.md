@@ -8,6 +8,6 @@
 | T02-FRM-02 | Unit | The maximum body length and an unknown ID are preserved. |
 | T02-FRM-03 | Unit | A body one byte above the receive limit is rejected. |
 
-Run `RunServerTests` or filter `ChatFrameCodecTests.*`. CI uploads `build/test-results/server_unit.xml` together with the two Asio lifecycle reports.
+Domain is Foundation and Level is Unit. Run `RunServerTests` or filter `ChatFrameCodecTests.*`. CI uploads `build/test-results/server_unit.xml` together with the two Asio lifecycle Unit reports.
 
 RED was a real compile failure: `DecodeValidatedHeader` did not exist. GREEN is 3/3 tests, with `CSession` calling the new production interface. Full socket half/sticky packet, disconnect, and cancellation behavior remains an Integration gap. Unknown IDs remain a `LogicSystem` no-handler concern, not a frame-validation rule.

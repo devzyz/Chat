@@ -1,28 +1,35 @@
-# 配置测试
+# Varify configuration tests
 
-## 被测代码与契约
+## Production contract
 
-- 生产代码：`VarifyServer/config.js`。
-- 契约：命令行 `--config` 高于 `CHAT_CONFIG`，环境变量高于工作目录 `config.json`；默认配置正确展开；
-  畸形 JSON 必须令加载进程非零退出。
+`config.js` reads non-secret service addresses from JSON. Configuration path
+precedence is `--config`, then `CHAT_CONFIG`, then the working-directory
+`config.json`.
 
-## 用例、依赖与隔离
+Credentials are required exclusively through these environment variables:
 
-`config.test.js` 包含 4 个 `node:test` 用例。每个用例创建唯一临时目录，并通过独立 Node 子进程隔离
-`process.argv`、环境变量和 CommonJS require cache；临时配置只含虚构凭据并在 teardown 清理。测试不连接
-Redis、MySQL、SMTP 或网络。
+- `CHAT_VARIFY_EMAIL_USER`
+- `CHAT_VARIFY_EMAIL_PASS`
+- `CHAT_VARIFY_MYSQL_PASSWORD`
+- `CHAT_VARIFY_REDIS_PASSWORD`
 
-## 运行与 CI
+Missing variables fail fast without printing credential values. Legacy
+credential fields in JSON are rejected so plaintext secrets cannot silently be
+reintroduced.
+
+## Isolation and execution
+
+`config.test.js` contains nine `node:test` cases. Each case loads the production
+module in an isolated child process with temporary JSON and synthetic
+credentials. It does not connect to Redis, MySQL, SMTP, or the public network.
+
+Domain is Foundation and Level is Integration because the contract is observed
+through a real child-process module load rather than an in-process fake.
 
 ```powershell
 Set-Location .\VarifyServer
 node.exe --test test/config/config.test.js
 ```
 
-统一入口是 `scripts/windows-local.ps1 -Task RunVarifyTests`。CI job 为 `varify-release`，合并报告为
-`build/test-results/varify_unit.xml`。
-
-## 已知缺口
-
-- 当前生产模块在加载时读取配置，尚未导出无副作用的纯加载函数。
-- 未覆盖字段 schema、端口范围、凭据为空或配置权限错误；这些契约需先明确。
+The repository entry point is `scripts/windows-local.ps1 -Task RunVarifyTests`.
+CI writes this suite to `build/test-results/varify_integration.xml`.

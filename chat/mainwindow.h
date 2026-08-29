@@ -6,6 +6,8 @@
 #include "registerdialog.h"
 #include "resetdialog.h"
 #include "chatdialog.h"
+#include "clientsession.h"
+#include <QPointer>
 
 /***************************************************
  * @file        mainwindow.h
@@ -36,6 +38,7 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+    bool resetSession(SessionResetReason reason);
 public slots:
     // 登录转注册槽函数
     void slot_login_switch_reg();
@@ -50,15 +53,16 @@ public slots:
     // 服务器通知下线槽函数
     void slot_notify_offline();
     // 服务器断开连接
-    void slot_connection_close();
+    void slot_connection_close(bool expectedClose);
 private:
     void offlineLogin();
 
     Ui::MainWindow *ui;
-    LoginDialog * _login_dlg;
-    RegisterDialog * _register_dlg;
-    ResetDialog * _reset_dlg;
-    ChatDialog * _chat_dlg;
-    UIStatus _ui_status;
+    QPointer<LoginDialog> _login_dlg;
+    QPointer<RegisterDialog> _register_dlg;
+    QPointer<ResetDialog> _reset_dlg;
+    QPointer<ChatDialog> _chat_dlg;
+    UIStatus _ui_status = UIStatus::LOGIN_UI;
+    ClientSession _session;
 };
 #endif // MAINWINDOW_H

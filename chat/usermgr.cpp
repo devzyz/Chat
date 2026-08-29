@@ -1,7 +1,9 @@
 #include "usermgr.h"
 #include "global.h"
 
-UserMgr::UserMgr() : _contact_load_count(0), _current_load_chat_id(0), _is_load_chat_finish(false)
+UserMgr::UserMgr()
+    : _contact_load_count(0), _current_load_chat_id(0), _last_chat_id(0),
+      _is_load_chat_finish(false)
 {
 
 }
@@ -11,14 +13,34 @@ void UserMgr::SetToken(QString token)
     _token = token;
 }
 
+QString UserMgr::GetToken() const
+{
+    return _token;
+}
+
 void UserMgr::SetInfo(std::shared_ptr<UserInfo> user_info)
 {
     _user_info = user_info;
 }
 
+void UserMgr::resetSession()
+{
+    _user_info.reset();
+    _token.clear();
+    _contact_load_count = 0;
+    _apply_map.clear();
+    _friend_map.clear();
+    _friend_list.clear();
+    _chat_map.clear();
+    _uid_to_chatId.clear();
+    _current_load_chat_id = 0;
+    _last_chat_id = 0;
+    _is_load_chat_finish = false;
+}
+
 int UserMgr::GetUid()
 {
-    return _user_info->_uid;
+    return _user_info ? _user_info->_uid : 0;
 }
 
 bool UserMgr::AlreadyApplyAddFriend(int uid)

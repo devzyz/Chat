@@ -21,10 +21,10 @@
     <ClCompile Include="ConfigMgr.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="message.grpc.pb.cc">
+    <ClCompile Include="$(ProtocolGeneratedDir)\status.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="message.pb.cc">
+    <ClCompile Include="$(ProtocolGeneratedDir)\status.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Singleton.cpp">
@@ -45,9 +45,6 @@
     <ClCompile Include="StatusServiceImpl.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="ChatGrpcClient.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="DistLock.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -62,10 +59,10 @@
     <ClInclude Include="const.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="message.grpc.pb.h">
+    <ClInclude Include="$(ProtocolGeneratedDir)\status.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="message.pb.h">
+    <ClInclude Include="$(ProtocolGeneratedDir)\status.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Singleton.h">
@@ -86,9 +83,6 @@
     <ClInclude Include="StatusServiceImpl.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="ChatGrpcClient.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="DistLock.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -98,6 +92,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="config.ini" />
-    <None Include="message.proto" />
+    <None Include="..\..\proto\status.proto" />
   </ItemGroup>
 </Project>

@@ -15,7 +15,9 @@ class UserMgr : public QObject, public Singleton<UserMgr>,
 public:
     ~UserMgr();
     void SetToken(QString token);
+    QString GetToken() const;
     void SetInfo(std::shared_ptr<UserInfo> user_info);
+    void resetSession();
     int GetUid();
 
     // 判断是否已经申请过添加我为好友了

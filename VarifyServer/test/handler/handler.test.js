@@ -73,6 +73,32 @@ test('cached code is reused without UUID generation or Redis write', async () =>
     assert.match(sentMessages[0].text, /A1B2/);
 });
 
+// V06-HDL-07
+test('mail uses the sender supplied by runtime configuration', async () => {
+    const senderEmail = 'sender@example.test';
+    let sentMessage;
+    const handler = createGetVarifyCodeHandler({
+        redisModule: {
+            async GetRedis() {
+                return 'A1B2';
+            }
+        },
+        emailModule: {
+            async SendMail(options) {
+                sentMessage = options;
+                return 'accepted';
+            }
+        },
+        senderEmail,
+        logger: silentLogger
+    });
+
+    const response = await invoke(handler);
+
+    assert.equal(response.error, constModule.Errors.Success);
+    assert.ok(sentMessage.from === senderEmail, 'mail must use the injected sender address');
+});
+
 // V06-HDL-02
 test('missing code generates four characters and stores a 600 second TTL', async () => {
     // Arrange

@@ -9,19 +9,25 @@ const test = require('node:test');
 
 const serverRoot = path.resolve(__dirname, '..', '..');
 const configModule = path.join(serverRoot, 'config.js');
+const credentialEnvironment = Object.freeze({
+    CHAT_VARIFY_EMAIL_USER: 'sender@example.test',
+    CHAT_VARIFY_EMAIL_PASS: 'fixture-email-secret',
+    CHAT_VARIFY_MYSQL_PASSWORD: 'fixture-mysql-secret',
+    CHAT_VARIFY_REDIS_PASSWORD: 'fixture-redis-secret'
+});
 
 function writeConfig(directory, marker) {
     fs.mkdirSync(directory, { recursive: true });
     const file = path.join(directory, 'config.json');
     fs.writeFileSync(file, JSON.stringify({
-        email: { user: `${marker}@example.com`, pass: `${marker}-email-secret` },
-        mysql: { host: `${marker}-mysql`, port: 3306, passwd: `${marker}-mysql-secret` },
-        redis: { host: `${marker}-redis`, port: 6379, passwd: `${marker}-redis-secret` }
+        email: {},
+        mysql: { host: `${marker}-mysql`, port: 3306 },
+        redis: { host: `${marker}-redis`, port: 6379 }
     }));
     return file;
 }
 
-function loadConfigInChild({ cwd, envConfig, argumentConfig }) {
+function loadConfigInChild({ cwd, envConfig, argumentConfig, credentials = credentialEnvironment }) {
     const args = [
         '-e',
         `const config = require(${JSON.stringify(configModule)}); process.stdout.write(JSON.stringify(config));`
@@ -30,6 +36,10 @@ function loadConfigInChild({ cwd, envConfig, argumentConfig }) {
         args.push('--', '--config', argumentConfig);
     }
     const env = { ...process.env };
+    for (const name of Object.keys(credentialEnvironment)) {
+        delete env[name];
+    }
+    Object.assign(env, credentials);
     if (envConfig) {
         env.CHAT_CONFIG = envConfig;
     } else {
@@ -48,7 +58,10 @@ test('explicit --config takes precedence over CHAT_CONFIG', (t) => {
 
     assert.equal(result.status, 0, result.stderr);
     const config = JSON.parse(result.stdout);
-    assert.equal(config.email_user, 'argument@example.com');
+    assert.equal(config.email_user, credentialEnvironment.CHAT_VARIFY_EMAIL_USER);
+    assert.equal(config.email_pass, credentialEnvironment.CHAT_VARIFY_EMAIL_PASS);
+    assert.equal(config.mysql_passwd, credentialEnvironment.CHAT_VARIFY_MYSQL_PASSWORD);
+    assert.equal(config.redis_passwd, credentialEnvironment.CHAT_VARIFY_REDIS_PASSWORD);
     assert.equal(config.mysql_host, 'argument-mysql');
     assert.equal(config.redis_host, 'argument-redis');
 });
@@ -62,7 +75,7 @@ test('CHAT_CONFIG takes precedence over the working-directory default', (t) => {
     const result = loadConfigInChild({ cwd: root, envConfig: environmentConfig });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).email_user, 'environment@example.com');
+    assert.equal(JSON.parse(result.stdout).mysql_host, 'environment-mysql');
 });
 
 test('config.json is loaded from the working directory by default', (t) => {
@@ -74,7 +87,7 @@ test('config.json is loaded from the working directory by default', (t) => {
 
     assert.equal(result.status, 0, result.stderr);
     const config = JSON.parse(result.stdout);
-    assert.equal(config.email_user, 'default@example.com');
+    assert.equal(config.mysql_host, 'default-mysql');
     assert.equal(config.code_prefix, 'code_');
 });
 
@@ -87,4 +100,40 @@ test('malformed configuration exits with a failure status', (t) => {
     const result = loadConfigInChild({ cwd: root, argumentConfig: malformed });
 
     assert.notEqual(result.status, 0);
+});
+
+for (const missingName of Object.keys(credentialEnvironment)) {
+    test(`missing ${missingName} is rejected without exposing credentials`, (t) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
+        t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+        writeConfig(root, 'default');
+        const credentials = { ...credentialEnvironment };
+        delete credentials[missingName];
+
+        const result = loadConfigInChild({ cwd: root, credentials });
+
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, new RegExp(missingName));
+        for (const value of Object.values(credentialEnvironment)) {
+            assert.equal(result.stderr.includes(value), false);
+        }
+    });
+}
+
+test('plaintext credential fields in config.json are rejected', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const configPath = path.join(root, 'config.json');
+    const legacySecret = 'legacy-fixture-secret';
+    fs.writeFileSync(configPath, JSON.stringify({
+        email: { user: 'legacy@example.test', pass: legacySecret },
+        mysql: { host: 'mysql', port: 3306, passwd: legacySecret },
+        redis: { host: 'redis', port: 6379, passwd: legacySecret }
+    }));
+
+    const result = loadConfigInChild({ cwd: root });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /environment variables/);
+    assert.equal(result.stderr.includes(legacySecret), false);
 });

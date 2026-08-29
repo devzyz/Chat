@@ -1,6 +1,6 @@
 #pragma once
 #include <grpcpp/grpcpp.h>
-#include "message.grpc.pb.h"
+#include "status.grpc.pb.h"
 
 using grpc::Server;
 using grpc::ServerBuilder;
@@ -36,4 +36,3 @@ private:
 	std::unordered_map<std::string, ChatServer> _servers;
 	std::mutex _server_mutex;
 };
-

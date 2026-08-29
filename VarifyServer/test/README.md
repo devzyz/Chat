@@ -1,13 +1,21 @@
 # VarifyServer tests
 
-The Node 22 `node:test` suite is organized by production contract:
+The directories follow production contracts. Domain and Level are independent
+metadata; reports are split by Level.
 
-- `config`: configuration precedence and malformed input.
-- `protocol`: error constants and generated service descriptors.
-- `handler`: injected Redis/SMTP/UUID/logger behavior, including log redaction.
-- `rpc`: real dynamic-loopback gRPC route registration.
-- `startup`: bind/start lifecycle through the production `startServer` interface plus direct-process bind failure.
+| Directory | Domain | Level | Coverage |
+| --- | --- | --- | --- |
+| `protocol` | Foundation | Unit | Error constants and generated service descriptors. |
+| `handler` | Business | Unit | Injected Redis/SMTP/UUID/logger behavior and log redaction. |
+| `startup/startup-unit.test.js` | Architecture | Unit | Bind/start transitions through a fake server. |
+| `config` | Foundation | Integration | Configuration loading in isolated child processes. |
+| `rpc` | Architecture | Integration | Real dynamic-loopback gRPC registration and routing. |
+| `startup/startup-integration.test.js` | Architecture | Integration | Direct-process bind failure on an occupied loopback port. |
 
-Run `npm test` in `VarifyServer` or `RunVarifyTests` from the repository root. Both execute the same explicit file list and write `build/test-results/varify_unit.xml` in CI. No test connects to Redis, SMTP, or a public network.
+From `VarifyServer`, run `npm run test:unit`, `npm run test:integration`, or
+`npm test`. The repository entry point is `RunVarifyTests`. CI writes
+`build/test-results/varify_unit.xml` and `varify_integration.xml`; a missing
+report is an error. No test connects to Redis, SMTP, or a public network.
 
-The real loopback protocol route and direct-process bind failure are Integration coverage. Successful default-process readiness, real adapters, signals, cross-language C++ calls, and C++ deadline behavior remain gaps.
+Successful default-process readiness, real adapters, signals, cross-language
+C++ calls, and C++ deadline behavior remain gaps.

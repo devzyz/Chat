@@ -1,16 +1,11 @@
 {
-    "email" : {
-        "user" : "1358451905@qq.com",
-        "pass" : "rlnskujppiiqfiab"
+    "email": {},
+    "mysql": {
+        "host": "192.168.18.128",
+        "port": 3308
     },
-    "mysql" : {
-        "host" : "192.168.18.128",
-        "port" : 3308,
-        "passwd" : 123456
-    },
-    "redis" : {
-        "host" : "192.168.18.128",
-        "port" : 6380,
-        "passwd" : 123456
+    "redis": {
+        "host": "192.168.18.128",
+        "port": 6380
     }
 }

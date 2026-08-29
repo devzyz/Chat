@@ -2,7 +2,8 @@
 
 Qt 测试由 `chat/CMakeLists.txt` 显式注册，测试源码按客户端模块组织：
 
-- [message-model](message-model/README.md)：消息模型、模型仓库和 delegate 布局行为。
+- [message-model](message-model/README.md)：Business / Unit + Component；前六项保护单一模型规则，store 分页状态和真实 delegate 布局保持 Component。
+- [session-reset](session-reset/README.md)：Architecture/Business / Component；保护账号状态、pending batch、页面/模型销毁、幂等和关闭原因。
 
 从仓库根目录运行：
 
@@ -10,8 +11,16 @@ Qt 测试由 `chat/CMakeLists.txt` 显式注册，测试源码按客户端模块
 .\scripts\windows-local.ps1 -Task RunClientTests -Configuration Release
 ```
 
-- [network-state](network-state/README.md): the `TcpMgr` frame decoder's partial-read,
+The production executable and tests link the same internal
+`chat_network_core` and `chat_message_model` modules. Test targets do not
+compile drifting copies of those production implementations.
+
+The executable and session reset tests also link the same `chat_session_core`
+Module containing `ClientSession`, `TcpMgr`, and `UserMgr`.
+
+- [network-state](network-state/README.md): Foundation / Unit, the `TcpMgr` frame decoder's partial-read,
   adjacent-frame, byte-order, and zero-body state transitions.
 
-CI 的 `client-release` job 运行 CTest，并生成 `build/test-results/client_unit.xml`。新增模块必须创建独立
+CI 的 `client-release` job 按 CTest 标签运行，并生成 `build/test-results/client_unit.xml`（7）和
+`client_component.xml`（5）。新增模块必须创建独立
 子目录和 `README.md`，并在 CMake 中显式注册，不能依赖目录通配符发现。

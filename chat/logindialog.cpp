@@ -190,7 +190,6 @@ void LoginDialog::initHttpHandlers()
             return;
         }
 
-        auto email = jsonObj["email"].toString();
         // 发送信号通知tcpMgr发送长连接
         ServerInfo si;
         si.Uid = jsonObj["uid"].toInt();
@@ -285,4 +284,3 @@ void LoginDialog::slot_tcp_connect_finish(bool bSuccess)
         ui->login_btn->setEnabled(true);
     }
 }
-

@@ -66,8 +66,12 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <ProtocolGeneratedDir>$(MSBuildThisFileDirectory)..\..\generated\proto\cpp</ProtocolGeneratedDir>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
+      <AdditionalIncludeDirectories>$(ProtocolGeneratedDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -81,6 +85,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
+      <AdditionalIncludeDirectories>$(ProtocolGeneratedDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -96,6 +101,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
+      <AdditionalIncludeDirectories>$(ProtocolGeneratedDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -110,6 +116,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
+      <AdditionalIncludeDirectories>$(ProtocolGeneratedDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -126,30 +133,33 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AsioIOServicePool.cpp" />
-    <ClCompile Include="ConfigMgr.cpp" />
     <ClCompile Include="CServer.cpp" />
     <ClCompile Include="GateServer.cpp" />
+    <ClCompile Include="GateResponse.cpp" />
     <ClCompile Include="HttpConnection.cpp" />
     <ClCompile Include="LogicSystem.cpp" />
     <ClCompile Include="LogMgr.cpp" />
-    <ClCompile Include="message.grpc.pb.cc" />
-    <ClCompile Include="message.pb.cc" />
+    <ClCompile Include="$(ProtocolGeneratedDir)\status.grpc.pb.cc" />
+    <ClCompile Include="$(ProtocolGeneratedDir)\status.pb.cc" />
+    <ClCompile Include="$(ProtocolGeneratedDir)\varify.grpc.pb.cc" />
+    <ClCompile Include="$(ProtocolGeneratedDir)\varify.pb.cc" />
     <ClCompile Include="MysqlDao.cpp" />
     <ClCompile Include="MysqlMgr.cpp" />
     <ClCompile Include="RedisMgr.cpp" />
-    <ClCompile Include="StatusGrpcClient.cpp" />
-    <ClCompile Include="VerifyGrpcClient.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AsioIOServicePool.h" />
     <ClInclude Include="ConfigMgr.h" />
     <ClInclude Include="const.h" />
     <ClInclude Include="CServer.h" />
+    <ClInclude Include="GateResponse.h" />
     <ClInclude Include="HttpConnection.h" />
     <ClInclude Include="LogicSystem.h" />
     <ClInclude Include="LogMgr.h" />
-    <ClInclude Include="message.grpc.pb.h" />
-    <ClInclude Include="message.pb.h" />
+    <ClInclude Include="$(ProtocolGeneratedDir)\status.grpc.pb.h" />
+    <ClInclude Include="$(ProtocolGeneratedDir)\status.pb.h" />
+    <ClInclude Include="$(ProtocolGeneratedDir)\varify.grpc.pb.h" />
+    <ClInclude Include="$(ProtocolGeneratedDir)\varify.pb.h" />
     <ClInclude Include="MysqlDao.h" />
     <ClInclude Include="MysqlMgr.h" />
     <ClInclude Include="RedisMgr.h" />
@@ -159,7 +169,13 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="config.ini" />
-    <None Include="message.proto" />
+    <None Include="..\..\proto\status.proto" />
+    <None Include="..\..\proto\varify.proto" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="GateGrpcClients.vcxproj">
+      <Project>{A5B4E15C-99D7-4D4D-86CC-5FB765AFC501}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

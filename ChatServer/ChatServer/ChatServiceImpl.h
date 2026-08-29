@@ -1,7 +1,6 @@
 #pragma once
 #include "grpcpp/grpcpp.h"
-#include "message.grpc.pb.h"
-#include "message.pb.h"
+#include "chat.grpc.pb.h"
 #include "Data.h"
 #include <memory>
 
@@ -39,4 +38,3 @@ public:
 private:
 	std::shared_ptr<CServer> _p_server;
 };
-

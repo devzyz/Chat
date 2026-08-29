@@ -1,43 +1,52 @@
 #pragma once
-#include <grpcpp/grpcpp.h>
+
+#include "../../common/grpc/GrpcClientRuntime.h"
 #include "Singleton.h"
-#include "message.grpc.pb.h"
 #include "const.h"
+#include "status.grpc.pb.h"
 
-using grpc::Channel;
-using grpc::Status;
+#include <chrono>
+#include <cstddef>
+#include <memory>
+#include <string>
+
 using grpc::ClientContext;
-
 using message::GetChatServerReq;
 using message::GetChatServerRsp;
 using message::StatusService;
 
-class RPCConnection {
+class RPCConnection : public rpc::BoundedPool<StatusService::Stub> {
 public:
-	RPCConnection(std::size_t poolsize, std::string host, std::string port);
-	~RPCConnection();
-	void close();
-	std::unique_ptr<StatusService::Stub> getConnection();
-	void returnConnection(std::unique_ptr<StatusService::Stub> context);
-private:
-	std::atomic<bool> _b_stop;
-	std::size_t _poolSize;
-	std::string _host;
-	std::string _port;
-	std::queue<std::unique_ptr<StatusService::Stub>> _connections;
-	std::mutex _mutex;
-	std::condition_variable _cond;
+    RPCConnection(
+        std::size_t pool_size,
+        const std::string& host,
+        const std::string& port,
+        std::chrono::milliseconds acquire_timeout)
+        : rpc::BoundedPool<StatusService::Stub>(
+              pool_size,
+              acquire_timeout,
+              [endpoint = host + ":" + port] {
+                  return StatusService::NewStub(grpc::CreateChannel(
+                      endpoint,
+                      grpc::InsecureChannelCredentials()));
+              }) {}
 };
 
-class StatusGrpcClient : public Singleton<StatusGrpcClient>
-{
-	friend class Singleton<StatusGrpcClient>;
+class StatusGrpcClient : public Singleton<StatusGrpcClient> {
+    friend class Singleton<StatusGrpcClient>;
+
 public:
-	~StatusGrpcClient();
-	GetChatServerRsp GetChatServer(int uid);
+    ~StatusGrpcClient() = default;
+    GetChatServerRsp GetChatServer(int uid);
+    StatusGrpcClient(
+        const std::string& host,
+        const std::string& port,
+        rpc::ClientPolicy policy,
+        std::size_t pool_size = 5);
+
 private:
-	StatusGrpcClient();
+    StatusGrpcClient();
 
-	std::unique_ptr<RPCConnection> _pool;
+    std::unique_ptr<RPCConnection> _pool;
+    rpc::ClientPolicy _policy;
 };
-

@@ -30,6 +30,8 @@ public:
 
     // 关闭连接
     void CloseConnection();
+    void beginSession();
+    void resetConnection(bool expectedClose);
 
     // 连接的tcp服务器的地址和端口号
     QString _host;
@@ -90,7 +92,7 @@ signals:
      * @brief sig_connection_close
      * 服务器关闭连接信号
      */
-    void sig_connection_close();
+    void sig_connection_close(bool expectedClose);
     /**
      * @brief sig_tcp_load_chat_finish
      * 加载聊天会话完成信号
@@ -122,7 +124,7 @@ signals:
      * 发送聊天文本回包，更新为已读状态
      */
     void sig_text_chat_msg_rsp_finish(int, QVector<MessageAcknowledgement>);
-    void sig_text_chat_msg_failed(int, QVector<QString>);
+    void sig_text_chat_msg_failed(int, const QVector<QString> &);
 public slots:
     /**
      * @brief slot_tcp_connect
@@ -151,6 +153,8 @@ private:
         QVector<QString> clientMessageIds;
     };
     QQueue<PendingTextBatch> _pendingTextBatches;
+    bool _acceptingSends = false;
+    bool _expectedClose = false;
 
 };
 
