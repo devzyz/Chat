@@ -4,6 +4,9 @@
 #include <hiredis/hiredis.h>
 #include "RedisMgr.h"
 #include "LogMgr.h"
+#include "AsioIOServicePool.h"
+#include <csignal>
+#include <iostream>
 
 void TestRedisMgr() {
     assert(RedisMgr::GetInstance()->Set("blogwebsite", "llfc.club"));
@@ -28,40 +31,60 @@ void TestRedisMgr() {
 
 int main(int argc, char* argv[])
 {
-    if (argc == 3 && std::string(argv[1]) == "--config") {
-        ConfigMgr::SetConfigPath(argv[2]);
-    }
-    //TestRedisMgr();
-    auto logger = LogMgr::GetInstance();
-    if (!logger->InitLogMgr()) {
+    if (argc != 1 && (argc != 3 || std::string(argv[1]) != "--config")) {
+        std::cerr << "Usage: GateServer.exe [--config <path>]" << std::endl;
         return EXIT_FAILURE;
     }
-    ConfigMgr& gCfgMgr = ConfigMgr::GetInstance();
-    // 获取当前服务的端口信息
-    std::string gate_port_str = gCfgMgr["GateServer"]["Port"];
-    unsigned short gate_port = atoi(gate_port_str.c_str());
+    if (argc == 3) {
+        ConfigMgr::SetConfigPath(argv[2]);
+    }
 
     try {
-        unsigned short port = static_cast<unsigned short> (gate_port);
+        ConfigMgr& config = ConfigMgr::GetInstance();
+        auto logger = LogMgr::GetInstance();
+        if (!logger->InitLogMgr()) {
+            std::cerr << "GateServer failed to initialize logging." << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        const auto port = static_cast<unsigned short>(std::stoi(config["GateServer"]["Port"]));
         net::io_context ioc{ 1 };
         boost::asio::signal_set signals(ioc, SIGINT, SIGTERM);
+#ifdef _WIN32
+        signals.add(SIGBREAK);
+#endif
+        auto server = std::make_shared<CServer>(ioc, port);
+        auto pool = AsioIOServicePool::GetInstance();
 
-        // 异步等待，当接收到SIGINT, SIGTERM信号后，触发后面的回调函数
-        signals.async_wait([&ioc](const boost::system::error_code& err, int signal_number) {
+        signals.async_wait([&ioc, pool, server](const boost::system::error_code& err, int signal_number) {
             if (err) {
                 return;
             }
+            SPDLOG_INFO("GateServer shutting down, signal={}", signal_number);
+            server->Stop();
+            pool->stop();
             ioc.stop();
             });
-        
-        std::make_shared<CServer>(ioc, port)->Start();
-        SPDLOG_INFO("GateServer listening on port={}", port);
-        ioc.run();
+
+        try {
+            server->Start();
+            SPDLOG_INFO("GateServer listening on port={}", port);
+            ioc.run();
+        }
+        catch (...) {
+            server->Stop();
+            pool->stop();
+            throw;
+        }
+        server->Stop();
+        pool->stop();
+        SPDLOG_INFO("GateServer stopped");
+        logger->Close();
     }
-    catch (std::exception& e) {
-        SPDLOG_ERROR("GateServer exception: {}", e.what());
+    catch (const std::exception& e) {
+        std::cerr << "GateServer startup error: " << e.what() << std::endl;
         return EXIT_FAILURE;
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }

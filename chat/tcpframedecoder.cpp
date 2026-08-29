@@ -32,6 +32,11 @@ QVector<DecodedTcpFrame> TcpFrameDecoder::append(const QByteArray &bytes)
     return frames;
 }
 
+void TcpFrameDecoder::reset()
+{
+    _buffer.clear();
+}
+
 qsizetype TcpFrameDecoder::bufferedBytes() const
 {
     return _buffer.size();

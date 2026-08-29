@@ -20,7 +20,8 @@ ZIP packages suitable for release testing.
 - vcpkg tool version:
   `4b3e4c276b5b87a649e66341e11553e8c577459c`
 - Qt 6.5.3 MinGW 64-bit and its bundled MinGW compiler
-- CMake 3.21 or newer and Ninja (required for the JUnit-capable CTest runner)
+- CMake 3.24 or newer and Ninja (required for JUnit-capable CTest and guarded
+  `--fresh` recovery of an incomplete generated cache)
 - Node.js and npm with support for npm ci
 
 The server triplet is the repository-owned `x64-windows-chat` overlay. The MSVC
@@ -96,6 +97,33 @@ QT_ROOT may be omitted when the correct qmake.exe is on PATH. MINGW_ROOT may
 be omitted when exactly one Qt MinGW 64-bit toolchain exists under the same Qt
 installation.
 
+VarifyServer keeps only non-secret hosts and ports in `VarifyServer\config.json`.
+The following credentials are required at runtime and must be supplied through
+the process environment, a Windows user environment, or CI/deployment secrets:
+
+    CHAT_VARIFY_EMAIL_USER
+    CHAT_VARIFY_EMAIL_PASS
+    CHAT_VARIFY_MYSQL_PASSWORD
+    CHAT_VARIFY_REDIS_PASSWORD
+
+Do not add these values to JSON, source files, command history, or committed
+`.env` files. Values that were previously committed must be rotated at their
+providers; moving them to environment variables does not erase them from Git
+history. `config.js` fails immediately when a required variable is missing and
+rejects the former plaintext JSON fields. After setting user-level values, open
+a new terminal before starting VarifyServer. To refresh an already-open
+PowerShell process without displaying values:
+
+    $names = @(
+      'CHAT_VARIFY_EMAIL_USER',
+      'CHAT_VARIFY_EMAIL_PASS',
+      'CHAT_VARIFY_MYSQL_PASSWORD',
+      'CHAT_VARIFY_REDIS_PASSWORD'
+    )
+    foreach ($name in $names) {
+      Set-Item -Path "Env:$name" -Value ([Environment]::GetEnvironmentVariable($name, 'User'))
+    }
+
 ## Commands
 
 Run all commands from the repository root:
@@ -130,16 +158,39 @@ Run all commands from the repository root:
     .\scripts\windows-local.ps1 -Task RestoreVarify
 
     # Run each phase-one behavior test group.
+    .\scripts\windows-local.ps1 -Task CheckTestStructure
+    .\scripts\windows-local.ps1 -Task CheckTestReports
     .\scripts\windows-local.ps1 -Task RunScriptTests
     .\scripts\windows-local.ps1 -Task RunServerTests -Configuration Release
     .\scripts\windows-local.ps1 -Task RunClientTests -Configuration Release
     .\scripts\windows-local.ps1 -Task RunVarifyTests
 
     # Run all four test groups with the configured toolchains and restored dependencies.
-    .\scripts\windows-local.ps1 -Task TestPhase1 -Configuration Release
+    .\scripts\windows-local.ps1 -Task RunAllTests -Configuration Release
 
     # Run all of the above in order.
     .\scripts\windows-local.ps1 -Task BuildAll -Configuration Debug
+
+Test reports are grouped by execution Level rather than by source directory:
+
+- Server: `server_unit.xml`, `server_component.xml`,
+  `server_integration.xml`, `server_chat_grpc_integration.xml`,
+  `server_gate_unit.xml`, `server_status_unit.xml`.
+- Qt client: `client_unit.xml`, `client_component.xml`.
+- VarifyServer: `varify_unit.xml`, `varify_integration.xml`.
+- PowerShell: `script_component.xml`, `script_integration.xml`.
+
+All reports are written under `build\test-results`. Test directories continue
+to mirror production modules; see `tests\README.md` for the independent Domain
+and Level classification rules. `tests\REGRESSION.md` defines the permanent
+baseline and admission contract for future modules; phase numbers do not retire
+older regression tests.
+
+The current develop baseline is exactly 173 testcases in 12 reports.
+`CheckTestReports` performs the no-build integrity audit; `RunAllTests` invokes
+the same audit after all four toolchain runners. A missing report, count drift,
+failure/error node, test exit failure, or newly-created known test temporary
+directory returns a nonzero status.
 
 ## ChatServer instances
 
@@ -177,6 +228,30 @@ local port, log initialization failure, or failure to bind a local TCP/gRPC port
 causes that process to exit with failure. A configured peer that is temporarily
 offline keeps the existing connection/retry behavior and does not create a
 circular startup dependency.
+
+## Local runnable environment retention
+
+Cleanup on a development machine must preserve the local runnable baseline.
+The following paths are derived, but they are not disposable cleanup residue:
+
+- `vcpkg_installed`, because MSBuild needs the manifest dependency tree.
+- `build\windows-servers\Debug` and `build\windows-servers\Release`, including
+  each service EXE, `config.ini`, ChatServer example configs and app-local DLLs.
+- `build\windows-client\Debug` and `build\windows-client\Release`, including
+  the `windeployqt` runtime and plugin directories beside `chat.exe`.
+- `VarifyServer\node_modules`, so the Node service remains directly runnable.
+- `D:\vcpkg-chat-temp\msbuild` when incremental Server development is expected.
+- The selected Qt installation, the pinned vcpkg checkout, vcpkg downloads and
+  vcpkg binary archives.
+
+Routine cleanup may remove only confirmed, reproducible scratch data, such as
+failed-operation quarantine directories, `build\local-smoke`, stale temporary
+logs, and completed vcpkg `buildtrees` or `packages` staging directories. It
+must first verify that no matching build or application process is active.
+Never use a broad `git clean -fdx` or delete the whole `build` directory as a
+normal cleanup operation. Before deleting any protected path above, list the
+exact target, explain that local build or direct-run capability will be lost,
+and obtain explicit approval for that cold reset.
 
 If PowerShell script execution is disabled, use a process-scoped policy:
 

@@ -40,6 +40,8 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 ## Qt 客户端
 
 - 当前版本固定为 Qt 6.5.3 MinGW；未经专门升级验证不得修改 Qt 主次版本。
+- CMake MUST 为 3.24 或更新版本；仅当 runner 识别到生成 cache 不完整时，使用
+  `cmake --fresh` 恢复 compiler/Ninja 元数据，不删除整个本地构建目录。
 - 所有源码、资源、UI 和测试 MUST 通过 `chat/CMakeLists.txt` 注册。
 - 不得依赖 Qt Creator 私有 kit 配置或用户目录。
 - 构建后 MUST 复制 `config.ini` 和 `static/`。

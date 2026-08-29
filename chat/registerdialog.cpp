@@ -165,11 +165,8 @@ void RegisterDialog::initHttpHandlers()
             return ;
         }
 
-        auto email = jsonObj["email"].toString();
         showTip(tr("验证码已经发送到邮箱，注意查收"), true);
-        SPDLOG_INFO(
-            "registration verification code sent, email_length={}",
-            email.size());
+        SPDLOG_INFO("registration verification code sent");
     });
 
     // 注册的回包逻辑
@@ -181,13 +178,9 @@ void RegisterDialog::initHttpHandlers()
             return ;
         }
 
-        auto email = jsonObj["email"].toString();
         changeTipPage();
         showTip(tr("用户注册成功"), true);
-        SPDLOG_INFO(
-            "user registration succeeded, uid={}, email_length={}",
-            LogMgr::ToUtf8(jsonObj["uid"].toString()),
-            email.size());
+        SPDLOG_INFO("user registration succeeded");
     });
 }
 
@@ -379,4 +372,3 @@ void RegisterDialog::on_cancel_btn_clicked()
     _return_login_timer->stop();
     emit sig_reg_switch_login();
 }
-

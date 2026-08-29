@@ -2,24 +2,27 @@
 
 ## 被测代码与契约
 
-- 生产契约：`ChatServer/ChatServer/message.proto` 及生成的 `message.pb.h/.cc`。
-- 契约：文本聊天请求保留路由字段、重复消息顺序、嵌入 NUL 和 UTF-8；验证码响应保留错误码、邮箱和验证码。
+- 生产契约：仓库级 `proto/varify.proto`、`proto/status.proto`、`proto/chat.proto`，以及只由固定命令生成的 `generated/proto/cpp/*`。
+- 契约：共享 package/message/service/RPC/field wire 语义与初始 release descriptor 兼容；当前 C++ 能消费旧 Varify payload 和未知字段；C++ client 能调用真实 Node Varify service。
 
 ## 用例、依赖与隔离
 
-`protobuf_contract_tests.cpp` 包含 2 个 GoogleTest round-trip 用例，只在内存中序列化和解析，不启动
-gRPC server、不开端口。依赖为 GoogleTest 与 vcpkg 提供的 protobuf；生成文件不由测试手工修改。
+`protobuf_contract_tests.cpp` 包含 3 个 Foundation / Unit 用例：F02-PROTO-01..03。前两个保留现有 round-trip；F02-PROTO-03 从独立旧 wire fixture 解析普通与 unknown-field payload。
+
+`cpp_node_varify_loopback_tests.cpp` 包含 T05-GRPC-02（Architecture / Integration）：Node 生产 `createServer` 绑定 `127.0.0.1:0`，C++ 生成 Stub 使用 2 秒 deadline 调用；ready 最多 3 秒，Node helper 最多 10 秒，teardown 最多 2 秒后只终止本测试拥有的进程。所有断言路径由 RAII 关闭 pipe/process/server，不访问 Redis、SMTP、公网或个人配置。
 
 ## 运行与 CI
 
 ```powershell
 .\scripts\windows-local.ps1 -Task RunServerTests -Configuration Release
+.\scripts\windows-local.ps1 -Task CheckProtocols
 .\build\windows-tests\Release\server_unit_tests.exe --gtest_filter=ProtobufContractTests.*
+.\build\windows-tests\Release\server_integration_tests.exe --gtest_filter=CrossLanguageProtocolTests.*
 ```
 
-CI job 为 `servers-release`，合并报告为 `build/test-results/server_unit.xml`。
+CI job 为 `servers-release`；该 job 使用 Node 22 与锁文件恢复 VarifyServer 依赖，再运行生产 `createServer` helper。Unit 写入 `server_unit.xml`，跨语言 Integration 写入 `server_integration.xml`。固定 vcpkg `protoc`/gRPC plugin 的生成物字节漂移只由这里的 `CheckProtocols` 拥有；Varify job 使用纯 Node descriptor 语义检查，不重复恢复 C++ 工具链。
 
 ## 已知缺口
 
-- 不验证真实 gRPC transport、deadline、连接失败或跨服务版本组合。
-- proto 字段兼容性目前没有历史 descriptor/buf breaking-change 自动门禁。
+- 初始 baseline 来自迁移前 Git wire source，而非可审计的外部正式 release artifact；后续正式发布必须晋升 baseline。
+- 当前只覆盖 C++ client → Node Varify；完整双向、新旧 release 组合仍由后续 release compatibility matrix 扩展。

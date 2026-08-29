@@ -26,8 +26,8 @@ void HttpConnection::Start() {
 			self->HandleReq();
 			self->CheckDeadline();
 		}
-		catch (std::exception& e) {
-			SPDLOG_ERROR("HTTP request handling exception: {}", e.what());
+		catch (const std::exception&) {
+			SPDLOG_ERROR("HTTP request handling failed");
 		}
 		});
 }

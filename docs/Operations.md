@@ -20,6 +20,7 @@
 - 枚举、布尔、超时、容量和长度 MUST 拒绝尾随垃圾字符与越界值。
 - 新配置项 MUST 同步默认值策略、示例配置、发布复制规则和自动测试。
 - 配置结构变化涉及多个服务时 MUST 搜索所有消费者，不允许只更新一份复制的 INI。
+- Gate/Chat 的可选 `[Grpc]` 毫秒配置包括 `PoolAcquireTimeoutMs`、`StatusDeadlineMs`、`ChatDeadlineMs` 与 `VarifyDeadlineMs`；缺省时采用协议规范默认值，显式值必须在 100..60000 范围内并在监听前验证。
 
 ## ChatServer 多实例
 

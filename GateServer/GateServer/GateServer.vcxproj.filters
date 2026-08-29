@@ -18,6 +18,9 @@
     <ClCompile Include="GateServer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="GateResponse.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="CServer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -30,10 +33,16 @@
     <ClCompile Include="VerifyGrpcClient.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="message.grpc.pb.cc">
+    <ClCompile Include="$(ProtocolGeneratedDir)\status.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="message.pb.cc">
+    <ClCompile Include="$(ProtocolGeneratedDir)\status.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ProtocolGeneratedDir)\varify.grpc.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ProtocolGeneratedDir)\varify.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="ConfigMgr.cpp">
@@ -62,6 +71,9 @@
     <ClInclude Include="CServer.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="GateResponse.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="const.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -77,10 +89,16 @@
     <ClInclude Include="VerifyGrpcClient.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="message.grpc.pb.h">
+    <ClInclude Include="$(ProtocolGeneratedDir)\status.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="message.pb.h">
+    <ClInclude Include="$(ProtocolGeneratedDir)\status.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="$(ProtocolGeneratedDir)\varify.grpc.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="$(ProtocolGeneratedDir)\varify.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="ConfigMgr.h">
@@ -106,7 +124,8 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="message.proto" />
+    <None Include="..\..\proto\status.proto" />
+    <None Include="..\..\proto\varify.proto" />
     <None Include="config.ini" />
   </ItemGroup>
 </Project>

@@ -1,18 +1,16 @@
 # Windows Server tests
 
-`RunServerTests` is the single local/CI entry. It builds the ChatServer test executable plus independent Gate/Status Asio lifecycle executables, all against real production sources and the already-restored vcpkg tree.
+`RunServerTests` is the single local/CI entry. It builds separate ChatServer Unit, Component, and Integration executables plus independent Gate/Status Asio Unit executables, all against real production sources and the already-restored vcpkg tree.
 
-| Module | Directory | Scope |
-| --- | --- | --- |
-| Configuration | `config` | INI selection and validation |
-| Startup | `startup` | ChatServer subprocess CLI/bind failure lifecycle |
-| Messaging/transport | `messaging`, `transport` | Buffer ownership and production frame validation |
-| Concurrency/lifecycle | `concurrency`, `lifecycle` | Chat/Gate/Status task dispatch and idempotent shutdown |
-| Protocol/RPC | `protocol`, `rpc` | protobuf contracts and route mapping |
-| Data | `data` | service-free Redis pool close/finite borrow |
+| Module | Domain | Level | Target/report |
+| --- | --- | --- | --- |
+| `config`, `messaging`, `transport`, `protocol`, `rpc` | Foundation | Unit | `server_unit_tests` / `server_unit.xml` |
+| `lifecycle` | Foundation | Unit | Chat/Gate/Status Unit targets and reports |
+| `data`, `gate-response` | Foundation/Architecture | Component | `server_component_tests` / `server_component.xml` |
+| `startup`, protocol/RPC loopback | Architecture | Integration | `server_integration_tests`, `chat_grpc_client_tests` / `server_integration.xml`, `server_chat_grpc_integration.xml` |
 
 ```powershell
 .\scripts\windows-local.ps1 -Task RunServerTests -Configuration Release
 ```
 
-The runner removes stale files, reuses the one Server dependency restore, and writes `server_unit.xml`, `server_gate_asio.xml`, and `server_status_asio.xml`. CI always uploads `build/test-results/server_*.xml`; a missing report is an error. Startup tests are process Integration tests; the remaining in-process modules follow their own README classifications.
+The runner removes stale files, reuses the one Server dependency restore, builds and app-local deploys all three production executables, and writes `server_unit.xml`, `server_component.xml`, `server_integration.xml`, `server_chat_grpc_integration.xml`, `server_gate_unit.xml`, and `server_status_unit.xml`. It rejects missing reports and exact testcase-count drift (53 Unit, 24 Component, 34 main Integration, 4 Chat gRPC Integration, and 2 for each Gate/Status lifecycle target), for 119 Server cases total. CI always uploads `build/test-results/server_*.xml`; a missing or count-drifted report is an error.

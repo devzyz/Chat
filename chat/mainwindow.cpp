@@ -6,6 +6,7 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , _session(this)
 {
     ui->setupUi(this);
 
@@ -32,6 +33,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    _session.resetSession(SessionResetReason::Logout);
     delete ui;
 //     if (_login_dlg) {
 //         delete _login_dlg;
@@ -112,22 +114,37 @@ void MainWindow::slot_login_switch_chat() {
     this->setMinimumSize(QSize(1050, 900));
     this->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
     _ui_status = UIStatus::CHAT_UI;
+    _session.beginSession(_chat_dlg);
 }
 
 void MainWindow::slot_notify_offline()
 {
+    if (!_session.isActive()) {
+        return;
+    }
     // 出现弹窗，并阻塞操作，直到用户点击确定
     QMessageBox::information(this, "下线提示", "同账号异地登录，该终端下线！");
-    TcpMgr::GetInstance()->CloseConnection();
-    offlineLogin();
+    resetSession(SessionResetReason::Kicked);
 }
 
-void MainWindow::slot_connection_close()
+void MainWindow::slot_connection_close(bool expectedClose)
 {
+    if (expectedClose || !_session.isActive()) {
+        return;
+    }
     // 出现弹窗，并阻塞操作，直到用户点击确定
     QMessageBox::information(this, "下线提示", "心跳检测超时，该终端下线！");
-    TcpMgr::GetInstance()->CloseConnection();
+    resetSession(SessionResetReason::UnexpectedDisconnect);
+}
+
+bool MainWindow::resetSession(SessionResetReason reason)
+{
+    if (!_session.resetSession(reason)) {
+        return false;
+    }
+    _chat_dlg.clear();
     offlineLogin();
+    return true;
 }
 
 // 离线后切换到登录状态
@@ -147,7 +164,6 @@ void MainWindow::offlineLogin()
     this->setMinimumSize(300,500);
     this->resize(300, 500);
 
-    _chat_dlg->hide();
     _login_dlg->show();
     // 连接登录界面和注册界面
     connect(_login_dlg, &LoginDialog::sig_login_switch_reg, this, &MainWindow::slot_login_switch_reg);

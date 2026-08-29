@@ -3,7 +3,7 @@ const messageProto = require('./proto');
 const constModule = require('./const');
 const { v4: uuidv4 } = require('uuid');
 
-function createGetVarifyCodeHandler({ redisModule, emailModule, generateUuid = uuidv4, logger = console }) {
+function createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail, generateUuid = uuidv4, logger = console }) {
     return async function GetVarifyCode(call, callback) {
         logger.log('verification request received');
 
@@ -28,7 +28,7 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, generateUuid = u
             }
             const text = '您的验证码为' + uniqueId + '请十分钟内完成注册';
             const mailOptions = {
-                from: '1358451905@qq.com',
+                from: senderEmail,
                 to: call.request.email,
                 subject: '验证码',
                 text
@@ -58,9 +58,10 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, generateUuid = u
 }
 
 function createDefaultHandler() {
+    const { email_user } = require('./config');
     const emailModule = require('./email');
     const redisModule = require('./redis');
-    return createGetVarifyCodeHandler({ redisModule, emailModule });
+    return createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail: email_user });
 }
 
 function createServer(handler = createDefaultHandler()) {

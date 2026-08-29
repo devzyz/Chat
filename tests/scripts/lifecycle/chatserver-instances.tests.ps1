@@ -1,3 +1,7 @@
+param(
+    [string]$JUnitPath
+)
+
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
@@ -11,6 +15,57 @@ if (-not (Test-Path -LiteralPath $powershell -PathType Leaf)) {
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("chat-instance-lifecycle-{0}" -f ([Guid]::NewGuid().ToString('N')))
 $script:passed = 0
 $script:failed = 0
+$script:results = @()
+
+function Write-JUnitReport {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $parent = Split-Path -Parent $Path
+    if (-not [string]::IsNullOrWhiteSpace($parent)) {
+        [void](New-Item -ItemType Directory -Path $parent -Force)
+    }
+    $failures = @($script:results | Where-Object { -not $_.Passed }).Count
+    $duration = ($script:results | Measure-Object -Property Duration -Sum).Sum
+    $settings = New-Object System.Xml.XmlWriterSettings
+    $settings.Indent = $true
+    $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
+    $writer = [System.Xml.XmlWriter]::Create($Path, $settings)
+    try {
+        $writer.WriteStartDocument()
+        $writer.WriteStartElement('testsuites')
+        $writer.WriteAttributeString('tests', [string]$script:results.Count)
+        $writer.WriteAttributeString('failures', [string]$failures)
+        $writer.WriteAttributeString('errors', '0')
+        $writer.WriteStartElement('testsuite')
+        $writer.WriteAttributeString('name', 'ChatServerInstanceLifecycle')
+        $writer.WriteAttributeString('tests', [string]$script:results.Count)
+        $writer.WriteAttributeString('failures', [string]$failures)
+        $writer.WriteAttributeString('errors', '0')
+        $writer.WriteAttributeString('time', $duration.ToString('0.000', [Globalization.CultureInfo]::InvariantCulture))
+        foreach ($result in $script:results) {
+            $writer.WriteStartElement('testcase')
+            $writer.WriteAttributeString('classname', 'scripts.chatserver-instances.lifecycle')
+            $writer.WriteAttributeString('name', $result.TestId)
+            $writer.WriteAttributeString('time', $result.Duration.ToString('0.000', [Globalization.CultureInfo]::InvariantCulture))
+            if (-not $result.Passed) {
+                $writer.WriteStartElement('failure')
+                $writer.WriteAttributeString('message', $result.Failure)
+                $writer.WriteString($result.Failure)
+                $writer.WriteEndElement()
+            }
+            $writer.WriteStartElement('system-out')
+            $writer.WriteString($result.Name)
+            $writer.WriteEndElement()
+            $writer.WriteEndElement()
+        }
+        $writer.WriteEndElement()
+        $writer.WriteEndElement()
+        $writer.WriteEndDocument()
+    }
+    finally {
+        $writer.Dispose()
+    }
+}
 
 function Write-ConfigFixture {
     param([string]$Path)
@@ -51,16 +106,30 @@ function Write-StateFixture {
 }
 
 function Invoke-TestCase {
-    param([string]$Name, [scriptblock]$Body)
+    param(
+        [ValidatePattern('^A02-LIFE-\d{2}$')][string]$TestId,
+        [string]$Name,
+        [scriptblock]$Body
+    )
 
+    $started = [DateTime]::UtcNow
+    $failure = $null
     try {
         & $Body
         $script:passed++
-        Write-Host "PASS $Name"
+        Write-Host "PASS $TestId $Name"
     }
     catch {
+        $failure = $_.Exception.Message
         $script:failed++
-        Write-Host "FAIL $Name - $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "FAIL $TestId $Name - $failure" -ForegroundColor Red
+    }
+    $script:results += [pscustomobject]@{
+        TestId = $TestId
+        Name = $Name
+        Passed = $null -eq $failure
+        Failure = [string]$failure
+        Duration = ([DateTime]::UtcNow - $started).TotalSeconds
     }
 }
 
@@ -79,7 +148,7 @@ try {
     $currentExecutable = [System.IO.Path]::GetFullPath($currentProcess.Path)
     $currentStartedUtc = $currentProcess.StartTime.ToUniversalTime().ToString('o')
 
-    Invoke-TestCase 'A child that exits during startup reports diagnostics and leaves no state' {
+    Invoke-TestCase 'A02-LIFE-01' 'A child that exits during startup reports diagnostics and leaves no state' {
         $stateDirectory = Join-Path $testRoot 'startup-failure'
         $caught = $null
         try {
@@ -97,7 +166,7 @@ try {
         Assert-True ($stateFiles.Count -eq 0) 'Startup failure left a process state file behind.'
     }
 
-    Invoke-TestCase 'Status treats a reused PID with a different start time as stopped' {
+    Invoke-TestCase 'A02-LIFE-02' 'Status treats a reused PID with a different start time as stopped' {
         $stateDirectory = Join-Path $testRoot 'stale-status'
         Write-StateFixture $stateDirectory '2000-01-01T00:00:00.0000000Z' $currentExecutable
 
@@ -108,7 +177,7 @@ try {
         Assert-True ($null -ne (Get-Process -Id $PID -ErrorAction SilentlyContinue)) 'Status terminated the unrelated current process.'
     }
 
-    Invoke-TestCase 'Stop never terminates a PID whose recorded identity is stale' {
+    Invoke-TestCase 'A02-LIFE-03' 'Stop never terminates a PID whose recorded identity is stale' {
         $stateDirectory = Join-Path $testRoot 'stale-stop'
         Write-StateFixture $stateDirectory '2000-01-01T00:00:00.0000000Z' $currentExecutable
 
@@ -121,7 +190,7 @@ try {
             'Stop did not remove the stale state file.'
     }
 
-    Invoke-TestCase 'Start rejects conflicts recorded by an independently running instance' {
+    Invoke-TestCase 'A02-LIFE-04' 'Start rejects conflicts recorded by an independently running instance' {
         $stateDirectory = Join-Path $testRoot 'running-conflict'
         Write-StateFixture $stateDirectory $currentStartedUtc $currentExecutable
         $caught = $null
@@ -145,6 +214,9 @@ finally {
     }
 }
 
+if (-not [string]::IsNullOrWhiteSpace($JUnitPath)) {
+    Write-JUnitReport -Path $JUnitPath
+}
 Write-Host "ChatServer instance lifecycle tests: $script:passed passed, $script:failed failed."
 if ($script:failed -ne 0) {
     exit 1

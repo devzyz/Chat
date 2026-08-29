@@ -1,9 +1,53 @@
 #include "ConfigMgr.h"
 #include "LogMgr.h"
+#include "../../common/grpc/GrpcClientRuntime.h"
 #include <boost/filesystem.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <cstdlib>
+#include <stdexcept>
+
+namespace {
+void ValidatePort(const std::string& value, const std::string& key) {
+	std::size_t parsed = 0;
+	int port = 0;
+	try {
+		port = std::stoi(value, &parsed);
+	}
+	catch (const std::exception&) {
+		throw std::invalid_argument(key + " must be a number between 1 and 65535");
+	}
+	if (parsed != value.size() || port < 1 || port > 65535) {
+		throw std::invalid_argument(key + " must be a number between 1 and 65535");
+	}
+}
+
+void RequireValue(SectionInfo section, const char* section_name, const char* key) {
+	if (section[key].empty()) {
+		throw std::invalid_argument(std::string("[") + section_name + "]." + key + " must not be empty");
+	}
+}
+
+void ValidateEndpoint(SectionInfo section, const char* section_name) {
+	RequireValue(section, section_name, "Host");
+	ValidatePort(section["Port"], std::string("[") + section_name + "].Port");
+}
+
+void ValidatePositiveInteger(SectionInfo section, const char* section_name, const char* key) {
+	RequireValue(section, section_name, key);
+	std::size_t parsed = 0;
+	unsigned long long value = 0;
+	try {
+		value = std::stoull(section[key], &parsed);
+	}
+	catch (const std::exception&) {
+		throw std::invalid_argument(std::string("[") + section_name + "]." + key + " must be a positive integer");
+	}
+	if (parsed != section[key].size() || value == 0) {
+		throw std::invalid_argument(std::string("[") + section_name + "]." + key + " must be a positive integer");
+	}
+}
+}
 
 std::string ConfigMgr::_config_path_override;
 
@@ -76,6 +120,29 @@ ConfigMgr::ConfigMgr() {
 		sectionInfo._section_datas = section_config;
 		_config_map[section_name] = sectionInfo;
 	}
+
+	auto gate = (*this)["GateServer"];
+	ValidatePort(gate["Port"], "[GateServer].Port");
+	ValidateEndpoint((*this)["VarifyServer"], "VarifyServer");
+	ValidateEndpoint((*this)["Redis"], "Redis");
+	ValidateEndpoint((*this)["Mysql"], "Mysql");
+	RequireValue((*this)["Mysql"], "Mysql", "User");
+	RequireValue((*this)["Mysql"], "Mysql", "Schema");
+	ValidateEndpoint((*this)["StatusServer"], "StatusServer");
+
+	auto grpc = (*this)["Grpc"];
+	(void)rpc::ParseDurationMs(
+		grpc["PoolAcquireTimeoutMs"], "[Grpc].PoolAcquireTimeoutMs", std::chrono::milliseconds(1000));
+	(void)rpc::ParseDurationMs(
+		grpc["StatusDeadlineMs"], "[Grpc].StatusDeadlineMs", std::chrono::milliseconds(3000));
+	(void)rpc::ParseDurationMs(
+		grpc["VarifyDeadlineMs"], "[Grpc].VarifyDeadlineMs", std::chrono::milliseconds(15000));
+
+	auto log = (*this)["Log"];
+	RequireValue(log, "Log", "Name");
+	RequireValue(log, "Log", "LogDir");
+	ValidatePositiveInteger(log, "Log", "MaxSizeMB");
+	ValidatePositiveInteger(log, "Log", "MaxTotalFiles");
 }
 
 ConfigMgr::ConfigMgr(const ConfigMgr& src) {

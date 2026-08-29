@@ -8,7 +8,7 @@
 
 ## 用例、依赖与隔离
 
-`config_mgr_tests.cpp` 包含 17 个 GoogleTest 用例。测试动态创建唯一临时 INI，并在析构时清理；只有双实例
+Domain 为 Foundation，Level 为 Unit。`config_mgr_tests.cpp` 包含 17 个 GoogleTest 用例。测试动态创建唯一临时 INI，并在析构时清理；只有双实例
 契约读取随测试目标复制的 `chat-01.ini`、`chat-02.ini`。测试不连接 Redis、MySQL 或网络。依赖为
 GoogleTest、Boost.PropertyTree 和 Windows 临时文件/PID API。
 

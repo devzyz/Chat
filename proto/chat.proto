@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package message;
+
+// Chat-to-Chat service. These messages are not shared with Gate or Status.
+service ChatService {
+  rpc NotifyOtherAddFriend(AddFriendReq) returns (AddFriendRsp) {}
+  rpc NotifyOtherAuthFriend(AuthFriendReq) returns (AuthFriendRsp) {}
+  rpc NotifyOtherReceiveTextChatMsg(TextChatMsgReq) returns (TextChatMsgRsp) {}
+  rpc NotifyOtherKickUser(KickUserReq) returns (KickUserRsp) {}
+}
+
+message AddFriendReq {
+  int32 applyuid = 1;
+  string applyname = 2;
+  string applydescription = 3;
+  string applyicon = 4;
+  int32 applysex = 5;
+  int32 touid = 6;
+  string description = 7;
+  string backname = 8;
+}
+
+message AddFriendRsp {
+  int32 error = 1;
+  int32 applyuid = 2;
+  string applyname = 3;
+  string applydescription = 4;
+  string applyicon = 5;
+  int32 applysex = 6;
+  int32 touid = 7;
+  string description = 8;
+  string backname = 9;
+}
+
+message ApplyInfo {
+  int32 applyuid = 1;
+  string applyname = 2;
+  string applydescription = 3;
+  string applyicon = 4;
+  int32 applysex = 5;
+  int32 status = 6;
+  int32 touid = 7;
+  string description = 8;
+  string backname = 9;
+}
+
+message AuthInfo {
+  int32 authuid = 1;
+  string authname = 2;
+  string authdescription = 3;
+  string authicon = 4;
+  int32 authsex = 5;
+  int32 status = 6;
+  int32 touid = 7;
+  string description = 8;
+  string backname = 9;
+}
+
+message ChatMessage {
+  int32 messageid = 1;
+  int32 chatid = 2;
+  int32 sendid = 3;
+  int32 recvid = 4;
+  string content = 5;
+  int32 status = 6;
+}
+
+message AuthFriendReq {
+  int32 applyuid = 1;
+  int32 authuid = 2;
+  ApplyInfo applyinfo = 3;
+  AuthInfo authinfo = 4;
+  int32 chatid = 5;
+  repeated ChatMessage chatmessage = 6;
+}
+
+message AuthFriendRsp {
+  int32 error = 1;
+}
+
+message TextChatData {
+  string uuid = 1;
+  string msgcontent = 2;
+  int32 msgid = 3;
+}
+
+message TextChatMsgReq {
+  int32 fromuid = 1;
+  int32 touid = 2;
+  int32 chatid = 3;
+  repeated TextChatData textmsgs = 4;
+}
+
+message TextChatMsgRsp {
+  int32 error = 1;
+}
+
+message KickUserReq {
+  int32 uid = 1;
+}
+
+message KickUserRsp {
+  int32 error = 1;
+  int32 uid = 2;
+}

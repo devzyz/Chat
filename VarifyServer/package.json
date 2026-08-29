@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "serve": "node server.js",
-    "test": "node --test test/config/config.test.js test/protocol/protocol.test.js test/handler/handler.test.js test/rpc/rpc-routing.test.js test/startup/startup.test.js"
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "node --test test/protocol/protocol.test.js test/handler/handler.test.js test/startup/startup-unit.test.js",
+    "test:integration": "node --test test/config/config.test.js test/rpc/rpc-routing.test.js test/startup/startup-integration.test.js"
   },
   "author": "",
   "license": "ISC",

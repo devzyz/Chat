@@ -1,7 +1,11 @@
 #include <gtest/gtest.h>
 
-#include "message.pb.h"
+#include "chat.pb.h"
+#include "varify.pb.h"
 
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 
 namespace {
@@ -53,6 +57,23 @@ TEST(ProtobufContractTests, VerifyResponsePreservesErrorEmailAndCode) {
     EXPECT_EQ(parsed.error(), 2);
     EXPECT_EQ(parsed.email(), "person@example.com");
     EXPECT_EQ(parsed.code(), "042731");
+}
+
+TEST(ProtobufContractTests, CurrentCppConsumerParsesInitialWireFixtureWithUnknownFields) {
+    const auto fixture_root = std::filesystem::path(__FILE__).parent_path() / "fixtures";
+    for (const char* fixture_name : {"varify-request-v1.bin", "varify-request-v1-unknown.bin"}) {
+        const auto fixture_path = fixture_root / fixture_name;
+        std::ifstream input(fixture_path, std::ios::binary);
+        ASSERT_TRUE(input.is_open()) << fixture_path.string();
+        const std::string payload(
+            (std::istreambuf_iterator<char>(input)),
+            std::istreambuf_iterator<char>()
+        );
+
+        message::GetVarifyReq request;
+        ASSERT_TRUE(request.ParseFromString(payload)) << fixture_name;
+        EXPECT_EQ(request.email(), "compat-user@example.test") << fixture_name;
+    }
 }
 
 } // namespace

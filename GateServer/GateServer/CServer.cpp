@@ -2,11 +2,14 @@
 #include "HttpConnection.h"
 #include "AsioIOServicePool.h"
 
-CServer::CServer(boost::asio::io_context& ioc, unsigned short& port) : _ioc(ioc), 
+CServer::CServer(boost::asio::io_context& ioc, unsigned short port) : _ioc(ioc),
 _acceptor(ioc, tcp::endpoint(tcp::v4(), port)){
 
 }
 void CServer::Start() {
+	if (_stopping) {
+		return;
+	}
 	auto self = shared_from_this();
 	auto& io_context = AsioIOServicePool::GetInstance()->GetIOService();
 	std::shared_ptr<HttpConnection> new_con = std::make_shared<HttpConnection>(io_context);
@@ -14,7 +17,9 @@ void CServer::Start() {
 		try {
 			// 出错放弃这个链接，继续监听其他链接
 			if (ec) {
-				self->Start();
+				if (!self->_stopping) {
+					self->Start();
+				}
 				return;
 			}
 
@@ -28,4 +33,14 @@ void CServer::Start() {
 			SPDLOG_ERROR("accept connection exception: {}", e.what());
 		}
 		});
+}
+
+void CServer::Stop() {
+	if (_stopping) {
+		return;
+	}
+	_stopping = true;
+	beast::error_code error;
+	_acceptor.cancel(error);
+	_acceptor.close(error);
 }

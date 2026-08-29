@@ -12,6 +12,23 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Network)
 
+if(WIN32)
+    get_target_property(QT_QMAKE_EXECUTABLE Qt${QT_VERSION_MAJOR}::qmake IMPORTED_LOCATION)
+    if(NOT QT_QMAKE_EXECUTABLE)
+        message(FATAL_ERROR "Unable to resolve qmake for the selected Qt kit")
+    endif()
+    execute_process(
+        COMMAND "${QT_QMAKE_EXECUTABLE}" -query QT_INSTALL_PLUGINS
+        OUTPUT_VARIABLE QT_INSTALL_PLUGINS
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE QT_PLUGIN_QUERY_RESULT
+    )
+    if(NOT QT_PLUGIN_QUERY_RESULT EQUAL 0 OR NOT EXISTS "${QT_INSTALL_PLUGINS}/platforms/qminimal.dll")
+        message(FATAL_ERROR "The selected Qt kit does not provide the qminimal platform plugin")
+    endif()
+    file(TO_CMAKE_PATH "${QT_INSTALL_PLUGINS}/platforms" QT_TEST_PLATFORM_PLUGIN_PATH)
+endif()
+
 set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Build spdlog as a static library" FORCE)
 set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "Disable spdlog examples" FORCE)
 set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "Disable spdlog tests" FORCE)
@@ -19,6 +36,39 @@ set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "Disable spdlog benchmarks" FORCE)
 set(SPDLOG_INSTALL OFF CACHE BOOL "Disable spdlog install target" FORCE)
 set(SPDLOG_FMT_EXTERNAL OFF CACHE BOOL "Use spdlog bundled fmt" FORCE)
 add_subdirectory(packages/spdlog EXCLUDE_FROM_ALL)
+
+add_library(chat_network_core STATIC
+    tcpframedecoder.h tcpframedecoder.cpp
+)
+target_include_directories(chat_network_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_network_core PUBLIC Qt${QT_VERSION_MAJOR}::Core)
+
+add_library(chat_message_model STATIC
+    messagerecord.h
+    messagelistmodel.h messagelistmodel.cpp
+    messagemodelstore.h messagemodelstore.cpp
+    messageitemdelegate.h messageitemdelegate.cpp
+)
+target_include_directories(chat_message_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_message_model PUBLIC Qt${QT_VERSION_MAJOR}::Widgets)
+
+add_library(chat_session_core STATIC
+    clientsession.h clientsession.cpp
+    global.h global.cpp
+    logmgr.h logmgr.cpp
+    messagerecord.h
+    tcpframedecoder.h
+    tcpmgr.h tcpmgr.cpp
+    userdata.h userdata.cpp
+    usermgr.h usermgr.cpp
+)
+target_include_directories(chat_session_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_session_core PUBLIC
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Network
+    spdlog::spdlog
+    chat_network_core
+)
 
 set(PROJECT_SOURCES
         main.cpp
@@ -39,7 +89,6 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         rc.qrc
         registerdialog.h registerdialog.cpp registerdialog.ui
         global.h
-        global.cpp
         singleton.h
         httpmgr.h httpmgr.cpp
         config.ini
@@ -47,8 +96,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         clickedlabel.h clickedlabel.cpp
         resetdialog.ui
         resetdialog.h resetdialog.cpp
-        tcpmgr.h tcpmgr.cpp
-        tcpframedecoder.h tcpframedecoder.cpp
+        tcpmgr.h
         chatdialog.h chatdialog.cpp chatdialog.ui
         clickedbtn.h clickedbtn.cpp
         customizeedit.h customizeedit.cpp
@@ -57,20 +105,17 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         listitembase.h listitembase.cpp
         loadingdialog.h loadingdialog.cpp loadingdialog.ui
         chatpage.h chatpage.cpp chatpage.ui
-        messagerecord.h
-        messagelistmodel.h messagelistmodel.cpp
-        messagemodelstore.h messagemodelstore.cpp
-        messageitemdelegate.h messageitemdelegate.cpp
         messagetextedit.h messagetextedit.cpp
         statewidget.h statewidget.cpp
         searchlist.h searchlist.cpp
-        userdata.h userdata.cpp
+        userdata.h
         adduseritem.h adduseritem.cpp adduseritem.ui
         findsuccessdialog.h findsuccessdialog.cpp findsuccessdialog.ui
         applyfrienddialog.h applyfrienddialog.cpp applyfrienddialog.ui
         clickedoncelabel.h clickedoncelabel.cpp
 
-        usermgr.h usermgr.cpp
+        usermgr.h
+        clientsession.h
         contactuserlist.h contactuserlist.cpp
         contactuseritem.h contactuseritem.cpp contactuseritem.ui
         grouptipitem.h grouptipitem.cpp grouptipitem.ui
@@ -84,7 +129,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         friendinfopage.h friendinfopage.cpp friendinfopage.ui
         userinfopage.h userinfopage.cpp userinfopage.ui
         editavatardialog.h editavatardialog.cpp editavatardialog.ui
-        logmgr.h logmgr.cpp
+        logmgr.h
 
 
 
@@ -131,6 +176,9 @@ target_link_libraries(chat PRIVATE
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Network
     spdlog::spdlog
+    chat_network_core
+    chat_message_model
+    chat_session_core
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
@@ -160,29 +208,112 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Test)
+
     add_executable(message_model_tests
         tests/message-model/message_model_tests.cpp
-        messagerecord.h
-        messagelistmodel.h messagelistmodel.cpp
-        messagemodelstore.h messagemodelstore.cpp
-        messageitemdelegate.h messageitemdelegate.cpp
     )
-    target_include_directories(message_model_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(message_model_tests PRIVATE
-        Qt${QT_VERSION_MAJOR}::Widgets
+        chat_message_model
+        Qt${QT_VERSION_MAJOR}::Test
     )
-    add_test(NAME message_model_tests COMMAND message_model_tests)
-    set_tests_properties(message_model_tests PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=minimal"
-    )
+    set(MESSAGE_MODEL_TEST_ENVIRONMENT "QT_QPA_PLATFORM=minimal")
+    if(WIN32)
+        list(APPEND MESSAGE_MODEL_TEST_ENVIRONMENT
+            "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_TEST_PLATFORM_PLUGIN_PATH}")
+    endif()
+    add_test(
+        NAME message_model.append_ack_status_removal
+        COMMAND message_model_tests appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized)
+    set_tests_properties(message_model.append_ack_status_removal PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+
+    add_test(
+        NAME message_model.unknown_ids
+        COMMAND message_model_tests unknownStableIdsDoNotMutateTheModel)
+    set_tests_properties(message_model.unknown_ids PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+
+    add_test(
+        NAME message_model.history_order
+        COMMAND message_model_tests historyDeduplicatesAndRemainsChronological)
+    set_tests_properties(message_model.history_order PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+
+    add_test(
+        NAME message_model.multiple_history_pages
+        COMMAND message_model_tests multipleHistoryPagesRemainChronological)
+    set_tests_properties(message_model.multiple_history_pages PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+
+    add_test(
+        NAME message_model.shifted_indexes
+        COMMAND message_model_tests removalAndAcknowledgementRebuildShiftedIndexes)
+    set_tests_properties(message_model.shifted_indexes PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+
+    add_test(
+        NAME message_model.text_and_chat_identity
+        COMMAND message_model_tests textAndChatIdentityRoundTripWithoutNormalization)
+    set_tests_properties(message_model.text_and_chat_identity PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+
+    add_test(
+        NAME message_model.store_pagination_state
+        COMMAND message_model_tests storeRetainsOneModelAndPaginationStatePerChat)
+    set_tests_properties(message_model.store_pagination_state PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 10)
+
+    add_test(
+        NAME message_model.delegate_reflow
+        COMMAND message_model_tests delegateReflowsLongTextForANarrowViewport)
+    set_tests_properties(message_model.delegate_reflow PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 10)
 
     add_executable(network_state_tests
         tests/network-state/tcp_frame_decoder_tests.cpp
-        tcpframedecoder.h tcpframedecoder.cpp
     )
-    target_include_directories(network_state_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(network_state_tests PRIVATE
-        Qt${QT_VERSION_MAJOR}::Core
+        chat_network_core
     )
     add_test(NAME network_state_tests COMMAND network_state_tests)
+    set_tests_properties(network_state_tests PROPERTIES
+        LABELS "unit"
+        TIMEOUT 10
+    )
+
+    add_executable(session_reset_tests
+        tests/session-reset/session_reset_tests.cpp
+    )
+    target_link_libraries(session_reset_tests PRIVATE
+        chat_session_core
+        Qt${QT_VERSION_MAJOR}::Test
+        Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Network
+        spdlog::spdlog
+    )
+    add_test(
+        NAME session_reset.account_state
+        COMMAND session_reset_tests accountStateDoesNotCrossLoginSessions)
+    set_tests_properties(session_reset.account_state PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "component"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME session_reset.owned_ui_and_idempotence
+        COMMAND session_reset_tests resetDestroysOwnedSessionUiOnceAndPreservesReason)
+    set_tests_properties(session_reset.owned_ui_and_idempotence PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "component"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME session_reset.pending_batch
+        COMMAND session_reset_tests resetDropsPendingTextBatchBeforeAnOldFailureArrives)
+    set_tests_properties(session_reset.pending_batch PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "component"
+        TIMEOUT 10
+    )
 endif()

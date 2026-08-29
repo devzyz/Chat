@@ -1,95 +1,55 @@
 #include "StatusGrpcClient.h"
+
 #include "ConfigMgr.h"
-#include "Const.h"
-#include "LogMgr.h"
-
-StatusConnectionPool::StatusConnectionPool(const std::string& host, const std::string& port, int poolSize) 
-	: _host(host), _port(port), _pool_size(poolSize) {
-	try {
-		for (int i = 0; i < _pool_size; i++) {
-			std::shared_ptr<Channel> channel = grpc::CreateChannel(host + ":" + port,
-				grpc::InsecureChannelCredentials());
-			_que.push(StatusService::NewStub(channel));
-		}
-	}
-	catch (std::exception& e) {
-		SPDLOG_ERROR("create Status connection pool failed, error={}", e.what());
-	}
-}
-
-StatusConnectionPool::~StatusConnectionPool() {
-	std::lock_guard<std::mutex> lock(_que_mutex);
-	close();
-	while (_que.size()) {
-		_que.pop();
-	}
-}
-
-std::unique_ptr<StatusService::Stub> StatusConnectionPool::getConnection() {
-	std::unique_lock<std::mutex> lock(_que_mutex);
-	_cond.wait(lock, [this]() {
-		if (_b_stop) {
-			return true;
-		}
-		return !_que.empty();
-		});
-	if (_b_stop) {
-		return nullptr;
-	}
-	auto con = std::move(_que.front());
-	_que.pop();
-	return con;
-}
-
-void StatusConnectionPool::returnConnection(std::unique_ptr<StatusService::Stub> connection) {
-	std::lock_guard<std::mutex> lock(_que_mutex);
-	if (_b_stop) {
-		return;
-	}
-	_que.push(std::move(connection));
-	_cond.notify_one();
-}
-
-void StatusConnectionPool::close() {
-	if (_b_stop) {
-		return;
-	}
-	_b_stop = true;
-	_cond.notify_all();
-}
-
-StatusGrpcClient::~StatusGrpcClient() {
-	SPDLOG_DEBUG("StatusGrpcClient destructed");
-}
 
 StatusGrpcClient::StatusGrpcClient() {
-	auto& configMgr = ConfigMgr::GetInstance();
-
-	std::string host = configMgr["StatusServer"]["Host"];
-	std::string port = configMgr["StatusServer"]["Port"];
-
-	_pool.reset(new StatusConnectionPool(host, port, 5));
+    auto& config = ConfigMgr::GetInstance();
+    auto grpc_config = config["Grpc"];
+    _policy = {
+        rpc::ParseDurationMs(
+            grpc_config["PoolAcquireTimeoutMs"],
+            "[Grpc].PoolAcquireTimeoutMs",
+            std::chrono::milliseconds(1000)),
+        rpc::ParseDurationMs(
+            grpc_config["StatusDeadlineMs"],
+            "[Grpc].StatusDeadlineMs",
+            std::chrono::milliseconds(3000))
+    };
+    _pool = std::make_unique<StatusConnectionPool>(
+        config["StatusServer"]["Host"],
+        config["StatusServer"]["Port"],
+        5,
+        _policy.acquire_timeout);
 }
 
+StatusGrpcClient::StatusGrpcClient(
+    const std::string& host,
+    const std::string& port,
+    rpc::ClientPolicy policy,
+    std::size_t pool_size)
+    : _pool(std::make_unique<StatusConnectionPool>(
+          host,
+          port,
+          pool_size,
+          policy.acquire_timeout)),
+      _policy(policy) {}
+
 LoginRsp StatusGrpcClient::Login(int uid, std::string token) {
-	ClientContext context;
-	LoginRsp reply;
-	LoginReq request;
-	request.set_uid(uid);
-	request.set_token(token);
-
-	auto stub = _pool->getConnection();
-	Status status = stub->Login(&context, request, &reply);
-
-	Defer defer([this, &stub]() {
-		_pool->returnConnection(std::move(stub));
-		});
-
-	if (status.ok()) {
-		return reply;
-	}
-	else {
-		reply.set_error(ErrorCodes::RPCFailed);
-		return reply;
-	}
+    LoginReq request;
+    request.set_uid(uid);
+    request.set_token(std::move(token));
+    auto result = rpc::InvokeUnary<StatusConnectionPool, LoginReq, LoginRsp>(
+        *_pool,
+        request,
+        _policy.rpc_deadline,
+        [](StatusService::Stub& stub,
+           ClientContext& context,
+           const LoginReq& req,
+           LoginRsp& rsp) {
+            return stub.Login(&context, req, &rsp);
+        });
+    if (!result) {
+        result.response.set_error(ErrorCodes::RPCFailed);
+    }
+    return result.response;
 }

@@ -6,6 +6,8 @@
 #include "StatusServiceImpl.h"
 #include "const.h"
 #include "LogMgr.h"
+#include <csignal>
+#include <stdexcept>
 
 void RunServer() {
 	auto& configMgr = ConfigMgr::GetInstance();
@@ -18,11 +20,15 @@ void RunServer() {
 
 	grpc::ServerBuilder builder;
 	// 监听端口和添加服务
-	builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+	int selected_port = 0;
+	builder.AddListeningPort(server_address, grpc::InsecureServerCredentials(), &selected_port);
 	builder.RegisterService(&service);
 
 	// 构建并启动gRPC服务器
 	std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+	if (!server || selected_port == 0) {
+		throw std::runtime_error("failed to listen on gRPC address " + server_address);
+	}
 	SPDLOG_INFO("StatusServer listening on {}", server_address);
 
 	// 下面的逻辑是用来优雅关闭的
@@ -35,6 +41,9 @@ void RunServer() {
 	boost::asio::io_context io_context;
 	// 创建singal_set用于捕获停止信号
 	boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
+#ifdef _WIN32
+	signals.add(SIGBREAK);
+#endif
 
 	// 异步等待停止信号
 	signals.async_wait([&server](const boost::system::error_code& error, int signal_number) {
@@ -44,32 +53,53 @@ void RunServer() {
 		}
 		});
 
-	// 在单独的线程中运行io_context
-	std::thread([&io_context]() {
-		io_context.run();
-		}).detach();
+	std::thread signal_thread;
+	try {
+		// 在单独的线程中运行io_context，并由 RunServer 明确 join。
+		signal_thread = std::thread([&io_context]() {
+			io_context.run();
+			});
 
-	// 等待服务器关闭
-	server->Wait();
-	io_context.stop();
+		server->Wait();
+		io_context.stop();
+		if (signal_thread.joinable()) {
+			signal_thread.join();
+		}
+		SPDLOG_INFO("StatusServer stopped");
+	}
+	catch (...) {
+		server->Shutdown();
+		io_context.stop();
+		if (signal_thread.joinable()) {
+			signal_thread.join();
+		}
+		throw;
+	}
 }
 
 int main(int argc, char* argv[])
 {
-	if (argc == 3 && std::string(argv[1]) == "--config") {
-		ConfigMgr::SetConfigPath(argv[2]);
-	}
-	auto logger = LogMgr::GetInstance();
-	if (!logger->InitLogMgr()) {
+	if (argc != 1 && (argc != 3 || std::string(argv[1]) != "--config")) {
+		std::cerr << "Usage: StatusServer.exe [--config <path>]" << std::endl;
 		return EXIT_FAILURE;
 	}
-	try {
-		RunServer();
+	if (argc == 3) {
+		ConfigMgr::SetConfigPath(argv[2]);
 	}
-	catch (std::exception& e) {
-		SPDLOG_ERROR("StatusServer exception: {}", e.what());
+	try {
+		ConfigMgr::GetInstance();
+		auto logger = LogMgr::GetInstance();
+		if (!logger->InitLogMgr()) {
+			std::cerr << "StatusServer failed to initialize logging." << std::endl;
+			return EXIT_FAILURE;
+		}
+		RunServer();
+		logger->Close();
+	}
+	catch (const std::exception& e) {
+		std::cerr << "StatusServer startup error: " << e.what() << std::endl;
 		return EXIT_FAILURE;
 	}
 
-	return 0;
+	return EXIT_SUCCESS;
 }

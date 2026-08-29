@@ -60,5 +60,23 @@ int main(int argc, char *argv[])
     passed &= expect(adjacentFrames[1].body.isEmpty(), "zero-length frame body was not preserved");
     passed &= expect(adjacent.bufferedBytes() == 0, "decoder retained bytes after complete adjacent frames");
 
+    // T07-FRM-04: connection lifecycle reset discards an old partial frame.
+    TcpFrameDecoder reconnected;
+    const auto staleFrame = frame(1006, QByteArray("stale", 5));
+    passed &= expect(reconnected.append(staleFrame.left(6)).isEmpty(),
+                     "partial old-connection frame emitted early");
+    passed &= expect(reconnected.bufferedBytes() == 6,
+                     "partial old-connection frame was not buffered");
+    reconnected.reset();
+    passed &= expect(reconnected.bufferedBytes() == 0,
+                     "connection reset retained old frame bytes");
+    const auto freshFrames = reconnected.append(frame(1021, QByteArray("fresh", 5)));
+    passed &= expect(freshFrames.size() == 1,
+                     "fresh connection frame did not decode independently");
+    passed &= expect(freshFrames[0].messageId == 1021,
+                     "fresh connection frame inherited the old message id");
+    passed &= expect(freshFrames[0].body == QByteArray("fresh", 5),
+                     "fresh connection frame inherited old body bytes");
+
     return passed ? 0 : 1;
 }

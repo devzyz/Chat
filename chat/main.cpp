@@ -1,5 +1,7 @@
 #include "mainwindow.h"
 #include "logmgr.h"
+#include "tcpmgr.h"
+#include "usermgr.h"
 
 #include <QApplication>
 #include <QFile>
@@ -38,7 +40,17 @@ int main(int argc, char *argv[])
     QString gate_port = settings.value("GateServer/port").toString();
     gate_url_prefix = "http://" + gate_host + ":" + gate_port;
 
-    MainWindow w;
-    w.show();
-    return a.exec();
+    int exitCode = 0;
+    {
+        MainWindow w;
+        w.show();
+        exitCode = a.exec();
+    }
+
+    TcpMgr::ReleaseInstance();
+    UserMgr::ReleaseInstance();
+    logger->Close();
+    logger.reset();
+    LogMgr::ReleaseInstance();
+    return exitCode;
 }

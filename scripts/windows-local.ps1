@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Check', 'RestoreServers', 'BuildServers', 'BuildClient', 'RestoreVarify', 'RunServerTests', 'RunClientTests', 'RunScriptTests', 'RunVarifyTests', 'TestPhase1', 'BuildAll')]
+    [ValidateSet('Check', 'CheckTestStructure', 'CheckTestReports', 'GenerateProtocols', 'CheckProtocols', 'RestoreServers', 'BuildServers', 'BuildClient', 'RestoreVarify', 'RunServerTests', 'RunClientTests', 'RunScriptTests', 'RunVarifyTests', 'RunAllTests', 'TestPhase1', 'BuildAll')]
     [string]$Task = 'Check',
 
     [ValidateSet('Debug', 'Release')]
@@ -18,6 +18,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$global:LASTEXITCODE = 0
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $repoRoot 'Chat.sln'
@@ -25,13 +26,52 @@ $manifest = Join-Path $repoRoot 'vcpkg.json'
 $clientSource = Join-Path $repoRoot 'chat'
 $clientBuild = Join-Path $repoRoot "build\windows-client\$Configuration"
 $varifySource = Join-Path $repoRoot 'VarifyServer'
+$gateServerExecutable = Join-Path $repoRoot "build\windows-servers\$Configuration\GateServer\GateServer.exe"
+$statusServerExecutable = Join-Path $repoRoot "build\windows-servers\$Configuration\StatusServer\StatusServer.exe"
 $chatServerExecutable = Join-Path $repoRoot "build\windows-servers\$Configuration\ChatServer\ChatServer.exe"
 $serverTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\server_unit_tests.exe"
+$serverComponentTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\server_component_tests.exe"
+$serverIntegrationTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\server_integration_tests.exe"
+$chatGrpcClientTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\chat_grpc_client_tests.exe"
 $gateAsioTestProject = Join-Path $repoRoot 'tests\server\lifecycle\GateAsioPoolTests.vcxproj'
 $statusAsioTestProject = Join-Path $repoRoot 'tests\server\lifecycle\StatusAsioPoolTests.vcxproj'
 $gateAsioTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\gate_asio_pool_tests.exe"
 $statusAsioTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\status_asio_pool_tests.exe"
 $testResults = Join-Path $repoRoot 'build\test-results'
+$clientTestGroups = @(
+    [pscustomobject]@{ Level = 'unit'; Report = (Join-Path $testResults 'client_unit.xml'); ExpectedCount = 7 }
+    [pscustomobject]@{ Level = 'component'; Report = (Join-Path $testResults 'client_component.xml'); ExpectedCount = 5 }
+)
+$scriptTestGroups = @(
+    [pscustomobject]@{
+        Level = 'component'
+        Report = (Join-Path $testResults 'script_component.xml')
+        Script = 'tests\scripts\validation\chatserver-instances.tests.ps1'
+        TestIdPattern = '^A02-VAL-\d{2}$'
+        ExpectedCount = 9
+    }
+    [pscustomobject]@{
+        Level = 'integration'
+        Report = (Join-Path $testResults 'script_integration.xml')
+        Script = 'tests\scripts\lifecycle\chatserver-instances.tests.ps1'
+        TestIdPattern = '^A02-LIFE-\d{2}$'
+        ExpectedCount = 4
+    }
+)
+$regressionReportGroups = @(
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 53 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 24 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 34 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
+    [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 7 }
+    [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 5 }
+    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 18 }
+    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 11 }
+    [pscustomobject]@{ Lane = 'script'; Name = 'script_component.xml'; ExpectedCount = 9 }
+    [pscustomobject]@{ Lane = 'script'; Name = 'script_integration.xml'; ExpectedCount = 4 }
+)
 $overlayTriplets = Join-Path $repoRoot 'triplets'
 $expectedQtVersion = '6.5.3'
 $expectedVcpkgCommit = '4b3e4c276b5b87a649e66341e11553e8c577459c'
@@ -66,15 +106,15 @@ function Require-Command {
 }
 
 function Resolve-CMake {
-    $cmake = Require-Command 'cmake.exe' 'Install CMake 3.21 or newer and add it to PATH.'
+    $cmake = Require-Command 'cmake.exe' 'Install CMake 3.24 or newer and add it to PATH.'
     $versionText = (& $cmake --version 2>&1 | Select-Object -First 1)
     $versionMatch = [regex]::Match([string]$versionText, '(\d+\.\d+(?:\.\d+)?)')
     if ($LASTEXITCODE -ne 0 -or -not $versionMatch.Success) {
         throw "Unable to determine the CMake version: $versionText"
     }
     $cmakeVersion = $versionMatch.Groups[1].Value
-    if ([version]$cmakeVersion -lt [version]'3.21') {
-        throw "CMake 3.21 or newer is required; found $cmakeVersion."
+    if ([version]$cmakeVersion -lt [version]'3.24') {
+        throw "CMake 3.24 or newer is required for safe --fresh recovery; found $cmakeVersion."
     }
     return $cmake
 }
@@ -222,12 +262,15 @@ function Build-Servers {
 }
 
 function Run-ServerTests {
+    Confirm-TestStructure
+    $residuePrefixes = @('chat-config-test-', 'chat-startup-tests-', 'gate-status-startup-tests-')
+    $residueBefore = @(Get-RegressionResidueSnapshot -Prefixes $residuePrefixes)
     $vcpkg = Resolve-Vcpkg
     $msbuild = Resolve-MSBuild
     $arguments = @(
         $solution
         '/m'
-        '/t:ChatServer;ServerUnitTests'
+        '/t:GateServer;StatusServer;ChatServer;ServerUnitTests;ServerComponentTests;ServerIntegrationTests;ChatGrpcClientTests'
         "/p:Configuration=$Configuration"
         '/p:Platform=x64'
         "/p:VcpkgRoot=$($vcpkg.Root)"
@@ -237,8 +280,11 @@ function Run-ServerTests {
     )
     $reports = @(
         (Join-Path $testResults 'server_unit.xml')
-        (Join-Path $testResults 'server_gate_asio.xml')
-        (Join-Path $testResults 'server_status_asio.xml')
+        (Join-Path $testResults 'server_component.xml')
+        (Join-Path $testResults 'server_integration.xml')
+        (Join-Path $testResults 'server_chat_grpc_integration.xml')
+        (Join-Path $testResults 'server_gate_unit.xml')
+        (Join-Path $testResults 'server_status_unit.xml')
     )
     [void](New-Item -ItemType Directory -Path $testResults -Force)
     foreach ($report in $reports) {
@@ -249,8 +295,9 @@ function Run-ServerTests {
 
     & $msbuild @arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Server unit test build failed with exit code $LASTEXITCODE."
+        throw "Server test build failed with exit code $LASTEXITCODE."
     }
+    Invoke-ProtocolCompatibility 'check'
 
     $installedRoot = Join-Path $repoRoot 'vcpkg_installed'
     foreach ($project in @($gateAsioTestProject, $statusAsioTestProject)) {
@@ -279,18 +326,29 @@ function Run-ServerTests {
     if (-not (Test-Path -LiteralPath $installedBin -PathType Container)) {
         throw "The vcpkg app-local dependency directory is missing: $installedBin"
     }
-    $chatBinary = Require-File $chatServerExecutable 'Build the ChatServer target first.'
-    & $vcpkg.Exe z-applocal "--target-binary=$chatBinary" "--installed-bin-dir=$installedBin"
-    if ($LASTEXITCODE -ne 0) {
-        throw "ChatServer app-local deployment failed with exit code $LASTEXITCODE."
+    foreach ($productionBinary in @(
+        (Require-File $gateServerExecutable 'Build the GateServer target first.')
+        (Require-File $statusServerExecutable 'Build the StatusServer target first.')
+        (Require-File $chatServerExecutable 'Build the ChatServer target first.')
+    )) {
+        & $vcpkg.Exe z-applocal "--target-binary=$productionBinary" "--installed-bin-dir=$installedBin"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Server app-local deployment failed with exit code $LASTEXITCODE`: $productionBinary"
+        }
     }
 
     $testBinary = Require-File $serverTestExecutable 'Build the ServerUnitTests target first.'
+    $componentBinary = Require-File $serverComponentTestExecutable 'Build the ServerComponentTests target first.'
+    $integrationBinary = Require-File $serverIntegrationTestExecutable 'Build the ServerIntegrationTests target first.'
+    $chatGrpcClientBinary = Require-File $chatGrpcClientTestExecutable 'Build the ChatGrpcClientTests target first.'
 
     $executions = @(
-        @{ Binary = $testBinary; Report = $reports[0] }
-        @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[1] }
-        @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[2] }
+        @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 53 }
+        @{ Binary = $componentBinary; Report = $reports[1]; ExpectedCount = 24 }
+        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 34 }
+        @{ Binary = $chatGrpcClientBinary; Report = $reports[3]; ExpectedCount = 4 }
+        @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4]; ExpectedCount = 2 }
+        @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5]; ExpectedCount = 2 }
     )
     $failures = @()
     foreach ($execution in $executions) {
@@ -308,6 +366,7 @@ function Run-ServerTests {
         if (-not (Test-Path -LiteralPath $execution.Report -PathType Leaf)) {
             throw "Server test report was not created: $($execution.Report)"
         }
+        [void](Assert-RegressionReport -Path $execution.Report -ExpectedCount $execution.ExpectedCount)
         if ($exitCode -ne 0) {
             $failures += "$($execution.Binary) (exit $exitCode)"
         }
@@ -315,6 +374,7 @@ function Run-ServerTests {
     if ($failures.Count -gt 0) {
         throw "Server tests failed: $($failures -join '; ')"
     }
+    Assert-NoNewRegressionResidue -Before $residueBefore -Prefixes $residuePrefixes -Lane 'Server'
 }
 
 function Build-Client {
@@ -324,15 +384,22 @@ function Build-Client {
     Write-Host "Qt C++ compiler: $($qt.CxxCompiler)"
     Write-Host "Ninja: $($qt.Ninja)"
     $cache = Join-Path $clientBuild 'CMakeCache.txt'
+    $freshConfigure = $false
     if (Test-Path -LiteralPath $cache) {
         $cacheText = Get-Content -LiteralPath $cache -Raw
         $compilerMatch = [regex]::Match($cacheText, '(?m)^CMAKE_CXX_COMPILER:[^=]*=(.+)$')
         $ninjaMatch = [regex]::Match($cacheText, '(?m)^CMAKE_MAKE_PROGRAM:[^=]*=(.+)$')
         $cachedCompiler = $compilerMatch.Groups[1].Value.Trim().Replace('/', '\')
         $cachedNinja = $ninjaMatch.Groups[1].Value.Trim().Replace('/', '\')
-        if (-not $compilerMatch.Success -or -not $ninjaMatch.Success -or
-            $cachedCompiler -ne $qt.CxxCompiler -or $cachedNinja -ne $qt.Ninja) {
+        $incompleteCache = -not $compilerMatch.Success -or -not $ninjaMatch.Success -or
+            $cachedCompiler.EndsWith('-NOTFOUND') -or $cachedNinja.EndsWith('-NOTFOUND')
+        if (-not $incompleteCache -and
+            ($cachedCompiler -ne $qt.CxxCompiler -or $cachedNinja -ne $qt.Ninja)) {
             throw "Client build cache uses a different compiler or Ninja. Remove the generated directory and retry: $clientBuild"
+        }
+        if ($incompleteCache) {
+            Write-Warning "Client build cache is incomplete; using CMake --fresh with the resolved Qt toolchain."
+            $freshConfigure = $true
         }
     }
     $configureArguments = @(
@@ -345,6 +412,9 @@ function Build-Client {
         "-DCMAKE_C_COMPILER=$($qt.CCompiler)"
         "-DCMAKE_CXX_COMPILER=$($qt.CxxCompiler)"
     )
+    if ($freshConfigure) {
+        $configureArguments = @('--fresh') + $configureArguments
+    }
     & $cmake @configureArguments
     if ($LASTEXITCODE -ne 0) {
         throw "Client configure failed with exit code $LASTEXITCODE."
@@ -356,122 +426,584 @@ function Build-Client {
 }
 
 function Run-ClientTests {
+    Confirm-TestStructure
     Build-Client
-    $ctest = Require-Command 'ctest.exe' 'Install CMake 3.21 or newer and add it to PATH.'
+    $ctest = Require-Command 'ctest.exe' 'Install CMake 3.24 or newer and add it to PATH.'
     [void](New-Item -ItemType Directory -Path $testResults -Force)
-    $report = Join-Path $testResults 'client_unit.xml'
-    if (Test-Path -LiteralPath $report) {
-        Remove-Item -LiteralPath $report -Force
+    $failures = @()
+    foreach ($group in $clientTestGroups) {
+        if (Test-Path -LiteralPath $group.Report) {
+            Remove-Item -LiteralPath $group.Report -Force
+        }
+        & $ctest --test-dir $clientBuild -L $group.Level --output-on-failure --output-junit $group.Report
+        $testExitCode = $LASTEXITCODE
+        if (-not (Test-Path -LiteralPath $group.Report -PathType Leaf)) {
+            throw "Qt client $($group.Level) test report was not created: $($group.Report)"
+        }
+        [void](Assert-RegressionReport -Path $group.Report -ExpectedCount $group.ExpectedCount)
+        if ($testExitCode -ne 0) {
+            $failures += "$($group.Level) (exit $testExitCode)"
+        }
     }
-    & $ctest --test-dir $clientBuild --output-on-failure --output-junit $report
-    $testExitCode = $LASTEXITCODE
-    if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
-        throw "Qt client test report was not created: $report"
+    if ($failures.Count -gt 0) {
+        throw "Qt client tests failed: $($failures -join '; ')"
     }
-    if ($testExitCode -ne 0) {
-        throw "Qt client tests failed with exit code $testExitCode. Report: $report"
+}
+
+function Assert-RegressionReport {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][int]$ExpectedCount
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Required regression report was not created: $Path"
     }
+    try {
+        [xml]$reportXml = Get-Content -LiteralPath $Path -Raw
+    } catch {
+        throw "Regression report is not valid XML: $Path. $($_.Exception.Message)"
+    }
+    $testcases = @($reportXml.SelectNodes('//testcase'))
+    $failures = @($reportXml.SelectNodes('//failure'))
+    $errors = @($reportXml.SelectNodes('//error'))
+    if ($testcases.Count -ne $ExpectedCount) {
+        throw "Regression report count mismatch for ${Path}: expected $ExpectedCount, found $($testcases.Count)."
+    }
+    if ($failures.Count -ne 0 -or $errors.Count -ne 0) {
+        throw "Regression report contains failures for ${Path}: failures=$($failures.Count), errors=$($errors.Count)."
+    }
+    return $testcases.Count
+}
+
+function Confirm-RegressionReports {
+    $total = 0
+    foreach ($group in $regressionReportGroups) {
+        $total += Assert-RegressionReport `
+            -Path (Join-Path $testResults $group.Name) `
+            -ExpectedCount $group.ExpectedCount
+    }
+    if ($regressionReportGroups.Count -ne 12 -or $total -ne 173) {
+        throw "Regression report baseline mismatch: expected 12 reports and 173 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    }
+    Write-Host "Regression report audit passed: $total testcases across $($regressionReportGroups.Count) reports."
+}
+
+function Get-RegressionResidueSnapshot {
+    param([Parameter(Mandatory = $true)][string[]]$Prefixes)
+
+    $temporaryRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    return @(
+        foreach ($prefix in $Prefixes) {
+            Get-ChildItem -LiteralPath $temporaryRoot -Filter "$prefix*" -Force -ErrorAction SilentlyContinue |
+                ForEach-Object { $_.FullName }
+        }
+    )
+}
+
+function Assert-NoNewRegressionResidue {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Before,
+        [Parameter(Mandatory = $true)][string[]]$Prefixes,
+        [Parameter(Mandatory = $true)][string]$Lane
+    )
+
+    $after = @(Get-RegressionResidueSnapshot -Prefixes $Prefixes)
+    $newResidue = @($after | Where-Object { $_ -notin $Before })
+    if ($newResidue.Count -gt 0) {
+        throw "$Lane test cleanup left owned temporary state: $($newResidue -join '; ')"
+    }
+}
+
+function Invoke-ProtocolCompatibility {
+    param([ValidateSet('generate', 'check')][string]$Mode)
+
+    $node = Require-Command 'node.exe' 'Node.js is required for protocol generation and compatibility checks.'
+    $protocolTool = Require-File (Join-Path $repoRoot 'scripts\protocol-compatibility.js') `
+        'The protocol compatibility tool is missing.'
+    & $node $protocolTool $Mode
+    if ($LASTEXITCODE -ne 0) {
+        throw "Protocol $Mode failed with exit code $LASTEXITCODE."
+    }
+}
+
+function Get-RepositoryRelativePath {
+    param([string]$Path)
+
+    $resolved = (Resolve-Path -LiteralPath $Path).Path
+    $rootPrefix = $repoRoot.TrimEnd('\') + '\'
+    if (-not $resolved.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Path is outside the repository: $resolved"
+    }
+    return $resolved.Substring($rootPrefix.Length).Replace('\', '/')
+}
+
+function Confirm-TestStructure {
+    function Assert-ModuleReadme {
+        param([System.IO.FileInfo[]]$TestFiles, [string]$Toolchain)
+
+        foreach ($directory in @($TestFiles | ForEach-Object { $_.DirectoryName } | Sort-Object -Unique)) {
+            $readme = Join-Path $directory 'README.md'
+            if (-not (Test-Path -LiteralPath $readme -PathType Leaf)) {
+                throw "$Toolchain test Module is missing README.md: $(Get-RepositoryRelativePath $directory)"
+            }
+        }
+    }
+
+    $serverTests = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'tests\server') `
+        -Recurse -File -Filter '*.cpp')
+    $serverProjects = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'tests\server') `
+        -Recurse -File -Filter '*.vcxproj')
+    $registeredServerSources = @()
+    foreach ($project in $serverProjects) {
+        $projectXml = [xml](Get-Content -LiteralPath $project.FullName -Raw)
+        $namespace = New-Object System.Xml.XmlNamespaceManager($projectXml.NameTable)
+        $namespace.AddNamespace('msb', 'http://schemas.microsoft.com/developer/msbuild/2003')
+        foreach ($compile in $projectXml.SelectNodes('//msb:ItemGroup/msb:ClCompile[@Include]', $namespace)) {
+            $registeredServerSources += [IO.Path]::GetFullPath(
+                (Join-Path $project.DirectoryName $compile.GetAttribute('Include'))
+            )
+        }
+    }
+    foreach ($test in $serverTests) {
+        if ($registeredServerSources -notcontains $test.FullName) {
+            throw "Unregistered Server test source: $(Get-RepositoryRelativePath $test.FullName)"
+        }
+    }
+    Assert-ModuleReadme -TestFiles $serverTests -Toolchain 'Server'
+    $asioContracts = @($serverTests | Where-Object { $_.Name -eq 'asio_pool_contract_tests.cpp' })
+    if ($asioContracts.Count -ne 1 -or $asioContracts[0].Directory.Name -ne 'lifecycle') {
+        throw 'The shared Asio pool contract source must have one owner: tests/server/lifecycle.'
+    }
+
+    $gateProject = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\GateServer.vcxproj') -Raw
+    $gateGrpcProject = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\GateGrpcClients.vcxproj') -Raw
+    $chatProject = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatServer.vcxproj') -Raw
+    $chatGrpcProject = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatGrpcClients.vcxproj') -Raw
+    $componentProject = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\ServerComponentTests.vcxproj') -Raw
+    $integrationProject = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\ServerIntegrationTests.vcxproj') -Raw
+    $chatGrpcTestProject = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\ChatGrpcClientTests.vcxproj') -Raw
+    foreach ($registration in @(
+        @{ Text = $gateProject; Pattern = 'ClCompile Include="GateResponse\.cpp"'; Owner = 'GateServer' }
+        @{ Text = $componentProject; Pattern = 'gate-response\\gate_response_tests\.cpp'; Owner = 'Server Component tests' }
+        @{ Text = $componentProject; Pattern = 'GateServer\\GateServer\\GateResponse\.cpp'; Owner = 'Server Component tests' }
+    )) {
+        if ($registration.Text -notmatch $registration.Pattern) {
+            throw "$($registration.Owner) must compile the production GateResponse Module."
+        }
+    }
+    $gateLogic = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\LogicSystem.cpp') -Raw
+    $gateRoutes = @{
+        '/get_varifycode' = 'GetVarifyCode'
+        '/user_register' = 'UserRegister'
+        '/reset_pwd' = 'ResetPassword'
+        '/user_login' = 'UserLogin'
+    }
+    foreach ($route in $gateRoutes.GetEnumerator()) {
+        $registration = 'RegPost\("{0}", \[write_gate_response\]' -f [regex]::Escape($route.Key)
+        $shapingCall = 'write_gate_response\(connection, gate::Endpoint::{0}' -f [regex]::Escape($route.Value)
+        if ($gateLogic -notmatch $registration -or $gateLogic -notmatch $shapingCall) {
+            throw "Gate route '$($route.Key)' must call the production GateResponse Interface with endpoint $($route.Value)."
+        }
+    }
+    if ($integrationProject -notmatch 'startup\\gate_status_startup_tests\.cpp') {
+        throw 'Server Integration tests must register the Gate/Status production process contracts.'
+    }
+    foreach ($registration in @(
+        @{ Text = $gateProject; Pattern = 'ProjectReference Include="GateGrpcClients\.vcxproj"'; Owner = 'GateServer' }
+        @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatGrpcClients\.vcxproj"'; Owner = 'ChatServer' }
+        @{ Text = $integrationProject; Pattern = 'GateGrpcClients\.vcxproj'; Owner = 'Server Integration tests' }
+        @{ Text = $chatGrpcTestProject; Pattern = 'ChatGrpcClients\.vcxproj'; Owner = 'Chat gRPC Integration tests' }
+        @{ Text = $gateGrpcProject; Pattern = 'GrpcClientRuntime\.h'; Owner = 'Gate gRPC client library' }
+        @{ Text = $chatGrpcProject; Pattern = 'GrpcClientRuntime\.h'; Owner = 'Chat gRPC client library' }
+    )) {
+        if ($registration.Text -notmatch $registration.Pattern) {
+            throw "$($registration.Owner) must share the production gRPC client library and runtime Interface with its tests."
+        }
+    }
+    foreach ($source in @(
+        'GateServer\GateServer\VerifyGrpcClient.cpp'
+        'GateServer\GateServer\StatusGrpcClient.cpp'
+        'ChatServer\ChatServer\StatusGrpcClient.cpp'
+        'ChatServer\ChatServer\ChatGrpcClient.cpp'
+    )) {
+        $grpcClientSource = Get-Content -LiteralPath (Join-Path $repoRoot $source) -Raw
+        if ($grpcClientSource -notmatch 'rpc::InvokeUnary') {
+            throw "$source must route every unary RPC through the finite-deadline production Interface."
+        }
+    }
+    $grpcRuntime = Get-Content -LiteralPath (Join-Path $repoRoot 'common\grpc\GrpcClientRuntime.h') -Raw
+    if ($grpcRuntime -notmatch 'context\.set_deadline') {
+        throw 'The shared gRPC client runtime must set a finite ClientContext deadline.'
+    }
+
+    $clientTests = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'chat\tests') `
+        -Recurse -File -Filter '*.cpp')
+    $clientCMake = Get-Content -LiteralPath (Join-Path $repoRoot 'chat\CMakeLists.txt') -Raw
+    $normalizedClientCMake = $clientCMake.Replace('\', '/')
+    foreach ($test in $clientTests) {
+        $relative = (Get-RepositoryRelativePath $test.FullName).Substring('chat/'.Length)
+        if ($normalizedClientCMake -notmatch [regex]::Escape($relative)) {
+            throw "Unregistered Qt client test source: $(Get-RepositoryRelativePath $test.FullName)"
+        }
+    }
+    Assert-ModuleReadme -TestFiles $clientTests -Toolchain 'Qt client'
+    $ctestTargets = @([regex]::Matches(
+        $clientCMake,
+        'add_test\s*\(\s*NAME\s+([A-Za-z0-9_.-]+)',
+        [Text.RegularExpressions.RegexOptions]::IgnoreCase
+    ) | ForEach-Object { $_.Groups[1].Value })
+    $expectedClientLevels = @{
+        'network_state_tests' = 'unit'
+        'message_model.append_ack_status_removal' = 'unit'
+        'message_model.unknown_ids' = 'unit'
+        'message_model.history_order' = 'unit'
+        'message_model.multiple_history_pages' = 'unit'
+        'message_model.shifted_indexes' = 'unit'
+        'message_model.text_and_chat_identity' = 'unit'
+        'message_model.store_pagination_state' = 'component'
+        'message_model.delegate_reflow' = 'component'
+        'session_reset.account_state' = 'component'
+        'session_reset.owned_ui_and_idempotence' = 'component'
+        'session_reset.pending_batch' = 'component'
+    }
+    foreach ($target in $ctestTargets) {
+        $properties = [regex]::Match(
+            $clientCMake,
+            "set_tests_properties\s*\(\s*$([regex]::Escape($target))\s+PROPERTIES(?<body>.*?)\)",
+            [Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
+                [Text.RegularExpressions.RegexOptions]::Singleline
+        )
+        $label = [regex]::Match(
+            $properties.Groups['body'].Value,
+            'LABELS\s+"?(?<level>unit|component|integration|e2e)"?',
+            [Text.RegularExpressions.RegexOptions]::IgnoreCase
+        )
+        if (-not $properties.Success -or -not $label.Success) {
+            throw "CTest target '$target' must declare a Unit/Component/Integration/E2E label."
+        }
+        if ($expectedClientLevels.ContainsKey($target) -and
+            $label.Groups['level'].Value -ne $expectedClientLevels[$target]) {
+            throw "CTest target '$target' must be $($expectedClientLevels[$target]); found $($label.Groups['level'].Value)."
+        }
+    }
+    foreach ($target in $expectedClientLevels.Keys) {
+        if ($ctestTargets -notcontains $target) {
+            throw "Required Qt CTest target is missing: $target"
+        }
+    }
+    $expectedClientReports = @{ unit = 'client_unit.xml'; component = 'client_component.xml' }
+    if ($clientTestGroups.Count -ne $expectedClientReports.Count) {
+        throw 'RunClientTests must define exactly the Unit and Component report groups.'
+    }
+    foreach ($group in $clientTestGroups) {
+        if (-not $expectedClientReports.ContainsKey($group.Level) -or
+            (Split-Path -Leaf $group.Report) -ne $expectedClientReports[$group.Level]) {
+            throw "Invalid Qt report mapping: $($group.Level) -> $($group.Report)"
+        }
+    }
+    $expectedClientCounts = @{ unit = 7; component = 5 }
+    foreach ($group in $clientTestGroups) {
+        if ($group.ExpectedCount -ne $expectedClientCounts[$group.Level]) {
+            throw "Qt $($group.Level) report must require exactly $($expectedClientCounts[$group.Level]) testcases."
+        }
+    }
+
+    foreach ($guard in @(
+        @{ Pattern = 'add_library\s*\(\s*chat_session_core'; Message = 'Qt session production sources must be owned by chat_session_core.' }
+        @{ Pattern = 'target_link_libraries\s*\(\s*chat[\s\S]*?chat_session_core'; Message = 'The Qt executable must link the production session Module.' }
+        @{ Pattern = 'target_link_libraries\s*\(\s*session_reset_tests[\s\S]*?chat_session_core'; Message = 'Session tests must link the same production session Module.' }
+    )) {
+        if ($clientCMake -notmatch $guard.Pattern) {
+            throw $guard.Message
+        }
+    }
+    $decoderSource = Get-Content -LiteralPath (Join-Path $repoRoot 'chat\tcpframedecoder.cpp') -Raw
+    $tcpMgrSource = Get-Content -LiteralPath (Join-Path $repoRoot 'chat\tcpmgr.cpp') -Raw
+    $clientSessionSource = Get-Content -LiteralPath (Join-Path $repoRoot 'chat\clientsession.cpp') -Raw
+    $mainWindowSource = Get-Content -LiteralPath (Join-Path $repoRoot 'chat\mainwindow.cpp') -Raw
+    if ($decoderSource -notmatch 'void\s+TcpFrameDecoder::reset\s*\(' -or
+        $tcpMgrSource -notmatch '_frameDecoder\.reset\s*\(' -or
+        $tcpMgrSource -notmatch '_pendingTextBatches\.clear\s*\(' -or
+        $tcpMgrSource -notmatch 'slot_tcp_connect[\s\S]*?resetConnection\s*\(') {
+        throw 'TcpMgr connection reset must clear decoder/pending state and run before reconnect.'
+    }
+    if ($clientSessionSource -notmatch 'UserMgr::GetInstance\(\)->resetSession\s*\(' -or
+        $clientSessionSource -notmatch 'TcpMgr::GetInstance\(\)->resetConnection\s*\(' -or
+        $clientSessionSource -notmatch 'delete\s+ownedSessionRoot') {
+        throw 'ClientSession reset must clear real user/connection state and destroy the owned session UI.'
+    }
+    if ($mainWindowSource -notmatch '_session\.beginSession\s*\(\s*_chat_dlg\s*\)' -or
+        $mainWindowSource -notmatch 'bool\s+MainWindow::resetSession[\s\S]*?_session\.resetSession\s*\(\s*reason\s*\)' -or
+        $mainWindowSource -notmatch 'resetSession\s*\(\s*SessionResetReason::Kicked\s*\)' -or
+        $mainWindowSource -notmatch 'resetSession\s*\(\s*SessionResetReason::UnexpectedDisconnect\s*\)' -or
+        $mainWindowSource -notmatch 'if\s*\(\s*expectedClose') {
+        throw 'MainWindow must route authenticated UI, kicked, expected-close, and abnormal-close paths through ClientSession.'
+    }
+    if ($clientCMake -match 'clearForTest|SESSION_TEST|TEST_SESSION') {
+        throw 'Qt session reset must not use a test-only switch or clearForTest Interface.'
+    }
+
+    $varifyTests = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'VarifyServer\test') `
+        -Recurse -File -Filter '*.test.js')
+    Assert-ModuleReadme -TestFiles $varifyTests -Toolchain 'VarifyServer'
+    $varifyPackage = Get-Content -LiteralPath (Join-Path $repoRoot 'VarifyServer\package.json') `
+        -Raw | ConvertFrom-Json
+    $runnerRegistration = Get-Content -LiteralPath $PSCommandPath -Raw
+    $normalizedRunnerRegistration = $runnerRegistration.Replace('\', '/')
+    $lastExitInitialization = $runnerRegistration.IndexOf('$global:LASTEXITCODE = 0')
+    $firstFunction = $runnerRegistration.IndexOf('function ')
+    if ($lastExitInitialization -lt 0 -or
+        $firstFunction -lt 0 -or
+        $lastExitInitialization -gt $firstFunction) {
+        throw 'The public runner must initialize LASTEXITCODE before StrictMode functions read it on a fresh CI process.'
+    }
+    $runServerTests = [regex]::Match(
+        $runnerRegistration,
+        '(?ms)^function\s+Run-ServerTests\s*\{(?<body>.*?)(?=^function\s+|\z)'
+    )
+    if (-not $runServerTests.Success -or
+        $runServerTests.Groups['body'].Value -notmatch "(?m)^\s*Invoke-ProtocolCompatibility\s+'check'\s*$") {
+        throw "RunServerTests must execute Invoke-ProtocolCompatibility 'check' so generated and descriptor drift block develop."
+    }
+    foreach ($requiredProductionTarget in @('GateServer', 'StatusServer')) {
+        if ($runServerTests.Groups['body'].Value -notmatch [regex]::Escape($requiredProductionTarget)) {
+            throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
+        }
+    }
+    foreach ($requiredCount in @(53, 34, 4)) {
+        if ($runServerTests.Groups['body'].Value -notmatch "ExpectedCount\s*=\s*$requiredCount") {
+            throw "RunServerTests is missing the exact Plan 2.5-05 testcase count $requiredCount."
+        }
+    }
+    if ($runServerTests.Groups['body'].Value -notmatch 'ChatGrpcClientTests' -or
+        $runServerTests.Groups['body'].Value -notmatch 'server_chat_grpc_integration\.xml') {
+        throw 'RunServerTests must build and report the Chat gRPC client Integration executable.'
+    }
+    $runAllTests = [regex]::Match(
+        $runnerRegistration,
+        '(?ms)^function\s+Run-AllTests\s*\{(?<body>.*?)(?=^function\s+|\z)'
+    )
+    if (-not $runAllTests.Success) {
+        throw 'RunAllTests is missing from the public runner.'
+    }
+    foreach ($requiredRunner in @('Run-ScriptTests', 'Run-ServerTests', 'Run-ClientTests', 'Run-VarifyTests')) {
+        if ($runAllTests.Groups['body'].Value -notmatch "(?m)^\s*$([regex]::Escape($requiredRunner))\s*$") {
+            throw "RunAllTests must execute $requiredRunner so the aggregate lane cannot omit a toolchain."
+        }
+    }
+    if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
+        throw 'RunAllTests must audit the exact twelve-report/173-testcase baseline.'
+    }
+    if ($regressionReportGroups.Count -ne 12 -or
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 173) {
+        throw 'The registered regression baseline must remain exactly 12 reports and 173 testcases.'
+    }
+
+    $workflowPath = Require-File (Join-Path $repoRoot '.github\workflows\windows-ci.yml') `
+        'The develop Windows CI workflow is missing.'
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    foreach ($trigger in @('push', 'pull_request')) {
+        $triggerBlock = [regex]::Match(
+            $workflow,
+            "(?ms)^  $([regex]::Escape($trigger)):\s*\r?\n(?<body>(?:^    .*?(?:\r?\n|\z))*)"
+        )
+        if (-not $triggerBlock.Success -or
+            $triggerBlock.Groups['body'].Value -notmatch '(?m)^\s+-\s+develop\s*$') {
+            throw "Windows CI must run for $trigger events targeting develop."
+        }
+    }
+    foreach ($requiredTask in @('CheckTestStructure', 'RunScriptTests', 'RunServerTests', 'RunClientTests', 'RunVarifyTests')) {
+        if ($workflow -notmatch "(?m)-Task\s+$([regex]::Escape($requiredTask))(?:\s|$)") {
+            throw "Windows CI must invoke the public $requiredTask entry so develop cannot use a second test path."
+        }
+    }
+    if ($workflow -match '(?m)^\s*continue-on-error\s*:') {
+        throw 'Windows CI must not weaken a required test or package step with continue-on-error.'
+    }
+    $serverJob = [regex]::Match(
+        $workflow,
+        '(?ms)^  servers-release:\s*$(?<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\z)'
+    )
+    if (-not $serverJob.Success -or
+        $serverJob.Groups['body'].Value -notmatch 'actions/setup-node@' -or
+        $serverJob.Groups['body'].Value -notmatch '(?m)^\s*run:\s+npm ci --ignore-scripts\s*$') {
+        throw 'The Server CI job must restore locked VarifyServer Node dependencies for the C++ to Node loopback contract.'
+    }
+    foreach ($upload in @(
+        @{ Artifact = 'windows-script-test-results'; Path = 'build/test-results/script_\*\.xml' }
+        @{ Artifact = 'windows-server-test-results'; Path = 'build/test-results/server_\*\.xml' }
+        @{ Artifact = 'windows-client-test-results'; Path = 'build/test-results/client_\*\.xml' }
+        @{ Artifact = 'windows-varify-test-results'; Path = 'build/test-results/varify_\*\.xml' }
+    )) {
+        $uploadPattern = "(?ms)-\s+name:\s+Upload[^\r\n]*test reports\s*\r?\n\s+if:\s+always\(\).*?name:\s+$([regex]::Escape($upload.Artifact)).*?path:\s+$($upload.Path).*?if-no-files-found:\s+error"
+        if ($workflow -notmatch $uploadPattern) {
+            throw "Windows CI must always upload $($upload.Artifact) and fail when its required reports are missing."
+        }
+    }
+    $npmRegisteredFiles = @(
+        @($varifyPackage.scripts.'test:unit', $varifyPackage.scripts.'test:integration') |
+            ForEach-Object {
+                [regex]::Matches([string]$_, 'test/[A-Za-z0-9_./-]+\.test\.js') |
+                    ForEach-Object { $_.Value }
+            }
+    )
+    $runnerRegisteredFiles = @(
+        [regex]::Matches($normalizedRunnerRegistration, 'test/[A-Za-z0-9_./-]+\.test\.js') |
+            ForEach-Object { $_.Value } | Sort-Object -Unique
+    )
+    foreach ($test in $varifyTests) {
+        $relative = (Get-RepositoryRelativePath $test.FullName).Substring('VarifyServer/'.Length)
+        if (@($npmRegisteredFiles | Where-Object { $_ -eq $relative }).Count -ne 1) {
+            throw "VarifyServer test is missing from an npm level script: $relative"
+        }
+        if ($runnerRegisteredFiles -notcontains $relative) {
+            throw "VarifyServer test is missing from RunVarifyTests: $relative"
+        }
+    }
+    if ($npmRegisteredFiles.Count -ne $varifyTests.Count -or
+        $runnerRegisteredFiles.Count -ne $varifyTests.Count) {
+        throw 'VarifyServer npm and RunVarifyTests file lists must exactly match discovered test files.'
+    }
+
+    $scriptTests = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'tests\scripts') `
+        -Recurse -File -Filter '*.tests.ps1')
+    Assert-ModuleReadme -TestFiles $scriptTests -Toolchain 'PowerShell'
+    foreach ($test in $scriptTests) {
+        $relative = Get-RepositoryRelativePath $test.FullName
+        if ($normalizedRunnerRegistration -notmatch [regex]::Escape($relative)) {
+            throw "PowerShell test is missing from RunScriptTests: $relative"
+        }
+    }
+    $expectedScriptReports = @{ component = 'script_component.xml'; integration = 'script_integration.xml' }
+    if ($scriptTestGroups.Count -ne $scriptTests.Count) {
+        throw 'RunScriptTests must register every PowerShell test source exactly once.'
+    }
+    foreach ($group in $scriptTestGroups) {
+        if (-not $expectedScriptReports.ContainsKey($group.Level) -or
+            (Split-Path -Leaf $group.Report) -ne $expectedScriptReports[$group.Level]) {
+            throw "Invalid PowerShell report mapping: $($group.Level) -> $($group.Report)"
+        }
+        $scriptPath = Require-File (Join-Path $repoRoot $group.Script) 'A registered PowerShell test is missing.'
+        $scriptText = Get-Content -LiteralPath $scriptPath -Raw
+        $ids = @(
+            [regex]::Matches(
+                $scriptText,
+                "Invoke-(?:ExpectedValidationFailure|TestCase)\s+'(?<id>A02-(?:VAL|LIFE)-\d{2})'"
+            ) | ForEach-Object { $_.Groups['id'].Value }
+        )
+        if ($ids.Count -ne $group.ExpectedCount -or @($ids | Sort-Object -Unique).Count -ne $ids.Count) {
+            throw "PowerShell test registration count mismatch for $($group.Script): expected $($group.ExpectedCount), found $($ids.Count)."
+        }
+        foreach ($id in $ids) {
+            if ($id -notmatch $group.TestIdPattern) {
+                throw "PowerShell Test ID '$id' is registered in the wrong report group."
+            }
+        }
+    }
+
+    Write-Host "Test registration and report grouping verified: $($serverTests.Count) Server, $($clientTests.Count) Qt, $($varifyTests.Count) VarifyServer, $($scriptTests.Count) PowerShell source files."
 }
 
 function Run-ScriptTests {
+    Confirm-TestStructure
+    $residuePrefixes = @('chat-instance-validation-', 'chat-instance-lifecycle-')
+    $residueBefore = @(Get-RegressionResidueSnapshot -Prefixes $residuePrefixes)
     $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $windowsPowerShell = Require-File $windowsPowerShell 'Windows PowerShell 5.1 is required for script tests.'
-    $testScripts = @(
-        'tests\scripts\validation\chatserver-instances.tests.ps1'
-        'tests\scripts\lifecycle\chatserver-instances.tests.ps1'
-    )
     [void](New-Item -ItemType Directory -Path $testResults -Force)
-    $report = Join-Path $testResults 'script_unit.xml'
-    if (Test-Path -LiteralPath $report) {
-        Remove-Item -LiteralPath $report -Force
-    }
-    $results = @()
-    foreach ($relativePath in $testScripts) {
-        $testScript = Require-File (Join-Path $repoRoot $relativePath) 'A ChatServer instance script test is missing.'
-        $started = [DateTime]::UtcNow
-        $output = (& $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $testScript 2>&1 | Out-String)
-        $results += [pscustomobject]@{
-            Name = $relativePath
-            ExitCode = $LASTEXITCODE
-            Duration = ([DateTime]::UtcNow - $started).TotalSeconds
-            Output = $output
+    $failedScripts = @()
+    foreach ($group in $scriptTestGroups) {
+        if (Test-Path -LiteralPath $group.Report) {
+            Remove-Item -LiteralPath $group.Report -Force
         }
+        $testScript = Require-File (Join-Path $repoRoot $group.Script) 'A ChatServer instance script test is missing.'
+        $output = (& $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+            -File $testScript -JUnitPath $group.Report 2>&1 | Out-String)
+        $testExitCode = $LASTEXITCODE
         Write-Host $output
-    }
-    $settings = New-Object System.Xml.XmlWriterSettings
-    $settings.Indent = $true
-    $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
-    $writer = [System.Xml.XmlWriter]::Create($report, $settings)
-    try {
-        $writer.WriteStartDocument()
-        $writer.WriteStartElement('testsuites')
-        $writer.WriteAttributeString('tests', [string]$results.Count)
-        $writer.WriteAttributeString('failures', [string]@($results | Where-Object { $_.ExitCode -ne 0 }).Count)
-        $writer.WriteStartElement('testsuite')
-        $writer.WriteAttributeString('name', 'PowerShellScriptTests')
-        $writer.WriteAttributeString('tests', [string]$results.Count)
-        $writer.WriteAttributeString('failures', [string]@($results | Where-Object { $_.ExitCode -ne 0 }).Count)
-        foreach ($result in $results) {
-            $writer.WriteStartElement('testcase')
-            $writer.WriteAttributeString('classname', 'scripts.chatserver-instances')
-            $writer.WriteAttributeString('name', $result.Name)
-            $writer.WriteAttributeString('time', $result.Duration.ToString('0.000', [Globalization.CultureInfo]::InvariantCulture))
-            if ($result.ExitCode -ne 0) {
-                $writer.WriteStartElement('failure')
-                $writer.WriteAttributeString('message', "exit code $($result.ExitCode)")
-                $writer.WriteString($result.Output)
-                $writer.WriteEndElement()
-            }
-            $writer.WriteStartElement('system-out')
-            $writer.WriteString($result.Output)
-            $writer.WriteEndElement()
-            $writer.WriteEndElement()
+        if (-not (Test-Path -LiteralPath $group.Report -PathType Leaf)) {
+            throw "PowerShell $($group.Level) test report was not created: $($group.Report)"
         }
-        $writer.WriteEndElement()
-        $writer.WriteEndElement()
-        $writer.WriteEndDocument()
-    } finally {
-        $writer.Dispose()
+        [void](Assert-RegressionReport -Path $group.Report -ExpectedCount $group.ExpectedCount)
+        $reportXml = [xml](Get-Content -LiteralPath $group.Report -Raw)
+        $testcases = @($reportXml.SelectNodes('//testcase'))
+        foreach ($testcase in $testcases) {
+            if ($testcase.name -notmatch $group.TestIdPattern) {
+                throw "PowerShell $($group.Level) report contains an unexpected Test ID: $($testcase.name)"
+            }
+        }
+        if ($testExitCode -ne 0) {
+            $failedScripts += "$($group.Script) (exit $testExitCode)"
+        }
     }
-    $failedScripts = @($results | Where-Object { $_.ExitCode -ne 0 })
     if ($failedScripts.Count -gt 0) {
-        throw "ChatServer instance script tests failed. Report: $report"
+        throw "ChatServer instance script tests failed: $($failedScripts -join '; ')"
     }
+    Assert-NoNewRegressionResidue -Before $residueBefore -Prefixes $residuePrefixes -Lane 'PowerShell'
 }
 
 function Run-VarifyTests {
+    Confirm-TestStructure
+    $residuePrefixes = @('varify-config-', 'varify-startup-', 'chat-proto-mutation-')
+    $residueBefore = @(Get-RegressionResidueSnapshot -Prefixes $residuePrefixes)
     $node = Require-Command 'node.exe' 'Install Node.js before running VarifyServer tests.'
     [void](Require-File (Join-Path $varifySource 'node_modules\@grpc\grpc-js\package.json') `
         'Restore VarifyServer dependencies with RestoreVarify or npm ci first.')
-    $testFiles = @(
-        Require-File (Join-Path $varifySource 'test\config\config.test.js') `
-            'The VarifyServer configuration unit tests are missing.'
-        Require-File (Join-Path $varifySource 'test\protocol\protocol.test.js') `
-            'The VarifyServer protocol unit tests are missing.'
-        Require-File (Join-Path $varifySource 'test\handler\handler.test.js') `
-            'The VarifyServer handler unit tests are missing.'
-        Require-File (Join-Path $varifySource 'test\rpc\rpc-routing.test.js') `
-            'The VarifyServer RPC routing component tests are missing.'
-        Require-File (Join-Path $varifySource 'test\startup\startup.test.js') `
-            'The VarifyServer startup lifecycle tests are missing.'
+    $groups = @(
+        @{
+            Level = 'unit'
+            Report = (Join-Path $testResults 'varify_unit.xml')
+            ExpectedCount = 18
+            Files = @(
+                Require-File (Join-Path $varifySource 'test\protocol\protocol.test.js') `
+                    'The VarifyServer protocol unit tests are missing.'
+                Require-File (Join-Path $varifySource 'test\handler\handler.test.js') `
+                    'The VarifyServer handler unit tests are missing.'
+                Require-File (Join-Path $varifySource 'test\startup\startup-unit.test.js') `
+                    'The VarifyServer startup unit tests are missing.'
+            )
+        }
+        @{
+            Level = 'integration'
+            Report = (Join-Path $testResults 'varify_integration.xml')
+            ExpectedCount = 11
+            Files = @(
+                Require-File (Join-Path $varifySource 'test\config\config.test.js') `
+                    'The VarifyServer configuration process tests are missing.'
+                Require-File (Join-Path $varifySource 'test\rpc\rpc-routing.test.js') `
+                    'The VarifyServer RPC routing integration tests are missing.'
+                Require-File (Join-Path $varifySource 'test\startup\startup-integration.test.js') `
+                    'The VarifyServer startup integration tests are missing.'
+            )
+        }
     )
     [void](New-Item -ItemType Directory -Path $testResults -Force)
-    $report = Join-Path $testResults 'varify_unit.xml'
-    if (Test-Path -LiteralPath $report) {
-        Remove-Item -LiteralPath $report -Force
-    }
+    $failures = @()
     Push-Location $varifySource
     try {
-        & $node --test --test-reporter=junit --test-reporter-destination=$report @testFiles
-        if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
-            throw "VarifyServer unit test report was not created: $report"
-        }
-        if ($LASTEXITCODE -ne 0) {
-            throw "VarifyServer unit tests failed with exit code $LASTEXITCODE. Report: $report"
+        foreach ($group in $groups) {
+            if (Test-Path -LiteralPath $group.Report) {
+                Remove-Item -LiteralPath $group.Report -Force
+            }
+            & $node --test --test-reporter=junit `
+                "--test-reporter-destination=$($group.Report)" @($group.Files)
+            $testExitCode = $LASTEXITCODE
+            if (-not (Test-Path -LiteralPath $group.Report -PathType Leaf)) {
+                throw "VarifyServer $($group.Level) test report was not created: $($group.Report)"
+            }
+            [void](Assert-RegressionReport -Path $group.Report -ExpectedCount $group.ExpectedCount)
+            if ($testExitCode -ne 0) {
+                $failures += "$($group.Level) (exit $testExitCode)"
+            }
         }
     } finally {
         Pop-Location
     }
+    if ($failures.Count -gt 0) {
+        throw "VarifyServer tests failed: $($failures -join '; ')"
+    }
+    Assert-NoNewRegressionResidue -Before $residueBefore -Prefixes $residuePrefixes -Lane 'VarifyServer'
 }
 
 function Restore-Varify {
@@ -486,6 +1018,14 @@ function Restore-Varify {
     } finally {
         Pop-Location
     }
+}
+
+function Run-AllTests {
+    Run-ScriptTests
+    Run-ServerTests
+    Run-ClientTests
+    Run-VarifyTests
+    Confirm-RegressionReports
 }
 
 function Check-Toolchains {
@@ -511,6 +1051,10 @@ function Check-Toolchains {
 
 switch ($Task) {
     'Check' { Check-Toolchains }
+    'CheckTestStructure' { Confirm-TestStructure }
+    'CheckTestReports' { Confirm-RegressionReports }
+    'GenerateProtocols' { Invoke-ProtocolCompatibility 'generate' }
+    'CheckProtocols' { Invoke-ProtocolCompatibility 'check' }
     'RestoreServers' { Restore-Servers }
     'BuildServers' { Build-Servers }
     'BuildClient' { Build-Client }
@@ -519,11 +1063,10 @@ switch ($Task) {
     'RunClientTests' { Run-ClientTests }
     'RunScriptTests' { Run-ScriptTests }
     'RunVarifyTests' { Run-VarifyTests }
+    'RunAllTests' { Run-AllTests }
     'TestPhase1' {
-        Run-ScriptTests
-        Run-ServerTests
-        Run-ClientTests
-        Run-VarifyTests
+        Write-Warning 'TestPhase1 is a compatibility alias; use RunAllTests.'
+        Run-AllTests
     }
     'BuildAll' {
         Check-Toolchains
