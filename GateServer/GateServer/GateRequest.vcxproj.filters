@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="GateRequest.cpp" />
+    <ClCompile Include="GateRequestProduction.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="GateRequest.h" />
+    <ClInclude Include="GateRequestInternal.h" />
+    <ClInclude Include="GateRequestProduction.h" />
+  </ItemGroup>
+</Project>

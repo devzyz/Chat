@@ -49,7 +49,7 @@ public slots:
     // 重置转登录槽函数
     void slot_reset_switch_login();
     // 登录转聊天槽函数
-    void slot_login_switch_chat();
+    void slot_login_switch_chat(AuthFlowId flowId);
     // 服务器通知下线槽函数
     void slot_notify_offline();
     // 服务器断开连接
@@ -63,6 +63,8 @@ private:
     QPointer<ResetDialog> _reset_dlg;
     QPointer<ChatDialog> _chat_dlg;
     UIStatus _ui_status = UIStatus::LOGIN_UI;
+    AuthFlowCoordinator _authFlow;
+    AuthFlowId _activeAuthFlowId = 0;
     ClientSession _session;
 };
 #endif // MAINWINDOW_H

@@ -1,6 +1,15 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClInclude Include="ChatSessionState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ChatSessionStateInternal.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ChatSessionStateProduction.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <Filter Include="源文件">
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
@@ -108,6 +117,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="LogicSystem.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="LogicDispatcher.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="MsgNode.h">

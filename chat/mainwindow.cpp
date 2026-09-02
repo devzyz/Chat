@@ -10,7 +10,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    _login_dlg = new LoginDialog(this);
+    _login_dlg = new LoginDialog(_authFlow, this);
     _login_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     setCentralWidget(_login_dlg);
     _login_dlg->show();
@@ -23,7 +23,8 @@ MainWindow::MainWindow(QWidget *parent)
     // 连接登录界面转重置界面信号
     connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
     // 连接登录界面转聊天界面信号
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_login_switch_chat, this, &MainWindow::slot_login_switch_chat);
+    connect(_login_dlg, &LoginDialog::sig_login_switch_chat,
+            this, &MainWindow::slot_login_switch_chat);
     // 连接服务器通知下线信号
     connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_notify_offline, this, &MainWindow::slot_notify_offline);
     // 连接服务器断开lian
@@ -48,7 +49,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::slot_login_switch_reg() {
     // 创建注册界面窗口，因为我在切换到其他界面后，这个界面可能就被析构了
-    _register_dlg = new RegisterDialog(this);
+    _register_dlg = new RegisterDialog(_authFlow, this);
     _register_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
 
     // 连接注册界面返回登录信号
@@ -62,7 +63,7 @@ void MainWindow::slot_login_switch_reg() {
 
 void MainWindow::slot_login_switch_reset()
 {
-    _reset_dlg = new ResetDialog(this);
+    _reset_dlg = new ResetDialog(_authFlow, this);
     _reset_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     setCentralWidget(_reset_dlg);
 
@@ -75,7 +76,7 @@ void MainWindow::slot_login_switch_reset()
 
 void MainWindow::slot_reg_switch_login() {
     // 创建一个登录页面，因为之前的页面切换后，被析构了
-    _login_dlg = new LoginDialog(this);
+    _login_dlg = new LoginDialog(_authFlow, this);
     _login_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     setCentralWidget(_login_dlg);
 
@@ -85,12 +86,14 @@ void MainWindow::slot_reg_switch_login() {
     connect(_login_dlg, &LoginDialog::sig_login_switch_reg, this, &MainWindow::slot_login_switch_reg);
     // 连接登录界面和忘记密码界面
     connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
+    connect(_login_dlg, &LoginDialog::sig_login_switch_chat,
+            this, &MainWindow::slot_login_switch_chat);
     _ui_status = UIStatus::LOGIN_UI;
 }
 
 void MainWindow::slot_reset_switch_login() {
     // 创建一个登录页面，因为之前的页面切换后，被析构了
-    _login_dlg = new LoginDialog(this);
+    _login_dlg = new LoginDialog(_authFlow, this);
     _login_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     setCentralWidget(_login_dlg);
 
@@ -100,10 +103,13 @@ void MainWindow::slot_reset_switch_login() {
     connect(_login_dlg, &LoginDialog::sig_login_switch_reg, this, &MainWindow::slot_login_switch_reg);
     // 连接登录界面和忘记密码界面
     connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
+    connect(_login_dlg, &LoginDialog::sig_login_switch_chat,
+            this, &MainWindow::slot_login_switch_chat);
     _ui_status = UIStatus::LOGIN_UI;
 }
 
-void MainWindow::slot_login_switch_chat() {
+void MainWindow::slot_login_switch_chat(AuthFlowId flowId) {
+    _activeAuthFlowId = flowId;
     _chat_dlg = new ChatDialog(this);
     _chat_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     setCentralWidget(_chat_dlg);
@@ -132,6 +138,12 @@ void MainWindow::slot_connection_close(bool expectedClose)
     if (expectedClose || !_session.isActive()) {
         return;
     }
+    AuthOutcome outcome;
+    outcome.kind = AuthOutcomeKind::AbnormalDisconnect;
+    const AuthAction action = _authFlow.Reduce(_activeAuthFlowId, outcome);
+    if (action.kind != AuthActionKind::ShowLogin) {
+        return;
+    }
     // 出现弹窗，并阻塞操作，直到用户点击确定
     QMessageBox::information(this, "下线提示", "心跳检测超时，该终端下线！");
     resetSession(SessionResetReason::UnexpectedDisconnect);
@@ -143,6 +155,7 @@ bool MainWindow::resetSession(SessionResetReason reason)
         return false;
     }
     _chat_dlg.clear();
+    _activeAuthFlowId = 0;
     offlineLogin();
     return true;
 }
@@ -155,7 +168,7 @@ void MainWindow::offlineLogin()
     }
 
     // 离线后切换到登录状态
-    _login_dlg = new LoginDialog(this);
+    _login_dlg = new LoginDialog(_authFlow, this);
     _login_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     setCentralWidget(_login_dlg);
 
@@ -169,5 +182,7 @@ void MainWindow::offlineLogin()
     connect(_login_dlg, &LoginDialog::sig_login_switch_reg, this, &MainWindow::slot_login_switch_reg);
     // 连接登录界面和忘记密码界面
     connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
+    connect(_login_dlg, &LoginDialog::sig_login_switch_chat,
+            this, &MainWindow::slot_login_switch_chat);
     _ui_status = UIStatus::LOGIN_UI;
 }

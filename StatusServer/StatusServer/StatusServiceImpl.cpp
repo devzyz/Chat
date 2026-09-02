@@ -1,162 +1,44 @@
 #include "StatusServiceImpl.h"
-#include "const.h"
+
 #include "ConfigMgr.h"
-#include <boost/uuid.hpp>
-#include "RedisMgr.h"
+#include "StatusRoutingProduction.h"
+#include "const.h"
 
-/**
- * @brief 
- * 读取所有的ChatServer服务器信息
- */
+#include <boost/algorithm/string/trim.hpp>
+
+#include <sstream>
+#include <utility>
+#include <vector>
+
 StatusServiceImpl::StatusServiceImpl() {
-	auto& configMgr = ConfigMgr::GetInstance();
-	auto server_list = configMgr["ChatServers"]["Name"];
-
-	std::vector <std::string> names;
-	std::stringstream ss(server_list);
-	std::string name;
-
-	while (std::getline(ss, name, ',')) {
-		names.push_back(name);
+	auto& config = ConfigMgr::GetInstance();
+	std::stringstream names(config["ChatServers"]["Name"]);
+	std::string section_name;
+	std::vector<RoutingServer> servers;
+	while (std::getline(names, section_name, ',')) {
+		boost::algorithm::trim(section_name);
+		auto section = config[section_name];
+		servers.push_back({section["Name"], section["Host"], section["Port"]});
 	}
-
-	for (auto& name : names) {
-		if (configMgr[name]["Name"].empty()) {
-			return;
-		}
-
-		ChatServer chatserver;
-		chatserver.host = configMgr[name]["Host"];
-		chatserver.port = configMgr[name]["Port"];
-		chatserver.name = configMgr[name]["Name"];
-		_servers[chatserver.name] = chatserver;
-	}
+	routing_ = CreateProductionStatusRouting(std::move(servers));
 }
 
-/**
- * @brief 
- * @return
- * 生成token
- */
-std::string generate_unique_string() {
-	// 创建UUID对象
-	boost::uuids::uuid uuid = boost::uuids::random_generator()();
-	// 将UUID转换为字符串
-	std::string unique_string = to_string(uuid);
-	return unique_string;
-}
-
-
-/**
- * @brief 
- * @return
- * 找到负载最小的服务器
- */
-ChatServer StatusServiceImpl::getChatServer() {
-	std::lock_guard<std::mutex> lock(_server_mutex);
-	auto minServer = _servers.begin()->second;
-	//std::string count_str;
-	//// 为什么这里可能会存在另一个线程改，而这里会查询。可能会出现查询到旧值的情况
-	//// 为什么不添加一个分布式锁。为了有更好的性能，允许有一些小的误差
-	//// 我们通过心跳检测，每60秒更新一下当前的连接数
-	//RedisMgr::GetInstance()->HGet(LOGIN_COUNT, minServer.name, count_str);
-
-	//// 没找到，则默认负载最大
-	//if (count_str.empty()) {
-	//	minServer.connection_count = INT_MAX;
-	//}
-	//else {
-	//	minServer.connection_count = std::stoi(count_str);
-	//}
-
-	//// 通过for循环，依次枚举所有的chatserver找到tcp连接数最少的
-	//for (auto& server : _servers) {
-	//	if (server.second.name == minServer.name) {
-	//		continue;
-	//	}
-
-	//	RedisMgr::GetInstance()->HGet(LOGIN_COUNT, server.second.name, count_str);
-	//	if (count_str.empty()) {
-	//		server.second.connection_count = INT_MAX;
-	//	}
-	//	else {
-	//		server.second.connection_count = std::stoi(count_str);
-	//	}
-
-	//	if (minServer.connection_count > server.second.connection_count) {
-	//			minServer = server.second;
-	//	}
-	//}
-
-	return minServer;
-}
-
-/**
- * @brief 
- * @param uid 
- * @param token 
- * 将token插入到redis中
- */
-void StatusServiceImpl::insertToken(int uid, std::string token) {
-	std::string uid_str = std::to_string(uid);
-	std::string token_key = USER_TOKEN_PREFIX + uid_str;
-	RedisMgr::GetInstance()->HSet(uid_str, token_key, token);
-}
-
-/**
- * @brief 
- * @param ontext 
- * @param request 
- * @param reply 
- * @return 
- * 获取负载最小的服务器
- * 
- * 重写的grpc方法，客户端实际希望调用的函数就是这个函数
- */
-Status StatusServiceImpl::GetChatServer(ServerContext* context, const GetChatServerReq* request, GetChatServerRsp* reply) {
+Status StatusServiceImpl::GetChatServer(
+	ServerContext*, const GetChatServerReq* request, GetChatServerRsp* reply) {
 	SPDLOG_DEBUG("chat server selection request received, uid={}", request->uid());
-
-	const auto& server = getChatServer();
-
-	reply->set_host(server.host);
-	reply->set_port(server.port);
-	reply->set_error(ErrorCodes::Success);
-	reply->set_token(generate_unique_string());
-	insertToken(request->uid(), reply->token());
+	const auto result = routing_->Assign(request->uid());
+	reply->set_error(result.error);
+	reply->set_host(result.host);
+	reply->set_port(result.port);
+	reply->set_token(result.token);
 	return Status::OK;
 }
 
-/**
- * @brief 
- * @param context 
- * @param request 
- * @param response 
- * @return 
- * 对登录服务器的token进行校验
- */
-Status StatusServiceImpl::Login(ServerContext* context, const LoginReq* request, LoginRsp* response)
-{
-	auto uid = request->uid();
-	auto token = request->token();
-	
-	std::string uid_str = std::to_string(uid);
-	std::string token_key = USER_TOKEN_PREFIX + uid_str;
-	std::string token_value = "";
-	bool success = RedisMgr::GetInstance()->HGet(uid_str, token_key, token_value);
-
-	if (!success) {
-		response->set_error(ErrorCodes::UidInvalid);
-		return Status::OK;
-	}
-
-	if (token_value != token) {
-		response->set_error(ErrorCodes::TokenInvalid);
-		return Status::OK;
-	}
-
-	response->set_error(ErrorCodes::Success);
-	response->set_uid(uid);
-	response->set_token(token);
-
+Status StatusServiceImpl::Login(
+	ServerContext*, const LoginReq* request, LoginRsp* response) {
+	const auto result = routing_->Validate(request->uid(), request->token());
+	response->set_error(result.error);
+	response->set_uid(result.uid);
+	response->set_token(result.token);
 	return Status::OK;
 }

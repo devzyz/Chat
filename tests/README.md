@@ -17,11 +17,18 @@ they are Component tests, while ChatServer process startup tests stay in
 - [`CI-GOVERNANCE.md`](CI-GOVERNANCE.md) is the authority for `develop`,
   `master`, release, failure, coverage, compatibility, feature-flag, and
   contract-change gates.
-- [`TEST-CONTRACT-MATRIX.md`](TEST-CONTRACT-MATRIX.md) maps the current 173
+- [`TEST-CONTRACT-MATRIX.md`](TEST-CONTRACT-MATRIX.md) maps the current 232
   runner testcases to Test IDs, production Module ownership, Level, report,
   required lane, and known gaps.
-- [`plans/PHASE-2.5-PLAN.md`](plans/PHASE-2.5-PLAN.md) is the executable
-  baseline-hardening plan that must complete before Phase 3 implementation.
+- Phase 2.5 and Plans 3A-01..05 are complete. The next planned item is Plan
+  3A-06 in [`plans/PHASE-3A-PLAN.md`](plans/PHASE-3A-PLAN.md).
+- Proportional execution tiers and the once-per-phase closeout evidence contract
+  are canonical in [`CI-GOVERNANCE.md` section 2.1](CI-GOVERNANCE.md#21-比例化执行合同).
+- DG-25 in [`plans/PHASE-3B-RELEASE-DECISIONS.md`](plans/PHASE-3B-RELEASE-DECISIONS.md)
+  and section 10.1 of [`CI-GOVERNANCE.md`](CI-GOVERNANCE.md) make
+  `D:\vcpkg\test-vcpkg` and `D:\git\Chat\vcpkg_installed` read-only by default.
+  A build/test authorization never authorizes package restore, install, update,
+  removal, cleanup, relocation, or implicit manifest installation.
 - [`plans/DG-DECISIONS.md`](plans/DG-DECISIONS.md) records the implementation
   contracts that must be confirmed before the corresponding Phase 2.5 plan.
 - [`REGRESSION.md`](REGRESSION.md) defines the permanent regression baseline
@@ -45,11 +52,11 @@ network.
 
 | Suite | Level | Report |
 | --- | --- | --- |
-| ChatServer deterministic logic plus Gate/Status Asio contracts | Unit | `server_unit.xml`, `server_gate_unit.xml`, `server_status_unit.xml` |
-| ChatServer service-free Redis pool lifecycle plus Gate response allowlist | Component | `server_component.xml` |
+| ChatServer deterministic logic, Status selection, plus Gate/Status Asio contracts | Unit | `server_unit.xml`, `server_gate_unit.xml`, `server_status_unit.xml` |
+| ChatServer service-free Redis pool, session registry/send state, Gate response/request orchestration, plus Status token/store behavior | Component | `server_component.xml` |
 | Chat/Gate/Status CLI, config, bind, ready, shutdown plus C++→Node Varify and production gRPC-client loopback | Integration | `server_integration.xml`, `server_chat_grpc_integration.xml` |
-| Qt frame decoder plus message-model rules Q01-MODEL-01..06 | Unit | `client_unit.xml` |
-| Qt message store/delegate Q01-MODEL-07..08 plus authenticated-session reset Q02-SESSION-01..06 | Component | `client_component.xml` |
+| Qt frame decoder, message-model rules Q01-MODEL-01..06, auth outcomes Q03-AUTH-01..11 | Unit | `client_unit.xml` |
+| Qt message store/delegate Q01-MODEL-07..08, authenticated-session reset Q02-SESSION-01..06, auth abnormal-reset wiring Q03-AUTH-12 | Component | `client_component.xml` |
 | Varify protocol, injected handler, fake startup transition | Unit | `varify_unit.xml` |
 | Varify config subprocess, loopback gRPC, direct-process bind failure | Integration | `varify_integration.xml` |
 | ChatServer instance validation | Component | `script_component.xml` |
@@ -62,7 +69,7 @@ currently owned by that toolchain. `TestPhase1` is retained only as a
 compatibility alias.
 
 `CheckTestReports` is the no-build integrity audit for the current baseline. It
-requires all 12 reports, exactly 173 testcases, and zero failure/error nodes.
+requires all 12 reports, exactly 232 testcases, and zero failure/error nodes.
 Every owning runner performs the same per-report checks before returning; the
 aggregate runner repeats the exact whole-baseline audit.
 

@@ -44,7 +44,7 @@
       <SDLCheck>false</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\ChatServer\ChatServer;$(MSBuildThisFileDirectory)..\..\generated\proto\cpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\ChatServer\ChatServer;$(MSBuildThisFileDirectory)..\..\StatusServer\StatusServer;$(MSBuildThisFileDirectory)..\..\generated\proto\cpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32_WINNT=0x0601;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -59,6 +59,8 @@
     <ClCompile Include="config\config_mgr_tests.cpp" />
     <ClCompile Include="messaging\msg_node_tests.cpp" />
     <ClCompile Include="lifecycle\asio_pool_contract_tests.cpp" />
+    <ClCompile Include="logic-dispatcher\logic_dispatcher_tests.cpp" />
+    <ClCompile Include="status-routing\status_routing_unit_tests.cpp" />
     <ClCompile Include="transport\chat_frame_codec_tests.cpp" />
     <ClCompile Include="rpc\peer_server_routing_tests.cpp" />
     <ClCompile Include="rpc\bounded_grpc_pool_tests.cpp" />
@@ -77,6 +79,14 @@
     <ClCompile Include="..\..\generated\proto\cpp\varify.grpc.pb.cc" />
     <ClCompile Include="..\..\ChatServer\ChatServer\MsgNode.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\PeerServerRouting.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\ChatServer\ChatServer\LogicDispatcher.vcxproj">
+      <Project>{B251FB8A-0C7D-4BFA-8F1B-31C75DFBDA01}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\StatusServer\StatusServer\StatusRouting.vcxproj">
+      <Project>{7C67B8A2-A0A4-44A0-9020-5D87915CE3E2}</Project>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\ChatServer\ChatServer\configs\chat-01.ini">

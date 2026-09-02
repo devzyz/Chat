@@ -1,24 +1,53 @@
 #include "CSession.h"
 #include "ChatFrameCodec.h"
+#include "ChatSessionStateInternal.h"
 #include "CServer.h"
-#include <boost/uuid.hpp>
 #include <iostream>
 #include "LogicSystem.h"
-#include "RedisMgr.h"
 #include "LogMgr.h"
 
-CSession::CSession(boost::asio::io_context& ioc, std::shared_ptr<CServer> server) : 
-	_socket(ioc), _server(server), _b_stop(false), _user_uid(0),
-	_last_heart_beat(time(nullptr)), _b_head_parse(false) {
-	// 通过雪花算法，为每个session连接生成一个唯一的uuid，方便由server管理会话
-	boost::uuids::uuid a_uuid = boost::uuids::random_generator()();
-	_session_id = boost::uuids::to_string(a_uuid);
+class CSessionWriterAdapter final : public SessionWriter {
+public:
+	void Bind(const std::shared_ptr<CSession>& session) {
+		session_ = session;
+	}
 
+	void Write(SessionFrame frame, Completion completion) override {
+		auto session = session_.lock();
+		if (!session) {
+			completion(false);
+			return;
+		}
+		auto node = std::make_shared<SendNode>(frame.body, frame.message_id, frame.body.size());
+		boost::asio::async_write(session->_socket,
+			boost::asio::buffer(node->_data, node->_total_len),
+			[session, node, completion = std::move(completion)](
+				const boost::system::error_code& error, std::size_t) mutable {
+				completion(!error);
+			});
+	}
+	void Close() override {
+		if (auto session = session_.lock()) {
+			boost::system::error_code ignored;
+			session->_socket.close(ignored);
+		}
+	}
+private:
+	std::weak_ptr<CSession> session_;
+};
+
+CSession::CSession(boost::asio::io_context& ioc, std::shared_ptr<CServer> server,
+	std::shared_ptr<ChatSessionState> session_state) :
+	_socket(ioc), _server(std::move(server)), _session_state(std::move(session_state)),
+	_writer(std::make_shared<CSessionWriterAdapter>()), _b_stop(false),
+	_last_heart_beat(time(nullptr)), _b_head_parse(false) {
+	_handle = _session_state->Create(_writer);
 	_recv_head_node = std::make_shared<MsgNode>(HEAD_TOTAL_LEN); // 接收头部节点
 }
 
 CSession::~CSession() {
-	SPDLOG_DEBUG("CSession destructed, session_id={}", _session_id);
+	Close();
+	SPDLOG_DEBUG("CSession destructed");
 }
 
 boost::asio::ip::tcp::socket& CSession::GetSocket() {
@@ -30,6 +59,7 @@ boost::asio::ip::tcp::socket& CSession::GetSocket() {
  * 开始接收
  */
 void CSession::Start() {
+	_writer->Bind(shared_from_this());
 	AsyncReadHead(HEAD_TOTAL_LEN);
 }
 
@@ -45,7 +75,7 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 		try {
 			// 如果是正常的可交互的，肯定不会走到这里，走到这里说明是有异常，例如客户端主动断开连接
 			if (ec) {
-				SPDLOG_DEBUG("session header read failed, session_id={}, error={}", _session_id, ec.message());
+				SPDLOG_DEBUG("session header read failed, error={}", ec.message());
 				Close();
 				// 出错后的处理
 				DealExceptionSession();
@@ -54,7 +84,7 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 			}
 
 			// 判断连接是否有效
-			if (!_server->CheckSessionValid(_session_id)) {
+			if (!_server->CheckSessionValid(_handle)) {
 				Close();
 				return;
 			}
@@ -67,8 +97,8 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 			const auto header = ChatFrameCodec::DecodeValidatedHeader(
 				_recv_head_node->_data, sizeof(_data));
 			if (!header) {
-				SPDLOG_WARN("invalid frame body length, session_id={}", _session_id);
-				_server->ClearSession(_session_id);
+				SPDLOG_WARN("invalid frame body length");
+				_server->ClearSession(_handle);
 				return;
 			}
 
@@ -81,7 +111,7 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
 			UpdateHeartBeat();
 		}
 		catch (std::exception& e) {
-			SPDLOG_ERROR("session header read exception, session_id={}, error={}", _session_id, e.what());
+				SPDLOG_ERROR("session header read exception, error={}", e.what());
 		}
 	});
 }
@@ -141,7 +171,7 @@ void CSession::AsyncReadBody(std::size_t body_total_len) {
 			// 因为服务器踢人逻辑中，都是通过给客户端发送一个信号，由客户端断开链接
 			// 因此当接受到错误信息后，代表此时客户端已经断开链接了，此时要清理到对应的session
 			if (ec) {
-				SPDLOG_DEBUG("session body read failed, session_id={}, error={}", _session_id, ec.message());
+				SPDLOG_DEBUG("session body read failed, error={}", ec.message());
 				Close();
 
 				DealExceptionSession();
@@ -154,14 +184,29 @@ void CSession::AsyncReadBody(std::size_t body_total_len) {
 			_recv_msg_node->_data[_recv_msg_node->_total_len] = '\0';
 
 			// 将消息体投递到逻辑队列中进行处理
-			LogicSystem::GetInstance()->PostMsgToQue(std::make_shared<LogicNode>(shared_from_this(), _recv_msg_node));
+			const auto submit_result = LogicSystem::GetInstance()->Submit({
+				shared_from_this(),
+				static_cast<std::int16_t>(_recv_msg_node->_msg_id),
+				std::string(_recv_msg_node->_data, _recv_msg_node->_cur_len),
+			});
+			switch (submit_result) {
+			case LogicSubmitResult::Accepted:
+				break;
+			case LogicSubmitResult::Full:
+				SPDLOG_WARN("logic message rejected, reason=full, msg_id={}", _recv_msg_node->_msg_id);
+				break;
+			case LogicSubmitResult::Closed:
+				SPDLOG_INFO("logic message rejected, reason=closed, msg_id={}", _recv_msg_node->_msg_id);
+				Close();
+				return;
+			}
 			// 继续接收完整的头部
 			AsyncReadHead(HEAD_TOTAL_LEN);
 
 			UpdateHeartBeat();
 		}
 		catch (std::exception& e) {
-			SPDLOG_ERROR("session body read exception, session_id={}, error={}", _session_id, e.what());
+			SPDLOG_ERROR("session body read exception, error={}", e.what());
 		}
 	});
 }
@@ -173,80 +218,33 @@ void CSession::AsyncReadBody(std::size_t body_total_len) {
  * @param msg_len 
  * 异步发送函数
  */
-void CSession::Send(const char* msg, std::uint16_t msg_id, std::size_t msg_len) {
-	std::lock_guard<std::mutex> lock(_send_mutex);
-	auto send_que_size = _send_que.size();
-	if (_send_que.size() > MAX_SENDQUE) {
-		SPDLOG_ERROR("session send queue full, session_id={}, max_size={}", _session_id, MAX_SENDQUE);
-		return;
+SessionSendResult CSession::Send(const char* msg, std::uint16_t msg_id, std::size_t msg_len) {
+	if (msg_len > 0 && msg == nullptr) {
+		return SessionSendResult::Closed;
 	}
-	_send_que.push(std::make_shared<SendNode>(msg, msg_id, msg_len));
-	// 本来队列中就又在发送的数据
-	if (send_que_size > 0) {
-		return;
-	}
-	// 原本队列中没有在发送的数据；则将当前的这个要发送的数据发出
-	auto& msgnode = _send_que.front();
-	boost::asio::async_write(_socket, boost::asio::buffer(msgnode->_data, msgnode->_total_len),
-		std::bind(&CSession::HandleWrite, this, std::placeholders::_1, shared_from_this()));
+	return _session_state->Send(_handle, {msg_id, std::string(msg ? msg : "", msg_len)});
 }
 
-/**
- * @brief 
- * @param ec 
- * @param self 
- * async_write内部由多次async_write_some，如果如果我同时async_write两次，那么可能这两个都会往socket写数据就会发生错误
- * 因此我必须保证上一次完整发送完成之后，我再发送下一个，可以用一个队列来保存要发送的数据，然后在async_write的
- * 回调函数内部来进行下一个包的发送
- */
-void CSession::HandleWrite(const boost::system::error_code& ec, std::shared_ptr<CSession> self) {
-	try {
-		if (!ec) {
-			std::lock_guard<std::mutex> lock(_send_mutex);
-			_send_que.pop();
-			if (_send_que.empty()) {
-				return;
-			}
-			auto& msgnode = _send_que.front();
-			boost::asio::async_write(_socket, boost::asio::buffer(msgnode->_data, msgnode->_total_len), 
-				std::bind(&CSession::HandleWrite, this, std::placeholders::_1, self));
-		}
-		else {
-			Close();
-		
-			DealExceptionSession();
-			return;
-		}
-	}
-	catch (std::exception& e) {
-		SPDLOG_ERROR("session send exception, session_id={}, error={}", _session_id, e.what());
-	}
-}
-
-void CSession::Send(const std::string& msg, std::uint16_t msg_id) {
-	Send(msg.c_str(), msg_id, msg.size());
+SessionSendResult CSession::Send(const std::string& msg, std::uint16_t msg_id) {
+	return Send(msg.data(), msg_id, msg.size());
 }
 
 void CSession::Close() {
-	if (_b_stop) {
+	bool expected = false;
+	if (!_b_stop.compare_exchange_strong(expected, true)) {
 		return;
 	}
-	std::lock_guard<std::mutex> lock(_session_mutex);
-	_socket.close();
-	_b_stop = true;
+	boost::system::error_code ignored;
+	_socket.close(ignored);
+	_session_state->Close(_handle);
 }
 
-
-std::string& CSession::GetSessionId() {
-	return _session_id;
+const ChatSessionState::Handle& CSession::GetHandle() const {
+	return _handle;
 }
 
 void CSession::SetUserId(int uid) {
-	_user_uid = uid;
-}
-
-int CSession::GetUserId() {
-	return _user_uid;
+	_session_state->RegisterCurrent(_handle, uid);
 }
 
 
@@ -269,50 +267,6 @@ void CSession::UpdateHeartBeat() {
 
 // 清除redis中当前session的连接信息
 void CSession::DealExceptionSession() {
-	if (_user_uid <= 0) {
-		_server->ClearSession(_session_id);
-		return;
-	}
-
-	// 添加分布式锁，清除redis中保存的session,ipserver信息等
-	auto uid_str = std::to_string(_user_uid);
-	auto lock_key = LOCK_PREFIX + uid_str;
-	// 获取到对uid的锁
-	auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, LOCK_ACQUIRE_TIME_OUT);
-	Defer defer([this, identifier, lock_key]() {
-		_server->ClearSession(_session_id); // 清除server中session连接
-		RedisMgr::GetInstance()->releaseLock(lock_key, identifier); // 释放锁
-		});
-
-	// 没有获得锁
-	if (identifier == "") {
-		return;
-	}
-
-	// 去redis中查看当前的uid对应的session_id是不是本session的，如果是，则清空redis,否则代表已被其他链接更新了，则不做其他处理
-	std::string redis_session_id_value = "";
-	auto redis_session_id_key = USER_SESSION_KEY + uid_str;
-	auto b_success = RedisMgr::GetInstance()->Get(redis_session_id_key, redis_session_id_value);
-	// 出现错误
-	if (!b_success) {
-		return;
-	}
-
-	// 如果不相同，代表已经再次登录了，则直接返回
-	if (redis_session_id_value != _session_id) {
-		return;
-	}
-
-	// 走到这里代表，当前session要断开链接，并且没有再次登录
-	RedisMgr::GetInstance()->Del(redis_session_id_key); // 清除session信息
-	RedisMgr::GetInstance()->Del(USER_IP_PREFIX + uid_str); // 清除ip信息
-}
-
-LogicNode::LogicNode(std::shared_ptr<CSession> session, std::shared_ptr<RecvNode> recvnode) 
-	: _session(session), _recv_msg_node(recvnode) {
-
-}
-
-LogicNode::~LogicNode() {
-
+	Close();
+	_server->ClearSession(_handle);
 }

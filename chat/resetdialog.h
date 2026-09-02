@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include "global.h"
+#include "authflowcoordinator.h"
 
 namespace Ui {
     class ResetDialog;
@@ -12,12 +13,12 @@ class ResetDialog : public QDialog
 {
     Q_OBJECT
 public:
-    explicit ResetDialog(QWidget *parent = nullptr);
+    explicit ResetDialog(AuthFlowCoordinator &authFlow, QWidget *parent = nullptr);
 
     ~ResetDialog();
 
 private slots:
-    void slot_reset_mod_finish(ReqId id, QString res, ErrorCodes err);
+    void slot_reset_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
 
     void on_confirm_btn_clicked();
 
@@ -31,6 +32,7 @@ signals:
 private:
     Ui::ResetDialog* ui;
     void showTip(QString str, bool isOk);
+    void showAuthError(AuthError error);
     void initHttpHandlers();
     QMap<ReqId, std::function<void(const QJsonObject&)>> _handlers;
 
@@ -46,6 +48,7 @@ private:
     bool checkEmailValid();
     bool checkPasswordValid();
     bool checkVarifyValid();
+    AuthFlowCoordinator &_authFlow;
 
 };
 

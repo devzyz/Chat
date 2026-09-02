@@ -6,9 +6,10 @@
 #include <QPainterPath>
 #include "tcpmgr.h"
 
-LoginDialog::LoginDialog(QWidget *parent)
+LoginDialog::LoginDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     : QDialog(parent)
     , ui(new Ui::LoginDialog)
+    , _authFlow(authFlow)
 {
     ui->setupUi(this);
 
@@ -46,9 +47,6 @@ LoginDialog::LoginDialog(QWidget *parent)
 
     // 头像处理逻辑
     initHead();
-    // 网络请求回包逻辑
-    initHttpHandlers();
-
     // 连接信号与槽，httpmgr中发送登录信号处理完成后，调用slot_login_mod_finish槽函数，触发网络请求回包逻辑
     connect(HttpMgr::GetInstance().get(), &HttpMgr::sig_login_mod_finish, this, &LoginDialog::slot_login_mod_finish);
 
@@ -57,6 +55,10 @@ LoginDialog::LoginDialog(QWidget *parent)
 
     // 连接tcp连接完成信号
     connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_connect_success, this, &LoginDialog::slot_tcp_connect_finish);
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_login_failed,
+            this, &LoginDialog::slot_chat_login_failed);
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_login_switch_chat,
+            this, &LoginDialog::slot_chat_login_succeeded);
 }
 
 // 用于显示错误信息
@@ -178,35 +180,17 @@ void LoginDialog::initHead()
     ui->head_label->setPixmap(rounderPixmap);
 }
 
-void LoginDialog::initHttpHandlers()
+void LoginDialog::showAuthError(AuthError error)
 {
-    // 登录的回包逻辑
-    _handlers.insert(ReqId::ID_LOGIN_UESR, [this](QJsonObject jsonObj) {
-        int err = jsonObj["error"].toInt();
-
-        if (err != ErrorCodes::SUCCESS) {
-            showTip(tr("参数错误"), false);
-            ui->login_btn->setEnabled(true);
-            return;
-        }
-
-        // 发送信号通知tcpMgr发送长连接
-        ServerInfo si;
-        si.Uid = jsonObj["uid"].toInt();
-        si.Host = jsonObj["host"].toString();
-        si.Port = jsonObj["port"].toString();
-        si.Token = jsonObj["token"].toString();
-
-        _uid = si.Uid;
-        _token = si.Token;
-
-        SPDLOG_INFO(
-            "login succeeded, uid={}, host={}, port={}",
-            si.Uid,
-            LogMgr::ToUtf8(si.Host),
-            LogMgr::ToUtf8(si.Port));
-        emit sig_connect_tcp(si);
-    });
+    const QString message = error == AuthError::Network
+        ? tr("网络请求错误")
+        : error == AuthError::MalformedResponse
+            ? tr("json解析失败")
+            : error == AuthError::TcpConnection
+                ? tr("网络异常")
+                : tr("参数错误");
+    showTip(message, false);
+    ui->login_btn->setEnabled(true);
 }
 
 LoginDialog::~LoginDialog()
@@ -231,14 +215,27 @@ void LoginDialog::on_login_btn_clicked()
     json_obj["email"] = email;
     json_obj["password"] = xorString(password);
 
+    AuthOutcome begin;
+    begin.kind = AuthOutcomeKind::BeginHttp;
+    begin.module = static_cast<int>(Modules::LOGINMOD);
+    begin.requestId = static_cast<int>(ReqId::ID_LOGIN_UESR);
+    _flowId = _authFlow.Reduce(0, begin).flowId;
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/user_login"), json_obj,
-                                        ReqId::ID_LOGIN_UESR, Modules::LOGINMOD);
+                                        ReqId::ID_LOGIN_UESR, Modules::LOGINMOD,
+                                        _flowId);
 }
 
-void LoginDialog::slot_login_mod_finish(ReqId id, QString res, ErrorCodes err)
+void LoginDialog::slot_login_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err)
 {
+    AuthOutcome outcome;
+    outcome.module = static_cast<int>(Modules::LOGINMOD);
+    outcome.requestId = static_cast<int>(id);
     if (err != ErrorCodes::SUCCESS) {
-        showTip(tr("网络请求错误"), false);
+        outcome.kind = AuthOutcomeKind::HttpNetworkError;
+        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        if (action.kind == AuthActionKind::StayAndShowError) {
+            showAuthError(action.error);
+        }
         return ;
     }
 
@@ -246,18 +243,45 @@ void LoginDialog::slot_login_mod_finish(ReqId id, QString res, ErrorCodes err)
     QJsonDocument jsonDoc = QJsonDocument::fromJson(res.toUtf8());
 
     if (jsonDoc.isNull()) {
-        showTip(tr("json解析失败"), false);
+        outcome.kind = AuthOutcomeKind::HttpMalformedJson;
+        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        if (action.kind == AuthActionKind::StayAndShowError) {
+            showAuthError(action.error);
+        }
         return ;
     }
 
     //json 解析错误
     if (!jsonDoc.isObject()) {
-        showTip(tr("json解析失败"), false);
+        outcome.kind = AuthOutcomeKind::HttpMalformedJson;
+        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        if (action.kind == AuthActionKind::StayAndShowError) {
+            showAuthError(action.error);
+        }
         return ;
     }
-
-    _handlers[id](jsonDoc.object());
-    return;
+    const QJsonObject jsonObj = jsonDoc.object();
+    const int businessError = jsonObj["error"].toInt();
+    if (businessError != ErrorCodes::SUCCESS) {
+        outcome.kind = AuthOutcomeKind::HttpBusinessError;
+        outcome.businessError = businessError;
+    } else {
+        ServerInfo server;
+        server.Uid = jsonObj["uid"].toInt();
+        server.Host = jsonObj["host"].toString();
+        server.Port = jsonObj["port"].toString();
+        server.Token = jsonObj["token"].toString();
+        outcome.kind = AuthOutcomeKind::HttpSuccess;
+        outcome.server = server;
+    }
+    const AuthAction action = _authFlow.Reduce(flowId, outcome);
+    if (action.kind == AuthActionKind::StayAndShowError) {
+        showAuthError(action.error);
+    } else if (action.kind == AuthActionKind::ConnectChat && action.server) {
+        _uid = action.server->Uid;
+        _token = action.server->Token;
+        emit sig_connect_tcp(*action.server);
+    }
 }
 
 /**
@@ -267,7 +291,14 @@ void LoginDialog::slot_login_mod_finish(ReqId id, QString res, ErrorCodes err)
  */
 void LoginDialog::slot_tcp_connect_finish(bool bSuccess)
 {
+    AuthOutcome outcome;
+    outcome.kind = bSuccess ? AuthOutcomeKind::TcpConnected
+                            : AuthOutcomeKind::TcpConnectFailed;
+    const AuthAction action = _authFlow.Reduce(_flowId, outcome);
     if (bSuccess) {
+        if (!action.accepted) {
+            return;
+        }
         showTip(tr("聊天服务器连接成功，正在登录..."), true);
 
         QJsonObject jsonObj;
@@ -280,7 +311,29 @@ void LoginDialog::slot_tcp_connect_finish(bool bSuccess)
         // 发送tcp请求给chat server请求连接
         emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_CHAT_LOGIN_REQ, jsonString);
     }else {
-        showTip(tr("网络异常"), false);
-        ui->login_btn->setEnabled(true);
+        if (action.kind == AuthActionKind::StayAndShowError) {
+            showAuthError(action.error);
+        }
+    }
+}
+
+void LoginDialog::slot_chat_login_failed(int error)
+{
+    AuthOutcome outcome;
+    outcome.kind = AuthOutcomeKind::ChatLoginFailed;
+    outcome.businessError = error;
+    const AuthAction action = _authFlow.Reduce(_flowId, outcome);
+    if (action.kind == AuthActionKind::StayAndShowError) {
+        showAuthError(action.error);
+    }
+}
+
+void LoginDialog::slot_chat_login_succeeded()
+{
+    AuthOutcome outcome;
+    outcome.kind = AuthOutcomeKind::ChatLoginSucceeded;
+    const AuthAction action = _authFlow.Reduce(_flowId, outcome);
+    if (action.kind == AuthActionKind::ShowChat) {
+        emit sig_login_switch_chat(_flowId);
     }
 }

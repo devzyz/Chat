@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件"><UniqueIdentifier>{76C0252E-95F4-4139-A50D-E4820F257D58}</UniqueIdentifier></Filter>
+    <Filter Include="头文件"><UniqueIdentifier>{3DD120CB-61F5-48C6-BEB1-BC301544C45A}</UniqueIdentifier></Filter>
+  </ItemGroup>
+  <ItemGroup><ClCompile Include="StatusRouting.cpp"><Filter>源文件</Filter></ClCompile><ClCompile Include="StatusRoutingProduction.cpp"><Filter>源文件</Filter></ClCompile></ItemGroup>
+  <ItemGroup><ClInclude Include="StatusRouting.h"><Filter>头文件</Filter></ClInclude><ClInclude Include="StatusRoutingInternal.h"><Filter>头文件</Filter></ClInclude><ClInclude Include="StatusRoutingProduction.h"><Filter>头文件</Filter></ClInclude></ItemGroup>
+</Project>

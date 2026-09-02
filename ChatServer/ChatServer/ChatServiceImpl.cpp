@@ -22,7 +22,8 @@ void ChatServiceImpl::SetServer(std::shared_ptr<CServer> pserver) {
 Status ChatServiceImpl::NotifyOtherAddFriend(ServerContext* context, const AddFriendReq* request, AddFriendRsp* response) {
 	// 查看是否在本服务器，因为有可能已经离线了
 	auto touid = request->touid();
-	auto session = UserMgr::GetInstance()->GetSession(touid);
+	auto sessions = UserMgr::GetInstance()->Sessions();
+	auto session = sessions->FindCurrent(touid);
 
 	// 设置返回值
 	response->set_error(ErrorCodes::Success);
@@ -36,7 +37,7 @@ Status ChatServiceImpl::NotifyOtherAddFriend(ServerContext* context, const AddFr
 	response->set_backname(request->backname());
 
 	// 用户会话连接已经断开，用户已下线
-	if (session == nullptr) {
+	if (!session) {
 		return Status::OK;
 	}
 
@@ -53,7 +54,7 @@ Status ChatServiceImpl::NotifyOtherAddFriend(ServerContext* context, const AddFr
 	return_value["description"] = request->description();
 	return_value["backname"] = request->backname();
 
-	session->Send(return_value.toStyledString(), MSG_NOTIFY_ADD_FRIEND_REQ);
+	sessions->Send(session, {MSG_NOTIFY_ADD_FRIEND_REQ, return_value.toStyledString()});
 
 	return Status::OK;
 }
@@ -66,13 +67,14 @@ Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const Auth
 	auto authuid = request->authuid();
 	auto chatid = request->chatid();
 	// 由认证人发送到申请人
-	auto session = UserMgr::GetInstance()->GetSession(applyuid);
+	auto sessions = UserMgr::GetInstance()->Sessions();
+	auto session = sessions->FindCurrent(applyuid);
 
 	// 设置返回值
 	response->set_error(ErrorCodes::Success);
 	
 	// 对方服务器也没有，则用户已下线
-	if (session == nullptr) {
+	if (!session) {
 		return Status::OK;
 	}
 
@@ -131,7 +133,7 @@ Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const Auth
 	SPDLOG_DEBUG("auth friend notify prepared, applyuid={}, authuid={}, chatid={}", applyuid, authuid, chatid);
 
 	std::string notify_str = notify.toStyledString();
-	session->Send(notify_str, MSG_NOTIFY_AUTH_FRIEND_REQ);
+	sessions->Send(session, {MSG_NOTIFY_AUTH_FRIEND_REQ, notify_str});
 	return Status::OK;
 }
 
@@ -141,13 +143,14 @@ Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, co
 
 	// 查看是否在本服务器，因为有可能已经离线了
 	auto touid = request->touid();
-	auto session = UserMgr::GetInstance()->GetSession(touid);
+	auto sessions = UserMgr::GetInstance()->Sessions();
+	auto session = sessions->FindCurrent(touid);
 
 	// 设置返回值
 	response->set_error(ErrorCodes::Success);
 
 	// 对方服务器也没有，则用户已下线
-	if (session == nullptr) {
+	if (!session) {
 		SPDLOG_DEBUG("notify text chat skipped, target session not found, to_uid={}", touid);
 		return Status::OK;
 	}
@@ -172,7 +175,7 @@ Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, co
 
 	// 通知对方服务器
 	std::string notify_str = notify.toStyledString();
-	session->Send(notify_str, MSG_NOTIFY_CHAT_MSG_REQ);
+	sessions->Send(session, {MSG_NOTIFY_CHAT_MSG_REQ, notify_str});
 	return Status::OK;
 }
 
@@ -182,13 +185,14 @@ Status ChatServiceImpl::NotifyOtherKickUser(ServerContext* context, const KickUs
 	int uid = request->uid();
 
 	// 查询用户是否在本服务器
-	auto session = UserMgr::GetInstance()->GetSession(uid);
+	auto sessions = UserMgr::GetInstance()->Sessions();
+	auto session = sessions->FindCurrent(uid);
 
 	reponse->set_error(ErrorCodes::Success);
 	reponse->set_uid(uid);
 
 	// 用户不在内存中，则直接返回
-	if (session == nullptr) {
+	if (!session) {
 		return Status::OK;
 	}
 
@@ -200,10 +204,10 @@ Status ChatServiceImpl::NotifyOtherKickUser(ServerContext* context, const KickUs
 
 	std::string return_str = notify.toStyledString();
 
-	session->Send(return_str, MSG_NOTIFY_OFF_LINE_REQ);
+	sessions->Send(session, {MSG_NOTIFY_OFF_LINE_REQ, return_str});
 	//session->NotifyOffline(uid);
 	// 清除旧的连接
-	_p_server->ClearSession(session->GetSessionId());
+	_p_server->ClearSession(session);
 
 	return Status::OK;
 }

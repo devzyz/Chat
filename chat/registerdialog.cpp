@@ -4,9 +4,10 @@
 #include "global.h"
 #include "httpmgr.h"
 
-RegisterDialog::RegisterDialog(QWidget *parent)
+RegisterDialog::RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     : QDialog(parent)
     , ui(new Ui::RegisterDialog)
+    , _authFlow(authFlow)
 {
     ui->setupUi(this);
 
@@ -107,18 +108,31 @@ void RegisterDialog::on_get_code_clicked()
         // 发送http验证码
         QJsonObject json_obj;
         json_obj["email"] = email;
+        AuthOutcome begin;
+        begin.kind = AuthOutcomeKind::BeginHttp;
+        begin.module = static_cast<int>(Modules::REGISTERMOD);
+        begin.requestId = static_cast<int>(ReqId::ID_GET_VERIFY_CODE);
+        const AuthFlowId flowId = _authFlow.Reduce(0, begin).flowId;
         HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/get_varifycode"),
-                                            json_obj, ReqId::ID_GET_VERIFY_CODE, Modules::REGISTERMOD);
+                                            json_obj, ReqId::ID_GET_VERIFY_CODE,
+                                            Modules::REGISTERMOD, flowId);
     }else {
         showTip("邮箱地址不正确", false);
     }
 }
 
 // 与httpmgr内sig_reg_mod_finish连接的槽函数，用于处理http完成后的工作
-void RegisterDialog::slot_reg_mod_finish(ReqId id, QString res, ErrorCodes err)
+void RegisterDialog::slot_reg_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err)
 {
+    AuthOutcome outcome;
+    outcome.module = static_cast<int>(Modules::REGISTERMOD);
+    outcome.requestId = static_cast<int>(id);
     if (err != ErrorCodes::SUCCESS) {
-        showTip(tr("网络请求错误"), false);
+        outcome.kind = AuthOutcomeKind::HttpNetworkError;
+        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        if (action.kind == AuthActionKind::StayAndShowError) {
+            showAuthError(action.error);
+        }
         return ;
     }
 
@@ -126,20 +140,46 @@ void RegisterDialog::slot_reg_mod_finish(ReqId id, QString res, ErrorCodes err)
     QJsonDocument jsonDoc = QJsonDocument::fromJson(res.toUtf8());
 
     if (jsonDoc.isNull()) {
-        showTip(tr("json解析失败"), false);
+        outcome.kind = AuthOutcomeKind::HttpMalformedJson;
+        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        if (action.kind == AuthActionKind::StayAndShowError) {
+            showAuthError(action.error);
+        }
         return ;
     }
 
     //json 解析错误
     if (!jsonDoc.isObject()) {
-        showTip(tr("json解析失败"), false);
+        outcome.kind = AuthOutcomeKind::HttpMalformedJson;
+        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        if (action.kind == AuthActionKind::StayAndShowError) {
+            showAuthError(action.error);
+        }
         return ;
     }
+    const QJsonObject object = jsonDoc.object();
+    const int businessError = object["error"].toInt();
+    outcome.businessError = businessError;
+    outcome.kind = businessError == ErrorCodes::SUCCESS
+        ? AuthOutcomeKind::HttpSuccess : AuthOutcomeKind::HttpBusinessError;
+    const AuthAction action = _authFlow.Reduce(flowId, outcome);
+    if (action.kind == AuthActionKind::StayAndShowError) {
+        showAuthError(action.error);
+        return;
+    }
+    const auto handler = _handlers.constFind(id);
+    if (action.accepted && handler != _handlers.cend()) {
+        (*handler)(object);
+    }
 
-    // 处理
-    _handlers[id](jsonDoc.object());
-    return ;
+}
 
+void RegisterDialog::showAuthError(AuthError error)
+{
+    showTip(error == AuthError::Network ? tr("网络请求错误")
+                                        : error == AuthError::MalformedResponse
+                                            ? tr("json解析失败") : tr("参数错误"),
+            false);
 }
 
 // 用于显示错误信息
@@ -355,8 +395,14 @@ void RegisterDialog::on_confirm_btn_clicked()
     json_obj["confirm"] = xorString(ui->confirm_edit->text());
     json_obj["varifycode"] = ui->varify_edit->text();
 
+    AuthOutcome begin;
+    begin.kind = AuthOutcomeKind::BeginHttp;
+    begin.module = static_cast<int>(Modules::REGISTERMOD);
+    begin.requestId = static_cast<int>(ReqId::ID_REG_USER);
+    const AuthFlowId flowId = _authFlow.Reduce(0, begin).flowId;
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/user_register"),
-                                        json_obj, ReqId::ID_REG_USER, Modules::REGISTERMOD);
+                                        json_obj, ReqId::ID_REG_USER,
+                                        Modules::REGISTERMOD, flowId);
 }
 
 // 点击返回登录按钮的事件

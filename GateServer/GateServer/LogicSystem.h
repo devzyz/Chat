@@ -1,5 +1,6 @@
 #pragma once
 #include "const.h"
+#include "GateRequest.h"
 
 class HttpConnection;
 typedef std::function<void(std::shared_ptr<HttpConnection>)>HttpHandler;
@@ -40,7 +41,7 @@ private:
 	 * 构造函数，同时将对应的处理逻辑进行注册
 	 */
 	LogicSystem();
+	std::unique_ptr<gate::GateRequest> _gate_request;
 	std::map<std::string, HttpHandler> _post_handlers;
 	std::map<std::string, HttpHandler> _get_handlers;
 };
-

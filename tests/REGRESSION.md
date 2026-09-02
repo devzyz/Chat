@@ -3,9 +3,11 @@
 Branch and release enforcement is defined in
 [`CI-GOVERNANCE.md`](CI-GOVERNANCE.md). The authoritative inventory of current
 Test IDs, reports, lanes, and gaps is
-[`TEST-CONTRACT-MATRIX.md`](TEST-CONTRACT-MATRIX.md). The next executable
-baseline-hardening work is planned in
-[`plans/PHASE-2.5-PLAN.md`](plans/PHASE-2.5-PLAN.md).
+[`TEST-CONTRACT-MATRIX.md`](TEST-CONTRACT-MATRIX.md). Phase 2.5 and Plans
+3A-01..05 are complete. The next planned item is Plan 3A-06 in
+[`plans/PHASE-3A-PLAN.md`](plans/PHASE-3A-PLAN.md). The fixed local vcpkg tree
+was verified read-only for 3A-02. DG-25 remains in force: a missing or inconsistent
+dependency fails closed and never authorizes an automatic restore.
 
 This document turns the phase-one and phase-two suites into a permanent
 regression baseline. Phase names describe when a test was introduced; they do
@@ -32,7 +34,7 @@ MSBuild/CMake/npm/PowerShell runner, or when a CTest target has no Level label.
 It prevents silent tests; it does not replace behavioral assertions.
 
 `CheckTestReports` is the result-integrity gate. It requires exactly twelve
-registered XML reports and 173 runner testcases, and rejects a missing/invalid
+registered XML reports and 232 runner testcases, and rejects a missing/invalid
 report, count drift, any `<failure>`/`<error>` node, or an incomplete aggregate.
 `RunAllTests` calls the same audit after all four public toolchain runners.
 
@@ -42,15 +44,16 @@ report, count drift, any `<failure>`/`<error>` node, or an incomplete aggregate.
 | --- | --- | --- | --- |
 | Build and startup | pinned toolchains, app-local packaging, config precedence, invalid argument/port fail-fast | Baseline | clean-runner parity and graceful service shutdown |
 | Server foundation | config validation, message nodes, protobuf round-trip, frame validation, Asio lifecycle | Baseline | protocol compatibility fixtures and cancellation races |
-| Chat routing foundation | peer name/address mapping and startup bind cleanup | Partial | real two-instance RPC and unavailable-peer behavior |
+| Chat routing foundation | peer mapping, dispatcher FIFO/capacity/shutdown, deterministic Status selection/token fail-closed, in-memory session identity/send FIFO/capacity/close, and startup bind cleanup | Partial | real TCP partial-write/peer-disconnect, Redis presence, two-instance RPC and unavailable-peer behavior |
+| Gate request orchestration | verification, registration, reset, and login ordering; early-return call suppression; dependency failure/exception mapping | Partial | real Gate HTTP composition and Redis/MySQL/Varify/Status/SMTP Adapters |
 | Data foundation | Redis pool wait/close without a service | Partial | disposable Redis/MySQL adapter and transaction tests |
-| Qt messaging model/session | stable indexes, ack/status/removal, history order/dedup, Unicode, store state, delegate layout, connection/session reset isolation | Baseline | broader network-to-model result mapping and account-keyed persistent cache |
+| Qt messaging model/session/auth | stable indexes, ack/status/removal, history order/dedup, Unicode, store state, delegate layout, connection/session reset isolation, auth outcome ordering/dedup and abnormal reset delegation | Baseline | real HTTP/TCP timing, broader network-to-model mapping and account-keyed persistent cache |
 | VarifyServer | configuration, protocol descriptor, injected handler, loopback gRPC, bind failure | Baseline | real Redis/SMTP adapters and shutdown signals |
 | Instance management | validation plus Start/Status/Stop process identity | Baseline | graceful stop and rollback after a partial batch start |
 
 Baseline means the listed contracts are protected, not that the entire owning
-executable is covered. In particular, `LogicSystem`, `CSession`, Gate routing,
-Status selection, Qt network managers, and cross-service flows remain outside
+executable is covered. In particular, real `CSession` TCP behavior, Gate HTTP transport,
+Status transport/persistence, Qt network managers, and cross-service flows remain outside
 the current baseline.
 
 ## Required lanes
@@ -62,13 +65,31 @@ the current baseline.
 | E2E smoke | release candidate, and PRs that change a public workflow | a small set of complete user/protocol journeys across release units |
 | Stress/soak | scheduled or explicit | long-running concurrency, media, reconnect, resource and race behavior |
 
-The current Phase 2.5 local baseline is 173/173 across twelve reports. Clean
-GitHub PR parity and branch-protection registration remain external acceptance
-steps until a PR run proves all four stable Windows check names on the submitted SHA.
+The current local baseline is 232/232 across twelve reports: the Phase 2.5
+173-case baseline plus seven Chat Logic dispatcher, fourteen Status routing, ten Chat session-state,
+and sixteen Gate request-orchestration cases, plus twelve Qt auth-flow cases. The Phase 2.5
+173-case baseline already has clean-PR, post-merge, and branch-protection evidence;
+the enlarged 232-case baseline receives its clean-PR evidence at Phase 3A closeout.
+
+Execution depth follows the canonical proportional tiers in
+[`CI-GOVERNANCE.md` section 2.1](CI-GOVERNANCE.md#21-比例化执行合同). Focused
+behavior evidence belongs to its owning plan; aggregate report, secret, residue,
+diff and full-lane evidence is collected once at phase closeout.
 
 No test may connect to a developer's fixed Redis/MySQL instance, personal
 credentials, public SMTP account, microphone, camera, or shared filesystem.
 Integration dependencies must be disposable and identified by a run ID.
+
+Local vcpkg state follows DG-25. `D:\vcpkg\test-vcpkg` and
+`D:\git\Chat\vcpkg_installed` are persistent, protected, and read-only by
+default. All ordinary local builds/tests must disable MSBuild manifest install,
+use the fixed installed directory, and fail nonzero when a dependency is absent
+or inconsistent. They must not invoke `RestoreServers`, change a root/triplet/
+baseline, select a substitute install tree, or delete/recreate packages. Any
+such mutation requires the user's explicit approval after the exact command,
+target, reason, impact, and rollback boundary are shown. GitHub-hosted runners
+use isolated run-owned install roots; changing their dependency identity or
+install-root contract also requires prior approval and D-04 review.
 
 ## New-module admission contract
 
@@ -114,12 +135,16 @@ payload type owns its validation and Adapter-specific behavior.
 
 For every production change:
 
-1. identify which existing Interface contracts can be affected;
-2. run their focused test while developing;
-3. add a red-capable regression test for a new contract or bug;
-4. run `CheckTestStructure` so every new test is registered;
-5. run `RunAllTests` before handoff;
-6. add Integration/E2E coverage when a protocol, process, persistence Adapter,
+1. run the read-only toolchain/dependency preflight and stop if the fixed local
+   vcpkg tree is incomplete; never auto-restore it;
+2. identify which existing Interface contracts can be affected;
+3. run their focused test while developing;
+4. add a red-capable regression test for a new contract or bug;
+5. register every new test in its owning target/runner; the plan or phase closeout
+   verifies registration without repeating the same structure gate per task;
+6. run the changed Module's owning public runner once after its plan stabilizes;
+7. let the phase closeout run `RunAllTests` once and reconcile aggregate evidence;
+8. add Integration/E2E coverage when a protocol, process, persistence Adapter,
    or public workflow changed.
 
 Coverage metrics may be added as a secondary signal for changed code, but a

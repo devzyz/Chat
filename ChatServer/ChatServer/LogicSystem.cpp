@@ -15,83 +15,28 @@
 #include "CServer.h"
 #include "LogMgr.h"
 
-LogicSystem::LogicSystem() : _b_stop(false), _p_server(nullptr) {
+LogicSystem::LogicSystem()
+	: LogicDispatcher([this](const LogicMessage& message) { return Dispatch(message); }),
+	  _p_server(nullptr) {
 	RegisterCallBacks();
-	_worker_thread = std::thread(&LogicSystem::DealMsg, this);
 }
 
 LogicSystem::~LogicSystem() {
-	_b_stop = true;
-	_cond.notify_one();
-	_worker_thread.join();
+	Stop();
 }
 
 void LogicSystem::SetServer(std::shared_ptr<CServer> pserver) {
 	_p_server = pserver;
 }
 
-void LogicSystem::PostMsgToQue(std::shared_ptr<LogicNode> msg) {
-	std::unique_lock<std::mutex> lock(_mutex);
-
-	if (_msg_que.size() > MAX_DEALQUE) {
-		SPDLOG_ERROR("logic queue full, max_size={}", MAX_DEALQUE);
-		return;
+bool LogicSystem::Dispatch(const LogicMessage& message) {
+	SPDLOG_DEBUG("logic recv msg, msg_id={}", message.id);
+	const auto callback = _fun_callbacks.find(message.id);
+	if (callback == _fun_callbacks.end()) {
+		return false;
 	}
-
-	_msg_que.push(msg);
-	// 由0变为1的时候，通知工作线程不要挂起了
-	if (_msg_que.size() == 1) {
-		lock.unlock();
-		_cond.notify_one();
-	}
-}
-/**
- * @brief 
- * 工作进程运行的函数
- */
-void LogicSystem::DealMsg() {
-	for (;;) {
-		// 保证对queue的加锁访问
-		std::unique_lock<std::mutex> lock(_mutex);
-
-		// 如果逻辑系统没有被关闭，同时队列不为空，同时可以防止虚假唤醒。lambda为true时，继续往下执行
-		_cond.wait(lock, [this]() { 
-			return !_msg_que.empty() || _b_stop;
-			});
-
-		// 如果逻辑队列关闭，则把所有待处理的依次取出来处理
-		if (_b_stop) {
-			while (_msg_que.size()) {
-				auto msg = _msg_que.front();
-
-				auto call_back_iter = _fun_callbacks.find(msg->_recv_msg_node->_msg_id);
-
-				if (call_back_iter == _fun_callbacks.end()) {
-					_msg_que.pop();
-					SPDLOG_WARN("message handler not found, msg_id={}", msg->_recv_msg_node->_msg_id);
-					continue;
-				}
-				call_back_iter->second(msg->_session, msg->_recv_msg_node->_msg_id,
-					std::string(msg->_recv_msg_node->_data, msg->_recv_msg_node->_cur_len));
-				_msg_que.pop();
-			}
-
-			break;
-		}
-
-		// 未关闭，则取出队首进行处理
-		auto msg = _msg_que.front();
-		SPDLOG_DEBUG("logic recv msg, msg_id={}", msg->_recv_msg_node->_msg_id);
-		auto call_back_iter = _fun_callbacks.find(msg->_recv_msg_node->_msg_id);
-		if (call_back_iter == _fun_callbacks.end()) {
-			_msg_que.pop();
-			SPDLOG_WARN("message handler not found, msg_id={}", msg->_recv_msg_node->_msg_id);
-			continue;
-		}
-		call_back_iter->second(msg->_session, msg->_recv_msg_node->_msg_id,
-			std::string(msg->_recv_msg_node->_data));
-		_msg_que.pop();
-	}
+	callback->second(message.session, message.id, message.body);
+	return true;
 }
 
 /**
@@ -246,7 +191,8 @@ void LogicSystem::RegisterCallBacks() {
 			// 如果查到的之前登录的服务器与当前服务器相同，代表是同服务器再次登录，则直接在本服务器将之前的链接剔除掉
 			if (uid_ip_value == self_server_name) {
 				// 拿到旧的链接
-				auto old_session = UserMgr::GetInstance()->GetSession(uid);
+				auto sessions = UserMgr::GetInstance()->Sessions();
+				auto old_session = sessions->FindCurrent(uid);
 
 				// 发送消息剔除旧链接
 				if (old_session) {
@@ -257,11 +203,11 @@ void LogicSystem::RegisterCallBacks() {
 
 					std::string return_str = notify.toStyledString();
 
-					old_session->Send(return_str, MSG_NOTIFY_OFF_LINE_REQ);
+					sessions->Send(old_session, {MSG_NOTIFY_OFF_LINE_REQ, return_str});
 					//old_session->NotifyOffline(uid);
 					// 清除旧的链接
 
-					_p_server->ClearSession(old_session->GetSessionId());
+					_p_server->ClearSession(old_session);
 				}
 			}
 			else {
@@ -279,16 +225,10 @@ void LogicSystem::RegisterCallBacks() {
 		// 连接完成后，将session绑定uid
 		session->SetUserId(uid);
 
-		// 连接完成后，将userMgr也绑定session
-		UserMgr::GetInstance()->SetUserSession(uid, session);
-
 		// 如果需要跟其他的用户通信，其他的用户可能在其他服务器上，因此需要知道每个tcp客户端登陆在哪一个服务器上
 		std::string user_server_key = USER_IP_PREFIX + std::to_string(uid);
 		RedisMgr::GetInstance()->Set(user_server_key, self_server_name);
 
-		// 客户端与服务器之间通信的session也需要保存到redis中，保证redis保存与某个客户端连接的最新的session信息
-		std::string uid_session_key = USER_SESSION_KEY + std::to_string(uid);
-		RedisMgr::GetInstance()->Set(uid_session_key, session->GetSessionId());
 	};
 
 	// 处理搜索用户的请求
@@ -374,7 +314,8 @@ void LogicSystem::RegisterCallBacks() {
 
 		// 查询到在同一服务器
 		if (to_ip_value == self_name) {
-			auto touid_session = UserMgr::GetInstance()->GetSession(touid); // usermgr中保存了所有连接本服务器的session
+			auto sessions = UserMgr::GetInstance()->Sessions();
+			auto touid_session = sessions->FindCurrent(touid);
 			if (touid_session) {
 				// 直接通知对方
 				Json::Value notify;
@@ -388,7 +329,7 @@ void LogicSystem::RegisterCallBacks() {
 				notify["description"] = description;
 				notify["backname"] = backname;
 				std::string notity_str = notify.toStyledString();
-				touid_session->Send(notity_str, MSG_NOTIFY_ADD_FRIEND_REQ);
+				sessions->Send(touid_session, {MSG_NOTIFY_ADD_FRIEND_REQ, notity_str});
 			}
 			return;
 		}
@@ -490,7 +431,8 @@ void LogicSystem::RegisterCallBacks() {
 
 		// 两个人在同一个服务器上，则直接找到对方的session，并发送请求
 		if (self_server_name == applyuid_ip_value) {
-			auto session = UserMgr::GetInstance()->GetSession(applyuid);
+			auto sessions = UserMgr::GetInstance()->Sessions();
+			auto session = sessions->FindCurrent(applyuid);
 			if (session) {
 				Json::Value notify;
 				notify["error"] = ErrorCodes::Success;
@@ -506,7 +448,7 @@ void LogicSystem::RegisterCallBacks() {
 
 				// 通过session发送
 				std::string notify_str = notify.toStyledString();
-				session->Send(notify_str, MSG_NOTIFY_AUTH_FRIEND_REQ); 
+				sessions->Send(session, {MSG_NOTIFY_AUTH_FRIEND_REQ, notify_str});
 			}
 
 			return;
@@ -622,7 +564,8 @@ void LogicSystem::RegisterCallBacks() {
 
 		// 两者在同一个服务器，则直接发送
 		if (self_server_name == touid_ip_value) {
-			auto session = UserMgr::GetInstance()->GetSession(to_uid);
+			auto sessions = UserMgr::GetInstance()->Sessions();
+			auto session = sessions->FindCurrent(to_uid);
 			if (session) {
 				// 这是往另一个客户端的通知信息
 				Json::Value notify;
@@ -642,7 +585,7 @@ void LogicSystem::RegisterCallBacks() {
 
 				// 直接在这里通知
 				std::string notify_str = notify.toStyledString();
-				session->Send(notify_str, MSG_NOTIFY_CHAT_MSG_REQ);
+				sessions->Send(session, {MSG_NOTIFY_CHAT_MSG_REQ, notify_str});
 			}
 			
 			return;

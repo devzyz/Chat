@@ -1,13 +1,13 @@
 #pragma once
 #include <boost/asio.hpp>
 #include <atomic>
+#include "ChatSessionState.h"
 #include "Const.h"
 #include "MsgNode.h"
-#include <queue>
-#include <mutex>
 
 class LogicSystem;
 class CServer;
+class CSessionWriterAdapter;
 /**
  * @brief 
  * 与tcp客户端通信的会话类
@@ -15,7 +15,8 @@ class CServer;
 class CSession : public std::enable_shared_from_this<CSession>
 {
 public:
-	CSession(boost::asio::io_context& ioc, std::shared_ptr<CServer> server);
+	CSession(boost::asio::io_context& ioc, std::shared_ptr<CServer> server,
+		std::shared_ptr<ChatSessionState> session_state);
 	~CSession();
 
 	boost::asio::ip::tcp::socket& GetSocket();
@@ -25,7 +26,7 @@ public:
 	 * @return 
 	 * 每个session有唯一的一个id,可以有CServer管理，方便通过CServer将对应的Session移除
 	 */
-	std::string& GetSessionId();
+	const ChatSessionState::Handle& GetHandle() const;
 	/**
 	 * @brief 
 	 * @param uid 
@@ -37,10 +38,9 @@ public:
 	 * @return 
 	 * 获取当前session对应的tcp客户端的uid
 	 */
-	int GetUserId();
 	void Close();
-	void Send(const char* msg, std::uint16_t msg_id, std::size_t msg_len);
-	void Send(const std::string& msg, std::uint16_t msg_id);
+	SessionSendResult Send(const char* msg, std::uint16_t msg_id, std::size_t msg_len);
+	SessionSendResult Send(const std::string& msg, std::uint16_t msg_id);
 	// 检测与当前session连接的客户端的心跳是否正确,正确返回true,否则返回false
 	bool CheckHeartBeatAccurate(std::time_t& now);
 	// 更新当前的心跳时间
@@ -87,12 +87,13 @@ private:
 	 * @param self 
 	 * 异步写的回调函数
 	 */
-	void HandleWrite(const boost::system::error_code& ec, std::shared_ptr<CSession> self);
+	friend class CSessionWriterAdapter;
 
 	boost::asio::ip::tcp::socket _socket;
 	std::shared_ptr<CServer> _server;
-	// 当前session的标识id
-	std::string _session_id;
+	std::shared_ptr<ChatSessionState> _session_state;
+	std::shared_ptr<CSessionWriterAdapter> _writer;
+	ChatSessionState::Handle _handle;
 	char _data[MAX_LENGTH];
 
 	// 收到的消息体
@@ -102,28 +103,9 @@ private:
 	// 收到的头部
 	std::shared_ptr<MsgNode> _recv_head_node;
 
-	// 异步发送队列，保证发送的异步有序性
-	std::queue<std::shared_ptr<SendNode>> _send_que;
-	std::mutex _send_mutex;
-
-	// 用于标记当前session有没有背关闭
+	// 用于标记当前session有没有被关闭
 	std::atomic<bool> _b_stop;
-
-	// 用于保存当前session连接的哪一个tcp客户端uid
-	int _user_uid;
 
 	// 上次接受数据的时间，包括正常发送的数据以及心跳包
 	std::atomic<std::time_t> _last_heart_beat;
-
-	// 访问session的锁
-	std::mutex _session_mutex;
-};
-
-class LogicNode {
-public:
-	LogicNode(std::shared_ptr<CSession> session, std::shared_ptr<RecvNode> recvnode);
-	~LogicNode();
-
-	std::shared_ptr<CSession> _session;
-	std::shared_ptr<RecvNode> _recv_msg_node;
 };

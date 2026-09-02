@@ -6,8 +6,11 @@
 #include "RedisMgr.h"
 #include "LogMgr.h"
 
+#include <algorithm>
+
 CServer::CServer(boost::asio::io_context& ioc, short port) : _ioc(ioc), _port(port),
-	_acceptor(ioc, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port)), _timer(ioc, std::chrono::seconds(60)) {
+	_acceptor(ioc, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port)),
+	_session_state(UserMgr::GetInstance()->Sessions()), _timer(ioc, std::chrono::seconds(60)) {
 	SPDLOG_INFO("TCP server started, port={}", port);
 	
 }
@@ -27,7 +30,17 @@ CServer::~CServer() {
 }
 
 void CServer::stop() {
-	_sessions.clear();
+	std::vector<std::shared_ptr<CSession>> sessions;
+	{
+		std::lock_guard<std::mutex> lock(_mutex);
+		for (const auto& entry : _sessions) {
+			sessions.push_back(entry.second);
+		}
+		_sessions.clear();
+	}
+	for (const auto& session : sessions) {
+		session->Close();
+	}
 	_timer.cancel();
 }
 
@@ -38,7 +51,8 @@ void CServer::stop() {
  */
 void CServer::StartAcceptor() {
 	auto& io_context = AsioIOServicePool::GetInstance()->GetIOService();
-	std::shared_ptr<CSession> new_session = std::make_shared<CSession>(io_context, shared_from_this());
+	std::shared_ptr<CSession> new_session = std::make_shared<CSession>(
+		io_context, shared_from_this(), _session_state);
 	_acceptor.async_accept(new_session->GetSocket(), 
 		std::bind(&CServer::HandleAcceptor, this, new_session, std::placeholders::_1));
 }
@@ -53,7 +67,7 @@ void CServer::HandleAcceptor(std::shared_ptr<CSession> new_session, const boost:
 	if (!error) {
 		{
 			std::lock_guard<std::mutex> lock(_mutex);
-			_sessions.insert(std::make_pair(new_session->GetSessionId(), new_session));
+			_sessions.emplace_back(new_session->GetHandle(), new_session);
 		}
 		new_session->Start();
 	}
@@ -67,27 +81,18 @@ void CServer::HandleAcceptor(std::shared_ptr<CSession> new_session, const boost:
  * CServer内的某个CSession被移除了，代表这该服务器与tcp的连接关闭了，此时要将CServer中保存的CSession
  * 以及UserMgr中保存的CSession都清空
  */
-void CServer::ClearSession(std::string session_id) {
+void CServer::ClearSession(const ChatSessionState::Handle& session) {
+	_session_state->Close(session);
 	std::lock_guard<std::mutex> lock(_mutex);
-	if (_sessions.find(session_id) != _sessions.end()) {
-		auto uid = _sessions[session_id]->GetUserId();
-		// 移除UserMgr关联的CSession
-		// UserMgr中可能已经被其他进程更新为最新的session连接了，因此可能内部实际不需要删除
-		UserMgr::GetInstance()->RemoveUserSession(uid, session_id);
-	}
-	
-	// 从本地的sessions中清除与客户端的连接
-	_sessions.erase(session_id);
+	_sessions.erase(std::remove_if(_sessions.begin(), _sessions.end(),
+		[&session](const auto& entry) { return entry.first == session; }), _sessions.end());
 }
 
 // 检查当前的session_id是能够正常使用
-bool CServer::CheckSessionValid(std::string session_id) {
+bool CServer::CheckSessionValid(const ChatSessionState::Handle& session) {
 	std::lock_guard<std::mutex> lock(_mutex);
-	auto it = _sessions.find(session_id);
-	if (it != _sessions.end()) {
-		return true;
-	}
-	return false;
+	return std::any_of(_sessions.begin(), _sessions.end(),
+		[&session](const auto& entry) { return entry.first == session; });
 }
 
 // 定时器，触发对当前session连接的检测
@@ -109,7 +114,7 @@ void CServer::on_timer(const boost::system::error_code& e) {
 	// 因此我们可以通过先加锁，然后将_sessions拷贝一份，然后通过对副本来进行处理
 	// 这样能够提高锁的精度
 	// 同时可以保证访问的CSession一定是有效的
-	std::map<std::string, std::shared_ptr<CSession>> _sessions_copy;
+	std::vector<std::pair<ChatSessionState::Handle, std::shared_ptr<CSession>>> _sessions_copy;
 	{
 		std::lock_guard<std::mutex> lock(_mutex);
 		_sessions_copy = _sessions;

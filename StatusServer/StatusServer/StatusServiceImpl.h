@@ -1,6 +1,7 @@
 #pragma once
 #include <grpcpp/grpcpp.h>
 #include "status.grpc.pb.h"
+#include "StatusRouting.h"
 
 using grpc::Server;
 using grpc::ServerBuilder;
@@ -15,13 +16,6 @@ using message::LoginRsp;
 
 using message::StatusService;
 
-struct ChatServer {
-	std::string host;
-	std::string port;
-	std::string name;
-	int connection_count;
-};
-
 class StatusServiceImpl final : public StatusService::Service
 {
 public:
@@ -30,9 +24,5 @@ public:
 	Status GetChatServer(ServerContext* context, const GetChatServerReq* request, GetChatServerRsp* reply) override;
 	Status Login(ServerContext* context, const LoginReq* request, LoginRsp* response) override;
 private:
-	ChatServer getChatServer();
-	void insertToken(int uid, std::string token);
-	// 保存所有的启用的ChatServer服务器的信息
-	std::unordered_map<std::string, ChatServer> _servers;
-	std::mutex _server_mutex;
+	std::unique_ptr<StatusRouting> routing_;
 };

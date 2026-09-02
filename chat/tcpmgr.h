@@ -62,7 +62,7 @@ signals:
      * @param error
      * 登录失败信号
      */
-    void sig_login_failed(bool error);
+    void sig_login_failed(int error);
     /**
      * @brief sig_login_switch_chat
      * 发送由登录窗口转换为聊天窗口的信号

@@ -43,6 +43,12 @@ add_library(chat_network_core STATIC
 target_include_directories(chat_network_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(chat_network_core PUBLIC Qt${QT_VERSION_MAJOR}::Core)
 
+add_library(chat_auth_flow STATIC
+    authflowcoordinator.h authflowcoordinator.cpp
+)
+target_include_directories(chat_auth_flow PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_auth_flow PUBLIC Qt${QT_VERSION_MAJOR}::Widgets)
+
 add_library(chat_message_model STATIC
     messagerecord.h
     messagelistmodel.h messagelistmodel.cpp
@@ -179,6 +185,7 @@ target_link_libraries(chat PRIVATE
     chat_network_core
     chat_message_model
     chat_session_core
+    chat_auth_flow
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
@@ -222,6 +229,122 @@ if(BUILD_TESTING)
         list(APPEND MESSAGE_MODEL_TEST_ENVIRONMENT
             "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_TEST_PLATFORM_PLUGIN_PATH}")
     endif()
+
+    add_executable(auth_flow_tests
+        tests/auth-flow/auth_flow_tests.cpp
+    )
+    target_link_libraries(auth_flow_tests PRIVATE
+        chat_auth_flow
+        Qt${QT_VERSION_MAJOR}::Test
+    )
+    add_test(
+        NAME auth_flow.register_network_error
+        COMMAND auth_flow_tests registerNetworkErrorIsReportedOnlyOnce)
+    set_tests_properties(auth_flow.register_network_error PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "unit"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME auth_flow.reset_network_error
+        COMMAND auth_flow_tests resetNetworkErrorIsReportedOnlyOnce)
+    set_tests_properties(auth_flow.reset_network_error PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "unit"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME auth_flow.login_network_error
+        COMMAND auth_flow_tests loginNetworkErrorIsReportedOnlyOnce)
+    set_tests_properties(auth_flow.login_network_error PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "unit"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME auth_flow.unknown_outcome
+        COMMAND auth_flow_tests unknownModuleOrRequestDoesNotChangeTheActiveFlow)
+    set_tests_properties(auth_flow.unknown_outcome PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "unit"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME auth_flow.malformed_json
+        COMMAND auth_flow_tests malformedJsonProducesOneStableError)
+    set_tests_properties(auth_flow.malformed_json PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "unit"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME auth_flow.business_error
+        COMMAND auth_flow_tests businessErrorDoesNotConnectChat)
+    set_tests_properties(auth_flow.business_error PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "unit"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME auth_flow.login_http_success
+        COMMAND auth_flow_tests loginHttpSuccessConnectsOnlyOnce)
+    set_tests_properties(auth_flow.login_http_success PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "unit"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME auth_flow.tcp_failure
+        COMMAND auth_flow_tests tcpFailureDoesNotCreateChat)
+    set_tests_properties(auth_flow.tcp_failure PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "unit"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME auth_flow.chat_login_failure
+        COMMAND auth_flow_tests chatLoginFailureDoesNotShowChat)
+    set_tests_properties(auth_flow.chat_login_failure PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "unit"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME auth_flow.chat_login_success
+        COMMAND auth_flow_tests chatLoginSuccessShowsChatOnlyOnce)
+    set_tests_properties(auth_flow.chat_login_success PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "unit"
+        TIMEOUT 10
+    )
+    add_test(
+        NAME auth_flow.duplicate_and_late
+        COMMAND auth_flow_tests duplicateAndLateOldFlowOutcomesAreIgnored)
+    set_tests_properties(auth_flow.duplicate_and_late PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "unit"
+        TIMEOUT 10
+    )
+
+    add_executable(auth_flow_component_tests
+        tests/auth-flow/auth_flow_component_tests.cpp
+    )
+    target_link_libraries(auth_flow_component_tests PRIVATE
+        chat_auth_flow
+        chat_session_core
+        Qt${QT_VERSION_MAJOR}::Test
+        Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Network
+        spdlog::spdlog
+    )
+    add_test(
+        NAME auth_flow.abnormal_disconnect_reset
+        COMMAND auth_flow_component_tests abnormalDisconnectDelegatesToClientSessionReset)
+    set_tests_properties(auth_flow.abnormal_disconnect_reset PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+        LABELS "component"
+        TIMEOUT 10
+    )
     add_test(
         NAME message_model.append_ack_status_removal
         COMMAND message_model_tests appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized)
