@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files"><UniqueIdentifier>{6EBE4E3B-FF11-4311-A75A-A6322D8FB689}</UniqueIdentifier></Filter>
+    <Filter Include="Header Files"><UniqueIdentifier>{B3F742B4-4B04-4391-A19E-56B0A07554B1}</UniqueIdentifier></Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="LogicDispatcher.cpp"><Filter>Source Files</Filter></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="LogicDispatcher.h"><Filter>Header Files</Filter></ClInclude>
+  </ItemGroup>
+</Project>

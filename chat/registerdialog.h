@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include "global.h"
+#include "authflowcoordinator.h"
 
 namespace Ui {
     class RegisterDialog;
@@ -12,12 +13,12 @@ class RegisterDialog : public QDialog
 {
     Q_OBJECT
 public:
-    explicit RegisterDialog(QWidget *parent = nullptr);
+    explicit RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent = nullptr);
     ~RegisterDialog();
 
 private slots:
     void on_get_code_clicked();
-    void slot_reg_mod_finish(ReqId id, QString res, ErrorCodes err);
+    void slot_reg_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
 
     void on_confirm_btn_clicked();
 
@@ -28,6 +29,7 @@ private slots:
 private:
     Ui::RegisterDialog *ui;
     void showTip(QString str, bool isOk);
+    void showAuthError(AuthError error);
     void initHttpHandlers();
     QMap<ReqId, std::function<void(const QJsonObject&)>> _handlers;
 
@@ -47,6 +49,7 @@ private:
 
     // 用于从注册成功后的页面，返回登录页面的定时器
     QTimer* _return_login_timer;
+    AuthFlowCoordinator &_authFlow;
     int _return_login_counter;
     void changeTipPage();
 

@@ -3,6 +3,16 @@
 This repository contains a Qt chat client and the GateServer, StatusServer,
 ChatServer and VarifyServer services.
 
+## Current testing plan
+
+Phase 2.5 and Plans 3A-01..05 are complete. The current closeout item is Plan 3A-06 in
+[`tests/plans/PHASE-3A-PLAN.md`](tests/plans/PHASE-3A-PLAN.md). Its current required
+packages are restored and each plan proceeds only after its authorized read-only DG-25 preflight. Local
+vcpkg paths remain immutable by default; builds and tests may not restore, install,
+remove, update, or relocate packages implicitly. Proportional execution and
+once-per-phase closeout evidence are defined in
+[`tests/CI-GOVERNANCE.md` section 2.1](tests/CI-GOVERNANCE.md#21-比例化执行合同).
+
 ## Running one or more ChatServer instances
 
 The repository builds one `ChatServer.exe`. Each process is one server instance,

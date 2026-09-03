@@ -1,8 +1,8 @@
 # CI 与自动测试治理规范
 
-状态：治理合同已确认；Phase 2.5 本地快速门禁已收敛，clean PR 与 branch protection 待远端验证
+状态：治理合同已确认；Phase 2.5 已由 clean PR、合并后 develop CI 与 branch protection 远端验证；Plan 3A-01 已完成本地合同验证
 适用分支：`develop`、`master` 与正式发布
-决策来源：2026-08-25 完成的 12 项测试治理问答
+决策来源：2026-08-25 完成的 12 项测试治理问答；2026-08-31 补充的本机 vcpkg 不可变决策
 
 ## 1. 目标与承诺边界
 
@@ -28,8 +28,35 @@ CI 通过不代表未测试行为绝对正确。自动测试遗漏由人工 UAT 
 | D-10 | 覆盖率 | 使用 changed-lines coverage 发现遗漏；不为固定全仓比例制造无意义测试 |
 | D-11 | 兼容性 | 公开协议、持久化和迁移至少验证当前版本与上一已发布版本 |
 | D-12 | 发布产物 | 同一 SHA 生成一次不可变 artifact；完成 artifact smoke 与人工 UAT 后晋升，不重建 |
+| D-13 | 本机 vcpkg 变更授权 | `D:\vcpkg\test-vcpkg` 与 `D:\git\Chat\vcpkg_installed` 默认只读；任何修改必须先展示精确命令/目标/影响并取得用户明确批准（DG-25） |
 
 任何后续计划都必须引用相关决策 ID。若计划与表中决策冲突，必须先按 D-04 完成评审，不能在实施过程中静默改变治理规则。
+
+### 2.1 比例化执行合同
+
+本节是所有未完成正式计划的唯一过程分层权威。执行者先按变更的最高风险面选择一层；同一行为切片只执行该层要求的
+证据，不因计划文件较长而自动升级。用户明确要求、适用 DG/G owner、phase dependency 或下列 closeout 规则仍优先：
+
+| 层级 | 适用范围 | 必要执行与验证 |
+| --- | --- | --- |
+| S0 | 简单只读检查、文档/静态链接、无行为注册、已获批的依赖操作 | `inspect -> execute -> focused verify`；除非用户或既有合同明确要求，不扩展正式计划，不做 mutation、threat model、全量回归、文档矩阵或 subagent 工作。依赖操作只验证本次获批目标，不派生新的 package 机制。 |
+| S1 | Module 或可观察行为变更 | 每个行为切片执行 focused RED/GREEN；只对可观察行为、失败传播、lifecycle、兼容性或 gate enforcement 做有意义 mutation；代码稳定后每个 plan 运行一次 owning focused/public runner。 |
+| S2 | process、transport 或 persistence 变更 | 在 S1 基础上执行 focused real Integration；只清理由本任务创建且可精确归属的进程、端口和临时资源，并由 owning runner 证明成功/失败均有界。 |
+| S3 | phase、CI 或 release closeout | 聚合报告、secret、residue、diff 与远端证据；每 phase 只运行一次 full lane，并在其权威环境证明 applicable dependency gate、Required Checks、UAT 和 promotion 合同。 |
+
+以下去重规则对所有层级具有约束力：
+
+1. `RunAllTests` 或等价 full lane 只由 phase closeout 执行一次。closeout 后的纯文档改动不触发 full rerun；source/runner
+   改动只重跑 affected owner，除非改动使 phase final evidence 失效。
+2. secret scan 只在处理 secret/data/log/artifact 的任务执行，并在 closeout 聚合一次；process/port/temp cleanup 只在创建这些
+   资源的任务执行，并在 closeout 聚合一次。
+3. staged index、protected path、git diff、文档 link/count audit 只在 closeout 聚合一次。结构注册可在 closeout 使用一个静态
+   negative probe；prose、简单 registration、静态链接、无害 plumbing 和 package installation 不要求 mutation。
+4. focused RED/GREEN 按行为切片执行；owning public runner 在同一 plan 代码稳定后只执行一次。每个任务的 `read_first` 只保留
+   edited source、closest analog 与一个必要 authority；共享 DG/G、baseline、lane 与 threat prerequisites 在 phase entry 读取一次。
+5. phase entry 对工具和依赖只做一次 read-only preflight。不得重复计算 tool hash、package identity 或 vcpkg fingerprint；缺失或
+   不一致必须 fail closed 并请求对精确修改的批准，不能自动 restore。巨型 inline verifier 应由 planned/public owning script 暴露
+   等价、确定性、非零退出合同。
 
 ## 3. 测试维度与依赖分类
 
@@ -57,7 +84,7 @@ fake Redis、MySQL、SMTP 或 gRPC 只能证明 Unit/Component，不能计入真
 
 本地公开入口为 `scripts/windows-local.ps1`。`RunAllTests` 只编排
 `RunScriptTests`、`RunServerTests`、`RunClientTests` 和 `RunVarifyTests`，并在结尾通过
-`CheckTestReports` 同一实现核验精确的 12 份 XML、173 个 testcase、零 failure 和零 error。
+`CheckTestReports` 同一实现核验精确的 12 份 XML、180 个 testcase、零 failure 和零 error。
 每个子入口先移除自己的旧报告，缺报告、数量漂移、失败节点、非零测试退出码或本次新增的已知临时目录残留都会返回非零。
 
 GitHub workflow 的稳定 job/check 名为：
@@ -195,6 +222,25 @@ GitHub workflow 的稳定 job/check 名为：
 - teardown 必须清理本次进程、socket、key、schema、文件和线程；清理失败也使测试失败。
 - 失败时保留 JUnit/XML、stdout/stderr、实例、PID、端口、seed 和非敏感业务 ID。
 - 测试和 artifact 不得包含密码、Token、验证码、邮件授权码或个人连接信息。
+
+### 10.1 本机 vcpkg 不可变门禁（DG-25）
+
+以下规则适用于本机持久开发环境；普通构建、测试、诊断和 phase 执行授权不扩大为 package-manager 写权限：
+
+1. vcpkg 工具检出固定为 `D:\vcpkg\test-vcpkg`，package install root 固定为
+   `D:\git\Chat\vcpkg_installed`。两者的只读检查允许执行，任何内容或路径修改均需单独批准。
+2. package restore/install/remove/update/upgrade、MSBuild manifest 自动安装、目录删除/重建/清理，以及
+   `VCPKG_ROOT`、`VcpkgInstalledDir`、triplet、baseline、tool checkout/install root 变化，都属于受控修改。
+3. 执行受控修改前必须向用户给出精确命令、精确目标、原因、影响和回滚边界，并取得针对该次操作的明确批准。
+   缺包、状态不一致、编译失败或超时都不构成默示批准。
+4. 本机普通 MSBuild 与测试入口必须显式传递 `/p:VcpkgManifestInstall=false` 和固定的
+   `/p:VcpkgInstalledDir=D:\git\Chat\vcpkg_installed\`；运行前只读核验工具/installed tree 身份，失败时非零退出，
+   不调用 `RestoreServers`，不切换到另一个安装目录，也不删除整个 tree 后重建。
+5. 获批的修改必须在 Summary 中记录批准范围、实际命令、目标、开始/结束状态和残留风险；不得把一次批准复用于以后
+   不同命令、不同目标或不同依赖变更。
+6. GitHub 托管 runner 使用与本机隔离的 run-owned 临时 install root。已审查并合并的 workflow 可按固定
+   manifest/baseline/triplet 正常恢复依赖；若要改变 CI install root、manifest、baseline、triplet 或 tool identity，
+   仍须先取得批准并按 D-04 更新计划、workflow 与供应链证据。
 
 ## 11. 门禁变更流程
 

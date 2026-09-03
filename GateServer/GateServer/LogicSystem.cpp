@@ -1,10 +1,8 @@
 #include "LogicSystem.h"
+
+#include "GateRequestProduction.h"
 #include "GateResponse.h"
 #include "HttpConnection.h"
-#include "VerifyGrpcClient.h"
-#include "RedisMgr.h"
-#include "MysqlMgr.h"
-#include "StatusGrpcClient.h"
 
 void LogicSystem::RegGet(std::string url, HttpHandler handler) {
 	_get_handlers.insert(make_pair(url, handler));
@@ -14,7 +12,8 @@ void LogicSystem::RegPost(std::string url, HttpHandler handler) {
 	_post_handlers.insert(make_pair(url, handler));
 }
 
-LogicSystem::LogicSystem() {
+LogicSystem::LogicSystem()
+	: _gate_request(gate::CreateProductionGateRequest()) {
 	const auto write_gate_response = [](
 		const std::shared_ptr<HttpConnection>& connection,
 		gate::Endpoint endpoint,
@@ -35,113 +34,33 @@ LogicSystem::LogicSystem() {
 		}
 	});
 
-	// 接收验证码的处理逻辑
-	RegPost("/get_varifycode", [write_gate_response](std::shared_ptr<HttpConnection> connection) {
+	RegPost("/get_varifycode", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
 		write_gate_response(connection, gate::Endpoint::GetVarifyCode,
-			[](const Json::Value& request) {
-				if (!request.isMember("email")) {
-					SPDLOG_WARN("verification-code request missing email");
-					return gate::Result{ErrorCodes::Error_Json};
-				}
-
-				const auto email = request["email"].asString();
-				const auto response = VerifyGrpcClient::GetInstance()->GetVarifyCode(email);
-				SPDLOG_DEBUG("verification-code RPC completed, email_size={}", email.size());
-				return gate::Result{response.error()};
+			[this](const Json::Value& request) {
+				return _gate_request->Handle(gate::Endpoint::GetVarifyCode, request);
 			});
 	});
 
-	// 注册的处理逻辑
-	RegPost("/user_register", [write_gate_response](std::shared_ptr<HttpConnection> connection) {
+	RegPost("/user_register", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
 		write_gate_response(connection, gate::Endpoint::UserRegister,
-			[](const Json::Value& request) {
-				const auto email = request["email"].asString();
-				const auto username = request["user"].asString();
-				const auto password = request["passwd"].asString();
-				const auto confirm = request["confirm"].asString();
-
-				if (password != confirm) {
-					SPDLOG_WARN("registration password confirmation mismatch");
-					return gate::Result{ErrorCodes::PasswdErr};
-				}
-
-				std::string verification_code;
-				if (!RedisMgr::GetInstance()->Get(CODEPREFIX + email, verification_code)) {
-					SPDLOG_WARN("registration verification code expired");
-					return gate::Result{ErrorCodes::VarifyExpired};
-				}
-				if (verification_code != request["varifycode"].asString()) {
-					SPDLOG_WARN("registration verification code mismatch");
-					return gate::Result{ErrorCodes::VarifyCodeErr};
-				}
-
-				const auto uid = MysqlMgr::GetInstance()->RegUser(username, email, password);
-				if (uid == 0 || uid == -1) {
-					SPDLOG_WARN("registration rejected because user or email exists");
-					return gate::Result{ErrorCodes::UserExist};
-				}
-				return gate::Result{ErrorCodes::Success};
+			[this](const Json::Value& request) {
+				return _gate_request->Handle(gate::Endpoint::UserRegister, request);
 			});
-		});
+	});
 
-		RegPost("/reset_pwd", [write_gate_response](std::shared_ptr<HttpConnection> connection) {
-			write_gate_response(connection, gate::Endpoint::ResetPassword,
-				[](const Json::Value& request) {
-					const auto email = request["email"].asString();
-					const auto user = request["user"].asString();
-					const auto password = request["password"].asString();
-					const auto verification = request["varify"].asString();
-
-					std::string verification_code;
-					if (!RedisMgr::GetInstance()->Get(CODEPREFIX + email, verification_code)) {
-						SPDLOG_WARN("password-reset verification code expired");
-						return gate::Result{ErrorCodes::VarifyExpired};
-					}
-					if (verification_code != verification) {
-						SPDLOG_WARN("password-reset verification code mismatch");
-						return gate::Result{ErrorCodes::VarifyCodeErr};
-					}
-					if (!MysqlMgr::GetInstance()->CheckEmail(user, email)) {
-						SPDLOG_WARN("password-reset username and email mismatch");
-						return gate::Result{ErrorCodes::EmailNotMatch};
-					}
-					if (!MysqlMgr::GetInstance()->UpdatePassword(user, password)) {
-						SPDLOG_ERROR("password-reset database update failed");
-						return gate::Result{ErrorCodes::PasswdUpFailed};
-					}
-
-					SPDLOG_INFO("password reset succeeded");
-					return gate::Result{ErrorCodes::Success};
-				});
+	RegPost("/reset_pwd", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
+		write_gate_response(connection, gate::Endpoint::ResetPassword,
+			[this](const Json::Value& request) {
+				return _gate_request->Handle(gate::Endpoint::ResetPassword, request);
 			});
+	});
 
-		RegPost("/user_login", [write_gate_response](std::shared_ptr<HttpConnection> connection) {
-			write_gate_response(connection, gate::Endpoint::UserLogin,
-				[](const Json::Value& request) {
-					const auto email = request["email"].asString();
-					const auto password = request["password"].asString();
-					UserInfo user_info;
-					if (!MysqlMgr::GetInstance()->CheckPassword(email, password, user_info)) {
-						SPDLOG_WARN("login credentials rejected");
-						return gate::Result{ErrorCodes::PasswdInvalid};
-					}
-
-					const auto reply = StatusGrpcClient::GetInstance()->GetChatServer(user_info.uid);
-					if (reply.error()) {
-						SPDLOG_ERROR("chat server selection RPC failed, error={}", reply.error());
-						return gate::Result{ErrorCodes::RPCFailed};
-					}
-
-					SPDLOG_INFO("login succeeded, uid={}", user_info.uid);
-					return gate::Result{
-						ErrorCodes::Success,
-						user_info.uid,
-						reply.token(),
-						reply.host(),
-						reply.port(),
-					};
-				});
+	RegPost("/user_login", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
+		write_gate_response(connection, gate::Endpoint::UserLogin,
+			[this](const Json::Value& request) {
+				return _gate_request->Handle(gate::Endpoint::UserLogin, request);
 			});
+	});
 }
 
 bool LogicSystem::HandleGet(std::string path, std::shared_ptr<HttpConnection> con) {

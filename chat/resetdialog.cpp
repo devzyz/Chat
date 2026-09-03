@@ -3,7 +3,8 @@
 #include "ui_resetdialog.h"
 #include "httpmgr.h"
 
-ResetDialog::ResetDialog(QWidget *parent) : QDialog(parent), ui(new Ui::ResetDialog)
+ResetDialog::ResetDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
+    : QDialog(parent), ui(new Ui::ResetDialog), _authFlow(authFlow)
 {
     ui->setupUi(this);
 
@@ -62,27 +63,53 @@ ResetDialog::~ResetDialog()
     delete ui;
 }
 
-void ResetDialog::slot_reset_mod_finish(ReqId id, QString res, ErrorCodes err)
+void ResetDialog::slot_reset_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err)
 {
+    AuthOutcome outcome;
+    outcome.module = static_cast<int>(Modules::RESETMOD);
+    outcome.requestId = static_cast<int>(id);
     if(err != ErrorCodes::SUCCESS){
-        showTip(tr("网络请求错误"),false);
+        outcome.kind = AuthOutcomeKind::HttpNetworkError;
+        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        if (action.kind == AuthActionKind::StayAndShowError) {
+            showAuthError(action.error);
+        }
         return;
     }
     // 解析 JSON 字符串,res需转化为QByteArray
     QJsonDocument jsonDoc = QJsonDocument::fromJson(res.toUtf8());
     //json解析错误
     if(jsonDoc.isNull()){
-        showTip(tr("json解析错误"),false);
+        outcome.kind = AuthOutcomeKind::HttpMalformedJson;
+        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        if (action.kind == AuthActionKind::StayAndShowError) {
+            showAuthError(action.error);
+        }
         return;
     }
     //json解析错误
     if(!jsonDoc.isObject()){
-        showTip(tr("json解析错误"),false);
+        outcome.kind = AuthOutcomeKind::HttpMalformedJson;
+        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        if (action.kind == AuthActionKind::StayAndShowError) {
+            showAuthError(action.error);
+        }
         return;
     }
-    //调用对应的逻辑,根据id回调。
-    _handlers[id](jsonDoc.object());
-    return;
+    const QJsonObject object = jsonDoc.object();
+    const int businessError = object["error"].toInt();
+    outcome.businessError = businessError;
+    outcome.kind = businessError == ErrorCodes::SUCCESS
+        ? AuthOutcomeKind::HttpSuccess : AuthOutcomeKind::HttpBusinessError;
+    const AuthAction action = _authFlow.Reduce(flowId, outcome);
+    if (action.kind == AuthActionKind::StayAndShowError) {
+        showAuthError(action.error);
+        return;
+    }
+    const auto handler = _handlers.constFind(id);
+    if (action.accepted && handler != _handlers.cend()) {
+        (*handler)(object);
+    }
 }
 
 // 用于显示错误信息
@@ -95,6 +122,14 @@ void ResetDialog::showTip(QString str, bool isOk) {
 
     ui->err_tip->setText(str);
     repolish(ui->err_tip);
+}
+
+void ResetDialog::showAuthError(AuthError error)
+{
+    showTip(error == AuthError::Network ? tr("网络请求错误")
+                                        : error == AuthError::MalformedResponse
+                                            ? tr("json解析错误") : tr("参数错误"),
+            false);
 }
 
 // 添加对网络请求返回的json对象的处理
@@ -236,8 +271,14 @@ void ResetDialog::on_confirm_btn_clicked()
     json_obj["varify"] = ui->varify_edit->text();
     json_obj["password"] = xorString(ui->password_edit->text());
 
+    AuthOutcome begin;
+    begin.kind = AuthOutcomeKind::BeginHttp;
+    begin.module = static_cast<int>(Modules::RESETMOD);
+    begin.requestId = static_cast<int>(ReqId::ID_RESET_PWD);
+    const AuthFlowId flowId = _authFlow.Reduce(0, begin).flowId;
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/reset_pwd"), json_obj,
-                                        ReqId::ID_RESET_PWD, Modules::RESETMOD);
+                                        ReqId::ID_RESET_PWD, Modules::RESETMOD,
+                                        flowId);
 }
 
 
@@ -253,8 +294,14 @@ void ResetDialog::on_get_code_btn_clicked()
     // 发送http请求获取验证码
     QJsonObject json_obj;
     json_obj["email"] = email;
+    AuthOutcome begin;
+    begin.kind = AuthOutcomeKind::BeginHttp;
+    begin.module = static_cast<int>(Modules::RESETMOD);
+    begin.requestId = static_cast<int>(ReqId::ID_GET_VERIFY_CODE);
+    const AuthFlowId flowId = _authFlow.Reduce(0, begin).flowId;
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/get_varifycode"), json_obj,
-                                        ReqId::ID_GET_VERIFY_CODE, Modules::RESETMOD);
+                                        ReqId::ID_GET_VERIFY_CODE, Modules::RESETMOD,
+                                        flowId);
 }
 
 

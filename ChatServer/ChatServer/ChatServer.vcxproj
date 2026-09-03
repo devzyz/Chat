@@ -155,6 +155,9 @@
     <ClCompile Include="UserMgr.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ChatSessionState.h" />
+    <ClInclude Include="ChatSessionStateInternal.h" />
+    <ClInclude Include="ChatSessionStateProduction.h" />
     <ClInclude Include="AsioIOServicePool.h" />
     <ClInclude Include="ChatGrpcClient.h" />
     <ClInclude Include="ChatFrameCodec.h" />
@@ -166,6 +169,7 @@
     <ClInclude Include="Data.h" />
     <ClInclude Include="DistLock.h" />
     <ClInclude Include="LogicSystem.h" />
+    <ClInclude Include="LogicDispatcher.h" />
     <ClInclude Include="LogMgr.h" />
     <ClInclude Include="$(ProtocolGeneratedDir)\chat.grpc.pb.h" />
     <ClInclude Include="$(ProtocolGeneratedDir)\chat.pb.h" />
@@ -188,6 +192,12 @@
     <None Include="..\..\proto\status.proto" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="ChatSessionState.vcxproj">
+      <Project>{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}</Project>
+    </ProjectReference>
+    <ProjectReference Include="LogicDispatcher.vcxproj">
+      <Project>{B251FB8A-0C7D-4BFA-8F1B-31C75DFBDA01}</Project>
+    </ProjectReference>
     <ProjectReference Include="ChatGrpcClients.vcxproj">
       <Project>{65DC3290-A9BB-4FAD-9930-096BC5B82102}</Project>
     </ProjectReference>

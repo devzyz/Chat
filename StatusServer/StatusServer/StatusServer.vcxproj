@@ -163,6 +163,11 @@
     <None Include="config.ini" />
     <None Include="..\..\proto\status.proto" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="StatusRouting.vcxproj">
+      <Project>{7C67B8A2-A0A4-44A0-9020-5D87915CE3E2}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -44,7 +44,7 @@
       <SDLCheck>false</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\ChatServer\ChatServer;$(MSBuildThisFileDirectory)..\..\GateServer\GateServer;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\ChatServer\ChatServer;$(MSBuildThisFileDirectory)..\..\GateServer\GateServer;$(MSBuildThisFileDirectory)..\..\StatusServer\StatusServer;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32_WINNT=0x0601;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -56,13 +56,27 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="chat-session-state\chat_session_state_tests.cpp" />
     <ClCompile Include="data\server_redis_pool_tests.cpp" />
     <ClCompile Include="gate-response\gate_response_tests.cpp" />
+    <ClCompile Include="gate-request\gate_request_component_tests.cpp" />
+    <ClCompile Include="status-routing\status_routing_component_tests.cpp" />
     <ClCompile Include="..\..\GateServer\GateServer\GateResponse.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\ConfigMgr.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\Const.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\DistLock.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\RedisMgr.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\GateServer\GateServer\GateRequest.vcxproj">
+      <Project>{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\ChatServer\ChatServer\ChatSessionState.vcxproj">
+      <Project>{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\StatusServer\StatusServer\StatusRouting.vcxproj">
+      <Project>{7C67B8A2-A0A4-44A0-9020-5D87915CE3E2}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
