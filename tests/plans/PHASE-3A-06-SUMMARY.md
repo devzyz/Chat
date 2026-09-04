@@ -10,7 +10,7 @@ requires:
 provides:
   - One complete local Release regression across all four public runners
   - Exact twelve-report integrity, secret, residue and registration audits
-  - Clean topic-branch PR and protected develop CI evidence (pending)
+  - Clean topic-branch PR and protected develop CI evidence
 affects: [phase-3b, develop-ci]
 tech-stack:
   added: []
@@ -26,7 +26,7 @@ key-decisions:
   - Real transport, persistence, cross-instance E2E and release promotion gaps remain owned by Phase 3B/3C/3D/Release.
 requirements-completed: []
 metrics:
-  completed: pending remote closeout
+  completed: 2026-09-03
   tasks: 5
   runner_cases: 232
   reports: 12
@@ -34,7 +34,7 @@ metrics:
 
 # Phase 3A Plan 06: Regression, Reports and CI Closeout Summary
 
-The complete Phase 3A local baseline is green at 232/232 across twelve exact JUnit reports, with the protected topic-branch PR, Required Checks, merge and post-merge develop run still pending.
+The complete Phase 3A baseline is green at 232/232 across twelve exact JUnit reports. The protected topic-branch PR and the exact merge-SHA post-merge develop run both passed all four Required Checks.
 
 ## Current Status
 
@@ -42,12 +42,34 @@ The complete Phase 3A local baseline is green at 232/232 across twelve exact JUn
 | --- | --- |
 | Local structure and isolated negative probe | PASS |
 | One full local Release lane | PASS, 232/232 |
-| Topic commit and PR | Pending |
-| Current PR HEAD four Required Checks | Pending |
-| Protected merge | Pending |
-| Merge-SHA develop push run | Pending |
+| Topic commit and PR | PASS, PR #2 at `eb6239b0f479f2cc0b76aa7e7b1cf4eeb9e617ad` |
+| Current PR HEAD four Required Checks | PASS, run `33646763982` |
+| Protected merge | PASS, `d04512e864890303f4c38ec8ca0a78e35e8c671c` |
+| Merge-SHA develop push run | PASS, run `33750918123` |
 
-This file deliberately does not claim remote evidence before GitHub produces it. The final section will be updated after the protected merge and exact merge-SHA push workflow complete.
+## Protected Remote Closeout
+
+- PR [#2](https://github.com/devzyz/Chat/pull/2) targeted `develop` from
+  `phase-3a-ci-closeout-20260902`; its exact HEAD was
+  `eb6239b0f479f2cc0b76aa7e7b1cf4eeb9e617ad`.
+- Pull-request workflow run [33646763982](https://github.com/devzyz/Chat/actions/runs/33646763982)
+  completed successfully with all four Required Checks green.
+- Immediately before merge, GitHub reported the PR `OPEN`, `MERGEABLE` and `CLEAN`. Branch protection
+  remained strict and admin-enforced, disallowed force pushes and deletions, and required the same four
+  exact contexts. PR #2 was merged through the normal protected flow without an admin bypass at
+  `2026-09-03T11:39:50Z`.
+- The resulting merge SHA is `d04512e864890303f4c38ec8ca0a78e35e8c671c`.
+- The exact-SHA `develop` push workflow run
+  [33750918123](https://github.com/devzyz/Chat/actions/runs/33750918123) completed successfully at
+  `2026-09-03T13:02:19Z`. Its four jobs were:
+  - `Static configuration checks`: success;
+  - `Server Release build`: success;
+  - `Qt client Release`: success;
+  - `VarifyServer dependency and package check`: success.
+- Local `develop` was fetched and fast-forwarded from
+  `a03d0c30e9a5e90d2de11320bf7c9e492294ed0e` to the exact merge SHA. The local-only checkpoint
+  `b25effb89782430bf7b3e0f7ef872ed181e28c95` is not an ancestor of `origin/develop`, so its topic
+  branch remains preserved and was not pushed or deleted.
 
 ## Git and Protected-Path Preflight
 
@@ -139,15 +161,16 @@ was unchanged and the probe was not repeated.
 
 ## Known Stubs
 
-None in Phase 3A production/test changes. Remote evidence fields above are explicit pending gates, not stubs.
+None in Phase 3A production/test changes.
 
 ## Threat Flags
 
 None. Phase 3A adds in-process business/state Modules and test registration; no new network endpoint,
 authentication trust boundary, file-access path or schema change is claimed by this closeout.
 
-## Self-Check: LOCAL PASSED / REMOTE PENDING
+## Self-Check: PHASE 3A COMPLETE
 
 - All local Phase 3A Module, test, README, plan and Summary files exist.
 - Structure, full regression, reports, marker, residue, process, link, Test ID and diff audits passed.
-- Remote PR/check/merge/post-merge evidence must be appended before Phase 3A is marked complete.
+- The clean PR checks, protected merge and exact merge-SHA post-merge develop checks all passed.
+- Phase 3A is complete. The next execution route is Phase 3B, starting with Plan 3B-00.

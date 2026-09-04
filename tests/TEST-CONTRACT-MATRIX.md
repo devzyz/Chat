@@ -486,6 +486,21 @@ Domain/Level：Architecture / Integration。
 | [3A §10 / 3A-04](plans/PHASE-3A-PLAN.md) / G-009 | T08-GATE-01..16 | `GateRequest::Handle` | Component / `server_component.xml` | complete（3A in-process part）；16 testcase 已进入 220 baseline |
 | [3A §11 / 3A-05](plans/PHASE-3A-PLAN.md) / G-011 | Q03-AUTH-01..12 | `AuthFlowCoordinator::Reduce` | Unit + Component / `client_unit.xml` + `client_component.xml` | complete（3A outcome/state 部分）；12 testcase 已进入 232 baseline |
 
+### Phase 3B planned contract registry
+
+The following identifiers are frozen by [`PHASE-3B-TEST-PLAN.md`](plans/PHASE-3B-TEST-PLAN.md). They are planned-only and add zero cases to the current 12-report/232-case baseline until a real source, target and emitted JUnit testcase exist.
+
+| Plan | Planned Test IDs | Domain / Level | Planned report owner | Current state |
+| --- | --- | --- | --- | --- |
+| 3B-00 | `T09-HOST-01..06` | Architecture / Integration | existing `server_integration.xml` | planned; first executable 3B slice |
+| 3B-01 | `T09-PROC-01..12` | Architecture / Integration | existing `server_integration.xml` | planned; G-015 process ownership remains open |
+| 3B-02 | `T09-GHTTP-01..12` | Architecture/Business / Integration | existing `server_integration.xml` | planned; G-009 real HTTP remains open |
+| 3B-02 | `Q04-HTTP-01..10` | Architecture/Business / Integration | `client_integration.xml` after real emission | planned; G-011 real QNAM remains open |
+| 3B-03 | `T09-SGRPC-01..12` | Architecture/Business / Integration | existing `server_integration.xml` | planned; G-010 process transport remains open |
+| 3B-04 | `T09-CTCP-01..16` | Architecture / Integration | existing `server_integration.xml` | planned; G-008 real TCP remains open |
+| 3B-04 | `Q04-TCP-01..12` | Architecture/Business / Integration | `client_integration.xml` after real emission | planned; G-011 real QTcpSocket remains open |
+| 3B-05 | `T09-COMP-01..08` | Architecture / Integration | existing `server_integration.xml` plus structure gate | planned; formal composition closeout remains open |
+
 3A-05 的 production library、Module README、非空测试源、真实 CMake/runner registration 与 production Adapter 接线均已落地。
 
 | Gap ID | Module / Interface | 当前风险 | 目标 Level | 计划归属 | 目标 lane |
