@@ -6,6 +6,8 @@ The contract target links the same `LogicDispatcher`, `ChatSessionState`, `GateR
 
 The factory is a composition root only. It does not parse payloads, choose servers, map business errors, expose production containers, detach work, or compile a private copy of a production algorithm.
 
+All six cases are registered in `ServerIntegrationTests.vcxproj` and emitted by the existing `server_integration.xml` owner. The report now contains 40 cases; the twelve-report regression manifest contains 238 cases. `CheckTestStructure` requires all four shared target references and rejects direct compilation of their production `.cpp` implementations.
+
 Focused command:
 
 ```powershell

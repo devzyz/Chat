@@ -21,6 +21,7 @@ $ErrorActionPreference = 'Stop'
 $global:LASTEXITCODE = 0
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$fixedVcpkgInstalledRoot = 'D:\git\Chat\vcpkg_installed'
 $solution = Join-Path $repoRoot 'Chat.sln'
 $manifest = Join-Path $repoRoot 'vcpkg.json'
 $clientSource = Join-Path $repoRoot 'chat'
@@ -61,7 +62,7 @@ $scriptTestGroups = @(
 $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 68 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 56 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 34 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 40 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
@@ -83,7 +84,7 @@ if ([string]::IsNullOrWhiteSpace($VcpkgPackagesRoot)) {
     $VcpkgPackagesRoot = 'D:\vcpkg-chat-temp\packages'
 }
 if ([string]::IsNullOrWhiteSpace($ServerIntermediateRoot)) {
-    $ServerIntermediateRoot = 'D:\vcpkg-chat-temp\msbuild'
+    $ServerIntermediateRoot = Join-Path $repoRoot 'build\windows-msbuild-obj'
 }
 
 function Require-File {
@@ -255,7 +256,7 @@ function Build-Servers {
         "/p:VcpkgHostTriplet=$ServerHostTriplet"
         "/p:ServerIntermediateRoot=$ServerIntermediateRoot"
         '/p:VcpkgManifestInstall=false'
-        "/p:VcpkgInstalledDir=$repoRoot\vcpkg_installed\"
+        "/p:VcpkgInstalledDir=$fixedVcpkgInstalledRoot\"
     )
     & $msbuild @arguments
     if ($LASTEXITCODE -ne 0) {
@@ -265,6 +266,8 @@ function Build-Servers {
 
 function Run-ServerTests {
     Confirm-TestStructure
+    [void](Require-File (Join-Path $varifySource 'node_modules\@grpc\grpc-js\package.json') `
+        'Restore VarifyServer dependencies with RestoreVarify or npm ci before running the C++ to Node loopback contract.')
     $residuePrefixes = @('chat-config-test-', 'chat-startup-tests-', 'gate-status-startup-tests-')
     $residueBefore = @(Get-RegressionResidueSnapshot -Prefixes $residuePrefixes)
     $vcpkg = Resolve-Vcpkg
@@ -280,7 +283,7 @@ function Run-ServerTests {
         "/p:VcpkgHostTriplet=$ServerHostTriplet"
         "/p:ServerIntermediateRoot=$ServerIntermediateRoot"
         '/p:VcpkgManifestInstall=false'
-        "/p:VcpkgInstalledDir=$repoRoot\vcpkg_installed\"
+        "/p:VcpkgInstalledDir=$fixedVcpkgInstalledRoot\"
     )
     $reports = @(
         (Join-Path $testResults 'server_unit.xml')
@@ -303,7 +306,7 @@ function Run-ServerTests {
     }
     Invoke-ProtocolCompatibility 'check'
 
-    $installedRoot = Join-Path $repoRoot 'vcpkg_installed'
+    $installedRoot = $fixedVcpkgInstalledRoot
     foreach ($project in @($gateAsioTestProject, $statusAsioTestProject)) {
         $poolArguments = @(
             $project
@@ -323,9 +326,9 @@ function Run-ServerTests {
         }
     }
 
-    $installedBin = Join-Path $repoRoot "vcpkg_installed\$ServerTriplet\bin"
+    $installedBin = Join-Path $fixedVcpkgInstalledRoot "$ServerTriplet\bin"
     if ($Configuration -eq 'Debug') {
-        $installedBin = Join-Path $repoRoot "vcpkg_installed\$ServerTriplet\debug\bin"
+        $installedBin = Join-Path $fixedVcpkgInstalledRoot "$ServerTriplet\debug\bin"
     }
     if (-not (Test-Path -LiteralPath $installedBin -PathType Container)) {
         throw "The vcpkg app-local dependency directory is missing: $installedBin"
@@ -349,7 +352,7 @@ function Run-ServerTests {
     $executions = @(
         @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 68 }
         @{ Binary = $componentBinary; Report = $reports[1]; ExpectedCount = 56 }
-        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 34 }
+        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 40 }
         @{ Binary = $chatGrpcClientBinary; Report = $reports[3]; ExpectedCount = 4 }
         @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4]; ExpectedCount = 2 }
         @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5]; ExpectedCount = 2 }
@@ -487,8 +490,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 12 -or $total -ne 232) {
-        throw "Regression report baseline mismatch: expected 12 reports and 232 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 12 -or $total -ne 238) {
+        throw "Regression report baseline mismatch: expected 12 reports and 238 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     Write-Host "Regression report audit passed: $total testcases across $($regressionReportGroups.Count) reports."
 }
@@ -525,9 +528,20 @@ function Invoke-ProtocolCompatibility {
     $node = Require-Command 'node.exe' 'Node.js is required for protocol generation and compatibility checks.'
     $protocolTool = Require-File (Join-Path $repoRoot 'scripts\protocol-compatibility.js') `
         'The protocol compatibility tool is missing.'
-    & $node $protocolTool $Mode
-    if ($LASTEXITCODE -ne 0) {
-        throw "Protocol $Mode failed with exit code $LASTEXITCODE."
+    $previousInstalledRoot = $env:CHAT_VCPKG_INSTALLED_ROOT
+    try {
+        $env:CHAT_VCPKG_INSTALLED_ROOT = $fixedVcpkgInstalledRoot
+        & $node $protocolTool $Mode
+        $exitCode = $LASTEXITCODE
+    } finally {
+        if ($null -eq $previousInstalledRoot) {
+            Remove-Item Env:CHAT_VCPKG_INSTALLED_ROOT -ErrorAction SilentlyContinue
+        } else {
+            $env:CHAT_VCPKG_INSTALLED_ROOT = $previousInstalledRoot
+        }
+    }
+    if ($exitCode -ne 0) {
+        throw "Protocol $Mode failed with exit code $exitCode."
     }
 }
 
@@ -756,6 +770,32 @@ function Confirm-TestStructure {
     if ($integrationProject -notmatch 'startup\\gate_status_startup_tests\.cpp') {
         throw 'Server Integration tests must register the Gate/Status production process contracts.'
     }
+    $integrationHostTests = Get-Content -LiteralPath `
+        (Join-Path $repoRoot 'tests\server\integration-host\integration_host_contract_tests.cpp') -Raw
+    if (@([regex]::Matches($integrationHostTests, 'TEST\(T09_HOST_Contract,')).Count -ne 6) {
+        throw 'Integration host tests must register exactly six T09-HOST contract testcases.'
+    }
+    foreach ($hostId in 1..6) {
+        $testId = 'T09-HOST-{0:D2}' -f $hostId
+        if (@([regex]::Matches($integrationHostTests, [regex]::Escape($testId))).Count -ne 1) {
+            throw "Integration host tests must register $testId exactly once."
+        }
+    }
+    foreach ($registration in @(
+        @{ Pattern = 'integration-host\\integration_host_contract_tests\.cpp'; Owner = 'T09-HOST contract source' }
+        @{ Pattern = '\.\.\\support\\IntegrationHostFactory\.cpp'; Owner = 'IntegrationHostFactory composition source' }
+        @{ Pattern = 'LogicDispatcher\.vcxproj'; Owner = 'LogicDispatcher shared target' }
+        @{ Pattern = 'ChatSessionState\.vcxproj'; Owner = 'ChatSessionState shared target' }
+        @{ Pattern = 'GateRequest\.vcxproj'; Owner = 'GateRequest shared target' }
+        @{ Pattern = 'StatusRouting\.vcxproj'; Owner = 'StatusRouting shared target' }
+    )) {
+        if ($integrationProject -notmatch $registration.Pattern) {
+            throw "Server Integration tests must register the $($registration.Owner)."
+        }
+    }
+    if ($integrationProject -match 'ClCompile Include="[^"]*(?:LogicDispatcher|ChatSessionState|GateRequest|StatusRouting)(?:Production)?\.cpp"') {
+        throw 'Server Integration tests must link shared Phase 3A targets instead of compiling production implementations directly.'
+    }
     foreach ($registration in @(
         @{ Text = $gateProject; Pattern = 'ProjectReference Include="GateGrpcClients\.vcxproj"'; Owner = 'GateServer' }
         @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatGrpcClients\.vcxproj"'; Owner = 'ChatServer' }
@@ -948,7 +988,7 @@ function Confirm-TestStructure {
             throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
         }
     }
-    foreach ($requiredCount in @(68, 56, 34, 4)) {
+    foreach ($requiredCount in @(68, 56, 40, 4)) {
         if ($runServerTests.Groups['body'].Value -notmatch "ExpectedCount\s*=\s*$requiredCount") {
             throw "RunServerTests is missing the exact Plan 2.5-05 testcase count $requiredCount."
         }
@@ -957,6 +997,11 @@ function Confirm-TestStructure {
         if ($runServerTests.Groups['body'].Value -notmatch [regex]::Escape($requiredProperty)) {
             throw "RunServerTests must enforce DG-25 property $requiredProperty on its solution build."
         }
+    }
+    if ($runnerRegistration -notmatch [regex]::Escape('$fixedVcpkgInstalledRoot = ''D:\git\Chat\vcpkg_installed''') -or
+        $runServerTests.Groups['body'].Value -notmatch 'fixedVcpkgInstalledRoot' -or
+        $runnerRegistration -notmatch 'CHAT_VCPKG_INSTALLED_ROOT\s*=\s*\$fixedVcpkgInstalledRoot') {
+        throw 'RunServerTests must reuse the exact DG-25 fixed installed tree from an isolated worktree.'
     }
     if ($runServerTests.Groups['body'].Value -notmatch 'ChatGrpcClientTests' -or
         $runServerTests.Groups['body'].Value -notmatch 'server_chat_grpc_integration\.xml') {
@@ -975,11 +1020,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact twelve-report/232-testcase baseline.'
+        throw 'RunAllTests must audit the exact twelve-report/238-testcase baseline.'
     }
     if ($regressionReportGroups.Count -ne 12 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 232) {
-        throw 'The registered regression baseline must remain exactly 12 reports and 232 testcases.'
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 238) {
+        throw 'The registered regression baseline must remain exactly 12 reports and 238 testcases.'
     }
 
     $workflowPath = Require-File (Join-Path $repoRoot '.github\workflows\windows-ci.yml') `

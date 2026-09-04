@@ -1,16 +1,16 @@
 # 当前自动测试合同矩阵
 
-状态：Phase 3A Plan 3A-05 基线清单
-基线日期：2026-09-02
+状态：Phase 3B Plan 3B-00 基线清单
+基线日期：2026-09-04
 治理规则：[`CI-GOVERNANCE.md`](CI-GOVERNANCE.md)
 
 ## 1. 统计口径
 
-当前本地基线包含 232 个 runner testcase：Server 166、Qt 24、VarifyServer 29、PowerShell 13。
+当前本地基线包含 238 个 runner testcase：Server 172、Qt 24、VarifyServer 29、PowerShell 13。
 
 Test ID 表示被保护的 Interface 合同，runner testcase 表示测试框架实际报告的用例。二者不必一一对应：例如 Qt `network_state_tests` 是一个 runner testcase，但同时保护拆分 header、拆分 body 和相邻 frame 三个合同。覆盖率、testcase 数量和合同数量必须分别报告，不能相互替代。
 
-当前所有 232 个 testcase 都属于 `develop` 全量快速门禁；`master` 和 release 继承它们。真实 Redis/MySQL/SMTP 与业务 E2E 尚不存在，因此不在当前 232 个基线中。
+当前所有 238 个 testcase 都属于 `develop` 全量快速门禁；`master` 和 release 继承它们。真实 Redis/MySQL/SMTP 与业务 E2E 尚不存在，因此不在当前 238 个基线中。
 
 Plan 2.5-07 的历史本地证据为 12 份报告 / 173 testcase。Plan 3A-01 在同一报告集合中新增
 7 个 `LogicDispatcherTests` runner testcase；focused 7/7 与完整 `server_unit.xml` 60/60
@@ -19,7 +19,7 @@ Plan 2.5-07 的历史本地证据为 12 份报告 / 173 testcase。Plan 3A-01 �
 因此为 12 份报告 / 194 testcase。Plan 3A-03 再增加 10 个 Chat session Component case，当前 manifest
 为 12 份报告 / 204 testcase。Plan 3A-04 再增加 16 个 Gate request Component case，当前 manifest
 为 12 份报告 / 220 testcase。Plan 3A-05 再增加 11 个 Qt Unit 与 1 个 Qt Component case，当前 manifest
-为 12 份报告 / 232 testcase。完整 `RunAllTests`、clean PR、远端 artifact 和 `develop`
+为 12 份报告 / 232 testcase。Plan 3B-00 在既有 `server_integration.xml` 中增加 6 个 T09-HOST contract case，当前 manifest 因此为 12 份报告 / 238 testcase。完整 `RunAllTests`、clean PR、远端 artifact 和 `develop`
 branch protection 仍必须由 3A-06/实际 GitHub check 证明。
 
 ## 2. Suite 与报告
@@ -30,7 +30,7 @@ branch protection 仍必须由 3A-06/实际 GitHub check 证明。
 | Gate Asio | Gate lifecycle | Foundation | Unit | 2 | `server_gate_unit.xml` | in-process thread/io_context | develop required |
 | Status Asio | Status lifecycle | Foundation | Unit | 2 | `server_status_unit.xml` | in-process thread/io_context | develop required |
 | Server component | Chat Redis pool/session state、Gate response/request、Status token/store | Foundation/Architecture/Business | Component | 56 | `server_component.xml` | in-process fake；不连接 Redis/MySQL/Status/Varify | develop required |
-| Server integration | Chat/Gate/Status startup、C++→Node Varify、Gate gRPC clients | Architecture | Integration | 34 | `server_integration.xml` | 受控子进程、动态 loopback 端口 | develop required |
+| Server integration | Chat/Gate/Status startup、C++→Node Varify、Gate gRPC clients、IntegrationHost composition | Architecture | Integration | 40 | `server_integration.xml` | 受控子进程、动态 loopback 端口、in-memory Adapter | develop required |
 | Chat gRPC integration | Chat production gRPC clients | Architecture | Integration | 4 | `server_chat_grpc_integration.xml` | 动态 loopback 端口、无外部服务 | develop required |
 | Qt unit | frame decoder、message model rules Q01-MODEL-01..06、auth outcomes Q03-AUTH-01..11 | Foundation/Architecture/Business | Unit | 18 | `client_unit.xml` | Qt Core/Widgets minimal，无 socket | develop required |
 | Qt component | message store/delegate Q01-MODEL-07..08、session reset Q02-SESSION-01..06、auth reset wiring Q03-AUTH-12 | Architecture/Business | Component | 6 | `client_component.xml` | Qt Widgets/Network minimal；真实 in-process Module，无连接 | develop required |
@@ -38,11 +38,11 @@ branch protection 仍必须由 3A-06/实际 GitHub check 证明。
 | Varify integration | config、loopback RPC、process startup | Foundation/Architecture | Integration | 11 | `varify_integration.xml` | 子进程或动态 loopback | develop required |
 | Script component | instance validation | Architecture | Component | 9 | `script_component.xml` | 临时目录、占位进程 | develop required |
 | Script integration | instance lifecycle | Architecture | Integration | 4 | `script_integration.xml` | 受控子进程/PID identity | develop required |
-| **合计** |  |  |  | **232** | 12 份报告 | 无个人服务或凭据 |  |
+| **合计** |  |  |  | **238** | 12 份报告 | 无个人服务或凭据 |  |
 
 PowerShell 报告逐项输出 13 个 testcase：validation 9 个、lifecycle 4 个；控制台同步保留逐 Test ID 的 PASS/FAIL。该报告粒度改进不改变本表的逻辑基线数量。
 
-## 3. Server testcase 目录（166）
+## 3. Server testcase 目录（172）
 
 ### 3.1 Chat ConfigMgr（17）
 
@@ -291,6 +291,21 @@ Domain/Level：Architecture / Integration。
 | S02-BIND-01 / S03-BIND-01 | `OccupiedPortFailsWithoutProtocolReadyAndReleasesOwnership` / Gate、Status | HTTP bind 或 gRPC `BuildAndStart` 失败不 ready、非零退出、端口可回收 |
 | S02-LIFE-01 / S03-LIFE-01 | `ProtocolReadyThenCtrlBreakStopsWithinDeadlineAndReleasesPort` / Gate、Status | 真实 HTTP/gRPC ready 后，scoped `CTRL_BREAK_EVENT` 5 秒内正常退出并释放端口 |
 
+### 3.17 Integration host composition（6）
+
+Interface：`integration::IntegrationHostFactory::Start`、`HostHandle::BoundEndpoint/Ready/Stop` 与 `CleanupObserver`。
+Domain/Level：Architecture / Integration。
+报告：`server_integration.xml`。通过 shared production targets 构造真实 Phase 3A Modules；transport seam 仅验证 host composition/lifecycle，不声明后续真实 HTTP/gRPC/TCP transport 已完成。
+
+| Test ID | Runner testcase | 合同 |
+| --- | --- | --- |
+| T09-HOST-01 | `RejectsNonLoopbackEndpoint` | 仅接受 numeric loopback endpoint |
+| T09-HOST-02 | `RequiresSelectedConcreteProductionModule` | host family 必须提供对应真实 Phase 3A Module |
+| T09-HOST-03 | `RejectsExpiredOwnedDeadline` | 缺失、过期或无界 owned deadline fail closed |
+| T09-HOST-04 | `ExposesActualBoundEndpointAndReadyProbe` | handle 暴露实际 bound endpoint 与 protocol-ready probe |
+| T09-HOST-05 | `StopIsBoundedAndIdempotent` | stop 使用调用方 deadline，重复调用保留首次 cleanup 结果 |
+| T09-HOST-06 | `DestructionPublishesBoundedCleanupResult` | 析构执行 bounded stop 并发布 cleanup 结果，不 detach |
+
 ## 4. Qt testcase 目录（24）
 
 ### 4.1 Frame decoder（1 runner testcase / 4 contracts）
@@ -474,7 +489,7 @@ Domain/Level：Architecture / Integration。
 [`PHASE-3C-PLAN.md`](plans/PHASE-3C-PLAN.md)、
 [`PHASE-3D-PLAN.md`](plans/PHASE-3D-PLAN.md) 和
 [`PHASE-RELEASE-PLAN.md`](plans/PHASE-RELEASE-PLAN.md)。这些 route 均为 planned/open owner 定位，
-不构成完成证据，不改变当前 12 份报告、232 个 runner testcase 或仍为 planned 的 Test ID 统计状态；
+不构成完成证据，不改变当前 12 份报告、238 个 runner testcase 或仍为 planned 的 Test ID 统计状态；
 阶段边界与 actual-or-bootstrap 条件继续严格遵守 DG-09..DG-24；所有后续计划同时受 DG-25 的本机 vcpkg
 不可变/审批门禁约束。
 
@@ -488,11 +503,11 @@ Domain/Level：Architecture / Integration。
 
 ### Phase 3B planned contract registry
 
-The following identifiers are frozen by [`PHASE-3B-TEST-PLAN.md`](plans/PHASE-3B-TEST-PLAN.md). They are planned-only and add zero cases to the current 12-report/232-case baseline until a real source, target and emitted JUnit testcase exist.
+The following identifiers are frozen by [`PHASE-3B-TEST-PLAN.md`](plans/PHASE-3B-TEST-PLAN.md). T09-HOST now contributes six emitted cases to the current 12-report/238-case baseline. Every later row remains planned-only and contributes zero until a real source, target and emitted JUnit testcase exist.
 
 | Plan | Planned Test IDs | Domain / Level | Planned report owner | Current state |
 | --- | --- | --- | --- | --- |
-| 3B-00 | `T09-HOST-01..06` | Architecture / Integration | existing `server_integration.xml` | planned; first executable 3B slice |
+| 3B-00 | `T09-HOST-01..06` | Architecture / Integration | existing `server_integration.xml` | complete; 6 testcase 已进入 238 baseline |
 | 3B-01 | `T09-PROC-01..12` | Architecture / Integration | existing `server_integration.xml` | planned; G-015 process ownership remains open |
 | 3B-02 | `T09-GHTTP-01..12` | Architecture/Business / Integration | existing `server_integration.xml` | planned; G-009 real HTTP remains open |
 | 3B-02 | `Q04-HTTP-01..10` | Architecture/Business / Integration | `client_integration.xml` after real emission | planned; G-011 real QNAM remains open |
