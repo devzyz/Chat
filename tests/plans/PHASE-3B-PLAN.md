@@ -174,6 +174,9 @@ ownership 串行合并这些共享注册文件。
 
 ## 7. Plan 3B-00 — Contract / shared-target preflight
 
+状态：**Complete（2026-09-04）**。完成证据见
+[`PHASE-3B-00-SUMMARY.md`](PHASE-3B-00-SUMMARY.md)；下一项为 **Plan 3B-01**。
+
 <objective>
 确认 Phase 3A 真实 production Modules 已完成并冻结 IntegrationHost 的最小 Interface、planned Test ID、report
 与 target ownership，使后续 transport plan 无需探索或复制上游实现。

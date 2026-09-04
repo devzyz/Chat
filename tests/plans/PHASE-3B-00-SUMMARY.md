@@ -146,7 +146,7 @@ None. Plan 3B-00 adds a loopback-only test host and runner validation; it does n
 
 ## Self-Check: PASSED
 
-- Task commits `c8c6d79`, `c53e2b9`, and `fc32b01` exist in order on `worktree-agent-3b-00-continuation`.
+- Task commits `c8c6d79`, `c53e2b9`, and `fc32b01` exist in order on `phase-3b-integration-20260904`.
 - All files listed as created or modified by this plan exist.
 - Task 3 contains exactly the five reviewed files and no tracked deletion.
 - Final verification evidence is complete, `git diff --check` passed, DG-25 recorded zero writes, and task process/residue checks are clean.
