@@ -1,5 +1,6 @@
 #include "ProcessHarness.h"
 
+#include "EvidenceSanitizer.h"
 #include "Win32ProcessAdapter.h"
 
 #include <algorithm>
@@ -150,8 +151,8 @@ ProcessEvidence ProcessHarness::CollectEvidence() const {
 	ProcessEvidence evidence;
 	evidence.identity = adapter_evidence.identity;
 	evidence.exit_code = adapter_evidence.exit_code;
-	evidence.stdout_text = adapter_evidence.stdout_text;
-	evidence.stderr_text = adapter_evidence.stderr_text;
+	evidence.stdout_text = SanitizeEvidence(adapter_evidence.stdout_text);
+	evidence.stderr_text = SanitizeEvidence(adapter_evidence.stderr_text);
 	evidence.ready_probe_attempted = impl_->ready_probe_attempted;
 	evidence.ready_probe_succeeded = impl_->ready_probe_succeeded;
 	evidence.graceful_stop_attempted = impl_->graceful_stop_attempted;

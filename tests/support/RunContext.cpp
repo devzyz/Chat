@@ -1,5 +1,7 @@
 #include "RunContext.h"
 
+#include "EvidenceSanitizer.h"
+
 #include <boost/asio.hpp>
 
 #include <Windows.h>
@@ -357,7 +359,7 @@ bool RunContext::CleanupProcess(ProcessIdentity identity) {
 void RunContext::RecordPrimaryFailure(std::string failure) {
 	std::lock_guard<std::mutex> lock(impl_->mutex);
 	if (!impl_->primary_failure.has_value()) {
-		impl_->primary_failure = std::move(failure);
+		impl_->primary_failure = SanitizeEvidence(std::move(failure));
 	}
 }
 
@@ -371,7 +373,7 @@ RunOutcome RunContext::Teardown() noexcept {
 	for (auto entry = impl_->ledger.rbegin(); entry != impl_->ledger.rend(); ++entry) {
 		const auto status = impl_->RunEntry(*entry);
 		if (!status.Complete()) {
-			impl_->outcome.cleanup_failures.push_back(status.Detail());
+			impl_->outcome.cleanup_failures.push_back(SanitizeEvidence(status.Detail()));
 		}
 	}
 	impl_->processes.clear();

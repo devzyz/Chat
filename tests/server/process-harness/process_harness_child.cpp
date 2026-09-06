@@ -32,7 +32,15 @@ std::string ArgumentValue(int argc, wchar_t** argv, const std::wstring& prefix) 
 		const std::wstring argument(argv[index]);
 		if (argument.rfind(prefix, 0) == 0) {
 			const auto value = argument.substr(prefix.size());
-			return std::string(value.begin(), value.end());
+			std::string result;
+			result.reserve(value.size());
+			for (const wchar_t character : value) {
+				if (character < 0 || character > 0x7f) {
+					throw std::invalid_argument("synthetic helper arguments must be ASCII");
+				}
+				result.push_back(static_cast<char>(character));
+			}
+			return result;
 		}
 	}
 	return {};
@@ -47,7 +55,7 @@ bool HasArgument(int argc, wchar_t** argv, const std::wstring& expected) {
 	return false;
 }
 
-int RunServer(std::uint16_t port, bool late_output) {
+int RunServer(std::uint16_t port, bool late_output, bool emit_secret) {
 	WSADATA data{};
 	if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
 		return 30;
@@ -103,6 +111,10 @@ int RunServer(std::uint16_t port, bool late_output) {
 		std::cout << "synthetic late stdout" << std::endl;
 		std::cerr << "synthetic late stderr" << std::endl;
 	}
+	if (emit_secret) {
+		std::cout << "password=primary-secret" << std::endl;
+		std::cerr << "token=cleanup-secret" << std::endl;
+	}
 	WSACloseEvent(socket_event);
 	CloseHandle(stop_event);
 	stop_event = nullptr;
@@ -133,5 +145,8 @@ int wmain(int argc, wchar_t** argv) {
 	if (port.empty()) {
 		return 32;
 	}
-	return RunServer(static_cast<std::uint16_t>(std::stoul(port)), HasArgument(argc, argv, L"--late-output"));
+	return RunServer(
+		static_cast<std::uint16_t>(std::stoul(port)),
+		HasArgument(argc, argv, L"--late-output"),
+		HasArgument(argc, argv, L"--emit-secret"));
 }

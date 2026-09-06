@@ -10,4 +10,6 @@ The process tests never adopt an existing directory or PID, delete outside the r
 - `T09-PROC-06..10`: Win32 start, protocol readiness, identity-scoped stop and evidence.
 - `T09-PROC-11..12`: deterministic fault propagation and complete residue release.
 
-All cases belong to the existing `server_integration.xml` report. Actual runner counts are updated only after the executable emits the cases.
+All 12 cases belong to the existing `server_integration.xml` report. The focused
+JUnit reports emitted 5 RunContext, 5 ProcessHarness, and 2 fault cases before
+the public runner baseline was updated.

@@ -62,7 +62,7 @@ $scriptTestGroups = @(
 $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 68 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 56 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 40 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 52 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
@@ -352,7 +352,7 @@ function Run-ServerTests {
     $executions = @(
         @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 68 }
         @{ Binary = $componentBinary; Report = $reports[1]; ExpectedCount = 56 }
-        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 40 }
+        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 52 }
         @{ Binary = $chatGrpcClientBinary; Report = $reports[3]; ExpectedCount = 4 }
         @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4]; ExpectedCount = 2 }
         @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5]; ExpectedCount = 2 }
@@ -490,8 +490,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 12 -or $total -ne 238) {
-        throw "Regression report baseline mismatch: expected 12 reports and 238 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 12 -or $total -ne 250) {
+        throw "Regression report baseline mismatch: expected 12 reports and 250 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     Write-Host "Regression report audit passed: $total testcases across $($regressionReportGroups.Count) reports."
 }
@@ -988,9 +988,9 @@ function Confirm-TestStructure {
             throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
         }
     }
-    foreach ($requiredCount in @(68, 56, 40, 4)) {
+    foreach ($requiredCount in @(68, 56, 52, 4)) {
         if ($runServerTests.Groups['body'].Value -notmatch "ExpectedCount\s*=\s*$requiredCount") {
-            throw "RunServerTests is missing the exact Plan 2.5-05 testcase count $requiredCount."
+            throw "RunServerTests is missing the exact current Server testcase count $requiredCount."
         }
     }
     foreach ($requiredProperty in @('VcpkgManifestInstall=false', 'VcpkgInstalledDir=')) {
@@ -1020,11 +1020,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact twelve-report/238-testcase baseline.'
+        throw 'RunAllTests must audit the exact twelve-report/250-testcase baseline.'
     }
     if ($regressionReportGroups.Count -ne 12 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 238) {
-        throw 'The registered regression baseline must remain exactly 12 reports and 238 testcases.'
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 250) {
+        throw 'The registered regression baseline must remain exactly 12 reports and 250 testcases.'
     }
 
     $workflowPath = Require-File (Join-Path $repoRoot '.github\workflows\windows-ci.yml') `
