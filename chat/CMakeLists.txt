@@ -46,6 +46,16 @@ add_library(chat_network_core STATIC
 target_include_directories(chat_network_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(chat_network_core PUBLIC Qt${QT_VERSION_MAJOR}::Core)
 
+add_library(chat_tcp_transport STATIC
+    chattcptransport.h chattcptransport.cpp
+)
+target_include_directories(chat_tcp_transport PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_tcp_transport PUBLIC
+    chat_network_core
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
+)
+
 add_library(chat_auth_flow STATIC
     authflowcoordinator.h authflowcoordinator.cpp
 )
@@ -478,6 +488,38 @@ if(BUILD_TESTING)
             NAME http_transport.${HTTP_TRANSPORT_CASE}
             COMMAND http_transport_tests ${HTTP_TRANSPORT_CASE})
         set_tests_properties(http_transport.${HTTP_TRANSPORT_CASE} PROPERTIES
+            ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+            LABELS "integration"
+            TIMEOUT 10
+        )
+    endforeach()
+
+    add_executable(tcp_transport_tests
+        tests/tcp-transport/tcp_transport_tests.cpp
+    )
+    target_link_libraries(tcp_transport_tests PRIVATE
+        chat_tcp_transport
+        Qt${QT_VERSION_MAJOR}::Test
+        Qt${QT_VERSION_MAJOR}::Network
+    )
+    foreach(TCP_TRANSPORT_CASE IN ITEMS
+        connectPreservesGenerationAndFlowIdentity
+        sendWritesProductionFrame
+        fragmentedFrameDecodedOnce
+        coalescedFramesStayOrdered
+        maximumFrameIsAccepted
+        malformedOversizedFrameTerminates
+        refusedConnectHasOneBoundedOutcome
+        writeDeadlineAbortsSilentPeer
+        peerCloseMidWriteHasOneTerminalOutcome
+        resetDiscardsHalfFrame
+        lateOldGenerationCannotCompleteRetry
+        closeAndDeleteReleaseOwnedResources
+    )
+        add_test(
+            NAME tcp_transport.${TCP_TRANSPORT_CASE}
+            COMMAND tcp_transport_tests ${TCP_TRANSPORT_CASE})
+        set_tests_properties(tcp_transport.${TCP_TRANSPORT_CASE} PROPERTIES
             ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
             LABELS "integration"
             TIMEOUT 10
