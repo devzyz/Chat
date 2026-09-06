@@ -6,7 +6,7 @@ The contract target links the same `LogicDispatcher`, `ChatSessionState`, `GateR
 
 The factory is a composition root only. It does not parse payloads, choose servers, map business errors, expose production containers, detach work, or compile a private copy of a production algorithm.
 
-The six host cases and seven `T09-GHTTP-01..07` cases are registered in `ServerIntegrationTests.vcxproj` and emitted by the existing `server_integration.xml` owner. The report now contains 59 cases; the thirteen-report regression manifest contains 267 cases. `CheckTestStructure` requires all shared production target references and rejects direct compilation of production `.cpp` implementations.
+The six host cases, seven `T09-GHTTP-01..07` cases, and twelve `T09-SGRPC-01..12` cases are registered in `ServerIntegrationTests.vcxproj` and emitted by the existing `server_integration.xml` owner. The report now contains 71 cases; the thirteen-report regression manifest contains 279 cases. `CheckTestStructure` requires all shared production target references and rejects direct compilation of production `.cpp` implementations.
 
 The Gate HTTP cases cross production Beast parsing and lifecycle code through the shared `GateTransport.vcxproj`. They prove actual numeric-loopback publication, all four POST routes delegating to the same Phase 3A `GateRequest`, fragmented exact-limit acceptance, max+1 rejection, malformed request rejection, interrupted connection cleanup, and idempotent stop. No Redis, MySQL, gRPC service, public endpoint, or test-only production switch is used.
 

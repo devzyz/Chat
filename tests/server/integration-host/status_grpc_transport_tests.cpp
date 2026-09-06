@@ -148,7 +148,7 @@ TEST_F(T09_SGRPC_Core, PublishesProtocolReadyNumericLoopbackEndpoint) {
 	EXPECT_NE(server_->BoundPort(), 0);
 }
 
-// T09-SGRPC-02 and T09-SGRPC-04 (maximum valid int32 request field)
+// T09-SGRPC-02 (also exercises the maximum valid int32 request field)
 TEST_F(T09_SGRPC_Core, GeneratedGetChatServerStubDelegatesMaximumUidToRouting) {
 	message::GetChatServerRsp response;
 	const auto status = GetChatServer((std::numeric_limits<std::int32_t>::max)(), response);

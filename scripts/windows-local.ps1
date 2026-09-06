@@ -63,7 +63,7 @@ $scriptTestGroups = @(
 $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 68 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 56 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 59 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 71 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
@@ -354,7 +354,7 @@ function Run-ServerTests {
     $executions = @(
         @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 68 }
         @{ Binary = $componentBinary; Report = $reports[1]; ExpectedCount = 56 }
-        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 59 }
+        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 71 }
         @{ Binary = $chatGrpcClientBinary; Report = $reports[3]; ExpectedCount = 4 }
         @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4]; ExpectedCount = 2 }
         @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5]; ExpectedCount = 2 }
@@ -492,8 +492,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 13 -or $total -ne 267) {
-        throw "Regression report baseline mismatch: expected 13 reports and 267 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 13 -or $total -ne 279) {
+        throw "Regression report baseline mismatch: expected 13 reports and 279 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     Write-Host "Regression report audit passed: $total testcases across $($regressionReportGroups.Count) reports."
 }
@@ -606,6 +606,7 @@ function Confirm-TestStructure {
     $logicDispatcherProject = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\LogicDispatcher.vcxproj') -Raw
     $statusProject = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusServer.vcxproj') -Raw
     $statusRoutingProject = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusRouting.vcxproj') -Raw
+    $statusTransportProject = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusTransport.vcxproj') -Raw
     $chatSessionStateProject = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatSessionState.vcxproj') -Raw
     $chatSessionStateFilters = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatSessionState.vcxproj.filters') -Raw
     $solutionRegistration = Get-Content -LiteralPath (Join-Path $repoRoot 'Chat.sln') -Raw
@@ -670,6 +671,7 @@ function Confirm-TestStructure {
     $statusServiceSource = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusServiceImpl.cpp') -Raw
     $statusUnitTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\status-routing\status_routing_unit_tests.cpp') -Raw
     $statusComponentTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\status-routing\status_routing_component_tests.cpp') -Raw
+    $statusGrpcTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\integration-host\status_grpc_transport_tests.cpp') -Raw
     if (@([regex]::Matches($statusUnitTests, 'TEST\(StatusRoutingUnitTests,')).Count -ne 8 -or
         @([regex]::Matches($statusComponentTests, 'TEST\(StatusRoutingComponentTests,')).Count -ne 6 -or
         @([regex]::Matches($statusUnitTests + $statusComponentTests, 'T08-STATUS-(?:0[1-9]|1[0-4])')).Count -ne 14) {
@@ -688,10 +690,36 @@ function Confirm-TestStructure {
             throw "$($registration.Owner) must share the production StatusRouting Module with its tests."
         }
     }
+    foreach ($registration in @(
+        @{ Text = $statusTransportProject; Pattern = 'ClCompile Include="StatusGrpcServer\.cpp"'; Owner = 'Status transport library' }
+        @{ Text = $statusTransportProject; Pattern = 'ClCompile Include="StatusServiceImpl\.cpp"'; Owner = 'Status transport library' }
+        @{ Text = $statusTransportProject; Pattern = 'ClCompile Include="\$\(ProtocolGeneratedDir\)\\status\.grpc\.pb\.cc"'; Owner = 'Status gRPC generated transport' }
+        @{ Text = $statusTransportProject; Pattern = 'ClCompile Include="\$\(ProtocolGeneratedDir\)\\status\.pb\.cc"'; Owner = 'Status protobuf generated transport' }
+        @{ Text = $statusProject; Pattern = 'ProjectReference Include="StatusTransport\.vcxproj"'; Owner = 'StatusServer' }
+        @{ Text = $integrationProject; Pattern = 'StatusServer\\StatusServer\\StatusTransport\.vcxproj'; Owner = 'Server Integration tests' }
+        @{ Text = $solutionRegistration; Pattern = '"StatusTransport", "StatusServer\\StatusServer\\StatusTransport\.vcxproj"'; Owner = 'Chat solution' }
+    )) {
+        if ($registration.Text -notmatch $registration.Pattern) {
+            throw "$($registration.Owner) must share and register the production StatusTransport target."
+        }
+    }
+    foreach ($consumer in @(
+        @{ Text = $statusProject; Owner = 'StatusServer' }
+        @{ Text = $integrationProject; Owner = 'Server Integration tests' }
+    )) {
+        if ($consumer.Text -match 'ClCompile Include="[^\"]*StatusServer\\StatusServer\\(?:StatusGrpcServer|StatusServiceImpl)\.cpp"' -or
+            $consumer.Text -match 'ClCompile Include="(?:StatusGrpcServer|StatusServiceImpl)\.cpp"') {
+            throw "$($consumer.Owner) must not compile StatusTransport production sources directly."
+        }
+    }
+    if (@([regex]::Matches($statusGrpcTests, 'TEST(?:_F)?\s*\(\s*T09_SGRPC_')).Count -ne 12 -or
+        @([regex]::Matches($statusGrpcTests, 'T09-SGRPC-(?:0[1-9]|1[0-2])')).Count -ne 12) {
+        throw 'Status gRPC transport tests must register exactly T09-SGRPC-01..12 as twelve Server Integration testcases.'
+    }
     if ($statusRoutingHeader -notmatch 'AssignmentResult\s+Assign\s*\(int uid\)' -or
         $statusRoutingHeader -notmatch 'LoginResult\s+Validate\s*\(int uid, const std::string& token\)' -or
-        $statusServiceSource -notmatch 'routing_->Assign\s*\(' -or
-        $statusServiceSource -notmatch 'routing_->Validate\s*\(' -or
+        $statusServiceSource -notmatch 'routing_\.Assign\s*\(' -or
+        $statusServiceSource -notmatch 'routing_\.Validate\s*\(' -or
         $statusServiceSource -match 'RedisMgr|_servers|\.begin\(\)') {
         throw 'StatusServiceImpl must call only the two-method production StatusRouting Interface.'
     }
@@ -1038,7 +1066,7 @@ function Confirm-TestStructure {
             throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
         }
     }
-    foreach ($requiredCount in @(68, 56, 59, 4)) {
+    foreach ($requiredCount in @(68, 56, 71, 4)) {
         if ($runServerTests.Groups['body'].Value -notmatch "ExpectedCount\s*=\s*$requiredCount") {
             throw "RunServerTests is missing the exact current Server testcase count $requiredCount."
         }
@@ -1070,11 +1098,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact thirteen-report/267-testcase baseline.'
+        throw 'RunAllTests must audit the exact thirteen-report/279-testcase baseline.'
     }
     if ($regressionReportGroups.Count -ne 13 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 267) {
-        throw 'The registered regression baseline must remain exactly 13 reports and 267 testcases.'
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 279) {
+        throw 'The registered regression baseline must remain exactly 13 reports and 279 testcases.'
     }
 
     $workflowPath = Require-File (Join-Path $repoRoot '.github\workflows\windows-ci.yml') `
