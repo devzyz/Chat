@@ -3,41 +3,41 @@
 #include "logmgr.h"
 #include "usermgr.h"
 
-TcpMgr::TcpMgr() : _host(""), _port(0) {
+TcpMgr::TcpMgr() : _host("") {
 
     // 绑定连接完成信号到lambda槽函数上
-    connect(&_socket, &QTcpSocket::connected, this, [&]() {
+    connect(&_transport, &ChatTcpTransport::connected, this,
+            [this](quint64, quint64) {
         _acceptingSends = true;
         SPDLOG_INFO("connected to chat server");
         emit sig_tcp_connect_success(true);
     });
 
     // 绑定socket可读取信号到lambda槽函数上
-    connect(&_socket, &QTcpSocket::readyRead, this, [&]() {
-        const auto frames = _frameDecoder.append(_socket.readAll());
-        for (const auto &frame : frames) {
-            handleMsg(ReqId(frame.messageId), frame.body.size(), frame.body);
-        }
+    connect(&_transport, &ChatTcpTransport::frameReceived, this,
+            [this](const ChatTcpFrame &frame) {
+        handleMsg(ReqId(frame.messageId), frame.body.size(), frame.body);
     });
 
     // 处理错误信号
-    connect(&_socket, &QTcpSocket::errorOccurred, this, [&](QAbstractSocket::SocketError socketError) {
-        SPDLOG_WARN("chat server socket error, code={}, message={}",
-                    static_cast<int>(socketError),
-                    LogMgr::ToUtf8(_socket.errorString()));
+    connect(&_transport, &ChatTcpTransport::finished, this,
+            [this](const ChatTcpOutcome &outcome) {
+        const bool expectedClose = _expectedClose
+            || outcome.terminal == ChatTcpTerminal::LocalClosed
+            || outcome.terminal == ChatTcpTerminal::Reset
+            || outcome.terminal == ChatTcpTerminal::Superseded;
+        _expectedClose = false;
+        _acceptingSends = false;
+        _pendingTextBatches.clear();
+        if (outcome.terminal == ChatTcpTerminal::Refused
+            || outcome.terminal == ChatTcpTerminal::ConnectDeadlineExceeded) {
+            emit sig_tcp_connect_success(false);
+        } else {
+            emit sig_connection_close(expectedClose);
+        }
     });
 
     // 处理断开连接信号
-    connect(&_socket, &QTcpSocket::disconnected, this, [&]() {
-        const bool expectedClose = _expectedClose;
-        _expectedClose = false;
-        _acceptingSends = false;
-        _frameDecoder.reset();
-        _pendingTextBatches.clear();
-        SPDLOG_INFO("disconnected from chat server");
-        emit sig_connection_close(expectedClose);
-    });
-
     // 连接发送数据信号与槽函数
     connect(this, &TcpMgr::sig_send_data, this, &TcpMgr::slot_send_data);
 
@@ -911,17 +911,11 @@ void TcpMgr::beginSession()
 void TcpMgr::resetConnection(bool expectedClose)
 {
     _acceptingSends = false;
-    _frameDecoder.reset();
     _pendingTextBatches.clear();
     _host.clear();
     _port = 0;
     _expectedClose = expectedClose;
-
-    if (_socket.state() != QAbstractSocket::UnconnectedState) {
-        _socket.abort();
-    } else {
-        _expectedClose = false;
-    }
+    _transport.reset();
 }
 
 /**
@@ -936,6 +930,7 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
         return;
     }
 
+    bool queuedTextBatch = false;
     if (reqId == ReqId::ID_TEXT_CHAT_MSG_REQ) {
         const QJsonDocument document = QJsonDocument::fromJson(dataBytes);
         if (document.isObject()) {
@@ -947,31 +942,13 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
             }
             if (batch.chatId > 0 && !batch.clientMessageIds.isEmpty()) {
                 _pendingTextBatches.enqueue(std::move(batch));
+                queuedTextBatch = true;
             }
         }
     }
 
-    uint16_t id = reqId;
-
-    // 计算长度
-    quint16 len = static_cast<quint16> (dataBytes.size());
-
-    // 字节流数组，保存要发送的，id, len, data
-    QByteArray sendData;
-    // 创建一个字节写入流，绑定sendData
-    QDataStream out(&sendData, QIODevice::WriteOnly);
-
-    // 设置数据流采用网络字节序
-    out.setByteOrder(QDataStream::BigEndian);
-
-    // 写入id和长度
-    out << id << len;
-
-    // 在结尾添加data的字节流
-    sendData.append(dataBytes);
-
-    if (_socket.state() == QAbstractSocket::ConnectedState) {
-        _socket.write(sendData);
+    if (!_transport.send(static_cast<quint16>(reqId), dataBytes) && queuedTextBatch) {
+        _pendingTextBatches.removeLast();
     }
 }
 
@@ -991,10 +968,15 @@ void TcpMgr::slot_tcp_connect(ServerInfo si)
     _host = si.Host;
     _port = static_cast<quint16> (si.Port.toUInt());
 
-    // 异步连接服务器
-    _socket.connectToHost(_host, _port);
+    ChatTcpEndpoint endpoint;
+    endpoint.host = _host;
+    endpoint.port = _port;
+    endpoint.flowId = ++_transportFlowId;
+    endpoint.connectDeadlineMs = 5000;
+    endpoint.writeDeadlineMs = 5000;
+    _transport.connectTo(endpoint);
 }
 
 TcpMgr::~TcpMgr() {
-
+    _transport.reset();
 }

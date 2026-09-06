@@ -82,6 +82,7 @@ target_link_libraries(chat_message_model PUBLIC Qt${QT_VERSION_MAJOR}::Widgets)
 
 add_library(chat_session_core STATIC
     clientsession.h clientsession.cpp
+    chattcptransport.h
     global.h global.cpp
     logmgr.h logmgr.cpp
     messagerecord.h
@@ -96,6 +97,7 @@ target_link_libraries(chat_session_core PUBLIC
     Qt${QT_VERSION_MAJOR}::Network
     spdlog::spdlog
     chat_network_core
+    chat_tcp_transport
 )
 
 set(PROJECT_SOURCES
@@ -124,7 +126,6 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         clickedlabel.h clickedlabel.cpp
         resetdialog.ui
         resetdialog.h resetdialog.cpp
-        tcpmgr.h
         chatdialog.h chatdialog.cpp chatdialog.ui
         clickedbtn.h clickedbtn.cpp
         customizeedit.h customizeedit.cpp
@@ -136,14 +137,11 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         messagetextedit.h messagetextedit.cpp
         statewidget.h statewidget.cpp
         searchlist.h searchlist.cpp
-        userdata.h
         adduseritem.h adduseritem.cpp adduseritem.ui
         findsuccessdialog.h findsuccessdialog.cpp findsuccessdialog.ui
         applyfrienddialog.h applyfrienddialog.cpp applyfrienddialog.ui
         clickedoncelabel.h clickedoncelabel.cpp
 
-        usermgr.h
-        clientsession.h
         contactuserlist.h contactuserlist.cpp
         contactuseritem.h contactuseritem.cpp contactuseritem.ui
         grouptipitem.h grouptipitem.cpp grouptipitem.ui

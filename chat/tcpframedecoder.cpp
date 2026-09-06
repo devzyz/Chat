@@ -18,6 +18,12 @@ QVector<DecodedTcpFrame> TcpFrameDecoder::append(const QByteArray &bytes)
         stream >> messageId;
         stream >> bodyLength;
 
+        if (bodyLength > MaxBodyBytes()) {
+            _buffer.clear();
+            _error = true;
+            break;
+        }
+
         if (_buffer.size() < headerSize + bodyLength) {
             break;
         }
@@ -35,9 +41,15 @@ QVector<DecodedTcpFrame> TcpFrameDecoder::append(const QByteArray &bytes)
 void TcpFrameDecoder::reset()
 {
     _buffer.clear();
+    _error = false;
 }
 
 qsizetype TcpFrameDecoder::bufferedBytes() const
 {
     return _buffer.size();
+}
+
+bool TcpFrameDecoder::hasError() const
+{
+    return _error;
 }
