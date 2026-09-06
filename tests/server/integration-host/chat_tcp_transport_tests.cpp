@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "../../../ChatServer/ChatServer/CServer.h"
+#include "../../../ChatServer/ChatServer/CSession.h"
 #include "../../../ChatServer/ChatServer/ChatFrameCodec.h"
 #include "../../../ChatServer/ChatServer/ChatSessionStateInternal.h"
 #include "../../../ChatServer/ChatServer/Const.h"
@@ -9,8 +10,10 @@
 #include <boost/asio.hpp>
 
 #include <chrono>
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -44,12 +47,22 @@ struct ReceivedFrame {
 class FrameRecorder {
 public:
 	bool Record(const LogicMessage& message) {
+		std::function<void(const LogicMessage&)> responder;
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 			frames_.push_back({static_cast<std::uint16_t>(message.id), message.body});
+			responder = responder_;
 		}
 		condition_.notify_all();
+		if (responder) {
+			responder(message);
+		}
 		return true;
+	}
+
+	void SetResponder(std::function<void(const LogicMessage&)> responder) {
+		std::lock_guard<std::mutex> lock(mutex_);
+		responder_ = std::move(responder);
 	}
 
 	bool WaitFor(std::size_t count, std::chrono::steady_clock::time_point deadline) {
@@ -66,6 +79,7 @@ private:
 	mutable std::mutex mutex_;
 	std::condition_variable condition_;
 	std::vector<ReceivedFrame> frames_;
+	std::function<void(const LogicMessage&)> responder_;
 };
 
 std::string Frame(std::uint16_t id, const std::string& body) {
@@ -231,6 +245,154 @@ TEST_F(T09_CTCP_Stream, StopDuringWriteInterruptionIsBoundedAndIdempotent) {
 	server_->Stop();
 	EXPECT_LT(std::chrono::steady_clock::now() - started, 1s);
 	EXPECT_FALSE(server_->Ready());
+}
+
+// T09-CTCP-11
+TEST_F(T09_CTCP_Stream, RefusedConnectionCompletesBeforeOwnedDeadline) {
+	const auto port = server_->BoundPort();
+	server_->Stop();
+	boost::asio::io_context connect_ioc;
+	tcp::socket socket(connect_ioc);
+	boost::asio::steady_timer deadline(connect_ioc, 250ms);
+	boost::system::error_code outcome;
+	bool completed = false;
+	socket.async_connect({boost::asio::ip::make_address("127.0.0.1"), port},
+		[&](const boost::system::error_code& error) {
+			if (!completed) {
+				completed = true;
+				outcome = error;
+				deadline.cancel();
+			}
+		});
+	deadline.async_wait([&](const boost::system::error_code& error) {
+		if (!error && !completed) {
+			completed = true;
+			outcome = boost::asio::error::timed_out;
+			boost::system::error_code ignored;
+			socket.close(ignored);
+		}
+	});
+	connect_ioc.run();
+	EXPECT_TRUE(completed);
+	EXPECT_TRUE(outcome);
+}
+
+// T09-CTCP-12
+TEST_F(T09_CTCP_Stream, SilentReadIsCancelledAtTheOwnedDeadline) {
+	auto socket = Connect();
+	std::array<char, 1> byte{};
+	boost::asio::steady_timer deadline(client_ioc_, 75ms);
+	bool timed_out = false;
+	bool read_completed = false;
+	boost::asio::async_read(socket, boost::asio::buffer(byte),
+		[&](const boost::system::error_code&, std::size_t) {
+			read_completed = true;
+			deadline.cancel();
+		});
+	deadline.async_wait([&](const boost::system::error_code& error) {
+		if (!error) {
+			timed_out = true;
+			boost::system::error_code ignored;
+			socket.close(ignored);
+		}
+	});
+	client_ioc_.restart();
+	client_ioc_.run();
+	EXPECT_TRUE(timed_out);
+	EXPECT_TRUE(read_completed);
+}
+
+// T09-CTCP-13
+TEST_F(T09_CTCP_Stream, QueuedWritesSurvivePartialCompletionsExactlyOnce) {
+	constexpr std::size_t reply_count = 512;
+	const std::string body(MAX_LENGTH, 'r');
+	std::atomic<std::size_t> accepted{0};
+	recorder_.SetResponder([&](const LogicMessage& message) {
+		for (std::size_t index = 0; index < reply_count; ++index) {
+			if (message.session->Send(body, static_cast<std::uint16_t>(2200 + (index % 100)))
+				== SessionSendResult::Accepted) {
+				++accepted;
+			}
+		}
+	});
+	auto socket = Connect();
+	socket.set_option(boost::asio::socket_base::receive_buffer_size(1024));
+	Write(socket, Frame(1213, "write-burst"));
+	ASSERT_TRUE(WaitFor(1));
+	ASSERT_EQ(accepted.load(), reply_count);
+
+	const std::size_t expected_bytes = reply_count * (HEAD_TOTAL_LEN + MAX_LENGTH);
+	std::vector<char> received(expected_bytes);
+	boost::asio::steady_timer deadline(client_ioc_, 3s);
+	std::size_t bytes_read = 0;
+	bool timed_out = false;
+	boost::asio::async_read(socket, boost::asio::buffer(received),
+		[&](const boost::system::error_code&, std::size_t count) {
+			bytes_read = count;
+			deadline.cancel();
+		});
+	deadline.async_wait([&](const boost::system::error_code& error) {
+		if (!error) {
+			timed_out = true;
+			boost::system::error_code ignored;
+			socket.close(ignored);
+		}
+	});
+	client_ioc_.restart();
+	client_ioc_.run();
+	EXPECT_FALSE(timed_out);
+	EXPECT_EQ(bytes_read, expected_bytes);
+}
+
+// T09-CTCP-14
+TEST_F(T09_CTCP_Stream, OccupiedPortIsRejectedWithoutReplacingTheOwner) {
+	auto second_state = std::make_shared<ChatSessionState>(
+		std::make_shared<SequentialSessionIds>(), std::make_shared<InMemoryPresence>());
+	auto second_dispatcher = std::make_shared<LogicDispatcher>([](const LogicMessage&) { return true; });
+	EXPECT_THROW((std::make_shared<chat_transport::CServer>(
+		ioc_, "127.0.0.1", server_->BoundPort(), second_state, second_dispatcher)),
+		boost::system::system_error);
+	EXPECT_TRUE(server_->Ready());
+	second_dispatcher->Stop();
+}
+
+// T09-CTCP-15
+TEST_F(T09_CTCP_Stream, StopCancelsPendingAcceptAndReleasesThePort) {
+	const auto port = server_->BoundPort();
+	server_->Stop();
+	EXPECT_TRUE(server_->Stopped());
+	boost::asio::io_context probe_ioc;
+	tcp::acceptor probe(probe_ioc);
+	boost::system::error_code error;
+	probe.open(tcp::v4(), error);
+	ASSERT_FALSE(error);
+	probe.bind({boost::asio::ip::make_address("127.0.0.1"), port}, error);
+	EXPECT_FALSE(error);
+}
+
+// T09-CTCP-16
+TEST_F(T09_CTCP_Stream, StopReleasesSessionsThreadsSocketsAndServerOwnership) {
+	const auto port = server_->BoundPort();
+	auto socket = Connect();
+	Write(socket, Frame(1214, "release"));
+	ASSERT_TRUE(WaitFor(1));
+	boost::system::error_code ignored;
+	socket.close(ignored);
+	std::weak_ptr<chat_transport::CServer> weak_server = server_;
+	server_->Stop();
+	EXPECT_TRUE(server_->Stopped());
+	server_.reset();
+	const auto deadline = std::chrono::steady_clock::now() + 1s;
+	while (!weak_server.expired() && std::chrono::steady_clock::now() < deadline) {
+		std::this_thread::yield();
+	}
+	EXPECT_TRUE(weak_server.expired());
+	boost::asio::io_context probe_ioc;
+	tcp::acceptor probe(probe_ioc);
+	probe.open(tcp::v4(), ignored);
+	ASSERT_FALSE(ignored);
+	probe.bind({boost::asio::ip::make_address("127.0.0.1"), port}, ignored);
+	EXPECT_FALSE(ignored);
 }
 
 } // namespace
