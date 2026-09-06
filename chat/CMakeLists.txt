@@ -439,4 +439,34 @@ if(BUILD_TESTING)
         LABELS "component"
         TIMEOUT 10
     )
+
+    add_executable(http_transport_tests
+        tests/http-transport/http_transport_tests.cpp
+    )
+    target_link_libraries(http_transport_tests PRIVATE
+        chat_gate_http_transport
+        Qt${QT_VERSION_MAJOR}::Test
+        Qt${QT_VERSION_MAJOR}::Network
+    )
+    foreach(HTTP_TRANSPORT_CASE IN ITEMS
+        successPreservesRequestAndFlowIdentity
+        refusedConnectionHasOneBoundedOutcome
+        finiteDeadlineAbortsAnUnresponsivePeer
+        malformedJsonIsRejectedWithoutLeakingItsBody
+        maximumResponseIsAccepted
+        oneByteOverMaximumIsRejected
+        peerClosingMidResponseHasOneNetworkOutcome
+        explicitCancelHasExactlyOneTerminalOutcome
+        lateReplyFromAnOldFlowCannotCompleteTheNewFlow
+        deletingTransportReleasesReplyAndLoopbackSocket
+    )
+        add_test(
+            NAME http_transport.${HTTP_TRANSPORT_CASE}
+            COMMAND http_transport_tests ${HTTP_TRANSPORT_CASE})
+        set_tests_properties(http_transport.${HTTP_TRANSPORT_CASE} PROPERTIES
+            ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+            LABELS "integration"
+            TIMEOUT 10
+        )
+    endforeach()
 endif()
