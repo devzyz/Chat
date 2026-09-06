@@ -100,6 +100,10 @@ bool CServer::Ready() const noexcept {
 	return _started.load() && !_stopping.load() && _acceptor.is_open();
 }
 
+bool CServer::Stopped() const noexcept {
+	return _stopping.load() && !_acceptor.is_open();
+}
+
 const std::string& CServer::BoundAddress() const noexcept {
 	return _address;
 }

@@ -34,6 +34,7 @@ public:
 	bool Start();
 	void Stop();
 	bool Ready() const noexcept;
+	bool Stopped() const noexcept;
 	const std::string& BoundAddress() const noexcept;
 	std::uint16_t BoundPort() const noexcept;
 

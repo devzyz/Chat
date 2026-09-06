@@ -319,6 +319,10 @@ TEST_F(T09_CTCP_Stream, QueuedWritesSurvivePartialCompletionsExactlyOnce) {
 	socket.set_option(boost::asio::socket_base::receive_buffer_size(1024));
 	Write(socket, Frame(1213, "write-burst"));
 	ASSERT_TRUE(WaitFor(1));
+	const auto enqueue_deadline = std::chrono::steady_clock::now() + 1s;
+	while (accepted.load() != reply_count && std::chrono::steady_clock::now() < enqueue_deadline) {
+		std::this_thread::yield();
+	}
 	ASSERT_EQ(accepted.load(), reply_count);
 
 	const std::size_t expected_bytes = reply_count * (HEAD_TOTAL_LEN + MAX_LENGTH);
@@ -349,9 +353,11 @@ TEST_F(T09_CTCP_Stream, OccupiedPortIsRejectedWithoutReplacingTheOwner) {
 	auto second_state = std::make_shared<ChatSessionState>(
 		std::make_shared<SequentialSessionIds>(), std::make_shared<InMemoryPresence>());
 	auto second_dispatcher = std::make_shared<LogicDispatcher>([](const LogicMessage&) { return true; });
-	EXPECT_THROW((std::make_shared<chat_transport::CServer>(
-		ioc_, "127.0.0.1", server_->BoundPort(), second_state, second_dispatcher)),
-		boost::system::system_error);
+	EXPECT_THROW({
+		const auto duplicate = std::make_shared<chat_transport::CServer>(
+			ioc_, "127.0.0.1", server_->BoundPort(), second_state, second_dispatcher);
+		(void)duplicate;
+	}, boost::system::system_error);
 	EXPECT_TRUE(server_->Ready());
 	second_dispatcher->Stop();
 }
