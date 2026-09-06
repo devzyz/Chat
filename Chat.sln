@@ -32,6 +32,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GateRequest", "GateServer\G
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GateTransport", "GateServer\GateServer\GateTransport.vcxproj", "{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "StatusTransport", "StatusServer\StatusServer\StatusTransport.vcxproj", "{D7D17A26-B23D-4B8D-A1D5-BA789D882B03}"
+EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ChatGrpcClientTests", "tests\server\ChatGrpcClientTests.vcxproj", "{F9A57744-7D12-456B-987D-27B1BAE61203}"
 EndProject
 Global
@@ -60,6 +62,12 @@ Global
 		{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}.Release|x64.ActiveCfg = Release|x64
 		{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}.Release|x64.Build.0 = Release|x64
 		{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}.Release|x86.ActiveCfg = Release|Win32
+		{D7D17A26-B23D-4B8D-A1D5-BA789D882B03}.Debug|x64.ActiveCfg = Debug|x64
+		{D7D17A26-B23D-4B8D-A1D5-BA789D882B03}.Debug|x64.Build.0 = Debug|x64
+		{D7D17A26-B23D-4B8D-A1D5-BA789D882B03}.Debug|x86.ActiveCfg = Debug|Win32
+		{D7D17A26-B23D-4B8D-A1D5-BA789D882B03}.Release|x64.ActiveCfg = Release|x64
+		{D7D17A26-B23D-4B8D-A1D5-BA789D882B03}.Release|x64.Build.0 = Release|x64
+		{D7D17A26-B23D-4B8D-A1D5-BA789D882B03}.Release|x86.ActiveCfg = Release|Win32
 		{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}.Debug|x64.ActiveCfg = Debug|x64
 		{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}.Debug|x64.Build.0 = Debug|x64
 		{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}.Debug|x86.ActiveCfg = Debug|Win32
