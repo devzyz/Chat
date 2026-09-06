@@ -61,6 +61,7 @@
     <ClCompile Include="..\support\RunContext.cpp" />
     <ClCompile Include="integration-host\integration_host_contract_tests.cpp" />
     <ClCompile Include="process-harness\run_context_tests.cpp" />
+    <ClCompile Include="process-harness\process_harness_tests.cpp" />
     <ClCompile Include="protocol\cpp_node_varify_loopback_tests.cpp" />
     <ClCompile Include="rpc\gate_grpc_client_tests.cpp" />
     <ClCompile Include="..\..\generated\proto\cpp\varify.grpc.pb.cc" />
