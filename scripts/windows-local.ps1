@@ -875,6 +875,55 @@ function Confirm-TestStructure {
     if ($integrationProject -match 'ClCompile Include="[^"]*(?:LogicDispatcher|ChatSessionState|GateRequest|StatusRouting)(?:Production)?\.cpp"') {
         throw 'Server Integration tests must link shared Phase 3A targets instead of compiling production implementations directly.'
     }
+    $formalCompositionTests = Get-Content -LiteralPath `
+        (Join-Path $repoRoot 'tests\server\integration-host\production_composition_tests.cpp') -Raw
+    if (@([regex]::Matches($formalCompositionTests, 'TEST\(T09_COMP_Formal,')).Count -ne 6) {
+        throw 'Formal composition tests must register exactly six actual T09-COMP Server Integration testcases.'
+    }
+    foreach ($compositionId in 1..6) {
+        $testId = 'T09-COMP-{0:D2}' -f $compositionId
+        if (@([regex]::Matches($formalCompositionTests, [regex]::Escape($testId))).Count -ne 1) {
+            throw "Formal composition tests must register $testId exactly once."
+        }
+    }
+    foreach ($registration in @(
+        @{ Text = $integrationProject; Pattern = 'integration-host\production_composition_tests\.cpp'; Owner = 'T09-COMP runtime source' }
+        @{ Text = $gateProject; Pattern = 'ProjectReference Include="GateTransport\.vcxproj"'; Owner = 'formal Gate transport' }
+        @{ Text = $gateProject; Pattern = 'ProjectReference Include="GateRequest\.vcxproj"'; Owner = 'formal Gate business Module' }
+        @{ Text = $integrationProject; Pattern = 'GateServer\GateServer\GateTransport\.vcxproj'; Owner = 'Gate Integration transport' }
+        @{ Text = $integrationProject; Pattern = 'GateServer\GateServer\GateRequest\.vcxproj'; Owner = 'Gate Integration business Module' }
+        @{ Text = $statusProject; Pattern = 'ProjectReference Include="StatusTransport\.vcxproj"'; Owner = 'formal Status transport' }
+        @{ Text = $statusProject; Pattern = 'ProjectReference Include="StatusRouting\.vcxproj"'; Owner = 'formal Status business Module' }
+        @{ Text = $integrationProject; Pattern = 'StatusServer\StatusServer\StatusTransport\.vcxproj'; Owner = 'Status Integration transport' }
+        @{ Text = $integrationProject; Pattern = 'StatusServer\StatusServer\StatusRouting\.vcxproj'; Owner = 'Status Integration business Module' }
+        @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatTransport\.vcxproj"'; Owner = 'formal Chat transport' }
+        @{ Text = $chatProject; Pattern = 'ProjectReference Include="LogicDispatcher\.vcxproj"'; Owner = 'formal Chat dispatcher Module' }
+        @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatSessionState\.vcxproj"'; Owner = 'formal Chat session Module' }
+        @{ Text = $integrationProject; Pattern = 'ChatServer\ChatServer\ChatTransport\.vcxproj'; Owner = 'Chat Integration transport' }
+        @{ Text = $integrationProject; Pattern = 'ChatServer\ChatServer\LogicDispatcher\.vcxproj'; Owner = 'Chat Integration dispatcher Module' }
+        @{ Text = $integrationProject; Pattern = 'ChatServer\ChatServer\ChatSessionState\.vcxproj'; Owner = 'Chat Integration session Module' }
+    )) {
+        if ($registration.Text -notmatch $registration.Pattern) {
+            throw "$($registration.Owner) must share the production target used by the formal executable and Integration tests."
+        }
+    }
+    $gateFormalSource = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\GateServer.cpp') -Raw
+    $statusFormalSource = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusServer.cpp') -Raw
+    $chatFormalSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatServer.cpp') -Raw
+    if ($gateFormalSource -notmatch 'gate::CreateProductionGateRequest\s*\(' -or
+        $statusFormalSource -notmatch 'CreateProductionStatusRouting\s*\(' -or
+        $chatFormalSource -notmatch 'LogicSystem::GetInstance\s*\(' -or
+        $chatFormalSource -notmatch 'UserMgr::GetInstance\s*\(\)->Sessions\s*\(' -or
+        $chatFormalSource -notmatch 'RedisMgr::GetInstance\s*\(') {
+        throw 'Formal Gate, Status, and Chat composition roots must select their real production Adapters and Modules.'
+    }
+    $formalCompositionSurface = @(
+        $gateFormalSource, $statusFormalSource, $chatFormalSource,
+        $gateProject, $statusProject, $chatProject
+    ) -join "`n"
+    if ($formalCompositionSurface -match '(?i)--fake-dependenc(?:y|ies)|\b(?:CHAT_)?FAKE_DEPENDENC(?:Y|IES)\b|\bTEST_ONLY\b|#\s*if(?:def)?\s+[^\r\n]*\bTEST(?:ING)?\b') {
+        throw 'Formal production composition must not expose a fake-dependency mode, test macro, or test-only Interface.'
+    }
     foreach ($registration in @(
         @{ Text = $gateProject; Pattern = 'ProjectReference Include="GateGrpcClients\.vcxproj"'; Owner = 'GateServer' }
         @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatGrpcClients\.vcxproj"'; Owner = 'ChatServer' }

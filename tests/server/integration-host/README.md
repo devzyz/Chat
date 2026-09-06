@@ -14,6 +14,10 @@ The Gate HTTP cases cross production Beast parsing and lifecycle code through th
 
 `T09-CTCP-01..16` sends raw loopback bytes through production `chat_transport::CServer`, `CSession`, `ChatFrameCodec`, and the injected Phase 3A `LogicDispatcher`, all owned by the shared `ChatTransport.vcxproj`. Stream contracts cover split headers and bodies, adjacent and zero-body frames, the exact maximum and max+1 boundaries, malformed input, and interrupted reads/writes. Fault contracts cover refusal/read deadlines, deterministic partial-write backpressure, occupied ports, pending-accept cancellation, idempotent stop, and complete session/thread/socket/server/port release. The suite uses only run-owned numeric loopback and in-memory adapters; it adds no Redis, MySQL, Status, peer RPC, fixed port, public network, or sleep dependency.
 
+`T09-COMP-01..06` black-boxes the three formal executables without adding a fake dependency mode. Gate and Status each prove explicit configuration precedence, fail-closed validation, real HTTP/gRPC protocol readiness, documented graceful signalling, bounded exit, and listener release. Chat proves explicit configuration precedence, then records the intentional G-015/Phase 3C boundary: its formal ready path requires disposable real dependencies, so the 3B contract observes no synthetic ready result, performs a bounded owned stop, verifies stable nonzero termination and pipe/port/temp cleanup, and rejects public-endpoint or synthetic-credential evidence. The frozen `T09-COMP-07..08` slots remain structure-only planned identifiers rather than fabricated JUnit cases.
+
+`CheckTestStructure` ties each formal executable and `ServerIntegrationTests` to the same Gate/Status/Chat transport target and Phase 3A business target. It also requires real production Adapter selection, exactly six actual T09-COMP cases, and rejects formal fake-dependency flags, test macros, test-only Interfaces, or private copies of production sources.
+
 Focused command:
 
 ```powershell
@@ -37,4 +41,10 @@ Chat TCP focused command:
 
 ```powershell
 build\windows-tests\Release\server_integration_tests.exe --gtest_filter=T09_CTCP_Stream.* --gtest_output=xml:build/test-results/3b04_chat_stream.xml
+```
+
+Formal composition focused command:
+
+```powershell
+build\windows-tests\Release\server_integration_tests.exe --gtest_filter=T09_COMP_* --gtest_output=xml:build/test-results/3b05_composition.xml
 ```
