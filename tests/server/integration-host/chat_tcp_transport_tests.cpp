@@ -80,7 +80,7 @@ protected:
 			std::make_shared<SequentialSessionIds>(), std::make_shared<InMemoryPresence>());
 		dispatcher_ = std::make_shared<LogicDispatcher>(
 			[this](const LogicMessage& message) { return recorder_.Record(message); });
-		server_ = std::make_shared<CServer>(ioc_, "127.0.0.1", 0, state_, dispatcher_);
+		server_ = std::make_shared<chat_transport::CServer>(ioc_, "127.0.0.1", 0, state_, dispatcher_);
 		ASSERT_TRUE(server_->Start());
 		server_thread_ = std::thread([this] { ioc_.run(); });
 		ASSERT_TRUE(server_->Ready());
@@ -117,7 +117,7 @@ protected:
 	boost::asio::io_context client_ioc_;
 	std::shared_ptr<ChatSessionState> state_;
 	std::shared_ptr<LogicDispatcher> dispatcher_;
-	std::shared_ptr<CServer> server_;
+	std::shared_ptr<chat_transport::CServer> server_;
 	FrameRecorder recorder_;
 	std::thread server_thread_;
 };
@@ -186,7 +186,8 @@ TEST_F(T09_CTCP_Stream, MaximumLegalBodyDispatchesWithoutTruncation) {
 TEST_F(T09_CTCP_Stream, OneByteOverMaximumClosesBeforeDispatch) {
 	auto socket = Connect();
 	const auto header = ChatFrameCodec::EncodeHeader(1207, MAX_LENGTH + 1);
-	boost::asio::write(socket, boost::asio::buffer(header));
+	Write(socket, std::string(reinterpret_cast<const char*>(header.data()), header.size())
+		+ std::string(MAX_LENGTH + 1, 'x'));
 	EXPECT_FALSE(recorder_.WaitFor(1, std::chrono::steady_clock::now() + 150ms));
 	auto healthy = Connect();
 	Write(healthy, Frame(1208, "healthy"));

@@ -3,7 +3,7 @@
 #include "ChatSessionStateInternal.h"
 #include "CServer.h"
 #include <iostream>
-#include "LogicSystem.h"
+#include "LogicDispatcher.h"
 #include "LogMgr.h"
 
 class CSessionWriterAdapter final : public SessionWriter {
@@ -36,9 +36,11 @@ private:
 	std::weak_ptr<CSession> session_;
 };
 
-CSession::CSession(boost::asio::io_context& ioc, std::shared_ptr<CServer> server,
-	std::shared_ptr<ChatSessionState> session_state) :
+CSession::CSession(boost::asio::io_context& ioc, std::shared_ptr<chat_transport::CServer> server,
+	std::shared_ptr<ChatSessionState> session_state,
+	std::shared_ptr<LogicDispatcher> dispatcher) :
 	_socket(ioc), _server(std::move(server)), _session_state(std::move(session_state)),
+	_dispatcher(std::move(dispatcher)),
 	_writer(std::make_shared<CSessionWriterAdapter>()), _b_stop(false),
 	_last_heart_beat(time(nullptr)), _b_head_parse(false) {
 	_handle = _session_state->Create(_writer);
@@ -124,6 +126,12 @@ void CSession::AsyncReadHead(std::size_t head_total_len) {
  */
 void CSession::asyncReadFull(std::size_t maxLength,
 	std::function<void(const boost::system::error_code& ec, std::size_t bytestransferred)> handler) {
+	if (maxLength == 0) {
+		boost::asio::post(_socket.get_executor(), [handler = std::move(handler)]() mutable {
+			handler({}, 0);
+		});
+		return;
+	}
 	std::memset(_data, 0, maxLength);
 	asyncReadLen(0, maxLength, handler);
 }
@@ -184,7 +192,7 @@ void CSession::AsyncReadBody(std::size_t body_total_len) {
 			_recv_msg_node->_data[_recv_msg_node->_total_len] = '\0';
 
 			// 将消息体投递到逻辑队列中进行处理
-			const auto submit_result = LogicSystem::GetInstance()->Submit({
+			const auto submit_result = _dispatcher->Submit({
 				shared_from_this(),
 				static_cast<std::int16_t>(_recv_msg_node->_msg_id),
 				std::string(_recv_msg_node->_data, _recv_msg_node->_cur_len),

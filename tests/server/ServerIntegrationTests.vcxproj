@@ -90,6 +90,9 @@
     <ProjectReference Include="..\..\ChatServer\ChatServer\ChatSessionState.vcxproj">
       <Project>{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\..\ChatServer\ChatServer\ChatTransport.vcxproj">
+      <Project>{4B7AD04F-6F24-45BC-BF1B-3B0400000001}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\..\GateServer\GateServer\GateRequest.vcxproj">
       <Project>{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}</Project>
     </ProjectReference>

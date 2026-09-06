@@ -7,14 +7,14 @@
 #include <json/value.h>
 
 class CSession;
-class CServer;
+namespace chat_transport { class CServer; }
 typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> FunCallBack;
 class LogicSystem : public Singleton<LogicSystem>, public LogicDispatcher
 {
 	friend class Singleton<LogicSystem>;
 public:
 	~LogicSystem();
-	void SetServer(std::shared_ptr<CServer> pserver);
+	void SetServer(std::shared_ptr<chat_transport::CServer> pserver);
 private:
 	LogicSystem();
 	bool Dispatch(const LogicMessage& message);
@@ -108,5 +108,5 @@ private:
 	std::map<short, FunCallBack> _fun_callbacks;
 
 	// 保存server
-	std::shared_ptr<CServer> _p_server;
+	std::shared_ptr<chat_transport::CServer> _p_server;
 };

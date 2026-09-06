@@ -13,6 +13,7 @@
 #include "LogicSystem.h"
 #include "RedisMgr.h"
 #include "LogMgr.h"
+#include "UserMgr.h"
 
 int main(int argc, char* argv[])
 {
@@ -40,7 +41,7 @@ int main(int argc, char* argv[])
     auto self_server_name = configMgr["SelfServer"]["Name"];
     boost::asio::io_context io_context;
     std::shared_ptr<AsioIOServicePool> pool;
-    std::shared_ptr<CServer> p_server;
+    std::shared_ptr<chat_transport::CServer> p_server;
     std::shared_ptr<RedisMgr> redis;
     std::unique_ptr<grpc::Server> server;
     std::thread grpc_server_thread;
@@ -50,7 +51,17 @@ int main(int argc, char* argv[])
 
         // 先完成所有本地端口绑定。任何端口冲突都必须在启动线程和登记Redis状态前失败。
         auto port_str = configMgr["SelfServer"]["Port"];
-        p_server = std::make_shared<CServer>(io_context, std::stoi(port_str));
+        auto logic_system = LogicSystem::GetInstance();
+        p_server = std::make_shared<chat_transport::CServer>(
+            io_context,
+            configMgr["SelfServer"]["Host"],
+            static_cast<std::uint16_t>(std::stoi(port_str)),
+            UserMgr::GetInstance()->Sessions(),
+            logic_system,
+            [self_server_name](std::size_t session_count) {
+                RedisMgr::GetInstance()->HSet(
+                    LOGIN_COUNT, self_server_name, std::to_string(session_count));
+            });
 
         // chatserver对应的grpc服务器地址
         std::string server_address = configMgr["SelfServer"]["Host"] + ":" + configMgr["SelfServer"]["RPCPort"];
@@ -69,7 +80,9 @@ int main(int argc, char* argv[])
 
         // Start workers only after both local listeners are known-good.
         pool = AsioIOServicePool::GetInstance();
-        p_server->init(); // 启动定时器
+        if (!p_server->Start()) {
+            throw std::runtime_error("failed to start Chat TCP listener");
+        }
 
         // 所有监听端口均已成功绑定后，才向Redis登记本实例。
         redis = RedisMgr::GetInstance();

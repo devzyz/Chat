@@ -34,6 +34,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GateTransport", "GateServer
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "StatusTransport", "StatusServer\StatusServer\StatusTransport.vcxproj", "{D7D17A26-B23D-4B8D-A1D5-BA789D882B03}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ChatTransport", "ChatServer\ChatServer\ChatTransport.vcxproj", "{4B7AD04F-6F24-45BC-BF1B-3B0400000001}"
+EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ChatGrpcClientTests", "tests\server\ChatGrpcClientTests.vcxproj", "{F9A57744-7D12-456B-987D-27B1BAE61203}"
 EndProject
 Global
@@ -44,6 +46,12 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4B7AD04F-6F24-45BC-BF1B-3B0400000001}.Debug|x64.ActiveCfg = Debug|x64
+		{4B7AD04F-6F24-45BC-BF1B-3B0400000001}.Debug|x64.Build.0 = Debug|x64
+		{4B7AD04F-6F24-45BC-BF1B-3B0400000001}.Debug|x86.ActiveCfg = Debug|Win32
+		{4B7AD04F-6F24-45BC-BF1B-3B0400000001}.Release|x64.ActiveCfg = Release|x64
+		{4B7AD04F-6F24-45BC-BF1B-3B0400000001}.Release|x64.Build.0 = Release|x64
+		{4B7AD04F-6F24-45BC-BF1B-3B0400000001}.Release|x86.ActiveCfg = Release|Win32
 		{9B810856-EB83-4B84-87A4-883A3FFB1001}.Debug|x64.ActiveCfg = Debug|x64
 		{9B810856-EB83-4B84-87A4-883A3FFB1001}.Debug|x64.Build.0 = Debug|x64
 		{9B810856-EB83-4B84-87A4-883A3FFB1001}.Debug|x86.ActiveCfg = Debug|x64

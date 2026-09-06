@@ -1,35 +1,84 @@
 #include "CServer.h"
-#include "AsioIOServicePool.h"
+
 #include "CSession.h"
-#include "UserMgr.h"
-#include "ConfigMgr.h"
-#include "RedisMgr.h"
+#include "LogicDispatcher.h"
 #include "LogMgr.h"
 
 #include <algorithm>
+#include <chrono>
+#include <stdexcept>
+#include <utility>
 
-CServer::CServer(boost::asio::io_context& ioc, short port) : _ioc(ioc), _port(port),
-	_acceptor(ioc, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port)),
-	_session_state(UserMgr::GetInstance()->Sessions()), _timer(ioc, std::chrono::seconds(60)) {
-	SPDLOG_INFO("TCP server started, port={}", port);
-	
-}
+namespace chat_transport {
 
-// 后置初始化，保证shared_from_this已经存在
-void CServer::init() {
-	// 等待60秒后触发Lambda回调
-	_timer.async_wait([self = shared_from_this()](const boost::system::error_code& e) {
-		self->on_timer(e);
-		});
-
-	StartAcceptor(); // 开始监听
+CServer::CServer(
+	boost::asio::io_context& ioc,
+	std::string address,
+	std::uint16_t port,
+	std::shared_ptr<ChatSessionState> session_state,
+	std::shared_ptr<LogicDispatcher> dispatcher,
+	SessionCountObserver session_count_observer)
+	: _ioc(ioc),
+	  _address(std::move(address)),
+	  _port(port),
+	  _acceptor(ioc),
+	  _session_state(std::move(session_state)),
+	  _dispatcher(std::move(dispatcher)),
+	  _session_count_observer(std::move(session_count_observer)),
+	  _timer(ioc) {
+	if (!_session_state || !_dispatcher) {
+		throw std::invalid_argument("Chat transport dependencies must not be null");
+	}
+	const auto bind_address = boost::asio::ip::make_address(_address);
+	if (!bind_address.is_loopback()) {
+		throw std::invalid_argument("Chat transport address must be numeric loopback");
+	}
+	boost::asio::ip::tcp::endpoint endpoint(bind_address, _port);
+	_acceptor.open(endpoint.protocol());
+	_acceptor.set_option(boost::asio::socket_base::reuse_address(false));
+	_acceptor.bind(endpoint);
+	_acceptor.listen();
+	_port = _acceptor.local_endpoint().port();
+	SPDLOG_INFO("TCP server bound, address={}, port={}", _address, _port);
 }
 
 CServer::~CServer() {
+	Stop();
 	SPDLOG_INFO("TCP server destructed, port={}", _port);
 }
 
-void CServer::stop() {
+bool CServer::Start() {
+	bool expected = false;
+	if (!_started.compare_exchange_strong(expected, true)) {
+		return !_stopping.load();
+	}
+	if (_stopping.load() || !_acceptor.is_open()) {
+		return false;
+	}
+	StartAcceptor();
+	if (_session_count_observer) {
+		_timer.expires_after(std::chrono::seconds(60));
+		_timer.async_wait([self = shared_from_this()](const boost::system::error_code& error) {
+			self->on_timer(error);
+		});
+	}
+	return true;
+}
+
+void CServer::init() {
+	(void)Start();
+}
+
+void CServer::Stop() {
+	bool expected = false;
+	if (!_stopping.compare_exchange_strong(expected, true)) {
+		return;
+	}
+	boost::system::error_code ignored;
+	_timer.cancel();
+	_acceptor.cancel(ignored);
+	_acceptor.close(ignored);
+
 	std::vector<std::shared_ptr<CSession>> sessions;
 	{
 		std::lock_guard<std::mutex> lock(_mutex);
@@ -41,46 +90,51 @@ void CServer::stop() {
 	for (const auto& session : sessions) {
 		session->Close();
 	}
-	_timer.cancel();
 }
 
-/**
- * @brief 
- * 用于异步接收连接
- * 
- */
+void CServer::stop() {
+	Stop();
+}
+
+bool CServer::Ready() const noexcept {
+	return _started.load() && !_stopping.load() && _acceptor.is_open();
+}
+
+const std::string& CServer::BoundAddress() const noexcept {
+	return _address;
+}
+
+std::uint16_t CServer::BoundPort() const noexcept {
+	return _port;
+}
+
 void CServer::StartAcceptor() {
-	auto& io_context = AsioIOServicePool::GetInstance()->GetIOService();
-	std::shared_ptr<CSession> new_session = std::make_shared<CSession>(
-		io_context, shared_from_this(), _session_state);
-	_acceptor.async_accept(new_session->GetSocket(), 
-		std::bind(&CServer::HandleAcceptor, this, new_session, std::placeholders::_1));
+	if (_stopping.load() || !_acceptor.is_open()) {
+		return;
+	}
+	auto new_session = std::make_shared<CSession>(
+		_ioc, shared_from_this(), _session_state, _dispatcher);
+	_acceptor.async_accept(new_session->GetSocket(),
+		[self = shared_from_this(), new_session](const boost::system::error_code& error) {
+			self->HandleAcceptor(new_session, error);
+		});
 }
 
-/**
- * @brief 
- * @param new_session 
- * @param error 
- * 用于处理连接的回调
- */
-void CServer::HandleAcceptor(std::shared_ptr<CSession> new_session, const boost::system::error_code& error) {
-	if (!error) {
+void CServer::HandleAcceptor(
+	std::shared_ptr<CSession> new_session,
+	const boost::system::error_code& error) {
+	if (!error && !_stopping.load()) {
 		{
 			std::lock_guard<std::mutex> lock(_mutex);
 			_sessions.emplace_back(new_session->GetHandle(), new_session);
 		}
 		new_session->Start();
 	}
-
-	StartAcceptor();
+	if (!_stopping.load()) {
+		StartAcceptor();
+	}
 }
 
-/**
- * @brief 
- * @param session_id 
- * CServer内的某个CSession被移除了，代表这该服务器与tcp的连接关闭了，此时要将CServer中保存的CSession
- * 以及UserMgr中保存的CSession都清空
- */
 void CServer::ClearSession(const ChatSessionState::Handle& session) {
 	_session_state->Close(session);
 	std::lock_guard<std::mutex> lock(_mutex);
@@ -88,71 +142,38 @@ void CServer::ClearSession(const ChatSessionState::Handle& session) {
 		[&session](const auto& entry) { return entry.first == session; }), _sessions.end());
 }
 
-// 检查当前的session_id是能够正常使用
 bool CServer::CheckSessionValid(const ChatSessionState::Handle& session) {
 	std::lock_guard<std::mutex> lock(_mutex);
 	return std::any_of(_sessions.begin(), _sessions.end(),
 		[&session](const auto& entry) { return entry.first == session; });
 }
 
-// 定时器，触发对当前session连接的检测
-void CServer::on_timer(const boost::system::error_code& e) {
-	if (e) {
-		if (e == boost::asio::error::operation_aborted) {
-			SPDLOG_DEBUG("server timer canceled");
-		}
-		else {
-			SPDLOG_WARN("server timer error: {}", e.message());
-		}
+void CServer::on_timer(const boost::system::error_code& error) {
+	if (error || _stopping.load() || !_session_count_observer) {
 		return;
 	}
-	// 暂存已过期的session
-	std::vector<std::shared_ptr<CSession>> _expired_sessions;
-	int session_count = 0; // 计算还存活的session
-
-	// 因为这里的思路就是遍历一下所有的session，查看一下是否超时
-	// 因此我们可以通过先加锁，然后将_sessions拷贝一份，然后通过对副本来进行处理
-	// 这样能够提高锁的精度
-	// 同时可以保证访问的CSession一定是有效的
-	std::vector<std::pair<ChatSessionState::Handle, std::shared_ptr<CSession>>> _sessions_copy;
+	std::vector<std::shared_ptr<CSession>> sessions;
 	{
 		std::lock_guard<std::mutex> lock(_mutex);
-		_sessions_copy = _sessions;
+		for (const auto& entry : _sessions) {
+			sessions.push_back(entry.second);
+		}
 	}
 
+	std::size_t active = 0;
 	std::time_t now = time(nullptr);
-	for (auto it = _sessions_copy.begin(); it != _sessions_copy.end(); it++) {
-		// 检查session心跳是否超时
-		auto b_expired = it->second->CheckHeartBeatAccurate(now);
-		if (b_expired) {
-			// 如果超时，则关闭连接，_socket关闭了，则会触发async_read的错误事件
-			it->second->Close();
-
-			_expired_sessions.push_back(it->second);
-		}
-		else {
-			session_count++;
+	for (const auto& session : sessions) {
+		if (session->CheckHeartBeatAccurate(now)) {
+			session->DealExceptionSession();
+		} else {
+			++active;
 		}
 	}
-
-	// 此时session_count记录了当前server还连接的session数量
-	// 可以直接将其更新到redis中，作为负载均衡的参考
-	// 为什么这里不需要加锁，首先这是定时操作，同一个进程中只会触发一次
-	// 而多进程操作的又不是同一个变量，同一个服务器只会读取和修改本服务器的count数量
-	auto& configMgr = ConfigMgr::GetInstance();
-	auto self_server_name = configMgr["SelfServer"]["Name"];
-	auto count_str = std::to_string(session_count);
-	RedisMgr::GetInstance()->HSet(LOGIN_COUNT, self_server_name, count_str);
-
-	// 处理过期的session
-	// 删除redis中的相应的信息
-	for (auto& session : _expired_sessions) {
-		session->DealExceptionSession();
-	}
-
-	// 设置下一个60秒的检测
+	_session_count_observer(active);
 	_timer.expires_after(std::chrono::seconds(60));
-	_timer.async_wait([self = shared_from_this()](const boost::system::error_code& e) {
-		self->on_timer(e);
-		});
+	_timer.async_wait([self = shared_from_this()](const boost::system::error_code& next_error) {
+		self->on_timer(next_error);
+	});
 }
+
+} // namespace chat_transport

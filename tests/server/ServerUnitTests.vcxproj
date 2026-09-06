@@ -68,7 +68,6 @@
     <ClCompile Include="rpc\chat_grpc_pool_contract_tests.cpp" />
     <ClCompile Include="protocol\protobuf_contract_tests.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\AsioIOServicePool.cpp" />
-    <ClCompile Include="..\..\ChatServer\ChatServer\ChatFrameCodec.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\ConfigMgr.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\Const.cpp" />
     <ClCompile Include="..\..\generated\proto\cpp\chat.pb.cc" />
@@ -77,10 +76,12 @@
     <ClCompile Include="..\..\generated\proto\cpp\status.grpc.pb.cc" />
     <ClCompile Include="..\..\generated\proto\cpp\varify.pb.cc" />
     <ClCompile Include="..\..\generated\proto\cpp\varify.grpc.pb.cc" />
-    <ClCompile Include="..\..\ChatServer\ChatServer\MsgNode.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\PeerServerRouting.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\ChatServer\ChatServer\ChatTransport.vcxproj">
+      <Project>{4B7AD04F-6F24-45BC-BF1B-3B0400000001}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\..\ChatServer\ChatServer\LogicDispatcher.vcxproj">
       <Project>{B251FB8A-0C7D-4BFA-8F1B-31C75DFBDA01}</Project>
     </ProjectReference>

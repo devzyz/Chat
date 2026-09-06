@@ -24,7 +24,7 @@ using message::KickUserRsp;
 
 using grpc::ClientContext;
 
-class CServer;
+namespace chat_transport { class CServer; }
 class ChatServiceImpl final : public ChatService::Service
 {
 public:
@@ -34,7 +34,7 @@ public:
 	virtual Status NotifyOtherReceiveTextChatMsg(ServerContext* context, const TextChatMsgReq* request, TextChatMsgRsp* response) override;
 	virtual Status NotifyOtherKickUser(ServerContext* context, const KickUserReq* request, KickUserRsp* reponse) override;
 	bool GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared_ptr<UserInfo>& user_info);
-	void SetServer(std::shared_ptr<CServer>);
+	void SetServer(std::shared_ptr<chat_transport::CServer>);
 private:
-	std::shared_ptr<CServer> _p_server;
+	std::shared_ptr<chat_transport::CServer> _p_server;
 };

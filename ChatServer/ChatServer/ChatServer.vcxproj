@@ -135,11 +135,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AsioIOServicePool.cpp" />
-    <ClCompile Include="ChatFrameCodec.cpp" />
     <ClCompile Include="ChatServer.cpp" />
     <ClCompile Include="ChatServiceImpl.cpp" />
-    <ClCompile Include="CServer.cpp" />
-    <ClCompile Include="CSession.cpp" />
     <ClCompile Include="DistLock.cpp" />
     <ClCompile Include="LogicSystem.cpp" />
     <ClCompile Include="LogMgr.cpp" />
@@ -147,7 +144,6 @@
     <ClCompile Include="$(ProtocolGeneratedDir)\chat.pb.cc" />
     <ClCompile Include="$(ProtocolGeneratedDir)\status.grpc.pb.cc" />
     <ClCompile Include="$(ProtocolGeneratedDir)\status.pb.cc" />
-    <ClCompile Include="MsgNode.cpp" />
     <ClCompile Include="MysqlDao.cpp" />
     <ClCompile Include="MysqlMgr.cpp" />
     <ClCompile Include="RedisMgr.cpp" />
@@ -194,6 +190,9 @@
   <ItemGroup>
     <ProjectReference Include="ChatSessionState.vcxproj">
       <Project>{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}</Project>
+    </ProjectReference>
+    <ProjectReference Include="ChatTransport.vcxproj">
+      <Project>{4B7AD04F-6F24-45BC-BF1B-3B0400000001}</Project>
     </ProjectReference>
     <ProjectReference Include="LogicDispatcher.vcxproj">
       <Project>{B251FB8A-0C7D-4BFA-8F1B-31C75DFBDA01}</Project>

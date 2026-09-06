@@ -6,7 +6,8 @@
 #include "MsgNode.h"
 
 class LogicSystem;
-class CServer;
+class LogicDispatcher;
+namespace chat_transport { class CServer; }
 class CSessionWriterAdapter;
 /**
  * @brief 
@@ -15,8 +16,9 @@ class CSessionWriterAdapter;
 class CSession : public std::enable_shared_from_this<CSession>
 {
 public:
-	CSession(boost::asio::io_context& ioc, std::shared_ptr<CServer> server,
-		std::shared_ptr<ChatSessionState> session_state);
+	CSession(boost::asio::io_context& ioc, std::shared_ptr<chat_transport::CServer> server,
+		std::shared_ptr<ChatSessionState> session_state,
+		std::shared_ptr<LogicDispatcher> dispatcher);
 	~CSession();
 
 	boost::asio::ip::tcp::socket& GetSocket();
@@ -90,8 +92,9 @@ private:
 	friend class CSessionWriterAdapter;
 
 	boost::asio::ip::tcp::socket _socket;
-	std::shared_ptr<CServer> _server;
+	std::shared_ptr<chat_transport::CServer> _server;
 	std::shared_ptr<ChatSessionState> _session_state;
+	std::shared_ptr<LogicDispatcher> _dispatcher;
 	std::shared_ptr<CSessionWriterAdapter> _writer;
 	ChatSessionState::Handle _handle;
 	char _data[MAX_LENGTH];
