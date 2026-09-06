@@ -17,6 +17,9 @@ if(WIN32)
     if(NOT QT_QMAKE_EXECUTABLE)
         message(FATAL_ERROR "Unable to resolve qmake for the selected Qt kit")
     endif()
+    get_filename_component(QT_TEST_RUNTIME_BIN "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
+    set(QT_TEST_RUNTIME_PATH "${QT_TEST_RUNTIME_BIN};$ENV{PATH}")
+    string(REPLACE ";" "\\;" QT_TEST_RUNTIME_PATH "${QT_TEST_RUNTIME_PATH}")
     execute_process(
         COMMAND "${QT_QMAKE_EXECUTABLE}" -query QT_INSTALL_PLUGINS
         OUTPUT_VARIABLE QT_INSTALL_PLUGINS
@@ -48,6 +51,15 @@ add_library(chat_auth_flow STATIC
 )
 target_include_directories(chat_auth_flow PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(chat_auth_flow PUBLIC Qt${QT_VERSION_MAJOR}::Widgets)
+
+add_library(chat_gate_http_transport STATIC
+    gatehttptransport.h gatehttptransport.cpp
+)
+target_include_directories(chat_gate_http_transport PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_gate_http_transport PUBLIC
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
+)
 
 add_library(chat_message_model STATIC
     messagerecord.h
@@ -186,6 +198,7 @@ target_link_libraries(chat PRIVATE
     chat_message_model
     chat_session_core
     chat_auth_flow
+    chat_gate_http_transport
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
@@ -227,7 +240,8 @@ if(BUILD_TESTING)
     set(MESSAGE_MODEL_TEST_ENVIRONMENT "QT_QPA_PLATFORM=minimal")
     if(WIN32)
         list(APPEND MESSAGE_MODEL_TEST_ENVIRONMENT
-            "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_TEST_PLATFORM_PLUGIN_PATH}")
+            "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_TEST_PLATFORM_PLUGIN_PATH}"
+            "PATH=${QT_TEST_RUNTIME_PATH}")
     endif()
 
     add_executable(auth_flow_tests

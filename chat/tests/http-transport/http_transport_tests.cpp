@@ -1,7 +1,9 @@
 #include "gatehttptransport.h"
 
 #include <QCoreApplication>
+#include <QHash>
 #include <QHostAddress>
+#include <QList>
 #include <QPointer>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -16,7 +18,7 @@ namespace {
 class LoopbackHttpPeer final : public QObject
 {
 public:
-    enum class Behavior { Respond, Hold, CloseMidResponse };
+    enum class Behavior { Respond, Hold, ResetOnAccept, CloseMidResponse };
 
     struct Plan {
         QByteArray body = QByteArrayLiteral("{\"ok\":true}");
@@ -24,13 +26,23 @@ public:
         int delayMs = 0;
     };
 
-    explicit LoopbackHttpPeer(QObject *parent = nullptr)
-        : QObject(parent)
+    explicit LoopbackHttpPeer(Behavior connectionBehavior = Behavior::Respond,
+                              QObject *parent = nullptr)
+        : QObject(parent), _connectionBehavior(connectionBehavior)
     {
         connect(&_server, &QTcpServer::newConnection, this, [this] {
             while (QTcpSocket *socket = _server.nextPendingConnection()) {
                 _sockets.append(socket);
+                if (_connectionBehavior == Behavior::ResetOnAccept) {
+                    socket->abort();
+                    socket->deleteLater();
+                    continue;
+                }
                 connect(socket, &QTcpSocket::readyRead, this, [this, socket] {
+                    if (socket->property("request-handled").toBool()) {
+                        socket->readAll();
+                        return;
+                    }
                     _requests[socket].append(socket->readAll());
                     const QByteArray request = _requests.value(socket);
                     const qsizetype firstSpace = request.indexOf(' ');
@@ -41,7 +53,7 @@ public:
                     const QString path = QString::fromLatin1(
                         request.mid(firstSpace + 1, secondSpace - firstSpace - 1));
                     const Plan plan = _plans.value(path);
-                    disconnect(socket, &QTcpSocket::readyRead, this, nullptr);
+                    socket->setProperty("request-handled", true);
                     if (plan.behavior == Behavior::Hold) {
                         return;
                     }
@@ -97,11 +109,18 @@ public:
 
     int activeConnections() const
     {
-        return _sockets.size();
+        int active = 0;
+        for (const QPointer<QTcpSocket> &socket : _sockets) {
+            if (socket && socket->state() != QAbstractSocket::UnconnectedState) {
+                ++active;
+            }
+        }
+        return active;
     }
 
 private:
     QTcpServer _server;
+    Behavior _connectionBehavior;
     QHash<QString, Plan> _plans;
     QHash<QTcpSocket *, QByteArray> _requests;
     QList<QPointer<QTcpSocket>> _sockets;
@@ -167,16 +186,14 @@ void HttpTransportTests::successPreservesRequestAndFlowIdentity()
 void HttpTransportTests::refusedConnectionHasOneBoundedOutcome()
 {
     // Q04-HTTP-02
-    QTcpServer reservation;
-    QVERIFY(reservation.listen(QHostAddress::LocalHost, 0));
-    const quint16 unusedPort = reservation.serverPort();
-    reservation.close();
+    LoopbackHttpPeer peer(LoopbackHttpPeer::Behavior::ResetOnAccept);
+    QVERIFY(peer.listen());
 
     GateHttpTransport transport;
     QList<GateHttpResult> results;
     connect(&transport, &GateHttpTransport::finished, this,
             [&results](const GateHttpResult &result) { results.append(result); });
-    transport.post(request(QUrl(QStringLiteral("http://127.0.0.1:%1/refused").arg(unusedPort)), 42));
+    transport.post(request(peer.url(QStringLiteral("/refused")), 42));
 
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
     QCOMPARE(results[0].terminal, GateHttpTerminal::NetworkError);
