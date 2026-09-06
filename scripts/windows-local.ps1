@@ -42,6 +42,7 @@ $testResults = Join-Path $repoRoot 'build\test-results'
 $clientTestGroups = @(
     [pscustomobject]@{ Level = 'unit'; Report = (Join-Path $testResults 'client_unit.xml'); ExpectedCount = 18 }
     [pscustomobject]@{ Level = 'component'; Report = (Join-Path $testResults 'client_component.xml'); ExpectedCount = 6 }
+    [pscustomobject]@{ Level = 'integration'; Report = (Join-Path $testResults 'client_integration.xml'); ExpectedCount = 10 }
 )
 $scriptTestGroups = @(
     [pscustomobject]@{
@@ -62,12 +63,13 @@ $scriptTestGroups = @(
 $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 68 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 56 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 52 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 59 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 18 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 6 }
+    [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 10 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 18 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 11 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_component.xml'; ExpectedCount = 9 }
@@ -352,7 +354,7 @@ function Run-ServerTests {
     $executions = @(
         @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 68 }
         @{ Binary = $componentBinary; Report = $reports[1]; ExpectedCount = 56 }
-        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 52 }
+        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 59 }
         @{ Binary = $chatGrpcClientBinary; Report = $reports[3]; ExpectedCount = 4 }
         @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4]; ExpectedCount = 2 }
         @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5]; ExpectedCount = 2 }
@@ -490,8 +492,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 12 -or $total -ne 250) {
-        throw "Regression report baseline mismatch: expected 12 reports and 250 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 13 -or $total -ne 267) {
+        throw "Regression report baseline mismatch: expected 13 reports and 267 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     Write-Host "Regression report audit passed: $total testcases across $($regressionReportGroups.Count) reports."
 }
@@ -598,6 +600,7 @@ function Confirm-TestStructure {
     $gateGrpcProject = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\GateGrpcClients.vcxproj') -Raw
     $gateRequestProject = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\GateRequest.vcxproj') -Raw
     $gateRequestFilters = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\GateRequest.vcxproj.filters') -Raw
+    $gateTransportProject = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\GateTransport.vcxproj') -Raw
     $chatProject = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatServer.vcxproj') -Raw
     $chatGrpcProject = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatGrpcClients.vcxproj') -Raw
     $logicDispatcherProject = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\LogicDispatcher.vcxproj') -Raw
@@ -611,12 +614,27 @@ function Confirm-TestStructure {
     $integrationProject = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\ServerIntegrationTests.vcxproj') -Raw
     $chatGrpcTestProject = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\ChatGrpcClientTests.vcxproj') -Raw
     foreach ($registration in @(
-        @{ Text = $gateProject; Pattern = 'ClCompile Include="GateResponse\.cpp"'; Owner = 'GateServer' }
+        @{ Text = $gateTransportProject; Pattern = 'ClCompile Include="GateResponse\.cpp"'; Owner = 'Gate transport library' }
+        @{ Text = $gateTransportProject; Pattern = 'ClCompile Include="CServer\.cpp"'; Owner = 'Gate transport library' }
+        @{ Text = $gateTransportProject; Pattern = 'ClCompile Include="HttpConnection\.cpp"'; Owner = 'Gate transport library' }
+        @{ Text = $gateTransportProject; Pattern = 'ClCompile Include="LogicSystem\.cpp"'; Owner = 'Gate transport library' }
+        @{ Text = $gateProject; Pattern = 'ProjectReference Include="GateTransport\.vcxproj"'; Owner = 'GateServer' }
         @{ Text = $componentProject; Pattern = 'gate-response\\gate_response_tests\.cpp'; Owner = 'Server Component tests' }
-        @{ Text = $componentProject; Pattern = 'GateServer\\GateServer\\GateResponse\.cpp'; Owner = 'Server Component tests' }
+        @{ Text = $componentProject; Pattern = 'GateServer\\GateServer\\GateTransport\.vcxproj'; Owner = 'Server Component tests' }
+        @{ Text = $integrationProject; Pattern = 'GateServer\\GateServer\\GateTransport\.vcxproj'; Owner = 'Server Integration tests' }
     )) {
         if ($registration.Text -notmatch $registration.Pattern) {
-            throw "$($registration.Owner) must compile the production GateResponse Module."
+            throw "$($registration.Owner) must share the production GateTransport target."
+        }
+    }
+    foreach ($consumer in @(
+        @{ Text = $gateProject; Owner = 'GateServer' }
+        @{ Text = $componentProject; Owner = 'Server Component tests' }
+        @{ Text = $integrationProject; Owner = 'Server Integration tests' }
+    )) {
+        if ($consumer.Text -match 'ClCompile Include="[^\"]*GateServer\\GateServer\\(?:CServer|GateResponse|HttpConnection|LogicSystem)\.cpp"' -or
+            $consumer.Text -match 'ClCompile Include="(?:CServer|GateResponse|HttpConnection|LogicSystem)\.cpp"') {
+            throw "$($consumer.Owner) must not compile GateTransport production sources directly."
         }
     }
     $logicDispatcherSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\LogicDispatcher.cpp') -Raw
@@ -759,7 +777,7 @@ function Confirm-TestStructure {
     foreach ($route in $gateRoutes.GetEnumerator()) {
         $registration = 'RegPost\("{0}", \[this, write_gate_response\]' -f [regex]::Escape($route.Key)
         $shapingCall = 'write_gate_response\(connection, gate::Endpoint::{0}' -f [regex]::Escape($route.Value)
-        $requestCall = '_gate_request->Handle\(gate::Endpoint::{0}, request\)' -f [regex]::Escape($route.Value)
+        $requestCall = '_gate_request\.Handle\(gate::Endpoint::{0}, request\)' -f [regex]::Escape($route.Value)
         if ($gateLogic -notmatch $registration -or $gateLogic -notmatch $shapingCall -or $gateLogic -notmatch $requestCall) {
             throw "Gate route '$($route.Key)' must call the shared GateRequest Module through the GateResponse Interface with endpoint $($route.Value)."
         }
@@ -844,7 +862,32 @@ function Confirm-TestStructure {
         $clientCMake,
         'add_test\s*\(\s*NAME\s+([A-Za-z0-9_.-]+)',
         [Text.RegularExpressions.RegexOptions]::IgnoreCase
-    ) | ForEach-Object { $_.Groups[1].Value })
+    ) | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -ne 'http_transport.' })
+    $expectedHttpTransportCases = @(
+        'successPreservesRequestAndFlowIdentity'
+        'refusedConnectionHasOneBoundedOutcome'
+        'finiteDeadlineAbortsAnUnresponsivePeer'
+        'malformedJsonIsRejectedWithoutLeakingItsBody'
+        'maximumResponseIsAccepted'
+        'oneByteOverMaximumIsRejected'
+        'peerClosingMidResponseHasOneNetworkOutcome'
+        'explicitCancelHasExactlyOneTerminalOutcome'
+        'lateReplyFromAnOldFlowCannotCompleteTheNewFlow'
+        'deletingTransportReleasesReplyAndLoopbackSocket'
+    )
+    $httpTransportBlock = [regex]::Match(
+        $clientCMake,
+        '(?ms)foreach\s*\(\s*HTTP_TRANSPORT_CASE\s+IN\s+ITEMS(?<cases>.*?)\)\s*add_test.*?set_tests_properties\s*\(\s*http_transport\.\$\{HTTP_TRANSPORT_CASE\}\s+PROPERTIES(?<properties>.*?)\)\s*endforeach'
+    )
+    $registeredHttpTransportCases = @(
+        [regex]::Matches($httpTransportBlock.Groups['cases'].Value, '(?m)^\s*(?<case>[A-Za-z][A-Za-z0-9]+)\s*$') |
+            ForEach-Object { $_.Groups['case'].Value }
+    )
+    if (-not $httpTransportBlock.Success -or
+        ($registeredHttpTransportCases -join ',') -ne ($expectedHttpTransportCases -join ',') -or
+        $httpTransportBlock.Groups['properties'].Value -notmatch 'LABELS\s+"?integration"?') {
+        throw 'Qt HTTP transport must register exactly ten frozen Integration CTest cases through the production target.'
+    }
     $expectedClientLevels = @{
         'network_state_tests' = 'unit'
         'message_model.append_ack_status_removal' = 'unit'
@@ -896,9 +939,13 @@ function Confirm-TestStructure {
             throw "Required Qt CTest target is missing: $target"
         }
     }
-    $expectedClientReports = @{ unit = 'client_unit.xml'; component = 'client_component.xml' }
+    $expectedClientReports = @{
+        unit = 'client_unit.xml'
+        component = 'client_component.xml'
+        integration = 'client_integration.xml'
+    }
     if ($clientTestGroups.Count -ne $expectedClientReports.Count) {
-        throw 'RunClientTests must define exactly the Unit and Component report groups.'
+        throw 'RunClientTests must define exactly the Unit, Component, and Integration report groups.'
     }
     foreach ($group in $clientTestGroups) {
         if (-not $expectedClientReports.ContainsKey($group.Level) -or
@@ -906,7 +953,7 @@ function Confirm-TestStructure {
             throw "Invalid Qt report mapping: $($group.Level) -> $($group.Report)"
         }
     }
-    $expectedClientCounts = @{ unit = 18; component = 6 }
+    $expectedClientCounts = @{ unit = 18; component = 6; integration = 10 }
     foreach ($group in $clientTestGroups) {
         if ($group.ExpectedCount -ne $expectedClientCounts[$group.Level]) {
             throw "Qt $($group.Level) report must require exactly $($expectedClientCounts[$group.Level]) testcases."
@@ -921,6 +968,9 @@ function Confirm-TestStructure {
         @{ Pattern = 'target_link_libraries\s*\(\s*chat[\s\S]*?chat_auth_flow'; Message = 'The Qt executable must link the production auth-flow Module.' }
         @{ Pattern = 'target_link_libraries\s*\(\s*auth_flow_tests[\s\S]*?chat_auth_flow'; Message = 'Auth Unit tests must link the same production auth-flow Module.' }
         @{ Pattern = 'target_link_libraries\s*\(\s*auth_flow_component_tests[\s\S]*?chat_auth_flow[\s\S]*?chat_session_core'; Message = 'Auth Component tests must link auth flow and the existing session Module.' }
+        @{ Pattern = 'add_library\s*\(\s*chat_gate_http_transport[\s\S]*?gatehttptransport\.cpp'; Message = 'Qt HTTP production sources must be owned by chat_gate_http_transport.' }
+        @{ Pattern = 'target_link_libraries\s*\(\s*chat[\s\S]*?chat_gate_http_transport'; Message = 'The Qt executable must link the production Gate HTTP transport Module.' }
+        @{ Pattern = 'target_link_libraries\s*\(\s*http_transport_tests[\s\S]*?chat_gate_http_transport'; Message = 'Qt HTTP Integration tests must link the same production transport Module.' }
     )) {
         if ($clientCMake -notmatch $guard.Pattern) {
             throw $guard.Message
@@ -953,7 +1003,7 @@ function Confirm-TestStructure {
     $httpMgrSource = Get-Content -LiteralPath (Join-Path $repoRoot 'chat\httpmgr.cpp') -Raw
     if ($authFlowSource -notmatch 'AuthFlowCoordinator::Reduce' -or
         $loginDialogSource -notmatch '_authFlow\.Reduce' -or
-        $httpMgrSource -notmatch 'sig_http_finish\s*\(\s*flowId' -or
+        $httpMgrSource -notmatch 'sig_http_finish\s*\(\s*static_cast<AuthFlowId>\s*\(\s*result\.flowId\s*\)' -or
         $mainWindowSource -notmatch 'AbnormalDisconnect[\s\S]*?AuthActionKind::ShowLogin[\s\S]*?_session\.resetSession\s*\(\s*reason\s*\)') {
         throw 'Qt auth outcomes and abnormal disconnect must route through AuthFlowCoordinator and existing ClientSession reset.'
     }
@@ -988,7 +1038,7 @@ function Confirm-TestStructure {
             throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
         }
     }
-    foreach ($requiredCount in @(68, 56, 52, 4)) {
+    foreach ($requiredCount in @(68, 56, 59, 4)) {
         if ($runServerTests.Groups['body'].Value -notmatch "ExpectedCount\s*=\s*$requiredCount") {
             throw "RunServerTests is missing the exact current Server testcase count $requiredCount."
         }
@@ -1020,11 +1070,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact twelve-report/250-testcase baseline.'
+        throw 'RunAllTests must audit the exact thirteen-report/267-testcase baseline.'
     }
-    if ($regressionReportGroups.Count -ne 12 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 250) {
-        throw 'The registered regression baseline must remain exactly 12 reports and 250 testcases.'
+    if ($regressionReportGroups.Count -ne 13 -or
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 267) {
+        throw 'The registered regression baseline must remain exactly 13 reports and 267 testcases.'
     }
 
     $workflowPath = Require-File (Join-Path $repoRoot '.github\workflows\windows-ci.yml') `
