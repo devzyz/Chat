@@ -8,6 +8,7 @@
 #include <boost/beast.hpp>
 
 #include <chrono>
+#include <algorithm>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -143,8 +144,10 @@ TEST_F(T09_GHTTP_Core, FragmentedMaximumBodyIsAcceptedExactlyOnce) {
 
 // T09-GHTTP-07
 TEST_F(T09_GHTTP_Core, OverLimitMalformedAndInterruptedRequestsNeverDispatch) {
-	const auto over_limit = std::string("{\"padding\":\"") +
-		std::string(CServer::MaxRequestBodyBytes(), 'x') + "\"}";
+	const std::string prefix = "{\"padding\":\"";
+	const std::string suffix = "\"}";
+	const auto over_limit = prefix +
+		std::string(CServer::MaxRequestBodyBytes() + 1 - prefix.size() - suffix.size(), 'x') + suffix;
 
 	boost::asio::io_context client_ioc;
 	beast::tcp_stream oversized(client_ioc);

@@ -1,6 +1,5 @@
 #include "LogicSystem.h"
 
-#include "GateRequestProduction.h"
 #include "GateResponse.h"
 #include "HttpConnection.h"
 
@@ -12,8 +11,8 @@ void LogicSystem::RegPost(std::string url, HttpHandler handler) {
 	_post_handlers.insert(make_pair(url, handler));
 }
 
-LogicSystem::LogicSystem()
-	: _gate_request(gate::CreateProductionGateRequest()) {
+LogicSystem::LogicSystem(gate::GateRequest& gate_request)
+	: _gate_request(gate_request) {
 	const auto write_gate_response = [](
 		const std::shared_ptr<HttpConnection>& connection,
 		gate::Endpoint endpoint,
@@ -37,28 +36,28 @@ LogicSystem::LogicSystem()
 	RegPost("/get_varifycode", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
 		write_gate_response(connection, gate::Endpoint::GetVarifyCode,
 			[this](const Json::Value& request) {
-				return _gate_request->Handle(gate::Endpoint::GetVarifyCode, request);
+				return _gate_request.Handle(gate::Endpoint::GetVarifyCode, request);
 			});
 	});
 
 	RegPost("/user_register", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
 		write_gate_response(connection, gate::Endpoint::UserRegister,
 			[this](const Json::Value& request) {
-				return _gate_request->Handle(gate::Endpoint::UserRegister, request);
+				return _gate_request.Handle(gate::Endpoint::UserRegister, request);
 			});
 	});
 
 	RegPost("/reset_pwd", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
 		write_gate_response(connection, gate::Endpoint::ResetPassword,
 			[this](const Json::Value& request) {
-				return _gate_request->Handle(gate::Endpoint::ResetPassword, request);
+				return _gate_request.Handle(gate::Endpoint::ResetPassword, request);
 			});
 	});
 
 	RegPost("/user_login", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
 		write_gate_response(connection, gate::Endpoint::UserLogin,
 			[this](const Json::Value& request) {
-				return _gate_request->Handle(gate::Endpoint::UserLogin, request);
+				return _gate_request.Handle(gate::Endpoint::UserLogin, request);
 			});
 	});
 }

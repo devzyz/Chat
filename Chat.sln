@@ -30,6 +30,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ChatSessionState", "ChatSer
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GateRequest", "GateServer\GateServer\GateRequest.vcxproj", "{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GateTransport", "GateServer\GateServer\GateTransport.vcxproj", "{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}"
+EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ChatGrpcClientTests", "tests\server\ChatGrpcClientTests.vcxproj", "{F9A57744-7D12-456B-987D-27B1BAE61203}"
 EndProject
 Global
@@ -52,6 +54,12 @@ Global
 		{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}.Release|x64.ActiveCfg = Release|x64
 		{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}.Release|x64.Build.0 = Release|x64
 		{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}.Release|x86.ActiveCfg = Release|Win32
+		{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}.Debug|x64.ActiveCfg = Debug|x64
+		{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}.Debug|x64.Build.0 = Debug|x64
+		{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}.Debug|x86.ActiveCfg = Debug|Win32
+		{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}.Release|x64.ActiveCfg = Release|x64
+		{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}.Release|x64.Build.0 = Release|x64
+		{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}.Release|x86.ActiveCfg = Release|Win32
 		{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}.Debug|x64.ActiveCfg = Debug|x64
 		{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}.Debug|x64.Build.0 = Debug|x64
 		{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}.Debug|x86.ActiveCfg = Debug|Win32

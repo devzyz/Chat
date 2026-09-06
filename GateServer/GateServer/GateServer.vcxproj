@@ -132,12 +132,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="AsioIOServicePool.cpp" />
-    <ClCompile Include="CServer.cpp" />
     <ClCompile Include="GateServer.cpp" />
-    <ClCompile Include="GateResponse.cpp" />
-    <ClCompile Include="HttpConnection.cpp" />
-    <ClCompile Include="LogicSystem.cpp" />
     <ClCompile Include="LogMgr.cpp" />
     <ClCompile Include="$(ProtocolGeneratedDir)\status.grpc.pb.cc" />
     <ClCompile Include="$(ProtocolGeneratedDir)\status.pb.cc" />
@@ -173,6 +168,9 @@
     <None Include="..\..\proto\varify.proto" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="GateTransport.vcxproj">
+      <Project>{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}</Project>
+    </ProjectReference>
     <ProjectReference Include="GateRequest.vcxproj">
       <Project>{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}</Project>
     </ProjectReference>

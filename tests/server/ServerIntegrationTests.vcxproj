@@ -81,6 +81,9 @@
     <ProjectReference Include="..\..\GateServer\GateServer\GateGrpcClients.vcxproj">
       <Project>{A5B4E15C-99D7-4D4D-86CC-5FB765AFC501}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\..\GateServer\GateServer\GateTransport.vcxproj">
+      <Project>{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\..\ChatServer\ChatServer\LogicDispatcher.vcxproj">
       <Project>{B251FB8A-0C7D-4BFA-8F1B-31C75DFBDA01}</Project>
     </ProjectReference>
