@@ -296,8 +296,10 @@ TEST(T09_SGRPC_Fault, RefusedConnectionIsBoundedAndSanitized) {
 	grpc::ClientContext context;
 	context.set_deadline(std::chrono::system_clock::now() + 500ms);
 	message::GetChatServerRsp response;
+	const auto started = std::chrono::steady_clock::now();
 	const auto result = InvokeAssignment(*stub, context, 108, response);
-	EXPECT_EQ(rpc::ClassifyStatus(result), rpc::Failure::Unavailable);
+	EXPECT_EQ(rpc::ClassifyStatus(result), rpc::Failure::DeadlineExceeded);
+	EXPECT_LE(std::chrono::steady_clock::now() - started, 700ms);
 	EXPECT_TRUE(result.error_message().find("SYNTHETIC") == std::string::npos);
 	EXPECT_TRUE(run->Teardown().complete);
 }
@@ -320,13 +322,14 @@ TEST(T09_SGRPC_Fault, ShutdownDuringCallCancelsWithoutLateHostMutation) {
 	});
 	const bool entered = store->WaitForReadBlocked(std::chrono::steady_clock::now() + 1s);
 	auto stop = std::async(std::launch::async, [&] {
-		return server.Stop(std::chrono::system_clock::now() + 1s);
+		return server.Stop(std::chrono::system_clock::now() + 150ms);
 	});
-	store->ReleaseRead();
 	ASSERT_TRUE(entered);
+	const bool cancelled = call.wait_until(std::chrono::steady_clock::now() + 1s) == std::future_status::ready;
+	store->ReleaseRead();
+	ASSERT_TRUE(cancelled);
 	ASSERT_EQ(stop.wait_until(std::chrono::steady_clock::now() + 2s), std::future_status::ready);
 	EXPECT_TRUE(stop.get());
-	ASSERT_EQ(call.wait_until(std::chrono::steady_clock::now() + 2s), std::future_status::ready);
 	EXPECT_NE(rpc::ClassifyStatus(call.get()), rpc::Failure::None);
 	EXPECT_FALSE(server.Ready());
 	EXPECT_TRUE(server.BoundEndpoint().empty());
@@ -355,6 +358,9 @@ TEST(T09_SGRPC_Fault, LateCompletionCannotCrossRestartGeneration) {
 	ASSERT_TRUE(expired);
 	EXPECT_EQ(rpc::ClassifyStatus(old_call.get()), rpc::Failure::DeadlineExceeded);
 	ASSERT_TRUE(store->WaitForReadCompleted(std::chrono::steady_clock::now() + 1s));
+	EXPECT_TRUE(old_response.host().empty());
+	EXPECT_TRUE(old_response.port().empty());
+	EXPECT_TRUE(old_response.token().empty());
 	ASSERT_TRUE(server.Stop(std::chrono::system_clock::now() + 2s));
 
 	ASSERT_TRUE(server.Start("127.0.0.1:0"));

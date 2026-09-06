@@ -10,6 +10,8 @@ The six host cases and seven `T09-GHTTP-01..07` cases are registered in `ServerI
 
 The Gate HTTP cases cross production Beast parsing and lifecycle code through the shared `GateTransport.vcxproj`. They prove actual numeric-loopback publication, all four POST routes delegating to the same Phase 3A `GateRequest`, fragmented exact-limit acceptance, max+1 rejection, malformed request rejection, interrupted connection cleanup, and idempotent stop. No Redis, MySQL, gRPC service, public endpoint, or test-only production switch is used.
 
+`T09-SGRPC-01..12` crosses the generated Status stub and production gRPC service through the shared `StatusTransport.vcxproj` into the Phase 3A `StatusRouting` Module. Core contracts cover readiness, assignment, login, fail-closed empty routing, the maximum protobuf integer boundary, and sanitized business errors. Fault contracts cover deadline expiry, explicit cancellation, refused connection, shutdown during a call, late completion across host generations, occupied-port rejection, idempotent stop, restart, and complete port/server resource release. Delay is scheduled only in the in-memory `StatusStore` Adapter with condition variables; the suite adds no test RPC, fixed port, public network access, or sleep.
+
 Focused command:
 
 ```powershell
@@ -20,4 +22,11 @@ Gate HTTP focused command:
 
 ```powershell
 build\windows-tests\Release\server_integration_tests.exe --gtest_filter=T09_GHTTP_Core* --gtest_output=xml:build/test-results/3b02_gate_http_focused.xml
+```
+
+Status gRPC focused commands:
+
+```powershell
+build\windows-tests\Release\server_integration_tests.exe --gtest_filter=T09_SGRPC_Core* --gtest_output=xml:build/test-results/3b03_status_core.xml
+build\windows-tests\Release\server_integration_tests.exe --gtest_filter=T09_SGRPC_Fault* --gtest_output=xml:build/test-results/3b03_status_faults.xml
 ```

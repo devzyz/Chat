@@ -15,7 +15,7 @@ StatusGrpcServer::~StatusGrpcServer() {
 
 bool StatusGrpcServer::Start(const std::string& endpoint) {
 	std::lock_guard<std::mutex> lock(mutex_);
-	if (server_ || stopping_ || stopped_ || endpoint.empty()) {
+	if (server_ || stopping_ || endpoint.empty()) {
 		return false;
 	}
 
@@ -36,6 +36,7 @@ bool StatusGrpcServer::Start(const std::string& endpoint) {
 
 	bound_address_ = address;
 	bound_port_ = static_cast<std::uint16_t>(selected_port);
+	stopped_ = false;
 	server_ = std::move(server);
 	return true;
 }
