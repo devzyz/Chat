@@ -59,6 +59,8 @@
     <ClCompile Include="startup\startup_config_tests.cpp" />
     <ClCompile Include="..\support\IntegrationHostFactory.cpp" />
     <ClCompile Include="..\support\RunContext.cpp" />
+    <ClCompile Include="..\support\ProcessHarness.cpp" />
+    <ClCompile Include="..\support\Win32ProcessAdapter.cpp" />
     <ClCompile Include="integration-host\integration_host_contract_tests.cpp" />
     <ClCompile Include="process-harness\run_context_tests.cpp" />
     <ClCompile Include="process-harness\process_harness_tests.cpp" />
@@ -70,6 +72,10 @@
     <ClCompile Include="..\..\generated\proto\cpp\status.pb.cc" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="process-harness\ProcessHarnessChild.vcxproj">
+      <Project>{9B810856-EB83-4B84-87A4-883A3FFB1001}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
     <ProjectReference Include="..\..\GateServer\GateServer\GateGrpcClients.vcxproj">
       <Project>{A5B4E15C-99D7-4D4D-86CC-5FB765AFC501}</Project>
     </ProjectReference>
