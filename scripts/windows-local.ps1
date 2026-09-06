@@ -63,7 +63,7 @@ $scriptTestGroups = @(
 $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 68 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 56 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 87 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 93 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
@@ -74,6 +74,31 @@ $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 11 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_component.xml'; ExpectedCount = 9 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_integration.xml'; ExpectedCount = 4 }
+)
+$legacyRegressionReportGroups = @(
+    [pscustomobject]@{ Name = 'server_unit.xml'; MinimumCount = 68 }
+    [pscustomobject]@{ Name = 'server_component.xml'; MinimumCount = 56 }
+    [pscustomobject]@{ Name = 'server_integration.xml'; MinimumCount = 34 }
+    [pscustomobject]@{ Name = 'server_chat_grpc_integration.xml'; MinimumCount = 4 }
+    [pscustomobject]@{ Name = 'server_gate_unit.xml'; MinimumCount = 2 }
+    [pscustomobject]@{ Name = 'server_status_unit.xml'; MinimumCount = 2 }
+    [pscustomobject]@{ Name = 'client_unit.xml'; MinimumCount = 18 }
+    [pscustomobject]@{ Name = 'client_component.xml'; MinimumCount = 6 }
+    [pscustomobject]@{ Name = 'varify_unit.xml'; MinimumCount = 18 }
+    [pscustomobject]@{ Name = 'varify_integration.xml'; MinimumCount = 11 }
+    [pscustomobject]@{ Name = 'script_component.xml'; MinimumCount = 9 }
+    [pscustomobject]@{ Name = 'script_integration.xml'; MinimumCount = 4 }
+)
+$regressionResiduePrefixes = @(
+    'chat-config-test-',
+    'chat-startup-tests-',
+    'gate-status-startup-tests-',
+    'chat-process-harness-',
+    'chat-instance-validation-',
+    'chat-instance-lifecycle-',
+    'varify-config-',
+    'varify-startup-',
+    'chat-proto-mutation-'
 )
 $overlayTriplets = Join-Path $repoRoot 'triplets'
 $expectedQtVersion = '6.5.3'
@@ -354,7 +379,7 @@ function Run-ServerTests {
     $executions = @(
         @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 68 }
         @{ Binary = $componentBinary; Report = $reports[1]; ExpectedCount = 56 }
-        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 87 }
+        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 93 }
         @{ Binary = $chatGrpcClientBinary; Report = $reports[3]; ExpectedCount = 4 }
         @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4]; ExpectedCount = 2 }
         @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5]; ExpectedCount = 2 }
@@ -473,16 +498,49 @@ function Assert-RegressionReport {
     } catch {
         throw "Regression report is not valid XML: $Path. $($_.Exception.Message)"
     }
+    $reportText = Get-Content -LiteralPath $Path -Raw
     $testcases = @($reportXml.SelectNodes('//testcase'))
     $failures = @($reportXml.SelectNodes('//failure'))
     $errors = @($reportXml.SelectNodes('//error'))
+    $skipped = @($reportXml.SelectNodes('//skipped'))
+    $unavailable = @(
+        $testcases | Where-Object {
+            $_.GetAttribute('status') -match '^(?i:notrun|disabled|skipped|unavailable|timeout)$' -or
+            $_.GetAttribute('result') -match '^(?i:notrun|disabled|skipped|unavailable|timeout|suppressed)$'
+        }
+    )
     if ($testcases.Count -ne $ExpectedCount) {
         throw "Regression report count mismatch for ${Path}: expected $ExpectedCount, found $($testcases.Count)."
     }
     if ($failures.Count -ne 0 -or $errors.Count -ne 0) {
         throw "Regression report contains failures for ${Path}: failures=$($failures.Count), errors=$($errors.Count)."
     }
+    if ($skipped.Count -ne 0 -or $unavailable.Count -ne 0) {
+        throw "Regression report contains skipped, disabled, unavailable, or timed-out cases: $Path."
+    }
+    if ($reportText -match '(?i)(?:password|passwd|secret|token|verification[-_ ]?code|email)\s*[:=]\s*[^\s<]{3,}') {
+        throw "Regression report contains a credential-shaped assignment: $Path."
+    }
     return $testcases.Count
+}
+
+function Assert-RegressionCleanupEvidence {
+    $requiredEvidence = @(
+        [pscustomobject]@{ Report = 'server_integration.xml'; Name = 'TeardownIsReverseOrderedAndPreservesPrimaryAndCleanupFailures' }
+        [pscustomobject]@{ Report = 'server_integration.xml'; Name = 'StopUsesGracefulSignalAndClosesPipesByDeadline' }
+        [pscustomobject]@{ Report = 'server_integration.xml'; Name = 'StopReleasesSessionsThreadsSocketsAndServerOwnership' }
+        [pscustomobject]@{ Report = 'server_integration.xml'; Name = 'ChatRealDependencyBoundaryIsExplicitBoundedAndResidueFree' }
+        [pscustomobject]@{ Report = 'client_integration.xml'; Name = 'http_transport.deletingTransportReleasesReplyAndLoopbackSocket' }
+        [pscustomobject]@{ Report = 'client_integration.xml'; Name = 'tcp_transport.closeAndDeleteReleaseOwnedResources' }
+    )
+    foreach ($evidence in $requiredEvidence) {
+        $reportPath = Join-Path $testResults $evidence.Report
+        [xml]$reportXml = Get-Content -LiteralPath $reportPath -Raw
+        $matchingCase = @($reportXml.SelectNodes('//testcase') | Where-Object { $_.name -eq $evidence.Name })
+        if ($matchingCase.Count -ne 1) {
+            throw "Regression cleanup evidence is missing or duplicated in $($evidence.Report): $($evidence.Name)."
+        }
+    }
 }
 
 function Confirm-RegressionReports {
@@ -492,9 +550,21 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 13 -or $total -ne 307) {
-        throw "Regression report baseline mismatch: expected 13 reports and 307 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 13 -or $total -ne 313) {
+        throw "Regression report baseline mismatch: expected 13 reports and 313 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
+    $legacyTotal = 0
+    foreach ($legacyGroup in $legacyRegressionReportGroups) {
+        $registeredGroup = @($regressionReportGroups | Where-Object { $_.Name -eq $legacyGroup.Name })
+        if ($registeredGroup.Count -ne 1 -or $registeredGroup[0].ExpectedCount -lt $legacyGroup.MinimumCount) {
+            throw "Legacy regression floor is not preserved for $($legacyGroup.Name)."
+        }
+        $legacyTotal += $legacyGroup.MinimumCount
+    }
+    if ($legacyRegressionReportGroups.Count -ne 12 -or $legacyTotal -ne 232) {
+        throw 'Legacy regression floor must remain exactly 12 reports and 232 testcases.'
+    }
+    Assert-RegressionCleanupEvidence
     Write-Host "Regression report audit passed: $total testcases across $($regressionReportGroups.Count) reports."
 }
 
@@ -887,21 +957,21 @@ function Confirm-TestStructure {
         }
     }
     foreach ($registration in @(
-        @{ Text = $integrationProject; Pattern = 'integration-host\production_composition_tests\.cpp'; Owner = 'T09-COMP runtime source' }
+        @{ Text = $integrationProject; Pattern = [regex]::Escape('integration-host\production_composition_tests.cpp'); Owner = 'T09-COMP runtime source' }
         @{ Text = $gateProject; Pattern = 'ProjectReference Include="GateTransport\.vcxproj"'; Owner = 'formal Gate transport' }
         @{ Text = $gateProject; Pattern = 'ProjectReference Include="GateRequest\.vcxproj"'; Owner = 'formal Gate business Module' }
-        @{ Text = $integrationProject; Pattern = 'GateServer\GateServer\GateTransport\.vcxproj'; Owner = 'Gate Integration transport' }
-        @{ Text = $integrationProject; Pattern = 'GateServer\GateServer\GateRequest\.vcxproj'; Owner = 'Gate Integration business Module' }
+        @{ Text = $integrationProject; Pattern = [regex]::Escape('GateServer\GateServer\GateTransport.vcxproj'); Owner = 'Gate Integration transport' }
+        @{ Text = $integrationProject; Pattern = [regex]::Escape('GateServer\GateServer\GateRequest.vcxproj'); Owner = 'Gate Integration business Module' }
         @{ Text = $statusProject; Pattern = 'ProjectReference Include="StatusTransport\.vcxproj"'; Owner = 'formal Status transport' }
         @{ Text = $statusProject; Pattern = 'ProjectReference Include="StatusRouting\.vcxproj"'; Owner = 'formal Status business Module' }
-        @{ Text = $integrationProject; Pattern = 'StatusServer\StatusServer\StatusTransport\.vcxproj'; Owner = 'Status Integration transport' }
-        @{ Text = $integrationProject; Pattern = 'StatusServer\StatusServer\StatusRouting\.vcxproj'; Owner = 'Status Integration business Module' }
+        @{ Text = $integrationProject; Pattern = [regex]::Escape('StatusServer\StatusServer\StatusTransport.vcxproj'); Owner = 'Status Integration transport' }
+        @{ Text = $integrationProject; Pattern = [regex]::Escape('StatusServer\StatusServer\StatusRouting.vcxproj'); Owner = 'Status Integration business Module' }
         @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatTransport\.vcxproj"'; Owner = 'formal Chat transport' }
         @{ Text = $chatProject; Pattern = 'ProjectReference Include="LogicDispatcher\.vcxproj"'; Owner = 'formal Chat dispatcher Module' }
         @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatSessionState\.vcxproj"'; Owner = 'formal Chat session Module' }
-        @{ Text = $integrationProject; Pattern = 'ChatServer\ChatServer\ChatTransport\.vcxproj'; Owner = 'Chat Integration transport' }
-        @{ Text = $integrationProject; Pattern = 'ChatServer\ChatServer\LogicDispatcher\.vcxproj'; Owner = 'Chat Integration dispatcher Module' }
-        @{ Text = $integrationProject; Pattern = 'ChatServer\ChatServer\ChatSessionState\.vcxproj'; Owner = 'Chat Integration session Module' }
+        @{ Text = $integrationProject; Pattern = [regex]::Escape('ChatServer\ChatServer\ChatTransport.vcxproj'); Owner = 'Chat Integration transport' }
+        @{ Text = $integrationProject; Pattern = [regex]::Escape('ChatServer\ChatServer\LogicDispatcher.vcxproj'); Owner = 'Chat Integration dispatcher Module' }
+        @{ Text = $integrationProject; Pattern = [regex]::Escape('ChatServer\ChatServer\ChatSessionState.vcxproj'); Owner = 'Chat Integration session Module' }
     )) {
         if ($registration.Text -notmatch $registration.Pattern) {
             throw "$($registration.Owner) must share the production target used by the formal executable and Integration tests."
@@ -1184,7 +1254,7 @@ function Confirm-TestStructure {
             throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
         }
     }
-    foreach ($requiredCount in @(68, 56, 87, 4)) {
+    foreach ($requiredCount in @(68, 56, 93, 4)) {
         if ($runServerTests.Groups['body'].Value -notmatch "ExpectedCount\s*=\s*$requiredCount") {
             throw "RunServerTests is missing the exact current Server testcase count $requiredCount."
         }
@@ -1216,11 +1286,36 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact thirteen-report/307-testcase baseline.'
+        throw 'RunAllTests must audit the exact thirteen-report/313-testcase baseline.'
     }
     if ($regressionReportGroups.Count -ne 13 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 307) {
-        throw 'The registered regression baseline must remain exactly 13 reports and 307 testcases.'
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 313) {
+        throw 'The registered regression baseline must remain exactly 13 reports and 313 testcases.'
+    }
+    if ($legacyRegressionReportGroups.Count -ne 12 -or
+        ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 232) {
+        throw 'The original regression floor must remain exactly 12 reports and 232 testcases.'
+    }
+    foreach ($residuePrefix in @(
+        'chat-config-test-', 'chat-startup-tests-', 'gate-status-startup-tests-',
+        'chat-process-harness-', 'chat-instance-validation-', 'chat-instance-lifecycle-',
+        'varify-config-', 'varify-startup-', 'chat-proto-mutation-'
+    )) {
+        if ($runnerRegistration -notmatch [regex]::Escape("'$residuePrefix'")) {
+            throw "The aggregate cleanup gate is missing the owned residue prefix $residuePrefix."
+        }
+    }
+    if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Assert-NoNewRegressionResidue\b' -or
+        $runnerRegistration -notmatch '(?ms)^function\s+Assert-RegressionCleanupEvidence\b.*?^function\s+Confirm-RegressionReports\b.*?^\s*Assert-RegressionCleanupEvidence\s*$' -or
+        $runnerRegistration -notmatch '(?ms)^function\s+Assert-RegressionReport\b.*?credential-shaped assignment') {
+        throw 'RunAllTests must enforce aggregate residue, cleanup-evidence, and secret/report-integrity gates.'
+    }
+    $addedDiff = (& git -C $repoRoot diff --unified=0 --no-ext-diff 2>$null | Where-Object { $_ -match '^\+(?!\+\+)' }) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to scan the working diff for credential-shaped assignments.'
+    }
+    if ($addedDiff -match '(?i)(?:password|passwd|secret|token|verification[-_ ]?code|email)\s*[:=]\s*[^\s<]{3,}') {
+        throw 'The working diff contains a credential-shaped assignment.'
     }
 
     $workflowPath = Require-File (Join-Path $repoRoot '.github\workflows\windows-ci.yml') `
@@ -1444,11 +1539,13 @@ function Restore-Varify {
 }
 
 function Run-AllTests {
+    $residueBefore = @(Get-RegressionResidueSnapshot -Prefixes $regressionResiduePrefixes)
     Run-ScriptTests
     Run-ServerTests
     Run-ClientTests
     Run-VarifyTests
     Confirm-RegressionReports
+    Assert-NoNewRegressionResidue -Before $residueBefore -Prefixes $regressionResiduePrefixes -Lane 'Aggregate'
 }
 
 function Check-Toolchains {
