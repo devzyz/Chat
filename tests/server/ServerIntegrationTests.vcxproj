@@ -62,6 +62,7 @@
     <ClCompile Include="..\support\ProcessHarness.cpp" />
     <ClCompile Include="..\support\Win32ProcessAdapter.cpp" />
     <ClCompile Include="integration-host\integration_host_contract_tests.cpp" />
+    <ClCompile Include="integration-host\gate_http_transport_tests.cpp" />
     <ClCompile Include="process-harness\run_context_tests.cpp" />
     <ClCompile Include="process-harness\process_harness_tests.cpp" />
     <ClCompile Include="process-harness\process_harness_fault_tests.cpp" />
