@@ -200,7 +200,7 @@ None. Loopback transport, parser bounds, completion identity, report evidence, a
 
 ## Self-Check: PASSED
 
-- Commits `058769b`, `79e6b91`, `3ef34ac`, `7281cc9`, and `979a0d3` exist in required order on `worktree-agent-3b-02-execution`.
+- Commits `058769b`, `79e6b91`, `3ef34ac`, `7281cc9`, and `979a0d3` exist in required order on `phase-3b-integration-20260904`.
 - All 23 implementation/test/registration files and this Summary exist; no tracked file was deleted.
 - T09-GHTTP is 7/7, Q04-HTTP is 10/10, and the sole owning Server runner emitted exactly 191 cases with zero failures/errors/skips.
 - Restored production hashes match the recorded body-bound and Qt completion baselines; DG-25 changed roots, run-owned residue, and secret marker counts are all zero.

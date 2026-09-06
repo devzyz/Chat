@@ -196,7 +196,7 @@ None. The new numeric loopback listener, generated RPC boundary, deadline/cancel
 
 ## Self-Check: PASSED
 
-- Commits `92f2bfb`, `24e927d`, `d76e50d`, `60352d2`, and `a7caea6` exist in required order on `worktree-agent-3b-03-execution`.
+- Commits `92f2bfb`, `24e927d`, `d76e50d`, `60352d2`, and `a7caea6` exist in required order on `phase-3b-integration-20260904`.
 - All 13 implementation/test/registration files and this Summary exist; no tracked file was deleted.
 - T09-SGRPC Core is 5/5, Fault is 7/7, and the sole owning Server runner emitted exactly 203 cases with zero failures/errors/disabled cases.
 - Restored mutation hashes match the Status routing, bind-result, and formal-target baselines; DG-25 changed roots, report payload/secret markers, owned processes, and temporary residue are all zero.

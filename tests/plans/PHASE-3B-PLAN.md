@@ -1,7 +1,7 @@
 ---
 phase: "3B"
 title: "Deterministic production-transport and process Integration"
-status: "Planned"
+status: "Local Complete — Remote CI Pending"
 depends_on:
   - "Phase 3A complete, including 3A-01..3A-06 production Module and runner evidence"
 plans: 6
@@ -38,7 +38,7 @@ must_haves:
 
 # Phase 3B 正式计划：确定性 production transport / process Integration
 
-状态：**Planned；Phase 3A 完成前禁止执行**
+状态：**本地实现与 313-case 回归已完成；PR Required Checks 与合并后 `develop` 证据待定**
 
 本文件是 3B-00..3B-05 的执行合同。所有以“planned”标识的新文件、target、Interface、symbol、Test ID
 和 report 都尚未实现；它们不得被当作当前仓库事实或当前 232-case baseline 的一部分。
@@ -283,6 +283,9 @@ all pre-existing Server cases remain registered and no other public runner is in
 
 ## 8. Plan 3B-01 — RunContext and Windows ProcessHarness
 
+状态：**Complete（2026-09-06）**。完成证据见
+[`PHASE-3B-01-SUMMARY.md`](PHASE-3B-01-SUMMARY.md)；下一项为 **Plan 3B-02**。
+
 <objective>
 Create the deterministic runtime owner used by every later 3B test: unique resources, protocol-ready process control, bounded
 evidence and identity-scoped cleanup.
@@ -388,6 +391,9 @@ threads/temp paths are released and pre-existing state is untouched.
 </tasks>
 
 ## 9. Plan 3B-02 — Gate HTTP and Qt QNetworkAccessManager
+
+状态：**Complete（2026-09-06）**。完成证据见
+[`PHASE-3B-02-SUMMARY.md`](PHASE-3B-02-SUMMARY.md)；下一项为 **Plan 3B-03**。
 
 <objective>
 Drive real HTTP bytes through the production Gate Beast transport into Phase 3A `GateRequest`, and drive the production Qt HTTP
@@ -504,6 +510,9 @@ and 12 reports remain present; HTTP logs/reports contain no synthetic code/token
 
 ## 10. Plan 3B-03 — Status gRPC
 
+状态：**Complete（2026-09-06）**。完成证据见
+[`PHASE-3B-03-SUMMARY.md`](PHASE-3B-03-SUMMARY.md)；下一项为 **Plan 3B-04**。
+
 <objective>
 Run the production Status gRPC service and generated stub over real loopback while delegating selection/token behavior to Phase 3A
 `StatusRouting` with its in-memory store Adapter.
@@ -608,6 +617,9 @@ structure mutation disconnecting the shared target fails.
 </tasks>
 
 ## 11. Plan 3B-04 — Chat TCP and Qt QTcpSocket
+
+状态：**Complete（2026-09-07）**。完成证据见
+[`PHASE-3B-04-SUMMARY.md`](PHASE-3B-04-SUMMARY.md)；下一项为 **Plan 3B-05**。
 
 <objective>
 Drive real TCP byte streams through the production Chat acceptor/session/frame/dispatcher path and the production Qt TCP Module,
@@ -724,6 +736,10 @@ owned runtime objects are released; prior frame/session/model contracts remain u
 </tasks>
 
 ## 12. Plan 3B-05 — Composition, report and develop CI closeout
+
+状态：**Local Complete（2026-09-07）；Remote CI Pending**。本地证据见
+[`PHASE-3B-05-SUMMARY.md`](PHASE-3B-05-SUMMARY.md) 与
+[`PHASE-3B-SUMMARY.md`](PHASE-3B-SUMMARY.md)。PR 四项 Required Checks 与合并后 `develop` 证据尚未完成。
 
 <objective>
 Protect formal production composition roots, converge real Test ID/report counts, run the phase's only complete local lane and make

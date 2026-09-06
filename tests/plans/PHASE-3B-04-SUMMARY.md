@@ -69,7 +69,7 @@ completed: 2026-09-07
 - **Completed:** 2026-09-06T16:27:50.7488545Z
 - **Tasks:** 3
 - **Files created or modified by commits:** 27
-- **Execution branch guard:** `worktree-agent-3b-04-execution`
+- **Consolidated phase branch:** `phase-3b-integration-20260904`
 - **Starting HEAD:** `f2428cf798fcc056833acd6cfa40e1734c2ce40a`
 
 ## Accomplishments
@@ -195,7 +195,7 @@ None. No credentials, external services, dependency installation, or public netw
 
 ## Self-Check: PASSED
 
-- All six RED/GREEN task commits exist on `worktree-agent-3b-04-execution` in the required order.
+- All six RED/GREEN task commits exist on `phase-3b-integration-20260904` in the required order.
 - Every created key file exists, every mutation was restored, focused Server 16/16 and Qt 12/12 are GREEN, and the sole owning Server lane is GREEN.
 - DG-25 fingerprints are unchanged, owned runtime residue is zero, staged state is empty, and only the two orchestrator-owned deferred plan documents remain modified before this Summary commit.
 

@@ -186,7 +186,7 @@ None. Process identity, child input/output, temporary-file ownership, denial-of-
 
 ## Self-Check: PASSED
 
-- Branch `worktree-agent-3b-01-execution` contains Task 3 GREEN `5eb035a`, and all six RED/GREEN commits exist in the required order immediately before this Summary commit.
+- Branch `phase-3b-integration-20260904` contains Task 3 GREEN `5eb035a`, and all six RED/GREEN commits exist in the required order immediately before this Summary commit.
 - All 19 plan files, including this Summary, exist; the accidental main-checkout Summary path is absent.
 - The six Server reports contain exactly 184 cases with zero failures/errors, including all 12 T09-PROC contracts.
 - `RunContext.cpp` matches the post-mutation SHA-256, and staged index, task processes, and run-owned temp residue are all empty.
