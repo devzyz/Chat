@@ -13,6 +13,8 @@ jobs:
     name: Linux configure compile link and startup preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    outputs:
+      status: ${{ steps.preflight-status.outputs.status }}
     env:
       VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
       VCPKG_DISABLE_METRICS: "1"
@@ -20,7 +22,7 @@ jobs:
       CHAT_EXPECTED_GNU_VERSION: "13.3.0"
       CHAT_EXPECTED_CMAKE_VERSION: "3.28.3"
       CHAT_EXPECTED_QT_VERSION: "6.5.3"
-      CHAT_EXPECTED_NODE_VERSION: "22"
+      CHAT_EXPECTED_NODE_VERSION: "22.18.0"
     steps:
       - name: Check out candidate source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -28,7 +30,7 @@ jobs:
       - name: Select locked Node runtime
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "22"
+          node-version: "22.18.0"
           cache: npm
           cache-dependency-path: VarifyServer/package-lock.json
 
@@ -54,6 +56,12 @@ jobs:
       - name: Run fail-closed Linux preflight
         run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-00-T2
 
+      - name: Confirm preflight PASS contract
+        id: preflight-status
+        run: |
+          jq -e '.status == "PASS"' out/phase3c/preflight/linux-preflight.json
+          echo 'status=PASS' >> "$GITHUB_OUTPUT"
+
       - name: Upload Linux preflight evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -62,3 +70,13 @@ jobs:
           path: out/phase3c/preflight/**
           if-no-files-found: error
           retention-days: 7
+
+  downstream-contract:
+    name: Phase 3C downstream hard gate
+    needs: linux-preflight
+    if: needs.linux-preflight.outputs.status == 'PASS'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Enforce preflight dependency
+        run: echo '3C-01..3C-09 may execute only after authoritative preflight PASS.'

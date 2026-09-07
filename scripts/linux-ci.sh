@@ -47,6 +47,41 @@ evidence_root="${CHAT_EVIDENCE_ROOT:-${repo_root}/out/phase3c/preflight}"
 junit_path="${evidence_root}/junit/linux_build_proof.xml"
 evidence_path="${evidence_root}/linux-preflight.json"
 mkdir -p "$(dirname "$junit_path")"
+current_step="contract"
+runtime_complete=0
+
+write_runtime_evidence() {
+  local status="$1"
+  local diagnostic="$2"
+  local compiler="${3:-unobserved}"
+  local cmake_version="${4:-unobserved}"
+  local qt_version="${5:-unobserved}"
+  local node_version="${6:-unobserved}"
+  local vcpkg_commit="${7:-unobserved}"
+  printf '%s\n' \
+    '{' \
+    '  "schema_version": 1,' \
+    "  \"status\": \"${status}\"," \
+    '  "scope": "CI portability only; not application containerization or Linux release support",' \
+    '  "runner": "ubuntu-24.04",' \
+    "  \"compiler\": \"${compiler}\"," \
+    "  \"cmake\": \"${cmake_version}\"," \
+    "  \"qt\": \"${qt_version}\"," \
+    "  \"node\": \"${node_version}\"," \
+    "  \"vcpkg_baseline\": \"${vcpkg_commit}\"," \
+    '  "triplet": "x64-linux-chat-release",' \
+    '  "targets": ["GateServer", "StatusServer", "ChatServer", "chat_network_core", "chat_message_model", "chat_session_core", "chat_protocol_cpp"],' \
+    "  \"diagnostic\": \"${diagnostic}\"" \
+    '}' > "$evidence_path"
+}
+
+on_exit() {
+  local exit_code=$?
+  if ((exit_code != 0 && runtime_complete == 0)); then
+    write_runtime_evidence "LINUX_PREFLIGHT_BLOCKED" "${current_step}"
+  fi
+}
+trap on_exit EXIT
 
 run_contract() {
   local expectation="$1"
@@ -55,6 +90,115 @@ run_contract() {
     -DCHAT_EVIDENCE_PATH="$evidence_path" \
     -DCHAT_EXPECT="$expectation" \
     -P "$repo_root/tests/build/linux_preflight_contract.cmake"
+}
+
+expect_mutation_red() {
+  local mutation_name="$1"
+  local mutation_root="$2"
+  set +e
+  local output
+  output="$(cmake \
+    -DCHAT_REPO_ROOT="$mutation_root" \
+    -DCHAT_JUNIT_PATH="$mutation_root/junit.xml" \
+    -DCHAT_EVIDENCE_PATH="$mutation_root/evidence.json" \
+    -DCHAT_EXPECT=GREEN \
+    -P "$repo_root/tests/build/linux_preflight_contract.cmake" 2>&1)"
+  local result=$?
+  set -e
+  if ((result == 0)) || [[ "$output" != *"LINUX_PREFLIGHT_BLOCKED"* ]]; then
+    printf '%s\n' "$output" >&2
+    echo "mutation did not make the contract RED: $mutation_name" >&2
+    return 1
+  fi
+  printf '%s\n' "mutation RED: $mutation_name"
+}
+
+copy_contract_inputs() {
+  local destination="$1"
+  mkdir -p \
+    "$destination/cmake" \
+    "$destination/triplets" \
+    "$destination/scripts" \
+    "$destination/.github/workflows"
+  cp "$repo_root/CMakeLists.txt" "$destination/CMakeLists.txt"
+  cp "$repo_root/CMakePresets.json" "$destination/CMakePresets.json"
+  cp "$repo_root/vcpkg.json" "$destination/vcpkg.json"
+  cp "$repo_root/cmake/LinuxPreflight.cmake" "$destination/cmake/LinuxPreflight.cmake"
+  cp "$repo_root/triplets/x64-linux-chat-release.cmake" "$destination/triplets/x64-linux-chat-release.cmake"
+  cp "$repo_root/scripts/linux-ci.sh" "$destination/scripts/linux-ci.sh"
+  cp "$repo_root/.github/workflows/linux-ci.yml" "$destination/.github/workflows/linux-ci.yml"
+}
+
+run_contract_mutations() {
+  local mutation_parent
+  mutation_parent="$(mktemp -d "${RUNNER_TEMP:-/tmp}/chat-preflight-mutations.XXXXXX")"
+
+  local target_root="$mutation_parent/missing-target"
+  copy_contract_inputs "$target_root"
+  sed -i 's/CHAT_LINUX_PRODUCTION_TARGETS_READY ON/CHAT_LINUX_PRODUCTION_TARGETS_READY OFF/' \
+    "$target_root/CMakeLists.txt"
+  expect_mutation_red "missing production target" "$target_root"
+
+  local duplicate_root="$mutation_parent/duplicate-source"
+  copy_contract_inputs "$duplicate_root"
+  printf '%s\n' 'add_executable(preflight_duplicate GateServer/GateServer/CServer.cpp)' \
+    >> "$duplicate_root/CMakeLists.txt"
+  expect_mutation_red "duplicate production source" "$duplicate_root"
+
+  local baseline_root="$mutation_parent/baseline-drift"
+  copy_contract_inputs "$baseline_root"
+  sed -i 's/fc3be1ebea7eaeb3071fe716ac65713af1f3a146/0000000000000000000000000000000000000000/' \
+    "$baseline_root/vcpkg.json"
+  expect_mutation_red "vcpkg baseline drift" "$baseline_root"
+
+  local startup_root="$mutation_parent/startup-break"
+  copy_contract_inputs "$startup_root"
+  sed -i 's#VarifyServer/server.js#VarifyServer/missing-main.js#g' \
+    "$startup_root/scripts/linux-ci.sh"
+  expect_mutation_red "broken Varify startup invocation" "$startup_root"
+
+  rm -rf "$mutation_parent"
+}
+
+assert_exact_identity() {
+  local name="$1"
+  local actual="$2"
+  local expected="$3"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "LINUX_PREFLIGHT_BLOCKED: $name identity mismatch; expected $expected, got $actual" >&2
+    return 1
+  fi
+}
+
+run_cpp_startup_probe() {
+  local name="$1"
+  local executable="$2"
+  local log_path="$evidence_root/${name}.startup.log"
+  set +e
+  timeout --signal=TERM --kill-after=5s 10s "$executable" --preflight-loader-probe \
+    >"$log_path" 2>&1
+  local result=$?
+  set -e
+  if ((result == 0 || result == 124 || result == 126 || result == 127)) || \
+     ! grep -Fq 'Usage:' "$log_path"; then
+    echo "LINUX_PREFLIGHT_BLOCKED: $name loader/startup probe failed" >&2
+    return 1
+  fi
+}
+
+run_varify_startup_probe() {
+  local log_path="$evidence_root/VarifyServer.startup.log"
+  set +e
+  (
+    cd "$repo_root/VarifyServer"
+    timeout --signal=TERM --kill-after=5s 10s node server.js
+  ) >"$log_path" 2>&1
+  local result=$?
+  set -e
+  if ((result != 124)) || ! grep -Fq 'grpc server started on port' "$log_path"; then
+    echo "LINUX_PREFLIGHT_BLOCKED: Varify production-main startup probe failed" >&2
+    return 1
+  fi
 }
 
 case "$selector" in
@@ -79,7 +223,55 @@ case "$selector" in
       echo "3C-00-T2 is a GREEN selector" >&2
       exit 64
     fi
+    current_step="hosted-runner-identity"
+    if [[ "$(uname -s)" != "Linux" || -z "${GITHUB_ACTIONS:-}" ]]; then
+      echo "LINUX_PREFLIGHT_BLOCKED: authoritative hosted Ubuntu runner is required" >&2
+      exit 1
+    fi
+
+    current_step="contract-static"
     run_contract GREEN
+    current_step="contract-mutations"
+    run_contract_mutations
+
+    current_step="tool-identities"
+    compiler_version="$(gcc -dumpfullversion)"
+    cmake_version="$(cmake --version | awk 'NR == 1 {print $3}')"
+    qt_version="$(qmake -query QT_VERSION)"
+    node_version="$(node --version | sed 's/^v//')"
+    vcpkg_commit="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
+    assert_exact_identity compiler "$compiler_version" "${CHAT_EXPECTED_GNU_VERSION:-13.3.0}"
+    assert_exact_identity CMake "$cmake_version" "${CHAT_EXPECTED_CMAKE_VERSION:-3.28.3}"
+    assert_exact_identity Qt "$qt_version" "${CHAT_EXPECTED_QT_VERSION:-6.5.3}"
+    assert_exact_identity Node "$node_version" "${CHAT_EXPECTED_NODE_VERSION:-22.18.0}"
+    assert_exact_identity vcpkg "$vcpkg_commit" fc3be1ebea7eaeb3071fe716ac65713af1f3a146
+
+    current_step="cmake-configure"
+    cmake --preset linux-x64-release
+    current_step="cmake-compile-link"
+    cmake --build --preset linux-x64-release --target \
+      GateServer StatusServer ChatServer \
+      chat_network_core chat_message_model chat_session_core chat_protocol_cpp
+
+    current_step="varify-npm-ci"
+    (cd "$repo_root/VarifyServer" && npm ci --ignore-scripts)
+
+    current_step="loader-startup"
+    binary_root="$repo_root/out/build/linux-x64-release/bin"
+    run_cpp_startup_probe GateServer "$binary_root/GateServer"
+    run_cpp_startup_probe StatusServer "$binary_root/StatusServer"
+    run_cpp_startup_probe ChatServer "$binary_root/ChatServer"
+    run_varify_startup_probe
+
+    current_step="evidence-finalize"
+    write_runtime_evidence \
+      "PASS" \
+      "configure-compile-link-loader-startup" \
+      "GNU-${compiler_version}" \
+      "$cmake_version" \
+      "$qt_version" \
+      "$node_version" \
+      "$vcpkg_commit"
+    runtime_complete=1
     ;;
 esac
-

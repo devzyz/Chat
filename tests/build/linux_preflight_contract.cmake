@@ -10,7 +10,11 @@ if(NOT CHAT_EXPECT MATCHES "^(RED|GREEN)$")
     message(FATAL_ERROR "CHAT_EXPECT must be RED or GREEN")
 endif()
 
-get_filename_component(repo_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+if(DEFINED CHAT_REPO_ROOT AND NOT "${CHAT_REPO_ROOT}" STREQUAL "")
+    get_filename_component(repo_root "${CHAT_REPO_ROOT}" ABSOLUTE)
+else()
+    get_filename_component(repo_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+endif()
 file(READ "${repo_root}/CMakeLists.txt" root_cmake)
 file(READ "${repo_root}/CMakePresets.json" presets)
 file(READ "${repo_root}/triplets/x64-linux-chat-release.cmake" triplet)
@@ -130,16 +134,19 @@ record_case("T10-LNX-09-loader-startup" startup_ok
 
 set(safety_ok TRUE)
 string(TOLOWER "${workflow}" workflow_lower)
+string(REGEX MATCHALL "GateServer/GateServer/CServer\\.cpp" gate_transport_occurrences "${root_cmake}")
+list(LENGTH gate_transport_occurrences gate_transport_count)
 if(workflow MATCHES "ubuntu-latest|self-hosted|docker[ \t]+(build|push)|continue-on-error" OR
    workflow_lower MATCHES "(password|token):[ \t]+[^$]" OR
-   root_cmake MATCHES "FAKE|clearForTest")
+   root_cmake MATCHES "FAKE|clearForTest" OR
+   NOT gate_transport_count EQUAL 1)
     set(safety_ok FALSE)
 endif()
 record_case("T10-LNX-10-scope-safety" safety_ok
     "forbidden floating runner, application image, secret value, or fake seam found")
 
 if(failure_count EQUAL 0)
-    set(status "PASS")
+    set(status "READY_FOR_HOSTED_PREFLIGHT")
     set(case_failure "")
     set(selector_exit 0)
 else()
