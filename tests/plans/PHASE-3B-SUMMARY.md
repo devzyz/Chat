@@ -34,3 +34,21 @@ Artifact upload must remain `if: always()` / `if-no-files-found: error`, with no
 ## Self-Check: PASSED
 
 The canonical Plan 3B-05 Summary exists, all local report and dependency evidence above was re-read from emitted artifacts, and remote work is explicitly left pending.
+
+## PR #3 Qt CI repair (2026-09-07)
+
+Run `34074327768` at `c19a766` passed Server, static, and Varify checks but crashed in
+`http_transport.finiteDeadlineAbortsAnUnresponsivePeer` (45 other Qt cases passed).
+The local focused CTest loop reproduced the same SIGSEGV on repetition 3. GDB located
+it in `LoopbackHttpPeer`'s socket-destroyed callback during peer destruction:
+the server-owned sockets outlived the `_requests` and `_sockets` members used by that callback.
+Declaring `_server` last makes it destruct first, while those containers remain alive.
+No production transport, dependency, deadline, or test registration changes are needed.
+
+The existing Q04-HTTP-03 regression passed 100 consecutive Release executions after
+the repair; all 46 Qt cases and `CheckTestStructure` also passed. This is local evidence;
+the new remote check remains pending. The repair used only the existing Qt toolchain.
+
+PR #4 head `c26f6d6` descends from `c19a766` and changes only Linux/preflight files.
+Its Qt fixture is identical, so this is an inherited 3B fixture defect, not a conflict
+introduced by Phase 3C. The 3C branch/worktree was not modified by this repair.
