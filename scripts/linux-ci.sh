@@ -151,6 +151,18 @@ run_contract_mutations() {
     "$baseline_root/vcpkg.json"
   expect_mutation_red "vcpkg baseline drift" "$baseline_root"
 
+  local mysql_static_missing_root="$mutation_parent/mysql-static-missing"
+  copy_contract_inputs "$mysql_static_missing_root"
+  sed -i '/if(PORT STREQUAL "mysql-connector-cpp"/,/endif()/d' \
+    "$mysql_static_missing_root/triplets/x64-linux-chat-release.cmake"
+  expect_mutation_red "missing per-port MySQL static linkage" "$mysql_static_missing_root"
+
+  local mysql_static_broad_root="$mutation_parent/mysql-static-broad"
+  copy_contract_inputs "$mysql_static_broad_root"
+  sed -i 's/OR PORT STREQUAL "libmysql")/OR PORT STREQUAL "libmysql" OR PORT STREQUAL "hiredis")/' \
+    "$mysql_static_broad_root/triplets/x64-linux-chat-release.cmake"
+  expect_mutation_red "broadened per-port MySQL static linkage" "$mysql_static_broad_root"
+
   local vcpkg_depth_missing_root="$mutation_parent/vcpkg-depth-missing"
   copy_contract_inputs "$vcpkg_depth_missing_root"
   sed -i '/fetch-depth: 0/d' \

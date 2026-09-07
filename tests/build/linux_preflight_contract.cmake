@@ -106,15 +106,15 @@ record_case("T10-LNX-05-qt-acquisition" qt_ok
     "Qt 6.5.3 acquisition identity is missing")
 
 set(vcpkg_ok FALSE)
-string(REPLACE "\r\n" "\n" triplet_normalized "\${triplet}")
+string(REPLACE "\r\n" "\n" triplet_normalized "${triplet}")
 string(REGEX MATCHALL
-    "set\(VCPKG_LIBRARY_LINKAGE[ \t]+static\)"
+    "set\\(VCPKG_LIBRARY_LINKAGE[ \t]+static\\)"
     triplet_static_rules
-    "\${triplet_normalized}")
+    "${triplet_normalized}")
 list(LENGTH triplet_static_rules triplet_static_rule_count)
 set(mysql_static_rule
     "if(PORT STREQUAL \"mysql-connector-cpp\" OR PORT STREQUAL \"libmysql\")\n    set(VCPKG_LIBRARY_LINKAGE static)\nendif()")
-string(FIND "\${triplet_normalized}" "\${mysql_static_rule}" mysql_static_rule_at)
+string(FIND "${triplet_normalized}" "${mysql_static_rule}" mysql_static_rule_at)
 if(presets MATCHES "x64-linux-chat-release" AND
    presets MATCHES "\\.ci/vcpkg_installed" AND
    triplet MATCHES "VCPKG_CMAKE_SYSTEM_NAME[ \t]+Linux" AND
