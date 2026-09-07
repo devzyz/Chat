@@ -144,6 +144,44 @@ is a fresh `ubuntu-24.04` result whose artifact JSON is `PASS`, whose JUnit is
 10/0, and whose Gate, Status, Chat, and Varify bounded startup logs are all
 present.
 
+### Third authoritative attempt and owning fix
+
+Draft PR #4 run `34121240236`, job `101739505788`, exercised the full-history
+checkout fix at candidate HEAD `b5b9444`. Locked CMake 3.28.3, Node, Qt, the
+full-history pinned vcpkg checkout, and vcpkg bootstrap all succeeded. The
+first stable configure failure was:
+
+```text
+mysql-connector-cpp[jdbc] is only supported on 'static', which does not match x64-linux-chat-release.
+```
+
+The later Unix Makefiles/compiler messages were cascading output. Using
+`--allow-unsupported` would bypass the compatibility gate and is not an
+acceptable fix. Artifact `phase3c-linux-preflight` had ID `10018277729` and
+digest
+`sha256:3e679654e18f9d4f921a3b42a73c2d79a747434cdf919bf2b7f5ba426da068e2`.
+Its JSON correctly reported `LINUX_PREFLIGHT_BLOCKED` at `cmake-configure`;
+the JUnit was 10/0 static-contract evidence only, and no bounded startup logs
+were produced.
+
+The owning fix mirrors the existing Windows release triplet rule: the Linux
+triplet stays dynamically linked by default, while only
+`mysql-connector-cpp` and its `libmysql` dependency switch to static linkage.
+The vcpkg baseline/ref, manifest features, run-owned install root, and tool
+identities remain unchanged. T10-LNX-06 first failed alone under RED, then the
+direct contract returned 10/10 and `READY_FOR_HOSTED_PREFLIGHT`. Independent
+temporary mutations that deleted the exception or broadened it to `hiredis`
+both returned non-zero with the named vcpkg contract diagnostic.
+
+Fix commits:
+
+- `8a13f0c` - `test(3c-00): require narrow MySQL static linkage`
+- `c3b1b6d` - `fix(3c-00): narrow MySQL linkage on Linux`
+
+No push or CI rerun was initiated from this executor session. A fresh hosted
+Ubuntu run remains required for a PASS JSON, 10/0 JUnit, and all four bounded
+startup logs.
+
 ## DG-25 and stop-condition audit
 
 No local configure, vcpkg restore/install/remove/update/upgrade/clean, npm
