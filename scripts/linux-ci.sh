@@ -151,6 +151,24 @@ run_contract_mutations() {
     "$baseline_root/vcpkg.json"
   expect_mutation_red "vcpkg baseline drift" "$baseline_root"
 
+  local cmake_action_root="$mutation_parent/cmake-action-missing"
+  copy_contract_inputs "$cmake_action_root"
+  sed -i 's#lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb#lukka/missing-cmake-action@fffaaafeea488556c2c12dad60690008bc1caacb#' \
+    "$cmake_action_root/.github/workflows/linux-ci.yml"
+  expect_mutation_red "missing locked CMake acquisition action" "$cmake_action_root"
+
+  local cmake_ref_root="$mutation_parent/cmake-action-floating-ref"
+  copy_contract_inputs "$cmake_ref_root"
+  sed -i 's#lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb#lukka/get-cmake@v4.4.2#' \
+    "$cmake_ref_root/.github/workflows/linux-ci.yml"
+  expect_mutation_red "floating CMake acquisition action ref" "$cmake_ref_root"
+
+  local cmake_identity_root="$mutation_parent/cmake-identity-drift"
+  copy_contract_inputs "$cmake_identity_root"
+  sed -i 's/cmakeVersion: "3.28.3"/cmakeVersion: "3.31.6"/' \
+    "$cmake_identity_root/.github/workflows/linux-ci.yml"
+  expect_mutation_red "CMake acquisition identity drift" "$cmake_identity_root"
+
   local startup_root="$mutation_parent/startup-break"
   copy_contract_inputs "$startup_root"
   sed -i 's#VarifyServer/server.js#VarifyServer/missing-main.js#g' \
