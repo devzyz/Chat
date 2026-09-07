@@ -83,11 +83,19 @@ record_case("T10-LNX-03-compiler-identity" compiler_ok
 
 set(cmake_ok FALSE)
 if(preflight MATCHES "CHAT_LINUX_CMAKE_VERSION[ \t]+\"3\\.28\\.3\"" AND
-   presets MATCHES "linux-x64-release")
-    set(cmake_ok TRUE)
+   presets MATCHES "linux-x64-release" AND
+   workflow MATCHES "lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb" AND
+   workflow MATCHES "cmakeVersion:[ \t]+\"3\\.28\\.3\"")
+    string(FIND "${workflow}"
+        "lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb"
+        cmake_acquire_at)
+    string(FIND "${workflow}" "Run fail-closed Linux preflight" preflight_run_at)
+    if(cmake_acquire_at GREATER_EQUAL 0 AND preflight_run_at GREATER cmake_acquire_at)
+        set(cmake_ok TRUE)
+    endif()
 endif()
 record_case("T10-LNX-04-cmake-preset" cmake_ok
-    "CMake 3.28.3 or linux-x64-release preset is missing")
+    "explicit full-SHA acquisition of locked CMake 3.28.3 is missing or ordered after preflight")
 
 set(qt_ok FALSE)
 if(preflight MATCHES "CHAT_LINUX_QT_VERSION[ \t]+\"6\\.5\\.3\"" AND
