@@ -119,11 +119,12 @@ public:
     }
 
 private:
-    QTcpServer _server;
     Behavior _connectionBehavior;
     QHash<QString, Plan> _plans;
     QHash<QTcpSocket *, QByteArray> _requests;
     QList<QPointer<QTcpSocket>> _sockets;
+    // Destroy accepted sockets before the containers used by their destroyed callbacks.
+    QTcpServer _server;
 };
 
 GateHttpRequest request(const QUrl &url, quint64 flowId, int deadlineMs = 1000)
