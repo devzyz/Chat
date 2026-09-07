@@ -110,6 +110,10 @@ jobs:
         shell: pwsh
         run: .\scripts\windows-local.ps1 -Task CheckTestStructure
 
+      - name: Verify GitHub asset download handling
+        shell: pwsh
+        run: .\scripts\ci\test-vcpkg-github-asset.ps1
+
       - name: Run ChatServer instance script test modules
         shell: pwsh
         run: .\scripts\windows-local.ps1 -Task RunScriptTests
@@ -202,6 +206,9 @@ jobs:
           $binaryCache = Join-Path $env:RUNNER_TEMP 'vcpkg-binary-cache'
           [void](New-Item -ItemType Directory -Path $binaryCache -Force)
           $env:VCPKG_BINARY_SOURCES = "clear;files,$binaryCache,readwrite"
+          # Use GitHub's archive data endpoint directly; vcpkg retains origin fallback.
+          $assetProvider = Join-Path $env:GITHUB_WORKSPACE 'scripts\ci\vcpkg-github-asset.ps1'
+          $env:X_VCPKG_ASSET_SOURCES = 'clear;x-script,powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $assetProvider + '" "{url}" "{sha512}" "{dst}"'
 
           & .\scripts\windows-local.ps1 `
               -Task RestoreServers `
