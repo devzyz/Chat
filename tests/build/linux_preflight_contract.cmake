@@ -110,10 +110,19 @@ if(presets MATCHES "x64-linux-chat-release" AND
    presets MATCHES "\\.ci/vcpkg_installed" AND
    triplet MATCHES "VCPKG_CMAKE_SYSTEM_NAME[ \t]+Linux" AND
    manifest MATCHES "fc3be1ebea7eaeb3071fe716ac65713af1f3a146")
-    set(vcpkg_ok TRUE)
+    string(FIND "${workflow}"
+        "ref: fc3be1ebea7eaeb3071fe716ac65713af1f3a146"
+        vcpkg_ref_at)
+    string(FIND "${workflow}" "fetch-depth: 0" vcpkg_full_depth_at)
+    string(FIND "${workflow}" "Bootstrap run-owned vcpkg" vcpkg_bootstrap_at)
+    if(vcpkg_ref_at GREATER_EQUAL 0 AND
+       vcpkg_full_depth_at GREATER vcpkg_ref_at AND
+       vcpkg_bootstrap_at GREATER vcpkg_full_depth_at)
+        set(vcpkg_ok TRUE)
+    endif()
 endif()
 record_case("T10-LNX-06-vcpkg-identity" vcpkg_ok
-    "vcpkg baseline, triplet, or run-owned install root drifted")
+    "vcpkg baseline, triplet, run-owned install root, or full-history pinned checkout contract drifted")
 
 set(proto_ok FALSE)
 if(root_cmake MATCHES "protobuf_generate|protoc" AND
