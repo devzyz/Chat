@@ -136,6 +136,12 @@ run_contract_mutations() {
   local mutation_parent
   mutation_parent="$(mktemp -d "${RUNNER_TEMP:-/tmp}/chat-preflight-mutations.XXXXXX")"
 
+  local rpc_root="$mutation_parent/missing-rpc-prerequisite"
+  copy_contract_inputs "$rpc_root"
+  sed -i '/sudo apt-get install --yes --no-install-recommends libtirpc-dev/d' \
+    "$rpc_root/.github/workflows/linux-ci.yml"
+  expect_mutation_red "missing MySQL native RPC prerequisite" "$rpc_root"
+
   local target_root="$mutation_parent/missing-target"
   copy_contract_inputs "$target_root"
   sed -i 's/CHAT_LINUX_PRODUCTION_TARGETS_READY ON/CHAT_LINUX_PRODUCTION_TARGETS_READY OFF/' \

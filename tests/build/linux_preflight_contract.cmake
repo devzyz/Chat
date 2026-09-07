@@ -66,12 +66,17 @@ record_case("T10-LNX-01-target-inventory" targets_present
     "missing production target/link/start ownership proof")
 
 set(hosted_pin_ok FALSE)
+string(FIND "${workflow}" "sudo apt-get install --yes --no-install-recommends libtirpc-dev" rpc_install_at)
+string(FIND "${workflow}" "pkg-config --exists libtirpc" rpc_check_at)
+string(FIND "${workflow}" "Run fail-closed Linux preflight" preflight_run_at)
 if(workflow MATCHES "runs-on:[ \t]*ubuntu-24\\.04" AND
-   NOT workflow MATCHES "ubuntu-latest|self-hosted")
+   NOT workflow MATCHES "ubuntu-latest|self-hosted" AND
+   rpc_install_at GREATER_EQUAL 0 AND rpc_check_at GREATER rpc_install_at AND
+   preflight_run_at GREATER rpc_check_at)
     set(hosted_pin_ok TRUE)
 endif()
 record_case("T10-LNX-02-hosted-runner-pin" hosted_pin_ok
-    "hosted Ubuntu runner label is absent, floating, or self-hosted")
+    "hosted Ubuntu runner pin or checked libtirpc-dev prerequisite before preflight is missing")
 
 set(compiler_ok FALSE)
 if(preflight MATCHES "CHAT_LINUX_COMPILER_ID[ \t]+\"GNU\"" AND
