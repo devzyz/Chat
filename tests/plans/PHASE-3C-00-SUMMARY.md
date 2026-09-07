@@ -47,6 +47,40 @@ and removed after the checks. No mutation residue remains in the worktree.
 
 ## Hosted checkpoint
 
+### First authoritative attempt and owning fix
+
+Draft PR #4 run `34119107345`, job `101732755306`, reached the hosted
+`ubuntu-24.04` preflight at candidate HEAD `dd8eb0d`. Checkout, Node, Qt,
+the pinned vcpkg checkout, and vcpkg bootstrap succeeded. All four existing
+contract mutations returned the expected RED. The first stable failure then
+occurred before configure/build:
+
+```text
+LINUX_PREFLIGHT_BLOCKED: CMake identity mismatch; expected 3.28.3, got 3.31.6
+```
+
+The `always()` upload succeeded. Artifact `phase3c-linux-preflight` had ID
+`10017496428` and archive SHA-256
+`9838e1c552c9cbaa051321ffc1197ff304dc68baf5678e89a6f4aafc483001d5`.
+Its JSON correctly reported `LINUX_PREFLIGHT_BLOCKED` at `tool-identities`.
+Its 10/0 JUnit only proved the static contract; the absence of bounded startup
+logs prevented any PASS claim.
+
+The owning 3C-00 fix keeps CMake 3.28.3 unchanged and acquires it before the
+preflight through mature action `lukka/get-cmake` v4.4.2 at immutable commit
+`fffaaafeea488556c2c12dad60690008bc1caacb`. The exact input is
+`cmakeVersion: "3.28.3"`; the action's otherwise floating Ninja acquisition is
+also fixed to 1.12.1. Cloud and local action caches are disabled. Structure
+contract mutations now prove that a missing action, floating `v4.4.2` ref, or
+3.31.6 identity drift each returns `LINUX_PREFLIGHT_BLOCKED`.
+
+Fix commits:
+
+- `ea703b8` — `test(3c-00): require locked CMake acquisition`
+- `49d09c3` — `fix(3c-00): acquire locked CMake on hosted Ubuntu`
+
+No CI rerun was initiated from this executor session.
+
 After fast-forwarding these commits to `phase-3c-integration-20260907` and
 pushing that branch, dispatch exactly:
 
