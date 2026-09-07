@@ -151,6 +151,18 @@ run_contract_mutations() {
     "$baseline_root/vcpkg.json"
   expect_mutation_red "vcpkg baseline drift" "$baseline_root"
 
+  local vcpkg_depth_missing_root="$mutation_parent/vcpkg-depth-missing"
+  copy_contract_inputs "$vcpkg_depth_missing_root"
+  sed -i '/fetch-depth: 0/d' \
+    "$vcpkg_depth_missing_root/.github/workflows/linux-ci.yml"
+  expect_mutation_red "missing full vcpkg checkout depth" "$vcpkg_depth_missing_root"
+
+  local vcpkg_depth_shallow_root="$mutation_parent/vcpkg-depth-shallow"
+  copy_contract_inputs "$vcpkg_depth_shallow_root"
+  sed -i 's/fetch-depth: 0/fetch-depth: 1/' \
+    "$vcpkg_depth_shallow_root/.github/workflows/linux-ci.yml"
+  expect_mutation_red "shallow vcpkg checkout depth" "$vcpkg_depth_shallow_root"
+
   local cmake_action_root="$mutation_parent/cmake-action-missing"
   copy_contract_inputs "$cmake_action_root"
   sed -i 's#lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb#lukka/missing-cmake-action@fffaaafeea488556c2c12dad60690008bc1caacb#' \

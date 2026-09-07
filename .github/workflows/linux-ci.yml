@@ -57,6 +57,7 @@ jobs:
           repository: microsoft/vcpkg
           ref: fc3be1ebea7eaeb3071fe716ac65713af1f3a146
           path: .ci/vcpkg
+          fetch-depth: 0
 
       - name: Bootstrap run-owned vcpkg
         run: bash "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
