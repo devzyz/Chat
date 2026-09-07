@@ -102,6 +102,48 @@ report, or upload failure is `LINUX_PREFLIGHT_BLOCKED` and returns work to
 Plan 3C-00. Plans 3C-01..3C-09 must not execute before this hosted result is
 accepted.
 
+### Second authoritative attempt and owning fix
+
+Draft PR #4 run `34120164172`, job `101736152670`, exercised the first
+owning fix at candidate HEAD `780d477`. The locked top-level CMake 3.28.3
+acquisition succeeded, as did checkout, Node, Qt, the pinned vcpkg checkout,
+vcpkg bootstrap, and all structure mutations. The first stable configure
+failure was instead:
+
+```text
+fatal: failed to unpack tree object 8c705e8acf87afb971678e50206c65dca9fccedc
+.ci/vcpkg/.git: note: vcpkg was cloned as a shallow repository. Try again with a full vcpkg clone.
+```
+
+The failure occurred while resolving `boost-context@1.90.0`. The later Unix
+Makefiles/compiler message was cascading output, not the owning root cause.
+The `always()` artifact `phase3c-linux-preflight` had ID `10017884831`,
+archive SHA-256
+`f5dd2067200cc65f71071f5a5b29d8dbb4d32db1f53bb8c34f8a14d395be647d`,
+and correctly reported `LINUX_PREFLIGHT_BLOCKED` at `cmake-configure`. Its
+JUnit remained the 10/0 static contract only; no bounded startup logs existed,
+so the attempt supplied no PASS evidence.
+
+The owning fix preserves the exact vcpkg commit
+`fc3be1ebea7eaeb3071fe716ac65713af1f3a146`, repository baseline, triplet,
+run-owned install root, and every tool identity. It adds `fetch-depth: 0` to
+that exact checkout. The structure contract now rejects a missing full-depth
+setting, and `scripts/linux-ci.sh` proves both deletion and mutation to
+`fetch-depth: 1` return non-zero. Direct GREEN remains 10/10 with
+`READY_FOR_HOSTED_PREFLIGHT`; it does not claim hosted PASS.
+
+Fix commits:
+
+- `5e378e6` - `test(3c-00): require full vcpkg history`
+- `1816702` - `fix(3c-00): fetch complete pinned vcpkg history`
+
+No push or CI rerun was initiated from this executor session. After these
+commits are fast-forwarded to `phase-3c-integration-20260907` and pushed,
+dispatch the same `linux-ci.yml` workflow on that ref. The remaining hard gate
+is a fresh `ubuntu-24.04` result whose artifact JSON is `PASS`, whose JUnit is
+10/0, and whose Gate, Status, Chat, and Varify bounded startup logs are all
+present.
+
 ## DG-25 and stop-condition audit
 
 No local configure, vcpkg restore/install/remove/update/upgrade/clean, npm
