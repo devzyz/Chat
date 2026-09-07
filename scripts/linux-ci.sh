@@ -82,6 +82,9 @@ on_exit() {
   fi
 }
 trap on_exit EXIT
+# GNU timeout signals this shell and its children as a process group. Exit
+# non-zero after child termination so the EXIT trap preserves blocked evidence.
+trap 'exit 143' TERM
 
 run_contract() {
   local expectation="$1"
@@ -150,6 +153,11 @@ run_contract_mutations() {
   sed -i 's/fc3be1ebea7eaeb3071fe716ac65713af1f3a146/0000000000000000000000000000000000000000/' \
     "$baseline_root/vcpkg.json"
   expect_mutation_red "vcpkg baseline drift" "$baseline_root"
+
+  local host_triplet_root="$mutation_parent/host-triplet-missing"
+  copy_contract_inputs "$host_triplet_root"
+  sed -i '/"VCPKG_HOST_TRIPLET"/d' "$host_triplet_root/CMakePresets.json"
+  expect_mutation_red "missing native Release host triplet" "$host_triplet_root"
 
   local mysql_static_missing_root="$mutation_parent/mysql-static-missing"
   copy_contract_inputs "$mysql_static_missing_root"

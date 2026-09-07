@@ -63,7 +63,14 @@ jobs:
         run: bash "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
 
       - name: Run fail-closed Linux preflight
-        run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-00-T2
+        # Leave time for blocked evidence and artifact upload before the job cap.
+        timeout-minutes: 57
+        run: |
+          mkdir -p "$CHAT_EVIDENCE_ROOT"
+          set -o pipefail
+          timeout --signal=TERM --kill-after=30s 55m \
+            bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-00-T2 \
+            2>&1 | tee "$CHAT_EVIDENCE_ROOT/preflight.log"
 
       - name: Confirm preflight PASS contract
         id: preflight-status

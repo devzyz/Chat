@@ -116,6 +116,7 @@ set(mysql_static_rule
     "if(PORT STREQUAL \"mysql-connector-cpp\" OR PORT STREQUAL \"libmysql\")\n    set(VCPKG_LIBRARY_LINKAGE static)\nendif()")
 string(FIND "${triplet_normalized}" "${mysql_static_rule}" mysql_static_rule_at)
 if(presets MATCHES "x64-linux-chat-release" AND
+   presets MATCHES "\"VCPKG_HOST_TRIPLET\":[ \t]*\"x64-linux-chat-release\"" AND
    presets MATCHES "\\.ci/vcpkg_installed" AND
    triplet MATCHES "VCPKG_CMAKE_SYSTEM_NAME[ \t]+Linux" AND
    triplet MATCHES "set\\(VCPKG_LIBRARY_LINKAGE[ \t]+dynamic\\)" AND
@@ -134,7 +135,7 @@ if(presets MATCHES "x64-linux-chat-release" AND
     endif()
 endif()
 record_case("T10-LNX-06-vcpkg-identity" vcpkg_ok
-    "vcpkg baseline, per-port MySQL static linkage, dynamic default, run-owned install root, or full-history pinned checkout contract drifted")
+    "vcpkg baseline, native Release host triplet, per-port MySQL static linkage, dynamic default, run-owned install root, or full-history pinned checkout contract drifted")
 
 set(proto_ok FALSE)
 if(root_cmake MATCHES "protobuf_generate|protoc" AND
