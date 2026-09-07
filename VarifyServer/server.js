@@ -1,4 +1,5 @@
 const grpc = require('@grpc/grpc-js');
+const net = require('node:net');
 const messageProto = require('./proto');
 const constModule = require('./const');
 const { v4: uuidv4 } = require('uuid');
@@ -88,20 +89,32 @@ function startServer({ server, address, credentials, logger = console }) {
     });
 }
 
-function main({ server = createServer(), logger = console } = {}) {
+function getBindAddress(environment = process.env) {
+    const address = environment.CHAT_VARIFY_BIND_ADDRESS ?? '0.0.0.0:50051';
+    const match = /^(\d+\.\d+\.\d+\.\d+):(\d+)$/.exec(address);
+    if (!match || !net.isIPv4(match[1]) || Number(match[2]) < 1 || Number(match[2]) > 65535) {
+        throw new Error('Invalid CHAT_VARIFY_BIND_ADDRESS; expected IPv4:port (1..65535)');
+    }
+    return address;
+}
+
+async function main({ server, logger = console } = {}) {
+    const address = getBindAddress();
+    server ??= createServer();
     return startServer({
         server,
-        address: '0.0.0.0:50051',
+        address,
         credentials: grpc.ServerCredentials.createInsecure(),
         logger
     }).then(() => server);
 }
 
 if (require.main === module) {
-    main().catch(() => {
-        console.error('grpc server failed to start');
+    main().catch((error) => {
+        const reason = /\bEADDRINUSE\b/.test(error.message) ? ' (EADDRINUSE)' : '';
+        console.error(`grpc server failed to start${reason}`);
         process.exitCode = 1;
     });
 }
 
-module.exports = { createGetVarifyCodeHandler, createServer, startServer, main };
+module.exports = { createGetVarifyCodeHandler, createServer, startServer, main, getBindAddress };
