@@ -148,6 +148,18 @@ run_contract_mutations() {
     "$target_root/CMakeLists.txt"
   expect_mutation_red "missing production target" "$target_root"
 
+  local jsoncpp_root="$mutation_parent/jsoncpp-package-case"
+  copy_contract_inputs "$jsoncpp_root"
+  sed -i 's/find_package(jsoncpp CONFIG REQUIRED)/find_package(JsonCpp CONFIG REQUIRED)/' \
+    "$jsoncpp_root/CMakeLists.txt"
+  expect_mutation_red "incorrect JsonCpp package case" "$jsoncpp_root"
+
+  local mysql_root="$mutation_parent/mysql-jdbc-target"
+  copy_contract_inputs "$mysql_root"
+  sed -i 's/set(CHAT_MYSQL_TARGET unofficial::mysql-connector-cpp::connector-jdbc)/set(CHAT_MYSQL_TARGET mysql::concpp-jdbc)/' \
+    "$mysql_root/CMakeLists.txt"
+  expect_mutation_red "unsupported static MySQL JDBC alias" "$mysql_root"
+
   local duplicate_root="$mutation_parent/duplicate-source"
   copy_contract_inputs "$duplicate_root"
   printf '%s\n' 'add_executable(preflight_duplicate GateServer/GateServer/CServer.cpp)' \

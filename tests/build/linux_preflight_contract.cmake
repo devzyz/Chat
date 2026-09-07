@@ -62,8 +62,16 @@ endforeach()
 if(NOT root_cmake MATCHES "set\\(CHAT_LINUX_PRODUCTION_TARGETS_READY[ \t\r\n]+ON\\)")
     set(targets_present FALSE)
 endif()
+# Package discovery names are case-sensitive on Linux. The pinned vcpkg MySQL
+# package exports the JDBC target under this namespace for both linkage modes.
+has_text(root_cmake "find_package(jsoncpp CONFIG REQUIRED)" jsoncpp_package_ok)
+has_text(root_cmake "find_package(unofficial-mysql-connector-cpp CONFIG REQUIRED)" mysql_package_ok)
+has_text(root_cmake "set(CHAT_MYSQL_TARGET unofficial::mysql-connector-cpp::connector-jdbc)" mysql_jdbc_ok)
+if(NOT jsoncpp_package_ok OR NOT mysql_package_ok OR NOT mysql_jdbc_ok)
+    set(targets_present FALSE)
+endif()
 record_case("T10-LNX-01-target-inventory" targets_present
-    "missing production target/link/start ownership proof")
+    "missing production target/link/start ownership proof or case-correct jsoncpp and pinned vcpkg JDBC target binding")
 
 set(hosted_pin_ok FALSE)
 string(FIND "${workflow}" "sudo apt-get install --yes --no-install-recommends libtirpc-dev" rpc_install_at)
