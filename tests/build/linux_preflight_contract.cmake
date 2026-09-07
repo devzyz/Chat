@@ -106,9 +106,21 @@ record_case("T10-LNX-05-qt-acquisition" qt_ok
     "Qt 6.5.3 acquisition identity is missing")
 
 set(vcpkg_ok FALSE)
+string(REPLACE "\r\n" "\n" triplet_normalized "\${triplet}")
+string(REGEX MATCHALL
+    "set\(VCPKG_LIBRARY_LINKAGE[ \t]+static\)"
+    triplet_static_rules
+    "\${triplet_normalized}")
+list(LENGTH triplet_static_rules triplet_static_rule_count)
+set(mysql_static_rule
+    "if(PORT STREQUAL \"mysql-connector-cpp\" OR PORT STREQUAL \"libmysql\")\n    set(VCPKG_LIBRARY_LINKAGE static)\nendif()")
+string(FIND "\${triplet_normalized}" "\${mysql_static_rule}" mysql_static_rule_at)
 if(presets MATCHES "x64-linux-chat-release" AND
    presets MATCHES "\\.ci/vcpkg_installed" AND
    triplet MATCHES "VCPKG_CMAKE_SYSTEM_NAME[ \t]+Linux" AND
+   triplet MATCHES "set\\(VCPKG_LIBRARY_LINKAGE[ \t]+dynamic\\)" AND
+   mysql_static_rule_at GREATER_EQUAL 0 AND
+   triplet_static_rule_count EQUAL 1 AND
    manifest MATCHES "fc3be1ebea7eaeb3071fe716ac65713af1f3a146")
     string(FIND "${workflow}"
         "ref: fc3be1ebea7eaeb3071fe716ac65713af1f3a146"
@@ -122,7 +134,7 @@ if(presets MATCHES "x64-linux-chat-release" AND
     endif()
 endif()
 record_case("T10-LNX-06-vcpkg-identity" vcpkg_ok
-    "vcpkg baseline, triplet, run-owned install root, or full-history pinned checkout contract drifted")
+    "vcpkg baseline, per-port MySQL static linkage, dynamic default, run-owned install root, or full-history pinned checkout contract drifted")
 
 set(proto_ok FALSE)
 if(root_cmake MATCHES "protobuf_generate|protoc" AND
