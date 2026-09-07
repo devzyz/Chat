@@ -7,6 +7,7 @@ param(
     [string]$Configuration = 'Debug',
 
     [string]$VcpkgRoot = $env:VCPKG_ROOT,
+    [string]$VcpkgInstalledRoot,
     [string]$VcpkgBuildtreesRoot = $env:VCPKG_BUILDTREES_ROOT,
     [string]$VcpkgPackagesRoot = $env:VCPKG_PACKAGES_ROOT,
     [string]$ServerIntermediateRoot = $env:CHAT_SERVER_INTERMEDIATE_ROOT,
@@ -22,6 +23,9 @@ $global:LASTEXITCODE = 0
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $fixedVcpkgInstalledRoot = 'D:\git\Chat\vcpkg_installed'
+if ([string]::IsNullOrWhiteSpace($VcpkgInstalledRoot)) {
+    $VcpkgInstalledRoot = $fixedVcpkgInstalledRoot
+}
 $solution = Join-Path $repoRoot 'Chat.sln'
 $manifest = Join-Path $repoRoot 'vcpkg.json'
 $clientSource = Join-Path $repoRoot 'chat'
@@ -253,7 +257,7 @@ function Restore-Servers {
         '--host-triplet', $ServerHostTriplet
         "--overlay-triplets=$overlayTriplets"
         "--x-manifest-root=$repoRoot"
-        "--x-install-root=$(Join-Path $repoRoot 'vcpkg_installed')"
+        "--x-install-root=$VcpkgInstalledRoot"
         '--clean-buildtrees-after-build'
         '--clean-packages-after-build'
     )
@@ -283,7 +287,7 @@ function Build-Servers {
         "/p:VcpkgHostTriplet=$ServerHostTriplet"
         "/p:ServerIntermediateRoot=$ServerIntermediateRoot"
         '/p:VcpkgManifestInstall=false'
-        "/p:VcpkgInstalledDir=$fixedVcpkgInstalledRoot\"
+        "/p:VcpkgInstalledDir=$VcpkgInstalledRoot\"
     )
     & $msbuild @arguments
     if ($LASTEXITCODE -ne 0) {
@@ -310,7 +314,7 @@ function Run-ServerTests {
         "/p:VcpkgHostTriplet=$ServerHostTriplet"
         "/p:ServerIntermediateRoot=$ServerIntermediateRoot"
         '/p:VcpkgManifestInstall=false'
-        "/p:VcpkgInstalledDir=$fixedVcpkgInstalledRoot\"
+        "/p:VcpkgInstalledDir=$VcpkgInstalledRoot\"
     )
     $reports = @(
         (Join-Path $testResults 'server_unit.xml')
@@ -333,7 +337,7 @@ function Run-ServerTests {
     }
     Invoke-ProtocolCompatibility 'check'
 
-    $installedRoot = $fixedVcpkgInstalledRoot
+    $installedRoot = $VcpkgInstalledRoot
     foreach ($project in @($gateAsioTestProject, $statusAsioTestProject)) {
         $poolArguments = @(
             $project
@@ -353,9 +357,9 @@ function Run-ServerTests {
         }
     }
 
-    $installedBin = Join-Path $fixedVcpkgInstalledRoot "$ServerTriplet\bin"
+    $installedBin = Join-Path $VcpkgInstalledRoot "$ServerTriplet\bin"
     if ($Configuration -eq 'Debug') {
-        $installedBin = Join-Path $fixedVcpkgInstalledRoot "$ServerTriplet\debug\bin"
+        $installedBin = Join-Path $VcpkgInstalledRoot "$ServerTriplet\debug\bin"
     }
     if (-not (Test-Path -LiteralPath $installedBin -PathType Container)) {
         throw "The vcpkg app-local dependency directory is missing: $installedBin"
@@ -602,7 +606,7 @@ function Invoke-ProtocolCompatibility {
         'The protocol compatibility tool is missing.'
     $previousInstalledRoot = $env:CHAT_VCPKG_INSTALLED_ROOT
     try {
-        $env:CHAT_VCPKG_INSTALLED_ROOT = $fixedVcpkgInstalledRoot
+        $env:CHAT_VCPKG_INSTALLED_ROOT = $VcpkgInstalledRoot
         & $node $protocolTool $Mode
         $exitCode = $LASTEXITCODE
     } finally {
@@ -1265,9 +1269,10 @@ function Confirm-TestStructure {
         }
     }
     if ($runnerRegistration -notmatch [regex]::Escape('$fixedVcpkgInstalledRoot = ''D:\git\Chat\vcpkg_installed''') -or
-        $runServerTests.Groups['body'].Value -notmatch 'fixedVcpkgInstalledRoot' -or
-        $runnerRegistration -notmatch 'CHAT_VCPKG_INSTALLED_ROOT\s*=\s*\$fixedVcpkgInstalledRoot') {
-        throw 'RunServerTests must reuse the exact DG-25 fixed installed tree from an isolated worktree.'
+        $runnerRegistration -notmatch '\$VcpkgInstalledRoot\s*=\s*\$fixedVcpkgInstalledRoot' -or
+        $runServerTests.Groups['body'].Value -notmatch 'VcpkgInstalledRoot' -or
+        $runnerRegistration -notmatch 'CHAT_VCPKG_INSTALLED_ROOT\s*=\s*\$VcpkgInstalledRoot') {
+        throw 'Server tasks must default to the exact DG-25 fixed installed tree while permitting an explicit CI-owned root.'
     }
     if ($runServerTests.Groups['body'].Value -notmatch 'ChatGrpcClientTests' -or
         $runServerTests.Groups['body'].Value -notmatch 'server_chat_grpc_integration\.xml') {
@@ -1347,6 +1352,13 @@ function Confirm-TestStructure {
         $serverJob.Groups['body'].Value -notmatch 'actions/setup-node@' -or
         $serverJob.Groups['body'].Value -notmatch '(?m)^\s*run:\s+npm ci --ignore-scripts\s*$') {
         throw 'The Server CI job must restore locked VarifyServer Node dependencies for the C++ to Node loopback contract.'
+    }
+    $ciInstalledRootPattern = '-VcpkgInstalledRoot\s+\(Join-Path\s+\$env:GITHUB_WORKSPACE\s+''\.ci\\vcpkg_installed''\)'
+    foreach ($serverTask in @('RestoreServers', 'BuildServers', 'RunServerTests')) {
+        $serverTaskPattern = "(?ms)-Task\s+$serverTask\s+``(?:(?!-Task\s+).)*?$ciInstalledRootPattern"
+        if ($serverJob.Groups['body'].Value -notmatch $serverTaskPattern) {
+            throw "Server CI task $serverTask must pass the job-owned .ci\\vcpkg_installed root explicitly."
+        }
     }
     foreach ($upload in @(
         @{ Artifact = 'windows-script-test-results'; Path = 'build/test-results/script_\*\.xml' }

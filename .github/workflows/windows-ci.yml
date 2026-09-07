@@ -207,6 +207,7 @@ jobs:
               -Task RestoreServers `
               -Configuration Release `
               -VcpkgRoot $env:VCPKG_ROOT `
+              -VcpkgInstalledRoot (Join-Path $env:GITHUB_WORKSPACE '.ci\vcpkg_installed') `
               -VcpkgBuildtreesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-buildtrees') `
               -VcpkgPackagesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-packages') `
               -ServerIntermediateRoot (Join-Path $env:RUNNER_TEMP 'server-msbuild') `
@@ -251,6 +252,7 @@ jobs:
               -Task BuildServers `
               -Configuration Release `
               -VcpkgRoot $env:VCPKG_ROOT `
+              -VcpkgInstalledRoot (Join-Path $env:GITHUB_WORKSPACE '.ci\vcpkg_installed') `
               -VcpkgBuildtreesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-buildtrees') `
               -VcpkgPackagesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-packages') `
               -ServerIntermediateRoot (Join-Path $env:RUNNER_TEMP 'server-msbuild') `
@@ -269,6 +271,7 @@ jobs:
               -Task RunServerTests `
               -Configuration Release `
               -VcpkgRoot $env:VCPKG_ROOT `
+              -VcpkgInstalledRoot (Join-Path $env:GITHUB_WORKSPACE '.ci\vcpkg_installed') `
               -VcpkgBuildtreesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-buildtrees') `
               -VcpkgPackagesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-packages') `
               -ServerIntermediateRoot (Join-Path $env:RUNNER_TEMP 'server-msbuild') `
