@@ -19,6 +19,12 @@ the exact `CHAT_JUNIT_PATH` and writes machine-readable status to the exact
 `PASS` after compiler, CMake, Qt, vcpkg, canonical proto, compile/link, and
 bounded production-main startup checks complete.
 
+The root CMake project resolves Qt Core 6.5.3 explicitly in its own directory
+scope before checking the Qt identity. Qt discovery inside the `chat/` child
+directory does not export `Qt6Core_VERSION` to the root. A missing or different
+version remains a configuration failure; it is never inferred from the
+requested version or replaced by a default.
+
 The selector first proves four mutations turn the same contract RED:
 
 - a missing production target;

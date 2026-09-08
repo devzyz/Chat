@@ -21,6 +21,8 @@ find_package(hiredis CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(unofficial-mysql-connector-cpp CONFIG REQUIRED)
 find_package(Threads REQUIRED)
+# The root preflight checks this variable; discovery in chat/ has child scope.
+find_package(Qt6 6.5.3 EXACT REQUIRED COMPONENTS Core)
 
 if(TARGET unofficial::mysql-connector-cpp::connector-jdbc)
     set(CHAT_MYSQL_TARGET unofficial::mysql-connector-cpp::connector-jdbc)
