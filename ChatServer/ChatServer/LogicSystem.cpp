@@ -1,9 +1,9 @@
 #include "LogicSystem.h"
 #include "CSession.h"
 #include "Const.h"
-#include <Json/Json.h>
-#include <Json/reader.h>
-#include <Json/value.h>
+#include <json/json.h>
+#include <json/reader.h>
+#include <json/value.h>
 #include "Data.h"
 #include <memory>
 #include "MysqlMgr.h"

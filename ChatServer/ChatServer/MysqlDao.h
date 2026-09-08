@@ -11,6 +11,9 @@
 #include <mutex>
 #include "Data.h"
 #include <memory>
+#include <atomic>
+#include <condition_variable>
+#include <thread>
 
 /**
  * @brief 
@@ -97,4 +100,3 @@ public:
 private:
 	std::unique_ptr<MysqlPool> _pool;
 };
-
