@@ -17,6 +17,16 @@ test('service lock matches hosted workflow images and dynamically mapped ports',
     const cmake = fs.readFileSync(path.resolve(__dirname, '../../CMakeLists.txt'), 'utf8');
     assert.ok(cmake.includes('set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")'));
     assert.ok(workflow.includes('cp out/build/linux-x64-release/bin/service_run out/phase3c/service-launcher/'));
+    const serviceJob = workflow.split('  disposable-services:')[1].split('  downstream-contract:')[0];
+    const jobConfiguration = serviceJob.split('    steps:')[0];
+    assert.ok(!jobConfiguration.includes('${{ job.'), 'job context is only available in step env');
+    for (const name of ['Prove bounded disposable service lifecycle', 'Preserve fail-closed outer evidence']) {
+        const step = serviceJob.split(`      - name: ${name}`)[1].split('      - name:')[0];
+        assert.ok(step.includes('        env:'), `${name} must inject its own runtime service identity`);
+        for (const service of ['redis', 'mysql', 'mailpit']) {
+            assert.ok(step.includes(`CHAT_${service.toUpperCase()}_CONTAINER: \${{ job.services.${service}.id }}`));
+        }
+    }
     for (const service of Object.values(lock.services)) {
         assert.match(service.image, /:[a-z0-9.]+@sha256:[a-f0-9]{64}$/);
         assert.ok(workflow.includes(`image: ${service.image}`));
