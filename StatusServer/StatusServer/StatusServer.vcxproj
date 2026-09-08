@@ -131,19 +131,21 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalDependencies>grpc++.lib;grpc.lib;libprotobuf.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AsioIOServicePool.cpp" />
     <ClCompile Include="ConfigMgr.cpp" />
     <ClCompile Include="DistLock.cpp" />
     <ClCompile Include="LogMgr.cpp" />
-    <ClCompile Include="$(ProtocolGeneratedDir)\status.grpc.pb.cc" />
-    <ClCompile Include="$(ProtocolGeneratedDir)\status.pb.cc" />
     <ClCompile Include="MysqlDao.cpp" />
     <ClCompile Include="MysqlMgr.cpp" />
     <ClCompile Include="RedisMgr.cpp" />
     <ClCompile Include="Singleton.cpp" />
     <ClCompile Include="StatusServer.cpp" />
-    <ClCompile Include="StatusServiceImpl.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AsioIOServicePool.h" />
@@ -164,6 +166,9 @@
     <None Include="..\..\proto\status.proto" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="StatusTransport.vcxproj">
+      <Project>{D7D17A26-B23D-4B8D-A1D5-BA789D882B03}</Project>
+    </ProjectReference>
     <ProjectReference Include="StatusRouting.vcxproj">
       <Project>{7C67B8A2-A0A4-44A0-9020-5D87915CE3E2}</Project>
     </ProjectReference>

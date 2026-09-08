@@ -7,10 +7,10 @@ typedef std::function<void(std::shared_ptr<HttpConnection>)>HttpHandler;
 /**
  * @brief 处理系统，客户端的请求信息在被进行预处理后，通过调用处理系统来实现对数据的处理
  */
-class LogicSystem : public Singleton<LogicSystem>
+class LogicSystem
 {
-	friend class Singleton<LogicSystem>;
 public:
+	explicit LogicSystem(gate::GateRequest& gate_request);
 	~LogicSystem() = default;
 
 	/**
@@ -35,13 +35,7 @@ public:
 	void RegGet(std::string, HttpHandler);
 	void RegPost(std::string, HttpHandler);
 private:
-	/**
-	 * @brief 
-	 * 
-	 * 构造函数，同时将对应的处理逻辑进行注册
-	 */
-	LogicSystem();
-	std::unique_ptr<gate::GateRequest> _gate_request;
+	gate::GateRequest& _gate_request;
 	std::map<std::string, HttpHandler> _post_handlers;
 	std::map<std::string, HttpHandler> _get_handlers;
 };

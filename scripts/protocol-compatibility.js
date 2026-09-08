@@ -7,6 +7,9 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const repositoryRoot = path.resolve(__dirname, '..');
+const installedRoot = process.env.CHAT_VCPKG_INSTALLED_ROOT
+    ? path.resolve(process.env.CHAT_VCPKG_INSTALLED_ROOT)
+    : path.join(repositoryRoot, 'vcpkg_installed');
 const protoRoot = path.join(repositoryRoot, 'proto');
 const generatedRoot = path.join(repositoryRoot, 'generated', 'proto', 'cpp');
 const baselinePath = path.join(
@@ -25,12 +28,12 @@ function resolvePinnedTool(relativePath) {
         'x64-windows-chat-release'
     ].filter(Boolean);
     for (const triplet of [...new Set(triplets)]) {
-        const candidate = path.join(repositoryRoot, 'vcpkg_installed', triplet, relativePath);
+        const candidate = path.join(installedRoot, triplet, relativePath);
         if (fs.existsSync(candidate)) {
             return candidate;
         }
     }
-    return path.join(repositoryRoot, 'vcpkg_installed', 'x64-windows', relativePath);
+    return path.join(installedRoot, 'x64-windows', relativePath);
 }
 
 const protoc = resolvePinnedTool(path.join('tools', 'protobuf', 'protoc.exe'));
@@ -115,7 +118,7 @@ function verifyToolchain() {
     assert.equal(protocVersion, 'libprotoc 33.4', `unexpected protoc version: ${protocVersion}`);
 
     const vcpkgStatus = fs.readFileSync(
-        path.join(repositoryRoot, 'vcpkg_installed', 'vcpkg', 'status'),
+        path.join(installedRoot, 'vcpkg', 'status'),
         'utf8'
     );
     assert.match(vcpkgStatus, /Package: protobuf\r?\nVersion: 6\.33\.4\r?\nPort-Version: 1/);

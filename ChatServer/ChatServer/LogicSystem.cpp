@@ -25,7 +25,7 @@ LogicSystem::~LogicSystem() {
 	Stop();
 }
 
-void LogicSystem::SetServer(std::shared_ptr<CServer> pserver) {
+void LogicSystem::SetServer(std::shared_ptr<chat_transport::CServer> pserver) {
 	_p_server = pserver;
 }
 

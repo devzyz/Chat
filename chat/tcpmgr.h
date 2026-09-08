@@ -4,11 +4,10 @@
 #include "singleton.h"
 #include <QObject>
 #include <functional>
-#include <QTcpSocket>
 #include <QQueue>
 #include "userdata.h"
 #include "messagerecord.h"
-#include "tcpframedecoder.h"
+#include "chattcptransport.h"
 
 /**
  * @brief The TcpMgr class
@@ -22,8 +21,6 @@ public:
     ~TcpMgr();
 
     // 用于对请求回调后的处理，根据不同的ReqId请求类型，构建不同的回调函数
-    QMap<ReqId, std::function<void(ReqId id, int len, QByteArray)>> _handlers;
-    void initHandlers();
 
     // 处理从粘包中拆分出单个包体后，应该对包体进行怎样的处理
     void handleMsg(ReqId id, int len, QByteArray data);
@@ -34,14 +31,10 @@ public:
     void resetConnection(bool expectedClose);
 
     // 连接的tcp服务器的地址和端口号
-    QString _host;
-    quint16 _port;
 
     // 与服务器通信的socket
-    QTcpSocket _socket;
 
     // tlv存储结构
-    TcpFrameDecoder _frameDecoder;
 
     // 用于标记当前包的包头是否收全了
 signals:
@@ -147,12 +140,18 @@ private slots:
 private:
     friend class Singleton<TcpMgr>;
     TcpMgr();
+    void initHandlers();
 
     struct PendingTextBatch {
         int chatId = 0;
         QVector<QString> clientMessageIds;
     };
+    QMap<ReqId, std::function<void(ReqId id, int len, QByteArray)>> _handlers;
     QQueue<PendingTextBatch> _pendingTextBatches;
+    ChatTcpTransport _transport;
+    QString _host;
+    quint16 _port = 0;
+    quint64 _transportFlowId = 0;
     bool _acceptingSends = false;
     bool _expectedClose = false;
 

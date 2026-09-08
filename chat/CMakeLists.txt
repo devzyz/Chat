@@ -17,6 +17,9 @@ if(WIN32)
     if(NOT QT_QMAKE_EXECUTABLE)
         message(FATAL_ERROR "Unable to resolve qmake for the selected Qt kit")
     endif()
+    get_filename_component(QT_TEST_RUNTIME_BIN "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
+    set(QT_TEST_RUNTIME_PATH "${QT_TEST_RUNTIME_BIN};$ENV{PATH}")
+    string(REPLACE ";" "\\;" QT_TEST_RUNTIME_PATH "${QT_TEST_RUNTIME_PATH}")
     execute_process(
         COMMAND "${QT_QMAKE_EXECUTABLE}" -query QT_INSTALL_PLUGINS
         OUTPUT_VARIABLE QT_INSTALL_PLUGINS
@@ -43,11 +46,30 @@ add_library(chat_network_core STATIC
 target_include_directories(chat_network_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(chat_network_core PUBLIC Qt${QT_VERSION_MAJOR}::Core)
 
+add_library(chat_tcp_transport STATIC
+    chattcptransport.h chattcptransport.cpp
+)
+target_include_directories(chat_tcp_transport PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_tcp_transport PUBLIC
+    chat_network_core
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
+)
+
 add_library(chat_auth_flow STATIC
     authflowcoordinator.h authflowcoordinator.cpp
 )
 target_include_directories(chat_auth_flow PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(chat_auth_flow PUBLIC Qt${QT_VERSION_MAJOR}::Widgets)
+
+add_library(chat_gate_http_transport STATIC
+    gatehttptransport.h gatehttptransport.cpp
+)
+target_include_directories(chat_gate_http_transport PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_gate_http_transport PUBLIC
+    Qt${QT_VERSION_MAJOR}::Core
+    Qt${QT_VERSION_MAJOR}::Network
+)
 
 add_library(chat_message_model STATIC
     messagerecord.h
@@ -60,6 +82,7 @@ target_link_libraries(chat_message_model PUBLIC Qt${QT_VERSION_MAJOR}::Widgets)
 
 add_library(chat_session_core STATIC
     clientsession.h clientsession.cpp
+    chattcptransport.h
     global.h global.cpp
     logmgr.h logmgr.cpp
     messagerecord.h
@@ -74,6 +97,7 @@ target_link_libraries(chat_session_core PUBLIC
     Qt${QT_VERSION_MAJOR}::Network
     spdlog::spdlog
     chat_network_core
+    chat_tcp_transport
 )
 
 set(PROJECT_SOURCES
@@ -102,7 +126,6 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         clickedlabel.h clickedlabel.cpp
         resetdialog.ui
         resetdialog.h resetdialog.cpp
-        tcpmgr.h
         chatdialog.h chatdialog.cpp chatdialog.ui
         clickedbtn.h clickedbtn.cpp
         customizeedit.h customizeedit.cpp
@@ -114,14 +137,11 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         messagetextedit.h messagetextedit.cpp
         statewidget.h statewidget.cpp
         searchlist.h searchlist.cpp
-        userdata.h
         adduseritem.h adduseritem.cpp adduseritem.ui
         findsuccessdialog.h findsuccessdialog.cpp findsuccessdialog.ui
         applyfrienddialog.h applyfrienddialog.cpp applyfrienddialog.ui
         clickedoncelabel.h clickedoncelabel.cpp
 
-        usermgr.h
-        clientsession.h
         contactuserlist.h contactuserlist.cpp
         contactuseritem.h contactuseritem.cpp contactuseritem.ui
         grouptipitem.h grouptipitem.cpp grouptipitem.ui
@@ -186,6 +206,7 @@ target_link_libraries(chat PRIVATE
     chat_message_model
     chat_session_core
     chat_auth_flow
+    chat_gate_http_transport
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
@@ -227,7 +248,8 @@ if(BUILD_TESTING)
     set(MESSAGE_MODEL_TEST_ENVIRONMENT "QT_QPA_PLATFORM=minimal")
     if(WIN32)
         list(APPEND MESSAGE_MODEL_TEST_ENVIRONMENT
-            "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_TEST_PLATFORM_PLUGIN_PATH}")
+            "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_TEST_PLATFORM_PLUGIN_PATH}"
+            "PATH=${QT_TEST_RUNTIME_PATH}")
     endif()
 
     add_executable(auth_flow_tests
@@ -439,4 +461,66 @@ if(BUILD_TESTING)
         LABELS "component"
         TIMEOUT 10
     )
+
+    add_executable(http_transport_tests
+        tests/http-transport/http_transport_tests.cpp
+    )
+    target_link_libraries(http_transport_tests PRIVATE
+        chat_gate_http_transport
+        Qt${QT_VERSION_MAJOR}::Test
+        Qt${QT_VERSION_MAJOR}::Network
+    )
+    foreach(HTTP_TRANSPORT_CASE IN ITEMS
+        successPreservesRequestAndFlowIdentity
+        refusedConnectionHasOneBoundedOutcome
+        finiteDeadlineAbortsAnUnresponsivePeer
+        malformedJsonIsRejectedWithoutLeakingItsBody
+        maximumResponseIsAccepted
+        oneByteOverMaximumIsRejected
+        peerClosingMidResponseHasOneNetworkOutcome
+        explicitCancelHasExactlyOneTerminalOutcome
+        lateReplyFromAnOldFlowCannotCompleteTheNewFlow
+        deletingTransportReleasesReplyAndLoopbackSocket
+    )
+        add_test(
+            NAME http_transport.${HTTP_TRANSPORT_CASE}
+            COMMAND http_transport_tests ${HTTP_TRANSPORT_CASE})
+        set_tests_properties(http_transport.${HTTP_TRANSPORT_CASE} PROPERTIES
+            ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+            LABELS "integration"
+            TIMEOUT 10
+        )
+    endforeach()
+
+    add_executable(tcp_transport_tests
+        tests/tcp-transport/tcp_transport_tests.cpp
+    )
+    target_link_libraries(tcp_transport_tests PRIVATE
+        chat_tcp_transport
+        Qt${QT_VERSION_MAJOR}::Test
+        Qt${QT_VERSION_MAJOR}::Network
+    )
+    foreach(TCP_TRANSPORT_CASE IN ITEMS
+        connectPreservesGenerationAndFlowIdentity
+        sendWritesProductionFrame
+        fragmentedFrameDecodedOnce
+        coalescedFramesStayOrdered
+        maximumFrameIsAccepted
+        malformedOversizedFrameTerminates
+        refusedConnectHasOneBoundedOutcome
+        writeDeadlineAbortsSilentPeer
+        peerCloseMidWriteHasOneTerminalOutcome
+        resetDiscardsHalfFrame
+        lateOldGenerationCannotCompleteRetry
+        closeAndDeleteReleaseOwnedResources
+    )
+        add_test(
+            NAME tcp_transport.${TCP_TRANSPORT_CASE}
+            COMMAND tcp_transport_tests ${TCP_TRANSPORT_CASE})
+        set_tests_properties(tcp_transport.${TCP_TRANSPORT_CASE} PROPERTIES
+            ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}"
+            LABELS "integration"
+            TIMEOUT 10
+        )
+    endforeach()
 endif()

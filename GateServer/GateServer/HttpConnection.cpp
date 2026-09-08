@@ -1,8 +1,10 @@
 #include "HttpConnection.h"
+#include "CServer.h"
 #include "LogicSystem.h"
 
-HttpConnection::HttpConnection(boost::asio::io_context& ioc) : _socket(ioc){
-
+HttpConnection::HttpConnection(boost::asio::io_context& ioc, std::shared_ptr<LogicSystem> logic)
+	: _socket(ioc), _logic(std::move(logic)) {
+	_parser.body_limit(CServer::MaxRequestBodyBytes());
 }
 
 tcp::socket& HttpConnection::GetSocket() {
@@ -15,21 +17,42 @@ tcp::socket& HttpConnection::GetSocket() {
  */
 void HttpConnection::Start() {
 	auto self = shared_from_this();
-	http::async_read(_socket, _buffer, _request, [self](beast::error_code ec, std::size_t bytes_transferred) {
+	CheckDeadline();
+	http::async_read(_socket, _buffer, _parser, [self](beast::error_code ec, std::size_t bytes_transferred) {
 		try {
 			if (ec) {
-				SPDLOG_WARN("HTTP request read failed: {}", ec.message());
+				if (ec == http::error::body_limit) {
+					self->_response.version(11);
+					self->_response.keep_alive(false);
+					self->_response.result(http::status::payload_too_large);
+					self->_response.set(http::field::content_type, "text/plain");
+					beast::ostream(self->_response.body()) << "request body exceeds limit\r\n";
+					self->WriteResponse();
+					return;
+				}
+				SPDLOG_WARN("HTTP request read failed");
 				return;
 			}
 
 			boost::ignore_unused(bytes_transferred);
+			self->_request = self->_parser.release();
 			self->HandleReq();
-			self->CheckDeadline();
 		}
 		catch (const std::exception&) {
 			SPDLOG_ERROR("HTTP request handling failed");
 		}
 		});
+}
+
+void HttpConnection::Stop() {
+	auto self = shared_from_this();
+	net::dispatch(_socket.get_executor(), [self] {
+		beast::error_code error;
+		self->deadline_.cancel();
+		self->_socket.cancel(error);
+		self->_socket.shutdown(tcp::socket::shutdown_both, error);
+		self->_socket.close(error);
+	});
 }
 
 // 数字转16进制
@@ -149,7 +172,7 @@ void HttpConnection::HandleReq() {
 	// 处理get请求
 	if (_request.method() == http::verb::get) {
 		PreParseGetParam();
-		bool success = LogicSystem::GetInstance()->HandleGet(_get_url, shared_from_this());
+		bool success = _logic->HandleGet(_get_url, shared_from_this());
 		if (!success) {
 			// 失败原因
 			_response.result(http::status::not_found);
@@ -168,7 +191,7 @@ void HttpConnection::HandleReq() {
 	}
 
 	if (_request.method() == http::verb::post) {
-		bool success = LogicSystem::GetInstance()->HandlePost(_request.target(), shared_from_this());
+		bool success = _logic->HandlePost(_request.target(), shared_from_this());
 		if (!success) {
 			// 失败原因
 			_response.result(http::status::not_found);

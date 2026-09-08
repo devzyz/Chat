@@ -14,7 +14,7 @@ ChatServiceImpl::ChatServiceImpl() : _p_server(nullptr)
 
 }
 
-void ChatServiceImpl::SetServer(std::shared_ptr<CServer> pserver) {
+void ChatServiceImpl::SetServer(std::shared_ptr<chat_transport::CServer> pserver) {
 	_p_server = pserver;
 }
 

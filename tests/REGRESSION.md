@@ -33,9 +33,11 @@ VarifyServer, or PowerShell test source exists but is absent from its real
 MSBuild/CMake/npm/PowerShell runner, or when a CTest target has no Level label.
 It prevents silent tests; it does not replace behavioral assertions.
 
-`CheckTestReports` is the result-integrity gate. It requires exactly twelve
-registered XML reports and 232 runner testcases, and rejects a missing/invalid
-report, count drift, any `<failure>`/`<error>` node, or an incomplete aggregate.
+`CheckTestReports` is the result-integrity gate. It requires exactly thirteen
+registered XML reports and 313 runner testcases while preserving the original
+twelve-report/232-testcase floor. It rejects a missing/invalid report, count
+drift, any failure/error/skipped/disabled/unavailable/timeout result, a
+credential-shaped assignment, missing cleanup evidence, or an incomplete aggregate.
 `RunAllTests` calls the same audit after all four public toolchain runners.
 
 ## Permanent baseline from phases one and two
@@ -65,11 +67,13 @@ the current baseline.
 | E2E smoke | release candidate, and PRs that change a public workflow | a small set of complete user/protocol journeys across release units |
 | Stress/soak | scheduled or explicit | long-running concurrency, media, reconnect, resource and race behavior |
 
-The current local baseline is 232/232 across twelve reports: the Phase 2.5
-173-case baseline plus seven Chat Logic dispatcher, fourteen Status routing, ten Chat session-state,
-and sixteen Gate request-orchestration cases, plus twelve Qt auth-flow cases. The Phase 2.5
-173-case baseline already has clean-PR, post-merge, and branch-protection evidence;
-the enlarged 232-case baseline receives its clean-PR evidence at Phase 3A closeout.
+The original Phase 3A floor remains 232/232 across twelve reports. Phase 3B adds
+six host, twelve process-harness, seven Gate HTTP, twelve Status gRPC, sixteen Chat
+TCP, six formal-composition, ten Qt HTTP, and twelve Qt TCP cases, plus the
+thirteenth `client_integration.xml` report. The current local baseline is therefore
+313/313 across thirteen reports. Remote clean-PR checks, artifact evidence, and
+post-merge `develop` evidence remain closeout requirements; local evidence does not
+substitute for them.
 
 Execution depth follows the canonical proportional tiers in
 [`CI-GOVERNANCE.md` section 2.1](CI-GOVERNANCE.md#21-比例化执行合同). Focused
