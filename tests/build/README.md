@@ -31,6 +31,19 @@ the exact `CHAT_JUNIT_PATH` and writes machine-readable status to the exact
 `PASS` after compiler, CMake, Qt, vcpkg, canonical proto, compile/link, and
 bounded production-main startup checks complete.
 
+`T10-LNX-10-scope-safety` checks workflow password/token values after trimming
+whitespace and scalar quotes. Only complete GitHub expressions and the exact
+`MYSQL_ALLOW_EMPTY_PASSWORD: "yes"` disposable bootstrap flag are accepted;
+literal credentials, other password keys and arbitrary flag values remain
+blocked. The same scanner runs positive and negative synthetic regression cases
+inside this contract, including multi-space expressions and a bootstrap flag
+next to a literal root password. Run the ten static cases without restoring
+dependencies:
+
+```sh
+cmake -DCHAT_EXPECT=GREEN -DCHAT_JUNIT_PATH=out/phase3c/contract.xml -DCHAT_EVIDENCE_PATH=out/phase3c/contract.json -P tests/build/linux_preflight_contract.cmake
+```
+
 The root CMake project resolves Qt Core 6.5.3 explicitly in its own directory
 scope before checking the Qt identity. Qt discovery inside the `chat/` child
 directory does not export `Qt6Core_VERSION` to the root. A missing or different

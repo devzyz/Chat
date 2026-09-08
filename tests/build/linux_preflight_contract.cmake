@@ -175,12 +175,75 @@ endif()
 record_case("T10-LNX-09-loader-startup" startup_ok
     "bounded loader/startup evidence is missing")
 
+function(has_literal_workflow_secret text output)
+    set(${output} FALSE PARENT_SCOPE)
+    string(REPLACE ";" "\\;" lines "${text}")
+    string(REPLACE "\n" ";" lines "${lines}")
+    foreach(line IN LISTS lines)
+        string(TOLOWER "${line}" key_line)
+        if(NOT key_line MATCHES "(^|[ \t{,])[\"']?([a-z0-9_-]*(password|token))[\"']?[ \t]*:[ \t]*(.*)$")
+            continue()
+        endif()
+        set(key "${CMAKE_MATCH_2}")
+        set(value "${CMAKE_MATCH_4}")
+        string(REGEX REPLACE "[ \t]+#.*$" "" value "${value}")
+        string(STRIP "${value}" value)
+        if(value MATCHES "^\"(.*)\"$")
+            set(value "${CMAKE_MATCH_1}")
+        elseif(value MATCHES "^'(.*)'$")
+            set(value "${CMAKE_MATCH_1}")
+        endif()
+        # This exact official MySQL bootstrap switch is not a credential.
+        # Do not exempt other password keys, arbitrary flag values or $ literals.
+        if(key STREQUAL "mysql_allow_empty_password" AND value STREQUAL "yes")
+            continue()
+        endif()
+        if(value MATCHES "^\\$\\{\\{[^{}]+\\}\\}$")
+            continue()
+        endif()
+        set(${output} TRUE PARENT_SCOPE)
+        return()
+    endforeach()
+endfunction()
+
 set(safety_ok TRUE)
-string(TOLOWER "${workflow}" workflow_lower)
+# Exercise the same scanner as the real workflow. Values here are synthetic.
+set(secret_scan_examples
+    [=[ALLOW|        MYSQL_ALLOW_EMPTY_PASSWORD: "yes"]=]
+    [=[ALLOW|        MYSQL_ALLOW_EMPTY_PASSWORD: yes # bootstrap flag]=]
+    [=[ALLOW|        password: ${{ secrets.DB_PASSWORD }}]=]
+    [=[ALLOW|        token:    ${{ github.token }}]=]
+    [=[ALLOW|        password: "${{ secrets.DB_PASSWORD }}"]=]
+    [=[ALLOW|        token: '${{ github.token }}' # injected at runtime]=]
+    [=[BLOCK|        MYSQL_ROOT_PASSWORD: synthetic-canary]=]
+    [=[BLOCK|        token: synthetic-canary]=]
+    [=[BLOCK|        password:    synthetic-canary]=]
+    [=[BLOCK|        token: "synthetic-canary"]=]
+    [=[BLOCK|        MYSQL_ALLOW_EMPTY_PASSWORD: synthetic-canary]=]
+    [=[BLOCK|        OTHER_ALLOW_EMPTY_PASSWORD: "yes"]=]
+    [=[BLOCK|        token: $literal-canary]=]
+    [=[BLOCK|        token: prefix-${{ github.token }}]=]
+    [=[BLOCK|        token: ${{ github.token }}-suffix]=]
+    [=[BLOCK|        'PASSWORD': 'synthetic-canary']=]
+    [=[BLOCK|        env: { token: synthetic-canary }]=]
+    [=[BLOCK|        password:synthetic-canary]=]
+    [=[BLOCK|        MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+        MYSQL_ROOT_PASSWORD: synthetic-canary]=])
+foreach(example IN LISTS secret_scan_examples)
+    string(SUBSTRING "${example}" 0 5 expected)
+    string(SUBSTRING "${example}" 6 -1 sample)
+    has_literal_workflow_secret("${sample}" sample_has_secret)
+    if((expected STREQUAL "ALLOW" AND sample_has_secret) OR
+       (expected STREQUAL "BLOCK" AND NOT sample_has_secret))
+        set(safety_ok FALSE)
+        message(STATUS "Workflow secret scanner regression failed: ${expected} example")
+    endif()
+endforeach()
+has_literal_workflow_secret("${workflow}" workflow_has_secret)
 string(REGEX MATCHALL "GateServer/GateServer/CServer\\.cpp" gate_transport_occurrences "${root_cmake}")
 list(LENGTH gate_transport_occurrences gate_transport_count)
 if(workflow MATCHES "ubuntu-latest|self-hosted|docker[ \t]+(build|push)|continue-on-error" OR
-   workflow_lower MATCHES "(password|token):[ \t]+[^$]" OR
+   workflow_has_secret OR
    root_cmake MATCHES "FAKE|clearForTest" OR
    NOT gate_transport_count EQUAL 0 OR
    NOT root_cmake MATCHES "include\\(cmake/ServerSourceOwnership\\.cmake\\)")
