@@ -144,6 +144,8 @@ set_tests_properties(T10-BLD-02-integration-host PROPERTIES LABELS "phase3c-buil
 add_subdirectory(tests/server/process-harness)
 add_executable(process_harness_posix_tests tests/server/process-harness/process_harness_posix_tests.cpp)
 target_link_libraries(process_harness_posix_tests PRIVATE process_harness)
+add_executable(service_run tests/services/ServiceRun.cpp)
+target_link_libraries(service_run PRIVATE process_harness)
 add_test(NAME T10-BLD-03-process-harness COMMAND process_harness_posix_tests)
 set_tests_properties(T10-BLD-03-process-harness PROPERTIES LABELS "phase3c-build-ownership" TIMEOUT 15)
 

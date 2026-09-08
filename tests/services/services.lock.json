@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "healthDeadlineMs": 120000,
+  "commandDeadlineMs": 5000,
+  "gracefulStopSeconds": 10,
+  "services": {
+    "redis": {
+      "image": "redis:7.4.2@sha256:fbdbaea47b9ae4ecc2082ecdb4e1cea81e32176ffb1dcf643d422ad07427e5d9",
+      "ports": [6379],
+      "health": "authenticated PING",
+      "source": "https://hub.docker.com/_/redis"
+    },
+    "mysql": {
+      "image": "mysql:8.4.4@sha256:23818b7d7de427096ab1427b2e3d9d5e14a5b933f9a4431a482d6414bc879091",
+      "ports": [3306],
+      "health": "TCP handshake and authenticated SELECT 1",
+      "source": "https://hub.docker.com/_/mysql"
+    },
+    "mailpit": {
+      "image": "axllent/mailpit:v1.24.1@sha256:4873e5a441ed368f1e98a832f61257a033859f5e829542cd03fb772d2282ea4e",
+      "ports": [1025, 8025],
+      "health": "SMTP verify and HTTP /readyz",
+      "source": "https://mailpit.axllent.org/docs/install/docker/"
+    }
+  }
+}

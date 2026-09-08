@@ -679,6 +679,16 @@ The following identifiers are frozen by [`PHASE-3B-TEST-PLAN.md`](plans/PHASE-3B
 | G-017 | 版本兼容 | 当前版与上一发布版无自动矩阵 | Compatibility | [3C §12 / 3C-03；§17 / 3C-08；§18 / 3C-09](plans/PHASE-3C-PLAN.md) → [3D §13 / 3D-04；§14 / 3D-05](plans/PHASE-3D-PLAN.md) → [Release §10 / R-01；§12 / R-03](plans/PHASE-RELEASE-PLAN.md) | master |
 | G-018 | artifact/UAT | 尚无同产物 smoke 与版本化人工清单 | Release | [Release §9 / R-00；§10 / R-01；§11 / R-02；§12 / R-03](plans/PHASE-RELEASE-PLAN.md) | release |
 
+### Phase 3C disposable services registration
+
+`T10-SVC-01..12` are owned by [the dependency coordinator](services/README.md),
+Architecture / Integration, CTest label `phase3c-services`, report
+`linux_services.xml`, job `Phase 3C disposable services`. The runner proves job
+container/port identity, synthetic authentication, run-owned data, bounded real
+faults and cleanup. It does not close production Adapter G-012..G-015 or change
+the existing Windows report baseline. Actual execution status belongs to
+`docs/Status.md`; an unexecuted hosted test is not PASS.
+
 ## 8. 矩阵维护规则
 
 - 新 testcase 合并时必须先分配 Test ID，并更新本矩阵及所属 Module README。

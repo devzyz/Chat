@@ -1,0 +1,58 @@
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { runCommand } = require('./dependencyCoordinator');
+const lock = require('./services.lock.json');
+
+// Also called by an always() workflow step if npm/configure/CTest never started.
+// Missing evidence is a failure, never a synthetic successful test run.
+const root = process.argv[2];
+fs.mkdirSync(root, { recursive: true });
+function read(name) {
+    try { return JSON.parse(fs.readFileSync(path.join(root, name), 'utf8')); }
+    catch { return { complete: false }; }
+}
+async function finalize() {
+    const teardown = read('teardown.json');
+    const processTeardown = read('process-teardown.json');
+    const junit = path.join(root, 'linux_services.xml');
+    teardown.processComplete = processTeardown.complete === true;
+    teardown.complete = teardown.complete === true && teardown.processComplete && fs.existsSync(junit) &&
+        fs.existsSync(path.join(root, 'service-endpoints.json'));
+    if (!teardown.complete && process.env.GITHUB_ACTIONS === 'true') {
+        teardown.fallbackStopped = [];
+        teardown.fallbackFailures = [];
+        for (const service of ['mailpit', 'mysql', 'redis']) {
+            const id = process.env[`CHAT_${service.toUpperCase()}_CONTAINER`] || '';
+            try {
+                if (!/^[a-f0-9]{64}$/.test(id)) throw new Error('missing job-owned identity');
+                const [container] = JSON.parse(await runCommand('docker', ['inspect', id]));
+                if (container.Id !== id || container.Config.Image !== lock.services[service].image) {
+                    throw new Error('identity mismatch');
+                }
+                if (container.State.Running) {
+                    await runCommand('docker', ['stop', '--time', '10', id], { timeout: 15000 });
+                }
+                const [stopped] = JSON.parse(await runCommand('docker', ['inspect', id]));
+                if (stopped.State.Running) throw new Error('stop incomplete');
+                teardown.fallbackStopped.push(service);
+            } catch { teardown.fallbackFailures.push(service); }
+        }
+    }
+    fs.writeFileSync(path.join(root, 'teardown.json'), JSON.stringify(teardown, null, 2));
+    if (!fs.existsSync(path.join(root, 'service-endpoints.json'))) {
+        fs.writeFileSync(path.join(root, 'service-endpoints.json'), '{"status":"not-started"}\n');
+    }
+    if (!fs.existsSync(junit) || !teardown.complete) {
+        // Preserve the coordinator's original failure report alongside outer failure.
+        if (fs.existsSync(junit) && !fs.existsSync(path.join(root, 'coordinator-services.xml'))) {
+            fs.copyFileSync(junit, path.join(root, 'coordinator-services.xml'));
+        }
+        fs.writeFileSync(junit, '<testsuite name="phase3c-services" tests="1" failures="1">' +
+            '<testcase name="outer-run-and-teardown"><failure message="service evidence incomplete"/>' +
+            '</testcase></testsuite>\n');
+    }
+    if (!teardown.complete) process.exitCode = 1;
+}
+finalize().catch(() => { process.stderr.write('outer service cleanup failed\n'); process.exitCode = 1; });

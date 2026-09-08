@@ -30,6 +30,7 @@ declare -A selectors=(
   [3C-00-T2]=preflight_build_green
   [3C-01]=build_ownership_and_process_lifecycle
   [3C-01-posix]=isolated_posix_process_lifecycle
+  [3C-02]=disposable_service_contracts
 )
 
 if ((list_only)); then
@@ -47,6 +48,17 @@ if [[ -z "${selectors[$selector]+x}" ]]; then
 fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ "$selector" == 3C-02 ]]; then
+  export CHAT_SERVICE_EVIDENCE_ROOT="${junit_dir:-$repo_root/out/phase3c/services}"
+  export CHAT_SERVICE_HOST=127.0.0.1
+  mkdir -p "$CHAT_SERVICE_EVIDENCE_ROOT"
+  trap 'result=$?; trap - EXIT; node "$repo_root/tests/services/finalizeEvidence.js" "$CHAT_SERVICE_EVIDENCE_ROOT" || result=1; exit "$result"' EXIT
+  build_root="$repo_root/out/build/service-contracts"
+  timeout --signal=TERM --kill-after=5s 30s cmake -S "$repo_root/tests/services" -B "$build_root"
+  timeout --signal=TERM --kill-after=15s 420s ctest --test-dir "$build_root" \
+    -L phase3c-services --output-on-failure --no-tests=error
+  exit 0
+fi
 if [[ "$selector" == 3C-01 || "$selector" == 3C-01-posix ]]; then
   junit_dir="${junit_dir:-$repo_root/out/phase3c/ownership/junit}"
   mkdir -p "$junit_dir"
