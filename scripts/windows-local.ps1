@@ -659,6 +659,24 @@ function Confirm-TestStructure {
             )
         }
     }
+    # Linux-only process contracts are explicitly owned by CMake, not MSBuild.
+    # Still require a real executable and CTest command: this is not a skip list.
+    $linuxProcessContracts = @(
+        @{ Source = 'tests/server/process-harness/posix_process_tests.cpp';
+           CMake = 'tests/server/process-harness/CMakeLists.txt'; Target = 'posix_process_tests' },
+        @{ Source = 'tests/server/process-harness/process_harness_posix_tests.cpp';
+           CMake = 'CMakeLists.txt'; Target = 'process_harness_posix_tests' }
+    )
+    foreach ($contract in $linuxProcessContracts) {
+        $cmakeText = Get-Content -LiteralPath (Join-Path $repoRoot $contract.CMake) -Raw
+        $sourceName = [regex]::Escape([IO.Path]::GetFileName($contract.Source))
+        $targetName = [regex]::Escape($contract.Target)
+        if ($cmakeText -notmatch "(?s)add_executable\($targetName\s+[^)]*$sourceName" -or
+            $cmakeText -notmatch "COMMAND\s+$targetName(?:\s|\))") {
+            throw "Linux process contract has no executable/CTest registration: $($contract.Source)"
+        }
+        $registeredServerSources += [IO.Path]::GetFullPath((Join-Path $repoRoot $contract.Source))
+    }
     foreach ($test in $serverTests) {
         if ($registeredServerSources -notcontains $test.FullName) {
             throw "Unregistered Server test source: $(Get-RepositoryRelativePath $test.FullName)"

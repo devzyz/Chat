@@ -1,5 +1,12 @@
 # 当前自动测试合同矩阵
 
+Phase 3C-01 adds `T10-BLD-01..10` under CTest label
+`phase3c-build-ownership`, reported in `linux_build_ownership.xml`.
+The [process module contract](server/process-harness/README.md#linux-ownership-and-process-contracts-3c-01)
+owns exact standalone/full selector registration, real-process boundaries and
+timeouts. These Linux contracts supplement, not replace, the Windows baseline;
+registration alone is not PASS evidence.
+
 状态：Phase 3B Plan 3B-05 本地 closeout 基线清单；远端 clean PR / post-merge develop evidence pending
 基线日期：2026-09-06
 治理规则：[`CI-GOVERNANCE.md`](CI-GOVERNANCE.md)

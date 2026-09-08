@@ -93,74 +93,59 @@ function(chat_configure_server_target target source_root)
     )
 endfunction()
 
-add_library(gate_server_modules STATIC
-    GateServer/GateServer/AsioIOServicePool.cpp
-    GateServer/GateServer/CServer.cpp
-    GateServer/GateServer/GateResponse.cpp
-    GateServer/GateServer/HttpConnection.cpp
-    GateServer/GateServer/LogicSystem.cpp
-    GateServer/GateServer/GateRequest.cpp
-    GateServer/GateServer/GateRequestProduction.cpp
-    GateServer/GateServer/ConfigMgr.cpp
-    GateServer/GateServer/StatusGrpcClient.cpp
-    GateServer/GateServer/VerifyGrpcClient.cpp
-    GateServer/GateServer/LogMgr.cpp
-    GateServer/GateServer/MysqlDao.cpp
-    GateServer/GateServer/MysqlMgr.cpp
-    GateServer/GateServer/RedisMgr.cpp
-)
-chat_configure_server_target(gate_server_modules GateServer/GateServer)
+include(cmake/ServerSourceOwnership.cmake)
+chat_check_source_ownership("${CMAKE_CURRENT_SOURCE_DIR}")
+chat_add_project_library(GateTransport GateServer/GateServer/GateTransport)
+chat_add_project_library(GateRequest GateServer/GateServer/GateRequest)
+chat_add_project_library(GateGrpcClients GateServer/GateServer/GateGrpcClients)
+target_link_libraries(GateRequest PUBLIC GateGrpcClients)
+chat_add_project_library(gate_server_modules GateServer/GateServer/GateServer GateServer/GateServer/GateServer.cpp)
+target_link_libraries(gate_server_modules PUBLIC GateTransport GateRequest GateGrpcClients)
 add_library(chat::gate_server_modules ALIAS gate_server_modules)
 add_executable(GateServer GateServer/GateServer/GateServer.cpp)
-target_link_libraries(GateServer PRIVATE gate_server_modules)
+target_link_libraries(GateServer PRIVATE "$<LINK_GROUP:RESCAN,gate_server_modules,GateTransport,GateRequest,GateGrpcClients>")
 
-add_library(status_server_modules STATIC
-    StatusServer/StatusServer/AsioIOServicePool.cpp
-    StatusServer/StatusServer/ConfigMgr.cpp
-    StatusServer/StatusServer/DistLock.cpp
-    StatusServer/StatusServer/LogMgr.cpp
-    StatusServer/StatusServer/MysqlDao.cpp
-    StatusServer/StatusServer/MysqlMgr.cpp
-    StatusServer/StatusServer/RedisMgr.cpp
-    StatusServer/StatusServer/Singleton.cpp
-    StatusServer/StatusServer/StatusGrpcServer.cpp
-    StatusServer/StatusServer/StatusServiceImpl.cpp
-    StatusServer/StatusServer/StatusRouting.cpp
-    StatusServer/StatusServer/StatusRoutingProduction.cpp
-)
-chat_configure_server_target(status_server_modules StatusServer/StatusServer)
+chat_add_project_library(StatusRouting StatusServer/StatusServer/StatusRouting)
+chat_add_project_library(StatusTransport StatusServer/StatusServer/StatusTransport)
+target_link_libraries(StatusTransport PUBLIC StatusRouting)
+chat_add_project_library(status_server_modules StatusServer/StatusServer/StatusServer StatusServer/StatusServer/StatusServer.cpp)
+target_link_libraries(status_server_modules PUBLIC StatusTransport StatusRouting)
 add_library(chat::status_server_modules ALIAS status_server_modules)
 add_executable(StatusServer StatusServer/StatusServer/StatusServer.cpp)
-target_link_libraries(StatusServer PRIVATE status_server_modules)
+target_link_libraries(StatusServer PRIVATE "$<LINK_GROUP:RESCAN,status_server_modules,StatusTransport,StatusRouting>")
 
-add_library(chat_server_modules STATIC
-    ChatServer/ChatServer/AsioIOServicePool.cpp
-    ChatServer/ChatServer/ChatServiceImpl.cpp
-    ChatServer/ChatServer/DistLock.cpp
-    ChatServer/ChatServer/LogicSystem.cpp
-    ChatServer/ChatServer/LogMgr.cpp
-    ChatServer/ChatServer/MysqlDao.cpp
-    ChatServer/ChatServer/MysqlMgr.cpp
-    ChatServer/ChatServer/RedisMgr.cpp
-    ChatServer/ChatServer/Singleton.cpp
-    ChatServer/ChatServer/UserMgr.cpp
-    ChatServer/ChatServer/ChatFrameCodec.cpp
-    ChatServer/ChatServer/CServer.cpp
-    ChatServer/ChatServer/CSession.cpp
-    ChatServer/ChatServer/MsgNode.cpp
-    ChatServer/ChatServer/LogicDispatcher.cpp
-    ChatServer/ChatServer/ChatSessionState.cpp
-    ChatServer/ChatServer/ChatSessionStateProduction.cpp
-    ChatServer/ChatServer/ChatGrpcClient.cpp
-    ChatServer/ChatServer/ConfigMgr.cpp
-    ChatServer/ChatServer/Const.cpp
-    ChatServer/ChatServer/PeerServerRouting.cpp
-    ChatServer/ChatServer/StatusGrpcClient.cpp
-)
-chat_configure_server_target(chat_server_modules ChatServer/ChatServer)
+chat_add_project_library(ChatTransport ChatServer/ChatServer/ChatTransport)
+chat_add_project_library(ChatSessionState ChatServer/ChatServer/ChatSessionState)
+chat_add_project_library(LogicDispatcher ChatServer/ChatServer/LogicDispatcher)
+chat_add_project_library(ChatGrpcClients ChatServer/ChatServer/ChatGrpcClients)
+target_link_libraries(ChatTransport PUBLIC ChatSessionState LogicDispatcher)
+chat_add_project_library(chat_server_modules ChatServer/ChatServer/ChatServer ChatServer/ChatServer/ChatServer.cpp)
+target_link_libraries(chat_server_modules PUBLIC ChatTransport ChatSessionState LogicDispatcher ChatGrpcClients)
 add_library(chat::chat_server_modules ALIAS chat_server_modules)
 add_executable(ChatServer ChatServer/ChatServer/ChatServer.cpp)
-target_link_libraries(ChatServer PRIVATE chat_server_modules)
+target_link_libraries(ChatServer PRIVATE "$<LINK_GROUP:RESCAN,chat_server_modules,ChatTransport,ChatSessionState,LogicDispatcher,ChatGrpcClients>")
+
+enable_testing()
+add_library(process_harness STATIC
+    tests/support/RunContext.cpp
+    tests/support/ProcessHarness.cpp
+    tests/support/PosixProcessAdapter.cpp)
+target_include_directories(process_harness PUBLIC tests/support)
+target_link_libraries(process_harness PUBLIC Boost::filesystem Threads::Threads)
+add_library(integration_host STATIC tests/support/IntegrationHostFactory.cpp)
+target_include_directories(integration_host PUBLIC tests/support)
+target_link_libraries(integration_host PUBLIC
+    GateTransport GateRequest StatusTransport StatusRouting ChatTransport ChatSessionState LogicDispatcher)
+find_package(GTest CONFIG REQUIRED)
+add_executable(integration_host_contract_tests tests/server/integration-host/integration_host_contract_tests.cpp)
+target_link_libraries(integration_host_contract_tests PRIVATE integration_host GTest::gtest_main)
+add_test(NAME T10-BLD-02-integration-host COMMAND integration_host_contract_tests)
+set_tests_properties(T10-BLD-02-integration-host PROPERTIES LABELS "phase3c-build-ownership" TIMEOUT 30)
+add_subdirectory(tests/server/process-harness)
+add_executable(process_harness_posix_tests tests/server/process-harness/process_harness_posix_tests.cpp)
+target_link_libraries(process_harness_posix_tests PRIVATE process_harness)
+add_test(NAME T10-BLD-03-process-harness COMMAND process_harness_posix_tests)
+set_tests_properties(T10-BLD-03-process-harness PROPERTIES LABELS "phase3c-build-ownership" TIMEOUT 15)
 
 set(CHAT_LINUX_EXPECTED_TARGETS
     chat_protocol_cpp

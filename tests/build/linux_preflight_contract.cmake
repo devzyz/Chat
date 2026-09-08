@@ -182,7 +182,8 @@ list(LENGTH gate_transport_occurrences gate_transport_count)
 if(workflow MATCHES "ubuntu-latest|self-hosted|docker[ \t]+(build|push)|continue-on-error" OR
    workflow_lower MATCHES "(password|token):[ \t]+[^$]" OR
    root_cmake MATCHES "FAKE|clearForTest" OR
-   NOT gate_transport_count EQUAL 1)
+   NOT gate_transport_count EQUAL 0 OR
+   NOT root_cmake MATCHES "include\\(cmake/ServerSourceOwnership\\.cmake\\)")
     set(safety_ok FALSE)
 endif()
 record_case("T10-LNX-10-scope-safety" safety_ok

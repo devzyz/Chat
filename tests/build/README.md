@@ -1,5 +1,17 @@
 # Linux preflight contract
 
+Production source ownership is shared with the explicit MSBuild project entries
+through `cmake/ServerSourceOwnership.cmake`. Linux builds the same GateTransport,
+GateRequest, GateGrpcClients, StatusTransport, StatusRouting, ChatTransport,
+ChatSessionState, LogicDispatcher and ChatGrpcClients libraries used upstream;
+formal servers and IntegrationHost consumers link those targets. Generated proto
+remains owned by `chat_protocol_cpp`. Conditional or property-expanded source
+entries fail configuration instead of silently dropping a source. Run the
+central check with `cmake -P tests/build/server_source_ownership.cmake`.
+
+The [process module README](../server/process-harness/README.md) owns 3C-01
+commands, registration and the Linux-only evidence boundary.
+
 Plan 3C-00 owns the public selector:
 
 ```text

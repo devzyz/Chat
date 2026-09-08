@@ -6,12 +6,14 @@ configuration=""
 selector=""
 expect_red=0
 list_only=0
+junit_dir=""
 
 while (($#)); do
   case "$1" in
     --phase) phase="${2:-}"; shift 2 ;;
     --configuration) configuration="${2:-}"; shift 2 ;;
     --selector) selector="${2:-}"; shift 2 ;;
+    --junit-dir) junit_dir="${2:-}"; shift 2 ;;
     --expect-red) expect_red=1; shift ;;
     --list-only) list_only=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 64 ;;
@@ -26,6 +28,8 @@ fi
 declare -A selectors=(
   [3C-00-T1]=preflight_contract_red
   [3C-00-T2]=preflight_build_green
+  [3C-01]=build_ownership_and_process_lifecycle
+  [3C-01-posix]=isolated_posix_process_lifecycle
 )
 
 if ((list_only)); then
@@ -43,6 +47,25 @@ if [[ -z "${selectors[$selector]+x}" ]]; then
 fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ "$selector" == 3C-01 || "$selector" == 3C-01-posix ]]; then
+  junit_dir="${junit_dir:-$repo_root/out/phase3c/ownership/junit}"
+  mkdir -p "$junit_dir"
+  if [[ "$selector" == 3C-01-posix ]]; then
+    build_root="$repo_root/out/build/posix-process-contracts"
+    timeout --signal=TERM --kill-after=5s 60s cmake \
+      -S "$repo_root/tests/server/process-harness" -B "$build_root" -DCMAKE_BUILD_TYPE=Release
+    timeout --signal=TERM --kill-after=5s 60s cmake --build "$build_root" --parallel 2
+  else
+    build_root="$repo_root/out/build/linux-x64-release"
+    # Reuse the preflight's configured, restored production build without restore.
+    timeout --signal=TERM --kill-after=5s 600s cmake --build "$build_root" --parallel 2 \
+      --target integration_host_contract_tests process_harness_posix_tests posix_process_tests
+  fi
+  timeout --signal=TERM --kill-after=5s 120s ctest --test-dir "$build_root" \
+    -L phase3c-build-ownership --output-on-failure --no-tests=error \
+    --output-junit "$junit_dir/linux_build_ownership.xml"
+  exit 0
+fi
 evidence_root="${CHAT_EVIDENCE_ROOT:-${repo_root}/out/phase3c/preflight}"
 junit_path="${evidence_root}/junit/linux_build_proof.xml"
 evidence_path="${evidence_root}/linux-preflight.json"
