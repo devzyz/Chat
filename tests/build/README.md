@@ -25,6 +25,14 @@ directory does not export `Qt6Core_VERSION` to the root. A missing or different
 version remains a configuration failure; it is never inferred from the
 requested version or replaced by a default.
 
+The Varify loader probe runs the production `server.js` with
+`fixtures/varify-loader.json`, loopback endpoints and synthetic non-secret
+credential values scoped to its child process. It sends no mail or business
+requests and proves only that the production listener starts and remains alive
+until the bounded timeout. Redis/SMTP readiness belongs to later integration
+plans. Missing configuration, early exit, bind failure or absent startup output
+still fails this probe.
+
 The selector first proves four mutations turn the same contract RED:
 
 - a missing production target;

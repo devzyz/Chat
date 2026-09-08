@@ -259,6 +259,14 @@ run_varify_startup_probe() {
   set +e
   (
     cd "$repo_root/VarifyServer"
+    # Exercise real startup with an isolated, non-secret fixture, not a developer
+    # configuration. This loader proof does not assert Redis/SMTP readiness.
+    export CHAT_CONFIG="$repo_root/tests/build/fixtures/varify-loader.json"
+    export CHAT_VARIFY_BIND_ADDRESS='127.0.0.1:50051'
+    export CHAT_VARIFY_EMAIL_USER='loader-probe@example.invalid'
+    export CHAT_VARIFY_EMAIL_PASS='synthetic-loader-probe'
+    export CHAT_VARIFY_MYSQL_PASSWORD='synthetic-loader-probe'
+    export CHAT_VARIFY_REDIS_PASSWORD='synthetic-loader-probe'
     timeout --signal=TERM --kill-after=5s 10s node server.js
   ) >"$log_path" 2>&1
   local result=$?
