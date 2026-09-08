@@ -11,6 +11,24 @@ const { performance } = require('node:perf_hooks');
 const { setTimeout: delay } = require('node:timers/promises');
 const lock = require('./services.lock.json');
 
+class BootstrapFailure extends Error {
+    constructor(stage, category) {
+        super('bootstrap failed');
+        this.diagnostic = { stage, category };
+    }
+}
+
+async function bootstrapStep(stage, action) {
+    try { return await action(); }
+    catch (error) {
+        const knownCodes = ['ER_ACCESS_DENIED_ERROR', 'ECONNREFUSED', 'ETIMEDOUT', 'ERR_ASSERTION'];
+        const knownMessages = ['health deadline', 'command deadline', 'command unavailable', 'command output limit'];
+        const category = knownCodes.includes(error.code) ? error.code
+            : knownMessages.includes(error.message) ? error.message.replaceAll(' ', '-') : 'operation-failed';
+        throw new BootstrapFailure(stage, category);
+    }
+}
+
 function loadConfiguration(env) {
     const port = (name) => {
         const value = env[name] || '';
@@ -91,7 +109,7 @@ function tcpHandshake(host, port, timeout = 1000) {
 }
 
 class DependencyCoordinator {
-    constructor(config) {
+    constructor(config, dependencies = {}) {
         this.config = config;
         this.password = crypto.randomBytes(32).toString('hex');
         this.mailBody = crypto.randomBytes(24).toString('hex');
@@ -101,8 +119,9 @@ class DependencyCoordinator {
         this.messages = [];
         this.clients = new Set();
         const requireVarify = createRequire(path.resolve(__dirname, '../../VarifyServer/package.json'));
-        this.Redis = requireVarify('ioredis');
-        this.nodemailer = requireVarify('nodemailer');
+        this.Redis = dependencies.Redis || requireVarify('ioredis');
+        this.nodemailer = dependencies.nodemailer || requireVarify('nodemailer');
+        this.runCommand = dependencies.runCommand || runCommand;
     }
 
     async inspect(service) {
@@ -139,9 +158,10 @@ class DependencyCoordinator {
 
     async sql(statement, password = this.passwordSet ? this.password : '') {
         assert.ok(this.owned.has('mysql'));
+        // Socket pins administration to root@localhost even with skip-name-resolve.
         // Docker inherits MYSQL_PWD by name; neither password nor SQL is argv.
-        return runCommand('docker', ['exec', '-i', '--env', 'MYSQL_PWD', this.config.ids.mysql,
-            'mysql', '--protocol=TCP', '--host=127.0.0.1', '--user=root', '--connect-timeout=2',
+        return this.runCommand('docker', ['exec', '-i', '--env', 'MYSQL_PWD', this.config.ids.mysql,
+            'mysql', '--protocol=SOCKET', '--host=localhost', '--user=root', '--connect-timeout=2',
             '--batch', '--skip-column-names', '--silent'], {
             env: { ...process.env, MYSQL_PWD: password }, input: statement
         });
@@ -165,23 +185,37 @@ class DependencyCoordinator {
     async bootstrap() {
         const deadline = performance.now() + lock.healthDeadlineMs;
         const remaining = () => Math.max(1, deadline - performance.now() - lock.commandDeadlineMs);
-        await poll(async () => (await this.sql('SELECT 1;')) === '1', remaining());
-        await this.sql(`ALTER USER 'root'@'localhost' IDENTIFIED BY '${this.password}';`);
+        // The official image's temporary initialization server disables networking.
+        // Wait for the final server before changing credentials over its local socket.
+        await bootstrapStep('mysql-network-ready', () => poll(async () =>
+            (await tcpHandshake(this.config.host, this.config.ports.mysql))[4] === 10, remaining()));
+        await bootstrapStep('mysql-local-ready', () => poll(async () =>
+            (await this.sql('SELECT 1;')) === '1', remaining()));
+        await bootstrapStep('mysql-account', async () => {
+            assert.equal(await this.sql('SELECT CURRENT_USER();'), 'root@localhost');
+        });
+        await bootstrapStep('mysql-local-password', () =>
+            this.sql(`ALTER USER 'root'@'localhost' IDENTIFIED BY '${this.password}';`));
         this.passwordSet = true;
         // The official image can create a second root account for network peers.
         // Protect every bootstrap root account before any fixture data is written.
-        const hosts = (await this.sql("SELECT Host FROM mysql.user WHERE User='root';")).split('\n');
+        const hosts = (await bootstrapStep('mysql-root-hosts', () =>
+            this.sql("SELECT Host FROM mysql.user WHERE User='root';"))).split('\n');
         for (const host of hosts) {
-            assert.ok(host === 'localhost' || host === '%');
-            if (host !== 'localhost') await this.sql(`ALTER USER 'root'@'${host}' IDENTIFIED BY '${this.password}';`);
+            await bootstrapStep('mysql-peer-password', async () => {
+                assert.ok(host === 'localhost' || host === '%');
+                if (host !== 'localhost') await this.sql(`ALTER USER 'root'@'${host}' IDENTIFIED BY '${this.password}';`);
+            });
         }
-        await poll(async () => {
+        await bootstrapStep('redis-ready', () => poll(async () => {
             const client = await this.redis(null);
             try { return (await client.ping()) === 'PONG'; } finally { client.disconnect(); }
-        }, remaining());
-        const client = await this.redis(null);
-        try { await client.config('SET', 'requirepass', this.password); } finally { client.disconnect(); }
-        await poll(() => this.mailApi('/readyz'), remaining());
+        }, remaining()));
+        await bootstrapStep('redis-password', async () => {
+            const client = await this.redis(null);
+            try { await client.config('SET', 'requirepass', this.password); } finally { client.disconnect(); }
+        });
+        await bootstrapStep('mailpit-ready', () => poll(() => this.mailApi('/readyz'), remaining()));
     }
 
     async clearData() {
@@ -241,7 +275,12 @@ async function runSuite(evidenceRoot) {
     const record = async (id, name, action) => {
         const start = performance.now();
         try { await action(); cases.push({ id, name, pass: true, seconds: (performance.now() - start) / 1000 }); }
-        catch { cases.push({ id, name, pass: false, seconds: (performance.now() - start) / 1000 }); throw new Error(id); }
+        catch (error) {
+            cases.push({ id, name, pass: false,
+                diagnostic: error instanceof BootstrapFailure ? error.diagnostic : undefined,
+                seconds: (performance.now() - start) / 1000 });
+            throw new Error(id);
+        }
     };
     try {
         config = loadConfiguration(process.env);
@@ -251,9 +290,13 @@ async function runSuite(evidenceRoot) {
         });
         await record('T10-SVC-02', 'bounded bootstrap and synthetic authentication', async () => {
             await coordinator.bootstrap();
-            assert.equal(await coordinator.sql('SELECT 1;'), '1');
-            const client = await coordinator.redis();
-            try { assert.equal(await client.ping(), 'PONG'); } finally { client.disconnect(); }
+            await bootstrapStep('mysql-authenticated', async () => {
+                assert.equal(await coordinator.sql('SELECT 1;'), '1');
+            });
+            await bootstrapStep('redis-authenticated', async () => {
+                const client = await coordinator.redis();
+                try { assert.equal(await client.ping(), 'PONG'); } finally { client.disconnect(); }
+            });
         });
         await record('T10-SVC-03', 'isolated Redis data', async () => {
             const client = await coordinator.redis();
@@ -318,7 +361,9 @@ async function runSuite(evidenceRoot) {
         const endpoints = config ? { runId: config.runId, host: config.host, ports: config.ports,
             database: config.database, prefix: config.prefix, recipient: config.recipient,
             images: Object.fromEntries(Object.entries(lock.services).map(([key, value]) => [key, value.image])) } : { status: 'setup-failed' };
-        const teardown = { runId: config?.runId || null, primaryFailure, ...cleanup };
+        const teardown = { runId: config?.runId || null, primaryFailure,
+            diagnostics: cases.filter((entry) => entry.diagnostic).map(({ id, diagnostic }) => ({ id, ...diagnostic })),
+            ...cleanup };
         const evidence = JSON.stringify({ endpoints, teardown, cases });
         const redacted = !coordinator || ![coordinator.password, coordinator.mailBody].some((secret) => evidence.includes(secret));
         cases.push({ id: 'T10-SVC-12', name: 'evidence excludes generated secrets and body', pass: redacted, seconds: 0 });
@@ -333,7 +378,7 @@ async function runSuite(evidenceRoot) {
     if (primaryFailure || !cleanup.complete || cases.some((entry) => !entry.pass)) throw new Error('services proof failed');
 }
 
-module.exports = { loadConfiguration, poll, runCommand, runSuite };
+module.exports = { DependencyCoordinator, loadConfiguration, poll, runCommand, runSuite };
 if (require.main === module) {
     runSuite(process.env.CHAT_SERVICE_EVIDENCE_ROOT).catch(() => {
         process.stderr.write('services proof failed; inspect bounded service evidence\n');

@@ -2,11 +2,68 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { loadConfiguration, poll, runCommand } = require('./dependencyCoordinator');
+const { DependencyCoordinator, loadConfiguration, poll, runCommand } = require('./dependencyCoordinator');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const net = require('node:net');
 const lock = require('./services.lock.json');
+
+test('bootstrap rotates both root accounts without switching authenticated account', { timeout: 5000 }, async (t) => {
+    const server = net.createServer((socket) => socket.end(Buffer.from([1, 0, 0, 0, 10])));
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const passwords = { localhost: '', '%': '' };
+    const calls = [];
+    const coordinator = new DependencyCoordinator({ ids: { mysql: 'b'.repeat(64) },
+        host: '127.0.0.1', ports: { mysql: server.address().port } }, {
+        Redis: class {}, nodemailer: {},
+        runCommand: async (executable, args, options) => {
+            const host = args.includes('--protocol=SOCKET') ? 'localhost' : '%';
+            assert.ok(options.env.MYSQL_PWD === passwords[host], 'selected root account rejects password');
+            assert.equal(executable, 'docker');
+            assert.ok(!args.some((arg) => arg.includes(coordinator.password)));
+            calls.push(options.input);
+            if (options.input === 'SELECT 1;') return '1';
+            if (options.input === 'SELECT CURRENT_USER();') return 'root@localhost';
+            if (options.input.includes('SELECT Host')) return 'localhost\n%';
+            const change = options.input.match(/^ALTER USER 'root'@'(localhost|%)' IDENTIFIED BY '([a-f0-9]+)';$/);
+            assert.ok(change, 'only known bootstrap statements');
+            passwords[change[1]] = change[2];
+            return '';
+        }
+    });
+    coordinator.owned.add('mysql');
+    coordinator.redis = async () => ({ ping: async () => 'PONG', config: async () => 'OK', disconnect() {} });
+    coordinator.mailApi = async () => true;
+    await coordinator.bootstrap();
+    assert.equal(await coordinator.sql('SELECT 1;'), '1');
+    assert.equal(passwords.localhost, coordinator.password);
+    assert.equal(passwords['%'], coordinator.password);
+    assert.ok(calls.some((sql) => sql.includes("ALTER USER 'root'@'%'")));
+});
+
+test('bootstrap failures expose only fixed stage and safe error category', { timeout: 5000 }, async (t) => {
+    const server = net.createServer((socket) => socket.end(Buffer.from([1, 0, 0, 0, 10])));
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const secret = require('node:crypto').randomBytes(24).toString('hex');
+    const coordinator = new DependencyCoordinator({ ids: { mysql: 'b'.repeat(64) },
+        host: '127.0.0.1', ports: { mysql: server.address().port } }, {
+        Redis: class {}, nodemailer: {},
+        runCommand: async (executable, args, options) => {
+            if (options.input === 'SELECT 1;') return '1';
+            throw Object.assign(new Error(secret), { code: secret, diagnostic: { stage: secret } });
+        }
+    });
+    coordinator.owned.add('mysql');
+    await assert.rejects(coordinator.bootstrap(), (error) => {
+        assert.deepEqual(error.diagnostic, { stage: 'mysql-account', category: 'operation-failed' });
+        assert.ok(!JSON.stringify(error).includes(secret));
+        assert.ok(!error.message.includes(secret));
+        return true;
+    });
+});
 
 test('service lock matches hosted workflow images and dynamically mapped ports', () => {
     const workflow = fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/linux-ci.yml'), 'utf8');

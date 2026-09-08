@@ -42,6 +42,15 @@ connected through the mapped port. Schema and application adapter tests remain
 future plans. SMTP and Redis library probes run natively, using only the
 existing Varify lockfile's libraries, without starting the default mail sender.
 
+Bootstrap first waits for the mapped MySQL protocol handshake, so it cannot
+modify credentials in the image's temporary initialization server (which disables
+networking). Administrative SQL then uses the container's Unix socket and verifies
+`CURRENT_USER()` is `root@localhost`. This keeps the authenticated account stable
+while rotating both `localhost` and `%` root passwords; TCP loopback with name
+resolution disabled can select the latter before its password has changed.
+This follows the [official image's socket administration](https://github.com/docker-library/mysql/blob/master/8.4/docker-entrypoint.sh)
+and [MySQL account selection rules](https://dev.mysql.com/doc/refman/8.4/en/connection-access.html).
+
 Health acquisition has a 120-second budget, commands at most five seconds,
 connection/SMTP/HTTP calls finite deadlines, and container graceful stop ten
 seconds. The launcher has a 360-second execution window plus cleanup reserve;
@@ -71,9 +80,13 @@ these real cases in sequence and emits individual entries in `linux_services.xml
 
 An early failure stops dependent cases rather than marking them passed. Outer
 failure evidence preserves the original coordinator XML separately.
-Six dependency-free Node tests cover configuration/lock agreement, health
+Eight dependency-free Node tests cover configuration/lock agreement, health
 deadline, real child failure/timeout and evidence failure propagation; they are
-not disposable-service proof:
+not disposable-service proof. The bootstrap regression drives the real
+coordinator/command adapter with a two-account command substitute and an isolated
+TCP greeting; it proves account-selection sequencing, not real MySQL behavior.
+Bootstrap failure diagnostics in `teardown.json` contain only fixed stage names
+and allowlisted error categories, never raw SQL, child output or library errors:
 
 ```sh
 node --test tests/services/coordinator.test.js
