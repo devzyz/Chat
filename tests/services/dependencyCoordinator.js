@@ -11,9 +11,9 @@ const { performance } = require('node:perf_hooks');
 const { setTimeout: delay } = require('node:timers/promises');
 const lock = require('./services.lock.json');
 
-class BootstrapFailure extends Error {
+class ServiceStepFailure extends Error {
     constructor(stage, category) {
-        super('bootstrap failed');
+        super('service step failed');
         this.diagnostic = { stage, category };
     }
 }
@@ -25,7 +25,7 @@ async function bootstrapStep(stage, action) {
         const knownMessages = ['health deadline', 'command deadline', 'command unavailable', 'command output limit'];
         const category = knownCodes.includes(error.code) ? error.code
             : knownMessages.includes(error.message) ? error.message.replaceAll(' ', '-') : 'operation-failed';
-        throw new BootstrapFailure(stage, category);
+        throw new ServiceStepFailure(stage, category);
     }
 }
 
@@ -124,26 +124,42 @@ class DependencyCoordinator {
         this.runCommand = dependencies.runCommand || runCommand;
     }
 
-    async inspect(service) {
-        const result = await runCommand('docker', ['inspect', this.config.ids[service]]);
-        const [container] = JSON.parse(result);
+    async inspect(service, refreshPorts = false) {
+        if (refreshPorts) assert.ok(this.owned.has(service), 'refusing unverified container');
+        const result = await this.runCommand('docker', ['inspect', this.config.ids[service]]);
+        const containers = JSON.parse(result);
+        assert.equal(containers.length, 1);
+        const [container] = containers;
         assert.equal(container.Id, this.config.ids[service]);
         assert.equal(container.Config.Image, lock.services[service].image);
+        assert.equal(container.State.Running, true);
+        const ports = { ...this.config.ports };
         for (const port of lock.services[service].ports) {
             const bindings = container.NetworkSettings.Ports[`${port}/tcp`];
             assert.ok(bindings && bindings.length === 1);
             assert.equal(bindings[0].HostIp, '127.0.0.1');
             const key = port === 1025 ? 'smtp' : service;
-            assert.equal(Number(bindings[0].HostPort), this.config.ports[key]);
+            assert.match(bindings[0].HostPort, /^[0-9]+$/);
+            const hostPort = Number(bindings[0].HostPort);
+            assert.ok(hostPort >= 1 && hostPort <= 65535);
+            if (!refreshPorts) assert.equal(hostPort, this.config.ports[key]);
+            ports[key] = hostPort;
         }
+        assert.equal(new Set(Object.values(ports)).size, Object.keys(ports).length);
+        // Docker may reassign ephemeral host ports on start. Publish all mappings
+        // only after identity and every loopback binding pass, preserving consumers.
+        Object.assign(this.config.ports, ports);
         this.owned.add(service);
         return container;
     }
 
     async lifecycle(service, operation) {
         assert.ok(this.owned.has(service), 'refusing unverified container');
+        assert.ok(operation === 'start' || operation === 'stop');
         const args = operation === 'stop' ? ['stop', '--time', '10'] : ['start'];
-        await runCommand('docker', [...args, this.config.ids[service]], { timeout: 15000 });
+        await bootstrapStep(`${service}-${operation}`, () =>
+            this.runCommand('docker', [...args, this.config.ids[service]], { timeout: 15000 }));
+        if (operation === 'start') await bootstrapStep(`${service}-restart-endpoints`, () => this.inspect(service, true));
     }
 
     async redis(password = this.password) {
@@ -256,7 +272,7 @@ class DependencyCoordinator {
             if (!this.owned.has(service)) continue;
             try {
                 await this.lifecycle(service, 'stop');
-                const [container] = JSON.parse(await runCommand('docker', ['inspect', this.config.ids[service]]));
+                const [container] = JSON.parse(await this.runCommand('docker', ['inspect', this.config.ids[service]]));
                 assert.equal(container.State.Running, false);
                 stopped.push(service);
             } catch { failures.push(`stop-${service}`); }
@@ -277,7 +293,7 @@ async function runSuite(evidenceRoot) {
         try { await action(); cases.push({ id, name, pass: true, seconds: (performance.now() - start) / 1000 }); }
         catch (error) {
             cases.push({ id, name, pass: false,
-                diagnostic: error instanceof BootstrapFailure ? error.diagnostic : undefined,
+                diagnostic: error instanceof ServiceStepFailure ? error.diagnostic : undefined,
                 seconds: (performance.now() - start) / 1000 });
             throw new Error(id);
         }
@@ -326,16 +342,19 @@ async function runSuite(evidenceRoot) {
         });
         await record('T10-SVC-06', 'real unavailable health deadline', async () => {
             await coordinator.lifecycle('mailpit', 'stop');
-            try { await assert.rejects(poll(() => coordinator.mailApi('/readyz'), 500), /health deadline/); }
+            try {
+                await bootstrapStep('mailpit-unavailable-health', () =>
+                    assert.rejects(poll(() => coordinator.mailApi('/readyz'), 500), /health deadline/));
+            }
             finally { await coordinator.lifecycle('mailpit', 'start'); }
-            await poll(() => coordinator.mailApi('/readyz'), 5000);
+            await bootstrapStep('mailpit-health-recovery', () => poll(() => coordinator.mailApi('/readyz'), 5000));
         });
         await record('T10-SVC-07', 'stopped SMTP connection failure', async () => {
             await coordinator.lifecycle('mailpit', 'stop');
             const transport = coordinator.smtp();
-            try { await assert.rejects(transport.verify()); }
+            try { await bootstrapStep('mailpit-unavailable-smtp', () => assert.rejects(transport.verify())); }
             finally { transport.close(); await coordinator.lifecycle('mailpit', 'start'); }
-            await poll(() => coordinator.mailApi('/readyz'), 5000);
+            await bootstrapStep('mailpit-smtp-recovery', () => poll(() => coordinator.mailApi('/readyz'), 5000));
         });
         await record('T10-SVC-08', 'incorrect credentials rejected', async () => {
             await assert.rejects(coordinator.sql('SELECT 1;', crypto.randomBytes(32).toString('hex')));
@@ -348,11 +367,11 @@ async function runSuite(evidenceRoot) {
         await record('T10-SVC-10', 'cleanup failure preserved and dependency recovery', async () => {
             assert.ok((await coordinator.clearData()).includes('redis'));
             await coordinator.lifecycle('redis', 'start');
-            await poll(async () => {
+            await bootstrapStep('redis-restart-authentication', () => poll(async () => {
                 const client = await coordinator.redis(null);
                 try { await client.config('SET', 'requirepass', coordinator.password); return true; }
                 finally { client.disconnect(); }
-            }, 5000);
+            }, 5000));
         });
     } catch (error) { primaryFailure = /^T10-SVC-[0-9]+$/.test(error.message) ? error.message : 'setup'; }
     finally {

@@ -9,6 +9,130 @@ const os = require('node:os');
 const net = require('node:net');
 const lock = require('./services.lock.json');
 
+function lifecycleFixture() {
+    const config = { host: '127.0.0.1', ids: { mailpit: 'c'.repeat(64), redis: 'a'.repeat(64) },
+        ports: { redis: 32100, mysql: 32101, smtp: 32102, mailpit: 32103 },
+        prefix: 'owned:', recipient: 'owned@example.invalid' };
+    const containers = {};
+    for (const service of ['mailpit', 'redis']) {
+        containers[service] = { Id: config.ids[service], Config: { Image: lock.services[service].image },
+            State: { Running: true }, NetworkSettings: { Ports: Object.fromEntries(
+                lock.services[service].ports.map((port) => [`${port}/tcp`, [{ HostIp: '127.0.0.1',
+                    HostPort: String(config.ports[port === 1025 ? 'smtp' : service]) }]])) } };
+    }
+    const coordinator = new DependencyCoordinator(config, { Redis: class {}, nodemailer: {},
+        runCommand: async (command, args) => {
+            assert.equal(command, 'docker');
+            const service = Object.keys(config.ids).find((name) => config.ids[name] === args.at(-1));
+            assert.ok(service, 'only exact owned ID may be addressed');
+            if (args[0] === 'inspect') return JSON.stringify([containers[service]]);
+            assert.ok(['start', 'stop'].includes(args[0]));
+            containers[service].State.Running = args[0] === 'start';
+            if (args[0] === 'start') {
+                for (const bindings of Object.values(containers[service].NetworkSettings.Ports)) {
+                    bindings[0].HostPort = String(Number(bindings[0].HostPort) + 100);
+                }
+            }
+            return '';
+        } });
+    return { coordinator, config, containers };
+}
+
+test('restart refreshes both Mailpit ports and Redis port in the shared configuration', async () => {
+    const { coordinator, config } = lifecycleFixture();
+    const ports = config.ports;
+    for (const service of ['mailpit', 'redis']) {
+        await coordinator.inspect(service);
+        await coordinator.lifecycle(service, 'stop');
+        await coordinator.lifecycle(service, 'start');
+    }
+    assert.equal(coordinator.config, config);
+    assert.equal(config.ports, ports);
+    assert.deepEqual(ports, { redis: 32200, mysql: 32101, smtp: 32202, mailpit: 32203 });
+    let smtpPort;
+    coordinator.nodemailer = { createTransport: (options) => { smtpPort = options.port; return {}; } };
+    coordinator.smtp();
+    assert.equal(smtpPort, ports.smtp);
+});
+
+test('initial ownership still requires the workflow port and rejects unverified restart', async () => {
+    const { coordinator, config, containers } = lifecycleFixture();
+    containers.mailpit.NetworkSettings.Ports['8025/tcp'][0].HostPort = '32203';
+    await assert.rejects(coordinator.inspect('mailpit'));
+    assert.equal(coordinator.owned.has('mailpit'), false);
+    await assert.rejects(coordinator.lifecycle('mailpit', 'start'), /unverified/);
+    await assert.rejects(coordinator.inspect('mailpit', true), /unverified/);
+    assert.equal(config.ports.mailpit, 32103);
+});
+
+test('restart rejects invalid identity and bindings without publishing partial ports', async () => {
+    const corruptions = [
+        (container) => { container.Id = 'd'.repeat(64); },
+        (container) => { container.Config.Image = 'unowned-image'; },
+        (container) => { container.State.Running = false; },
+        (container) => { container.NetworkSettings.Ports['8025/tcp'] = []; },
+        (container) => { container.NetworkSettings.Ports['8025/tcp'][0].HostIp = '0.0.0.0'; },
+        (container) => { container.NetworkSettings.Ports['8025/tcp'][0].HostPort = '65536'; },
+        (container) => { container.NetworkSettings.Ports['8025/tcp'][0].HostPort = '0'; },
+        (container) => { container.NetworkSettings.Ports['8025/tcp'][0].HostPort = '32203junk'; },
+        (container) => { container.NetworkSettings.Ports['8025/tcp'][0].HostPort = '32100'; },
+        (container) => { container.NetworkSettings.Ports['8025/tcp'].push({ HostIp: '127.0.0.1', HostPort: '32204' }); }
+    ];
+    for (const corrupt of corruptions) {
+        const { coordinator, config } = lifecycleFixture();
+        await coordinator.inspect('mailpit');
+        await coordinator.lifecycle('mailpit', 'stop');
+        const before = { ...config.ports };
+        const command = coordinator.runCommand;
+        coordinator.runCommand = async (...args) => {
+            const result = await command(...args);
+            if (args[1][0] !== 'inspect') return result;
+            const [container] = JSON.parse(result);
+            corrupt(container);
+            return JSON.stringify([container]);
+        };
+        await assert.rejects(coordinator.lifecycle('mailpit', 'start'), (error) => {
+            assert.deepEqual(error.diagnostic, { stage: 'mailpit-restart-endpoints', category: 'ERR_ASSERTION' });
+            return true;
+        });
+        assert.deepEqual(config.ports, before);
+    }
+});
+
+test('refreshed Mailpit endpoint drives real HTTP health and cleanup requests', { timeout: 5000 }, async (t) => {
+    const requests = [];
+    let messages = [{ ID: 'owned-message' }];
+    const server = require('node:http').createServer((request, response) => {
+        requests.push({ method: request.method, url: request.url });
+        if (request.url === '/readyz') { response.end('ready'); return; }
+        if (request.method === 'DELETE') { messages = []; response.end(); return; }
+        response.setHeader('Content-Type', 'application/json');
+        response.end(JSON.stringify({ messages }));
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
+    const { coordinator, config, containers } = lifecycleFixture();
+    const oldPorts = config.ports;
+    await coordinator.inspect('mailpit');
+    await coordinator.lifecycle('mailpit', 'stop');
+    const command = coordinator.runCommand;
+    coordinator.runCommand = async (...args) => {
+        const result = await command(...args);
+        if (args[1][0] === 'start') {
+            containers.mailpit.NetworkSettings.Ports['8025/tcp'][0].HostPort = String(server.address().port);
+        }
+        return result;
+    };
+    await coordinator.lifecycle('mailpit', 'start');
+    assert.equal(config.ports, oldPorts);
+    assert.equal(config.ports.mailpit, server.address().port);
+    await poll(() => coordinator.mailApi('/readyz'), 1000);
+    assert.deepEqual(await coordinator.clearData(), []);
+    assert.equal(requests[0].url, '/readyz');
+    assert.ok(requests.some(({ method, url }) => method === 'DELETE' && url === '/api/v1/messages'));
+    assert.equal(messages.length, 0);
+});
+
 test('bootstrap rotates both root accounts without switching authenticated account', { timeout: 5000 }, async (t) => {
     const server = net.createServer((socket) => socket.end(Buffer.from([1, 0, 0, 0, 10])));
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

@@ -28,6 +28,11 @@ on 2026-09-08. Source ownership and API references:
 Service host ports are Docker-assigned, bound only to `127.0.0.1`. Before use,
 the coordinator verifies exact job container IDs, locked images and mapped
 ports. Personal endpoints and arbitrary container names are rejected.
+After an owned container is restarted, its dynamic host ports are inspected again:
+the exact ID, locked image, running state and every loopback binding must pass
+before the shared runtime endpoints are updated together. Initial ownership still
+requires exact agreement with the workflow-injected ports. SMTP, health probes,
+Redis clients, cleanup and endpoint evidence consume the refreshed mappings.
 MySQL starts with an empty bootstrap password only in this disposable job;
 before creating data, the coordinator changes every bootstrap root account to
 a random synthetic password and sets a random Redis password. MySQL SQL input
@@ -80,12 +85,17 @@ these real cases in sequence and emits individual entries in `linux_services.xml
 
 An early failure stops dependent cases rather than marking them passed. Outer
 failure evidence preserves the original coordinator XML separately.
-Eight dependency-free Node tests cover configuration/lock agreement, health
+Twelve dependency-free Node tests cover configuration/lock agreement, health
 deadline, real child failure/timeout and evidence failure propagation; they are
 not disposable-service proof. The bootstrap regression drives the real
 coordinator/command adapter with a two-account command substitute and an isolated
 TCP greeting; it proves account-selection sequencing, not real MySQL behavior.
-Bootstrap failure diagnostics in `teardown.json` contain only fixed stage names
+Restart regressions drive the actual coordinator lifecycle with a Docker command
+substitute that reallocates ports, including both Mailpit bindings and Redis.
+Invalid identities/bindings must fail without publishing any partial update;
+a temporary loopback HTTP server verifies refreshed health and cleanup requests.
+These regressions do not substitute for the hosted Docker lifecycle proof.
+Bootstrap and restart failure diagnostics in `teardown.json` contain only fixed stage names
 and allowlisted error categories, never raw SQL, child output or library errors:
 
 ```sh
