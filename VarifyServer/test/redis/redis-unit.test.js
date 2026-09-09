@@ -35,7 +35,10 @@ test('Redis module and factory do not connect before the first operation', async
 test('verification write is one atomic SET EX command', async () => {
     const { adapter, clients } = fixture();
     assert.equal(await adapter.setRedisExpire('key', 'value', 600), true);
-    assert.deepEqual(clients[0].calls, [['key', 'value', 'EX', 600]]);
+    assert.equal(await adapter.setRedisExpire('key', 'value', Number.MAX_SAFE_INTEGER), true);
+    assert.deepEqual(clients[0].calls, [
+        ['key', 'value', 'EX', 600], ['key', 'value', 'EX', Number.MAX_SAFE_INTEGER]
+    ]);
     await adapter.Quit();
 });
 
@@ -79,7 +82,7 @@ test('invalid deadlines and TTL fail before network activity', async () => {
         assert.throws(() => normalizeRedisConfig({ host: '127.0.0.1', port: 6379, commandTimeoutMs: value }), /Redis/);
     }
     const { adapter, clients } = fixture();
-    for (const ttl of [0, -1, 1.2, Infinity, '600']) {
+    for (const ttl of [0, -1, 1.2, Infinity, '600', Number.MAX_SAFE_INTEGER + 1]) {
         assert.equal(await adapter.setRedisExpire('key', 'value', ttl), false);
     }
     assert.equal(clients.length, 0);

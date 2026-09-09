@@ -45,6 +45,15 @@ synthetic password. Its six Integration cases write `varify_redis.xml`:
 | V08-REDIS-05 | Integration | Close cancels a pending command and prevents a later write. |
 | V08-REDIS-06 | Integration | Only this run's node-prefixed keys are removed and absence is verified. |
 
+V08-REDIS-01 distinguishes the JavaScript safe-integer boundary from Redis's
+signed 64-bit expiration timestamp. `Number.MAX_SAFE_INTEGER` seconds is valid:
+the adapter must write successfully with a positive TTL. Zero and unsafe integers
+must fail adapter validation without creating a key. A separate direct Redis
+`SET EX` probe uses zero and verifies server rejection without an orphan; it does
+not claim that the adapter sent an invalid value. The atomic command shape is
+also protected by V08-UNT-02. See the
+[locked Redis 7.4.2 expiration validation](https://github.com/redis/redis/blob/7.4.2/src/t_string.c).
+
 The restart fixture is shared with the native Redis suite. It restores the
 synthetic password, refreshes Docker mappings and preserves the infrastructure
 proof key's remaining TTL. It does not parse or emulate Redis. Readiness probes

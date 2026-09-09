@@ -45,10 +45,25 @@ async function runRedisCases(coordinator, record) {
                     assert.ok(ttl >= 0 && ttl <= 1000);
                     await poll(async () => (await client.exists(key)) === 0, 2500);
                 });
-                // Redis rejects this out-of-range expiry. A split SET/EXPIRE would
-                // leave a permanent value, while SET EX fails without any write.
-                assert.equal(await adapter.setRedisExpire(key, 'must-not-persist', Number.MAX_SAFE_INTEGER), false);
-                await withAdmin(coordinator, async (client) => assert.equal(await client.exists(key), 0));
+                // JavaScript's largest safe integer is still a valid Redis EX
+                // value: seconds * 1000 fits Redis's signed 64-bit timestamp.
+                assert.equal(await adapter.setRedisExpire(key, 'large-ttl', Number.MAX_SAFE_INTEGER), true);
+                assert.equal(await adapter.GetRedis(key), 'large-ttl');
+                await withAdmin(coordinator, async (client) => {
+                    assert.ok(await client.ttl(key) > 0);
+                    assert.equal(await client.del(key), 1);
+                });
+                for (const seconds of [0, Number.MAX_SAFE_INTEGER + 1]) {
+                    assert.equal(await adapter.setRedisExpire(key, 'must-not-persist', seconds), false);
+                    await withAdmin(coordinator, async (client) => assert.equal(await client.exists(key), 0));
+                }
+                // Zero cannot pass the adapter's validation. Probe Redis directly
+                // for server rejection without claiming an adapter failure.
+                await withAdmin(coordinator, async (client) => {
+                    await assert.rejects(client.set(key, 'must-not-persist', 'EX', 0),
+                        /invalid expire time/i);
+                    assert.equal(await client.exists(key), 0);
+                });
             } finally { await adapter.Quit(); }
         });
         await record('V08-REDIS-02', 'production Node wrong authentication preserves failure mapping', async () => {
