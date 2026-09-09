@@ -114,6 +114,17 @@ getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超�
 
 ## 当前迁移要求
 
+### MySQL schema 与消息写入（3C-03/05）
+
+- Gate/Chat 启动前必须已完成 [版本化迁移](Data.md#operational-entry)；服务只验证
+  version/checksum/结构，不在启动时执行 DDL。旧的无版本开发库会被拒绝，不能直接覆盖导入。
+  现有数据须先备份并单独规划接管；当前迁移只接受空库或可信迁移历史。
+- Chat 的 MySQL Host 使用数字 IP 或 `localhost`，IPv6 使用方括号；不接受不可取消的
+  任意同步 DNS 解析。连接、读写和锁等待各有两秒边界，借用及事务步骤检查请求 deadline。
+  同步命令和回滚可能消耗额外 socket timeout，不能把该机制宣称为精确毫秒级取消。
+- 消息成功以显式 COMMIT 确认为准；确认丢失时保留原 UUID 重试，由数据库唯一约束返回原 ID。
+  通知失败不撤销已提交数据。历史消息 NULL UUID 保持可读，客户端不得为重试生成新 UUID。
+
 ### Redis adapter 生命周期与期限（3C-04）
 
 - Gate、Status、Chat 使用同一个纯技术 hiredis pool，业务 key/field 和锁 owner 规则不变。

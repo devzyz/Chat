@@ -5,14 +5,20 @@ const path = require('node:path');
 
 function reportGroups(selector = '3C-02') {
     const groups = [{ file: 'linux_services.xml', prefix: 'T10-SVC-', expected: 12 }];
-    if (selector === '3C-04' || selector === '3C-adapters') {
+    if (['3C-03', '3C-05', '3C-data-adapters'].includes(selector)) {
+        groups.push({ file: 'linux_migration.xml', prefix: 'T10-MIG-', expected: 12 });
+    }
+    if (['3C-05', '3C-data-adapters'].includes(selector)) {
+        groups.push({ file: 'linux_message.xml', prefix: 'T10-MSG-', expected: 20 });
+    }
+    if (selector === '3C-04' || selector === '3C-adapters' || selector === '3C-data-adapters') {
         groups.push({ file: 'linux_redis.xml', prefix: 'T10-RDS-', expected: 9 });
         groups.push({ file: 'varify_redis.xml', prefix: 'V08-REDIS-', expected: 6 });
     }
-    if (selector === '3C-06' || selector === '3C-adapters') {
+    if (selector === '3C-06' || selector === '3C-adapters' || selector === '3C-data-adapters') {
         groups.push({ file: 'varify_smtp.xml', prefix: 'V09-SMTP-', expected: 12 });
     }
-    if (!['3C-02', '3C-04', '3C-06', '3C-adapters'].includes(selector)) {
+    if (!['3C-02', '3C-03', '3C-04', '3C-05', '3C-06', '3C-adapters', '3C-data-adapters'].includes(selector)) {
         throw new Error('unknown service selector');
     }
     return groups;

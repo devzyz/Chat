@@ -121,6 +121,7 @@ Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const Auth
 		for (auto msg : request->chatmessage()) {
 			Json::Value msg_info;
 			msg_info["message_id"] = msg.messageid();
+            msg_info["msg_uuid"] = msg.client_msg_uuid();
 			msg_info["chat_id"] = msg.chatid();
 			msg_info["send_id"] = msg.sendid();
 			msg_info["recv_id"] = msg.recvid();
@@ -168,6 +169,7 @@ Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, co
 		Json::Value value;
 		value["msg_content"] = msg.msgcontent();
 		value["message_id"] = msg.msgid();
+        value["msg_uuid"] = msg.uuid();
 		notify_msgs.append(value);
 	}
 

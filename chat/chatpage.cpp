@@ -259,7 +259,7 @@ void ChatPage::on_send_btn_clicked()
             sendTextBatch();
         }
 
-        const QString uuid = QUuid::createUuid().toString();
+        const QString uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
         QJsonObject payload;
         payload["msg_content"] = message.content;
         payload["msg_uuid"] = uuid;

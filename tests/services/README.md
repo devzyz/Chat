@@ -87,7 +87,7 @@ these real cases in sequence and emits individual entries in `linux_services.xml
 
 An early failure stops dependent cases rather than marking them passed. Outer
 failure evidence preserves the original coordinator XML separately.
-Fifteen dependency-free Node tests cover configuration/lock agreement, health
+Seventeen dependency-free Node tests cover configuration/lock agreement, health
 deadline, real child failure/timeout and evidence failure propagation; they are
 not disposable-service proof. The bootstrap regression drives the real
 coordinator/command adapter with a two-account command substitute and an isolated
@@ -106,6 +106,7 @@ and allowlisted error categories, never raw SQL, child output or library errors:
 node --test tests/services/coordinator.test.js
 bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-02
 bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-adapters
+bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-data-adapters
 ```
 
 The latter requires the workflow-injected container/port environment and
@@ -120,9 +121,15 @@ Docker inspect output, SMTP bodies or raw SQL errors are uploaded.
 `3C-04` adds native hiredis and Node ioredis production adapters; `3C-06` adds
 the production SMTP adapter. `3C-adapters` runs both on the same owned fixture.
 All retain the twelve base contracts and fail closed on missing selected cases.
+`3C-03` adds schema migration and registration; `3C-05` adds migration and
+message persistence. `3C-data-adapters` runs all four adapter suites with the
+same owned RunContext. These selectors never connect to the personal exported
+database or apply migrations to an unversioned existing database.
 
 | Report | IDs | Count | Owner |
 | --- | --- | --- | --- |
+| `linux_migration.xml` | T10-MIG-01..12 | 12 | [Schema migration](../server/schema-migration/README.md) |
+| `linux_message.xml` | T10-MSG-01..20 | 20 | [Message persistence](../server/message-commit/README.md) |
 | `linux_redis.xml` | T10-RDS-01..09 | 9 | [Native Redis](../server/data/README.md) |
 | `varify_redis.xml` | V08-REDIS-01..06 | 6 | [Node Redis](../../VarifyServer/test/redis/README.md) |
 | `varify_smtp.xml` | V09-SMTP-01..12 | 12 | [SMTP](../../VarifyServer/test/smtp/README.md) |
@@ -134,6 +141,13 @@ copies the locked shared library by its SONAME and links the adapter with
 build-tree dependencies and libraries outside the exact bundle/system allowlist,
 then run the relocated lifecycle test without `LD_LIBRARY_PATH` or `LD_PRELOAD`.
 The service job performs no native rebuild or dependency restore.
+The message test binary (`CHAT_MESSAGE_TEST_BINARY`) and its dynamic dependency
+closure travel in the `message/` subdirectory of that same checksummed artifact.
+`messageRuntime.js` packages dependencies only from the locked installed tree
+or the explicit system library directory, then verifies the relocated closure
+against `libraries.json`; the service job repeats verification before execution.
+The locked static MySQL connector exception is unchanged. The message runner
+uses only this app-local library path, and never restores dependencies.
 Mailpit uses a database inside its disposable container
 to preserve earlier fixture messages across the intentional restart. No host
 volume or personal mailbox is used. Individual suites remove only their own

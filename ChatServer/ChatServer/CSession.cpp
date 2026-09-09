@@ -255,6 +255,10 @@ void CSession::SetUserId(int uid) {
 	_session_state->RegisterCurrent(_handle, uid);
 }
 
+int CSession::GetAuthenticatedUid() const {
+    return _b_stop ? 0 : _session_state->AuthenticatedUid(_handle);
+}
+
 
 // 检测与当前session连接的客户端的心跳是否超时，心跳超时返回ture，否则返回false
 bool CSession::CheckHeartBeatAccurate(std::time_t& now) {

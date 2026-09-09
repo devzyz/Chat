@@ -3,7 +3,7 @@
 Production ownership: `ChatServer/ChatServer/ChatSessionState.h`.
 
 The single caller-facing Interface is `ChatSessionState::Create`,
-`RegisterCurrent`, `FindCurrent`, `Close`, and `Send`. Its opaque handle hides
+`RegisterCurrent`, `FindCurrent`, `AuthenticatedUid`, `Close`, and `Send`. Its opaque handle hides
 the session ID, UID mapping, send queue, active writer, and closed state.
 
 `SessionWriter` and `SessionPresence` are internal seams with both production
@@ -25,11 +25,12 @@ the existing Redis manager. UID/session matching remains inside the Module.
 | T08-SESSION-08 | Architecture | Component | Exactly MAX_SENDQUE frames are accepted; the next is Full without overwrite |
 | T08-SESSION-09 | Architecture | Component | Close rejects new frames immediately |
 | T08-SESSION-10 | Architecture | Component | Writer failure closes and matching-cleans exactly once |
+| T08-SESSION-11 | Architecture | Component | Only the current live handle owned by this state authenticates; closed sessions cannot re-register |
 
 The owning public runner is
 `scripts/windows-local.ps1 -Task RunServerTests -Configuration Release`. The
-owning report is `server_component.xml`; these ten cases make that report 40
-cases and the Server family 150. Every wait is bounded by two
+owning report is `server_component.xml`; report counts are defined by the public
+runner. Every wait is bounded by two
 seconds and each test leaves no callback or thread pending. Real TCP partial
 writes, peer disconnects, and process cleanup remain Phase 3B; real Redis
 presence commands, locks, and TTL remain Phase 3C.

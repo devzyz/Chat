@@ -158,6 +158,11 @@ void ChatSessionState::RegisterCurrent(const Handle& handle, int uid) {
 	}
 	{
 		std::lock_guard<std::mutex> lock(impl_->mutex);
+
+        if (uid <= 0 || handle.session_->closed
+            || (handle.session_->registered && handle.session_->uid != uid)) {
+            throw std::invalid_argument("cannot register closed or rebound session");
+        }
 		handle.session_->uid = uid;
 		handle.session_->registered = true;
 		impl_->current[uid] = handle.session_;
@@ -172,6 +177,19 @@ ChatSessionState::Handle ChatSessionState::FindCurrent(int uid) const {
 		return {};
 	}
 	return Handle(found->second);
+}
+
+int ChatSessionState::AuthenticatedUid(const Handle& handle) const {
+    if (!handle.session_ || handle.session_->owner.lock() != impl_) {
+        return 0;
+    }
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    const auto& session = handle.session_;
+    if (session->closed || !session->registered) {
+        return 0;
+    }
+    const auto current = impl_->current.find(session->uid);
+    return current != impl_->current.end() && current->second == session ? session->uid : 0;
 }
 
 void ChatSessionState::Close(const Handle& handle) {

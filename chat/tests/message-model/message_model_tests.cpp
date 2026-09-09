@@ -60,6 +60,16 @@ void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized
     QVERIFY(model.removeByMessageId(42));
     QCOMPARE(removed, 1);
     QCOMPARE(model.rowCount(), 0);
+    // History may beat the acknowledgement, including a legacy record without UUID.
+    model.appendMessage(message(0, QStringLiteral("retry-uuid")));
+    model.prependHistory({message(9001, {})});
+    QCOMPARE(model.rowCount(), 2);
+    QVERIFY(model.acknowledgeMessage(QStringLiteral("retry-uuid"), 9001, DeliveryStatus::Sent));
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.rowForMessageId(9001), model.rowForClientMessageId(QStringLiteral("retry-uuid")));
+    QCOMPARE(model.appendMessage(message(9001, QStringLiteral("retry-uuid"))), 0);
+    QVERIFY(model.acknowledgeMessage(QStringLiteral("retry-uuid"), 9001, DeliveryStatus::Sent));
+    QCOMPARE(model.rowCount(), 1);
 }
 
 void MessageModelTests::unknownStableIdsDoNotMutateTheModel()

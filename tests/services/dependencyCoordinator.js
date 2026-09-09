@@ -331,6 +331,12 @@ async function runSuite(evidenceRoot) {
             coordinator.databaseCreated = true;
             assert.equal(await coordinator.sql(`USE \`${config.database}\`; SELECT DATABASE();`), config.database);
         });
+        if (groups.some((group) => group.prefix === 'T10-MIG-')) {
+            await require('../server/schema-migration/runMigrationCases').runMigrationCases(coordinator, record);
+        }
+        if (groups.some((group) => group.prefix === 'T10-MSG-')) {
+            await require('../server/message-commit/runMessageCases').runMessageCases(coordinator, record);
+        }
         await record('T10-SVC-05', 'Mailpit SMTP and API correlation', async () => {
             const transport = coordinator.smtp();
             try {
@@ -383,7 +389,7 @@ async function runSuite(evidenceRoot) {
                 finally { client.disconnect(); }
             }, 5000));
         });
-    } catch (error) { primaryFailure = /^(T10-(SVC|RDS)|V0[89]-(REDIS|SMTP))-[0-9]+$/.test(error.message) ? error.message : 'setup'; }
+    } catch (error) { primaryFailure = /^(T10-(SVC|RDS|MIG|MSG)|V0[89]-(REDIS|SMTP))-[0-9]+$/.test(error.message) ? error.message : 'setup'; }
     finally {
         if (coordinator) cleanup = await coordinator.teardown();
         cases.push({ id: 'T10-SVC-11', name: 'owned data and service teardown', pass: cleanup.complete, seconds: 0 });

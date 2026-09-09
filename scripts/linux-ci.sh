@@ -31,9 +31,12 @@ declare -A selectors=(
   [3C-01]=build_ownership_and_process_lifecycle
   [3C-01-posix]=isolated_posix_process_lifecycle
   [3C-02]=disposable_service_contracts
+  [3C-03]=schema_migration_contracts
+  [3C-05]=message_persistence_contracts
   [3C-04]=redis_adapter_contracts
   [3C-06]=smtp_adapter_contracts
   [3C-adapters]=redis_and_smtp_adapter_contracts
+  [3C-data-adapters]=schema_message_and_adapter_contracts
 )
 
 if ((list_only)); then
@@ -51,7 +54,7 @@ if [[ -z "${selectors[$selector]+x}" ]]; then
 fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ "$selector" == 3C-02 || "$selector" == 3C-04 || "$selector" == 3C-06 || "$selector" == 3C-adapters ]]; then
+if [[ "$selector" == 3C-02 || "$selector" == 3C-03 || "$selector" == 3C-04 || "$selector" == 3C-05 || "$selector" == 3C-06 || "$selector" == 3C-adapters || "$selector" == 3C-data-adapters ]]; then
   export CHAT_SERVICE_SELECTOR="$selector"
   export CHAT_SERVICE_EVIDENCE_ROOT="${junit_dir:-$repo_root/out/phase3c/services}"
   export CHAT_SERVICE_HOST=127.0.0.1

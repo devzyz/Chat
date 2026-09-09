@@ -1,5 +1,6 @@
 #include "MysqlDao.h"
 #include "ConfigMgr.h"
+#include "../../schema/SchemaContract.h"
 
 SqlConnection::SqlConnection(sql::Connection* con, int64_t lasttime) : _con(con), _last_oper_time(lasttime) {
 	
@@ -20,8 +21,10 @@ MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::stri
 	try {
 		for (int i = 0; i < _poolSize; i++) {
 			sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-			auto* con = driver->connect(_url, _user, _pass);
-			con->setSchema(_schema);
+			std::unique_ptr<sql::Connection> owned_connection(driver->connect(_url, _user, _pass));
+			owned_connection->setSchema(_schema);
+            chat_schema::Verify(*owned_connection);
+			auto* con = owned_connection.release();
 			// 获取当前时间戳
 			auto currentTime = std::chrono::system_clock::now().time_since_epoch();
 			// 将时间戳转换为秒
@@ -36,8 +39,8 @@ MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::stri
 			}
 			});
 	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql pool init failed, error={}", e.what());
+	catch (const sql::SQLException&) {
+        throw std::runtime_error("mysql_initialization_failed");
 	}
 }
 

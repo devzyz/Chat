@@ -10,6 +10,48 @@ const net = require('node:net');
 const lock = require('./services.lock.json');
 const { reportGroups, writeReports } = require('./serviceReports');
 const { verifyDependencies } = require('./serviceRuntime');
+const { validateRelocated } = require('./messageRuntime');
+
+test('message runtime checks the complete app-local dependency manifest', () => {
+    const bundle = '/tmp/owned-message';
+    const system = 'libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x1)\n';
+    const local = `libssl.so.3 => ${bundle}/libssl.so.3 (0x2)\n`;
+    assert.doesNotThrow(() => validateRelocated(system + local, bundle, ['libssl.so.3']));
+    assert.doesNotThrow(() => validateRelocated(system, bundle, []));
+    assert.throws(() => validateRelocated(system, bundle, ['libssl.so.3']));
+    assert.throws(() => validateRelocated(system + local, bundle, []));
+    assert.throws(() => validateRelocated(system + local, bundle, ['../libssl.so.3']));
+    assert.throws(() => validateRelocated(system + local, bundle, ['libssl.so.3', 'libssl.so.3']));
+    assert.throws(() => validateRelocated(system + local.replace(bundle, '/build/vcpkg/lib'), bundle, ['libssl.so.3']));
+    assert.throws(() => validateRelocated('libssl.so.3 => not found', bundle, ['libssl.so.3']));
+});
+
+test('schema selection requires all migration cases independently of infrastructure', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-migration-reports-'));
+    try {
+        const cases = Array.from({ length: 12 }, (_, index) => ({
+            id: `T10-SVC-${String(index + 1).padStart(2, '0')}`, name: 'fixture', pass: true
+        }));
+        writeReports(root, '3C-03', cases);
+        assert.match(fs.readFileSync(path.join(root, 'linux_migration.xml'), 'utf8'), /<failure /);
+        cases.push(...Array.from({ length: 12 }, (_, index) => ({
+            id: `T10-MIG-${String(index + 1).padStart(2, '0')}`, name: 'migration', pass: true
+        })));
+        writeReports(root, '3C-03', cases);
+        assert.doesNotMatch(fs.readFileSync(path.join(root, 'linux_migration.xml'), 'utf8'), /<failure /);
+        writeReports(root, '3C-05', cases);
+        assert.match(fs.readFileSync(path.join(root, 'linux_message.xml'), 'utf8'), /<failure /);
+        cases.push(...Array.from({ length: 20 }, (_, index) => ({
+            id: `T10-MSG-${String(index + 1).padStart(2, '0')}`, name: 'message', pass: true
+        })));
+        writeReports(root, '3C-05', cases);
+        assert.doesNotMatch(fs.readFileSync(path.join(root, 'linux_message.xml'), 'utf8'), /<failure /);
+        cases.at(-1).pass = false;
+        writeReports(root, '3C-05', cases);
+        assert.match(fs.readFileSync(path.join(root, 'linux_message.xml'), 'utf8'), /<failure /);
+        assert.equal(reportGroups('3C-data-adapters').length, 6);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
 
 test('service artifacts require bundled hiredis and reject build-tree or missing dependencies', () => {
     const root = '/tmp/service-launcher';

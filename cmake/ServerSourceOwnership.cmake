@@ -51,6 +51,7 @@ set(CHAT_SERVER_SOURCE_OWNERS
     ChatServer/ChatServer/ChatSessionState
     ChatServer/ChatServer/LogicDispatcher
     ChatServer/ChatServer/ChatGrpcClients
+    ChatServer/ChatServer/MessageCommit
     ChatServer/ChatServer/ChatServer)
 
 function(chat_check_source_ownership root)
