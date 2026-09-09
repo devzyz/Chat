@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "compatibility": "BOOTSTRAP_NO_PROMOTED_N_MINUS_1",
+  "migrations": [
+    {
+      "id": 1,
+      "version": "1",
+      "file": "migrations/001_baseline.sql",
+      "checksum": "a549039f9846ac8dc5120e3f89481a92934a2d485d054019c6dfb69c9241957d",
+      "reversible": false,
+      "recovery": "Restore a verified pre-migration backup; for an owned empty bootstrap database only, explicitly recreate it and reapply. Never retry partially applied DDL."
+    },
+    {
+      "id": 2,
+      "version": "2",
+      "file": "migrations/002_registration_message_identity.sql",
+      "checksum": "be6b412a603046f67125d6a3f61aff2bf4054ee5154ca73a25ec7d824f3a2f85",
+      "reversible": false,
+      "recovery": "Restore a verified pre-migration backup; for an owned empty bootstrap database only, explicitly recreate it and reapply. Never retry partially applied DDL."
+    }
+  ]
+}
