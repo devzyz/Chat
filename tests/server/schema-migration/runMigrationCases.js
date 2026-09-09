@@ -113,6 +113,11 @@ async function runCases(createSession, database, record) {
         await record('T10-MIG-11', 'routine body drift is rejected without repair on startup', async () => {
             await session.execute('DROP PROCEDURE reg_user');
             try {
+                await session.execute(routine.replace(
+                    '-- All registrations take this one row lock before checking uniqueness.',
+                    '-- A different explanatory comment must not change the schema contract.'));
+                assert.equal((await migration.Verify()).version, 2);
+                await session.execute('DROP PROCEDURE reg_user');
                 await session.execute(routine.replace('SET result = next_uid;', 'SET result = 42;'));
                 await assert.rejects(migration.Verify(), /SchemaContractDrift/);
             } finally {

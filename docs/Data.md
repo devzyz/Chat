@@ -19,6 +19,10 @@ recovery descriptions in [`manifest.json`](../schema/manifest.json).
   transaction. Success returns a positive signed-32-bit UID; a duplicate returns 0;
   storage/counter failure returns -1. Parameter collation is explicit, preserving
   the export's username/email comparison behavior independently of server defaults.
+- The shared Node/native routine fingerprint excludes standalone `-- ` comment
+  text, retaining the whitespace that MySQL 8.0 exposes. MySQL 8.4 retains these
+  comments in metadata; this formatting difference must not reject the same schema.
+  Executable body changes still fail verification, and migration checksums are unchanged.
 - The unique constraints reject collisions; migration never silently deduplicates
   existing user records. Missing/multiple/stale UID counter rows fail verification.
 

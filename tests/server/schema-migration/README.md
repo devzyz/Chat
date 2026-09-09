@@ -24,7 +24,7 @@ C++ DAO or four-process workflow proof.
 | 07..08 | Eight concurrent same/distinct registrations preserve identity and uniqueness |
 | 09 | Missing UID seed returns failure and does not insert a user |
 | 10 | Real partial DDL failure records failed state; blind retry is rejected; explicit empty-bootstrap recovery works |
-| 11 | Changed routine body fails verification |
+| 11 | Standalone routine comment changes preserve verification; executable body changes fail |
 | 12 | Only the owned auxiliary database is dropped; primary current-N database remains for downstream tests |
 
 For a local supplemental run, set `CHAT_MYSQL_BIN` to an existing MySQL installation's
@@ -59,3 +59,8 @@ parameter collation to the exported table collation, avoiding 1267 on fresh serv
 No promoted N-1 has been supplied: `BOOTSTRAP_NO_PROMOTED_N_MINUS_1` remains an
 explicit compatibility gap. The partial bootstrap recovery is not N-1 upgrade proof.
 Local MySQL 8.0 results supplement, but do not replace, the hosted MySQL 8.4 gate.
+The shared metadata fingerprint removes standalone `-- ` comment text while
+preserving indentation and newlines: MySQL 8.0 omits that text from
+`ROUTINE_DEFINITION`, whereas 8.4 retains it. T10-MIG-01 exercises the same
+checksummed migration on either version, and T10-MIG-11 distinguishes explanatory
+comment changes from executable routine drift. Migration file checksums stay exact.

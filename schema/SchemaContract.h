@@ -11,6 +11,8 @@
 namespace chat_schema {
 
 // Shared with SchemaMigration.js: semantic metadata, not version-specific SHOW CREATE formatting.
+// MySQL 8.0 removes standalone -- comments; 8.4 preserves them. Keep the
+// indentation/newline left by 8.0 while excluding those comments from the hash.
 inline constexpr const char* CONTRACT_QUERY = R"SQL(
 SELECT SHA2(GROUP_CONCAT(item ORDER BY item SEPARATOR '\n'),256) FROM (
     SELECT CONCAT('column:',table_name,':',column_name,':',ordinal_position,':',column_type,':',
@@ -25,7 +27,8 @@ SELECT SHA2(GROUP_CONCAT(item ORDER BY item SEPARATOR '\n'),256) FROM (
     FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name<>'schema_version'
     UNION ALL
     SELECT CONCAT('routine:',routine_name,':',routine_type,':',security_type,':',
-        SHA2(REPLACE(routine_definition,CHAR(13),''),256))
+        SHA2(REGEXP_REPLACE(REPLACE(routine_definition,CHAR(13),''),
+            '(?m)^([ \\t]*)-- [^\\n]*', '$1'),256))
     FROM information_schema.routines WHERE routine_schema=DATABASE()
     UNION ALL
     SELECT CONCAT('parameter:',specific_name,':',ordinal_position,':',parameter_mode,':',
