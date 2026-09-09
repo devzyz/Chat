@@ -114,13 +114,11 @@ jobs:
           mkdir -p out/phase3c/service-launcher
           cp out/build/linux-x64-release/bin/service_run out/phase3c/service-launcher/
           cp out/build/linux-x64-release/bin/redis_adapter_integration out/phase3c/service-launcher/
-          ldd out/phase3c/service-launcher/service_run
-          # The launcher uses only the shared harness and standard Ubuntu runtime.
-          # Fail closed if a new non-system runtime dependency appears.
-          if ldd out/phase3c/service-launcher/service_run | grep -E 'not found|vcpkg|/out/'; then exit 1; fi
-          if ldd out/phase3c/service-launcher/redis_adapter_integration | grep -E 'not found|vcpkg|/out/'; then exit 1; fi
+          cp out/build/linux-x64-release/bin/libhiredis.so.1 out/phase3c/service-launcher/
+          node tests/services/serviceRuntime.js out/phase3c/service-launcher
+          env -u LD_LIBRARY_PATH -u LD_PRELOAD out/phase3c/service-launcher/redis_adapter_integration lifecycle
           git rev-parse HEAD > out/phase3c/service-launcher/source-sha.txt
-          (cd out/phase3c/service-launcher && sha256sum service_run redis_adapter_integration > service_run.sha256)
+          (cd out/phase3c/service-launcher && sha256sum service_run redis_adapter_integration libhiredis.so.1 > service_run.sha256)
 
       - name: Upload same-run service launcher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -206,7 +204,8 @@ jobs:
           (cd out/phase3c/service-launcher && sha256sum --check service_run.sha256)
           chmod u+x "$CHAT_SERVICE_LAUNCHER"
           chmod u+x "$CHAT_REDIS_TEST_BINARY"
-          ldd "$CHAT_SERVICE_LAUNCHER"
+          node tests/services/serviceRuntime.js out/phase3c/service-launcher
+          env -u LD_LIBRARY_PATH -u LD_PRELOAD "$CHAT_REDIS_TEST_BINARY" lifecycle
           node --test tests/services/coordinator.test.js
       - name: Restore existing locked Node libraries
         timeout-minutes: 2

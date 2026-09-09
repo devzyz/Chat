@@ -87,7 +87,7 @@ these real cases in sequence and emits individual entries in `linux_services.xml
 
 An early failure stops dependent cases rather than marking them passed. Outer
 failure evidence preserves the original coordinator XML separately.
-Fourteen dependency-free Node tests cover configuration/lock agreement, health
+Fifteen dependency-free Node tests cover configuration/lock agreement, health
 deadline, real child failure/timeout and evidence failure propagation; they are
 not disposable-service proof. The bootstrap regression drives the real
 coordinator/command adapter with a two-account command substitute and an isolated
@@ -127,9 +127,14 @@ All retain the twelve base contracts and fail closed on missing selected cases.
 | `varify_redis.xml` | V08-REDIS-01..06 | 6 | [Node Redis](../../VarifyServer/test/redis/README.md) |
 | `varify_smtp.xml` | V09-SMTP-01..12 | 12 | [SMTP](../../VarifyServer/test/smtp/README.md) |
 
-The native adapter binary travels with the same-run launcher, source SHA and
-checksums (`CHAT_REDIS_TEST_BINARY`); the service job performs no native rebuild
-or dependency restore. Mailpit uses a database inside its disposable container
+The native adapter binary travels with the same-run launcher, app-local
+`libhiredis.so.1`, source SHA and checksums (`CHAT_REDIS_TEST_BINARY`). CMake
+copies the locked shared library by its SONAME and links the adapter with
+`$ORIGIN` RPATH. Both jobs use `serviceRuntime.js` to reject missing libraries,
+build-tree dependencies and libraries outside the exact bundle/system allowlist,
+then run the relocated lifecycle test without `LD_LIBRARY_PATH` or `LD_PRELOAD`.
+The service job performs no native rebuild or dependency restore.
+Mailpit uses a database inside its disposable container
 to preserve earlier fixture messages across the intentional restart. No host
 volume or personal mailbox is used. Individual suites remove only their own
 data before the coordinator performs final fixture teardown. Hosted execution

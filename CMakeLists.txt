@@ -148,6 +148,17 @@ add_executable(service_run tests/services/ServiceRun.cpp)
 target_link_libraries(service_run PRIVATE process_harness)
 add_executable(redis_adapter_integration tests/server/data/redis_adapter_integration.cpp)
 target_link_libraries(redis_adapter_integration PRIVATE hiredis::hiredis Threads::Threads)
+# This executable crosses jobs without the installed vcpkg tree. Keep the
+# locked shared library app-local and resolve it relative to the executable.
+set_target_properties(redis_adapter_integration PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH "$ORIGIN"
+    INSTALL_RPATH_USE_LINK_PATH FALSE)
+add_custom_command(TARGET redis_adapter_integration POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:hiredis::hiredis>"
+        "$<TARGET_FILE_DIR:redis_adapter_integration>/$<TARGET_SONAME_FILE_NAME:hiredis::hiredis>"
+    VERBATIM)
 add_test(NAME phase3c-redis-lifecycle COMMAND redis_adapter_integration lifecycle)
 set_tests_properties(phase3c-redis-lifecycle PROPERTIES LABELS "phase3c-redis-local" TIMEOUT 10)
 add_test(NAME T10-BLD-03-process-harness COMMAND process_harness_posix_tests)

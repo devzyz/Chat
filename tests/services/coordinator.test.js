@@ -9,6 +9,24 @@ const os = require('node:os');
 const net = require('node:net');
 const lock = require('./services.lock.json');
 const { reportGroups, writeReports } = require('./serviceReports');
+const { verifyDependencies } = require('./serviceRuntime');
+
+test('service artifacts require bundled hiredis and reject build-tree or missing dependencies', () => {
+    const root = '/tmp/service-launcher';
+    const system = 'libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x1)\n';
+    const bundled = `libhiredis.so.1 => ${root}/libhiredis.so.1 (0x2)`;
+    assert.doesNotThrow(() => verifyDependencies(system, root));
+    assert.doesNotThrow(() => verifyDependencies(system + bundled, root, true));
+    assert.throws(() => verifyDependencies(system + bundled, root));
+    for (const wrong of [
+        'libhiredis.so.1 => /work/.ci/vcpkg_installed/lib/libhiredis.so.1 (0x2)',
+        'libhiredis.so.1 => /tmp/service-launcher-other/libhiredis.so.1 (0x2)',
+        'libhiredis.so.1 => not found',
+        'libunexpected.so.1 => /lib/x86_64-linux-gnu/libunexpected.so.1 (0x2)',
+        'libhiredis.so.1 => /lib/x86_64-linux-gnu/libhiredis.so.1 (0x2)'
+    ]) assert.throws(() => verifyDependencies(system + wrong, root, true));
+    assert.throws(() => verifyDependencies(system, root, true));
+});
 
 test('adapter reports are separate and missing selected cases fail closed', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-service-reports-'));
