@@ -36,7 +36,7 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail, gen
             };
 
             const sendResult = await emailModule.SendMail(mailOptions);
-            if (!sendResult) {
+            if (!sendResult || (typeof sendResult === 'object' && sendResult.status !== 'Delivered')) {
                 callback(null, {
                     email: call.request.email,
                     error: constModule.Errors.Exception
@@ -59,15 +59,18 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail, gen
 }
 
 function createDefaultHandler() {
-    const { email_user } = require('./config');
-    const emailModule = require('./email');
-    const redisModule = require('./redis');
-    return createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail: email_user });
+    const { email_user, smtp, redis } = require('./config');
+    const emailModule = require('./email').createSmtpAdapter(smtp);
+    const redisModule = require('./redis').createRedisAdapter(redis);
+    const handler = createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail: email_user });
+    handler.close = () => { emailModule.close(); return redisModule.Quit(); };
+    return handler;
 }
 
 function createServer(handler = createDefaultHandler()) {
     const server = new grpc.Server();
     server.addService(messageProto.VarifyService.service, { GetVarifyCode: handler });
+    server.closeAdapters = () => handler.close?.();
     return server;
 }
 
@@ -106,11 +109,25 @@ async function main({ server, logger = console } = {}) {
         address,
         credentials: grpc.ServerCredentials.createInsecure(),
         logger
-    }).then(() => server);
+    }).then(() => server).catch(async (error) => {
+        await server.closeAdapters?.();
+        throw error;
+    });
 }
 
 if (require.main === module) {
-    main().catch((error) => {
+    main().then((server) => {
+        let closing = false;
+        const stop = async () => {
+            if (closing) return;
+            closing = true;
+            await server.closeAdapters?.();
+            const deadline = setTimeout(() => server.forceShutdown(), 10000);
+            server.tryShutdown(() => clearTimeout(deadline));
+        };
+        process.once('SIGINT', () => { void stop(); });
+        process.once('SIGTERM', () => { void stop(); });
+    }).catch((error) => {
         const reason = /\bEADDRINUSE\b/.test(error.message) ? ' (EADDRINUSE)' : '';
         console.error(`grpc server failed to start${reason}`);
         process.exitCode = 1;

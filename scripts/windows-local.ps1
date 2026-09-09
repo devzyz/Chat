@@ -74,8 +74,8 @@ $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 18 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 6 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 22 }
-    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 18 }
-    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 11 }
+    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 33 }
+    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 21 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_component.xml'; ExpectedCount = 9 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_integration.xml'; ExpectedCount = 4 }
 )
@@ -554,8 +554,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 13 -or $total -ne 313) {
-        throw "Regression report baseline mismatch: expected 13 reports and 313 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 13 -or $total -ne 338) {
+        throw "Regression report baseline mismatch: expected 13 reports and 338 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     $legacyTotal = 0
     foreach ($legacyGroup in $legacyRegressionReportGroups) {
@@ -665,7 +665,9 @@ function Confirm-TestStructure {
         @{ Source = 'tests/server/process-harness/posix_process_tests.cpp';
            CMake = 'tests/server/process-harness/CMakeLists.txt'; Target = 'posix_process_tests' },
         @{ Source = 'tests/server/process-harness/process_harness_posix_tests.cpp';
-           CMake = 'CMakeLists.txt'; Target = 'process_harness_posix_tests' }
+           CMake = 'CMakeLists.txt'; Target = 'process_harness_posix_tests' },
+        @{ Source = 'tests/server/data/redis_adapter_integration.cpp';
+           CMake = 'CMakeLists.txt'; Target = 'redis_adapter_integration' }
     )
     foreach ($contract in $linuxProcessContracts) {
         $cmakeText = Get-Content -LiteralPath (Join-Path $repoRoot $contract.CMake) -Raw
@@ -1309,11 +1311,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact thirteen-report/313-testcase baseline.'
+        throw 'RunAllTests must audit the exact thirteen-report/338-testcase baseline.'
     }
     if ($regressionReportGroups.Count -ne 13 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 313) {
-        throw 'The registered regression baseline must remain exactly 13 reports and 313 testcases.'
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 338) {
+        throw 'The registered regression baseline must remain exactly 13 reports and 338 testcases.'
     }
     if ($legacyRegressionReportGroups.Count -ne 12 -or
         ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 232) {
@@ -1502,7 +1504,7 @@ function Run-VarifyTests {
         @{
             Level = 'unit'
             Report = (Join-Path $testResults 'varify_unit.xml')
-            ExpectedCount = 18
+            ExpectedCount = 33
             Files = @(
                 Require-File (Join-Path $varifySource 'test\protocol\protocol.test.js') `
                     'The VarifyServer protocol unit tests are missing.'
@@ -1510,12 +1512,16 @@ function Run-VarifyTests {
                     'The VarifyServer handler unit tests are missing.'
                 Require-File (Join-Path $varifySource 'test\startup\startup-unit.test.js') `
                     'The VarifyServer startup unit tests are missing.'
+                Require-File (Join-Path $varifySource 'test\smtp\smtp-unit.test.js') `
+                    'The VarifyServer SMTP unit tests are missing.'
+                Require-File (Join-Path $varifySource 'test\redis\redis-unit.test.js') `
+                    'The VarifyServer Redis unit tests are missing.'
             )
         }
         @{
             Level = 'integration'
             Report = (Join-Path $testResults 'varify_integration.xml')
-            ExpectedCount = 11
+            ExpectedCount = 21
             Files = @(
                 Require-File (Join-Path $varifySource 'test\config\config.test.js') `
                     'The VarifyServer configuration process tests are missing.'
@@ -1523,6 +1529,10 @@ function Run-VarifyTests {
                     'The VarifyServer RPC routing integration tests are missing.'
                 Require-File (Join-Path $varifySource 'test\startup\startup-integration.test.js') `
                     'The VarifyServer startup integration tests are missing.'
+                Require-File (Join-Path $varifySource 'test\smtp\smtp-integration.test.js') `
+                    'The VarifyServer SMTP integration tests are missing.'
+                Require-File (Join-Path $varifySource 'test\redis\redis-integration.test.js') `
+                    'The VarifyServer Redis integration tests are missing.'
             )
         }
     )

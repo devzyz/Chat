@@ -8,6 +8,41 @@ const path = require('node:path');
 const os = require('node:os');
 const net = require('node:net');
 const lock = require('./services.lock.json');
+const { reportGroups, writeReports } = require('./serviceReports');
+
+test('adapter reports are separate and missing selected cases fail closed', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-service-reports-'));
+    try {
+        const cases = Array.from({ length: 12 }, (_, index) => ({
+            id: `T10-SVC-${String(index + 1).padStart(2, '0')}`, name: 'bounded contract', pass: true, seconds: 0
+        }));
+        writeReports(root, '3C-06', cases);
+        assert.match(fs.readFileSync(path.join(root, 'linux_services.xml'), 'utf8'), /tests="12" failures="0"/);
+        assert.match(fs.readFileSync(path.join(root, 'varify_smtp.xml'), 'utf8'), /<failure /);
+        assert.equal(reportGroups('3C-adapters').length, 4);
+        assert.throws(() => reportGroups('unexpected'), /selector/);
+    } finally { fs.rmSync(root, { recursive: true }); }
+});
+
+test('outer cleanup cannot pass when a required adapter report is absent or failed', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-service-reports-'));
+    try {
+        fs.writeFileSync(path.join(root, 'teardown.json'), '{"complete":true}');
+        fs.writeFileSync(path.join(root, 'process-teardown.json'), '{"complete":true}');
+        fs.writeFileSync(path.join(root, 'service-endpoints.json'), '{}');
+        fs.writeFileSync(path.join(root, 'linux_services.xml'), '<testsuite tests="12" failures="0"/>');
+        await assert.rejects(runCommand(process.execPath, [path.join(__dirname, 'finalizeEvidence.js'), root], {
+            env: { ...process.env, GITHUB_ACTIONS: 'false', CHAT_SERVICE_SELECTOR: '3C-06' }
+        }), /command failed/);
+        assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'teardown.json'), 'utf8')).complete, false);
+        fs.writeFileSync(path.join(root, 'teardown.json'), '{"complete":true}');
+        fs.writeFileSync(path.join(root, 'linux_services.xml'), '<testsuite tests="12" failures="0"/>');
+        fs.writeFileSync(path.join(root, 'varify_smtp.xml'), '<testsuite tests="1" failures="1"><testcase><failure/></testcase></testsuite>');
+        await assert.rejects(runCommand(process.execPath, [path.join(__dirname, 'finalizeEvidence.js'), root], {
+            env: { ...process.env, GITHUB_ACTIONS: 'false', CHAT_SERVICE_SELECTOR: '3C-06' }
+        }), /command failed/);
+    } finally { fs.rmSync(root, { recursive: true }); }
+});
 
 function lifecycleFixture() {
     const config = { host: '127.0.0.1', ids: { mailpit: 'c'.repeat(64), redis: 'a'.repeat(64) },

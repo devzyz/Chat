@@ -1,37 +1,79 @@
+'use strict';
+
+const net = require('node:net');
 const nodemailer = require('nodemailer');
-const config_module = require("./config");
+const { normalizeSmtpConfig } = require('./smtpConfig');
 
-/**
- * 创建发送邮件的代理
- */
-let transport = nodemailer.createTransport({
-    host: 'smtp.qq.com',
-    port: 465,
-    secure: true, 
-    auth: {
-        user: config_module.email_user, // 发送方邮箱地址
-        pass: config_module.email_pass // 邮箱授权码
-    }
-})
-
-/**
- * 发送邮件的函数
- * @param {*} mailOptions_ 发送邮件的参数
- * @returns
- */
-
-function SendMail(mailOptions_) {
-    return new Promise(function(resolve, reject) {
-        transport.sendMail(mailOptions_, function(error, info) {
-            if (error) {
-                console.log('SMTP delivery failed');
-                reject(error);
-            }else {
-                console.log('SMTP delivery succeeded');
-                resolve(info.response);
-            }
-        });
-    })
+function classify(error) {
+    if (error.code === 'ETIMEDOUT') return 'DeadlineExceeded';
+    if (error.code === 'EAUTH' || error.code === 'EENVELOPE' || error.responseCode >= 400) return 'Rejected';
+    return 'Unavailable';
 }
 
-module.exports.SendMail = SendMail
+function createSmtpAdapter(input, createTransport = nodemailer.createTransport) {
+    let config;
+    try { config = normalizeSmtpConfig(input, input?.credentials); } catch { /* SendMail reports InvalidConfig. */ }
+    const pending = new Set();
+    let closed = false;
+
+    return {
+        SendMail(mail) {
+            if (!config) return Promise.resolve({ status: 'InvalidConfig' });
+            if (closed) return Promise.resolve({ status: 'Unavailable' });
+            return new Promise((resolve) => {
+                let settled = false;
+                let socket;
+                let transport;
+                const finish = (status) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    pending.delete(cancel);
+                    // SMTPTransport.close() in locked 8.0.6 does not cancel active sends.
+                    // Own the supported getSocket connection so a total deadline cancels
+                    // I/O (including TLS), rather than leaving a late delivery running.
+                    socket?.destroy();
+                    transport?.close();
+                    resolve({ status });
+                };
+                const cancel = () => finish('Unavailable');
+                const timer = setTimeout(() => finish('DeadlineExceeded'), config.deadlineMs);
+                pending.add(cancel);
+                try {
+                    transport = createTransport({
+                        host: config.host, port: config.port, secure: config.secure,
+                        auth: config.credentials, connectionTimeout: config.deadlineMs,
+                        greetingTimeout: config.deadlineMs, socketTimeout: config.deadlineMs,
+                        dnsTimeout: config.deadlineMs, logger: false, debug: false,
+                        disableFileAccess: true, disableUrlAccess: true,
+                        getSocket(options, callback) {
+                            if (settled) { callback(new Error('SMTP operation closed')); return; }
+                            socket = net.createConnection({ host: config.host, port: config.port });
+                            let returned = false;
+                            const complete = (error) => {
+                                if (returned) return;
+                                returned = true;
+                                if (error || settled) {
+                                    socket.destroy();
+                                    callback(error || new Error('SMTP operation closed'));
+                                } else callback(null, { connection: socket });
+                            };
+                            socket.once('error', complete);
+                            socket.once('connect', () => complete());
+                        }
+                    });
+                    transport.sendMail(mail, (error, info) => {
+                        if (error) finish(classify(error));
+                        else finish(info?.accepted?.length > 0 && !info?.rejected?.length ? 'Delivered' : 'Rejected');
+                    });
+                } catch (error) { finish(classify(error)); }
+            });
+        },
+        close() {
+            closed = true;
+            for (const cancel of pending) cancel();
+        }
+    };
+}
+
+module.exports = { createSmtpAdapter };

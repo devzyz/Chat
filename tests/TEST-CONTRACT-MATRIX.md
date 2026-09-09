@@ -13,11 +13,14 @@ registration alone is not PASS evidence.
 
 ## 1. 统计口径
 
-当前本地基线包含 313 个 runner testcase：Server 225、Qt 46、VarifyServer 29、PowerShell 13。
+当前公开 runner 注册 338 个 testcase：Server 225、Qt 46、VarifyServer 54、PowerShell 13。
+3C-04/06 在既有两份 Varify 报告新增 25 项（Unit +15、Integration +10），
+报告集合仍为 13 份；注册数量不代表本轮执行了全量门禁。下方 313 等计数保留阶段历史。
 
 Test ID 表示被保护的 Interface 合同，runner testcase 表示测试框架实际报告的用例。二者不必一一对应：例如 Qt `network_state_tests` 是一个 runner testcase，但同时保护拆分 header、拆分 body 和相邻 frame 三个合同。覆盖率、testcase 数量和合同数量必须分别报告，不能相互替代。
 
-当前所有 313 个 testcase 都属于 `develop` 全量快速门禁；`master` 和 release 继承它们。真实 Redis/MySQL/SMTP 与业务 E2E 尚不存在，因此不在当前 313 个基线中。
+上述 338 个 testcase 属于 `develop` 快速门禁；`master` 和 release 继承它们。
+新增 hosted Redis/SMTP 报告单独统计，不计入这 338 项；真实 MySQL 与业务 E2E 仍待后续计划。
 
 Plan 2.5-07 的历史本地证据为 12 份报告 / 173 testcase。Plan 3A-01 在同一报告集合中新增
 7 个 `LogicDispatcherTests` runner testcase；focused 7/7 与完整 `server_unit.xml` 60/60
@@ -43,11 +46,11 @@ branch protection 仍必须由 3A-06/实际 GitHub check 证明。
 | Qt component | message store/delegate Q01-MODEL-07..08、session reset Q02-SESSION-01..06、auth reset wiring Q03-AUTH-12 | Architecture/Business | Component | 6 | `client_component.xml` | Qt Widgets/Network minimal；真实 in-process Module，无连接 | develop required |
 | Qt HTTP integration | production GateHttpTransport Q04-HTTP-01..10 | Architecture/Business | Integration | 10 | `client_integration.xml` | Qt QNetworkAccessManager、动态 numeric loopback、无公网 | develop required |
 | Qt TCP integration | production ChatTcpTransport Q04-TCP-01..12 | Architecture/Business | Integration | 12 | `client_integration.xml` | real QTcpSocket、动态 numeric loopback、无公网 | develop required |
-| Varify unit | protocol、handler、fake startup | Foundation/Business/Architecture | Unit | 18 | `varify_unit.xml` | in-process fake；descriptor/fixture | develop required |
-| Varify integration | config、loopback RPC、process startup | Foundation/Architecture | Integration | 11 | `varify_integration.xml` | 子进程或动态 loopback | develop required |
+| Varify unit | protocol、handler、fake startup、Redis/SMTP adapters | Foundation/Business/Architecture | Unit | 33 | `varify_unit.xml` | in-process fake；descriptor/fixture | develop required |
+| Varify integration | config、loopback RPC、process startup、Redis/SMTP bounded faults | Foundation/Architecture | Integration | 21 | `varify_integration.xml` | 子进程或动态 loopback | develop required |
 | Script component | instance validation | Architecture | Component | 9 | `script_component.xml` | 临时目录、占位进程 | develop required |
 | Script integration | instance lifecycle | Architecture | Integration | 4 | `script_integration.xml` | 受控子进程/PID identity | develop required |
-| **合计** |  |  |  | **313** | 13 份报告 | 无个人服务或凭据；保留 12/232 floor |  |
+| **合计** |  |  |  | **338** | 13 份报告 | 无个人服务或凭据；保留 12/232 floor |  |
 
 PowerShell 报告逐项输出 13 个 testcase：validation 9 个、lifecycle 4 个；控制台同步保留逐 Test ID 的 PASS/FAIL。该报告粒度改进不改变本表的逻辑基线数量。
 
@@ -688,6 +691,23 @@ container/port identity, synthetic authentication, run-owned data, bounded real
 faults and cleanup. It does not close production Adapter G-012..G-015 or change
 the existing Windows report baseline. Actual execution status belongs to
 `docs/Status.md`; an unexecuted hosted test is not PASS.
+
+### Phase 3C Redis / SMTP adapter registration
+
+| IDs | Owner / level | Report / count |
+| --- | --- | --- |
+| T10-RDS-01..09 | [Native Redis](server/data/README.md), Component / Integration | `linux_redis.xml`, 9 |
+| V08-REDIS-01..06 | [Node Redis](../VarifyServer/test/redis/README.md), Integration | `varify_redis.xml`, 6 |
+| V09-SMTP-01..12 | [SMTP](../VarifyServer/test/smtp/README.md), Integration | `varify_smtp.xml`, 12 |
+
+These run through `3C-adapters` in the owned hosted services job, alongside the
+existing twelve infrastructure cases. Missing or failed selected reports fail
+the outer gate. G-012/G-014 remain open until hosted evidence is accepted;
+registration and local socket tests do not imply Redis/Mailpit acceptance.
+V09-SMTP-06..11 also run locally in `varify_integration.xml`; these are shared
+contracts executed in two lanes, not twelve different Test IDs. Local adapter
+unit/loopback IDs and their precise assertions are owned by the linked module
+READMEs. Schema/MySQL G-013 remains separate and blocked on authoritative schema.
 
 ## 8. 矩阵维护规则
 

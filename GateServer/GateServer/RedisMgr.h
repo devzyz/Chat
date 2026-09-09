@@ -1,26 +1,20 @@
 #pragma once
+#include "../../common/redis/RedisPool.h"
 #include "Singleton.h"
 #include "hiredis/hiredis.h"
 #include "const.h"
 
 class RedisConfigPool {
 public:
-	RedisConfigPool(size_t poolsize, const char* host, int port, const char* pwd);
-
-	~RedisConfigPool();
-
-	void close();
-	redisContext* GetConnection();
-	void returnConnection(redisContext * context);
-
+    RedisConfigPool(std::size_t pool_size, const char* host, int port, const char* password)
+        : _transport(host, port, password, pool_size) {}
+    redisContext* GetConnection(std::chrono::milliseconds timeout = std::chrono::milliseconds(2000)) {
+        return _transport.Borrow(timeout);
+    }
+    void returnConnection(redisContext* connection) { _transport.Return(connection); }
+    void close() { _transport.Close(); }
 private:
-	const char* _host;
-	int _port;
-	size_t _poolSize;
-	std::atomic<bool> _b_stop;
-	std::mutex _mutex;
-	std::condition_variable _conf;
-	std::queue<redisContext*> _connections;
+    chat_redis::RedisPool _transport;
 };
 
 class RedisMgr : public Singleton<RedisMgr>
@@ -45,4 +39,3 @@ protected:
 
 	std::unique_ptr<RedisConfigPool> _redis_pool;
 };
-

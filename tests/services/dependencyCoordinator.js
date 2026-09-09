@@ -10,6 +10,7 @@ const { createRequire } = require('node:module');
 const { performance } = require('node:perf_hooks');
 const { setTimeout: delay } = require('node:timers/promises');
 const lock = require('./services.lock.json');
+const { reportGroups, writeReports } = require('./serviceReports');
 
 class ServiceStepFailure extends Error {
     constructor(stage, category) {
@@ -283,6 +284,8 @@ class DependencyCoordinator {
 
 async function runSuite(evidenceRoot) {
     fs.mkdirSync(evidenceRoot, { recursive: true });
+    const selector = process.env.CHAT_SERVICE_SELECTOR || '3C-02';
+    const groups = reportGroups(selector);
     const cases = [];
     let coordinator;
     let config;
@@ -340,6 +343,13 @@ async function runSuite(evidenceRoot) {
                 return found.messages.length === 1;
             }, 5000);
         });
+        if (groups.some((group) => group.prefix === 'V09-SMTP-')) {
+            await require('../../VarifyServer/test/smtp/mailpit-suite').runSmtpCases(coordinator, record);
+        }
+        if (groups.some((group) => group.prefix === 'T10-RDS-')) {
+            await require('../server/data/runRedisCases').runRedisCases(coordinator, record);
+            await require('../../VarifyServer/test/redis/redis-suite').runRedisCases(coordinator, record);
+        }
         await record('T10-SVC-06', 'real unavailable health deadline', async () => {
             await coordinator.lifecycle('mailpit', 'stop');
             try {
@@ -373,7 +383,7 @@ async function runSuite(evidenceRoot) {
                 finally { client.disconnect(); }
             }, 5000));
         });
-    } catch (error) { primaryFailure = /^T10-SVC-[0-9]+$/.test(error.message) ? error.message : 'setup'; }
+    } catch (error) { primaryFailure = /^(T10-(SVC|RDS)|V0[89]-(REDIS|SMTP))-[0-9]+$/.test(error.message) ? error.message : 'setup'; }
     finally {
         if (coordinator) cleanup = await coordinator.teardown();
         cases.push({ id: 'T10-SVC-11', name: 'owned data and service teardown', pass: cleanup.complete, seconds: 0 });
@@ -388,11 +398,7 @@ async function runSuite(evidenceRoot) {
         cases.push({ id: 'T10-SVC-12', name: 'evidence excludes generated secrets and body', pass: redacted, seconds: 0 });
         fs.writeFileSync(path.join(evidenceRoot, 'service-endpoints.json'), JSON.stringify(endpoints, null, 2));
         fs.writeFileSync(path.join(evidenceRoot, 'teardown.json'), JSON.stringify(teardown, null, 2));
-        const failures = cases.filter((entry) => !entry.pass).length + (primaryFailure === 'setup' ? 1 : 0);
-        const rows = cases.map((entry) => `  <testcase classname="phase3c.services" name="${entry.id} ${entry.name}" time="${entry.seconds.toFixed(3)}">${entry.pass ? '' : '<failure message="bounded contract failed"/>'}</testcase>`);
-        if (primaryFailure === 'setup') rows.push('  <testcase name="setup"><failure message="service setup failed"/></testcase>');
-        fs.writeFileSync(path.join(evidenceRoot, 'linux_services.xml'),
-            `<testsuite name="phase3c-services" tests="${rows.length}" failures="${failures}">\n${rows.join('\n')}\n</testsuite>\n`);
+        writeReports(evidenceRoot, selector, cases);
     }
     if (primaryFailure || !cleanup.complete || cases.some((entry) => !entry.pass)) throw new Error('services proof failed');
 }

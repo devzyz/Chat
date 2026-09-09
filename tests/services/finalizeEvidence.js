@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { runCommand } = require('./dependencyCoordinator');
 const lock = require('./services.lock.json');
+const { reportGroups } = require('./serviceReports');
 
 // Also called by an always() workflow step if npm/configure/CTest never started.
 // Missing evidence is a failure, never a synthetic successful test run.
@@ -17,8 +18,16 @@ async function finalize() {
     const teardown = read('teardown.json');
     const processTeardown = read('process-teardown.json');
     const junit = path.join(root, 'linux_services.xml');
+    const reports = reportGroups(process.env.CHAT_SERVICE_SELECTOR || '3C-02');
+    const reportsComplete = reports.every((group) => {
+        try {
+            const report = fs.readFileSync(path.join(root, group.file), 'utf8');
+            return report.includes('<testsuite ') && !/<(?:failure|error)\b/.test(report) &&
+                !/\b(?:failures|errors)="[1-9][0-9]*"/.test(report);
+        } catch { return false; }
+    });
     teardown.processComplete = processTeardown.complete === true;
-    teardown.complete = teardown.complete === true && teardown.processComplete && fs.existsSync(junit) &&
+    teardown.complete = teardown.complete === true && teardown.processComplete && reportsComplete &&
         fs.existsSync(path.join(root, 'service-endpoints.json'));
     if (!teardown.complete && process.env.GITHUB_ACTIONS === 'true') {
         teardown.fallbackStopped = [];

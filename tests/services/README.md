@@ -1,9 +1,11 @@
-# Disposable dependency coordinator (3C-02)
+# Disposable dependency coordinator and adapters (3C-02/04/06)
 
 This Architecture / Integration fixture owns one hosted Ubuntu job's Redis,
 MySQL and Mailpit services. It is infrastructure proof, **not** production Redis,
 MySQL DAO, SMTP adapter, migration or four-process business-flow coverage.
-Those belong to 3C-03..07. Current verification state is recorded in the main
+The optional adapter selectors additionally exercise production Redis and SMTP;
+schema, MySQL DAO and full business flows remain separate contracts.
+Current verification state is recorded in the main
 workspace's `docs/Status.md`.
 
 `ServiceRun.cpp` links the existing `process_harness` target; its `RunContext`
@@ -85,7 +87,7 @@ these real cases in sequence and emits individual entries in `linux_services.xml
 
 An early failure stops dependent cases rather than marking them passed. Outer
 failure evidence preserves the original coordinator XML separately.
-Twelve dependency-free Node tests cover configuration/lock agreement, health
+Fourteen dependency-free Node tests cover configuration/lock agreement, health
 deadline, real child failure/timeout and evidence failure propagation; they are
 not disposable-service proof. The bootstrap regression drives the real
 coordinator/command adapter with a two-account command substitute and an isolated
@@ -95,12 +97,15 @@ substitute that reallocates ports, including both Mailpit bindings and Redis.
 Invalid identities/bindings must fail without publishing any partial update;
 a temporary loopback HTTP server verifies refreshed health and cleanup requests.
 These regressions do not substitute for the hosted Docker lifecycle proof.
+Report regressions reject missing, duplicate or failed selected adapter cases;
+successful base infrastructure cases cannot hide an adapter failure.
 Bootstrap and restart failure diagnostics in `teardown.json` contain only fixed stage names
 and allowlisted error categories, never raw SQL, child output or library errors:
 
 ```sh
 node --test tests/services/coordinator.test.js
 bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-02
+bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-adapters
 ```
 
 The latter requires the workflow-injected container/port environment and
@@ -109,3 +114,24 @@ Job `Phase 3C disposable services` uploads `phase3c-services-evidence` with
 `linux_services.xml`, `service-endpoints.json`, `teardown.json` and the shared
 process cleanup result, including on failure. No personal credentials, full
 Docker inspect output, SMTP bodies or raw SQL errors are uploaded.
+
+## Production adapter selectors
+
+`3C-04` adds native hiredis and Node ioredis production adapters; `3C-06` adds
+the production SMTP adapter. `3C-adapters` runs both on the same owned fixture.
+All retain the twelve base contracts and fail closed on missing selected cases.
+
+| Report | IDs | Count | Owner |
+| --- | --- | --- | --- |
+| `linux_redis.xml` | T10-RDS-01..09 | 9 | [Native Redis](../server/data/README.md) |
+| `varify_redis.xml` | V08-REDIS-01..06 | 6 | [Node Redis](../../VarifyServer/test/redis/README.md) |
+| `varify_smtp.xml` | V09-SMTP-01..12 | 12 | [SMTP](../../VarifyServer/test/smtp/README.md) |
+
+The native adapter binary travels with the same-run launcher, source SHA and
+checksums (`CHAT_REDIS_TEST_BINARY`); the service job performs no native rebuild
+or dependency restore. Mailpit uses a database inside its disposable container
+to preserve earlier fixture messages across the intentional restart. No host
+volume or personal mailbox is used. Individual suites remove only their own
+data before the coordinator performs final fixture teardown. Hosted execution
+remains required; local lifecycle and loopback tests are not acceptance evidence
+for actual Redis/Mailpit integration.

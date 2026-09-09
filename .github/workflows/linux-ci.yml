@@ -109,15 +109,18 @@ jobs:
 
       - name: Build same-source service RunContext launcher
         run: |
-          timeout --signal=TERM --kill-after=5s 120s cmake --build out/build/linux-x64-release --target service_run --parallel 2
+          timeout --signal=TERM --kill-after=5s 120s cmake --build out/build/linux-x64-release --target service_run redis_adapter_integration --parallel 2
+          ctest --test-dir out/build/linux-x64-release -L phase3c-redis-local --output-on-failure --no-tests=error
           mkdir -p out/phase3c/service-launcher
           cp out/build/linux-x64-release/bin/service_run out/phase3c/service-launcher/
+          cp out/build/linux-x64-release/bin/redis_adapter_integration out/phase3c/service-launcher/
           ldd out/phase3c/service-launcher/service_run
           # The launcher uses only the shared harness and standard Ubuntu runtime.
           # Fail closed if a new non-system runtime dependency appears.
           if ldd out/phase3c/service-launcher/service_run | grep -E 'not found|vcpkg|/out/'; then exit 1; fi
+          if ldd out/phase3c/service-launcher/redis_adapter_integration | grep -E 'not found|vcpkg|/out/'; then exit 1; fi
           git rev-parse HEAD > out/phase3c/service-launcher/source-sha.txt
-          (cd out/phase3c/service-launcher && sha256sum service_run > service_run.sha256)
+          (cd out/phase3c/service-launcher && sha256sum service_run redis_adapter_integration > service_run.sha256)
 
       - name: Upload same-run service launcher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -170,9 +173,12 @@ jobs:
         ports: ["127.0.0.1::3306"]
       mailpit:
         image: axllent/mailpit:v1.24.1@sha256:4873e5a441ed368f1e98a832f61257a033859f5e829542cd03fb772d2282ea4e
+        env:
+          MP_DATABASE: /tmp/phase3c-mailpit.db
         ports: ["127.0.0.1::1025", "127.0.0.1::8025"]
     env:
       CHAT_SERVICE_LAUNCHER: ${{ github.workspace }}/out/phase3c/service-launcher/service_run
+      CHAT_REDIS_TEST_BINARY: ${{ github.workspace }}/out/phase3c/service-launcher/redis_adapter_integration
     steps:
       - name: Check out candidate source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -199,6 +205,7 @@ jobs:
           test "$(cat out/phase3c/service-launcher/source-sha.txt)" = "$(git rev-parse HEAD)"
           (cd out/phase3c/service-launcher && sha256sum --check service_run.sha256)
           chmod u+x "$CHAT_SERVICE_LAUNCHER"
+          chmod u+x "$CHAT_REDIS_TEST_BINARY"
           ldd "$CHAT_SERVICE_LAUNCHER"
           node --test tests/services/coordinator.test.js
       - name: Restore existing locked Node libraries
@@ -208,6 +215,7 @@ jobs:
       - name: Prove bounded disposable service lifecycle
         timeout-minutes: 8
         env:
+          CHAT_SERVICE_SELECTOR: 3C-adapters
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
@@ -215,10 +223,11 @@ jobs:
           CHAT_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
           CHAT_SMTP_PORT: ${{ job.services.mailpit.ports[1025] }}
           CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports[8025] }}
-        run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-02
+        run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-adapters
       - name: Preserve fail-closed outer evidence
         if: always()
         env:
+          CHAT_SERVICE_SELECTOR: 3C-adapters
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
