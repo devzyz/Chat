@@ -43,6 +43,8 @@ int main(int argc, char* argv[])
     std::shared_ptr<AsioIOServicePool> pool;
     std::shared_ptr<chat_transport::CServer> p_server;
     std::shared_ptr<RedisMgr> redis;
+    // Registered services must outlive grpc::Server, including exception cleanup.
+    ChatServiceImpl service;
     std::unique_ptr<grpc::Server> server;
     std::thread grpc_server_thread;
     bool login_count_registered = false;
@@ -65,7 +67,6 @@ int main(int argc, char* argv[])
 
         // chatserver对应的grpc服务器地址
         std::string server_address = configMgr["SelfServer"]["Host"] + ":" + configMgr["SelfServer"]["RPCPort"];
-        ChatServiceImpl service;
         grpc::ServerBuilder builder;
         // 添加监听的端口，以及注册grpc服务
         builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());

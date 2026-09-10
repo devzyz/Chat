@@ -21,6 +21,8 @@ class ServiceStepFailure extends Error {
 
 function caseDiagnostic(error) {
     if (error instanceof ServiceStepFailure) return error.diagnostic;
+    const processFailure = /^FourProcess:(GateServer|StatusServer|ChatServer|VarifyServer):(stop-timeout|report-unavailable|stop-escalated|exit-[0-9]{1,10}|harness-incomplete|exit-unavailable|expected-failure)$/.exec(error.message);
+    if (processFailure) return { stage: `stop-${processFailure[1]}`, category: processFailure[2] };
     const safeMysqlErrors = ['MysqlDeadlineExceeded', 'MysqlSessionUnavailable',
         'MysqlUnavailable', 'MysqlOutputLimit', 'MysqlSessionClosed'];
     if (safeMysqlErrors.includes(error.message) || /^MysqlError:[0-9]{1,5}$/.test(error.message)) {

@@ -28,7 +28,9 @@ has ten seconds, and escalation fails the case. The outer coordinator has a
 | 18 | Reverse process stop, exact owned data removal, listener release |
 
 Temporary configuration and mail content are not uploaded. Missing cases and
-cleanup failure remain failures. Two report/port regressions and three compiled
+cleanup failure remain failures. Shutdown failures retain only an allowlisted
+process name and category (including a numeric exit code); raw child output and
+configuration remain private. Three report/port/stop regressions and three compiled
 driver regressions support this suite but do not replace hosted acceptance.
 Current evidence remains in the main workspace's `docs/Status.md`.
 

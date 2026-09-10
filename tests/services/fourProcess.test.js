@@ -28,3 +28,28 @@ test('application port leases are unique until explicitly released', async () =>
     try { assert.notEqual(first.port, second.port); }
     finally { await first.release(); await second.release(); }
 });
+
+
+test('process shutdown reports retain safe failure identity and reject incomplete cleanup', async () => {
+    const { stop } = require('./fourProcessCases');
+    const { caseDiagnostic } = require('./dependencyCoordinator');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-stop-report-'));
+    try {
+        const report = path.join(root, 'report.json');
+        const owned = () => ({ name: 'ChatServer', report, child: { kill() {} }, exited: Promise.resolve(0) });
+        fs.writeFileSync(report, JSON.stringify({ complete: true, escalated: false, exitCode: 139 }));
+        await assert.rejects(stop(owned()), error => {
+            assert.deepEqual(caseDiagnostic(error), { stage: 'stop-ChatServer', category: 'exit-139' });
+            return true;
+        });
+        fs.writeFileSync(report, JSON.stringify({ complete: false, escalated: true, exitCode: 137 }));
+        await assert.rejects(stop(owned()), /stop-escalated/);
+        fs.writeFileSync(report, JSON.stringify({ complete: true, escalated: false, exitCode: 0 }));
+        const successful = owned();
+        await stop(successful);
+        assert.equal(successful.stopped, true);
+        await stop(successful);
+        assert.equal(caseDiagnostic(new Error('FourProcess:ChatServer:secret-token')), undefined);
+        assert.equal(caseDiagnostic(new Error('FourProcess:private-account:exit-1')), undefined);
+    } finally { fs.rmSync(root, { recursive: true }); }
+});

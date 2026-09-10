@@ -20,6 +20,27 @@ async function reserve() {
     return { port: server.address().port, release: () => new Promise(resolve => server.close(resolve)) };
 }
 
+async function stop(owned, expected = 0) {
+    if (owned.stopped) return;
+    const fail = category => { throw new Error(`FourProcess:${owned.name}:${category}`); };
+    owned.child.kill('SIGTERM');
+    let timer;
+    const result = await Promise.race([owned.exited, new Promise(resolve => { timer = setTimeout(() => resolve('timeout'), 15000); })]);
+    clearTimeout(timer);
+    if (result === 'timeout') fail('stop-timeout');
+    let report;
+    try { report = JSON.parse(fs.readFileSync(owned.report)); }
+    catch { fail('report-unavailable'); }
+    if (report.escalated !== false) fail('stop-escalated');
+    if (Number.isSafeInteger(report.exitCode) && report.exitCode !== 0 && expected === 0) {
+        fail(`exit-${report.exitCode}`);
+    }
+    if (result !== 0 || report.complete !== true) fail('harness-incomplete');
+    if (expected === 0 && report.exitCode !== 0) fail('exit-unavailable');
+    if (expected !== 0 && (!Number.isSafeInteger(report.exitCode) || report.exitCode === 0)) fail('expected-failure');
+    owned.stopped = true;
+}
+
 async function runFourProcessCases(coordinator, record) {
     const { poll, runCommand } = require('./dependencyCoordinator');
     const bundle = process.env.CHAT_FOUR_BUNDLE;
@@ -53,21 +74,6 @@ async function runFourProcessCases(coordinator, record) {
         owned.exited = new Promise(resolve => { child.once('error', () => resolve(-1)); child.once('exit', resolve); });
         children.push(owned);
         return owned;
-    }
-    async function stop(owned, expected = 0) {
-        if (owned.stopped) return;
-        owned.child.kill('SIGTERM');
-        let timer;
-        const result = await Promise.race([owned.exited, new Promise(resolve => { timer = setTimeout(() => resolve('timeout'), 15000); })]);
-        clearTimeout(timer);
-        assert.notEqual(result, 'timeout', 'owned process stop deadline');
-        assert.equal(result, 0, 'process harness cleanup');
-        const report = JSON.parse(fs.readFileSync(owned.report));
-        assert.equal(report.complete, true);
-        assert.equal(report.escalated, false);
-        if (expected === 0) assert.equal(report.exitCode, 0, `${owned.name} graceful exit`);
-        else assert.notEqual(report.exitCode, 0, 'bind conflict must fail');
-        owned.stopped = true;
     }
     function writeConfig(name) {
         const common = `[Redis]\nHost=127.0.0.1\nPort=${coordinator.config.ports.redis}\nPassword=${coordinator.password}\n` +
@@ -280,4 +286,4 @@ async function runFourProcessCases(coordinator, record) {
     if (primary) throw primary;
 }
 
-module.exports = { reserve, runFourProcessCases };
+module.exports = { reserve, stop, runFourProcessCases };
