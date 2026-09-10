@@ -32,12 +32,20 @@ MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::stri
 			_pool.push(std::make_unique<SqlConnection>(con, timestamp));
 		}
 
-		_check_thread = std::thread([this] {
-			while (!_b_stop) {
-				checkConnection();
-				std::this_thread::sleep_for(std::chrono::seconds(60));
-			}
-			});
+        _check_thread = std::thread([this] {
+            std::unique_lock<std::mutex> lock(_mutex);
+            while (!_b_stop) {
+                if (_check_cond.wait_for(lock, std::chrono::seconds(60), [this] { return _b_stop.load(); })) {
+                    break;
+                }
+                lock.unlock();
+                try { checkConnection(); }
+                catch (const std::exception&) {
+                    SPDLOG_WARN("mysql keepalive unavailable");
+                }
+                lock.lock();
+            }
+        });
 	}
 	catch (const sql::SQLException&) {
         throw std::runtime_error("mysql_initialization_failed");
@@ -85,10 +93,7 @@ void MysqlConnectionPool::checkConnection() {
 }
 
 MysqlConnectionPool::~MysqlConnectionPool() {
-	std::unique_lock<std::mutex> lock(_mutex);
-	while (!_pool.empty()) {
-		_pool.pop();
-	}
+    close();
 }
 
 std::unique_ptr<SqlConnection> MysqlConnectionPool::getConnection() {
@@ -119,8 +124,21 @@ void MysqlConnectionPool::returnConnection(std::unique_ptr<SqlConnection> con) {
 }
 
 void MysqlConnectionPool::close() {
-	_b_stop = true;
-	_cond.notify_all();
+    // Serialize concurrent close callers, but never join while holding the
+    // mutex needed by the health worker or a waiting borrower.
+    std::lock_guard<std::mutex> close_lock(_close_mutex);
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _b_stop = true;
+    }
+    _cond.notify_all();
+    _check_cond.notify_all();
+    if (_check_thread.joinable()) { _check_thread.join(); }
+    std::queue<std::unique_ptr<SqlConnection>> closing;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        closing.swap(_pool);
+    }
 }
 
 MysqlDao::MysqlDao() {

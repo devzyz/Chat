@@ -110,8 +110,8 @@ jobs:
 
       - name: Build same-source service RunContext launcher
         run: |
-          timeout --signal=TERM --kill-after=5s 120s cmake --build out/build/linux-x64-release --target service_run redis_adapter_integration message_commit_integration --parallel 2
-          ctest --test-dir out/build/linux-x64-release -L 'phase3c-(redis|message-commit)-local' --output-on-failure --no-tests=error
+          timeout --signal=TERM --kill-after=5s 120s cmake --build out/build/linux-x64-release --target service_run redis_adapter_integration message_commit_integration gate_mysql_pool_tests --parallel 2
+          ctest --test-dir out/build/linux-x64-release -L 'phase3c-(redis|message-commit|gate-mysql)-local' --output-on-failure --no-tests=error
           mkdir -p out/phase3c/service-launcher
           cp out/build/linux-x64-release/bin/service_run out/phase3c/service-launcher/
           cp out/build/linux-x64-release/bin/redis_adapter_integration out/phase3c/service-launcher/

@@ -169,6 +169,10 @@ add_executable(message_commit_integration tests/server/message-commit/message_co
 target_link_libraries(message_commit_integration PRIVATE MessageCommit)
 add_test(NAME phase3c-message-validation COMMAND message_commit_integration validation)
 set_tests_properties(phase3c-message-validation PROPERTIES LABELS "phase3c-message-commit-local" TIMEOUT 10)
+add_executable(gate_mysql_pool_tests tests/server/lifecycle/gate_mysql_pool_tests.cpp)
+target_link_libraries(gate_mysql_pool_tests PRIVATE gate_server_modules)
+add_test(NAME phase3c-gate-mysql-lifecycle COMMAND gate_mysql_pool_tests)
+set_tests_properties(phase3c-gate-mysql-lifecycle PROPERTIES LABELS "phase3c-gate-mysql-local" TIMEOUT 5)
 add_test(NAME T10-BLD-03-process-harness COMMAND process_harness_posix_tests)
 set_tests_properties(T10-BLD-03-process-harness PROPERTIES LABELS "phase3c-build-ownership" TIMEOUT 15)
 
