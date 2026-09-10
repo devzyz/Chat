@@ -19,6 +19,16 @@ class ServiceStepFailure extends Error {
     }
 }
 
+function caseDiagnostic(error) {
+    if (error instanceof ServiceStepFailure) return error.diagnostic;
+    const safeMysqlErrors = ['MysqlDeadlineExceeded', 'MysqlSessionUnavailable',
+        'MysqlUnavailable', 'MysqlOutputLimit', 'MysqlSessionClosed'];
+    if (safeMysqlErrors.includes(error.message) || /^MysqlError:[0-9]{1,5}$/.test(error.message)) {
+        return { stage: 'service-case', category: error.message };
+    }
+    return undefined;
+}
+
 async function bootstrapStep(stage, action) {
     try { return await action(); }
     catch (error) {
@@ -296,7 +306,7 @@ async function runSuite(evidenceRoot) {
         try { await action(); cases.push({ id, name, pass: true, seconds: (performance.now() - start) / 1000 }); }
         catch (error) {
             cases.push({ id, name, pass: false,
-                diagnostic: error instanceof ServiceStepFailure ? error.diagnostic : undefined,
+                diagnostic: caseDiagnostic(error),
                 seconds: (performance.now() - start) / 1000 });
             throw new Error(id);
         }
@@ -412,7 +422,7 @@ async function runSuite(evidenceRoot) {
     if (primaryFailure || !cleanup.complete || cases.some((entry) => !entry.pass)) throw new Error('services proof failed');
 }
 
-module.exports = { DependencyCoordinator, loadConfiguration, poll, runCommand, runSuite };
+module.exports = { DependencyCoordinator, loadConfiguration, poll, runCommand, runSuite, caseDiagnostic };
 if (require.main === module) {
     runSuite(process.env.CHAT_SERVICE_EVIDENCE_ROOT).catch(() => {
         process.stderr.write('services proof failed; inspect bounded service evidence\n');

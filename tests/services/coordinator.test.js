@@ -12,6 +12,18 @@ const { reportGroups, writeReports } = require('./serviceReports');
 const { verifyDependencies } = require('./serviceRuntime');
 const { validateRelocated } = require('./messageRuntime');
 
+test('service diagnostics preserve safe MySQL categories without raw query or credentials', () => {
+    const { caseDiagnostic } = require('./dependencyCoordinator');
+    assert.deepEqual(caseDiagnostic(new Error('MysqlDeadlineExceeded')),
+        { stage: 'service-case', category: 'MysqlDeadlineExceeded' });
+    assert.deepEqual(caseDiagnostic(new Error('MysqlSessionUnavailable')),
+        { stage: 'service-case', category: 'MysqlSessionUnavailable' });
+    assert.deepEqual(caseDiagnostic(new Error('MysqlError:1064')),
+        { stage: 'service-case', category: 'MysqlError:1064' });
+    assert.equal(caseDiagnostic(new Error('MysqlError:1064 SELECT secret')), undefined);
+    assert.equal(caseDiagnostic(new Error('password=not-for-evidence')), undefined);
+});
+
 test('message runtime checks the complete app-local dependency manifest', () => {
     const bundle = '/tmp/owned-message';
     const system = 'libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x1)\n';

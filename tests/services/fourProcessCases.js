@@ -173,7 +173,10 @@ async function runFourProcessCases(coordinator, record) {
         await test('public message commit and durable UUID', async () => {
             const result = await wire(users[0], [message()]);
             assert.equal(result.responses[0].error, 0);
-            assert.equal(await session.execute(`USE \`${database}\`; SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${uuid}'`), '1');
+            // MysqlSession uses a private delimiter and accepts one statement;
+            // the mysql client's USE command must not consume a following query.
+            await session.execute(`USE \`${database}\``);
+            assert.equal(await session.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${uuid}'`), '1');
         });
         await test('disconnect retry preserves single durable message', async () => {
             const before = await session.execute(`SELECT message_id FROM chat_message WHERE client_msg_uuid='${uuid}'`);

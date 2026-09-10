@@ -142,6 +142,13 @@ successful base infrastructure cases cannot hide an adapter failure.
 Bootstrap and restart failure diagnostics in `teardown.json` contain only fixed stage names
 and allowlisted error categories, never raw SQL, child output or library errors:
 
+Case failures additionally retain allowlisted `MysqlDeadlineExceeded`, session
+availability/output-limit categories and numeric `MysqlError:<code>` diagnostics.
+`T10-4PROC-08` sends database selection and the UUID count query as separate
+statements: `MysqlSession.execute` uses a private delimiter and accepts one
+statement per call. Combining the mysql client's `USE` command with `SELECT`
+can consume the response marker, time out and close the session needed by cleanup.
+
 ```sh
 node --test tests/services/coordinator.test.js
 bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-02
