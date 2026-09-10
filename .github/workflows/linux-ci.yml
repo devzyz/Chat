@@ -254,9 +254,48 @@ jobs:
   downstream-contract:
     name: Phase 3C downstream hard gate
     needs: [linux-preflight, posix-process-contracts, disposable-services]
-    if: needs.linux-preflight.outputs.status == 'PASS'
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    env:
+      CHAT_RELEASE_INVENTORY: ${{ github.workspace }}/out/phase3c/releases.json
+      CHAT_JOB_RESULTS: '{"linux-preflight":"${{ needs.linux-preflight.result }}","posix-process-contracts":"${{ needs.posix-process-contracts.result }}","disposable-services":"${{ needs.disposable-services.result }}"}'
     steps:
-      - name: Enforce preflight dependency
-        run: echo '3C-03..3C-09 require preflight, same-source/POSIX lifecycle and disposable services PASS.'
+      - name: Check out candidate source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Select locked Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.18.0"
+      - name: Test compatibility and evidence failure propagation
+        run: |
+          node --test tests/compatibility/bootstrap.test.js
+          python3 tests/services/gate_test.py
+      - name: Download this run's service evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phase3c-services-evidence
+          path: out/phase3c/services
+      - name: Resolve published runtime baseline inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p out/phase3c
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$CHAT_RELEASE_INVENTORY"
+          result=0
+          bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-08 || result=$?
+          # Exit 2 is an explicit unexecuted bootstrap matrix, not compatibility PASS.
+          test "$result" -eq 2
+      - name: Aggregate current-N reports and preserve compatibility blocker
+        if: always()
+        run: bash scripts/linux-ci.sh --phase 3C --configuration Release --junit-dir out/phase3c/gate
+      - name: Upload phase gate evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase3c-gate-evidence
+          path: |
+            out/phase3c/gate/
+            out/phase3c/compatibility/
+          if-no-files-found: error
+          retention-days: 7

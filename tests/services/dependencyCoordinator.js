@@ -419,6 +419,8 @@ async function runSuite(evidenceRoot) {
         cases.push({ id: 'T10-SVC-12', name: 'evidence excludes generated secrets and body', pass: redacted, seconds: 0 });
         fs.writeFileSync(path.join(evidenceRoot, 'service-endpoints.json'), JSON.stringify(endpoints, null, 2));
         fs.writeFileSync(path.join(evidenceRoot, 'teardown.json'), JSON.stringify(teardown, null, 2));
+        fs.writeFileSync(path.join(evidenceRoot, 'redaction.json'), JSON.stringify({ complete: redacted,
+            scope: 'coordinator-generated-credentials-and-mail-body' }));
         writeReports(evidenceRoot, selector, cases);
     }
     if (primaryFailure || !cleanup.complete || cases.some((entry) => !entry.pass)) throw new Error('services proof failed');

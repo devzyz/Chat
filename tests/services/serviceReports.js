@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 
 function reportGroups(selector = '3C-02') {
     const fourProcess = selector === '3C-07';
@@ -34,6 +35,8 @@ function xml(value) {
 
 function writeReports(root, selector, cases) {
     fs.mkdirSync(root, { recursive: true });
+    const manifest = { format: 1, sourceSha: process.env.CHAT_CANDIDATE_SHA || null,
+        selector, reports: [] };
     for (const group of reportGroups(selector)) {
         const selected = cases.filter((entry) => entry.id.startsWith(group.prefix));
         const incomplete = selected.length === 0 || (group.expected !== undefined && selected.length !== group.expected);
@@ -43,7 +46,12 @@ function writeReports(root, selector, cases) {
         if (incomplete || duplicate) rows.push('<testcase name="registration"><failure message="required cases missing or duplicated"/></testcase>');
         fs.writeFileSync(path.join(root, group.file),
             `<testsuite name="${xml(group.file)}" tests="${rows.length}" failures="${failures}">\n${rows.join('\n')}\n</testsuite>\n`);
+        manifest.reports.push({ file: group.file, owner: 'tests/services', level: 'Integration',
+            deadlineSeconds: 690, prefix: group.prefix, expected: group.expected,
+            cases: selected.map(entry => ({ id: entry.id, name: entry.name, pass: entry.pass })),
+            sha256: createHash('sha256').update(fs.readFileSync(path.join(root, group.file))).digest('hex') });
     }
+    fs.writeFileSync(path.join(root, 'phase3c-reports.json'), JSON.stringify(manifest, null, 2));
 }
 
 module.exports = { reportGroups, writeReports };

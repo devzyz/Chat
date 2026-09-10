@@ -31,6 +31,8 @@ declare -A selectors=(
   [3C-01]=build_ownership_and_process_lifecycle
   [3C-01-posix]=isolated_posix_process_lifecycle
   [3C-07]=four_process_contracts
+  [3C-08]=runtime_compatibility_inventory
+  [3C-09]=current_n_evidence_gate
   [3C-02]=disposable_service_contracts
   [3C-03]=schema_migration_contracts
   [3C-05]=message_persistence_contracts
@@ -46,8 +48,7 @@ if ((list_only)); then
 fi
 
 if [[ -z "$selector" ]]; then
-  echo "full Phase 3C lane is reserved for 3C-09-T2" >&2
-  exit 65
+  selector=3C-09
 fi
 if [[ -z "${selectors[$selector]+x}" ]]; then
   echo "selector is not registered: $selector" >&2
@@ -55,6 +56,22 @@ if [[ -z "${selectors[$selector]+x}" ]]; then
 fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export CHAT_CANDIDATE_SHA="$(git -C "$repo_root" rev-parse HEAD)"
+if [[ "$selector" == 3C-08 ]]; then
+  node "$repo_root/tests/compatibility/bootstrap.js" "${CHAT_RELEASE_INVENTORY:?release inventory required}" \
+    "${CHAT_COMPATIBILITY_ROOT:-$repo_root/out/phase3c/compatibility}" "$CHAT_CANDIDATE_SHA"
+  exit $?
+fi
+if [[ "$selector" == 3C-09 ]]; then
+  # The workflow already ran the same-source build and disposable full selector
+  # once. Aggregate those same-run artifacts rather than rebuilding services.
+  python3 "$repo_root/tests/services/gate.py" \
+    --services "${CHAT_PHASE3C_SERVICES_ROOT:-$repo_root/out/phase3c/services}" \
+    --compatibility "${CHAT_COMPATIBILITY_ROOT:-$repo_root/out/phase3c/compatibility}" \
+    --output "${junit_dir:-$repo_root/out/phase3c/gate}" --source-sha "$CHAT_CANDIDATE_SHA" \
+    --jobs "${CHAT_JOB_RESULTS:?same-workflow job results required}"
+  exit $?
+fi
 if [[ "$selector" == 3C-07 || "$selector" == 3C-02 || "$selector" == 3C-03 || "$selector" == 3C-04 || "$selector" == 3C-05 || "$selector" == 3C-06 || "$selector" == 3C-adapters || "$selector" == 3C-data-adapters ]]; then
   export CHAT_SERVICE_SELECTOR="$selector"
   export CHAT_SERVICE_EVIDENCE_ROOT="${junit_dir:-$repo_root/out/phase3c/services}"

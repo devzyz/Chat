@@ -38,6 +38,7 @@ Logs/
 
 # Dependency/build caches
 node_modules/
+__pycache__/
 .cache/
 vcpkg_installed/
 

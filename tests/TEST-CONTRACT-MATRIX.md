@@ -691,6 +691,19 @@ The following identifiers are frozen by [`PHASE-3B-TEST-PLAN.md`](plans/PHASE-3B
 | G-017 | 版本兼容 | 当前版与上一发布版无自动矩阵 | Compatibility | [3C §12 / 3C-03；§17 / 3C-08；§18 / 3C-09](plans/PHASE-3C-PLAN.md) → [3D §13 / 3D-04；§14 / 3D-05](plans/PHASE-3D-PLAN.md) → [Release §10 / R-01；§12 / R-03](plans/PHASE-RELEASE-PLAN.md) | master |
 | G-018 | artifact/UAT | 尚无同产物 smoke 与版本化人工清单 | Release | [Release §9 / R-00；§10 / R-01；§11 / R-02；§12 / R-03](plans/PHASE-RELEASE-PLAN.md) | release |
 
+### Phase 3C compatibility and aggregate evidence registration
+
+3C-08 的实际 bootstrap 分支登记 `T10-COMPAT-01..05`：双向 client/server、双向 service RPC、
+N-1 schema→N。owner 为 [compatibility](compatibility/README.md)，Level 为 Compatibility。
+没有 published Release 时五项均为未执行的 bootstrap skips，G-017 保持开放；不能以保留的
+18 个 ID 范围或 descriptor 检查替代真实跨版本运行。
+
+3C-09 从 `tests/services/serviceReports.js` 实际注册产生 `phase3c-reports.json`，并由
+[aggregate gate](services/README.md#current-n-evidence-gate-3c-09) 检查同 SHA 的 JUnit、摘要和清理。
+仅登记一个真实聚合断言，不为填满 CLOSE 范围创建占位用例。`currentNPass` 与
+`releaseEligible` 分开；兼容 bootstrap 允许当前版门禁通过，但不关闭 G-017 或授予发布准入。
+具体报告和用例数以实际 manifest 为准，状态与远端证据由 `docs/Status.md` 维护。
+
 ### Phase 3C disposable services registration
 
 `T10-SVC-01..12` are owned by [the dependency coordinator](services/README.md),

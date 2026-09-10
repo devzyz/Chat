@@ -1,5 +1,42 @@
 # Disposable dependency coordinator and adapters (3C-02/04/06)
 
+## Current-N evidence gate (3C-09)
+
+The hosted workflow runs the production build and the `3C-07` superset once,
+then downloads that run's service evidence into the downstream job. The default
+`scripts/linux-ci.sh --phase 3C --configuration Release` invocation aggregates
+those existing results; it does not install dependencies or rerun services.
+Local callers must provide `CHAT_JOB_RESULTS`, the same-candidate service outputs
+and the compatibility inventory result. Missing inputs fail closed.
+
+`serviceReports.js` remains the single registration owner. It writes
+`phase3c-reports.json` with actual case IDs/names/results, owner, Level, enclosing
+CTest deadline, relative report paths, candidate SHA and report digests. The gate
+checks that manifest against the current registration, parses every JUnit case,
+and rejects missing, duplicate, skipped, failed, modified or other-SHA service
+evidence. Successful build/POSIX/service job results, process and service teardown,
+and the coordinator's credential/mail-body redaction result are all mandatory.
+The redaction result covers those generated secrets, not an unrestricted scan of
+all files or upstream build logs.
+
+`phase3c-gate-evidence` contains the validated manifest, `junit/*.xml`, `gate.json`,
+`teardown.json`, `redaction.json` and the compatibility result. One aggregate JUnit
+case records the gate verdict; no placeholder CLOSE test IDs are manufactured.
+`currentNPass` can be true while `releaseEligible` remains false and all five
+runtime combinations are bootstrap skips. No compatibility or release approval
+is implied by a successful current-N gate. Windows checks remain separate and
+are required before whole-phase acceptance.
+
+```sh
+python3 tests/services/gate_test.py
+node --test tests/compatibility/bootstrap.test.js
+bash scripts/linux-ci.sh --phase 3C --configuration Release --junit-dir out/phase3c/gate
+```
+
+The workflow supplies `CHAT_JOB_RESULTS`; optional root overrides are
+`CHAT_PHASE3C_SERVICES_ROOT` and `CHAT_COMPATIBILITY_ROOT`. The `--junit-dir`
+argument is the aggregate artifact root (reports are under its `junit/` folder).
+
 ## Four production processes (3C-07)
 
 Selector `3C-07` retains the adapter reports and adds `linux_four_process.xml`
