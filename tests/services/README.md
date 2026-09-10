@@ -1,5 +1,45 @@
 # Disposable dependency coordinator and adapters (3C-02/04/06)
 
+## Four production processes (3C-07)
+
+Selector `3C-07` retains the adapter reports and adds `linux_four_process.xml`
+with eighteen `T10-4PROC` cases. The same-SHA artifact contains formal
+Gate/Status/Chat binaries and `FourProcessDriver`, with the existing dynamic
+dependency manifest verifier applied to each relocated bundle. Varify runs
+from the same checkout and locked Node dependencies; no service-job native
+rebuild or dependency restore is needed.
+
+The driver reuses RunContext/ProcessHarness for identity-checked ownership,
+termination and reaping, and ChatFrameCodec for public TCP traffic. The
+coordinator leases loopback ports and supplies an owned database and synthetic
+credentials. Each child has a 240-second lifetime deadline, graceful shutdown
+has ten seconds, and escalation fails the case. The outer coordinator has a
+680-second execution window, with CTest and shell deadlines of 690/720 seconds.
+
+| IDs | Contracts |
+| --- | --- |
+| 01..05 | Fresh migration and Varify/Status/Chat/Gate protocol readiness |
+| 06..09 | Mailpit code, registration/login/selection, TCP authentication/private chat, durable message and stable-ID retry |
+| 10 | Occupied Gate listener rejects the second formal process |
+| 11..12 | SMTP outage failure and refreshed-port recovery |
+| 13..15 | Redis outage fails closed, application restart with refreshed mapping, durable retry |
+| 16 | Real Redis instance count returns to zero after client disconnect |
+| 17 | MySQL table lock blocks Gate read; bounded I/O allows process shutdown |
+| 18 | Reverse process stop, exact owned data removal, listener release |
+
+Temporary configuration and mail content are not uploaded. Missing cases and
+cleanup failure remain failures. Two report/port regressions and three compiled
+driver regressions support this suite but do not replace hosted acceptance.
+Current evidence remains in the main workspace's `docs/Status.md`.
+
+```sh
+bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-07
+node --test tests/services/coordinator.test.js tests/services/fourProcess.test.js
+CHAT_FOUR_DRIVER=/absolute/built/FourProcessDriver node --test tests/services/driver.test.js
+```
+
+## Infrastructure and adapter baseline
+
 This Architecture / Integration fixture owns one hosted Ubuntu job's Redis,
 MySQL and Mailpit services. It is infrastructure proof, **not** production Redis,
 MySQL DAO, SMTP adapter, migration or four-process business-flow coverage.

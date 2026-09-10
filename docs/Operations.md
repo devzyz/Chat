@@ -1,6 +1,10 @@
 <!-- generated-by: gsd-doc-writer -->
 # 配置、错误与日志规范
 
+Gate 的 MySQL Connector 连接、读取和写入超时均为 2 秒，关闭池会唤醒等待者并回收健康线程。
+自动重连关闭；超时按已有业务失败路径返回。四服务 fixture 使用数值 loopback 地址，
+真实阻塞读和关闭验证由 `tests/services` 的 3C-07 selector 负责，不能仅由空池回归推断通过。
+
 ## 配置来源
 
 项目配置采用显式路径优先模型：

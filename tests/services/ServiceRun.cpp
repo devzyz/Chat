@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     std::filesystem::create_directories(evidence_root);
     bool complete = false;
     try {
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(380);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(680);
         auto context = integration::RunContext::Create(deadline);
         if (setenv("CHAT_SERVICE_RUN_ID", context->RunId().c_str(), 1) != 0 ||
             setenv("CHAT_SERVICE_EVIDENCE_ROOT", evidence_root.string().c_str(), 1) != 0) {

@@ -746,6 +746,11 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 
 ## 8. 矩阵维护规则
 
+3C-07 新登记 `T10-4PROC-01..18`，Domain 为 Architecture/Business、Level 为 Integration，
+owner 为 `tests/services/fourProcessCases.js`，公开入口为 Linux `3C-07` selector，
+独立报告为 `linux_four_process.xml`。合同细分、期限和清理见 [模块入口](services/README.md#four-production-processes-3c-07)。
+本地驱动/报告回归不计为上述真实依赖用例通过；G-015 的验收须查当前状态页的 hosted 证据。
+
 - 新 testcase 合并时必须先分配 Test ID，并更新本矩阵及所属 Module README。
 - 删除、合并或改写 Test ID 必须遵守 D-04 合同变更流程。
 - `CheckTestStructure` 负责验证测试文件和 runner 注册；本矩阵负责语义、lane 和合同归属，二者不能互相替代。

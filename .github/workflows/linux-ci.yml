@@ -110,8 +110,9 @@ jobs:
 
       - name: Build same-source service RunContext launcher
         run: |
-          timeout --signal=TERM --kill-after=5s 120s cmake --build out/build/linux-x64-release --target service_run redis_adapter_integration message_commit_integration gate_mysql_pool_tests --parallel 2
+          timeout --signal=TERM --kill-after=5s 120s cmake --build out/build/linux-x64-release --target service_run redis_adapter_integration message_commit_integration gate_mysql_pool_tests FourProcessDriver --parallel 2
           ctest --test-dir out/build/linux-x64-release -L 'phase3c-(redis|message-commit|gate-mysql)-local' --output-on-failure --no-tests=error
+          CHAT_FOUR_DRIVER="$PWD/out/build/linux-x64-release/bin/FourProcessDriver" node --test tests/services/driver.test.js tests/services/fourProcess.test.js
           mkdir -p out/phase3c/service-launcher
           cp out/build/linux-x64-release/bin/service_run out/phase3c/service-launcher/
           cp out/build/linux-x64-release/bin/redis_adapter_integration out/phase3c/service-launcher/
@@ -120,7 +121,8 @@ jobs:
           env -u LD_LIBRARY_PATH -u LD_PRELOAD out/phase3c/service-launcher/redis_adapter_integration lifecycle
           node tests/services/messageRuntime.js pack out/build/linux-x64-release/bin/message_commit_integration out/phase3c/service-launcher/message .ci/vcpkg_installed
           git rev-parse HEAD > out/phase3c/service-launcher/source-sha.txt
-          (cd out/phase3c/service-launcher && sha256sum service_run redis_adapter_integration libhiredis.so.1 message/* > service_run.sha256)
+          node tests/services/fourRuntime.js pack out/build/linux-x64-release/bin out/phase3c/service-launcher/four .ci/vcpkg_installed
+          (cd out/phase3c/service-launcher && sha256sum service_run redis_adapter_integration libhiredis.so.1 message/* four/*/* > service_run.sha256)
 
       - name: Upload same-run service launcher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -179,6 +181,7 @@ jobs:
     env:
       CHAT_SERVICE_LAUNCHER: ${{ github.workspace }}/out/phase3c/service-launcher/service_run
       CHAT_REDIS_TEST_BINARY: ${{ github.workspace }}/out/phase3c/service-launcher/redis_adapter_integration
+      CHAT_FOUR_BUNDLE: ${{ github.workspace }}/out/phase3c/service-launcher/four
       CHAT_MESSAGE_TEST_BINARY: ${{ github.workspace }}/out/phase3c/service-launcher/message/message_commit_integration
     steps:
       - name: Check out candidate source
@@ -209,6 +212,9 @@ jobs:
           chmod u+x "$CHAT_REDIS_TEST_BINARY"
           chmod u+x "$CHAT_MESSAGE_TEST_BINARY"
           node tests/services/serviceRuntime.js out/phase3c/service-launcher
+          find out/phase3c/service-launcher/four -type f -name "*Server" -exec chmod u+x {} +
+          chmod u+x out/phase3c/service-launcher/four/driver/FourProcessDriver
+          node tests/services/fourRuntime.js verify out/phase3c/service-launcher/four
           node tests/services/messageRuntime.js verify out/phase3c/service-launcher/message
           env -u LD_LIBRARY_PATH -u LD_PRELOAD "$CHAT_REDIS_TEST_BINARY" lifecycle
           node --test tests/services/coordinator.test.js
@@ -217,9 +223,9 @@ jobs:
         working-directory: VarifyServer
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Prove bounded disposable service lifecycle
-        timeout-minutes: 8
+        timeout-minutes: 13
         env:
-          CHAT_SERVICE_SELECTOR: 3C-data-adapters
+          CHAT_SERVICE_SELECTOR: 3C-07
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
@@ -227,11 +233,11 @@ jobs:
           CHAT_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
           CHAT_SMTP_PORT: ${{ job.services.mailpit.ports[1025] }}
           CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports[8025] }}
-        run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-data-adapters
+        run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-07
       - name: Preserve fail-closed outer evidence
         if: always()
         env:
-          CHAT_SERVICE_SELECTOR: 3C-data-adapters
+          CHAT_SERVICE_SELECTOR: 3C-07
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}

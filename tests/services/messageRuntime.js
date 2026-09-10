@@ -41,15 +41,16 @@ function inspect(binary, bundle) {
         env: { ...process.env, LD_LIBRARY_PATH: bundle || '', LD_PRELOAD: '' } });
 }
 
-function pack(binary, bundle, installedRoot) {
+function pack(binary, bundle, installedRoot, name = 'message_commit_integration', probe = ['validation']) {
+    assert.match(name, /^[A-Za-z][A-Za-z0-9_]*$/);
     binary = fs.realpathSync(binary);
     installedRoot = fs.realpathSync(installedRoot);
     bundle = path.resolve(bundle);
     assert.ok(!fs.existsSync(bundle), 'message runtime destination must be new');
     const libraries = dependencies(inspect(binary));
     fs.mkdirSync(bundle, { recursive: true });
-    fs.copyFileSync(binary, path.join(bundle, 'message_commit_integration'));
-    fs.chmodSync(path.join(bundle, 'message_commit_integration'), 0o755);
+    fs.copyFileSync(binary, path.join(bundle, name));
+    fs.chmodSync(path.join(bundle, name), 0o755);
     for (const [name, source] of libraries) {
         const real = fs.realpathSync(source);
         assert.ok(real.startsWith(installedRoot + path.sep) ||
@@ -57,15 +58,16 @@ function pack(binary, bundle, installedRoot) {
         fs.copyFileSync(real, path.join(bundle, name));
     }
     fs.writeFileSync(path.join(bundle, 'libraries.json'), JSON.stringify([...libraries.keys()].sort()) + '\n');
-    verify(bundle);
+    verify(bundle, name, probe);
 }
 
-function verify(bundle) {
+function verify(bundle, name = 'message_commit_integration', probe = ['validation']) {
+    assert.match(name, /^[A-Za-z][A-Za-z0-9_]*$/);
     bundle = path.resolve(bundle);
-    const binary = path.join(bundle, 'message_commit_integration');
+    const binary = path.join(bundle, name);
     const names = JSON.parse(fs.readFileSync(path.join(bundle, 'libraries.json'), 'utf8'));
     validateRelocated(inspect(binary, bundle), bundle, names);
-    execFileSync(binary, ['validation'], { timeout: 10000,
+    if (probe) execFileSync(binary, probe, { timeout: 10000,
         env: { ...process.env, LD_LIBRARY_PATH: bundle, LD_PRELOAD: '' }, stdio: 'pipe' });
 }
 
@@ -76,4 +78,4 @@ if (require.main === module) {
     else throw new Error('messageRuntime requires pack <binary> <new-bundle> <installed-root> or verify <bundle>');
 }
 
-module.exports = { dependencies, validateRelocated };
+module.exports = { dependencies, validateRelocated, pack, verify };

@@ -356,6 +356,9 @@ async function runSuite(evidenceRoot) {
             await require('../server/data/runRedisCases').runRedisCases(coordinator, record);
             await require('../../VarifyServer/test/redis/redis-suite').runRedisCases(coordinator, record);
         }
+        if (groups.some((group) => group.prefix === 'T10-4PROC-')) {
+            await require('./fourProcessCases').runFourProcessCases(coordinator, record);
+        }
         await record('T10-SVC-06', 'real unavailable health deadline', async () => {
             await coordinator.lifecycle('mailpit', 'stop');
             try {
@@ -389,7 +392,7 @@ async function runSuite(evidenceRoot) {
                 finally { client.disconnect(); }
             }, 5000));
         });
-    } catch (error) { primaryFailure = /^(T10-(SVC|RDS|MIG|MSG)|V0[89]-(REDIS|SMTP))-[0-9]+$/.test(error.message) ? error.message : 'setup'; }
+    } catch (error) { primaryFailure = /^(T10-(SVC|RDS|MIG|MSG|4PROC)|V0[89]-(REDIS|SMTP))-[0-9]+$/.test(error.message) ? error.message : 'setup'; }
     finally {
         if (coordinator) cleanup = await coordinator.teardown();
         cases.push({ id: 'T10-SVC-11', name: 'owned data and service teardown', pass: cleanup.complete, seconds: 0 });

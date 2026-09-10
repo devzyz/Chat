@@ -8,4 +8,4 @@ endif()
 add_test(NAME phase3c-disposable-services
     COMMAND "$ENV{CHAT_SERVICE_LAUNCHER}" "${CHAT_NODE_EXECUTABLE}"
         "${CMAKE_CURRENT_LIST_DIR}/dependencyCoordinator.js" "$ENV{CHAT_SERVICE_EVIDENCE_ROOT}")
-set_tests_properties(phase3c-disposable-services PROPERTIES LABELS "phase3c-services" TIMEOUT 390)
+set_tests_properties(phase3c-disposable-services PROPERTIES LABELS "phase3c-services" TIMEOUT 690)
