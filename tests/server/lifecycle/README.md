@@ -23,3 +23,10 @@ seconds. CTest applies a five-second process timeout and the hosted preflight
 runs the `phase3c-gate-mysql-local` label. This is a lifecycle regression, not
 real MySQL or four-process acceptance; shutdown during database I/O still needs
 the 3C-07 real-dependency fixture.
+
+The Gate lifecycle executable also checks that repeated `LogMgr::Close()` retains
+the default logger for later destructor logging. It runs with the same TRACE
+compile definition as hosted Linux Release. Previously global spdlog shutdown
+cleared that logger before singleton destruction, causing a null dereference.
+This regression checks logger availability directly and restores it on failure
+so the failure report is not itself lost during static destruction.

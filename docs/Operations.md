@@ -92,6 +92,12 @@ getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超�
 - 清理失败不得覆盖原始异常；可作为附加日志记录。
 - 对客户端公开的错误码必须稳定，内部异常文本不得直接作为协议字段泄漏。
 
+## 日志关闭
+
+`LogMgr::Close()` 幂等刷新应用日志，不销毁进程级 spdlog registry。
+服务静态析构仍可能产生日志；registry 在进程退出时自行释放。通用 Singleton 析构不写日志，
+避免 LogMgr 自身或早于 registry 初始化的单例在 registry 销毁后再次调用日志设施。
+
 ## 日志级别
 
 | 级别 | 使用场景 |

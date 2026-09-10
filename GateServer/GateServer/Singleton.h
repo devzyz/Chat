@@ -15,9 +15,8 @@ public:
 	//	std::cout << _instance.get() << std::endl;
 	//}
 
-	~Singleton() {
-		SPDLOG_DEBUG("Singleton destructed");
-	}
+	// A singleton can outlive the logging registry during static destruction.
+	~Singleton() = default;
 protected:
 	Singleton() = default;
 	Singleton(const Singleton&) = delete;
