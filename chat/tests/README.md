@@ -1,5 +1,8 @@
 # Qt 客户端测试
 
+- [session-driver](session-driver/README.md): GUI/driver shared production login,
+  isolated client processes and bounded control-channel lifecycle (five Integration cases).
+
 Qt 测试由 `chat/CMakeLists.txt` 显式注册，测试源码按客户端模块组织：
 
 - [message-model](message-model/README.md)：Business / Unit + Component；前六项保护单一模型规则，store 分页状态和真实 delegate 布局保持 Component。

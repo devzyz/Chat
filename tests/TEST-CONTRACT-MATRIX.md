@@ -1,5 +1,13 @@
 # 当前自动测试合同矩阵
 
+Phase 3D-00 client foundation adds `E03-CONTRACT-01..05`, registered as
+`session_driver.*` in [the client driver module](../chat/tests/session-driver/README.md).
+They execute real client processes and loopback production transports, under
+`client_integration.xml`: 28 Integration cases, 54 total client cases.
+These results do not close G-016 or establish the real five-service topology.
+The registered aggregate becomes 13 reports / 347 cases; this registration
+does not mean all 347 cases were re-executed for this change.
+
 Phase 3C-01 adds `T10-BLD-01..10` under CTest label
 `phase3c-build-ownership`, reported in `linux_build_ownership.xml`.
 The [process module contract](server/process-harness/README.md#linux-ownership-and-process-contracts-3c-01)

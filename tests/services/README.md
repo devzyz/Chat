@@ -240,3 +240,17 @@ volume or personal mailbox is used. Individual suites remove only their own
 data before the coordinator performs final fixture teardown. Hosted execution
 remains required; local lifecycle and loopback tests are not acceptance evidence
 for actual Redis/Mailpit integration.
+# Phase 3D foundation
+
+`phase3d.fixture.json` fixes the logical users, server identities, seed, journey
+and deadlines. `twoServerTopology.js` namespaces physical resources by run ID,
+renders reciprocal peer RPC and Status discovery configuration, and rejects
+missing clients, shared PID/account, or incorrect observed endpoints.
+Configuration strings contain a generated credential and must only be written
+to private run-owned files; the topology descriptor contains no credential.
+
+`node --test tests/services/twoServerTopology.test.js` runs three support
+contracts; Linux preflight runs the same command. These checks and the
+[client process contracts](../../chat/tests/session-driver/README.md) are
+foundation evidence. They do not yet launch the five production services or
+prove real Status balancing, routing, message models or the full journey.

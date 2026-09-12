@@ -1,0 +1,10 @@
+{
+  "format": 1,
+  "identity": "phase3d-2026-08-30",
+  "seed": "0x3D20260830",
+  "users": ["alice", "bob"],
+  "servers": ["chat-e2e-a", "chat-e2e-b"],
+  "journey": ["verification", "registration", "login", "friendship", "private-chat", "reconnect", "history"],
+  "text": "Hello, 世界 👋",
+  "deadlinesMs": {"ready": 30000, "command": 10000, "recovery": 30000, "stop": 10000}
+}
