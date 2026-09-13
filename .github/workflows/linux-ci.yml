@@ -115,7 +115,7 @@ jobs:
           CHAT_E2E_CLIENT="$PWD/out/build/linux-x64-release/bin/chat_e2e_client" node --test tests/services/twoServerTopology.test.js tests/services/clientControl.test.js tests/services/phase3dEvidence.test.js tests/services/connectionCount.test.js
           ctest --test-dir out/build/linux-x64-release -R '^session_driver\.' --output-on-failure --no-tests=error --output-junit "$CHAT_EVIDENCE_ROOT/linux_phase3d_client.xml"
           ctest --test-dir out/build/linux-x64-release -L 'phase3c-(redis|message-commit|gate-mysql)-local' --output-on-failure --no-tests=error
-          CHAT_FOUR_DRIVER="$PWD/out/build/linux-x64-release/bin/FourProcessDriver" node --test tests/services/driver.test.js tests/services/fourProcess.test.js
+          CHAT_FOUR_DRIVER="$PWD/out/build/linux-x64-release/bin/FourProcessDriver" node --test tests/services/driver.test.js tests/services/relay.test.js tests/services/fourProcess.test.js
           mkdir -p out/phase3c/service-launcher
           cp out/build/linux-x64-release/bin/service_run out/phase3c/service-launcher/
           cp out/build/linux-x64-release/bin/redis_adapter_integration out/phase3c/service-launcher/
@@ -320,10 +320,10 @@ jobs:
         timeout-minutes: 2
         working-directory: VarifyServer
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Prove five-service two-client foundation friendship and messaging
+      - name: Prove complete current-N two-instance business and recovery journey
         timeout-minutes: 13
         env:
-          CHAT_SERVICE_SELECTOR: 3D-03-history
+          CHAT_SERVICE_SELECTOR: 3D
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
@@ -331,11 +331,11 @@ jobs:
           CHAT_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
           CHAT_SMTP_PORT: ${{ job.services.mailpit.ports[1025] }}
           CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports[8025] }}
-        run: bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-03-history
+        run: bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D
       - name: Preserve fail-closed outer evidence
         if: always()
         env:
-          CHAT_SERVICE_SELECTOR: 3D-03-history
+          CHAT_SERVICE_SELECTOR: 3D
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
@@ -346,6 +346,58 @@ jobs:
         with:
           name: phase3d-contract-evidence
           path: out/phase3d/contracts/*
+          if-no-files-found: error
+          retention-days: 7
+
+  phase3d-release-admission:
+    name: Phase 3D current-N release admission
+    needs: [two-server-contract, downstream-contract]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Check out candidate source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Select locked Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.18.0"
+      - name: Verify admission rejection contracts
+        run: node --test tests/services/phase3dGate.test.js tests/services/phase3dEvidence.test.js
+      - name: Download current-N business evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phase3d-contract-evidence
+          path: out/phase3d/contracts
+      - name: Reuse this run's accepted Phase 3C and promotion inventory
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phase3c-gate-evidence
+          path: out/phase3d/phase3c
+      - name: Bind candidate checks and actual checkout ancestry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mkdir -p out/phase3d
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" > out/phase3d/commit.json
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/commits/$CANDIDATE_SHA/check-runs?per_page=100" > out/phase3d/checks.json
+      - name: Admit current-N and retain the explicit N-1 blocker
+        if: always()
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          node tests/services/phase3dGate.js out/phase3d/contracts out/phase3d/phase3c/gate \
+            out/phase3d/gate "$GITHUB_SHA" "$CANDIDATE_SHA" out/phase3d/commit.json out/phase3d/checks.json
+      - name: Upload current-N gate and release admission
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase3d-gate-evidence
+          path: out/phase3d/gate/
           if-no-files-found: error
           retention-days: 7
 

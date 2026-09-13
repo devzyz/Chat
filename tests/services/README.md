@@ -49,7 +49,7 @@ rebuild or dependency restore is needed.
 The driver reuses RunContext/ProcessHarness for identity-checked ownership,
 termination and reaping, and ChatFrameCodec for public TCP traffic. The
 coordinator leases loopback ports and supplies an owned database and synthetic
-credentials. Each child has a 240-second lifetime deadline, graceful shutdown
+credentials. Each child has a 600-second lifetime deadline, graceful shutdown
 has ten seconds, and escalation fails the case. The outer coordinator has a
 680-second execution window, with CTest and shell deadlines of 690/720 seconds.
 
@@ -250,7 +250,49 @@ without extra chats/greetings (05), wrong code/password and duplicate registrati
 (06), and real Chat rejection of mismatched/cross-account tokens (07).
 It reuses the same disposable five-service scenario and cleanup; no friend row
 or selected endpoint is written by the fixture. The seven foundation cases also
-remain mandatory. The hosted job selects `3D-03-history`; full `3D` still fails closed.
+remain mandatory. The hosted job selects full `3D` (33 current-N E2E cases).
+
+Full `3D-03` and `3D` extend the four history cases below with
+`E03-RECOVER-05..11`: restart Chat A behind a production-codec fault relay; drop
+the selected committed ACK and disconnect its generation; reauthenticate the
+same process and replay the retained original payload to the same server ID;
+duplicate a real peer notification; restart Chat B and recover discovery before
+cross-instance delivery; reject invalid wire history cursors; stop the relay and
+verify fault/cleanup evidence. Normal preceding journeys connect directly.
+
+The relay changes only the fault-path listener while preserving discovery and
+peer RPC identity. It uses `ChatFrameCodec`, sequential bounded frames in each
+direction, at most 64 live connection pairs, and a 420-second lifetime. The
+600-second child supervision budget accommodates the additional real 60-second
+Redis publication cycles; existing outer 690/720-second limits remain. Identity
+sidecars record native PID/creation time, and `topology.json` binds both restarts.
+No arbitrary test endpoint override or production EXE test mode is added.
+
+The complete public current-N entry is:
+
+```bash
+bash scripts/linux-ci.sh --phase 3D --configuration Release --junit-dir out/phase3d/contracts
+```
+
+`phase3d-release-admission` consumes the same run's 3C promotion inventory and
+gate, the 33-case 3D manifest, and all nine existing checks for the candidate.
+PR checkout SHA ancestry must contain that candidate; dispatch checks use the
+candidate directly. It emits `phase3d-gate-evidence`, `release-admission.json`,
+the original E2E reports, and the actual `E03-CLOSE-01` aggregation result in
+`linux_phase3d_gate.xml`. Missing/failed checks, report tampering, wrong SHA,
+missing restart/fault evidence or incomplete cleanup fail admission.
+
+The five `E03-COMPAT-01..05` entries reuse the 3C bootstrap resolver for the two
+client/service, two peer RPC and schema directions. An empty published release
+inventory yields five **unexecuted** bootstrap entries/skips, leaves G-017 open,
+and keeps `releaseEligible=false`. Any published runtime requires baseline review
+and blocks this bootstrap route; no old source is rebuilt or fake N-1 substituted.
+Current-N acceptance may route to R-00 preparation, but does not authorize release.
+
+Support regression includes `phase3dGate.test.js`, `relay.test.js` and the existing
+driver/compatibility tests. The compiled relay test uses real local sockets and
+checks exact dropped/replayed bytes; only hosted E2E proves service faults and
+graceful relay cleanup. Synthetic admission inputs are validator tests, not E2E.
 
 The partial `3D-03-history` selector adds four `E03-RECOVER-01..04` cases in
 `linux_phase3d_recovery.xml` (26 cumulative cases). It publicly sends 21 messages,
@@ -265,9 +307,7 @@ ten-row page size. Existing process supervision owns the restarted client.
 bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-03-history
 ```
 
-This is only the history/process-restart slice of 3D-03. ACK-loss relay, in-process
-pending replay after reconnect, ChatServer restart, and invalid wire cursor
-coverage remain outstanding. The full `3D-03` selector deliberately fails closed.
+The `3D-03-history` selector remains available as the smaller history/process-restart slice.
 
 Selector `3D-02` also requires eight `E03-XMSG-01..08` cases in
 `linux_phase3d_messaging.xml` (22 E2E cases cumulatively): bidirectional Unicode

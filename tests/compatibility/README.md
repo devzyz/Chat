@@ -1,5 +1,11 @@
 # Runtime compatibility evidence (3C-08)
 
+Phase 3D reuses this same-run promotion result in `phase3dGate.js`, correlating
+the five entries as `E03-COMPAT-01..05` with their original T10 IDs. Bootstrap
+remains unexecuted and release-ineligible; current-N business admission does not
+prove N/N-1 compatibility. No duplicate downloader or invented historical binary
+is used. A published baseline requires review before this route can proceed.
+
 The repository has no published Release at phase entry. `bootstrap.js` consumes
 the complete, successfully fetched GitHub releases inventory (`gh api --paginate
 --slurp`) and records five unexecuted combinations: both client/server directions,

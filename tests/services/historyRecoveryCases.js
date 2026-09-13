@@ -61,6 +61,7 @@ async function runHistoryRecoveryCases({ bob, users, sql, record, chatId, restar
             assert.equal(state.more, false);
         }
     });
+    return recovered;
 }
 
 module.exports = { runHistoryRecoveryCases };

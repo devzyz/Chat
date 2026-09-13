@@ -21,6 +21,7 @@ const loader = requireVarify('@grpc/proto-loader');
 const { runFriendshipCases } = require('./friendshipCases');
 const { runMessagingCases, runOfflineMessageCase } = require('./messagingCases');
 const { runHistoryRecoveryCases } = require('./historyRecoveryCases');
+const { runFaultRecoveryCases } = require('./faultRecoveryCases');
 
 async function runFiveProcessCases(coordinator, record, evidenceRoot, selector = '3D-00') {
     const bundle = process.env.CHAT_FOUR_BUNDLE;
@@ -35,6 +36,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
     const recipients = [];
     const users = [];
     const auxiliaryUsers = [];
+    const servers = {};
     const secrets = [coordinator.password];
     let topology;
     let sql;
@@ -60,14 +62,15 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
     async function release(...names) {
         for (const name of names) if (leases[name]) { await leases[name].release(); delete leases[name]; }
     }
-    async function native(role) {
+    async function native(role, configuredTopology = topology) {
         const binary = role.startsWith('Chat') ? 'ChatServer' : role;
         const keys = { GateServer: ['gate'], StatusServer: ['status'], ChatA: ['chatA', 'rpcA'], ChatB: ['chatB', 'rpcB'] };
         await release(...keys[role]);
         const file = path.join(root, `${role}.ini`);
-        fs.writeFileSync(file, nativeConfig(topology, role, { password: coordinator.password,
+        fs.writeFileSync(file, nativeConfig(configuredTopology, role, { password: coordinator.password,
             redis: coordinator.config.ports.redis, mysql: coordinator.config.ports.mysql }, path.join(root, 'logs')), { mode: 0o600 });
-        return start(role, path.join(bundle, binary, binary), ['--config', file]);
+        servers[role] = start(role, path.join(bundle, binary, binary), ['--config', file]);
+        return servers[role];
     }
     async function rpc(service, method, request) {
         const definition = grpc.loadPackageDefinition(loader.loadSync(path.resolve(__dirname, '../../proto',
@@ -180,7 +183,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             }
             const first = await authenticate(alice, users[0]);
             await count(topology.servers[0].name, 1);
-            if (['3D-02', '3D-03-history'].includes(selector)) {
+            if (['3D-02', '3D-03-history', '3D-03', '3D'].includes(selector)) {
                 const outsider = { logical: 'outsider', name: `outsider_${topology.runId}`,
                     email: `outsider-${topology.runId}@example.invalid`, password: randomUUID().slice(0, 12) };
                 secrets.push(outsider.password);
@@ -236,7 +239,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             assert.equal(await sql.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${uuid}'`), '1');
             assert.equal(await sql.execute(`SELECT message_id FROM chat_message WHERE client_msg_uuid='${uuid}'`), first[0].messageId);
         });
-        if (['3D-02', '3D-03-history'].includes(selector)) {
+        if (['3D-02', '3D-03-history', '3D-03', '3D'].includes(selector)) {
             await runMessagingCases({ alice, bob, users, sql, record, chatId, outsider: auxiliaryUsers[0] });
         }
         await test('one client exits while the peer retains its independent session', async () => {
@@ -246,9 +249,9 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             await count(topology.servers[0].name, 0);
             const remaining = await bob.control.command('snapshot');
             assert.equal(remaining.active, true); assert.equal(remaining.uid, users[1].uid);
-            assert.equal((await bob.control.command('snapshot', { chatId })).messages.length, ['3D-02', '3D-03-history'].includes(selector) ? 5 : 1);
+            assert.equal((await bob.control.command('snapshot', { chatId })).messages.length, ['3D-02', '3D-03-history', '3D-03', '3D'].includes(selector) ? 5 : 1);
         });
-        if (['3D-02', '3D-03-history'].includes(selector)) {
+        if (['3D-02', '3D-03-history', '3D-03', '3D'].includes(selector)) {
             await runOfflineMessageCase({ bob, users, sql, record, chatId });
             await record('E03-XMSG-08', 'authenticated wire rejects forged sender identity before persistence', async () => {
                 const redis = await coordinator.redis();
@@ -268,8 +271,8 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
                 assert.equal(await sql.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${spoofUuid}'`), '0');
             });
         }
-        if (selector === '3D-03-history') {
-            await runHistoryRecoveryCases({ bob, users, sql, record, chatId, restartClient: async () => {
+        if (['3D-03-history', '3D-03', '3D'].includes(selector)) {
+            const recoveredAlice = await runHistoryRecoveryCases({ bob, users, sql, record, chatId, restartClient: async () => {
                 await count(topology.servers[0].name, 0);
                 const recovered = await client('alicerecovered');
                 const expectedUid = users[0].uid;
@@ -283,6 +286,79 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
                     pid: recovered.pid, uid: observed.uid, active: observed.active, host: observed.host, port: observed.port }];
                 return recovered;
             } });
+            if (['3D-03', '3D'].includes(selector)) {
+                const identity = owned => JSON.parse(fs.readFileSync(`${owned.report}.identity`));
+                const ready = async port => poll(async () => {
+                    const result = JSON.parse(await runCommand(supervisor, ['chat'], { timeout: 10000,
+                        env: { ...env, LD_LIBRARY_PATH: path.dirname(supervisor),
+                            CHAT_FOUR_WIRE: JSON.stringify({ port, login: { uid: -1, token: 'invalid' } }) } }));
+                    return result.error > 0;
+                }, 30000);
+                const restart = async (role, clientInstance, configuredTopology = topology) => {
+                    const previous = servers[role];
+                    const oldIdentity = identity(previous);
+                    await stop(previous);
+                    await poll(async () => !(await clientInstance.control.command('snapshot')).active, 10000);
+                    await native(role, configuredTopology);
+                    const index = role === 'ChatA' ? 0 : 1;
+                    await ready(configuredTopology.servers[index].port);
+                    const nextIdentity = identity(servers[role]);
+                    assert.ok(oldIdentity.pid !== nextIdentity.pid || oldIdentity.creationTime !== nextIdentity.creationTime);
+                    topology.serverRestarts ||= [];
+                    topology.serverRestarts.push({ logical: role, previous: oldIdentity, current: nextIdentity,
+                        advertisedPort: topology.servers[index].port, listenPort: configuredTopology.servers[index].port });
+                };
+                await runFaultRecoveryCases({ alice: recoveredAlice, bob, users, sql, record, chatId,
+                    prepareRelay: async (dropUuid, replayUuid) => {
+                        const lease = await reserve();
+                        leases.faultBackend = lease;
+                        const backendPort = lease.port;
+                        // Preserve RPC identity and discovery; only this fault path inserts the relay.
+                        const configured = { ...topology, servers: topology.servers.map((server, index) =>
+                            index === 0 ? { ...server, port: backendPort } : server) };
+                        await release('faultBackend');
+                        await restart('ChatA', recoveredAlice, configured);
+                        const file = path.join(evidenceRoot, 'fault-relay.json');
+                        const owned = start('FrameFaultRelay', supervisor, ['relay', file], {
+                            CHAT_RELAY_CONFIG: JSON.stringify({ port: ports.chatA, backend: backendPort, dropUuid, replayUuid }) });
+                        const read = () => JSON.parse(fs.readFileSync(file));
+                        await poll(async () => read().ready === true, 10000);
+                        return { owned, read };
+                    },
+                    relogin: async (instance, index) => {
+                        await count(topology.servers[index].name, 0);
+                        await count(topology.servers[1 - index].name, 1);
+                        const uid = users[index].uid;
+                        const observed = await authenticate(instance, users[index], false);
+                        assert.equal(observed.uid, uid);
+                        assert.equal(observed.port, topology.servers[index].port);
+                        assert.equal(observed.active, true);
+                        await count(topology.servers[index].name, 1);
+                    },
+                    restartBob: () => restart('ChatB', bob),
+                    invalidHistory: async () => {
+                        assert.equal((await recoveredAlice.control.command('stop')).status, 'stopped');
+                        await stop(recoveredAlice.owned);
+                        await recoveredAlice.control.close();
+                        const redis = await coordinator.redis();
+                        let token;
+                        try { token = await redis.hget(String(users[0].uid), `utoken_${users[0].uid}`); }
+                        finally { redis.disconnect(); }
+                        assert.ok(token); secrets.push(token);
+                        const result = JSON.parse(await runCommand(supervisor, ['chat'], { timeout: 15000,
+                            env: { ...env, LD_LIBRARY_PATH: path.dirname(supervisor), CHAT_FOUR_WIRE: JSON.stringify({
+                                port: ports.chatA, login: { uid: users[0].uid, token },
+                                requests: [-1, 'bad', 1.5, 2147483648].map(cursor => ({ id: 1027,
+                                    body: { chat_id: chatId, current_msg_id: cursor } })) }) } }));
+                        assert.equal(result.error, 0);
+                        assert.equal(result.responses.length, 4);
+                        for (const response of result.responses) {
+                            assert.equal(response.error, 1001);
+                            assert.ok(!response.msgs);
+                        }
+                    }, stopRelay: stop });
+            }
+
         }
     } catch (error) { primary = error; }
     finally {

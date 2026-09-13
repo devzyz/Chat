@@ -48,6 +48,12 @@ Newline-delimited JSON commands require strictly increasing positive integer
   wire requests and one acknowledged model item.
 
 Only one business command may be pending; snapshots and stop remain available.
+An unexpected disconnect completes a pending TCP control command as `disconnected`
+and releases its deadline. Production `TcpMgr` retains uncertain payloads; a new
+public login for the same account retries their original bytes. The driver keeps
+the same account's message model and clears it on account change. The existing
+E03-CONTRACT-01 regression covers disconnect/relogin and a private chat absent
+from the friend cache; production login renders a safe UID label for that chat.
 TCP commands have a ten-second deadline, account HTTP requests five seconds.
 `ClientSession` owns the ten-second heartbeat for both GUI and driver.
 Input is capped at 8192 bytes, outbound queued

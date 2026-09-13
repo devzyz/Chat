@@ -68,7 +68,7 @@ test('foundation evidence binds exact cases, bytes, SHA, distinct clients and cl
         writeJourney(journey);
         fs.appendFileSync(path.join(root, 'linux_phase3d_journey.xml'), 'modified');
         assert.throws(() => validate(root, sha, '3D-01'));
-        assert.throws(() => reportGroups('3D'));
+        assert.throws(() => reportGroups('unknown'));
         restore();
         const messaging = Array.from({ length: 8 }, (_, index) => ({
             id: `E03-XMSG-${String(index + 1).padStart(2, '0')}`,
@@ -105,7 +105,7 @@ test('foundation evidence binds exact cases, bytes, SHA, distinct clients and cl
         writeRecovery(recovery);
         fs.appendFileSync(path.join(root, 'linux_phase3d_recovery.xml'), 'modified');
         assert.throws(() => validate(root, sha, '3D-03-history'));
-        assert.throws(() => reportGroups('3D-03'));
+        assert.equal(reportGroups('3D-03').at(-1).expected, 11);
     } finally {
         if (previous === undefined) delete process.env.CHAT_CANDIDATE_SHA;
         else process.env.CHAT_CANDIDATE_SHA = previous;

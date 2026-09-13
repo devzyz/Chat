@@ -1,10 +1,18 @@
 # 当前自动测试合同矩阵
 
+Full `3D` / `3D-03` register `E03-RECOVER-01..11`; cumulative current-N E2E count
+is 33 across four reports. Recovery includes real codec ACK loss/duplicate
+notification, same-process original-payload retry, both server restarts with
+PID/creation identity, and invalid wire cursors. The full gate adds the real
+`E03-CLOSE-01` aggregation result, and separately records five unexecuted
+`E03-COMPAT-01..05` bootstrap entries when there is no promoted N-1. These five
+are not PASS cases. G-016 requires accepted hosted current-N evidence; G-017 and
+release eligibility remain blocked under bootstrap. See [service contracts](services/README.md).
+
 Partial selector `3D-03-history` adds `E03-RECOVER-01..04` in
 `linux_phase3d_recovery.xml`: public three-page dataset, new-process discovery,
 complete ordered history recovery, and overlapping/terminal page replay.
-It requires 26 cumulative E2E cases. This does not close the rest of 3D-03:
-ACK loss, connection/server restart and invalid wire cursor cases remain open.
+It requires 26 cumulative E2E cases and remains a focused subset of the full selector.
 
 The cumulative Linux `3D-02` selector adds `E03-XMSG-01..08` in
 `linux_phase3d_messaging.xml`: bidirectional model/database correlation,

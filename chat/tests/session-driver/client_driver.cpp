@@ -52,7 +52,15 @@ public:
             _pendingId = 0;
         });
         connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_connection_close, this, [this](bool expected) {
-            if (!expected && _session.isActive()) _session.resetSession(SessionResetReason::UnexpectedDisconnect);
+            if (!expected && _session.isActive()) {
+                _session.resetSession(SessionResetReason::UnexpectedDisconnect);
+                if (_pendingId && _expectedResponse >= 0) {
+                    _commandDeadline.stop();
+                    send(QJsonObject{{"id", _pendingId}, {"status", "disconnected"}, {"error", -1}});
+                    _pendingId = 0;
+                    _expectedResponse = -1;
+                }
+            }
         });
         connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_notify_offline, this,
                 [this] { _session.resetSession(SessionResetReason::Kicked); });

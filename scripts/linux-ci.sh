@@ -22,9 +22,10 @@ done
 
 if [[ "$phase" == "3D" && "$configuration" == "Release" ]]; then
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  if ((list_only)); then printf '%s\n' '3D-00' '3D-01' '3D-02' '3D-03-history'; exit 0; fi
-  if [[ "$selector" != "3D-00" && "$selector" != "3D-01" && "$selector" != "3D-02" && "$selector" != "3D-03-history" ]]; then
-    echo 'Phase 3D full acceptance is not implemented; select 3D-00, 3D-01, 3D-02 or 3D-03-history for implemented contracts' >&2
+  selector="${selector:-3D}"
+  if ((list_only)); then printf '%s\n' '3D-00' '3D-01' '3D-02' '3D-03-history' '3D-03' '3D'; exit 0; fi
+  if [[ "$selector" != "3D-00" && "$selector" != "3D-01" && "$selector" != "3D-02" && "$selector" != "3D-03-history" && "$selector" != "3D-03" && "$selector" != "3D" ]]; then
+    echo 'Unknown Phase 3D selector' >&2
     exit 2
   fi
   export CHAT_CANDIDATE_SHA="$(git -C "$repo_root" rev-parse HEAD)"

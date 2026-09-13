@@ -794,25 +794,20 @@ void LogicSystem::RegisterCallBacks() {
 	_fun_callbacks[MSG_LOAD_CHAT_MESSAGE_REQ] = [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
 		SPDLOG_DEBUG("load chat message request, msg_id={}", static_cast<int>(MSG_LOAD_CHAT_MESSAGE_REQ));
 		// 解析json数据
-		Json::Reader reader;
-		Json::Value root;
-		auto err = reader.parse(msg_data, root);
-		if (!err) {
-			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
-			return;
-		}
-
-		auto chat_id = root["chat_id"].asInt();
-		auto current_msg_id = root["current_msg_id"].asInt();
-
-		Json::Value return_value;
-		return_value["error"] = ErrorCodes::Success;
-		return_value["chat_id"] = chat_id;
-
-		Defer defer([this, &return_value, session]() {
-			std::string return_str = return_value.toStyledString();
-			session->Send(return_str, MSG_LOAD_CHAT_MESSAGE_RSP);
-			});
+        Json::Value return_value;
+        return_value["error"] = ErrorCodes::Error_Json;
+        Defer defer([&return_value, session]() {
+            session->Send(return_value.toStyledString(), MSG_LOAD_CHAT_MESSAGE_RSP);
+        });
+        Json::Reader reader;
+        Json::Value root;
+        if (!reader.parse(msg_data, root) || !root.isObject() ||
+            !root["chat_id"].isInt() || root["chat_id"].asInt() <= 0 ||
+            !root["current_msg_id"].isInt() || root["current_msg_id"].asInt() < 0) return;
+        const int chat_id = root["chat_id"].asInt();
+        const int current_msg_id = root["current_msg_id"].asInt();
+        return_value["error"] = ErrorCodes::Success;
+        return_value["chat_id"] = chat_id;
 
 		std::vector<std::shared_ptr<ChatMessage>> chat_msgs;
 

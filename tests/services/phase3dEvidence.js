@@ -7,11 +7,11 @@ const { assertConnectedClients } = require('./twoServerTopology');
 
 const groups = [{ file: 'linux_phase3d_contract.xml', prefix: 'E03-CONTRACT-', expected: 7 }];
 function reportGroups(selector = '3D-00') {
-    assert.ok(['3D-00', '3D-01', '3D-02', '3D-03-history'].includes(selector), 'unimplemented Phase 3D selector');
+    assert.ok(['3D-00', '3D-01', '3D-02', '3D-03-history', '3D-03', '3D'].includes(selector), 'unimplemented Phase 3D selector');
     const selected = [...groups];
     if (selector !== '3D-00') selected.push({ file: 'linux_phase3d_journey.xml', prefix: 'E03-JOURNEY-', expected: 7 });
-    if (['3D-02', '3D-03-history'].includes(selector)) selected.push({ file: 'linux_phase3d_messaging.xml', prefix: 'E03-XMSG-', expected: 8 });
-    if (selector === '3D-03-history') selected.push({ file: 'linux_phase3d_recovery.xml', prefix: 'E03-RECOVER-', expected: 4 });
+    if (['3D-02', '3D-03-history', '3D-03', '3D'].includes(selector)) selected.push({ file: 'linux_phase3d_messaging.xml', prefix: 'E03-XMSG-', expected: 8 });
+    if (['3D-03-history', '3D-03', '3D'].includes(selector)) selected.push({ file: 'linux_phase3d_recovery.xml', prefix: 'E03-RECOVER-', expected: selector === '3D-03-history' ? 4 : 11 });
     return selected;
 }
 function validate(root, sourceSha, selector = '3D-00') {
@@ -39,13 +39,29 @@ function validate(root, sourceSha, selector = '3D-00') {
     }
     const topology = read('topology.json');
     assertConnectedClients(topology, topology.clients);
-    if (selector === '3D-03-history') {
+    if (['3D-03-history', '3D-03', '3D'].includes(selector)) {
         assert.equal(topology.recoveredClients?.length, 1);
         const recovered = topology.recoveredClients[0];
         assert.equal(recovered.previousPid, topology.clients[0].pid);
         assert.notEqual(recovered.pid, recovered.previousPid);
         assert.equal(recovered.uid, topology.clients[0].uid);
         assertConnectedClients(topology, [recovered, topology.clients[1]]);
+    }
+    if (['3D-03', '3D'].includes(selector)) {
+        const relay = read('fault-relay.json');
+        assert.equal(relay.complete, true);
+        assert.equal(relay.droppedAck, true);
+        assert.equal(relay.replayedNotification, true);
+        assert.match(relay.committedId, /^[1-9][0-9]*$/);
+        assert.deepEqual(topology.serverRestarts?.map(value => value.logical), ['ChatA', 'ChatB']);
+        for (const [index, restart] of topology.serverRestarts.entries()) {
+            for (const identity of [restart.previous, restart.current]) {
+                assert.ok(Number.isSafeInteger(identity.pid) && identity.pid > 0);
+                assert.match(identity.creationTime, /^[0-9]+$/);
+            }
+            assert.ok(restart.previous.pid !== restart.current.pid || restart.previous.creationTime !== restart.current.creationTime);
+            assert.equal(restart.advertisedPort, topology.servers[index].port);
+        }
     }
     for (const name of ['application-teardown.json', 'process-teardown.json', 'redaction.json']) {
         assert.equal(read(name).complete, true);

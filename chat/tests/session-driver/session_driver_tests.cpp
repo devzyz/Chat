@@ -141,6 +141,7 @@ public:
                         QJsonObject result{{"error", 0}, {"chat_id", 7}, {"self_id", userId}, {"other_id", 42}};
                         if (frame.messageId == 1016) {
                             ++sentFrames;
+                            if (dropNextText) { dropNextText = false; peer->abort(); continue; }
                             sentBody = request;
                             result["uuid_msgId"] = QJsonArray{QJsonObject{
                                 {"msg_uuid", request["text_array"].toArray().first().toObject()["msg_uuid"]},
@@ -156,7 +157,9 @@ public:
                     if (frame.messageId != 1005) continue;
                     chatBody = QJsonDocument::fromJson(frame.body).object();
                     const auto body = QJsonDocument(QJsonObject{{"error", 0}, {"uid", userId},
-                        {"name", "synthetic"}, {"token", "synthetic-login-token"}}).toJson(QJsonDocument::Compact);
+                        {"name", "synthetic"}, {"token", "synthetic-login-token"},
+                        {"chat_list", QJsonArray{QJsonObject{{"chat_id", 9}, {"type", "private"},
+                            {"user1_id", userId}, {"user2_id", 99}}}}}).toJson(QJsonDocument::Compact);
                     QByteArray response(4, '\0');
                     qToBigEndian<quint16>(1006, response.data());
                     qToBigEndian<quint16>(static_cast<quint16>(body.size()), response.data() + 2);
@@ -173,6 +176,7 @@ public:
     QJsonObject applicationBody, acceptanceBody;
     int heartbeats = 0;
     int sentFrames = 0;
+    bool dropNextText = false;
 };
 
 class SessionDriverTests : public QObject
@@ -247,7 +251,17 @@ private slots:
                     {"description", "unknown"}, {"backname", "unknown"}});
         QCOMPARE(alice.receive().value("status").toString(), QString("no-application"));
         QTRY_VERIFY_WITH_TIMEOUT(first.heartbeats > 0 && second.heartbeats > 0, 12000);
-        QVERIFY(alice.stop(10));
+        first.dropNextText = true;
+        alice.send({{"id", 10}, {"command", "send"}, {"chatId", 7}, {"toUid", 42},
+                    {"uuid", uuid}, {"text", QString::fromUtf8("\u8de8\u5b9e\u4f8b \U0001f642\nsecond line")}});
+        QCOMPARE(alice.receive().value("status").toString(), QString("disconnected"));
+        alice.send({{"id", 11}, {"command", "login"}, {"gate", first.url()},
+                    {"email", "alice@example.invalid"}, {"password", "fixture-only"}});
+        QCOMPARE(alice.receive().value("status").toString(), QString("authenticated"));
+        QTRY_COMPARE_WITH_TIMEOUT(first.sentFrames, 4, 3000);
+        alice.send({{"id", 12}, {"command", "snapshot"}, {"chatId", 7}});
+        QCOMPARE(alice.receive().value("messages").toArray().size(), 1);
+        QVERIFY(alice.stop(13));
         bob.send({{"id", 2}, {"command", "snapshot"}});
         QCOMPARE(bob.receive().value("uid").toInt(), 42);
         QVERIFY(bob.stop(3));
