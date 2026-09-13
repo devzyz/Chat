@@ -323,7 +323,7 @@ jobs:
       - name: Prove five-service two-client foundation friendship and messaging
         timeout-minutes: 13
         env:
-          CHAT_SERVICE_SELECTOR: 3D-02
+          CHAT_SERVICE_SELECTOR: 3D-03-history
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
@@ -331,11 +331,11 @@ jobs:
           CHAT_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
           CHAT_SMTP_PORT: ${{ job.services.mailpit.ports[1025] }}
           CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports[8025] }}
-        run: bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-02
+        run: bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-03-history
       - name: Preserve fail-closed outer evidence
         if: always()
         env:
-          CHAT_SERVICE_SELECTOR: 3D-02
+          CHAT_SERVICE_SELECTOR: 3D-03-history
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}

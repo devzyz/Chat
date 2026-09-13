@@ -84,6 +84,28 @@ test('foundation evidence binds exact cases, bytes, SHA, distinct clients and cl
         writeMessaging(messaging);
         fs.appendFileSync(path.join(root, 'linux_phase3d_messaging.xml'), 'modified');
         assert.throws(() => validate(root, sha, '3D-02'));
+        restore();
+        write('topology.json', { ...topology, recoveredClients: [{ ...topology.clients[0],
+            previousPid: topology.clients[0].pid, pid: 9999 }] });
+        const recovery = Array.from({ length: 4 }, (_, index) => ({
+            id: `E03-RECOVER-${String(index + 1).padStart(2, '0')}`,
+            name: 'synthetic recovery validator input', pass: true }));
+        const writeRecovery = values => writeReports(root, '3D-03-history', [...cases, ...journey, ...messaging, ...values], {
+            groups: reportGroups('3D-03-history'), manifest: 'phase3d-reports.json', level: 'E2E' });
+        writeRecovery(recovery);
+        validate(root, sha, '3D-03-history');
+        write('topology.json', topology);
+        assert.throws(() => validate(root, sha, '3D-03-history'));
+        write('topology.json', { ...topology, recoveredClients: [{ ...topology.clients[0],
+            previousPid: topology.clients[0].pid, pid: 9999 }] });
+        writeRecovery(recovery.slice(1));
+        assert.throws(() => validate(root, sha, '3D-03-history'));
+        writeRecovery(recovery.map((value, index) => ({ ...value, pass: index !== 2 })));
+        assert.throws(() => validate(root, sha, '3D-03-history'));
+        writeRecovery(recovery);
+        fs.appendFileSync(path.join(root, 'linux_phase3d_recovery.xml'), 'modified');
+        assert.throws(() => validate(root, sha, '3D-03-history'));
+        assert.throws(() => reportGroups('3D-03'));
     } finally {
         if (previous === undefined) delete process.env.CHAT_CANDIDATE_SHA;
         else process.env.CHAT_CANDIDATE_SHA = previous;

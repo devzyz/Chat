@@ -1,23 +1,29 @@
 #include "messagemodelstore.h"
 
-#include <algorithm>
-
 bool MessageModelStore::applyHistory(int chatId, const QVector<MessageRecord> &records,
                                    bool canLoadMore, qint64 nextCursor)
 {
     auto *model = getOrCreate(chatId);
-    const auto oldest = model->oldestMessageId();
-    if (model->hasLoadedInitialPage() && oldest > 0 &&
-        std::any_of(records.cbegin(), records.cend(), [model, oldest](const MessageRecord &record) {
-            return record.messageId >= oldest && model->rowForMessageId(record.messageId) < 0;
-        })) {
-        model->setCanLoadMore(false);
+    qint64 previousId = 0;
+    for (const auto &record : records) {
+        if (record.chatId != chatId || record.messageId <= previousId) {
+            model->setLoadingHistory(false);
+            return false;
+        }
+        previousId = record.messageId;
+    }
+    if (nextCursor < 0 || (!records.isEmpty() && nextCursor != previousId) ||
+        (records.isEmpty() && canLoadMore)) {
         model->setLoadingHistory(false);
         return false;
     }
+    const bool advances = !model->hasLoadedInitialPage() || nextCursor > model->historyCursor();
     model->prependHistory(records);
-    model->setCanLoadMore(canLoadMore);
-    model->setHistoryCursor(nextCursor > 0 ? nextCursor : model->oldestMessageId());
+    // Overlapping/replayed pages must not rewind the cursor or reopen an exhausted scan.
+    if (advances || (nextCursor == model->historyCursor() && !canLoadMore)) {
+        model->setCanLoadMore(canLoadMore);
+        model->setHistoryCursor(nextCursor);
+    }
     model->setInitialPageLoaded(true);
     model->setLoadingHistory(false);
     return true;

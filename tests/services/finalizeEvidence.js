@@ -15,7 +15,7 @@ function read(name) {
     catch { return { complete: false }; }
 }
 async function finalize() {
-    const phase3d = ['3D-00', '3D-01', '3D-02'].includes(process.env.CHAT_SERVICE_SELECTOR);
+    const phase3d = ['3D-00', '3D-01', '3D-02', '3D-03-history'].includes(process.env.CHAT_SERVICE_SELECTOR);
     const teardown = read('teardown.json');
     const processTeardown = read('process-teardown.json');
     const junit = path.join(root, phase3d ? 'linux_phase3d_contract.xml' : 'linux_services.xml');

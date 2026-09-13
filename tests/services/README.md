@@ -250,7 +250,24 @@ without extra chats/greetings (05), wrong code/password and duplicate registrati
 (06), and real Chat rejection of mismatched/cross-account tokens (07).
 It reuses the same disposable five-service scenario and cleanup; no friend row
 or selected endpoint is written by the fixture. The seven foundation cases also
-remain mandatory. The hosted job selects `3D-02`; full `3D` still fails closed.
+remain mandatory. The hosted job selects `3D-03-history`; full `3D` still fails closed.
+
+The partial `3D-03-history` selector adds four `E03-RECOVER-01..04` cases in
+`linux_phase3d_recovery.xml` (26 cumulative cases). It publicly sends 21 messages,
+starts a new client process for the stopped account, authenticates through normal
+discovery, and traverses at least three pages. Every recovered ID, sender, UUID
+and content hash must match MySQL in server-ID order. A page overlapping one
+previous boundary and a terminal empty request preserve the complete model and
+terminal cursor. The first-page boundary is asserted against the production
+ten-row page size. Existing process supervision owns the restarted client.
+
+```bash
+bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-03-history
+```
+
+This is only the history/process-restart slice of 3D-03. ACK-loss relay, in-process
+pending replay after reconnect, ChatServer restart, and invalid wire cursor
+coverage remain outstanding. The full `3D-03` selector deliberately fails closed.
 
 Selector `3D-02` also requires eight `E03-XMSG-01..08` cases in
 `linux_phase3d_messaging.xml` (22 E2E cases cumulatively): bidirectional Unicode

@@ -1,5 +1,11 @@
 # 当前自动测试合同矩阵
 
+Partial selector `3D-03-history` adds `E03-RECOVER-01..04` in
+`linux_phase3d_recovery.xml`: public three-page dataset, new-process discovery,
+complete ordered history recovery, and overlapping/terminal page replay.
+It requires 26 cumulative E2E cases. This does not close the rest of 3D-03:
+ACK loss, connection/server restart and invalid wire cursor cases remain open.
+
 The cumulative Linux `3D-02` selector adds `E03-XMSG-01..08` in
 `linux_phase3d_messaging.xml`: bidirectional model/database correlation,
 sender-scoped UUID identity, duplicate retries, content conflicts, invalid chat,

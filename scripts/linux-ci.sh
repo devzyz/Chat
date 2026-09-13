@@ -22,9 +22,9 @@ done
 
 if [[ "$phase" == "3D" && "$configuration" == "Release" ]]; then
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  if ((list_only)); then printf '%s\n' '3D-00' '3D-01' '3D-02'; exit 0; fi
-  if [[ "$selector" != "3D-00" && "$selector" != "3D-01" && "$selector" != "3D-02" ]]; then
-    echo 'Phase 3D full acceptance is not implemented; select 3D-00, 3D-01 or 3D-02 for implemented contracts' >&2
+  if ((list_only)); then printf '%s\n' '3D-00' '3D-01' '3D-02' '3D-03-history'; exit 0; fi
+  if [[ "$selector" != "3D-00" && "$selector" != "3D-01" && "$selector" != "3D-02" && "$selector" != "3D-03-history" ]]; then
+    echo 'Phase 3D full acceptance is not implemented; select 3D-00, 3D-01, 3D-02 or 3D-03-history for implemented contracts' >&2
     exit 2
   fi
   export CHAT_CANDIDATE_SHA="$(git -C "$repo_root" rev-parse HEAD)"

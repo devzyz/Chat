@@ -130,6 +130,7 @@ void MessageModelTests::historyDeduplicatesAndRemainsChronological()
 {
     MessageListModel model(7);
     model.appendMessage(message(30, {}));
+    QPersistentModelIndex anchor(model.index(0));
     const QVector<MessageRecord> history = {
         message(20, {}, QStringLiteral("中文")),
         message(10, {}, QStringLiteral("English 😄\nmanual wrap")),
@@ -142,6 +143,8 @@ void MessageModelTests::historyDeduplicatesAndRemainsChronological()
     QCOMPARE(model.data(model.index(0), MessageListModel::MessageIdRole).toLongLong(), 10);
     QCOMPARE(model.data(model.index(1), MessageListModel::MessageIdRole).toLongLong(), 20);
     QCOMPARE(model.data(model.index(2), MessageListModel::MessageIdRole).toLongLong(), 30);
+    QCOMPARE(anchor.row(), 2);
+    QCOMPARE(anchor.data(MessageListModel::MessageIdRole).toLongLong(), 30);
     QCOMPARE(model.data(model.index(0), MessageListModel::TextRole).toString(),
              QStringLiteral("English 😄\nmanual wrap"));
 }
@@ -234,20 +237,28 @@ void MessageModelTests::storeRetainsOneModelAndPaginationStatePerChat()
     QCOMPARE(first->historyCursor(), 123);
 
     first->setInitialPageLoaded(false);
-    QVERIFY(store.applyHistory(7, {message(30, "server-30")}, true, 30));
-    QVERIFY(!first->isLoadingHistory());
-    QVERIFY(store.applyHistory(7, {message(20, "server-20"), message(30, "server-30")}, true, 20));
-    QCOMPARE(first->rowCount(), 2);
-    QVERIFY(!store.applyHistory(7, {message(40, "forward")}, true, 40));
-    QCOMPARE(first->historyCursor(), 20);
-    QCOMPARE(first->rowCount(), 2);
+    QVERIFY(store.applyHistory(7, {message(10, "server-10"), message(20, "server-20")}, true, 20));
+    QPersistentModelIndex anchor(first->index(1));
+    QVERIFY(store.applyHistory(7, {message(20, "server-20"), message(30, "server-30")}, true, 30));
+    QVERIFY(store.applyHistory(7, {message(40, "server-40")}, false, 40));
+    QCOMPARE(first->rowCount(), 4);
+    for (int row = 0; row < 4; ++row) QCOMPARE(first->recordAt(row)->messageId, qint64((row + 1) * 10));
+    QCOMPARE(anchor.data(MessageListModel::MessageIdRole).toLongLong(), 20);
+    QVERIFY(store.applyHistory(7, {message(10, "server-10"), message(20, "server-20")}, true, 20));
+    QCOMPARE(first->historyCursor(), 40);
+    QVERIFY(!first->canLoadMore());
+    QVERIFY(store.applyHistory(7, {}, false, 40));
+    QVERIFY(!store.applyHistory(7, {message(50, "bad-cursor")}, true, 49));
+    QVERIFY(!store.applyHistory(7, {message(60, "unordered"), message(50, "unordered-2")}, true, 50));
+    QCOMPARE(first->historyCursor(), 40);
+    QCOMPARE(first->rowCount(), 4);
     first->appendMessage(message(0, "pending"));
     store.markFailed(8, {"pending"});
     store.markFailed(7, {"pending"});
-    QCOMPARE(first->recordAt(2)->deliveryStatus, DeliveryStatus::Failed);
+    QCOMPARE(first->recordAt(4)->deliveryStatus, DeliveryStatus::Failed);
     store.acknowledge(7, {{"pending", 50}});
-    QCOMPARE(first->recordAt(2)->messageId, 50);
-    QCOMPARE(first->recordAt(2)->deliveryStatus, DeliveryStatus::Sent);
+    QCOMPARE(first->recordAt(4)->messageId, 50);
+    QCOMPARE(first->recordAt(4)->deliveryStatus, DeliveryStatus::Sent);
     QCOMPARE(store.find(8)->rowCount(), 0);
 }
 

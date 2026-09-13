@@ -20,6 +20,7 @@ const grpc = requireVarify('@grpc/grpc-js');
 const loader = requireVarify('@grpc/proto-loader');
 const { runFriendshipCases } = require('./friendshipCases');
 const { runMessagingCases, runOfflineMessageCase } = require('./messagingCases');
+const { runHistoryRecoveryCases } = require('./historyRecoveryCases');
 
 async function runFiveProcessCases(coordinator, record, evidenceRoot, selector = '3D-00') {
     const bundle = process.env.CHAT_FOUR_BUNDLE;
@@ -179,7 +180,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             }
             const first = await authenticate(alice, users[0]);
             await count(topology.servers[0].name, 1);
-            if (selector === '3D-02') {
+            if (['3D-02', '3D-03-history'].includes(selector)) {
                 const outsider = { logical: 'outsider', name: `outsider_${topology.runId}`,
                     email: `outsider-${topology.runId}@example.invalid`, password: randomUUID().slice(0, 12) };
                 secrets.push(outsider.password);
@@ -235,7 +236,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             assert.equal(await sql.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${uuid}'`), '1');
             assert.equal(await sql.execute(`SELECT message_id FROM chat_message WHERE client_msg_uuid='${uuid}'`), first[0].messageId);
         });
-        if (selector === '3D-02') {
+        if (['3D-02', '3D-03-history'].includes(selector)) {
             await runMessagingCases({ alice, bob, users, sql, record, chatId, outsider: auxiliaryUsers[0] });
         }
         await test('one client exits while the peer retains its independent session', async () => {
@@ -245,9 +246,9 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             await count(topology.servers[0].name, 0);
             const remaining = await bob.control.command('snapshot');
             assert.equal(remaining.active, true); assert.equal(remaining.uid, users[1].uid);
-            assert.equal((await bob.control.command('snapshot', { chatId })).messages.length, selector === '3D-02' ? 5 : 1);
+            assert.equal((await bob.control.command('snapshot', { chatId })).messages.length, ['3D-02', '3D-03-history'].includes(selector) ? 5 : 1);
         });
-        if (selector === '3D-02') {
+        if (['3D-02', '3D-03-history'].includes(selector)) {
             await runOfflineMessageCase({ bob, users, sql, record, chatId });
             await record('E03-XMSG-08', 'authenticated wire rejects forged sender identity before persistence', async () => {
                 const redis = await coordinator.redis();
@@ -266,6 +267,22 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
                 assert.equal(result.responses[0].commit_error, 'UnauthorizedSender');
                 assert.equal(await sql.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${spoofUuid}'`), '0');
             });
+        }
+        if (selector === '3D-03-history') {
+            await runHistoryRecoveryCases({ bob, users, sql, record, chatId, restartClient: async () => {
+                await count(topology.servers[0].name, 0);
+                const recovered = await client('alicerecovered');
+                const expectedUid = users[0].uid;
+                const observed = await authenticate(recovered, users[0], false);
+                assert.notEqual(recovered.pid, alice.pid);
+                assert.equal(observed.uid, expectedUid);
+                assert.equal(observed.active, true);
+                assert.equal(observed.host, topology.host);
+                assert.equal(observed.port, topology.servers[0].port);
+                topology.recoveredClients = [{ logical: users[0].logical, previousPid: alice.pid,
+                    pid: recovered.pid, uid: observed.uid, active: observed.active, host: observed.host, port: observed.port }];
+                return recovered;
+            } });
         }
     } catch (error) { primary = error; }
     finally {

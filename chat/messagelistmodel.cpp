@@ -7,6 +7,7 @@
 namespace {
 bool messageLess(const MessageRecord &left, const MessageRecord &right)
 {
+    if ((left.messageId > 0) != (right.messageId > 0)) return left.messageId > 0;
     if (left.messageId > 0 && right.messageId > 0 && left.messageId != right.messageId) {
         return left.messageId < right.messageId;
     }
@@ -150,15 +151,35 @@ int MessageListModel::prependHistory(const QVector<MessageRecord> &messages)
         filtered.push_back(message);
     }
 
-    if (filtered.isEmpty()) {
-        return 0;
+    if (!filtered.isEmpty()) {
+        const int first = _messages.size();
+        beginInsertRows({}, first, first + filtered.size() - 1);
+        _messages += filtered;
+        endInsertRows();
+        rebuildRowIndexes();
     }
-
-    std::stable_sort(filtered.begin(), filtered.end(), messageLess);
-    beginInsertRows({}, 0, filtered.size() - 1);
-    _messages = filtered + _messages;
-    endInsertRows();
-    rebuildRowIndexes();
+    if (!std::is_sorted(_messages.cbegin(), _messages.cend(), messageLess)) {
+        emit layoutAboutToBeChanged({}, QAbstractItemModel::VerticalSortHint);
+        const auto previousIndexes = persistentIndexList();
+        QVector<int> order;
+        for (int row = 0; row < _messages.size(); ++row) order.push_back(row);
+        std::stable_sort(order.begin(), order.end(), [this](int left, int right) {
+            return messageLess(_messages[left], _messages[right]);
+        });
+        QVector<MessageRecord> sorted;
+        QVector<int> newRows(_messages.size());
+        sorted.reserve(_messages.size());
+        for (int row = 0; row < order.size(); ++row) {
+            sorted.push_back(_messages[order[row]]);
+            newRows[order[row]] = row;
+        }
+        _messages = std::move(sorted);
+        rebuildRowIndexes();
+        QModelIndexList updatedIndexes;
+        for (const auto &previous : previousIndexes) updatedIndexes.push_back(index(newRows[previous.row()]));
+        changePersistentIndexList(previousIndexes, updatedIndexes);
+        emit layoutChanged({}, QAbstractItemModel::VerticalSortHint);
+    }
     return filtered.size();
 }
 
