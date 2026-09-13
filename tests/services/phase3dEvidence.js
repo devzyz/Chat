@@ -7,9 +7,11 @@ const { assertConnectedClients } = require('./twoServerTopology');
 
 const groups = [{ file: 'linux_phase3d_contract.xml', prefix: 'E03-CONTRACT-', expected: 7 }];
 function reportGroups(selector = '3D-00') {
-    assert.ok(['3D-00', '3D-01'].includes(selector), 'unimplemented Phase 3D selector');
-    return selector === '3D-00' ? groups : [...groups,
-        { file: 'linux_phase3d_journey.xml', prefix: 'E03-JOURNEY-', expected: 7 }];
+    assert.ok(['3D-00', '3D-01', '3D-02'].includes(selector), 'unimplemented Phase 3D selector');
+    const selected = [...groups];
+    if (selector !== '3D-00') selected.push({ file: 'linux_phase3d_journey.xml', prefix: 'E03-JOURNEY-', expected: 7 });
+    if (selector === '3D-02') selected.push({ file: 'linux_phase3d_messaging.xml', prefix: 'E03-XMSG-', expected: 8 });
+    return selected;
 }
 function validate(root, sourceSha, selector = '3D-00') {
     const read = name => JSON.parse(fs.readFileSync(path.join(root, name), 'utf8'));

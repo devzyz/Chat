@@ -42,6 +42,10 @@ Newline-delimited JSON commands require strictly increasing positive integer
   Uses the GUI's shared request builders, production TCP handlers, DTO conversion
   and `MessageModelStore` history/ACK/failure operations. Completion follows
   production response handling; transport generation filtering remains in TcpMgr.
+  `send` optionally accepts `copies: 2`: it immediately sends the identical
+  production frame twice, appends one pending model row, and completes only after
+  both responses. Any business failure is retained. E03-CONTRACT-01 checks two
+  wire requests and one acknowledged model item.
 
 Only one business command may be pending; snapshots and stop remain available.
 TCP commands have a ten-second deadline, account HTTP requests five seconds.

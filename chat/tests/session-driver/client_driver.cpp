@@ -75,16 +75,18 @@ public:
             if (!_messages.applyHistory(chatId, records, more, cursor)) _historyRejected = true;
         });
         connect(tcp.get(), &TcpMgr::sig_text_chat_msg_rsp_finish, this,
-                [this](int chatId, QVector<MessageAcknowledgement> acks) { _messages.acknowledge(chatId, acks); });
+                [this](int chatId, QVector<MessageAcknowledgement> acks) { _messages.acknowledge(chatId, acks, UserMgr::GetInstance()->GetUid()); });
         connect(tcp.get(), &TcpMgr::sig_text_chat_msg_failed, this,
-                [this](int chatId, const QVector<QString> &ids) { _messages.markFailed(chatId, ids); });
+                [this](int chatId, const QVector<QString> &ids) { _messages.markFailed(chatId, ids, UserMgr::GetInstance()->GetUid()); });
         connect(tcp.get(), &TcpMgr::sig_create_private_chat_finish, this,
                 [this](const std::shared_ptr<ChatInfo> &chat) { if (chat) _lastChatId = chat->GetChatId(); });
         connect(tcp.get(), &TcpMgr::requestCompleted, this, [this](ReqId id, int error) {
             if (!_pendingId || id != _expectedResponse) return;
+            if (error != 0) _commandError = error;
+            if (--_responsesRemaining > 0) return;
             _commandDeadline.stop();
             send(QJsonObject{{"id", _pendingId}, {"status", "completed"},
-                {"error", _historyRejected ? -1 : error}, {"chatId", _lastChatId}});
+                {"error", _historyRejected ? -1 : _commandError}, {"chatId", _lastChatId}});
             _pendingId = 0;
             _expectedResponse = -1;
         });
@@ -195,6 +197,8 @@ private:
                 }
                 if (body.size() > ChatTcpTransport::MaxBodyBytes()) { finish(2); return; }
                 _pendingId = _lastId;
+                _commandError = 0;
+                _responsesRemaining = 1;
                 _historyRejected = false;
                 _expectedResponse = static_cast<int>(request) + 1;
                 _commandDeadline.start(10000);
@@ -203,6 +207,7 @@ private:
                        !_pendingId && _session.isActive()) {
                 QByteArray body;
                 ReqId request = ID_CREATE_PRIVATE_CHAT_REQ;
+                int copies = 1;
                 const int chatId = object.value("chatId").toInt();
                 if (command == "create" && object.size() == 3 && object.value("toUid").toInt() > 0) {
                     body = clientPrivateChatRequest(UserMgr::GetInstance()->GetUid(), object.value("toUid").toInt());
@@ -214,9 +219,12 @@ private:
                     request = ID_LOAD_CHAT_MESSAGE_REQ;
                     _historyRejected = false;
                     body = clientHistoryRequest(chatId, cursor);
-                } else if (command == "send" && object.size() == 6 && chatId > 0 &&
+                } else if (command == "send" &&
+                           (object.size() == 6 || (object.size() == 7 && object.value("copies").toDouble() == 2)) &&
+                           chatId > 0 &&
                            object.value("toUid").toInt() > 0 && object.value("text").isString() &&
                            !QUuid(object.value("uuid").toString()).isNull()) {
+                    copies = object.contains("copies") ? 2 : 1;
                     request = ID_TEXT_CHAT_MSG_REQ;
                     const auto uuid = object.value("uuid").toString();
                     const auto text = object.value("text").toString();
@@ -229,11 +237,15 @@ private:
                     _messages.getOrCreate(chatId)->appendMessage(clientMessageRecord(dto));
                 } else { finish(2); return; }
                 _pendingId = _lastId;
+                _commandError = 0;
+                _responsesRemaining = 1;
                 _historyRejected = false;
+                _responsesRemaining = copies;
                 _lastChatId = command == "create" ? 0 : chatId;
                 _expectedResponse = static_cast<int>(request) + 1;
                 _commandDeadline.start(10000);
-                emit TcpMgr::GetInstance()->sig_send_data(request, body);
+                for (int copy = 0; copy < copies; ++copy)
+                    emit TcpMgr::GetInstance()->sig_send_data(request, body);
             } else if ((command == "verify" || command == "register") && !_pendingId && !_session.isActive()) {
                 const QUrl gate(object.value("gate").toString());
                 if (gate.scheme() != "http" || gate.host() != "127.0.0.1" || gate.port() <= 0 ||
@@ -294,6 +306,8 @@ private:
     int _lastUid = 0;
     int _lastChatId = 0;
     int _expectedResponse = -1;
+    int _responsesRemaining = 1;
+    int _commandError = 0;
     bool _historyRejected = false;
     QByteArray _input;
     qint64 _lastId = 0;

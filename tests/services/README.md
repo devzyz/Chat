@@ -250,7 +250,22 @@ without extra chats/greetings (05), wrong code/password and duplicate registrati
 (06), and real Chat rejection of mismatched/cross-account tokens (07).
 It reuses the same disposable five-service scenario and cleanup; no friend row
 or selected endpoint is written by the fixture. The seven foundation cases also
-remain mandatory. The hosted job selects `3D-01`; full `3D` still fails closed.
+remain mandatory. The hosted job selects `3D-02`; full `3D` still fails closed.
+
+Selector `3D-02` also requires eight `E03-XMSG-01..08` cases in
+`linux_phase3d_messaging.xml` (22 E2E cases cumulatively): bidirectional Unicode
+delivery; sender-scoped shared UUIDs; in-flight and subsequent retries; conflicting
+content; invalid chat rejection; offline durable recovery through history; real
+nonmember send/history rejection and changed retry scope; forged wire sender
+rejection. A third disposable account is publicly registered only as an offline
+negative fixture; the two observed production clients remain Alice and Bob.
+History authorization uses the authenticated session UID and current private/group
+membership. No schema or public wire fields change. These cases do not prove
+reconnect, lost ACK, server restart, multipage history or compatibility.
+
+```bash
+bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-02
+```
 
 Friend application uses the authenticated session UID, rejects self/unknown
 recipients, and preserves one pending row on duplicate application. Acceptance

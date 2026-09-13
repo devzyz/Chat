@@ -1,5 +1,13 @@
 # 当前自动测试合同矩阵
 
+The cumulative Linux `3D-02` selector adds `E03-XMSG-01..08` in
+`linux_phase3d_messaging.xml`: bidirectional model/database correlation,
+sender-scoped UUID identity, duplicate retries, content conflicts, invalid chat,
+offline persistence/history, real nonmember access and changed retry scope,
+and authenticated wire sender rejection. It requires 22 E2E cases across three
+reports with matching source SHA, hashes and cleanup evidence. Registration is
+not hosted acceptance; recovery, multipage history and compatibility remain open.
+
 Phase 3D-00 client foundation adds `E03-CONTRACT-01..05`, registered as
 `session_driver.*` in [the client driver module](../chat/tests/session-driver/README.md).
 They execute real client processes and loopback production transports, under

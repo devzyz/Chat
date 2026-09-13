@@ -23,18 +23,18 @@ bool MessageModelStore::applyHistory(int chatId, const QVector<MessageRecord> &r
     return true;
 }
 
-void MessageModelStore::acknowledge(int chatId, const QVector<MessageAcknowledgement> &acknowledgements)
+void MessageModelStore::acknowledge(int chatId, const QVector<MessageAcknowledgement> &acknowledgements, int senderId)
 {
     if (auto *model = find(chatId)) {
         for (const auto &ack : acknowledgements)
-            model->acknowledgeMessage(ack.clientMessageId, ack.messageId, DeliveryStatus::Sent);
+            model->acknowledgeMessage(ack.clientMessageId, ack.messageId, DeliveryStatus::Sent, senderId);
     }
 }
 
-void MessageModelStore::markFailed(int chatId, const QVector<QString> &clientIds)
+void MessageModelStore::markFailed(int chatId, const QVector<QString> &clientIds, int senderId)
 {
     if (auto *model = find(chatId)) {
-        for (const auto &id : clientIds) model->updateStatusByClientId(id, DeliveryStatus::Failed);
+        for (const auto &id : clientIds) model->updateStatusByClientId(id, DeliveryStatus::Failed, senderId);
     }
 }
 

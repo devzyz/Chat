@@ -34,7 +34,7 @@ public:
         int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
         std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline);
 	// 增量加载部分聊天数据
-	bool GetChatMessageList(int chat_id, int current_msg_id, int page_size,
+	bool GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
 private:
 	MysqlMgr();

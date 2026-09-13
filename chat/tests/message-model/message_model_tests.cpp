@@ -74,6 +74,37 @@ void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized
 
 void MessageModelTests::unknownStableIdsDoNotMutateTheModel()
 {
+    MessageListModel sharedUuid(7);
+    auto own = message(0, QStringLiteral("shared-uuid"));
+    auto peer = message(55, QStringLiteral("shared-uuid"));
+    peer.senderId = 2;
+    peer.isSelf = false;
+    QCOMPARE(sharedUuid.appendMessages({own, peer}), 2);
+    QCOMPARE(sharedUuid.prependHistory({peer}), 0);
+    QCOMPARE(sharedUuid.rowCount(), 2);
+    QCOMPARE(sharedUuid.rowForClientMessageId("shared-uuid"), -1);
+    QVERIFY(!sharedUuid.acknowledgeMessage("shared-uuid", 56));
+    QVERIFY(!sharedUuid.acknowledgeMessage("shared-uuid", 55, DeliveryStatus::Sent, 1));
+    QVERIFY(sharedUuid.acknowledgeMessage("shared-uuid", 56, DeliveryStatus::Sent, 1));
+    QCOMPARE(sharedUuid.recordAt(sharedUuid.rowForMessageId(55))->senderId, 2);
+    QCOMPARE(sharedUuid.recordAt(sharedUuid.rowForMessageId(56))->senderId, 1);
+    QVERIFY(sharedUuid.updateStatusByClientId("shared-uuid", DeliveryStatus::Failed, 1));
+    QCOMPARE(sharedUuid.recordAt(sharedUuid.rowForMessageId(55))->deliveryStatus, DeliveryStatus::Read);
+    QVERIFY(sharedUuid.removeByMessageId(55));
+    QCOMPARE(sharedUuid.rowForClientMessageId("shared-uuid", 1), 0);
+    MessageListModel history(7);
+    own.messageId = 56;
+    QCOMPARE(history.prependHistory({own, peer}), 2);
+    QCOMPARE(history.appendMessages({own, peer}), 0);
+    MessageListModel uncertain(7);
+    auto pending = message(0, "history-confirmation");
+    uncertain.appendMessage(pending);
+    pending.messageId = 57;
+    pending.deliveryStatus = DeliveryStatus::Sent;
+    uncertain.prependHistory({pending});
+    QCOMPARE(uncertain.rowCount(), 1);
+    QCOMPARE(uncertain.recordAt(0)->messageId, 57);
+
     MessageListModel model(7);
     model.appendMessage(message(101, QStringLiteral("known-client")));
     int changes = 0;

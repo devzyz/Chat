@@ -42,12 +42,12 @@ public:
     int prependHistory(const QVector<MessageRecord> &messages);
 
     bool acknowledgeMessage(const QString &clientMessageId, qint64 messageId,
-                            DeliveryStatus status = DeliveryStatus::Sent);
-    bool updateStatusByClientId(const QString &clientMessageId, DeliveryStatus status);
+                            DeliveryStatus status = DeliveryStatus::Sent, int senderId = -1);
+    bool updateStatusByClientId(const QString &clientMessageId, DeliveryStatus status, int senderId = -1);
     bool updateStatusByMessageId(qint64 messageId, DeliveryStatus status);
     bool removeByMessageId(qint64 messageId);
 
-    int rowForClientMessageId(const QString &clientMessageId) const;
+    int rowForClientMessageId(const QString &clientMessageId, int senderId = -1) const;
     int rowForMessageId(qint64 messageId) const;
     QModelIndex indexForStableId(qint64 messageId, const QString &clientMessageId) const;
     qint64 oldestMessageId() const;
@@ -69,7 +69,7 @@ private:
 
     int _chatId;
     QVector<MessageRecord> _messages;
-    QHash<QString, int> _clientIdRows;
+    QHash<QString, QHash<int, int>> _clientIdRows;
     QHash<qint64, int> _messageIdRows;
     bool _canLoadMore = true;
     bool _loadingHistory = false;

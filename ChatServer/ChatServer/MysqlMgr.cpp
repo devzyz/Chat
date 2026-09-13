@@ -48,7 +48,7 @@ message_commit::Result MysqlMgr::AddChatMessageList(message_commit::Authenticate
     return _dao.AddChatMessageList(principal, from_uid, to_uid, chat_id, cache_msgs, chat_msgs, deadline);
 }
 
-bool MysqlMgr::GetChatMessageList(int chat_id, int current_msg_id, int page_size,
+bool MysqlMgr::GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 	std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id) {
-	return _dao.GetChatMessageList(chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
+	return _dao.GetChatMessageList(principal_uid, chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
 }

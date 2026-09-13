@@ -140,6 +140,7 @@ public:
                         const auto request = QJsonDocument::fromJson(frame.body).object();
                         QJsonObject result{{"error", 0}, {"chat_id", 7}, {"self_id", userId}, {"other_id", 42}};
                         if (frame.messageId == 1016) {
+                            ++sentFrames;
                             sentBody = request;
                             result["uuid_msgId"] = QJsonArray{QJsonObject{
                                 {"msg_uuid", request["text_array"].toArray().first().toObject()["msg_uuid"]},
@@ -171,6 +172,7 @@ public:
     QJsonObject gateBody, chatBody, sentBody;
     QJsonObject applicationBody, acceptanceBody;
     int heartbeats = 0;
+    int sentFrames = 0;
 };
 
 class SessionDriverTests : public QObject
@@ -207,9 +209,10 @@ private slots:
         QCOMPARE(alice.receive().value("chatId").toInt(), 7);
         const QString uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
         alice.send({{"id", 3}, {"command", "send"}, {"chatId", 7}, {"toUid", 42},
-                    {"uuid", uuid}, {"text", QString::fromUtf8("跨实例 🙂\nsecond line")}});
+                    {"uuid", uuid}, {"text", QString::fromUtf8("跨实例 🙂\nsecond line")}, {"copies", 2}});
         QCOMPARE(alice.receive().value("error").toInt(-1), 0);
         QCOMPARE(first.sentBody.value("from_uid").toInt(), 41);
+        QCOMPARE(first.sentFrames, 2);
         alice.send({{"id", 4}, {"command", "snapshot"}, {"chatId", 7}});
         const auto rows = alice.receive().value("messages").toArray();
         QCOMPARE(rows.size(), 1);

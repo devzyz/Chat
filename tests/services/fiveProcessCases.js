@@ -19,6 +19,7 @@ const requireVarify = createRequire(path.resolve(__dirname, '../../VarifyServer/
 const grpc = requireVarify('@grpc/grpc-js');
 const loader = requireVarify('@grpc/proto-loader');
 const { runFriendshipCases } = require('./friendshipCases');
+const { runMessagingCases, runOfflineMessageCase } = require('./messagingCases');
 
 async function runFiveProcessCases(coordinator, record, evidenceRoot, selector = '3D-00') {
     const bundle = process.env.CHAT_FOUR_BUNDLE;
@@ -32,6 +33,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
     const ports = {};
     const recipients = [];
     const users = [];
+    const auxiliaryUsers = [];
     const secrets = [coordinator.password];
     let topology;
     let sql;
@@ -88,7 +90,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
         await waitForConnectionCount(coordinator, name, expected, controls.filter(control => !control.failed));
     }
     const gate = () => `http://127.0.0.1:${ports.gate}`;
-    async function authenticate(instance, user, register = true) {
+    async function authenticate(instance, user, register = true, registerOnly = false) {
         if (register) {
             recipients.push(user.email);
             assert.equal((await instance.control.command('verify', { gate: gate(), email: user.email })).error, 0);
@@ -122,6 +124,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
                     name: user.name, password: user.password, code })).error, 0);
             }
         }
+        if (registerOnly) return;
         const result = await instance.control.command('login', { gate: gate(), email: user.email, password: user.password });
         assert.equal(result.status, 'authenticated');
         user.uid = result.uid;
@@ -176,6 +179,16 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             }
             const first = await authenticate(alice, users[0]);
             await count(topology.servers[0].name, 1);
+            if (selector === '3D-02') {
+                const outsider = { logical: 'outsider', name: `outsider_${topology.runId}`,
+                    email: `outsider-${topology.runId}@example.invalid`, password: randomUUID().slice(0, 12) };
+                secrets.push(outsider.password);
+                await authenticate(bob, outsider, true, true);
+                await sql.execute(`USE \`${topology.database}\``);
+                outsider.uid = Number(await sql.execute(`SELECT uid FROM user WHERE email='${outsider.email}'`));
+                assert.ok(Number.isSafeInteger(outsider.uid) && outsider.uid > 0);
+                auxiliaryUsers.push(outsider);
+            }
             const second = await authenticate(bob, users[1]);
             await count(topology.servers[1].name, 1);
             assertConnectedClients(topology, [first, second]);
@@ -222,6 +235,9 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             assert.equal(await sql.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${uuid}'`), '1');
             assert.equal(await sql.execute(`SELECT message_id FROM chat_message WHERE client_msg_uuid='${uuid}'`), first[0].messageId);
         });
+        if (selector === '3D-02') {
+            await runMessagingCases({ alice, bob, users, sql, record, chatId, outsider: auxiliaryUsers[0] });
+        }
         await test('one client exits while the peer retains its independent session', async () => {
             assert.equal((await alice.control.command('stop')).status, 'stopped');
             await stop(alice.owned);
@@ -229,8 +245,28 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             await count(topology.servers[0].name, 0);
             const remaining = await bob.control.command('snapshot');
             assert.equal(remaining.active, true); assert.equal(remaining.uid, users[1].uid);
-            assert.equal((await bob.control.command('snapshot', { chatId })).messages.length, 1);
+            assert.equal((await bob.control.command('snapshot', { chatId })).messages.length, selector === '3D-02' ? 5 : 1);
         });
+        if (selector === '3D-02') {
+            await runOfflineMessageCase({ bob, users, sql, record, chatId });
+            await record('E03-XMSG-08', 'authenticated wire rejects forged sender identity before persistence', async () => {
+                const redis = await coordinator.redis();
+                let token;
+                try { token = await redis.hget(String(users[0].uid), `utoken_${users[0].uid}`); }
+                finally { redis.disconnect(); }
+                assert.ok(token); secrets.push(token);
+                const spoofUuid = randomUUID();
+                const result = JSON.parse(await runCommand(supervisor, ['chat'], { timeout: 15000,
+                    env: { ...env, LD_LIBRARY_PATH: path.dirname(supervisor), CHAT_FOUR_WIRE: JSON.stringify({
+                        port: ports.chatA, login: { uid: users[0].uid, token }, requests: [{ id: 1016,
+                            body: { from_uid: users[1].uid, to_uid: users[0].uid, chat_id: chatId,
+                                text_array: [{ msg_uuid: spoofUuid, msg_content: 'forged sender' }] } }] }) } }));
+                assert.equal(result.error, 0);
+                assert.equal(result.responses.length, 1);
+                assert.equal(result.responses[0].commit_error, 'UnauthorizedSender');
+                assert.equal(await sql.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${spoofUuid}'`), '0');
+            });
+        }
     } catch (error) { primary = error; }
     finally {
         const failures = [];
@@ -249,7 +285,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             const redis = await coordinator.redis();
             try {
                 const keys = recipients.map(email => `code_${email}`);
-                for (const user of users.filter(user => user.uid)) {
+                for (const user of [...users, ...auxiliaryUsers].filter(user => user.uid)) {
                     for (const prefix of ['utoken_', 'uip_', 'ubaseinfo_', 'usessionid_', 'lock_']) keys.push(`${prefix}${user.uid}`);
                 }
                 if (keys.length) { await redis.del(...keys); assert.equal(await redis.exists(...keys), 0); }

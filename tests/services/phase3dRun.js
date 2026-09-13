@@ -33,7 +33,7 @@ async function run(root) {
         await coordinator.bootstrap();
         await runFiveProcessCases(coordinator, record, root, selector);
     } catch (error) {
-        primaryFailure = /^E03-(?:CONTRACT|JOURNEY)-\d\d$/.test(error.message) ? error.message : 'setup';
+        primaryFailure = /^E03-(?:CONTRACT|JOURNEY|XMSG)-\d\d$/.test(error.message) ? error.message : 'setup';
     } finally {
         if (coordinator) {
             try { cleanup = await coordinator.teardown(); } catch { cleanup = { complete: false }; }

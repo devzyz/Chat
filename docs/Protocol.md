@@ -44,6 +44,11 @@
 不新增好友关系或问候消息。消息 ID、JSON 字段及 schema 不变；重复申请仍保持已有单行。
 对应真实依赖合同见 [3D 好友旅程](../tests/services/README.md#phase-3d-foundation)。
 
+历史消息查询使用连接的认证 UID，DAO 在读取消息前检查私聊双方或群成员关系。
+非成员访问返回既有 `UidInvalid`，不返回消息；请求和响应字段不变。
+客户端按发送者与 UUID 组合去重，ACK/失败只更新当前发送者；历史记录可以确认
+同一发送者的待发送 UUID 对应的持久化 ID。对应边界见服务场景 `E03-XMSG-01..08`。
+
 ## HTTP/JSON
 
 - GateServer endpoint MUST 明确方法、路径、请求字段、响应字段和错误码。

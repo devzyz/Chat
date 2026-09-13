@@ -49,6 +49,11 @@ Component case 写入 `build/test-results/client_component.xml`；两组任一�
 
 ## 已知缺口
 
+The stable-ID regression also covers two senders sharing a UUID, sender-scoped
+ACK/failure updates, ambiguous unscoped lookup rejection, and history resolving
+a pending UUID to its durable server ID. UUID deduplication uses sender plus UUID;
+server IDs remain globally unique within the model.
+
 The store Component case also exercises the production history reducer shared
 by GUI and process driver: overlapping existing rows are deduplicated, unseen
 forward pages are rejected without advancing the cursor, and ACK/failure

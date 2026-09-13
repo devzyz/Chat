@@ -819,7 +819,7 @@ void LogicSystem::RegisterCallBacks() {
 		// 是否能够加载更多
 		bool load_more = false;
 		int last_msg_id = 0;
-		bool success = GetChatMessageList(chat_id, current_msg_id, PAGE_SIZE, chat_msgs, load_more, last_msg_id);
+		bool success = GetChatMessageList(session->GetAuthenticatedUid(), chat_id, current_msg_id, PAGE_SIZE, chat_msgs, load_more, last_msg_id);
 
 		if (!success) {
 			return_value["error"] = ErrorCodes::UidInvalid;
@@ -1095,7 +1095,7 @@ bool LogicSystem::GetUserChatList(int uid, int current_chat_id, int page_size,
  * @return 
  * 增量加载部分聊天数据
  */
-bool LogicSystem::GetChatMessageList(int chat_id, int current_msg_id, int page_size,
+bool LogicSystem::GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 	std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id) {
-	return MysqlMgr::GetInstance()->GetChatMessageList(chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
+	return MysqlMgr::GetInstance()->GetChatMessageList(principal_uid, chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
 }

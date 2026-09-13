@@ -168,13 +168,13 @@ void ChatPage::ApplyDeliveryAcknowledgements(
     int chatId, const QVector<MessageAcknowledgement> &acknowledgements)
 {
     Q_ASSERT(QThread::currentThread() == thread());
-    _messageStore.acknowledge(chatId, acknowledgements);
+    _messageStore.acknowledge(chatId, acknowledgements, UserMgr::GetInstance()->GetUid());
 }
 
 void ChatPage::MarkMessagesFailed(int chatId, const QVector<QString> &clientMessageIds)
 {
     Q_ASSERT(QThread::currentThread() == thread());
-    _messageStore.markFailed(chatId, clientMessageIds);
+    _messageStore.markFailed(chatId, clientMessageIds, UserMgr::GetInstance()->GetUid());
 }
 
 void ChatPage::paintEvent(QPaintEvent *event)
