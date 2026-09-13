@@ -18,8 +18,9 @@ const fixture = require('./phase3d.fixture.json');
 const requireVarify = createRequire(path.resolve(__dirname, '../../VarifyServer/package.json'));
 const grpc = requireVarify('@grpc/grpc-js');
 const loader = requireVarify('@grpc/proto-loader');
+const { runFriendshipCases } = require('./friendshipCases');
 
-async function runFiveProcessCases(coordinator, record, evidenceRoot) {
+async function runFiveProcessCases(coordinator, record, evidenceRoot, selector = '3D-00') {
     const bundle = process.env.CHAT_FOUR_BUNDLE;
     const clientBinary = process.env.CHAT_E2E_CLIENT;
     assert.ok(bundle && path.isAbsolute(bundle) && clientBinary && path.isAbsolute(clientBinary));
@@ -101,8 +102,25 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot) {
                 return Boolean(code);
             }, 5000);
             secrets.push(code);
+            if (selector !== '3D-00' && user.logical === 'alice') {
+                await record('E03-JOURNEY-06', 'public account failures do not create duplicate users or authenticate', async () => {
+                    const registration = { gate: gate(), email: user.email, name: user.name,
+                        password: user.password, code };
+                    assert.notEqual((await instance.control.command('register', { ...registration, code: `${code}-wrong` })).error, 0);
+                    await sql.execute(`USE \`${topology.database}\``);
+                    assert.equal(await sql.execute('SELECT COUNT(*) FROM user'), '0');
+                    assert.equal((await instance.control.command('register', registration)).error, 0);
+                    assert.notEqual((await instance.control.command('register', registration)).error, 0);
+                    assert.equal(await sql.execute('SELECT COUNT(*) FROM user'), '1');
+                    const denied = await instance.control.command('login', { gate: gate(), email: user.email,
+                        password: `${user.password}-wrong` });
+                    assert.equal(denied.status, 'login-failed');
+                    assert.equal((await instance.control.command('snapshot')).active, false);
+                });
+            } else {
             assert.equal((await instance.control.command('register', { gate: gate(), email: user.email,
                 name: user.name, password: user.password, code })).error, 0);
+            }
         }
         const result = await instance.control.command('login', { gate: gate(), email: user.email, password: user.password });
         assert.equal(result.status, 'authenticated');
@@ -163,7 +181,28 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot) {
             assertConnectedClients(topology, [first, second]);
             topology.clients = [first, second];
         });
+        if (selector !== '3D-00') {
+            await record('E03-JOURNEY-07', 'Chat rejects mismatched and cross-account tokens without disturbing sessions', async () => {
+                const redis = await coordinator.redis();
+                let token;
+                try { token = await redis.hget(String(users[0].uid), `utoken_${users[0].uid}`); }
+                finally { redis.disconnect(); }
+                assert.ok(token); secrets.push(token);
+                for (const login of [{ uid: users[0].uid, token: `${token}-wrong` }, { uid: users[1].uid, token }]) {
+                    const result = JSON.parse(await runCommand(supervisor, ['chat'], { timeout: 10000,
+                        env: { ...env, LD_LIBRARY_PATH: path.dirname(supervisor),
+                            CHAT_FOUR_WIRE: JSON.stringify({ port: ports.chatA, login }) } }));
+                    assert.notEqual(result.error, 0);
+                }
+                assert.equal((await alice.control.command('snapshot')).uid, users[0].uid);
+                assert.equal((await bob.control.command('snapshot')).uid, users[1].uid);
+            });
+        }
         let chatId;
+        if (selector !== '3D-00') {
+            await sql.execute(`USE \`${topology.database}\``);
+            chatId = await runFriendshipCases({ alice, bob, users, sql, record });
+        }
         const uuid = randomUUID();
         await test('production models correlate a durable cross-instance message', async () => {
             const created = await alice.control.command('create', { toUid: users[1].uid });

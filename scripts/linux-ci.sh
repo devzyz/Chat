@@ -22,13 +22,13 @@ done
 
 if [[ "$phase" == "3D" && "$configuration" == "Release" ]]; then
   repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  if ((list_only)); then printf '%s\n' '3D-00'; exit 0; fi
-  if [[ "$selector" != "3D-00" ]]; then
-    echo 'Phase 3D full acceptance is not implemented; select 3D-00 for the foundation contract' >&2
+  if ((list_only)); then printf '%s\n' '3D-00' '3D-01'; exit 0; fi
+  if [[ "$selector" != "3D-00" && "$selector" != "3D-01" ]]; then
+    echo 'Phase 3D full acceptance is not implemented; select 3D-00 or 3D-01 for implemented contracts' >&2
     exit 2
   fi
   export CHAT_CANDIDATE_SHA="$(git -C "$repo_root" rev-parse HEAD)"
-  export CHAT_SERVICE_SELECTOR=3D-00 CHAT_SERVICE_HOST=127.0.0.1
+  export CHAT_SERVICE_SELECTOR="$selector" CHAT_SERVICE_HOST=127.0.0.1
   export CHAT_SERVICE_EVIDENCE_ROOT="${junit_dir:-$repo_root/out/phase3d/contracts}"
   mkdir -p "$CHAT_SERVICE_EVIDENCE_ROOT"
   trap 'result=$?; trap - EXIT; node "$repo_root/tests/services/finalizeEvidence.js" "$CHAT_SERVICE_EVIDENCE_ROOT" || result=1; exit "$result"' EXIT

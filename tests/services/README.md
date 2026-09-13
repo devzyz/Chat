@@ -242,6 +242,20 @@ remains required; local lifecycle and loopback tests are not acceptance evidence
 for actual Redis/Mailpit integration.
 # Phase 3D foundation
 
+Selector `3D-01` extends `3D-00` with `linux_phase3d_journey.xml` and seven
+`E03-JOURNEY` cases: self/unknown-user rejection (01), cross-instance application
+notification (02), duplicate application (03), recipient acceptance with both
+production models and reciprocal MySQL relations (04), duplicate acceptance
+without extra chats/greetings (05), wrong code/password and duplicate registration
+(06), and real Chat rejection of mismatched/cross-account tokens (07).
+It reuses the same disposable five-service scenario and cleanup; no friend row
+or selected endpoint is written by the fixture. The seven foundation cases also
+remain mandatory. The hosted job selects `3D-01`; full `3D` still fails closed.
+
+```bash
+bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-01
+```
+
 `phase3d.fixture.json` fixes the logical users, server identities, seed, journey
 and deadlines. `twoServerTopology.js` namespaces physical resources by run ID,
 renders reciprocal peer RPC and Status discovery configuration, and rejects

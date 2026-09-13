@@ -15,11 +15,11 @@ function read(name) {
     catch { return { complete: false }; }
 }
 async function finalize() {
-    const phase3d = process.env.CHAT_SERVICE_SELECTOR === '3D-00';
+    const phase3d = ['3D-00', '3D-01'].includes(process.env.CHAT_SERVICE_SELECTOR);
     const teardown = read('teardown.json');
     const processTeardown = read('process-teardown.json');
     const junit = path.join(root, phase3d ? 'linux_phase3d_contract.xml' : 'linux_services.xml');
-    const reports = phase3d ? [{ file: 'linux_phase3d_contract.xml' }] : reportGroups(process.env.CHAT_SERVICE_SELECTOR || '3C-02');
+    const reports = phase3d ? require('./phase3dEvidence').reportGroups(process.env.CHAT_SERVICE_SELECTOR) : reportGroups(process.env.CHAT_SERVICE_SELECTOR || '3C-02');
     let reportsComplete = reports.every((group) => {
         try {
             const report = fs.readFileSync(path.join(root, group.file), 'utf8');
@@ -28,7 +28,7 @@ async function finalize() {
         } catch { return false; }
     });
     if (phase3d) {
-        try { require('./phase3dEvidence').validate(root, process.env.CHAT_CANDIDATE_SHA); }
+        try { require('./phase3dEvidence').validate(root, process.env.CHAT_CANDIDATE_SHA, process.env.CHAT_SERVICE_SELECTOR); }
         catch { reportsComplete = false; }
     }
     teardown.processComplete = processTeardown.complete === true;

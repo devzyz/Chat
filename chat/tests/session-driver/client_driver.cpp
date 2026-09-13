@@ -57,6 +57,10 @@ public:
         connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_notify_offline, this,
                 [this] { _session.resetSession(SessionResetReason::Kicked); });
         const auto tcp = TcpMgr::GetInstance();
+        connect(tcp.get(), &TcpMgr::sig_tcp_add_friend_apply, this,
+                [](const std::shared_ptr<ApplyInfo> &apply) {
+            if (apply) UserMgr::GetInstance()->AddApply(apply->_apply_uid, apply);
+        });
         connect(tcp.get(), &TcpMgr::sig_update_text_chat_msg, this,
                 [this](int, int, int, std::vector<std::shared_ptr<ChatDataBase>> &messages) {
             for (const auto &message : messages) {
@@ -114,6 +118,13 @@ private:
                          {"host", _session.isActive() ? _login.serverHost() : QString()},
                          {"port", _session.isActive() ? _login.serverPort() : 0}});
     }
+    void friendship(qint64 id, int otherUid)
+    {
+        const auto user = UserMgr::GetInstance();
+        send(QJsonObject{{"id", id}, {"status", "snapshot"}, {"uid", user->GetUid()},
+            {"otherUid", otherUid}, {"applied", user->AlreadyApplyAddFriend(otherUid)},
+            {"friend", user->CheckIsFriendById(otherUid)}, {"chatId", user->GetUidToChatId(otherUid)}});
+    }
     void snapshot(qint64 id, int chatId)
     {
         QJsonArray rows;
@@ -153,6 +164,41 @@ private:
                 reply(_lastId, "snapshot");
             } else if (command == "snapshot" && object.size() == 3 && object.value("chatId").toInt() > 0) {
                 snapshot(_lastId, object.value("chatId").toInt());
+            } else if (command == "snapshot" && object.size() == 3 && object.value("otherUid").toInt() > 0) {
+                friendship(_lastId, object.value("otherUid").toInt());
+            } else if ((command == "apply" || command == "accept") && !_pendingId && _session.isActive() &&
+                       object.size() == 5 && object.value("toUid").toInt() > 0 &&
+                       object.value("description").isString() && object.value("backname").isString()) {
+                const auto self = UserMgr::GetInstance()->GetUserInfo();
+                const int otherUid = object.value("toUid").toInt();
+                const auto description = object.value("description").toString();
+                const auto backname = object.value("backname").toString();
+                if (!self || description.size() > 255 || backname.size() > 255) { finish(2); return; }
+                QByteArray body;
+                ReqId request = ID_ADD_FRIEND_REQ;
+                if (command == "apply") {
+                    body = clientFriendRequest(*self, otherUid, description, backname);
+                } else {
+                    std::vector<std::shared_ptr<ApplyInfo>> applications;
+                    UserMgr::GetInstance()->GetApplyList(applications);
+                    for (const auto &apply : applications) {
+                        if (apply && apply->_apply_uid == otherUid) {
+                            body = clientAcceptFriendRequest(*self, *apply, description, backname);
+                            break;
+                        }
+                    }
+                    if (body.isEmpty()) {
+                        send(QJsonObject{{"id", _lastId}, {"status", "no-application"}, {"error", -1}});
+                        continue;
+                    }
+                    request = ID_AUTH_FRIEND_REQ;
+                }
+                if (body.size() > ChatTcpTransport::MaxBodyBytes()) { finish(2); return; }
+                _pendingId = _lastId;
+                _historyRejected = false;
+                _expectedResponse = static_cast<int>(request) + 1;
+                _commandDeadline.start(10000);
+                emit TcpMgr::GetInstance()->sig_send_data(request, body);
             } else if ((command == "create" || command == "history" || command == "send") &&
                        !_pendingId && _session.isActive()) {
                 QByteArray body;

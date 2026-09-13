@@ -19,6 +19,14 @@ Newline-delimited JSON commands require strictly increasing positive integer
 `id` values, at most 2^53-1:
 
 - `snapshot`: safe active/uid/host/port state.
+- `snapshot` with `otherUid`: production UserMgr application/friend state and
+  private chat ID, without profile text or credentials.
+- `apply` / `accept`: `toUid`, `description`, `backname`; uses the same request
+  builders as ApplyFriendDialog/AuthFriendDialog. Acceptance requires an actual
+  application received by the production TCP handler or loaded at login.
+  Missing application returns `no-application`; malformed commands fail closed.
+  The existing E03-CONTRACT-01 process case verifies authenticated request identity,
+  notification storage, acceptance, safe snapshots and missing-application rejection.
 - `snapshot` with `chatId`: at most 128 model rows with UUID, server ID,
   sender, delivery state and text SHA-256; includes history cursor/more state.
 - `verify`: `gate`, `email`; `register`: also `name`, `password`, `code`.

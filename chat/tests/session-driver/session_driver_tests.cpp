@@ -112,6 +112,30 @@ public:
             QObject::connect(peer, &QTcpSocket::readyRead, peer, [this, peer, decoder = TcpFrameDecoder()]() mutable {
                 for (const auto &frame : decoder.append(peer->readAll())) {
                     if (frame.messageId == 1020) { ++heartbeats; continue; }
+                    if (frame.messageId == 1009 || frame.messageId == 1013) {
+                        const auto request = QJsonDocument::fromJson(frame.body).object();
+                        QJsonObject result{{"error", 0}};
+                        if (frame.messageId == 1009) {
+                            applicationBody = request;
+                        } else {
+                            acceptanceBody = request;
+                            result = request;
+                            result["error"] = 0;
+                            result["chatid"] = 7;
+                        }
+                        const auto sendFrame = [peer](int id, const QJsonObject &object) {
+                            const auto payload = QJsonDocument(object).toJson(QJsonDocument::Compact);
+                            QByteArray header(4, '\0');
+                            qToBigEndian<quint16>(id, header.data());
+                            qToBigEndian<quint16>(static_cast<quint16>(payload.size()), header.data() + 2);
+                            peer->write(header + payload);
+                        };
+                        sendFrame(frame.messageId + 1, result);
+                        if (frame.messageId == 1009) sendFrame(1011, QJsonObject{{"error", 0},
+                            {"fromuid", 42}, {"touid", userId}, {"applyname", "peer"},
+                            {"description", "synthetic application"}, {"backname", "original alias"}});
+                        continue;
+                    }
                     if (frame.messageId == 1023 || frame.messageId == 1016) {
                         const auto request = QJsonDocument::fromJson(frame.body).object();
                         QJsonObject result{{"error", 0}, {"chat_id", 7}, {"self_id", userId}, {"other_id", 42}};
@@ -145,6 +169,7 @@ public:
     int userId;
     QTcpServer gate, chat;
     QJsonObject gateBody, chatBody, sentBody;
+    QJsonObject applicationBody, acceptanceBody;
     int heartbeats = 0;
 };
 
@@ -191,8 +216,35 @@ private slots:
         QCOMPARE(rows.first().toObject()["messageId"].toString(), QString("81"));
         QCOMPARE(rows.first().toObject()["uuid"].toString(), uuid);
         QVERIFY(!rows.first().toObject().contains("text"));
+        alice.send({{"id", 5}, {"command", "apply"}, {"toUid", 42},
+                    {"description", "hello peer"}, {"backname", "peer alias"}});
+        QCOMPARE(alice.receive().value("error").toInt(-1), 0);
+        QCOMPARE(first.applicationBody.value("fromuid").toInt(), 41);
+        QCOMPARE(first.applicationBody.value("touid").toInt(), 42);
+        QCOMPARE(first.applicationBody.value("description").toString(), QString("hello peer"));
+        alice.send({{"id", 6}, {"command", "snapshot"}, {"otherUid", 42}});
+        const auto application = alice.receive();
+        QVERIFY(application.value("applied").toBool());
+        QVERIFY(!application.value("friend").toBool());
+        alice.send({{"id", 7}, {"command", "accept"}, {"toUid", 42},
+                    {"description", "accepted"}, {"backname", "accepted alias"}});
+        QCOMPARE(alice.receive().value("error").toInt(-1), 0);
+        QCOMPARE(first.acceptanceBody.value("authuid").toInt(), 41);
+        QCOMPARE(first.acceptanceBody.value("applyuid").toInt(), 42);
+        QCOMPARE(first.acceptanceBody.value("applyinfo").toObject().value("backname").toString(),
+                 QString("original alias"));
+        QCOMPARE(first.acceptanceBody.value("authinfo").toObject().value("backname").toString(),
+                 QString("accepted alias"));
+        alice.send({{"id", 8}, {"command", "snapshot"}, {"otherUid", 42}});
+        const auto accepted = alice.receive();
+        QVERIFY(accepted.value("friend").toBool());
+        QCOMPARE(accepted.value("chatId").toInt(), 7);
+        QVERIFY(!accepted.contains("token"));
+        alice.send({{"id", 9}, {"command", "accept"}, {"toUid", 999},
+                    {"description", "unknown"}, {"backname", "unknown"}});
+        QCOMPARE(alice.receive().value("status").toString(), QString("no-application"));
         QTRY_VERIFY_WITH_TIMEOUT(first.heartbeats > 0 && second.heartbeats > 0, 12000);
-        QVERIFY(alice.stop(5));
+        QVERIFY(alice.stop(10));
         bob.send({{"id", 2}, {"command", "snapshot"}});
         QCOMPARE(bob.receive().value("uid").toInt(), 42);
         QVERIFY(bob.stop(3));

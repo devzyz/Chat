@@ -7,8 +7,10 @@ const { DependencyCoordinator, loadConfiguration } = require('./dependencyCoordi
 const { runFiveProcessCases } = require('./fiveProcessCases');
 const { writeReports } = require('./serviceReports');
 
-const { groups } = require('./phase3dEvidence');
+const { reportGroups } = require('./phase3dEvidence');
 async function run(root) {
+    const selector = process.env.CHAT_SERVICE_SELECTOR || '3D-00';
+    const groups = reportGroups(selector);
     fs.mkdirSync(root, { recursive: true });
     const cases = [];
     let coordinator;
@@ -29,22 +31,22 @@ async function run(root) {
         coordinator = new DependencyCoordinator(loadConfiguration(process.env));
         for (const service of ['redis', 'mysql', 'mailpit']) await coordinator.inspect(service);
         await coordinator.bootstrap();
-        await runFiveProcessCases(coordinator, record, root);
+        await runFiveProcessCases(coordinator, record, root, selector);
     } catch (error) {
-        primaryFailure = /^E03-CONTRACT-\d\d$/.test(error.message) ? error.message : 'setup';
+        primaryFailure = /^E03-(?:CONTRACT|JOURNEY)-\d\d$/.test(error.message) ? error.message : 'setup';
     } finally {
         if (coordinator) {
             try { cleanup = await coordinator.teardown(); } catch { cleanup = { complete: false }; }
         }
         fs.writeFileSync(path.join(root, 'teardown.json'), JSON.stringify({ ...cleanup, primaryFailure }));
-        writeReports(root, '3D-00', cases, { groups, manifest: 'phase3d-reports.json', level: 'E2E' });
+        writeReports(root, selector, cases, { groups, manifest: 'phase3d-reports.json', level: 'E2E' });
     }
-    if (primaryFailure || !cleanup.complete || cases.length !== 7 || cases.some(value => !value.pass)) {
+    if (primaryFailure || !cleanup.complete || cases.length !== groups.reduce((sum, group) => sum + group.expected, 0) || cases.some(value => !value.pass)) {
         throw new Error('phase3d-contract-failed');
     }
 }
 
-module.exports = { run, groups };
+module.exports = { run };
 if (require.main === module) run(process.env.CHAT_SERVICE_EVIDENCE_ROOT).catch(() => {
     process.stderr.write('Phase 3D contract failed; inspect bounded evidence\n');
     process.exitCode = 1;

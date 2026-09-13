@@ -320,10 +320,10 @@ jobs:
         timeout-minutes: 2
         working-directory: VarifyServer
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Prove five-service two-client foundation
+      - name: Prove five-service two-client foundation and friendship
         timeout-minutes: 13
         env:
-          CHAT_SERVICE_SELECTOR: 3D-00
+          CHAT_SERVICE_SELECTOR: 3D-01
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
@@ -331,11 +331,11 @@ jobs:
           CHAT_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
           CHAT_SMTP_PORT: ${{ job.services.mailpit.ports[1025] }}
           CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports[8025] }}
-        run: bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-00
+        run: bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-01
       - name: Preserve fail-closed outer evidence
         if: always()
         env:
-          CHAT_SERVICE_SELECTOR: 3D-00
+          CHAT_SERVICE_SELECTOR: 3D-01
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
