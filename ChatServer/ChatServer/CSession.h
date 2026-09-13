@@ -35,6 +35,7 @@ public:
 	 * 每个session会跟一个tcp客户端建立通信，这里用来设置session对应的tcp客户端的uid
 	 */
 	void SetUserId(int uid);
+    int GetAuthenticatedUid() const;
 	/**
 	 * @brief 
 	 * @return 

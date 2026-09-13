@@ -11,6 +11,10 @@
 #include <mutex>
 #include "Data.h"
 #include <memory>
+#include <atomic>
+#include <condition_variable>
+#include <thread>
+#include "MessageCommit.h"
 
 /**
  * @brief 
@@ -34,16 +38,11 @@ public:
 		int poolSize);
 	~MysqlPool();
 
-	std::unique_ptr<SQLConnection> GetConnection();
-	void returnConnection(std::unique_ptr<SQLConnection> connection);
+	std::unique_ptr<SQLConnection> GetConnection(message_commit::Deadline deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(2));
+	void returnConnection(std::unique_ptr<SQLConnection> connection) noexcept;
 	void close();
 private:
-	// 心跳检测1.0
-	void CheckConnection();
-	// 心跳检测2.0
-	void CheckConnectionPro();
-	// 重连一个连接
-	bool reconnection(long long);
 	// 连接池队列，以及互斥访问连接池的信号
 	std::mutex _que_mutex;
 	std::queue<std::unique_ptr<SQLConnection>> _que;
@@ -60,11 +59,7 @@ private:
 	std::string _password; // 密码
 	std::string _schema; // 分组
 
-	// 心跳检查程序
-	std::thread _check_thread;
-
-	// 统计在某次心跳时连接失效的数量，后续用于进行重连
-	std::atomic<int> _fail_count;
+    int _live_count = 0;
 };
 
 class MysqlDao
@@ -89,12 +84,12 @@ public:
 	// 创建私聊会话
 	bool CreatePrivateChat(int user1_id, int user2_id, int& chat_id);
 	// 插入from_uid发给to_uid的对话
-	bool AddChatMessageList(int from_uid, int to_uid, int chat_id, std::vector<std::pair<std::string, std::string>> cache_msgs,
-		std::vector<std::shared_ptr<ChatMessage>>& chat_msgs);
+	message_commit::Result AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
+        int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
+        std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline);
 	// 增量加载部分聊天数据
 	bool GetChatMessageList(int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
 private:
 	std::unique_ptr<MysqlPool> _pool;
 };
-

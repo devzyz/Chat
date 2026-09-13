@@ -200,6 +200,9 @@
     <ProjectReference Include="ChatGrpcClients.vcxproj">
       <Project>{65DC3290-A9BB-4FAD-9930-096BC5B82102}</Project>
     </ProjectReference>
+    <ProjectReference Include="MessageCommit.vcxproj">
+      <Project>{AC1F5D07-BDA4-4A95-A095-3C0500000001}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

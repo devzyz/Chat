@@ -48,6 +48,8 @@ public:
 	Handle Create(std::shared_ptr<SessionWriter> writer);
 	void RegisterCurrent(const Handle& handle, int uid);
 	Handle FindCurrent(int uid) const;
+    // Zero means unauthenticated, closed, replaced, or owned by another state.
+    int AuthenticatedUid(const Handle& handle) const;
 	void Close(const Handle& handle);
 	SessionSendResult Send(const Handle& handle, SessionFrame frame);
 

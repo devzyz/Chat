@@ -5,6 +5,9 @@
 - 生产代码：`messagelistmodel.*`、`messagemodelstore.*`、`messageitemdelegate.*` 和 `messagerecord.h`。
 - 契约：插入、确认、状态更新和删除同步稳定 ID 索引；多页历史去重且保持时间顺序；Unicode、空文本和换行
   无损；每个 chat 保留独立模型与分页状态；窄视口增加长文本布局高度。
+- Q01-MODEL-01 also covers history arriving before acknowledgement, including a legacy
+  row without UUID: confirmation merges by server ID and preserves the pending UUID;
+  duplicate peer/history/ack observations cannot create a second row.
 
 ## 用例、依赖与隔离
 

@@ -11,11 +11,41 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <stdexcept>
 #include <thread>
 #include <utility>
 #include <vector>
 
 namespace {
+
+TEST(ChatSessionPrincipal, OnlyCurrentLiveOwnedHandleAuthenticates) {
+    class Ids final : public SessionIdSource {
+        int next = 0;
+        std::string Next() override { return std::to_string(++next); }
+    };
+    class Presence final : public SessionPresence {
+        void Register(int, const std::string&) override {}
+        void Cleanup(int, const std::string&) override {}
+    };
+    class Writer final : public SessionWriter {
+        void Write(SessionFrame, Completion completion) override { completion(true); }
+        void Close() override {}
+    };
+    ChatSessionState state(std::make_shared<Ids>(), std::make_shared<Presence>());
+    ChatSessionState other(std::make_shared<Ids>(), std::make_shared<Presence>());
+    auto first = state.Create(std::make_shared<Writer>());
+    auto second = state.Create(std::make_shared<Writer>());
+    EXPECT_EQ(state.AuthenticatedUid(first), 0);
+    state.RegisterCurrent(first, 42);
+    EXPECT_EQ(state.AuthenticatedUid(first), 42);
+    EXPECT_EQ(other.AuthenticatedUid(first), 0);
+    state.RegisterCurrent(second, 42);
+    EXPECT_EQ(state.AuthenticatedUid(first), 0);
+    EXPECT_EQ(state.AuthenticatedUid(second), 42);
+    state.Close(second);
+    EXPECT_EQ(state.AuthenticatedUid(second), 0);
+    EXPECT_THROW(state.RegisterCurrent(second, 42), std::invalid_argument);
+}
 
 class FixedIdSource final : public SessionIdSource {
 public:

@@ -144,7 +144,9 @@ private:
 
     struct PendingTextBatch {
         int chatId = 0;
+        int senderUid = 0;
         QVector<QString> clientMessageIds;
+        QByteArray payload;
     };
     QMap<ReqId, std::function<void(ReqId id, int len, QByteArray)>> _handlers;
     QQueue<PendingTextBatch> _pendingTextBatches;
@@ -154,6 +156,7 @@ private:
     quint64 _transportFlowId = 0;
     bool _acceptingSends = false;
     bool _expectedClose = false;
+    bool _retainingPending = false;
 
 };
 

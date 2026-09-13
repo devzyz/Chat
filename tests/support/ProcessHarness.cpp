@@ -1,7 +1,11 @@
 #include "ProcessHarness.h"
 
 #include "EvidenceSanitizer.h"
+#ifdef _WIN32
 #include "Win32ProcessAdapter.h"
+#else
+#include "PosixProcessAdapter.h"
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -11,6 +15,12 @@
 
 namespace integration {
 namespace {
+
+#ifdef _WIN32
+using PlatformProcessAdapter = internal::Win32ProcessAdapter;
+#else
+using PlatformProcessAdapter = internal::PosixProcessAdapter;
+#endif
 
 bool IsBoundedDeadline(RunDeadline deadline) {
 	return deadline != RunDeadline{} && deadline != RunDeadline::max();
@@ -32,7 +42,7 @@ bool IsWithin(const std::filesystem::path& child, const std::filesystem::path& r
 
 class ProcessHarness::Impl {
 public:
-	Impl(RunContext& owner, ProcessIdentity process_identity, std::shared_ptr<internal::Win32ProcessAdapter> process_adapter)
+	Impl(RunContext& owner, ProcessIdentity process_identity, std::shared_ptr<PlatformProcessAdapter> process_adapter)
 		: context(owner), identity(process_identity), adapter(std::move(process_adapter)) {
 	}
 
@@ -47,6 +57,8 @@ public:
 		}
 
 		if (adapter->IsRunning(identity)) {
+			graceful_deadline = std::min({graceful_deadline, context.Deadline(),
+				std::chrono::steady_clock::now() + std::chrono::seconds(10)});
 			graceful_stop_attempted = true;
 			adapter->SendGraceful(identity);
 			if (!adapter->WaitForExitUntil(graceful_deadline)) {
@@ -74,7 +86,7 @@ public:
 
 	RunContext& context;
 	ProcessIdentity identity;
-	std::shared_ptr<internal::Win32ProcessAdapter> adapter;
+	std::shared_ptr<PlatformProcessAdapter> adapter;
 	mutable std::mutex mutex;
 	bool ready_probe_attempted = false;
 	bool ready_probe_succeeded = false;
@@ -92,7 +104,7 @@ std::unique_ptr<ProcessHarness> ProcessHarness::Start(RunContext& context, Proce
 		throw std::invalid_argument("process working directory must be inside its run-owned temp root");
 	}
 	const auto slot = context.ReserveProcessSlot("child-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-	auto adapter = std::make_shared<internal::Win32ProcessAdapter>();
+	auto adapter = std::make_shared<PlatformProcessAdapter>();
 	const auto identity = adapter->Start(spec);
 	auto impl = std::make_shared<Impl>(context, identity, adapter);
 	try {

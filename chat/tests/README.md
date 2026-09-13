@@ -22,6 +22,11 @@ Module containing `ClientSession`, `TcpMgr`, and `UserMgr`.
 - [network-state](network-state/README.md): Foundation / Unit, the `TcpMgr` frame decoder's partial-read,
   adjacent-frame, byte-order, and zero-body state transitions.
 
-CI 的 `client-release` job 按 CTest 标签运行，并生成 `build/test-results/client_unit.xml`（18）和
-`client_component.xml`（6）。新增模块必须创建独立
+CI 的 `client-release` job 按 CTest 标签运行，并生成 `build/test-results/client_unit.xml` 和
+`client_component.xml`。新增模块必须创建独立
 子目录和 `README.md`，并在 CMake 中显式注册，不能依赖目录通配符发现。
+
+Phase 3C message retry adds two session Component cases and one real loopback
+Integration case in the existing session-reset module. The authoritative report
+counts are maintained by `scripts/windows-local.ps1`; `client_integration.xml`
+includes the authenticated retry alongside the existing HTTP/TCP transport cases.

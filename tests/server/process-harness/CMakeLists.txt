@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 3.24)
+project(ChatPosixProcessContracts LANGUAGES CXX)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "POSIX process contracts require Linux")
+endif()
+enable_testing()
+add_test(NAME T10-BLD-01-source-ownership
+    COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_LIST_DIR}/../../build/server_source_ownership.cmake")
+set_tests_properties(T10-BLD-01-source-ownership PROPERTIES LABELS "phase3c-build-ownership" TIMEOUT 30)
+add_executable(posix_process_tests
+    posix_process_tests.cpp
+    ../../support/PosixProcessAdapter.cpp)
+target_include_directories(posix_process_tests PRIVATE ../../support)
+target_compile_features(posix_process_tests PRIVATE cxx_std_17)
+target_compile_options(posix_process_tests PRIVATE -Wall -Wextra -Werror -pedantic)
+set(case_id 3)
+foreach(case IN ITEMS exit-output graceful stale-identity timeout bounded-output descendant invalid-exec)
+    math(EXPR case_id "${case_id} + 1")
+    if(case_id LESS 10)
+        set(padded_id "0${case_id}")
+    else()
+        set(padded_id "${case_id}")
+    endif()
+    add_test(NAME "T10-BLD-${padded_id}-${case}" COMMAND posix_process_tests "${case}")
+    set_tests_properties("T10-BLD-${padded_id}-${case}" PROPERTIES
+        LABELS "phase3c-build-ownership" TIMEOUT 10)
+endforeach()

@@ -1,6 +1,8 @@
 # Build output
 build/
 Build/
+!/tests/build/
+!/tests/build/server_source_ownership.cmake
 Debug/
 Release/
 x64/
@@ -36,6 +38,7 @@ Logs/
 
 # Dependency/build caches
 node_modules/
+__pycache__/
 .cache/
 vcpkg_installed/
 

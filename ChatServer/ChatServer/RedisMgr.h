@@ -1,4 +1,5 @@
 #pragma once
+#include "../../common/redis/RedisPool.h"
 #include "Singleton.h"
 #include <queue>
 #include <mutex>
@@ -8,36 +9,27 @@
 #include <chrono>
 #include <hiredis/hiredis.h>
 
-// redis连接池
 class RedisConnectionPool {
 public:
-	RedisConnectionPool(const std::string& host, const std::string& port, const std::string& password, int poolSize);
-	~RedisConnectionPool();
-	redisContext* getConnection(
-		std::chrono::milliseconds wait_timeout = std::chrono::milliseconds(2000));
-	void returnConnection(redisContext* connection);
-	void close();
+    RedisConnectionPool(const std::string& host, const std::string& port,
+        const std::string& password, int pool_size)
+        : _transport(host, ParsePort(port), password, pool_size > 0 ? static_cast<std::size_t>(pool_size) : 0) {}
+    redisContext* getConnection(std::chrono::milliseconds timeout = std::chrono::milliseconds(2000)) {
+        return _transport.Borrow(timeout);
+    }
+    void returnConnection(redisContext* connection) { _transport.Return(connection); }
+    void close() { _transport.Close(); }
 private:
-	// 心跳检测
-	void CheckConnection();
-	// 重建一个连接
-	bool reconnection();
+    static int ParsePort(const std::string& port) {
+        std::size_t parsed = 0;
+        const int value = std::stoi(port, &parsed);
+        if (parsed != port.size() || value < 1 || value > 65535) {
+            throw std::invalid_argument("invalid Redis port");
+        }
+        return value;
+    }
 
-	std::atomic<bool> _b_stop;
-
-	const std::string _host;
-	const std::string _port;
-	const std::string _password;
-	
-	std::mutex _que_mutex;
-	std::condition_variable _cond;
-	std::queue<redisContext*> _que;
-	int _pool_size;
-
-	// 心跳检查程序
-	std::thread _check_thread;
-	// 连接失效的数量
-	std::atomic<int> _fail_count;
+    chat_redis::RedisPool _transport;
 };
 
 /**

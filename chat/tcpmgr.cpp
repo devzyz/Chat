@@ -1,5 +1,6 @@
 #include "tcpmgr.h"
 #include <QJsonDocument>
+#include <QSet>
 #include "logmgr.h"
 #include "usermgr.h"
 
@@ -28,7 +29,9 @@ TcpMgr::TcpMgr() : _host("") {
             || outcome.terminal == ChatTcpTerminal::Superseded;
         _expectedClose = false;
         _acceptingSends = false;
-        _pendingTextBatches.clear();
+        if (expectedClose && !_retainingPending) {
+            _pendingTextBatches.clear();
+        }
         if (outcome.terminal == ChatTcpTerminal::Refused
             || outcome.terminal == ChatTcpTerminal::ConnectDeadlineExceeded) {
             emit sig_tcp_connect_success(false);
@@ -91,6 +94,12 @@ void TcpMgr::initHandlers()
         }
 
         auto uid = jsonObj["uid"].toInt();
+        // An uncertain send belongs to the account that created it, never to the next login.
+        for (qsizetype i = _pendingTextBatches.size(); i > 0; --i) {
+            if (_pendingTextBatches[i - 1].senderUid != uid) {
+                _pendingTextBatches.removeAt(i - 1);
+            }
+        }
         auto name =jsonObj["name"].toString();
         auto description = jsonObj["description"].toString();
         auto icon = jsonObj["icon"].toString();
@@ -150,6 +159,11 @@ void TcpMgr::initHandlers()
                 }
             }
             emit sig_tcp_load_chat_finish(chat_list);
+        }
+        // Authentication is complete. Retry the original bytes/UUIDs once per successful login.
+        const auto pending = _pendingTextBatches;
+        for (const auto &batch : pending) {
+            _transport.send(static_cast<quint16>(ReqId::ID_TEXT_CHAT_MSG_REQ), batch.payload);
         }
     });
 
@@ -370,6 +384,7 @@ void TcpMgr::initHandlers()
             auto content = msg_info["content"].toString();
             auto status = msg_info["status"].toInt();
             auto text_msg = std::make_shared<TextChatData> (message_id, chat_id, ChatType::PRIVATE, ChatMessageType::TEXT_TYPE, content, send_id, QTime::currentTime());
+            text_msg->SetClientMessageId(msg_info["msg_uuid"].toString());
             chat_info->AddChatData(text_msg);
         }
 
@@ -452,6 +467,7 @@ void TcpMgr::initHandlers()
             auto status = msg_info["status"].toInt();
             auto text_msg = std::make_shared<TextChatData> (message_id, chat_id, ChatType::PRIVATE,
                                                            ChatMessageType::TEXT_TYPE, content, send_id, QTime::currentTime());
+            text_msg->SetClientMessageId(msg_info["msg_uuid"].toString());
             chat_info->AddChatData(text_msg);
         }
 
@@ -499,11 +515,45 @@ void TcpMgr::initHandlers()
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         const int responseChatId = jsonObj["chat_id"].toInt();
+        QSet<QString> responseIds;
+        for (const auto &id : jsonObj["client_msg_uuids"].toArray()) {
+            responseIds.insert(id.toString());
+        }
+        if (responseIds.isEmpty() && err == ErrorCodes::SUCCESS) {
+            for (const auto &entry : jsonObj["uuid_msgId"].toArray()) {
+                responseIds.insert(entry.toObject()["msg_uuid"].toString());
+            }
+        }
+        responseIds.remove(QString());
+        if (err == ErrorCodes::SUCCESS) {
+            QSet<QString> acknowledgedIds;
+            QSet<qint64> serverIds;
+            for (const auto &entry : jsonObj["uuid_msgId"].toArray()) {
+                const auto item = entry.toObject();
+                const auto uuid = item["msg_uuid"].toString();
+                const auto serverId = item["message_id"].toInteger();
+                if (uuid.isEmpty() || serverId <= 0 || acknowledgedIds.contains(uuid)
+                    || serverIds.contains(serverId)) {
+                    return;
+                }
+                acknowledgedIds.insert(uuid);
+                serverIds.insert(serverId);
+            }
+            // Incomplete/invalid acknowledgements are uncertain, not a terminal confirmation.
+            if (acknowledgedIds.isEmpty() || acknowledgedIds != responseIds) {
+                return;
+            }
+        }
         QVector<QString> pendingClientIds;
         for (qsizetype i = 0; i < _pendingTextBatches.size(); ++i) {
-            if (_pendingTextBatches.at(i).chatId == responseChatId) {
+            const auto &batch = _pendingTextBatches.at(i);
+            const QSet<QString> batchIds(batch.clientMessageIds.begin(), batch.clientMessageIds.end());
+            if (batch.chatId == responseChatId && !responseIds.isEmpty() && batchIds == responseIds) {
                 pendingClientIds = _pendingTextBatches.at(i).clientMessageIds;
-                _pendingTextBatches.removeAt(i);
+                const auto commitError = jsonObj["commit_error"].toString();
+                if (commitError != "StorageUnavailable" && commitError != "DeadlineExceeded") {
+                    _pendingTextBatches.removeAt(i);
+                }
                 break;
             }
         }
@@ -527,6 +577,9 @@ void TcpMgr::initHandlers()
             auto info = msg.toObject();
             auto uuid = info["msg_uuid"].toString();
             auto msgid = info["message_id"].toInt();
+            if (uuid.isEmpty() || msgid <= 0) {
+                continue;
+            }
             // ChatInfo 缓存暂时保留给左侧摘要兼容；右侧状态由 Model 独立更新。
             if (chat_info) {
                 auto text_msg = chat_info->GetCacheChatMessage(uuid);
@@ -596,7 +649,10 @@ void TcpMgr::initHandlers()
             auto text_msg = std::make_shared<TextChatData> (msgid, chat_id, ChatType::PRIVATE,
                                                            ChatMessageType::TEXT_TYPE, msgcontent,
                                                            from_uid, QTime::currentTime());
-            chat_info->AddChatData(text_msg);
+            text_msg->SetClientMessageId(info["msg_uuid"].toString());
+            if (chat_info) {
+                chat_info->AddChatData(text_msg);
+            }
             msgs.push_back(text_msg);
         }
 
@@ -877,6 +933,7 @@ void TcpMgr::initHandlers()
             auto msg_info = std::make_shared<TextChatData> (message_id, chat_id, ChatType::PRIVATE,
                                                            ChatMessageType::TEXT_TYPE,
                                                             content, send_id, dt);
+            msg_info->SetClientMessageId(msg_obj["msg_uuid"].toString());
             if (status >= ChatStatus::STATUS_EMPTY && status <= ChatStatus::STATUS_READ_ALREADY) {
                 msg_info->SetStatus(static_cast<ChatStatus>(status));
             }
@@ -911,11 +968,15 @@ void TcpMgr::beginSession()
 void TcpMgr::resetConnection(bool expectedClose)
 {
     _acceptingSends = false;
-    _pendingTextBatches.clear();
+    if (expectedClose) {
+        _pendingTextBatches.clear();
+    }
     _host.clear();
     _port = 0;
     _expectedClose = expectedClose;
+    _retainingPending = !expectedClose;
     _transport.reset();
+    _retainingPending = false;
 }
 
 /**
@@ -930,26 +991,47 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
         return;
     }
 
-    bool queuedTextBatch = false;
     if (reqId == ReqId::ID_TEXT_CHAT_MSG_REQ) {
         const QJsonDocument document = QJsonDocument::fromJson(dataBytes);
         if (document.isObject()) {
             const QJsonObject object = document.object();
             PendingTextBatch batch;
             batch.chatId = object["chat_id"].toInt();
+            batch.senderUid = object["from_uid"].toInt();
+            batch.payload = dataBytes;
             for (const auto &entry : object["text_array"].toArray()) {
                 batch.clientMessageIds.push_back(entry.toObject()["msg_uuid"].toString());
             }
-            if (batch.chatId > 0 && !batch.clientMessageIds.isEmpty()) {
-                _pendingTextBatches.enqueue(std::move(batch));
-                queuedTextBatch = true;
+            if (batch.chatId <= 0 || batch.senderUid <= 0
+                || batch.senderUid != UserMgr::GetInstance()->GetUid()
+                || batch.clientMessageIds.isEmpty() || dataBytes.size() > ChatTcpTransport::MaxBodyBytes()) {
+                return;
             }
+            bool existing = false;
+            for (const auto &pending : _pendingTextBatches) {
+                if (pending.senderUid == batch.senderUid && pending.clientMessageIds == batch.clientMessageIds) {
+                    if (pending.payload != batch.payload) {
+                        emit sig_text_chat_msg_failed(batch.chatId, batch.clientMessageIds);
+                        return;
+                    }
+                    existing = true;
+                    break;
+                }
+            }
+            if (!existing) {
+                if (_pendingTextBatches.size() >= 128) {
+                    emit sig_text_chat_msg_failed(batch.chatId, batch.clientMessageIds);
+                    return;
+                }
+                _pendingTextBatches.enqueue(std::move(batch));
+            }
+        } else {
+            return;
         }
     }
 
-    if (!_transport.send(static_cast<quint16>(reqId), dataBytes) && queuedTextBatch) {
-        _pendingTextBatches.removeLast();
-    }
+    // A failed write is uncertain: keep its immutable payload for authenticated retry.
+    _transport.send(static_cast<quint16>(reqId), dataBytes);
 }
 
 /**
@@ -960,7 +1042,7 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
 void TcpMgr::slot_tcp_connect(ServerInfo si)
 {
     SPDLOG_DEBUG("received TCP connect signal");
-    resetConnection(true);
+    resetConnection(false);
     // 尝试连接到服务器
     SPDLOG_INFO("connecting to chat server, host={}, port={}",
                 LogMgr::ToUtf8(si.Host),

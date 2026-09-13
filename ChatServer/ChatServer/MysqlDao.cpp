@@ -3,266 +3,83 @@
 #include <chrono>
 #include "ConfigMgr.h"
 #include "LogMgr.h"
+#include "MySqlMessageCommitAdapter.h"
+#include "../../schema/SchemaContract.h"
 
 SQLConnection::SQLConnection(sql::Connection* connection, int64_t lasttime) 
 	: _connection(connection), _last_operator_time(lasttime) {
 
 }
 
-MysqlPool::MysqlPool(const std::string& url, const std::string& user, const std::string& password, const std::string& schema, 
-	int poolSize) : _url(url), _user(user), _password(password), _schema(schema), _pool_size(poolSize), _b_stop(false), _fail_count(0) {
-	try {
-		for (int i = 0; i < _pool_size; i++) {
-			sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-
-			// 通过驱动程序连接到数据库
-			auto* connection = driver->connect(_url, _user, _password);
-			connection->setSchema(_schema);
-
-			// 获取当前时间戳
-			auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-			// 将时间戳转换为秒
-			long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
-
-			_que.push(std::make_unique<SQLConnection>(connection, timestamp));
-		}
-
-		// 心跳检测线程，通过与sql通信的最后时间戳来进行测试
-		_check_thread = std::thread([this]() {
-			int count = 0;
-			while (!_b_stop) {
-				if (count >= 60) {
-					CheckConnection();
-					count = 0;
-					continue;
-				}
-				std::this_thread::sleep_for(std::chrono::seconds(1));
-				count++;
-			}
-			});
-
-		_check_thread.detach();
-	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql pool init failed, error={}", e.what());
-	}
+MysqlPool::MysqlPool(const std::string& url, const std::string& user, const std::string& password,
+    const std::string& schema, int pool_size)
+    : _url(url), _user(user), _password(password), _schema(schema), _pool_size(pool_size), _b_stop(false) {
+    for (int index = 0; index < _pool_size; ++index) {
+        auto connection = message_commit::ConnectBounded(_url, _user, _password, _schema);
+        if (index == 0) { chat_schema::Verify(*connection); }
+        _que.push(std::make_unique<SQLConnection>(connection.release(), 0));
+        ++_live_count;
+    }
 }
 
-/**
- * @brief 
- * 心跳检测
- * 
- * 枚举所有的连接，如果出现未操作时间大于给定值，则发出一个select 1的sql查询，维持sql连接
- * 如果sql连接已失效，则创建新的连接
- * 这里的锁的精度太大了，如果在进行心跳的时候，有很多的mysql请求，则会出现获取不到锁的情况
- */
-void MysqlPool::CheckConnection() {
-	std::lock_guard<std::mutex> lock(_que_mutex);
+MysqlPool::~MysqlPool() { close(); }
 
-	// 获取当前时间戳
-	auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-	// 将时间戳转换为秒
-	long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
-
-	int poolsize = _que.size();
-	for (int i = 0; i < poolsize; i++) {
-		auto con = std::move(_que.front());
-		_que.pop();
-
-		if (con == nullptr) {
-			continue;
-		}
-
-		// 每次循环结束，自动执行pusn操作
-		Defer defer([this, &con]() {
-			_que.push(std::move(con));
-			});
-
-		// 间隔小于10分钟
-		if (timestamp - con->_last_operator_time < 600) {
-			continue;
-		}
-
-		try {
-			std::unique_ptr<sql::Statement> pstmt(con->_connection->createStatement());
-			pstmt->executeQuery("SELECT 1");
-			con->_last_operator_time = timestamp;
-		}
-		catch (sql::SQLException& e) {
-			SPDLOG_WARN("mysql keepalive failed, error={}", e.what());
-
-			// 创建新连接，替换旧连接
-			sql::mysql::MySQL_Driver* driver = sql::mysql::get_driver_instance();
-			auto* new_connect = driver->connect(_url, _user, _password);
-			new_connect->setSchema(_schema);
-
-			// 对旧连接进行覆盖，最后会执行defer将连接放回队列中
-			con->_connection.reset(new_connect);
-			con->_last_operator_time = timestamp;
-		}
-	}
+std::unique_ptr<SQLConnection> MysqlPool::GetConnection(message_commit::Deadline deadline) {
+    std::unique_lock<std::mutex> lock(_que_mutex);
+    if (!_cond.wait_until(lock, deadline, [this] {
+        return _b_stop || !_que.empty() || _live_count < _pool_size;
+    }) || _b_stop) { return nullptr; }
+    if (!_que.empty()) {
+        auto connection = std::move(_que.front());
+        _que.pop();
+        return connection;
+    }
+    ++_live_count;
+    lock.unlock();
+    try {
+        auto connection = message_commit::ConnectBounded(_url, _user, _password, _schema);
+        auto borrowed = std::make_unique<SQLConnection>(connection.release(), 0);
+        if (std::chrono::steady_clock::now() >= deadline || _b_stop) {
+            returnConnection(std::move(borrowed));
+            return nullptr;
+        }
+        return borrowed;
+    } catch (const std::exception&) {
+        lock.lock();
+        --_live_count;
+        _cond.notify_all();
+        return nullptr;
+    }
 }
 
-// 这里进行优化
-// 心跳的意义就是保证在一定时间间隔之内，一定要访问一次数据库，保证连接的存活
-// 因此我可以在某一时刻，取出当前连接的大小k（可能小于连接池的大小）
-// 因为其余的被取出去正在使用的，在这段事件内已经访问过数据库了，因此可以保证心跳
-// 接下来需要至少取出k个连接来进行心跳，因为可能在这段时刻这k个都没有被使用，因此需要心跳保活
-// 但是可能这段事件中这k个可能有被取出来使用的，那也没关系，因为心跳的意义就是保证被使用
-// 只不过可能在这段时间内某一些连接会被心跳再使用一次（那么原本在k个之外的，他们已经满足这段时间被使用了，但是因为在这k个当中
-// 可能有的会在心跳期间被拿出去使用，导致后面用完了放进来的会被再心跳一次）
-// 
-// 但是心跳包的总数量是没有变得，跟直接添加一个全局锁发送的心跳包数量相同
-// 但是锁的精度提高了，可以在处理某个连接的心跳的同时，获取其余的连接，而原始情况必须等待所有心跳完成才可以获得
-void MysqlPool::CheckConnectionPro() {
-	std::size_t target_count;
-	{
-		std::lock_guard<std::mutex> lock(_que_mutex);
-		target_count = _que.size(); // 通过加锁，获取到现在期望进行心跳的连接数
-	}
-
-	std::size_t now_count = 0; // 表示当前已经心跳的数量
-
-	// 获取当前时间戳
-	auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-	// 将时间戳转换为秒
-	long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
-
-	while (now_count < target_count) {
-		std::unique_ptr<SQLConnection> connection; // 用于接收现在需要心跳的连接
-		{
-			std::lock_guard<std::mutex> lock(_que_mutex);
-			// 如果池子为空，代表这段时间所有的连接都一定心跳过了，则直接退出
-			if (_que.empty()) {
-				break;
-			}
-			connection = std::move(_que.front());
-			_que.pop();
-		}
-
-		// 判断连接是否还正常
-		bool healthy = true;
-		// 间隔小于5分钟
-		if (timestamp - connection->_last_operator_time >= 300) {
-			try {
-				// 发送一个心跳包
-				std::unique_ptr<sql::Statement> pstmt(connection->_connection->createStatement());
-				pstmt->executeQuery("SELECT 1");
-				connection->_last_operator_time = timestamp;
-			}
-			catch (sql::SQLException& e) {
-				SPDLOG_WARN("mysql keepalive failed, error={}", e.what());
-				// 连接不正常，则记录一下，在心跳完成后，进行重连
-				healthy = false;
-				_fail_count++;
-			}
-		}
-
-		// 连接正常，则加锁，将连接还回去
-		if (healthy) {
-			std::lock_guard<std::mutex> lock(_que_mutex);
-			_que.push(std::move(connection));
-			_cond.notify_one();
-		}
-
-		now_count++;
-	}
-
-	// 重连所有失败的连接
-	// 因为一次失败了，后面一直重试，可能还是会失败，这里设置一个最大重试次数，如果重试几次之后，还是连接不上，则返回
-	int retry = 0;
-	while (_fail_count > 0 && retry < MYSQL_MAX_RETRIES) {
-		bool success = reconnection(timestamp);
-		if (success) {
-			_fail_count--;
-		}
-		else {
-			// 达到最大重试次数后，则退出，等待下一次心跳时再进行连接
-			retry++;
-		}
-	}
+void MysqlPool::returnConnection(std::unique_ptr<SQLConnection> connection) noexcept {
+    bool reusable = false;
+    try {
+        reusable = connection && connection->_connection && !connection->_connection->isClosed();
+    } catch (const std::exception&) {
+        // A health-query exception invalidates the session; callers include noexcept cleanup paths.
+        reusable = false;
+    }
+    std::lock_guard<std::mutex> lock(_que_mutex);
+    if (_b_stop) { return; }
+    if (!reusable) {
+        --_live_count;
+    } else {
+        try { _que.push(std::move(connection)); }
+        catch (const std::exception&) { --_live_count; }
+    }
+    _cond.notify_all();
 }
 
-// 重连一个sql连接
-bool MysqlPool::reconnection(long long timestamp) {
-	try {
-		sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-
-		// 通过驱动程序连接到数据库
-		auto* connection = driver->connect(_url, _user, _password);
-		connection->setSchema(_schema);
-
-		// 创建一个自定义sql连接
-		auto sqlconnection = std::make_unique<SQLConnection>(connection, timestamp);
-		// 加锁，将新连接放入
-		{
-			std::lock_guard<std::mutex> lock(_que_mutex);
-			_que.push(std::move(sqlconnection));
-		}
-
-		return true;
-	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql reconnect failed, error={}", e.what());
-		return false;
-	}
-}
-
-MysqlPool::~MysqlPool() {
-	std::lock_guard<std::mutex> lock(_que_mutex);
-	close();
-	while (_que.size()) {
-		_que.pop();
-	}
-}
-
-/**
- * @brief 
- * @return
- * 返回一个SQLConnection
- */
-std::unique_ptr<SQLConnection> MysqlPool::GetConnection() {
-	std::unique_lock<std::mutex> lock(_que_mutex);
-	_cond.wait(lock, [this]() {
-		if (_b_stop) {
-			return true;
-		}
-		return !_que.empty();
-		});
-
-	if (_b_stop) {
-		return nullptr;
-	}
-
-	auto connection = std::move(_que.front());
-	_que.pop();
-	return connection;
-}
-
-/**
- * @brief 
- * @param connection 
- * 归还SQLConnection
- */
-void MysqlPool::returnConnection(std::unique_ptr<SQLConnection> connection) {
-	std::lock_guard<std::mutex> lock(_que_mutex);
-	if (_b_stop) {
-		return;
-	}
-	_que.push(std::move(connection));
-	_cond.notify_one();
-}
-
-/**
- * @brief 
- * 连接池关闭，弹出所有的SQLConnection即可，因为其都是unique_ptr管理的
- */
 void MysqlPool::close() {
-	if (_b_stop) {
-		return;
-	}
-	_b_stop = true;
-	_cond.notify_all();
+    std::queue<std::unique_ptr<SQLConnection>> closing;
+    {
+        std::lock_guard<std::mutex> lock(_que_mutex);
+        if (_b_stop.exchange(true)) { return; }
+        closing.swap(_que);
+        _cond.notify_all();
+    }
+    // Connection destructors may perform IO; never hold the pool mutex here.
 }
 
 MysqlDao::MysqlDao() {
@@ -273,7 +90,7 @@ MysqlDao::MysqlDao() {
 	std::string password = configMgr["Mysql"]["Password"];
 	std::string schema = configMgr["Mysql"]["Schema"];
 
-	_pool.reset(new MysqlPool(host + ":" + port, user, password, schema, 8));
+	_pool = std::make_unique<MysqlPool>(host + ":" + port, user, password, schema, 8);
 }
 
 MysqlDao::~MysqlDao() {
@@ -885,56 +702,47 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 }
 
 // 插入新的聊天信息
-bool MysqlDao::AddChatMessageList(int from_uid, int to_uid, int chat_id, std::vector<std::pair<std::string, std::string>> cache_msgs,
-	std::vector<std::shared_ptr<ChatMessage>>& chat_msgs) {
-	auto connection = _pool->GetConnection();
-	if (connection == nullptr) {
-		return false;
-	}
-
-	Defer defer([this, &connection]() {
-		connection->_connection->setAutoCommit(true);
-		_pool->returnConnection(std::move(connection));
-		});
-
-	try{
-		connection->_connection->setAutoCommit(false);
-
-		// 插入所有的数据
-		std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-			prepareStatement("INSERT INTO chat_message(chat_id, send_id, recv_id, content, status) "
-				"VALUES(?, ?, ?, ?, 0)"));
-				
-		for (auto& p : cache_msgs) {
-			pstmt->setInt(1, chat_id);
-			pstmt->setInt(2, from_uid);
-			pstmt->setInt(3, to_uid);
-			pstmt->setString(4, p.second);
-
-			pstmt->executeUpdate();
-
-			// 获取刚刚生成的 message_id
-			std::unique_ptr<sql::Statement> stmt(connection->_connection->createStatement());
-			std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID()"));
-
-			if  (res->next()) {
-				auto message_id = res->getInt(1);
-				auto msg = std::make_shared<ChatMessage>(message_id, p.first, chat_id, from_uid, to_uid, p.second, 0);
-				chat_msgs.push_back(msg);
-			}
-			else {
-				connection->_connection->rollback();
-				chat_msgs.clear();
-				return false;
-			}
-		}
-
-		return true;
-	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql AddChatMessageList failed, from_uid={}, to_uid={}, chat_id={}, msg_count={}, error={}", from_uid, to_uid, chat_id, cache_msgs.size(), e.what());
-		return false;
-	}
+message_commit::Result MysqlDao::AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
+    int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
+    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline) {
+    chat_msgs.clear();
+    class PooledStore final : public message_commit::Store {
+    public:
+        explicit PooledStore(MysqlPool& pool) : _pool(pool) {}
+        message_commit::Result Commit(int sender, int recipient, int chat,
+            const message_commit::Batch& batch, message_commit::Deadline end) override {
+            auto connection = _pool.GetConnection(end);
+            if (!connection) {
+                return {std::chrono::steady_clock::now() >= end ? message_commit::Error::DEADLINE_EXCEEDED :
+                    message_commit::Error::STORAGE_UNAVAILABLE, {}};
+            }
+            try {
+                message_commit::MySqlMessageCommitAdapter adapter(*connection->_connection);
+                auto result = adapter.Commit(sender, recipient, chat, batch, end);
+                if (!adapter.IsReusable()) { connection->_connection.reset(); }
+                _pool.returnConnection(std::move(connection));
+                return result;
+            } catch (const std::exception&) {
+                if (connection) {
+                    connection->_connection.reset();
+                    _pool.returnConnection(std::move(connection));
+                }
+                return {message_commit::Error::STORAGE_UNAVAILABLE, {}};
+            }
+        }
+    private:
+        MysqlPool& _pool;
+    } store(*_pool);
+    auto result = message_commit::Commit(store, principal, from_uid, to_uid, chat_id, cache_msgs, deadline);
+    if (!result.IsSuccess()) { return result; }
+    for (std::size_t index = 0; index < result.items.size(); ++index) {
+        const auto& item = result.items[index];
+        auto message = std::make_shared<ChatMessage>(item.message_id, item.client_msg_uuid,
+            chat_id, principal.uid, to_uid, cache_msgs[index].second, 0);
+        message->_created_at = item.created_at;
+        chat_msgs.push_back(std::move(message));
+    }
+    return result;
 }
 
 // 增量加载部分聊天数据
@@ -952,7 +760,8 @@ bool MysqlDao::GetChatMessageList(int chat_id, int current_msg_id, int page_size
 
 	try {
 		// 准备查询
-		std::string sql = "SELECT * FROM chat_message WHERE chat_id = ? and message_id > ? ORDER BY message_id LIMIT ?";
+		std::string sql = "SELECT *,UNIX_TIMESTAMP(created_at) AS created_epoch FROM chat_message "
+            "WHERE chat_id = ? and message_id > ? ORDER BY message_id LIMIT ?";
 		std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(sql));
 
 		pstmt->setInt(1, chat_id);
@@ -969,8 +778,9 @@ bool MysqlDao::GetChatMessageList(int chat_id, int current_msg_id, int page_size
 			auto recv_id = res->getInt("recv_id");
 			auto content = res->getString("content");
 			auto status = res->getInt("status");
-			auto created_at = res->getInt64("created_at");
+			auto created_at = res->getInt64("created_epoch");
 			auto msg = std::make_shared<ChatMessage>(message_id, chat_id, send_id, recv_id, content, status, created_at);
+			if (!res->isNull("client_msg_uuid")) { msg->_client_msg_id = res->getString("client_msg_uuid"); }
 			
 			lists.push_back(msg);
 		}

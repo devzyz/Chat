@@ -1,5 +1,23 @@
 #include "MysqlDao.h"
 #include "ConfigMgr.h"
+#include "../../schema/SchemaContract.h"
+
+namespace {
+std::unique_ptr<sql::Connection> ConnectGateMysql(const std::string& url, const std::string& user,
+    const std::string& password, const std::string& schema) {
+    sql::ConnectOptionsMap options;
+    options["hostName"] = sql::SQLString(url);
+    options["userName"] = sql::SQLString(user);
+    options["password"] = sql::SQLString(password);
+    options["OPT_CONNECT_TIMEOUT"] = 2;
+    options["OPT_READ_TIMEOUT"] = 2;
+    options["OPT_WRITE_TIMEOUT"] = 2;
+    options["OPT_RECONNECT"] = false;
+    std::unique_ptr<sql::Connection> connection(sql::mysql::get_mysql_driver_instance()->connect(options));
+    connection->setSchema(schema);
+    return connection;
+}
+}
 
 SqlConnection::SqlConnection(sql::Connection* con, int64_t lasttime) : _con(con), _last_oper_time(lasttime) {
 	
@@ -19,9 +37,9 @@ MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::stri
 	_url(url), _user(user), _pass(pass), _schema(schema), _poolSize(poolsize), _b_stop(false) {
 	try {
 		for (int i = 0; i < _poolSize; i++) {
-			sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-			auto* con = driver->connect(_url, _user, _pass);
-			con->setSchema(_schema);
+            auto owned_connection = ConnectGateMysql(_url, _user, _pass, _schema);
+            chat_schema::Verify(*owned_connection);
+			auto* con = owned_connection.release();
 			// 获取当前时间戳
 			auto currentTime = std::chrono::system_clock::now().time_since_epoch();
 			// 将时间戳转换为秒
@@ -29,15 +47,23 @@ MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::stri
 			_pool.push(std::make_unique<SqlConnection>(con, timestamp));
 		}
 
-		_check_thread = std::thread([this] {
-			while (!_b_stop) {
-				checkConnection();
-				std::this_thread::sleep_for(std::chrono::seconds(60));
-			}
-			});
+        _check_thread = std::thread([this] {
+            std::unique_lock<std::mutex> lock(_mutex);
+            while (!_b_stop) {
+                if (_check_cond.wait_for(lock, std::chrono::seconds(60), [this] { return _b_stop.load(); })) {
+                    break;
+                }
+                lock.unlock();
+                try { checkConnection(); }
+                catch (const std::exception&) {
+                    SPDLOG_WARN("mysql keepalive unavailable");
+                }
+                lock.lock();
+            }
+        });
 	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql pool init failed, error={}", e.what());
+	catch (const sql::SQLException&) {
+        throw std::runtime_error("mysql_initialization_failed");
 	}
 }
 
@@ -51,6 +77,7 @@ void MysqlConnectionPool::checkConnection() {
 	long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
 
 	for (int i = 0; i < poolsize; i++) {
+        if (_b_stop) { break; }
 		auto con = std::move(_pool.front());
 		_pool.pop();
 
@@ -65,27 +92,22 @@ void MysqlConnectionPool::checkConnection() {
 
 		try {
 			std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
-			stmt->executeQuery("SELECT 1");
+            std::unique_ptr<sql::ResultSet> rows(stmt->executeQuery("SELECT 1"));
 			con->_last_oper_time = timestamp;
 			SPDLOG_TRACE("mysql keepalive succeeded, timestamp={}", timestamp);
 		}
-		catch (sql::SQLException& e) {
-			SPDLOG_WARN("mysql keepalive failed, error={}", e.what());
+		catch (const sql::SQLException&) {
+            SPDLOG_WARN("mysql keepalive failed");
 			// 重新创建连接，并替换旧的连接
-			sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-			auto* newcon = driver->connect(_url, _user, _pass);
-			newcon->setSchema(_schema);
-			con->_con.reset(newcon);
+            if (_b_stop) { break; }
+            con->_con = ConnectGateMysql(_url, _user, _pass, _schema);
 			con->_last_oper_time = timestamp;
 		}
 	}
 }
 
 MysqlConnectionPool::~MysqlConnectionPool() {
-	std::unique_lock<std::mutex> lock(_mutex);
-	while (!_pool.empty()) {
-		_pool.pop();
-	}
+    close();
 }
 
 std::unique_ptr<SqlConnection> MysqlConnectionPool::getConnection() {
@@ -116,8 +138,22 @@ void MysqlConnectionPool::returnConnection(std::unique_ptr<SqlConnection> con) {
 }
 
 void MysqlConnectionPool::close() {
-	_b_stop = true;
-	_cond.notify_all();
+    // Serialize concurrent close callers, but never join while holding the
+    // mutex needed by the health worker or a waiting borrower.
+    std::lock_guard<std::mutex> close_lock(_close_mutex);
+    _b_stop = true;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        // Synchronize with the predicate check before notifying waiters.
+    }
+    _cond.notify_all();
+    _check_cond.notify_all();
+    if (_check_thread.joinable()) { _check_thread.join(); }
+    std::queue<std::unique_ptr<SqlConnection>> closing;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        closing.swap(_pool);
+    }
 }
 
 MysqlDao::MysqlDao() {

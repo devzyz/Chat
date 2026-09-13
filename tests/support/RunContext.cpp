@@ -4,7 +4,9 @@
 
 #include <boost/asio.hpp>
 
+#ifdef _WIN32
 #include <Windows.h>
+#endif
 
 #include <array>
 #include <iomanip>
@@ -229,12 +231,14 @@ LoopbackPort RunContext::ReserveLoopbackPort(const std::string& name) {
 	if (error) {
 		throw std::runtime_error("unable to open loopback reservation: " + error.message());
 	}
+#ifdef _WIN32
 	const BOOL exclusive = TRUE;
 	if (setsockopt(
 			acceptor->native_handle(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
 			reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) == SOCKET_ERROR) {
 		throw std::runtime_error("unable to make loopback reservation exclusive");
 	}
+#endif
 	acceptor->bind({boost::asio::ip::address_v4::loopback(), 0}, error);
 	if (error) {
 		throw std::runtime_error("unable to bind loopback reservation: " + error.message());

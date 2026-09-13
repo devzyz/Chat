@@ -1,5 +1,11 @@
 {
-    "email": {},
+    "email": {
+        "host": "smtp.qq.com",
+        "port": 465,
+        "secure": true,
+        "auth": "login",
+        "deadlineMs": 10000
+    },
     "mysql": {
         "host": "192.168.18.128",
         "port": 3308

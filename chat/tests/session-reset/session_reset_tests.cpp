@@ -7,6 +7,8 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QSignalSpy>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QtTest>
 #include <spdlog/sinks/null_sink.h>
 
@@ -20,6 +22,9 @@ private slots:
     void accountStateDoesNotCrossLoginSessions();
     void resetDestroysOwnedSessionUiOnceAndPreservesReason();
     void resetDropsPendingTextBatchBeforeAnOldFailureArrives();
+    void uncertainBatchSurvivesDisconnectAndMatchesExactUuid();
+    void retryDoesNotCrossAuthenticatedAccounts();
+    void reconnectResendsIdenticalWirePayloadAfterAuthentication();
 };
 
 void SessionResetTests::initTestCase()
@@ -164,6 +169,115 @@ void SessionResetTests::resetDropsPendingTextBatchBeforeAnOldFailureArrives()
     QCOMPARE(failureCount, 1);
     QVERIFY(failedClientIds.isEmpty());
     disconnect(failureConnection);
+}
+
+void SessionResetTests::uncertainBatchSurvivesDisconnectAndMatchesExactUuid()
+{
+    auto tcp = TcpMgr::GetInstance();
+    tcp->resetConnection(true);
+    UserMgr::GetInstance()->SetInfo(std::make_shared<UserInfo>(101, "a", "", "", 0));
+    tcp->beginSession();
+    auto send = [&](const QString &uuid) {
+        QJsonObject request{{"from_uid", 101}, {"to_uid", 102}, {"chat_id", 501},
+            {"text_array", QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"msg_content", "body"}}}}};
+        emit tcp->sig_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, QJsonDocument(request).toJson());
+    };
+    const QString first = "00000000-0000-4000-8000-000000000001";
+    const QString second = "00000000-0000-4000-8000-000000000002";
+    send(first);
+    send(second);
+    tcp->resetConnection(false);
+    tcp->beginSession();
+    QSignalSpy failures(tcp.get(), &TcpMgr::sig_text_chat_msg_failed);
+    auto fail = [&](const QString &uuid) {
+        const QByteArray response = QJsonDocument(QJsonObject{{"error", 1011}, {"chat_id", 501},
+            {"commit_error", "Conflict"}, {"client_msg_uuids", QJsonArray{uuid}}}).toJson();
+        tcp->handleMsg(ReqId::ID_TEXT_CHAT_MSG_RSP, response.size(), response);
+    };
+    fail(second);
+    QCOMPARE(failures.size(), 1);
+    QCOMPARE(qvariant_cast<QVector<QString>>(failures[0][1]), QVector<QString>{second});
+    fail(first);
+    QCOMPARE(qvariant_cast<QVector<QString>>(failures[1][1]), QVector<QString>{first});
+    fail(first);
+    QVERIFY(qvariant_cast<QVector<QString>>(failures[2][1]).isEmpty());
+    send(first);
+    const QByteArray unavailable = QJsonDocument(QJsonObject{{"error", 1011}, {"chat_id", 501},
+        {"commit_error", "StorageUnavailable"}, {"client_msg_uuids", QJsonArray{first}}}).toJson();
+    tcp->handleMsg(ReqId::ID_TEXT_CHAT_MSG_RSP, unavailable.size(), unavailable);
+    const QByteArray malformedAck = QJsonDocument(QJsonObject{{"error", 0}, {"chat_id", 501},
+        {"client_msg_uuids", QJsonArray{first}}}).toJson();
+    tcp->handleMsg(ReqId::ID_TEXT_CHAT_MSG_RSP, malformedAck.size(), malformedAck);
+    fail(first);
+    QCOMPARE(qvariant_cast<QVector<QString>>(failures.last()[1]), QVector<QString>{first});
+    send(first);
+    const QByteArray ack = QJsonDocument(QJsonObject{{"error", 0}, {"chat_id", 501},
+        {"client_msg_uuids", QJsonArray{first}}, {"uuid_msgId", QJsonArray{
+            QJsonObject{{"msg_uuid", first}, {"message_id", 9001}}}}}).toJson();
+    tcp->handleMsg(ReqId::ID_TEXT_CHAT_MSG_RSP, ack.size(), ack);
+    fail(first);
+    QVERIFY(qvariant_cast<QVector<QString>>(failures.last()[1]).isEmpty());
+    tcp->resetConnection(true);
+}
+
+void SessionResetTests::retryDoesNotCrossAuthenticatedAccounts()
+{
+    auto tcp = TcpMgr::GetInstance();
+    tcp->resetConnection(true);
+    UserMgr::GetInstance()->SetInfo(std::make_shared<UserInfo>(101, "a", "", "", 0));
+    tcp->beginSession();
+    const QString uuid = "00000000-0000-4000-8000-000000000003";
+    const QByteArray request = QJsonDocument(QJsonObject{{"from_uid", 101}, {"to_uid", 102},
+        {"chat_id", 501}, {"text_array", QJsonArray{QJsonObject{{"msg_uuid", uuid},
+        {"msg_content", "body"}}}}}).toJson();
+    emit tcp->sig_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, request);
+    tcp->resetConnection(false);
+    const QByteArray login = QJsonDocument(QJsonObject{{"error", 0}, {"uid", 202}}).toJson();
+    tcp->handleMsg(ReqId::ID_CHAT_LOGIN_RSP, login.size(), login);
+    QSignalSpy failures(tcp.get(), &TcpMgr::sig_text_chat_msg_failed);
+    const QByteArray response = QJsonDocument(QJsonObject{{"error", 1011}, {"chat_id", 501},
+        {"commit_error", "Conflict"}, {"client_msg_uuids", QJsonArray{uuid}}}).toJson();
+    tcp->handleMsg(ReqId::ID_TEXT_CHAT_MSG_RSP, response.size(), response);
+    QVERIFY(qvariant_cast<QVector<QString>>(failures[0][1]).isEmpty());
+    tcp->resetConnection(true);
+}
+
+void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication()
+{
+    auto tcp = TcpMgr::GetInstance();
+    tcp->resetConnection(true);
+    QTcpServer peer;
+    QVERIFY(peer.listen(QHostAddress::LocalHost, 0));
+    ServerInfo endpoint;
+    endpoint.Host = "127.0.0.1";
+    endpoint.Port = QString::number(peer.serverPort());
+    QSignalSpy connected(tcp.get(), &TcpMgr::sig_tcp_connect_success);
+    QSignalSpy closed(tcp.get(), &TcpMgr::sig_connection_close);
+    tcp->slot_tcp_connect(endpoint);
+    QTRY_COMPARE_WITH_TIMEOUT(connected.size(), 1, 2000);
+    QTRY_VERIFY_WITH_TIMEOUT(peer.hasPendingConnections(), 2000);
+    std::unique_ptr<QTcpSocket> first(peer.nextPendingConnection());
+    const QByteArray login = QJsonDocument(QJsonObject{{"error", 0}, {"uid", 101}}).toJson();
+    tcp->handleMsg(ReqId::ID_CHAT_LOGIN_RSP, login.size(), login);
+    const QByteArray request = QJsonDocument(QJsonObject{{"from_uid", 101}, {"to_uid", 102},
+        {"chat_id", 501}, {"text_array", QJsonArray{QJsonObject{
+        {"msg_uuid", "00000000-0000-4000-8000-000000000004"}, {"msg_content", "retry body"}}}}})
+        .toJson(QJsonDocument::Compact);
+    emit tcp->sig_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, request);
+    QTRY_COMPARE_WITH_TIMEOUT(first->bytesAvailable(), request.size() + 4, 2000);
+    const QByteArray originalWire = first->readAll();
+    first->abort();
+    QTRY_VERIFY_WITH_TIMEOUT(!closed.isEmpty(), 2000);
+    QVERIFY(!closed.last()[0].toBool());
+    tcp->slot_tcp_connect(endpoint);
+    QTRY_COMPARE_WITH_TIMEOUT(connected.size(), 2, 2000);
+    QTRY_VERIFY_WITH_TIMEOUT(peer.hasPendingConnections(), 2000);
+    std::unique_ptr<QTcpSocket> second(peer.nextPendingConnection());
+    QCOMPARE(second->bytesAvailable(), 0);
+    tcp->handleMsg(ReqId::ID_CHAT_LOGIN_RSP, login.size(), login);
+    QTRY_COMPARE_WITH_TIMEOUT(second->bytesAvailable(), originalWire.size(), 2000);
+    QCOMPARE(second->readAll(), originalWire);
+    tcp->resetConnection(true);
 }
 
 QTEST_MAIN(SessionResetTests)

@@ -161,9 +161,20 @@ bool MessageListModel::acknowledgeMessage(const QString &clientMessageId, qint64
                                           DeliveryStatus status)
 {
     assertGuiThread();
-    const int row = rowForClientMessageId(clientMessageId);
-    if (row < 0) {
+    int row = rowForClientMessageId(clientMessageId);
+    if (row < 0 || messageId <= 0) {
         return false;
+    }
+
+    const int duplicateRow = rowForMessageId(messageId);
+    if (duplicateRow >= 0 && duplicateRow != row) {
+        // A history/peer row can arrive before the pending send is acknowledged.
+        // Keep the pending UUID identity but collapse the duplicate server ID.
+        beginRemoveRows({}, duplicateRow, duplicateRow);
+        _messages.removeAt(duplicateRow);
+        endRemoveRows();
+        rebuildRowIndexes();
+        row = rowForClientMessageId(clientMessageId);
     }
 
     auto &message = _messages[row];

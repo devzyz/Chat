@@ -1,6 +1,10 @@
 <!-- generated-by: gsd-doc-writer -->
 # 配置、错误与日志规范
 
+Gate 的 MySQL Connector 连接、读取和写入超时均为 2 秒，关闭池会唤醒等待者并回收健康线程。
+自动重连关闭；超时按已有业务失败路径返回。四服务 fixture 使用数值 loopback 地址，
+真实阻塞读和关闭验证由 `tests/services` 的 3C-07 selector 负责，不能仅由空池回归推断通过。
+
 ## 配置来源
 
 项目配置采用显式路径优先模型：
@@ -21,6 +25,47 @@
 - 新配置项 MUST 同步默认值策略、示例配置、发布复制规则和自动测试。
 - 配置结构变化涉及多个服务时 MUST 搜索所有消费者，不允许只更新一份复制的 INI。
 - Gate/Chat 的可选 `[Grpc]` 毫秒配置包括 `PoolAcquireTimeoutMs`、`StatusDeadlineMs`、`ChatDeadlineMs` 与 `VarifyDeadlineMs`；缺省时采用协议规范默认值，显式值必须在 100..60000 范围内并在监听前验证。
+
+## Varify SMTP 运行配置
+
+`VarifyServer/config.json` 的 `email` 支持 `host`、`port`、`secure`、`auth` 和
+`deadlineMs`。省略字段时保持 `smtp.qq.com:465`、`secure=true`、`auth=login`，
+总发送期限默认 10000 毫秒。显式字段严格校验；端口必须是 JSON 整数 1..65535，
+`secure` 必须是布尔，`auth` 只能为 `login`/`none`，期限必须为 100..60000 毫秒整数。
+配置在默认服务组合创建 Redis/SMTP 对象及监听之前校验。
+
+`CHAT_VARIFY_EMAIL_USER` 仍指定发件地址；`login` 模式的 SMTP 身份及密码来自
+`CHAT_VARIFY_EMAIL_USER` / `CHAT_VARIFY_EMAIL_PASS`，禁止在 JSON 写入凭据。
+`none` 模式不提供 SMTP auth 对象，也不要求 SMTP 密码，适用于隔离 Mailpit：
+
+```json
+{
+    "email": {
+        "host": "127.0.0.1",
+        "port": 1025,
+        "secure": false,
+        "auth": "none",
+        "deadlineMs": 2000
+    }
+}
+```
+
+以上只是 email section 示例；完整 JSON 仍需现有 mysql/redis section 与所需环境变量。
+CI 将示例端口替换为本次服务动态映射，不连接默认公网 SMTP。
+`secure=false` 保留 Nodemailer 的可用时 STARTTLS 行为，不关闭证书验证；
+Mailpit 未配置 TLS 时使用本次隔离 loopback 明文连接。
+
+生产 `createSmtpAdapter` 惰性创建连接，`SendMail` 仅返回 Delivered/Rejected/Unavailable/
+DeadlineExceeded/InvalidConfig，不返回 provider response、密码、验证码或正文；
+正式 gRPC handler 将所有非 Delivered 结果映射到既有 Exception，公开协议编号不变。
+总 deadline 或 adapter `close()` 终止本次 socket 并保证结果只完成一次，不自动重试。
+Delivered 仅表示 SMTP 接受；超时临界点是否已被远端接受存在歧义，不能声明最终邮箱投递或网络 exactly-once。
+
+所锁 Nodemailer 8.0.6 的普通 transport.close 不取消活跃发送，因此适配器通过受支持的
+getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超时。
+真实 Mailpit/故障测试、仅按本 run 删除邮件及报告边界见
+[SMTP 测试](../VarifyServer/test/smtp/README.md)。依赖锁与现有发布文件收集方式不变；
+新增 `smtpConfig.js` 与其他生产 JavaScript 一并发布。
 
 ## ChatServer 多实例
 
@@ -47,6 +92,12 @@
 - 清理失败不得覆盖原始异常；可作为附加日志记录。
 - 对客户端公开的错误码必须稳定，内部异常文本不得直接作为协议字段泄漏。
 
+## 日志关闭
+
+`LogMgr::Close()` 幂等刷新应用日志，不销毁进程级 spdlog registry。
+服务静态析构仍可能产生日志；registry 在进程退出时自行释放。通用 Singleton 析构不写日志，
+避免 LogMgr 自身或早于 registry 初始化的单例在 registry 销毁后再次调用日志设施。
+
 ## 日志级别
 
 | 级别 | 使用场景 |
@@ -72,5 +123,37 @@
 - CI 失败时 SHOULD 保存对应 stdout/stderr 和 JUnit/XML；不得只保留退出码。
 
 ## 当前迁移要求
+
+### MySQL schema 与消息写入（3C-03/05）
+
+- Gate/Chat 启动前必须已完成 [版本化迁移](Data.md#operational-entry)；服务只验证
+  version/checksum/结构，不在启动时执行 DDL。旧的无版本开发库会被拒绝，不能直接覆盖导入。
+  现有数据须先备份并单独规划接管；当前迁移只接受空库或可信迁移历史。
+- Chat 的 MySQL Host 使用数字 IP 或 `localhost`，IPv6 使用方括号；不接受不可取消的
+  任意同步 DNS 解析。连接、读写和锁等待各有两秒边界，借用及事务步骤检查请求 deadline。
+  同步命令和回滚可能消耗额外 socket timeout，不能把该机制宣称为精确毫秒级取消。
+- 消息成功以显式 COMMIT 确认为准；确认丢失时保留原 UUID 重试，由数据库唯一约束返回原 ID。
+  通知失败不撤销已提交数据。历史消息 NULL UUID 保持可读，客户端不得为重试生成新 UUID。
+
+### Redis adapter 生命周期与期限（3C-04）
+
+- Gate、Status、Chat 使用同一个纯技术 hiredis pool，业务 key/field 和锁 owner 规则不变。
+  默认借用、连接与命令 socket timeout 为 2000 ms；每次借用最多创建一个替代连接，
+  不重放业务命令。空闲连接借出前以 PING 重新验证，错误 context 归还时丢弃。
+- C++ Redis Host 必须是数字 IPv4/IPv6 或 `localhost`（映射为 `127.0.0.1`）；
+  其他 DNS 名称在池构造时明确报配置错误。hiredis 的同步 DNS 不受 socket timeout 约束，
+  因而不能把未限定的名称解析标成有限连接。原有数字地址配置不变。
+- 池按需连接，没有后台心跳线程；`close()` 幂等并唤醒等待者。调用方在销毁池前必须
+  停止业务请求并归还借出的连接；已借出的命令通过自身有限 timeout 收敛。
+- Varify 的 `redis.js` 在导入时不读取配置、不创建客户端；默认 handler 组合注入配置，
+  首次操作才创建 ioredis 连接。JSON `redis.connectTimeoutMs` / `commandTimeoutMs`
+  可选，默认各 1000，合法范围为整数 1..60000；密码仍仅由
+  `CHAT_VARIFY_REDIS_PASSWORD` 提供。Node 连接总期限为两者之和，包含异步解析和 AUTH。
+- ioredis 关闭离线队列、自动重发与自动重连；失败命令保留 null/false 旧映射，
+  后续独立操作才创建新连接。验证码写入为单条 `SET key value EX seconds`，不再分步 EXPIRE。
+  `Quit()` 直接断开并取消等待，不发送可能阻塞的 QUIT；入口绑定失败与 SIGINT/SIGTERM
+  都关闭 Redis/SMTP adapter，gRPC 排空最多 10 秒后强制关闭。
+- 测试只使用本次 RunContext 的动态地址、合成密码和 key prefix；真实服务验收状态见
+  主工作区 `docs/Status.md`，本地 loopback fault 测试不代表真实 Redis 数据/重启测试已通过。
 
 ChatServer 已具有较完整的 fail-fast 配置和异常清理。GateServer、StatusServer 和 VarifyServer 的历史启动逻辑仍可能存在校验或错误传播差异；新改动 MUST 朝统一契约收敛，不能把现有差异复制为新的正确行为。

@@ -1063,6 +1063,7 @@ class ChatMessage final : public ::google::protobuf::Message
   // accessors -------------------------------------------------------
   enum : int {
     kContentFieldNumber = 5,
+    kClientMsgUuidFieldNumber = 7,
     kMessageidFieldNumber = 1,
     kChatidFieldNumber = 2,
     kSendidFieldNumber = 3,
@@ -1082,6 +1083,21 @@ class ChatMessage final : public ::google::protobuf::Message
   const ::std::string& _internal_content() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_content(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_content();
+
+  public:
+  // string client_msg_uuid = 7;
+  void clear_client_msg_uuid() ;
+  const ::std::string& client_msg_uuid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_client_msg_uuid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_client_msg_uuid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_client_msg_uuid();
+  void set_allocated_client_msg_uuid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_client_msg_uuid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_client_msg_uuid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_client_msg_uuid();
 
   public:
   // int32 messageid = 1;
@@ -1138,8 +1154,8 @@ class ChatMessage final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<3, 6,
-                                   0, 35,
+  static const ::google::protobuf::internal::TcParseTable<3, 7,
+                                   0, 50,
                                    2>
       _table_;
 
@@ -1161,6 +1177,7 @@ class ChatMessage final : public ::google::protobuf::Message
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr content_;
+    ::google::protobuf::internal::ArenaStringPtr client_msg_uuid_;
     ::int32_t messageid_;
     ::int32_t chatid_;
     ::int32_t sendid_;
@@ -4808,7 +4825,7 @@ inline void ChatMessage::clear_messageid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.messageid_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
+                  0x00000004U);
 }
 inline ::int32_t ChatMessage::messageid() const {
   // @@protoc_insertion_point(field_get:message.ChatMessage.messageid)
@@ -4816,7 +4833,7 @@ inline ::int32_t ChatMessage::messageid() const {
 }
 inline void ChatMessage::set_messageid(::int32_t value) {
   _internal_set_messageid(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:message.ChatMessage.messageid)
 }
 inline ::int32_t ChatMessage::_internal_messageid() const {
@@ -4833,7 +4850,7 @@ inline void ChatMessage::clear_chatid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.chatid_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000004U);
+                  0x00000008U);
 }
 inline ::int32_t ChatMessage::chatid() const {
   // @@protoc_insertion_point(field_get:message.ChatMessage.chatid)
@@ -4841,7 +4858,7 @@ inline ::int32_t ChatMessage::chatid() const {
 }
 inline void ChatMessage::set_chatid(::int32_t value) {
   _internal_set_chatid(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:message.ChatMessage.chatid)
 }
 inline ::int32_t ChatMessage::_internal_chatid() const {
@@ -4858,7 +4875,7 @@ inline void ChatMessage::clear_sendid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sendid_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000008U);
+                  0x00000010U);
 }
 inline ::int32_t ChatMessage::sendid() const {
   // @@protoc_insertion_point(field_get:message.ChatMessage.sendid)
@@ -4866,7 +4883,7 @@ inline ::int32_t ChatMessage::sendid() const {
 }
 inline void ChatMessage::set_sendid(::int32_t value) {
   _internal_set_sendid(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:message.ChatMessage.sendid)
 }
 inline ::int32_t ChatMessage::_internal_sendid() const {
@@ -4883,7 +4900,7 @@ inline void ChatMessage::clear_recvid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.recvid_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000010U);
+                  0x00000020U);
 }
 inline ::int32_t ChatMessage::recvid() const {
   // @@protoc_insertion_point(field_get:message.ChatMessage.recvid)
@@ -4891,7 +4908,7 @@ inline ::int32_t ChatMessage::recvid() const {
 }
 inline void ChatMessage::set_recvid(::int32_t value) {
   _internal_set_recvid(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:message.ChatMessage.recvid)
 }
 inline ::int32_t ChatMessage::_internal_recvid() const {
@@ -4973,7 +4990,7 @@ inline void ChatMessage::clear_status() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.status_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000020U);
+                  0x00000040U);
 }
 inline ::int32_t ChatMessage::status() const {
   // @@protoc_insertion_point(field_get:message.ChatMessage.status)
@@ -4981,7 +4998,7 @@ inline ::int32_t ChatMessage::status() const {
 }
 inline void ChatMessage::set_status(::int32_t value) {
   _internal_set_status(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:message.ChatMessage.status)
 }
 inline ::int32_t ChatMessage::_internal_status() const {
@@ -4991,6 +5008,71 @@ inline ::int32_t ChatMessage::_internal_status() const {
 inline void ChatMessage::_internal_set_status(::int32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.status_ = value;
+}
+
+// string client_msg_uuid = 7;
+inline void ChatMessage::clear_client_msg_uuid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_msg_uuid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& ChatMessage::client_msg_uuid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:message.ChatMessage.client_msg_uuid)
+  return _internal_client_msg_uuid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ChatMessage::set_client_msg_uuid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.client_msg_uuid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:message.ChatMessage.client_msg_uuid)
+}
+inline ::std::string* PROTOBUF_NONNULL ChatMessage::mutable_client_msg_uuid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_client_msg_uuid();
+  // @@protoc_insertion_point(field_mutable:message.ChatMessage.client_msg_uuid)
+  return _s;
+}
+inline const ::std::string& ChatMessage::_internal_client_msg_uuid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_msg_uuid_.Get();
+}
+inline void ChatMessage::_internal_set_client_msg_uuid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_msg_uuid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ChatMessage::_internal_mutable_client_msg_uuid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.client_msg_uuid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ChatMessage::release_client_msg_uuid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:message.ChatMessage.client_msg_uuid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.client_msg_uuid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.client_msg_uuid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ChatMessage::set_allocated_client_msg_uuid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.client_msg_uuid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.client_msg_uuid_.IsDefault()) {
+    _impl_.client_msg_uuid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:message.ChatMessage.client_msg_uuid)
 }
 
 // -------------------------------------------------------------------

@@ -42,9 +42,10 @@ bool MysqlMgr::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 	return _dao.CreatePrivateChat(user1_id, user2_id, chat_id);
 }
 
-bool MysqlMgr::AddChatMessageList(int from_uid, int to_uid, int chat_id, std::vector<std::pair<std::string, std::string>> cache_msgs,
-	std::vector<std::shared_ptr<ChatMessage>>& chat_msgs) {
-	return _dao.AddChatMessageList(from_uid, to_uid, chat_id, cache_msgs, chat_msgs);
+message_commit::Result MysqlMgr::AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
+    int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
+    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline) {
+    return _dao.AddChatMessageList(principal, from_uid, to_uid, chat_id, cache_msgs, chat_msgs, deadline);
 }
 
 bool MysqlMgr::GetChatMessageList(int chat_id, int current_msg_id, int page_size,
