@@ -33,11 +33,11 @@ function xml(value) {
         .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
 }
 
-function writeReports(root, selector, cases) {
+function writeReports(root, selector, cases, options = {}) {
     fs.mkdirSync(root, { recursive: true });
     const manifest = { format: 1, sourceSha: process.env.CHAT_CANDIDATE_SHA || null,
         selector, reports: [] };
-    for (const group of reportGroups(selector)) {
+    for (const group of options.groups || reportGroups(selector)) {
         const selected = cases.filter((entry) => entry.id.startsWith(group.prefix));
         const incomplete = selected.length === 0 || (group.expected !== undefined && selected.length !== group.expected);
         const duplicate = new Set(selected.map((entry) => entry.id)).size !== selected.length;
@@ -46,12 +46,12 @@ function writeReports(root, selector, cases) {
         if (incomplete || duplicate) rows.push('<testcase name="registration"><failure message="required cases missing or duplicated"/></testcase>');
         fs.writeFileSync(path.join(root, group.file),
             `<testsuite name="${xml(group.file)}" tests="${rows.length}" failures="${failures}">\n${rows.join('\n')}\n</testsuite>\n`);
-        manifest.reports.push({ file: group.file, owner: 'tests/services', level: 'Integration',
+        manifest.reports.push({ file: group.file, owner: 'tests/services', level: options.level || 'Integration',
             deadlineSeconds: 690, prefix: group.prefix, expected: group.expected,
             cases: selected.map(entry => ({ id: entry.id, name: entry.name, pass: entry.pass })),
             sha256: createHash('sha256').update(fs.readFileSync(path.join(root, group.file))).digest('hex') });
     }
-    fs.writeFileSync(path.join(root, 'phase3c-reports.json'), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(root, options.manifest || 'phase3c-reports.json'), JSON.stringify(manifest, null, 2));
 }
 
 module.exports = { reportGroups, writeReports };

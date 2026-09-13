@@ -15,20 +15,26 @@ function read(name) {
     catch { return { complete: false }; }
 }
 async function finalize() {
+    const phase3d = ['3D-00', '3D-01'].includes(process.env.CHAT_SERVICE_SELECTOR);
     const teardown = read('teardown.json');
     const processTeardown = read('process-teardown.json');
-    const junit = path.join(root, 'linux_services.xml');
-    const reports = reportGroups(process.env.CHAT_SERVICE_SELECTOR || '3C-02');
-    const reportsComplete = reports.every((group) => {
+    const junit = path.join(root, phase3d ? 'linux_phase3d_contract.xml' : 'linux_services.xml');
+    const reports = phase3d ? require('./phase3dEvidence').reportGroups(process.env.CHAT_SERVICE_SELECTOR) : reportGroups(process.env.CHAT_SERVICE_SELECTOR || '3C-02');
+    let reportsComplete = reports.every((group) => {
         try {
             const report = fs.readFileSync(path.join(root, group.file), 'utf8');
             return report.includes('<testsuite ') && !/<(?:failure|error)\b/.test(report) &&
                 !/\b(?:failures|errors)="[1-9][0-9]*"/.test(report);
         } catch { return false; }
     });
+    if (phase3d) {
+        try { require('./phase3dEvidence').validate(root, process.env.CHAT_CANDIDATE_SHA, process.env.CHAT_SERVICE_SELECTOR); }
+        catch { reportsComplete = false; }
+    }
     teardown.processComplete = processTeardown.complete === true;
     teardown.complete = teardown.complete === true && teardown.processComplete && reportsComplete &&
-        fs.existsSync(path.join(root, 'service-endpoints.json'));
+        fs.existsSync(path.join(root, phase3d ? 'topology.json' : 'service-endpoints.json')) &&
+        (!phase3d || (read('application-teardown.json').complete === true && read('redaction.json').complete === true));
     if (!teardown.complete && process.env.GITHUB_ACTIONS === 'true') {
         teardown.fallbackStopped = [];
         teardown.fallbackFailures = [];
@@ -50,7 +56,7 @@ async function finalize() {
         }
     }
     fs.writeFileSync(path.join(root, 'teardown.json'), JSON.stringify(teardown, null, 2));
-    if (!fs.existsSync(path.join(root, 'service-endpoints.json'))) {
+    if (!phase3d && !fs.existsSync(path.join(root, 'service-endpoints.json'))) {
         fs.writeFileSync(path.join(root, 'service-endpoints.json'), '{"status":"not-started"}\n');
     }
     if (!fs.existsSync(junit) || !teardown.complete) {
@@ -58,7 +64,7 @@ async function finalize() {
         if (fs.existsSync(junit) && !fs.existsSync(path.join(root, 'coordinator-services.xml'))) {
             fs.copyFileSync(junit, path.join(root, 'coordinator-services.xml'));
         }
-        fs.writeFileSync(junit, '<testsuite name="phase3c-services" tests="1" failures="1">' +
+        fs.writeFileSync(junit, `<testsuite name="${phase3d ? 'phase3d-contract' : 'phase3c-services'}" tests="1" failures="1">` +
             '<testcase name="outer-run-and-teardown"><failure message="service evidence incomplete"/>' +
             '</testcase></testsuite>\n');
     }

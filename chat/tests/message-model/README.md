@@ -49,4 +49,10 @@ Component case 写入 `build/test-results/client_component.xml`；两组任一�
 
 ## 已知缺口
 
+The store Component case also exercises the production history reducer shared
+by GUI and process driver: overlapping existing rows are deduplicated, unseen
+forward pages are rejected without advancing the cursor, and ACK/failure
+updates remain isolated by chat. ClientSession owns production heartbeats;
+the process-driver Integration case observes them on real loopback TCP.
+
 - 不覆盖真实窗口事件、网络管理器、登录/好友/聊天跨页面流程或平台字体的精确像素。

@@ -201,6 +201,23 @@ void MessageModelTests::storeRetainsOneModelAndPaginationStatePerChat()
     QVERIFY(!first->canLoadMore());
     QVERIFY(first->hasLoadedInitialPage());
     QCOMPARE(first->historyCursor(), 123);
+
+    first->setInitialPageLoaded(false);
+    QVERIFY(store.applyHistory(7, {message(30, "server-30")}, true, 30));
+    QVERIFY(!first->isLoadingHistory());
+    QVERIFY(store.applyHistory(7, {message(20, "server-20"), message(30, "server-30")}, true, 20));
+    QCOMPARE(first->rowCount(), 2);
+    QVERIFY(!store.applyHistory(7, {message(40, "forward")}, true, 40));
+    QCOMPARE(first->historyCursor(), 20);
+    QCOMPARE(first->rowCount(), 2);
+    first->appendMessage(message(0, "pending"));
+    store.markFailed(8, {"pending"});
+    store.markFailed(7, {"pending"});
+    QCOMPARE(first->recordAt(2)->deliveryStatus, DeliveryStatus::Failed);
+    store.acknowledge(7, {{"pending", 50}});
+    QCOMPARE(first->recordAt(2)->messageId, 50);
+    QCOMPARE(first->recordAt(2)->deliveryStatus, DeliveryStatus::Sent);
+    QCOMPARE(store.find(8)->rowCount(), 0);
 }
 
 void MessageModelTests::delegateReflowsLongTextForANarrowViewport()

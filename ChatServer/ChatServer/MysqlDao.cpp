@@ -288,15 +288,12 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 		{
 			// 准备修改语句
 			std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-				prepareStatement("SELECT id FROM apply_friend WHERE (from_uid = ? and to_uid = ?) OR (from_uid = ? and to_uid = ?) FOR UPDATE"));
+				prepareStatement("SELECT id FROM apply_friend WHERE from_uid = ? AND to_uid = ? AND status = 0 FOR UPDATE"));
 
 			pstmt->setInt(1, apply_uid);
 			pstmt->setInt(2, auth_uid);
 
-			pstmt->setInt(3, auth_uid);
-			pstmt->setInt(4, apply_uid);
-
-			auto res = pstmt->executeQuery();
+			std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 			if (!res->next()) {
 				connection->_connection->rollback();
 				return false;

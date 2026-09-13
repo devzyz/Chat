@@ -952,6 +952,11 @@ void TcpMgr::handleMsg(ReqId id, int len, QByteArray data)
         return ;
     }
     _handlers[id](id, len, data);
+    if (id == ID_CREATE_PRIVATE_CHAT_RSP || id == ID_LOAD_CHAT_MESSAGE_RSP ||
+        id == ID_TEXT_CHAT_MSG_RSP || id == ID_ADD_FRIEND_RSP || id == ID_AUTH_FRIEND_RSP) {
+        const auto object = QJsonDocument::fromJson(data).object();
+        emit requestCompleted(id, object.value("error").toInt(-1));
+    }
 }
 
 // 关闭tcp连接

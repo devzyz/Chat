@@ -3,7 +3,7 @@
 
 #include <QDialog>
 #include <global.h>
-#include "authflowcoordinator.h"
+#include "clientloginflow.h"
 
 namespace Ui {
 class LoginDialog;
@@ -36,21 +36,13 @@ private:
 
     void showAuthError(AuthError error);
 
-    int _uid;
-    QString _token;
-    AuthFlowCoordinator &_authFlow;
-    AuthFlowId _flowId = 0;
+    ClientLoginFlow _loginFlow;
 signals:
     void sig_login_switch_reg();
     void sig_login_switch_reset();
-    void sig_connect_tcp(ServerInfo si);
     void sig_login_switch_chat(AuthFlowId flowId);
 private slots:
     void on_login_btn_clicked();
-    void slot_login_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
-    void slot_tcp_connect_finish(bool bSuccess);
-    void slot_chat_login_failed(int error);
-    void slot_chat_login_succeeded();
 };
 
 #endif // LOGINDIALOG_H

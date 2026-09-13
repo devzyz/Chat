@@ -240,3 +240,85 @@ volume or personal mailbox is used. Individual suites remove only their own
 data before the coordinator performs final fixture teardown. Hosted execution
 remains required; local lifecycle and loopback tests are not acceptance evidence
 for actual Redis/Mailpit integration.
+# Phase 3D foundation
+
+Selector `3D-01` extends `3D-00` with `linux_phase3d_journey.xml` and seven
+`E03-JOURNEY` cases: self/unknown-user rejection (01), cross-instance application
+notification (02), duplicate application (03), recipient acceptance with both
+production models and reciprocal MySQL relations (04), duplicate acceptance
+without extra chats/greetings (05), wrong code/password and duplicate registration
+(06), and real Chat rejection of mismatched/cross-account tokens (07).
+It reuses the same disposable five-service scenario and cleanup; no friend row
+or selected endpoint is written by the fixture. The seven foundation cases also
+remain mandatory. The hosted job selects `3D-01`; full `3D` still fails closed.
+
+Friend application uses the authenticated session UID, rejects self/unknown
+recipients, and preserves one pending row on duplicate application. Acceptance
+requires the authenticated recipient and consistent nested identity fields;
+the DAO locks only a pending application in the incoming direction. A reverse
+outgoing application cannot authorize acceptance. Repeated acceptance returns
+the existing `UidInvalid` error without new relations, chats or greetings.
+There is no schema or wire-field change; clients using forged identities or
+accepting their own outgoing application now receive an error.
+
+```bash
+bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-01
+```
+
+`phase3d.fixture.json` fixes the logical users, server identities, seed, journey
+and deadlines. `twoServerTopology.js` namespaces physical resources by run ID,
+renders reciprocal peer RPC and Status discovery configuration, and rejects
+missing clients, shared PID/account, or incorrect observed endpoints.
+Configuration strings contain a generated credential and must only be written
+to private run-owned files; the topology descriptor contains no credential.
+
+The public foundation entry is:
+
+```bash
+bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-00
+```
+
+It requires the same-source `CHAT_SERVICE_LAUNCHER`, `CHAT_FOUR_BUNDLE`,
+`CHAT_E2E_CLIENT`, and job-owned container IDs/mapped ports used by the existing
+coordinator. The `two-server-contract` hosted job supplies these inputs and
+uploads `phase3d-contract-evidence`. `clientRuntime.js` packs the Qt binary and
+its dependency closure in the checksummed launcher artifact; no GUI platform
+plugin is needed by this QCoreApplication entry point.
+
+`fiveProcessCases.js` reuses RunContext/ProcessHarness supervisors, the real
+schema migration and dependency coordinator. It runs Varify, Status, Gate,
+Chat A/B and two production client processes; account credentials stay in
+private run-owned configuration/control channels. It registers and logs in
+Alice before Bob, observes real Redis connection counts, checks distinct
+Status endpoints, and correlates one cross-instance message by UUID/server ID
+and text hash in both production models and MySQL. It stops one client while
+the other remains active, then stops all owned processes and removes owned data.
+
+Connection-count waits allow 70 seconds for CServer's 60-second Redis publication
+cycle. While polling, snapshots keep both live controllers below their independent
+60-second inactivity deadline; a stopped controller is excluded. Counts must still
+match exactly, and an unchanged count fails at the bounded deadline.
+
+| Report | IDs | Count | Contract |
+| --- | --- | --- | --- |
+| `linux_phase3d_contract.xml` | E03-CONTRACT-06..12 | 7 | Fresh schema, five-service ready, two client processes, public registration/discovery, durable cross-instance model correlation, independent exit, reverse cleanup |
+
+`phase3d-reports.json` records actual cases and report hashes. Finalization
+requires the exact seven IDs, source SHA, matching report bytes, two distinct
+observed clients, application/process/dependency teardown and redaction evidence.
+Missing or failed evidence remains a failure, including failures before startup.
+These seven cases supplement the five loopback
+[client process contracts](../../chat/tests/session-driver/README.md);
+they do not replace friendship, bidirectional messaging, recovery/history or
+N/N-1 compatibility acceptance. An unqualified/full Phase 3D selector returns
+nonzero until the downstream phase gate is implemented.
+
+Support regression (provide the configured same-source client binary):
+
+```bash
+CHAT_E2E_CLIENT="$PWD/out/build/linux-x64-release/bin/chat_e2e_client" node --test tests/services/twoServerTopology.test.js tests/services/clientControl.test.js tests/services/phase3dEvidence.test.js tests/services/connectionCount.test.js
+```
+
+These seven support cases exercise topology rejection, real Node-to-Qt control,
+bounded controller failures, delayed count publication and evidence validation. Synthetic validator inputs
+are not E2E results; only the real hosted selector can supply that evidence.

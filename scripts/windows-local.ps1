@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('Check', 'CheckTestStructure', 'CheckTestReports', 'GenerateProtocols', 'CheckProtocols', 'RestoreServers', 'BuildServers', 'BuildClient', 'RestoreVarify', 'RunServerTests', 'RunClientTests', 'RunScriptTests', 'RunVarifyTests', 'RunAllTests', 'TestPhase1', 'BuildAll')]
     [string]$Task = 'Check',
@@ -46,7 +46,7 @@ $testResults = Join-Path $repoRoot 'build\test-results'
 $clientTestGroups = @(
     [pscustomobject]@{ Level = 'unit'; Report = (Join-Path $testResults 'client_unit.xml'); ExpectedCount = 18 }
     [pscustomobject]@{ Level = 'component'; Report = (Join-Path $testResults 'client_component.xml'); ExpectedCount = 8 }
-    [pscustomobject]@{ Level = 'integration'; Report = (Join-Path $testResults 'client_integration.xml'); ExpectedCount = 23 }
+    [pscustomobject]@{ Level = 'integration'; Report = (Join-Path $testResults 'client_integration.xml'); ExpectedCount = 28 }
 )
 $scriptTestGroups = @(
     [pscustomobject]@{
@@ -73,7 +73,7 @@ $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 18 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 8 }
-    [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 23 }
+    [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 28 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 33 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 21 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_component.xml'; ExpectedCount = 9 }
@@ -554,8 +554,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 13 -or $total -ne 342) {
-        throw "Regression report baseline mismatch: expected 13 reports and 342 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 13 -or $total -ne 347) {
+        throw "Regression report baseline mismatch: expected 13 reports and 347 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     $legacyTotal = 0
     foreach ($legacyGroup in $legacyRegressionReportGroups) {
@@ -1070,7 +1070,7 @@ function Confirm-TestStructure {
         $clientCMake,
         'add_test\s*\(\s*NAME\s+([A-Za-z0-9_.-]+)',
         [Text.RegularExpressions.RegexOptions]::IgnoreCase
-    ) | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -notin @('http_transport.', 'tcp_transport.') })
+    ) | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -notin @('http_transport.', 'tcp_transport.', 'session_driver.') })
     $expectedHttpTransportCases = @(
         'successPreservesRequestAndFlowIdentity'
         'refusedConnectionHasOneBoundedOutcome'
@@ -1122,6 +1122,19 @@ function Confirm-TestStructure {
         ($registeredTcpTransportCases -join ',') -ne ($expectedTcpTransportCases -join ',') -or
         $tcpTransportBlock.Groups['properties'].Value -notmatch 'LABELS\s+"?integration"?') {
         throw 'Qt TCP transport must register exactly twelve frozen Integration CTest cases through the production target.'
+    }
+    $driverCases = @('productionLoginKeepsAccountsAndEndpointsSeparate',
+        'twoProcessesHaveIndependentLifetimes', 'malformedAndReplayedCommandsFailClosed',
+        'lostControllerTerminatesClient', 'stopCancelsPendingProductionHttp')
+    $driverBlock = [regex]::Match($clientCMake,
+        '(?ms)foreach\s*\(\s*SESSION_DRIVER_CASE\s+IN\s+ITEMS(?<cases>.*?)\)\s*add_test.*?set_tests_properties\s*\(\s*session_driver\.\$\{SESSION_DRIVER_CASE\}\s+PROPERTIES(?<properties>.*?)\)\s*endforeach')
+    $registeredDriverCases = @([regex]::Matches($driverBlock.Groups['cases'].Value,
+        '(?m)^\s*(?<case>[A-Za-z][A-Za-z0-9]+)\s*$') | ForEach-Object { $_.Groups['case'].Value })
+    if (-not $driverBlock.Success -or ($registeredDriverCases -join ',') -ne ($driverCases -join ',') -or
+        $driverBlock.Groups['properties'].Value -notmatch 'LABELS\s+"integration"' -or
+        $clientCMake -notmatch 'target_link_libraries\(chat_e2e_client\s+PRIVATE\s+chat_client_login' -or
+        $clientCMake -notmatch 'target_link_libraries\(chat\s+PRIVATE\s+chat_client_login') {
+        throw 'GUI and client driver must share production login and register all five process contracts.'
     }
     $expectedClientLevels = @{
         'network_state_tests' = 'unit'
@@ -1191,7 +1204,7 @@ function Confirm-TestStructure {
             throw "Invalid Qt report mapping: $($group.Level) -> $($group.Report)"
         }
     }
-    $expectedClientCounts = @{ unit = 18; component = 8; integration = 23 }
+    $expectedClientCounts = @{ unit = 18; component = 8; integration = 28 }
     foreach ($group in $clientTestGroups) {
         if ($group.ExpectedCount -ne $expectedClientCounts[$group.Level]) {
             throw "Qt $($group.Level) report must require exactly $($expectedClientCounts[$group.Level]) testcases."
@@ -1249,7 +1262,8 @@ function Confirm-TestStructure {
     $loginDialogSource = Get-Content -LiteralPath (Join-Path $repoRoot 'chat\logindialog.cpp') -Raw
     $httpMgrSource = Get-Content -LiteralPath (Join-Path $repoRoot 'chat\httpmgr.cpp') -Raw
     if ($authFlowSource -notmatch 'AuthFlowCoordinator::Reduce' -or
-        $loginDialogSource -notmatch '_authFlow\.Reduce' -or
+        $loginDialogSource -notmatch '_loginFlow\.login' -or
+        (Get-Content -LiteralPath (Join-Path $repoRoot 'chat\clientloginflow.cpp') -Raw) -notmatch '_coordinator\.Reduce' -or
         $httpMgrSource -notmatch 'sig_http_finish\s*\(\s*static_cast<AuthFlowId>\s*\(\s*result\.flowId\s*\)' -or
         $mainWindowSource -notmatch 'AbnormalDisconnect[\s\S]*?AuthActionKind::ShowLogin[\s\S]*?_session\.resetSession\s*\(\s*reason\s*\)') {
         throw 'Qt auth outcomes and abnormal disconnect must route through AuthFlowCoordinator and existing ClientSession reset.'
@@ -1318,11 +1332,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact thirteen-report/342-testcase baseline.'
+        throw 'RunAllTests must audit the exact thirteen-report/347-testcase baseline.'
     }
     if ($regressionReportGroups.Count -ne 13 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 342) {
-        throw 'The registered regression baseline must remain exactly 13 reports and 342 testcases.'
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 347) {
+        throw 'The registered regression baseline must remain exactly 13 reports and 347 testcases.'
     }
     if ($legacyRegressionReportGroups.Count -ne 12 -or
         ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 232) {

@@ -38,6 +38,12 @@
 - 写入 MUST 通过单连接顺序队列串行化，避免多个 `async_write` 交叉数据。
 - protobuf 或 JSON payload 解析失败不得继续进入业务 handler。
 
+好友申请的 `fromuid`、好友确认的 `authuid` 必须匹配连接的认证 UID。
+申请拒绝自身及不存在的目标用户；确认的内嵌 `applyinfo` / `authinfo` 身份必须与外层一致，
+且只能确认发给当前用户的待处理申请。身份不符、反向申请和重复确认返回既有 `UidInvalid`，
+不新增好友关系或问候消息。消息 ID、JSON 字段及 schema 不变；重复申请仍保持已有单行。
+对应真实依赖合同见 [3D 好友旅程](../tests/services/README.md#phase-3d-foundation)。
+
 ## HTTP/JSON
 
 - GateServer endpoint MUST 明确方法、路径、请求字段、响应字段和错误码。
