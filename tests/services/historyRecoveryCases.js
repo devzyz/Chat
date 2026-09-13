@@ -7,7 +7,7 @@ async function runHistoryRecoveryCases({ bob, users, sql, record, chatId, restar
     let expected;
     await record('E03-RECOVER-01', 'public sends persist at least three production history pages', async () => {
         const sent = new Map();
-        // The production page size is ten; fail below if its boundary changes.
+        // The production row cap is ten; encoded byte limits can shorten a page.
         for (let index = 0; index < 21; ++index) {
             const uuid = randomUUID();
             const text = `history-${index}: Unicode \u4e16\u754c`;
@@ -43,7 +43,9 @@ async function runHistoryRecoveryCases({ bob, users, sql, record, chatId, restar
             assert.equal((await recovered.control.command('history', { chatId, cursor })).error, 0);
             finalState = await snapshot();
             assert.ok(BigInt(finalState.cursor) > BigInt(cursor));
-            if (pages === 0) assert.equal(finalState.messages.length, 10);
+            const previousCount = pages === 0 ? 0 : expected.findIndex(row => row.messageId === cursor) + 1;
+            const pageCount = finalState.messages.length - previousCount;
+            assert.ok(pageCount > 0 && pageCount <= 10);
             assert.deepEqual(finalState.messages.map(identity), expected.slice(0, finalState.messages.length));
             cursor = finalState.cursor;
             ++pages;

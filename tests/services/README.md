@@ -2,6 +2,12 @@
 
 ## Current-N evidence gate (3C-09)
 
+History recovery pages contain at most ten rows and must fit the existing 2048-byte
+TCP body limit. `E03-RECOVER-03` verifies nonempty forward progress, the row cap and
+every persisted ID/UUID/hash across shortened pages; `HistoryResponse.h` owns the
+byte-bound serialization. The Linux preflight's `phase3d-history-response` support
+regression checks the codec boundary without external services.
+
 The hosted workflow runs the production build and the `3C-07` superset once,
 then downloads that run's service evidence into the downstream job. The default
 `scripts/linux-ci.sh --phase 3C --configuration Release` invocation aggregates

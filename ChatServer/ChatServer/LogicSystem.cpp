@@ -8,6 +8,7 @@
 #include <memory>
 #include "MysqlMgr.h"
 #include "MessageCommit.h"
+#include "HistoryResponse.h"
 #include <chrono>
 #include "StatusGrpcClient.h"
 #include "RedisMgr.h"
@@ -796,8 +797,9 @@ void LogicSystem::RegisterCallBacks() {
 		// 解析json数据
         Json::Value return_value;
         return_value["error"] = ErrorCodes::Error_Json;
-        Defer defer([&return_value, session]() {
-            session->Send(return_value.toStyledString(), MSG_LOAD_CHAT_MESSAGE_RSP);
+        int request_cursor = 0;
+        Defer defer([&return_value, &request_cursor, session]() {
+            session->Send(SerializeHistoryResponse(return_value, request_cursor), MSG_LOAD_CHAT_MESSAGE_RSP);
         });
         Json::Reader reader;
         Json::Value root;
@@ -806,6 +808,7 @@ void LogicSystem::RegisterCallBacks() {
             !root["current_msg_id"].isInt() || root["current_msg_id"].asInt() < 0) return;
         const int chat_id = root["chat_id"].asInt();
         const int current_msg_id = root["current_msg_id"].asInt();
+        request_cursor = current_msg_id;
         return_value["error"] = ErrorCodes::Success;
         return_value["chat_id"] = chat_id;
 

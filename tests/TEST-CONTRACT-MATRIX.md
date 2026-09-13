@@ -1,5 +1,13 @@
 # 当前自动测试合同矩阵
 
+`E03-RECOVER-CONTRACT-01` (Business / Unit) is the Linux preflight CTest
+`phase3d-history-response`, owned by `tests/server/transport/history_response_tests.cpp`.
+It verifies production history serialization at/beyond the 2048-byte boundary,
+complete-prefix pagination, cursor/termination and bounded errors. It is support
+evidence outside the 33 E2E cases and does not change Windows report counts.
+RECOVER-03 accepts shortened pages of one to ten rows, still requiring every
+persisted ID/UUID/hash exactly once; wire fields, frame limits and schema stay stable.
+
 Full `3D` / `3D-03` register `E03-RECOVER-01..11`; cumulative current-N E2E count
 is 33 across four reports. Recovery includes real codec ACK loss/duplicate
 notification, same-process original-payload retry, both server restarts with
