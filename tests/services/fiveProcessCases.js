@@ -11,6 +11,7 @@ const { reserve, stop } = require('./fourProcessCases');
 const { poll, runCommand } = require('./dependencyCoordinator');
 const { createTopology, nativeConfig, assertConnectedClients } = require('./twoServerTopology');
 const { ClientControl } = require('./clientControl');
+const { waitForConnectionCount } = require('./connectionCount');
 const { SchemaMigration } = require('../../schema/SchemaMigration');
 const { MysqlSession, mysqlArgs } = require('../../schema/MysqlSession');
 const fixture = require('./phase3d.fixture.json');
@@ -83,9 +84,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot) {
         return { control, owned, pid: ready.pid };
     }
     async function count(name, expected) {
-        const redis = await coordinator.redis();
-        try { await poll(async () => await redis.hget('logincount', name) === String(expected), 5000); }
-        finally { redis.disconnect(); }
+        await waitForConnectionCount(coordinator, name, expected, controls.filter(control => !control.failed));
     }
     const gate = () => `http://127.0.0.1:${ports.gate}`;
     async function authenticate(instance, user, register = true) {

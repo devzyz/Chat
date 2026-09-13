@@ -112,7 +112,7 @@ jobs:
         run: |
           timeout --signal=TERM --kill-after=5s 120s cmake --build out/build/linux-x64-release --target service_run redis_adapter_integration message_commit_integration gate_mysql_pool_tests FourProcessDriver --parallel 2
           timeout --signal=TERM --kill-after=5s 180s cmake --build out/build/linux-x64-release --target chat_e2e_client session_driver_tests --parallel 2
-          CHAT_E2E_CLIENT="$PWD/out/build/linux-x64-release/bin/chat_e2e_client" node --test tests/services/twoServerTopology.test.js tests/services/clientControl.test.js tests/services/phase3dEvidence.test.js
+          CHAT_E2E_CLIENT="$PWD/out/build/linux-x64-release/bin/chat_e2e_client" node --test tests/services/twoServerTopology.test.js tests/services/clientControl.test.js tests/services/phase3dEvidence.test.js tests/services/connectionCount.test.js
           ctest --test-dir out/build/linux-x64-release -R '^session_driver\.' --output-on-failure --no-tests=error --output-junit "$CHAT_EVIDENCE_ROOT/linux_phase3d_client.xml"
           ctest --test-dir out/build/linux-x64-release -L 'phase3c-(redis|message-commit|gate-mysql)-local' --output-on-failure --no-tests=error
           CHAT_FOUR_DRIVER="$PWD/out/build/linux-x64-release/bin/FourProcessDriver" node --test tests/services/driver.test.js tests/services/fourProcess.test.js

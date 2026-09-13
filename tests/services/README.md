@@ -271,6 +271,11 @@ Status endpoints, and correlates one cross-instance message by UUID/server ID
 and text hash in both production models and MySQL. It stops one client while
 the other remains active, then stops all owned processes and removes owned data.
 
+Connection-count waits allow 70 seconds for CServer's 60-second Redis publication
+cycle. While polling, snapshots keep both live controllers below their independent
+60-second inactivity deadline; a stopped controller is excluded. Counts must still
+match exactly, and an unchanged count fails at the bounded deadline.
+
 | Report | IDs | Count | Contract |
 | --- | --- | --- | --- |
 | `linux_phase3d_contract.xml` | E03-CONTRACT-06..12 | 7 | Fresh schema, five-service ready, two client processes, public registration/discovery, durable cross-instance model correlation, independent exit, reverse cleanup |
@@ -288,9 +293,9 @@ nonzero until the downstream phase gate is implemented.
 Support regression (provide the configured same-source client binary):
 
 ```bash
-CHAT_E2E_CLIENT="$PWD/out/build/linux-x64-release/bin/chat_e2e_client" node --test tests/services/twoServerTopology.test.js tests/services/clientControl.test.js tests/services/phase3dEvidence.test.js
+CHAT_E2E_CLIENT="$PWD/out/build/linux-x64-release/bin/chat_e2e_client" node --test tests/services/twoServerTopology.test.js tests/services/clientControl.test.js tests/services/phase3dEvidence.test.js tests/services/connectionCount.test.js
 ```
 
-These six support cases exercise topology rejection, real Node-to-Qt control,
-bounded controller failures and evidence validation. Synthetic validator inputs
+These seven support cases exercise topology rejection, real Node-to-Qt control,
+bounded controller failures, delayed count publication and evidence validation. Synthetic validator inputs
 are not E2E results; only the real hosted selector can supply that evidence.
