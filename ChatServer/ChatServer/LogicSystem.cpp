@@ -294,6 +294,18 @@ void LogicSystem::RegisterCallBacks() {
 
 		return_value["error"] = ErrorCodes::Success;
 		// 先更新数据库
+
+        // Identity belongs to the authenticated connection, not the request body.
+        if (session->GetAuthenticatedUid() <= 0 || fromuid != session->GetAuthenticatedUid() ||
+            touid <= 0 || fromuid == touid) {
+            return_value["error"] = ErrorCodes::UidInvalid;
+            return;
+        }
+        auto recipient = std::make_shared<UserInfo>();
+        if (!GetUserBaseInfo(USER_BASE_INFO + std::to_string(touid), touid, recipient)) {
+            return_value["error"] = ErrorCodes::UidInvalid;
+            return;
+        }
 		bool success = MysqlMgr::GetInstance()->AddFriendApply(fromuid, touid, description, backname);
 		if (!success) {
 			return_value["error"] = ErrorCodes::UidInvalid;
@@ -390,6 +402,16 @@ void LogicSystem::RegisterCallBacks() {
 			});
 
 		std::vector<std::shared_ptr<ChatMessage>> _chat_msgs;
+
+        if (session->GetAuthenticatedUid() <= 0 || authuid != session->GetAuthenticatedUid() ||
+            applyuid <= 0 || applyuid == authuid || !applyinfo.isObject() || !authinfo.isObject() ||
+            !applyinfo["applyuid"].isInt() || applyinfo["applyuid"].asInt() != applyuid ||
+            !applyinfo["touid"].isInt() || applyinfo["touid"].asInt() != authuid ||
+            !authinfo["authuid"].isInt() || authinfo["authuid"].asInt() != authuid ||
+            !authinfo["touid"].isInt() || authinfo["touid"].asInt() != applyuid) {
+            return_value["error"] = ErrorCodes::UidInvalid;
+            return;
+        }
 		int chat_id = 0;
 		SPDLOG_DEBUG("auth friend description received, applyuid={}, authuid={}, description_size={}", applyuid, authuid, authinfo["description"].asString().size());
 		// 更新数据库

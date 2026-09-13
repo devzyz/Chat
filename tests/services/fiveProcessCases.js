@@ -118,8 +118,8 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
                     assert.equal((await instance.control.command('snapshot')).active, false);
                 });
             } else {
-            assert.equal((await instance.control.command('register', { gate: gate(), email: user.email,
-                name: user.name, password: user.password, code })).error, 0);
+                assert.equal((await instance.control.command('register', { gate: gate(), email: user.email,
+                    name: user.name, password: user.password, code })).error, 0);
             }
         }
         const result = await instance.control.command('login', { gate: gate(), email: user.email, password: user.password });

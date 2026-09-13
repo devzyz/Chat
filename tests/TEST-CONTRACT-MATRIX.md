@@ -8,6 +8,13 @@ These results do not close G-016 or establish the real five-service topology.
 The registered aggregate becomes 13 reports / 347 cases; this registration
 does not mean all 347 cases were re-executed for this change.
 
+The cumulative Linux `3D-01` selector adds `E03-JOURNEY-01..07` in
+`linux_phase3d_journey.xml`: account failure isolation, cross-account Token
+rejection, invalid/duplicate applications, cross-instance acceptance, reciprocal
+durable relations and duplicate acceptance. It requires all seven foundation
+cases plus these seven journey cases, bound to the same SHA and cleanup evidence.
+These registrations do not establish hosted PASS or close G-016/G-017.
+
 The independent Linux `3D-00` selector adds `E03-CONTRACT-06..12` (seven E2E
 cases) in `linux_phase3d_contract.xml`, owned by
 [the service scenario](services/README.md#phase-3d-foundation). Its actual

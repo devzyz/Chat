@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { groups, validate } = require('./phase3dEvidence');
+const { groups, reportGroups, validate } = require('./phase3dEvidence');
 const { writeReports } = require('./serviceReports');
 const { createTopology } = require('./twoServerTopology');
 
@@ -52,6 +52,23 @@ test('foundation evidence binds exact cases, bytes, SHA, distinct clients and cl
         for (const name of ['application-teardown.json', 'process-teardown.json', 'redaction.json']) {
             restore(); write(name, { complete: false }); assert.throws(() => validate(root, sha));
         }
+        restore();
+        assert.throws(() => validate(root, sha, '3D-01'));
+        const journey = Array.from({ length: 7 }, (_, index) => ({
+            id: `E03-JOURNEY-${String(index + 1).padStart(2, '0')}`,
+            name: 'synthetic journey validator input', pass: true }));
+        const writeJourney = values => writeReports(root, '3D-01', [...cases, ...values], {
+            groups: reportGroups('3D-01'), manifest: 'phase3d-reports.json', level: 'E2E' });
+        writeJourney(journey);
+        validate(root, sha, '3D-01');
+        writeJourney(journey.slice(1));
+        assert.throws(() => validate(root, sha, '3D-01'));
+        writeJourney(journey.map((value, index) => ({ ...value, pass: index !== 3 })));
+        assert.throws(() => validate(root, sha, '3D-01'));
+        writeJourney(journey);
+        fs.appendFileSync(path.join(root, 'linux_phase3d_journey.xml'), 'modified');
+        assert.throws(() => validate(root, sha, '3D-01'));
+        assert.throws(() => reportGroups('3D'));
     } finally {
         if (previous === undefined) delete process.env.CHAT_CANDIDATE_SHA;
         else process.env.CHAT_CANDIDATE_SHA = previous;

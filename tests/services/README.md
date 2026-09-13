@@ -252,6 +252,15 @@ It reuses the same disposable five-service scenario and cleanup; no friend row
 or selected endpoint is written by the fixture. The seven foundation cases also
 remain mandatory. The hosted job selects `3D-01`; full `3D` still fails closed.
 
+Friend application uses the authenticated session UID, rejects self/unknown
+recipients, and preserves one pending row on duplicate application. Acceptance
+requires the authenticated recipient and consistent nested identity fields;
+the DAO locks only a pending application in the incoming direction. A reverse
+outgoing application cannot authorize acceptance. Repeated acceptance returns
+the existing `UidInvalid` error without new relations, chats or greetings.
+There is no schema or wire-field change; clients using forged identities or
+accepting their own outgoing application now receive an error.
+
 ```bash
 bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-01
 ```
