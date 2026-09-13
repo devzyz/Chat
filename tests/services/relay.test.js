@@ -41,6 +41,27 @@ test('compiled production-codec relay drops one ACK and replays one framed notif
         await new Promise(resolve => backend.listen(0, '127.0.0.1', resolve));
         await new Promise(resolve => lease.listen(0, '127.0.0.1', resolve));
         const port = lease.address().port;
+        const occupiedReport = path.join(root, 'occupied.json');
+        child = spawn(driver, ['relay', occupiedReport], { windowsHide: true, stdio: 'ignore', env: { ...process.env,
+            CHAT_RELAY_CONFIG: JSON.stringify({ port, backend: backend.address().port, dropUuid, replayUuid }) } });
+        child.done = new Promise(resolve => { child.once('exit', resolve); child.once('error', () => resolve(-1)); });
+        await poll(async () => child.exitCode !== null, 3000);
+        assert.equal(await child.done, 1);
+        const occupied = JSON.parse(fs.readFileSync(occupiedReport));
+        assert.equal(occupied.ready, false);
+        assert.equal(occupied.startupStage, 'bind');
+        assert.ok(Number.isInteger(occupied.errorCode) && occupied.errorCode !== 0);
+        // Match replacement of a server that actively closed an established session.
+        const accepted = new Promise(resolve => lease.once('connection', resolve));
+        const previousClient = net.connect(port, '127.0.0.1');
+        sockets.add(previousClient);
+        previousClient.on('error', () => {});
+        const previousServer = await accepted;
+        sockets.add(previousServer);
+        previousServer.on('error', () => {});
+        const previousClosed = new Promise(resolve => previousClient.once('close', resolve));
+        previousServer.end();
+        await previousClosed;
         await new Promise(resolve => lease.close(resolve));
         child = spawn(driver, ['relay', report], { windowsHide: true, stdio: 'ignore', env: { ...process.env,
             CHAT_RELAY_CONFIG: JSON.stringify({ port, backend: backend.address().port, dropUuid, replayUuid }) } });

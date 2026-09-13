@@ -39,6 +39,12 @@ build\windows-tests\Release\server_integration_tests.exe --gtest_filter=T09_SGRP
 
 Chat TCP focused command:
 
+`T09-CTCP-15` also verifies immediate port reuse after the server actively closes
+an established connection. Linux enables address reuse on both generations;
+`T09-CTCP-14` continues to reject a competing live listener. The Linux preflight
+runs these two existing contracts as `phase3d-chat-rebind`; Windows runs them
+through the existing Integration report without increasing its testcase count.
+
 ```powershell
 build\windows-tests\Release\server_integration_tests.exe --gtest_filter=T09_CTCP_Stream.* --gtest_output=xml:build/test-results/3b04_chat_stream.xml
 ```

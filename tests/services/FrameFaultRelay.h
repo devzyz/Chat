@@ -73,8 +73,29 @@ class FrameFaultRelay {
 public:
     FrameFaultRelay(unsigned short listen_port, unsigned short backend_port,
                     std::string drop, std::string replay, std::string report_path)
-        : acceptor(io, {boost::asio::ip::make_address("127.0.0.1"), listen_port}), timer(io),
-          backend(backend_port), drop_uuid(std::move(drop)), replay_uuid(std::move(replay)), report(std::move(report_path)) {}
+        : acceptor(io), timer(io), backend(backend_port), drop_uuid(std::move(drop)),
+          replay_uuid(std::move(replay)), report(std::move(report_path)) {
+        const Tcp::endpoint endpoint(boost::asio::ip::make_address("127.0.0.1"), listen_port);
+        acceptor.open(endpoint.protocol());
+        // The previous ChatServer can leave accepted connections in TIME_WAIT.
+        // Reuse the released endpoint, while an active listener must still fail bind.
+#ifndef _WIN32
+        acceptor.set_option(Tcp::acceptor::reuse_address(true));
+#endif
+        boost::system::error_code bind_error;
+        acceptor.bind(endpoint, bind_error);
+        if (bind_error) {
+            Json::Value failure;
+            failure["ready"] = false;
+            failure["complete"] = false;
+            failure["startupStage"] = "bind";
+            failure["errorCode"] = bind_error.value();
+            std::ofstream output(report);
+            output << Json::writeString(Json::StreamWriterBuilder{}, failure);
+            throw boost::system::system_error(bind_error);
+        }
+        acceptor.listen();
+    }
     int Run(const std::function<bool()>& stopped) {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(420);
         Accept();

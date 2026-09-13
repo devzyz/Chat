@@ -266,6 +266,13 @@ duplicate a real peer notification; restart Chat B and recover discovery before
 cross-instance delivery; reject invalid wire history cursors; stop the relay and
 verify fault/cleanup evidence. Normal preceding journeys connect directly.
 
+Linux listeners enable address reuse before binding so the relay and restarted
+ChatServer can replace closed generations with TIME_WAIT connections. Existing
+live listeners remain exclusive (SO_REUSEPORT is not enabled); Windows keeps its
+previous exclusive binding behavior. The relay support regression actively closes
+a real prior session before binding. Linux preflight additionally executes the
+production CServer occupied-listener and active-close/rebind contracts.
+
 The relay changes only the fault-path listener while preserving discovery and
 peer RPC identity. It uses `ChatFrameCodec`, sequential bounded frames in each
 direction, at most 64 live connection pairs, and a 420-second lifetime. The

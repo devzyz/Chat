@@ -30,6 +30,10 @@
 
 ## ChatServer TCP
 
+ChatServer 的 Linux TCP 监听器在 bind 前启用 SO_REUSEADDR，使旧会话主动关闭后可以立即重启或接管
+已释放的监听端口；不启用 SO_REUSEPORT，已有存活监听器仍必须使新绑定失败。Windows 保留原有
+独占绑定设置。此行为不修改消息 wire 字段、服务发现端点或持久化数据。
+
 - 包头中的消息 ID 和 body 长度 MUST 使用明确的网络字节序。
 - 读取 MUST 支持半包和连续多包，不得假设一次 read 得到完整消息。
 - body 长度 MUST 在分配、复制和解析前限制在协议最大值内。

@@ -172,6 +172,11 @@ set_tests_properties(phase3c-message-validation PROPERTIES LABELS "phase3c-messa
 add_executable(gate_mysql_pool_tests tests/server/lifecycle/gate_mysql_pool_tests.cpp)
 add_executable(FourProcessDriver tests/services/FourProcessDriver.cpp)
 add_executable(history_response_tests tests/server/transport/history_response_tests.cpp)
+add_executable(chat_tcp_transport_tests tests/server/integration-host/chat_tcp_transport_tests.cpp)
+target_link_libraries(chat_tcp_transport_tests PRIVATE ChatTransport GTest::gtest_main)
+add_test(NAME phase3d-chat-rebind COMMAND chat_tcp_transport_tests
+    --gtest_filter=T09_CTCP_Stream.OccupiedPortIsRejectedWithoutReplacingTheOwner:T09_CTCP_Stream.StopCancelsPendingAcceptAndReleasesThePort)
+set_tests_properties(phase3d-chat-rebind PROPERTIES LABELS "phase3d-transport-local" TIMEOUT 10)
 target_link_libraries(history_response_tests PRIVATE ChatTransport JsonCpp::JsonCpp)
 add_test(NAME phase3d-history-response COMMAND history_response_tests)
 set_tests_properties(phase3d-history-response PROPERTIES LABELS "phase3d-history-local" TIMEOUT 5)

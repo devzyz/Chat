@@ -446,7 +446,7 @@ Domain/Level：Architecture / Integration。
 | T09-CTCP-12 | `T09_CTCP_Stream.SilentReadIsCancelledAtTheOwnedDeadline` | silent read 在 owned deadline 取消 |
 | T09-CTCP-13 | `T09_CTCP_Stream.QueuedWritesSurvivePartialCompletionsExactlyOnce` | queued writes 经 partial completion/backpressure 保持完整且一次 |
 | T09-CTCP-14 | `T09_CTCP_Stream.OccupiedPortIsRejectedWithoutReplacingTheOwner` | occupied port fail closed 且不窃取 listener |
-| T09-CTCP-15 | `T09_CTCP_Stream.StopCancelsPendingAcceptAndReleasesThePort` | stop 取消 pending accept 并释放 port |
+| T09-CTCP-15 | `T09_CTCP_Stream.StopCancelsPendingAcceptAndReleasesThePort` | stop 取消 pending accept，主动关闭真实连接后立即重绑定；Linux 与 T09-CTCP-14 一同接入 phase3d-chat-rebind，仍拒绝抢占存活监听器 |
 | T09-CTCP-16 | `T09_CTCP_Stream.StopReleasesSessionsThreadsSocketsAndServerOwnership` | stop 完整释放 session/thread/socket/server/port ownership |
 
 ### 3.22 Formal production composition（6 actual；2 planned-only）
