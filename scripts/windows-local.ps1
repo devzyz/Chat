@@ -671,7 +671,9 @@ function Confirm-TestStructure {
         @{ Source = 'tests/server/message-commit/message_commit_integration.cpp';
            CMake = 'CMakeLists.txt'; Target = 'message_commit_integration' },
         @{ Source = 'tests/server/lifecycle/gate_mysql_pool_tests.cpp';
-           CMake = 'CMakeLists.txt'; Target = 'gate_mysql_pool_tests' }
+           CMake = 'CMakeLists.txt'; Target = 'gate_mysql_pool_tests' },
+        @{ Source = 'tests/server/transport/history_response_tests.cpp';
+           CMake = 'CMakeLists.txt'; Target = 'history_response_tests' }
     )
     foreach ($contract in $linuxProcessContracts) {
         $cmakeText = Get-Content -LiteralPath (Join-Path $repoRoot $contract.CMake) -Raw
