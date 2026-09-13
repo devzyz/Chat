@@ -8,6 +8,15 @@ These results do not close G-016 or establish the real five-service topology.
 The registered aggregate becomes 13 reports / 347 cases; this registration
 does not mean all 347 cases were re-executed for this change.
 
+The independent Linux `3D-00` selector adds `E03-CONTRACT-06..12` (seven E2E
+cases) in `linux_phase3d_contract.xml`, owned by
+[the service scenario](services/README.md#phase-3d-foundation). Its actual
+registration and hashes are in `phase3d-reports.json`; it is not part of the
+Windows 347-case aggregate or the Phase 3C 89-case gate. It exercises five
+services, two production Qt clients, real discovery, one durable cross-instance
+message and teardown. G-016/G-017 remain open pending downstream journey,
+recovery/history and applicable compatibility evidence.
+
 Phase 3C-01 adds `T10-BLD-01..10` under CTest label
 `phase3c-build-ownership`, reported in `linux_build_ownership.xml`.
 The [process module contract](server/process-harness/README.md#linux-ownership-and-process-contracts-3c-01)

@@ -3,6 +3,7 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QLocalServer>
 #include <QLocalSocket>
@@ -110,6 +111,23 @@ public:
             auto *peer = chat.nextPendingConnection();
             QObject::connect(peer, &QTcpSocket::readyRead, peer, [this, peer, decoder = TcpFrameDecoder()]() mutable {
                 for (const auto &frame : decoder.append(peer->readAll())) {
+                    if (frame.messageId == 1020) { ++heartbeats; continue; }
+                    if (frame.messageId == 1023 || frame.messageId == 1016) {
+                        const auto request = QJsonDocument::fromJson(frame.body).object();
+                        QJsonObject result{{"error", 0}, {"chat_id", 7}, {"self_id", userId}, {"other_id", 42}};
+                        if (frame.messageId == 1016) {
+                            sentBody = request;
+                            result["uuid_msgId"] = QJsonArray{QJsonObject{
+                                {"msg_uuid", request["text_array"].toArray().first().toObject()["msg_uuid"]},
+                                {"message_id", 81}}};
+                        }
+                        const auto payload = QJsonDocument(result).toJson(QJsonDocument::Compact);
+                        QByteArray header(4, '\0');
+                        qToBigEndian<quint16>(frame.messageId + 1, header.data());
+                        qToBigEndian<quint16>(static_cast<quint16>(payload.size()), header.data() + 2);
+                        peer->write(header + payload);
+                        continue;
+                    }
                     if (frame.messageId != 1005) continue;
                     chatBody = QJsonDocument::fromJson(frame.body).object();
                     const auto body = QJsonDocument(QJsonObject{{"error", 0}, {"uid", userId},
@@ -126,7 +144,8 @@ public:
     QString url() const { return QString("http://127.0.0.1:%1").arg(gate.serverPort()); }
     int userId;
     QTcpServer gate, chat;
-    QJsonObject gateBody, chatBody;
+    QJsonObject gateBody, chatBody, sentBody;
+    int heartbeats = 0;
 };
 
 class SessionDriverTests : public QObject
@@ -159,13 +178,29 @@ private slots:
         QVERIFY(!aliceReply.contains("token"));
         QVERIFY(!bobReply.contains("password"));
         QVERIFY(first.gateBody.value("password").toString() != "fixture-only");
-        QVERIFY(alice.stop(2));
+        alice.send({{"id", 2}, {"command", "create"}, {"toUid", 42}});
+        QCOMPARE(alice.receive().value("chatId").toInt(), 7);
+        const QString uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        alice.send({{"id", 3}, {"command", "send"}, {"chatId", 7}, {"toUid", 42},
+                    {"uuid", uuid}, {"text", QString::fromUtf8("跨实例 🙂\nsecond line")}});
+        QCOMPARE(alice.receive().value("error").toInt(-1), 0);
+        QCOMPARE(first.sentBody.value("from_uid").toInt(), 41);
+        alice.send({{"id", 4}, {"command", "snapshot"}, {"chatId", 7}});
+        const auto rows = alice.receive().value("messages").toArray();
+        QCOMPARE(rows.size(), 1);
+        QCOMPARE(rows.first().toObject()["messageId"].toString(), QString("81"));
+        QCOMPARE(rows.first().toObject()["uuid"].toString(), uuid);
+        QVERIFY(!rows.first().toObject().contains("text"));
+        QTRY_VERIFY_WITH_TIMEOUT(first.heartbeats > 0 && second.heartbeats > 0, 12000);
+        QVERIFY(alice.stop(5));
         bob.send({{"id", 2}, {"command", "snapshot"}});
         QCOMPARE(bob.receive().value("uid").toInt(), 42);
         QVERIFY(bob.stop(3));
     }
     void twoProcessesHaveIndependentLifetimes()
     {
+        LoopbackLogin fixture(41);
+        QVERIFY(fixture.listen());
         OwnedClient alice, bob;
         QVERIFY(alice.start());
         QVERIFY(bob.start());
@@ -175,7 +210,17 @@ private slots:
         QCOMPARE(first.value("id").toInt(), 1);
         QCOMPARE(first.value("uid").toInt(), 0);
         QCOMPARE(first.value("active").toBool(), false);
-        QVERIFY(alice.stop(2));
+        alice.send({{"id", 2}, {"command", "verify"}, {"gate", fixture.url()}, {"email", "alice@example.invalid"}});
+        QCOMPARE(alice.receive().value("error").toInt(-1), 0);
+        QCOMPARE(fixture.gateBody.value("email").toString(), QString("alice@example.invalid"));
+        alice.send({{"id", 3}, {"command", "register"}, {"gate", fixture.url()},
+                    {"email", "alice@example.invalid"}, {"name", "alice"},
+                    {"password", "fixture-only"}, {"code", "synthetic-code"}});
+        QCOMPARE(alice.receive().value("error").toInt(-1), 0);
+        QCOMPARE(fixture.gateBody.value("user").toString(), QString("alice"));
+        QCOMPARE(fixture.gateBody.value("passwd"), fixture.gateBody.value("confirm"));
+        QVERIFY(fixture.gateBody.value("passwd").toString() != "fixture-only");
+        QVERIFY(alice.stop(4));
         bob.send({{"id", 1}, {"command", "snapshot"}});
         QCOMPARE(bob.receive().value("status").toString(), QString("snapshot"));
         QVERIFY(bob.stop(2));

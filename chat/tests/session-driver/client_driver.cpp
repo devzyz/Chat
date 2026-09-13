@@ -1,9 +1,14 @@
 #include "clientloginflow.h"
 #include "clientsession.h"
+#include "clientmessage.h"
+#include "clientrequests.h"
+#include "messagemodelstore.h"
 #include "tcpmgr.h"
 #include "usermgr.h"
 #include <QCoreApplication>
 #include <QJsonDocument>
+#include <QCryptographicHash>
+#include <QUuid>
 #include <QLocalSocket>
 #include <QTimer>
 #include <cmath>
@@ -17,6 +22,15 @@ public:
     {
         _socket.setReadBufferSize(8193);
         _watchdog.setSingleShot(true);
+        _commandDeadline.setSingleShot(true);
+        connect(&_commandDeadline, &QTimer::timeout, this, [this] { finish(2); });
+        connect(&_accounts, &GateHttpTransport::finished, this, [this](const GateHttpResult &result) {
+            if (!_pendingId || static_cast<quint64>(_pendingId) != result.flowId) return;
+            const auto object = QJsonDocument::fromJson(result.body).object();
+            send(QJsonObject{{"id", _pendingId}, {"status", "completed"},
+                {"error", result.terminal == GateHttpTerminal::Success ? object.value("error").toInt(-1) : -1}});
+            _pendingId = 0;
+        });
         connect(&_watchdog, &QTimer::timeout, this, [this] { finish(2); });
         connect(&_socket, &QLocalSocket::errorOccurred, this, [this] { finish(2); });
         connect(&_socket, &QLocalSocket::disconnected, this, [this] { finish(_stopping ? 0 : 2); });
@@ -26,6 +40,9 @@ public:
         });
         connect(&_socket, &QLocalSocket::readyRead, this, [this] { read(); });
         connect(&_login, &ClientLoginFlow::authenticated, this, [this](AuthFlowId) {
+            const int uid = UserMgr::GetInstance()->GetUid();
+            if (_lastUid && _lastUid != uid) _messages = MessageModelStore{};
+            _lastUid = uid;
             _session.beginSession();
             reply(_pendingId, "authenticated");
             _pendingId = 0;
@@ -39,6 +56,34 @@ public:
         });
         connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_notify_offline, this,
                 [this] { _session.resetSession(SessionResetReason::Kicked); });
+        const auto tcp = TcpMgr::GetInstance();
+        connect(tcp.get(), &TcpMgr::sig_update_text_chat_msg, this,
+                [this](int, int, int, std::vector<std::shared_ptr<ChatDataBase>> &messages) {
+            for (const auto &message : messages) {
+                const auto record = clientMessageRecord(message);
+                _messages.getOrCreate(record.chatId)->appendMessage(record);
+            }
+        });
+        connect(tcp.get(), &TcpMgr::sig_tcp_load_chat_msg_finish, this,
+                [this](int chatId, std::vector<std::shared_ptr<ChatDataBase>> messages, bool more, qint64 cursor) {
+            QVector<MessageRecord> records;
+            for (const auto &message : messages) records.push_back(clientMessageRecord(message));
+            if (!_messages.applyHistory(chatId, records, more, cursor)) _historyRejected = true;
+        });
+        connect(tcp.get(), &TcpMgr::sig_text_chat_msg_rsp_finish, this,
+                [this](int chatId, QVector<MessageAcknowledgement> acks) { _messages.acknowledge(chatId, acks); });
+        connect(tcp.get(), &TcpMgr::sig_text_chat_msg_failed, this,
+                [this](int chatId, const QVector<QString> &ids) { _messages.markFailed(chatId, ids); });
+        connect(tcp.get(), &TcpMgr::sig_create_private_chat_finish, this,
+                [this](const std::shared_ptr<ChatInfo> &chat) { if (chat) _lastChatId = chat->GetChatId(); });
+        connect(tcp.get(), &TcpMgr::requestCompleted, this, [this](ReqId id, int error) {
+            if (!_pendingId || id != _expectedResponse) return;
+            _commandDeadline.stop();
+            send(QJsonObject{{"id", _pendingId}, {"status", "completed"},
+                {"error", _historyRejected ? -1 : error}, {"chatId", _lastChatId}});
+            _pendingId = 0;
+            _expectedResponse = -1;
+        });
         _watchdog.start(5000);
         _socket.connectToServer(endpoint);
     }
@@ -48,7 +93,9 @@ private:
     {
         if (_finished) return;
         _finished = true;
+        _pendingId = 0;
         _login.cancel();
+        _accounts.reset();
         _session.resetSession(SessionResetReason::Logout);
         TcpMgr::GetInstance()->resetConnection(true);
         UserMgr::GetInstance()->resetSession();
@@ -66,6 +113,23 @@ private:
                          {"uid", UserMgr::GetInstance()->GetUid()},
                          {"host", _session.isActive() ? _login.serverHost() : QString()},
                          {"port", _session.isActive() ? _login.serverPort() : 0}});
+    }
+    void snapshot(qint64 id, int chatId)
+    {
+        QJsonArray rows;
+        auto *model = _messages.find(chatId);
+        if (model && model->rowCount() > 128) { finish(2); return; }
+        if (model) for (int i = 0; i < model->rowCount(); ++i) {
+            const auto *record = model->recordAt(i);
+            rows.append(QJsonObject{{"messageId", QString::number(record->messageId)},
+                {"uuid", record->clientMessageId}, {"sender", record->senderId},
+                {"status", static_cast<int>(record->deliveryStatus)},
+                {"sha256", QString::fromLatin1(QCryptographicHash::hash(record->text.toUtf8(),
+                    QCryptographicHash::Sha256).toHex())}});
+        }
+        send(QJsonObject{{"id", id}, {"status", "snapshot"}, {"chatId", chatId}, {"messages", rows},
+            {"more", model ? model->canLoadMore() : true},
+            {"cursor", QString::number(model ? model->historyCursor() : 0)}});
     }
     void read()
     {
@@ -87,6 +151,68 @@ private:
             _watchdog.start(60000);
             if (command == "snapshot" && object.size() == 2) {
                 reply(_lastId, "snapshot");
+            } else if (command == "snapshot" && object.size() == 3 && object.value("chatId").toInt() > 0) {
+                snapshot(_lastId, object.value("chatId").toInt());
+            } else if ((command == "create" || command == "history" || command == "send") &&
+                       !_pendingId && _session.isActive()) {
+                QByteArray body;
+                ReqId request = ID_CREATE_PRIVATE_CHAT_REQ;
+                const int chatId = object.value("chatId").toInt();
+                if (command == "create" && object.size() == 3 && object.value("toUid").toInt() > 0) {
+                    body = clientPrivateChatRequest(UserMgr::GetInstance()->GetUid(), object.value("toUid").toInt());
+                } else if (command == "history" && object.size() == 4 && chatId > 0 &&
+                           object.value("cursor").isString()) {
+                    bool ok = false;
+                    const qint64 cursor = object.value("cursor").toString().toLongLong(&ok);
+                    if (!ok || cursor < 0) { finish(2); return; }
+                    request = ID_LOAD_CHAT_MESSAGE_REQ;
+                    _historyRejected = false;
+                    body = clientHistoryRequest(chatId, cursor);
+                } else if (command == "send" && object.size() == 6 && chatId > 0 &&
+                           object.value("toUid").toInt() > 0 && object.value("text").isString() &&
+                           !QUuid(object.value("uuid").toString()).isNull()) {
+                    request = ID_TEXT_CHAT_MSG_REQ;
+                    const auto uuid = object.value("uuid").toString();
+                    const auto text = object.value("text").toString();
+                    if (text.isEmpty() || text.size() > 1024) { finish(2); return; }
+                    body = clientTextRequest(UserMgr::GetInstance()->GetUid(), object.value("toUid").toInt(),
+                        chatId, QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"msg_content", text}}});
+                    if (body.size() > ChatTcpTransport::MaxBodyBytes()) { finish(2); return; }
+                    auto dto = std::make_shared<TextChatData>(uuid, chatId, ChatType::PRIVATE,
+                        ChatMessageType::TEXT_TYPE, text, UserMgr::GetInstance()->GetUid(), QTime::currentTime());
+                    _messages.getOrCreate(chatId)->appendMessage(clientMessageRecord(dto));
+                } else { finish(2); return; }
+                _pendingId = _lastId;
+                _historyRejected = false;
+                _lastChatId = command == "create" ? 0 : chatId;
+                _expectedResponse = static_cast<int>(request) + 1;
+                _commandDeadline.start(10000);
+                emit TcpMgr::GetInstance()->sig_send_data(request, body);
+            } else if ((command == "verify" || command == "register") && !_pendingId && !_session.isActive()) {
+                const QUrl gate(object.value("gate").toString());
+                if (gate.scheme() != "http" || gate.host() != "127.0.0.1" || gate.port() <= 0 ||
+                    gate.port() > 65535 || !gate.userInfo().isEmpty() || !object.value("email").isString() ||
+                    (command == "verify" ? object.size() != 4 : object.size() != 7)) {
+                    finish(2); return;
+                }
+                QJsonObject body{{"email", object.value("email")}};
+                if (command == "register") {
+                    if (!object.value("name").isString() || !object.value("password").isString() ||
+                        !object.value("code").isString()) { finish(2); return; }
+                    body["user"] = object.value("name");
+                    body["passwd"] = xorString(object.value("password").toString());
+                    body["confirm"] = body.value("passwd");
+                    body["varifycode"] = object.value("code");
+                }
+                _pendingId = _lastId;
+                GateHttpRequest request;
+                request.url = gate.resolved(QUrl(command == "verify" ? "/get_varifycode" : "/user_register"));
+                request.body = QJsonDocument(body).toJson(QJsonDocument::Compact);
+                request.flowId = static_cast<quint64>(_pendingId);
+                request.module = Modules::REGISTERMOD;
+                request.requestId = command == "verify" ? ReqId::ID_GET_VERIFY_CODE : ReqId::ID_REG_USER;
+                request.deadlineMs = 5000;
+                _accounts.post(request);
             } else if (command == "login" && object.size() == 5 && !_pendingId && !_session.isActive()) {
                 const QUrl gate(object.value("gate").toString());
                 if (gate.scheme() != "http" || gate.host() != "127.0.0.1" || gate.port() <= 0 ||
@@ -98,7 +224,9 @@ private:
                 _login.login(gate, object.value("email").toString(), object.value("password").toString());
             } else if (command == "stop" && object.size() == 2) {
                 _stopping = true;
+                _pendingId = 0;
                 _login.cancel();
+                _accounts.reset();
                 _session.resetSession(SessionResetReason::Logout);
                 TcpMgr::GetInstance()->resetConnection(true);
                 reply(_lastId, "stopped");
@@ -114,6 +242,13 @@ private:
     ClientSession _session;
     QLocalSocket _socket;
     QTimer _watchdog;
+    QTimer _commandDeadline;
+    GateHttpTransport _accounts;
+    MessageModelStore _messages;
+    int _lastUid = 0;
+    int _lastChatId = 0;
+    int _expectedResponse = -1;
+    bool _historyRejected = false;
     QByteArray _input;
     qint64 _lastId = 0;
     qint64 _pendingId = 0;

@@ -102,10 +102,11 @@ target_link_libraries(chat_session_core PUBLIC
 
 add_library(chat_client_login STATIC
     clientloginflow.h clientloginflow.cpp
+    clientmessage.h clientmessage.cpp
 )
 target_include_directories(chat_client_login PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(chat_client_login PUBLIC
-    chat_auth_flow chat_gate_http_transport chat_session_core
+    chat_auth_flow chat_gate_http_transport chat_session_core chat_message_model
 )
 
 set(PROJECT_SOURCES
