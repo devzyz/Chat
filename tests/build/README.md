@@ -64,12 +64,19 @@ until the bounded timeout. Redis/SMTP readiness belongs to later integration
 plans. Missing configuration, early exit, bind failure or absent startup output
 still fails this probe.
 
-The selector first proves four mutations turn the same contract RED:
+The hosted selector runs the same static and mutation functions as this local entry:
 
-- a missing production target;
-- a production source duplicated into another executable;
-- vcpkg baseline drift;
-- a broken Varify production-main invocation.
+```sh
+bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-00-contracts
+```
+
+This entry performs no restore/build and retains `READY_FOR_HOSTED_PREFLIGHT`, never runtime `PASS`.
+It runs ten static cases and fifteen mutations. Each copied fixture must first pass an unmodified
+baseline, including the locked-tool JSON and acquisition scripts, before the mutation is applied.
+The mutations cover native RPC prerequisites, production targets/package names/source ownership,
+vcpkg baseline/host triplet/linkage/checkout depth, missing tool acquisition, invalid asset digest,
+CMake version drift and the Varify production-main invocation. Download mutations target the
+current installer and asset lock, not the removed third-party acquisition Action.
 
 Any configure, compile, link, loader, startup, identity, timeout, or evidence
 failure remains `LINUX_PREFLIGHT_BLOCKED`. The evidence scope is CI

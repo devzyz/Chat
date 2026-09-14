@@ -42,6 +42,10 @@ Linux CMake 3.28.3/Ninja 1.12.1、vcpkg baseline/triplet/install root 和十项�
 T10-LNX-04 从第三方下载 Action 名称检查迁移为仓库固定摘要、工具版本及获取顺序检查。
 工具只在 hosted job 临时目录使用，不增加下载重试，不将失败 run 重新执行后的绿色结果冒充首次验收。
 
+Linux 静态门禁与变异的本地公开入口为 `3C-00-contracts`，复用 hosted `3C-00-T2` 的同一函数。
+临时工程包含完整输入，先验证未修改基线；工具变异针对当前安装脚本/摘要/版本。此入口不恢复或构建依赖，
+仅保留 `READY_FOR_HOSTED_PREFLIGHT`，不新增运行时 PASS 或 JUnit Test ID。
+
 ### 2.1 比例化执行合同
 
 本节是所有未完成正式计划的唯一过程分层权威。执行者先按变更的最高风险面选择一层；同一行为切片只执行该层要求的

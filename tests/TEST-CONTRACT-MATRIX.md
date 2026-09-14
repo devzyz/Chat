@@ -1,5 +1,9 @@
 # 当前自动测试合同矩阵
 
+Linux `T10-LNX-01..10` 的静态合同及十五项变异可通过 `3C-00-contracts` selector 执行，
+与 hosted `3C-00-T2` 复用同一函数。每份变异输入先通过完整基线检查；工具相关变异验证获取入口、
+摘要和版本。此入口不新增 Test ID、不恢复依赖、不代表 hosted 编译或业务通过，详见 [构建测试](build/README.md)。
+
 `E03-RECOVER-CONTRACT-01` (Business / Unit) is the Linux preflight CTest
 `phase3d-history-response`, owned by `tests/server/transport/history_response_tests.cpp`.
 It verifies production history serialization at/beyond the 2048-byte boundary,
