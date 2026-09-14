@@ -10,7 +10,7 @@ import tempfile
 
 SHA = r'[a-f0-9]{40}'
 DIGEST = r'[a-f0-9]{64}'
-VERSION = r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:alpha|beta|rc)\.[1-9][0-9]*)?'
+VERSION = r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)'
 CHECKS = (
     'Static configuration checks', 'Server Release build', 'Qt client Release',
     'VarifyServer dependency and package check', 'Linux POSIX process lifecycle',
@@ -52,6 +52,8 @@ def check_unused(identity, deployments):
     require(isinstance(deployments, list), 'invalid-deployment-history')
     for record in deployments:
         require(record.get('environment') != 'candidate-' + identity['version'], 'version-already-reserved')
+        if str(record.get('environment', '')).startswith('candidate-'):
+            require(record.get('sha') != identity['sourceSha'], 'source-already-reserved')
 
 
 def admit(identity, admission, checks, deployments):

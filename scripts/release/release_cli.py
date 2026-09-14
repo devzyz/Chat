@@ -9,7 +9,7 @@ from release_gate import json_bytes, require, verify_candidate
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('task', choices=['PreflightCandidate', 'VerifyCandidate', 'PackCandidate',
+    parser.add_argument('task', choices=['PrepareCandidate', 'PreflightCandidate', 'VerifyCandidate', 'PackCandidate',
                                         'SealCandidate', 'VerifyPlanTask', 'RegisterCandidate', 'BuildCandidate',
                                         'VerifyUpload', 'CleanupCandidate', 'VerifyCiEvidence'])
     parser.add_argument('--input')
@@ -94,7 +94,11 @@ def main():
     require(args.output is not None, 'output-file-required')
     require(not Path(args.output).exists(), 'evidence-output-already-exists')
     value = json.loads(Path(args.input).read_text(encoding='utf-8-sig'))
-    if args.task == 'PreflightCandidate':
+    if args.task == 'PrepareCandidate':
+        from github_release import GitHub
+        from settings_receipt import prepare
+        result = prepare(GitHub(value['repository']), value)
+    elif args.task == 'PreflightCandidate':
         from github_release import GitHub, preflight
         result = preflight(GitHub(value['identity']['repository']), value['identity'], value['admissionRunId'])
     elif args.task == 'VerifyCandidate':

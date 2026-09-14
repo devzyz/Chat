@@ -25,6 +25,21 @@ def verify_junit(data, expected):
             'junit-case-not-passed')
 
 
+def reserved_run(deployments, repository, sha):
+    records = [d for d in deployments if str(d.get('environment', '')).startswith('candidate-') and d.get('sha') == sha]
+    require(len(records) <= 1, 'ambiguous-source-reservation')
+    if not records:
+        return None
+    payload = records[0].get('payload') or {}
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    identity = payload.get('identity')
+    validate_identity(identity)
+    require(identity['repository'] == repository and identity['sourceSha'] == sha and
+            records[0]['environment'] == 'candidate-' + identity['version'], 'reservation-identity-mismatch')
+    return identity['runId']
+
+
 def verify(options):
     require(re.fullmatch(SHA, options['headSha']) is not None, 'invalid-source')
     require(options['workflowFile'] == '.github/workflows/release.yml' and
@@ -41,9 +56,11 @@ def verify(options):
     while True:
         require(time.monotonic() < api.deadline, 'ci-evidence-timeout')
         runs = api.pages('actions/workflows/release.yml/runs?head_sha=' + options['headSha'], 'workflow_runs')
+        # Expired preflight dispatches never reserve/build and must not mask the one actual candidate run.
+        build_run = reserved_run(api.pages('deployments'), options['repository'], options['headSha'])
         matching = [run for run in runs if run.get('head_sha') == options['headSha'] and
                     run.get('path') == options['workflowFile'] and run.get('name') == options['expectedWorkflowName']
-                    and run.get('event') == 'workflow_dispatch']
+                    and run.get('event') == 'workflow_dispatch' and run.get('id') == build_run]
         require(len(matching) <= 1, 'ambiguous-release-run')
         if matching:
             run = matching[0]

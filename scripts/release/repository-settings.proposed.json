@@ -1,5 +1,5 @@
 {
-  "status": "PROPOSAL_NOT_APPLIED",
+  "status": "APPROVED",
   "repository": "devzyz/Chat",
   "reviewer": "devzyz",
   "requests": [
@@ -134,7 +134,7 @@
     }
   ],
   "preflightDecision": {
-    "status": "PENDING_D04_APPROVAL",
+    "status": "APPROVED_D04",
     "recommended": "owner_verified_short_lived_receipt",
     "actor": "devzyz",
     "bindings": [
@@ -148,6 +148,11 @@
     ],
     "maximumAgeSeconds": 900,
     "automationCredential": "GITHUB_TOKEN",
-    "reason": "Management settings REST reads require Administration:read, which GITHUB_TOKEN cannot declare. No credential fallback is implemented."
+    "reason": "Owner-approved independent read-only settings review; authenticated owner dispatch consumes a candidate-bound record within 900 seconds. CI uses only GITHUB_TOKEN."
+  },
+  "versionPolicy": {
+    "format": "x.x.x",
+    "initialVersion": "1.0.0",
+    "prereleaseSuffixes": false
   }
 }

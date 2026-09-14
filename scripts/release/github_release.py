@@ -77,7 +77,7 @@ def settings_blockers(environments, policies, retention, master):
     return blockers
 
 
-def preflight(api, identity, admission_run):
+def preflight(api, identity, admission_run, *, settings_receipt=None, event=None):
     from release_gate import validate_identity
     validate_identity(identity)
     require(type(admission_run) is int and admission_run > 0, 'invalid-admission-run')
@@ -114,37 +114,42 @@ def preflight(api, identity, admission_run):
             require(check_run.get('head_sha') == identity['sourceSha'] and check_run.get('run_attempt') == 1 and
                     check_run.get('conclusion') == 'success', 'required-check-run-not-first-attempt-success')
             checked_runs.add(run_id)
-    environments = api.pages('environments', 'environments')
-    policies = {}
-    for name in ('release-uat', 'release-promotion'):
-        if any(e.get('name') == name for e in environments):
-            policies[name] = api.pages('environments/' + quote(name) + '/deployment-branch-policies', 'branch_policies')
-    retention = api.request('actions/permissions/artifact-and-log-retention')
-    blockers = settings_blockers(environments, policies, retention, api.request('branches/master'))
-    require(not blockers, 'release-settings-blocked:' + ','.join(blockers))
-    protection = api.request('branches/master/protection')
-    status_checks = protection.get('required_status_checks') or {}
-    contexts = set(status_checks.get('contexts', [])) | {c.get('context') for c in status_checks.get('checks', [])}
-    bound_contexts = {c.get('context') for c in status_checks.get('checks', []) if c.get('app_id') == 15368}
-    require(set(CHECKS) <= contexts and status_checks.get('strict') is True and
-            set(CHECKS) <= bound_contexts and protection.get('enforce_admins', {}).get('enabled') is True,
-            'master-required-check-policy-missing')
+    from settings_receipt import collect_settings, verify_receipt
+    if settings_receipt is None:
+        import os
+        require(os.environ.get('GITHUB_ACTIONS') != 'true', 'hosted-settings-receipt-required')
+        collect_settings(api)
+    else:
+        verify_receipt(settings_receipt, identity, api.request('actions/runs/' + str(identity['runId'])),
+                       event, deployments)
     return {'identity': identity, 'upstream': admission['manifests'],
             'compatibility': admission['compatibility'], 'admissionRunId': admission_run,
             'admissionArtifactId': matches[0]['id'], 'admissionArtifactDigest': matches[0]['digest']}
 
 
-def reserve(api, identity):
+def reserve(api, identity, *, settings_receipt=None):
     # Workflow concurrency is the transaction lock. Recheck history immediately before POST.
     from release_gate import check_unused
-    check_unused(identity, api.pages('deployments'))
+    history = api.pages('deployments')
+    check_unused(identity, history)
+    if settings_receipt is not None:
+        require(settings_receipt['createdAt'] <= int(time.time()) < settings_receipt['expiresAt'],
+                'settings-receipt-expired-or-future')
+        for item in history:
+            payload = item.get('payload') or {}
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            require(payload.get('settingsChallenge') != settings_receipt['dispatchChallenge'],
+                    'settings-receipt-already-consumed')
     record = api.request('deployments', body={
         'ref': identity['sourceSha'], 'environment': 'candidate-' + identity['version'],
         # The public register operation has already validated actual Check Runs, including producer/run identity.
         # Deployments' required_contexts refers to legacy commit statuses, not those Check Run names.
         'auto_merge': False, 'required_contexts': [], 'transient_environment': False,
         'production_environment': False, 'description': 'Immutable release build reservation; never reuse version',
-        'payload': {'format': 1, 'identity': identity},
+        'payload': {'format': 1, 'identity': identity, **({} if settings_receipt is None else
+                    {'settingsChallenge': settings_receipt['dispatchChallenge'],
+                     'settingsSha256': settings_receipt['settingsSha256']})},
     })
     require(type(record.get('id')) is int and record['id'] > 0 and record.get('sha') == identity['sourceSha'],
             'candidate-reservation-failed')

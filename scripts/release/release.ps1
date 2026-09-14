@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('PreflightCandidate', 'VerifyCandidate', 'PackCandidate', 'SealCandidate', 'VerifyPlanTask',
+    [ValidateSet('PrepareCandidate', 'PreflightCandidate', 'VerifyCandidate', 'PackCandidate', 'SealCandidate', 'VerifyPlanTask',
         'RegisterCandidate', 'BuildCandidate', 'VerifyUpload', 'CleanupCandidate', 'VerifyCiEvidence')]
     [string]$Task,
     [string]$InputFile,

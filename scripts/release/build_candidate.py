@@ -45,11 +45,15 @@ def register(version, admission_run):
     require(os.environ['ImageVersion'] == tool_lock['tools']['runnerImage'], 'upstream-runner-image-drift')
     require(invoke(['git', 'rev-parse', 'HEAD'], cwd=source) == identity['sourceSha'], 'checkout-source-mismatch')
     api = GitHub(identity['repository'])
-    receipt = preflight(api, identity, admission_run)
+    event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+    settings = json.loads(event.get('inputs', {}).get('settings_receipt', 'null'))
+    require(isinstance(settings, dict), 'hosted-settings-receipt-required')
+    receipt = preflight(api, identity, admission_run, settings_receipt=settings, event=event)
     receipt['sourceTreeSha'] = invoke(['git', 'rev-parse', 'HEAD^{tree}'], cwd=source)
     receipt['lockHashes'] = source_locks(source)
     # A failed POST or any later failure cannot authorize deleting the durable reservation.
-    receipt['deploymentId'] = reserve(api, identity)
+    receipt['deploymentId'] = reserve(api, identity, settings_receipt=settings)
+    receipt['settingsReceipt'] = settings
     owned.mkdir()
     (owned / 'receipt.json').write_bytes(json_bytes(receipt))
     return {'deploymentId': receipt['deploymentId'], 'status': 'RESERVED'}

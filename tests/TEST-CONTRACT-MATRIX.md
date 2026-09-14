@@ -814,6 +814,7 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 ## 8. 矩阵维护规则
 
 R-00 新增 `R01-BUILD-01..16`，Domain 为 Architecture，Level 为 Unit/Component，
+其中 BUILD-01 仅允许 `x.x.x`；BUILD-02 包含 owner dispatch 记录的身份、过期、篡改与重放拒绝。
 owner 为 `tests/release/contracts/test_release.py`，公开入口 `release.ps1 -Task VerifyPlanTask -PlanTask R-00-T1`。
 独立报告 `release_candidate_contracts.xml`，真实登记见 [release-reports.json](manifests/release-reports.json)，
 细分合同与未覆盖的 artifact lifecycle/UAT 边界见 [模块入口](release/contracts/README.md)。

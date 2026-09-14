@@ -18,9 +18,9 @@ Domain 为 Architecture，Level 为 Unit/Component；没有应用编译、真实
 
 | Test ID | 实际覆盖 |
 | --- | --- |
-| R01-BUILD-01 | 版本、完整 SHA、run ID、首次 attempt |
-| R01-BUILD-02 | 同源 required checks，最新失败结果，审批/分支/retention 设置 |
-| R01-BUILD-03 | 已用版本不可复用，持久化 deployment seam 首次登记/重复拒绝 |
+| R01-BUILD-01 | 仅 x.x.x 版本、完整 SHA、run ID、首次 attempt；拒绝 rc/beta/build 后缀 |
+| R01-BUILD-02 | 同源 required checks，最新失败结果，审批/分支/retention；owner 记录身份/篡改/过期/重放拒绝 |
+| R01-BUILD-03 | 已用版本或源码 SHA 不可重建，持久化 deployment seam 首次登记/重复拒绝 |
 | R01-BUILD-04 | Windows 保留名、相对路径和目录穿越 |
 | R01-BUILD-05 | 缺少 current-N 验收、不同 source SHA |
 | R01-BUILD-06 | 私密元数据拒绝；合法依赖文件名不会误判为 Token |
@@ -41,12 +41,14 @@ Domain 为 Architecture，Level 为 Unit/Component；没有应用编译、真实
 ## Hosted candidate
 
 [Release workflow](../../../.github/workflows/release.yml) 默认只运行合同测试。正式候选要求手动 dispatch，
-`build_candidate=true`、未使用的 `release_version` 和同一 master SHA 的首次成功 Linux `admission_run_id`。
+`build_candidate=true`、未使用的 `release_version`、同一 master SHA 的首次成功 Linux `admission_run_id`
+及由 `PrepareCandidate` 生成的 `settings_receipt`。版本只接受 `x.x.x`，首次采用 `1.0.0`；
+验收和发布状态单独记录，同一包晋升时不改内部版本号和字节。
 禁止从 PR merge-test SHA 的验收推定另一个 merge commit 已通过。
 
 `RegisterCandidate` 在编译前验证 GitHub admission artifact 的下载 digest、同源十个检查及首次 attempt、
-master required checks/admin enforcement、两个 protected environments 和 30 天 retention。
-它随后创建永久 deployment 记录。相同版本的失败、制品过期或删除都不授权重建。
+owner 提交的有效设置记录（master required checks/admin enforcement、两个 protected environments 和 30 天 retention）。
+它随后创建永久 deployment 记录。相同版本或 source SHA 的失败、制品过期或删除都不授权重建。
 Check Runs 由上述预检验证；Deployment API 的 `required_contexts` 是 legacy commit-status 接口，
 创建记录时显式传空数组，避免把 Check Run 名字误当作 commit status。参见
 [GitHub deployment API](https://docs.github.com/en/rest/deployments/deployments#create-a-deployment)。
@@ -81,23 +83,43 @@ workflow 固定 `Release` / `.github/workflows/release.yml`，job 固定 `Window
   hosted 副本，另用 build/upload JSON 证明真实构建及上传。不能仅凭 JUnit 宣称正式构建通过。
 
 `VerifyPlanTask -PlanTask R-00-T2` / `R-00-T3` 分别要求上述完整 CI 参数和 Build/Upload profile，
-缺少 hosted 证据会非零退出。未知/后续计划任务不返回通过。校验器只选择同源首次手动运行，重试、重复运行、
+缺少 hosted 证据会非零退出。未知/后续计划任务不返回通过。校验器通过唯一同源 deployment 选择实际构建的首次手动运行；
+未通过预检、未创建 reservation 的 dispatch 不冒充构建。重试、重复 reservation、
 超时、跳过和内容漂移都阻断，只删除自己在 DownloadRoot 下创建的临时子目录。
 
 ## 验收边界
 
-**尚待 D-04 决定的权限冲突：** GitHub 的
+**已批准的 D-04 预检方案：** GitHub 的
 [branch protection](https://docs.github.com/en/rest/branches/branch-protection#get-branch-protection) 和
 [retention settings](https://docs.github.com/en/rest/actions/permissions#get-artifact-and-log-retention-settings-for-a-repository)
 读取接口需要 `Administration: read`；它不在
 [`GITHUB_TOKEN` 可声明权限](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions)
-中。因此当前 hosted preflight 会拒绝不足的权限，设置好环境本身不能让它通过。没有加入 PAT、App 私钥或
-扩大默认 workflow 权限。建议待 owner 确认后，将管理设置预检改为管理员只读步骤，输出绑定 repository、
-source SHA、版本、短期 dispatch challenge/期限的审查凭据，由 owner 触发的工作流消费；CI 保持 GITHUB_TOKEN。
-这是待批准的治理变更，尚未实现或视为通过。配置请求草案见
+中。用户于 2026-09-14 批准管理员在 CI 外使用已有登录只读核查；自动化不接收个人 Token、App 私钥，
+也不扩大默认 workflow 权限。配置请求及批准策略见
 [repository-settings.proposed.json](../../../scripts/release/repository-settings.proposed.json)。
 
-正式 R-00 仍须配置审批环境/master 保护、确定版本、使包含发布工具的 source SHA 通过上游验收，再执行一次
+管理员把 repository、master 完整 sourceSha、version 和 admissionRunId 写入输入 JSON，例如：
+
+```json
+{"repository":"devzyz/Chat","sourceSha":"<40-character-master-SHA>","version":"1.0.0","admissionRunId":123456}
+```
+
+在仓库根目录运行（输入中的 SHA/run 必须换成实际已验收身份）：
+
+```powershell
+./scripts/release/release.ps1 -Task PrepareCandidate -InputFile candidate-input.json -OutputFile candidate-dispatch.json
+Get-Content -Raw -Encoding UTF8 candidate-dispatch.json | gh workflow run release.yml --repo devzyz/Chat --ref master --json
+if ($LASTEXITCODE -ne 0) { throw 'Candidate dispatch failed.' }
+```
+
+记录包含完整设置快照及其摘要，绑定 owner ID、repository、SHA、版本、随机 challenge 与 900 秒期限。
+hosted 准入使用 GitHub run API 的 actor/triggering actor、实际 dispatch event 和首次 attempt 验证来源；
+哈希不是签名，信任来自 GitHub 认证的 owner 提交。任一身份漂移、过期、内容摘要不匹配或
+已消费 challenge 都阻断。版本并发锁与持久化 deployment 记录避免重复构建。
+15 分钟限制准入时间，不限制构建耗时；排队过期必须重新核查，不能编辑旧时间戳继续使用。
+核查到准入间设置可能变化，这是该管理员辅助方案的明确边界。
+
+正式 R-00 仍须使包含发布工具的 source SHA 通过上游验收，再执行一次
 hosted candidate job 和两个 CI evidence profile。本地合同成功不关闭 G-018。
 artifact-only 启动/探测/停止、版本化 UAT checklist 和 promotion 属于后续 R-01/R-02/R-03；
 本次只打包可用的 verifier，不提供会返回假 PASS 的 smoke/UAT 占位实现。

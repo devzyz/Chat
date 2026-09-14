@@ -14,7 +14,7 @@ spec.loader.exec_module(gate)
 
 class ReleaseContracts(unittest.TestCase):
     def identity(self):
-        return dict(version='1.0.0-rc.1', sourceSha='a' * 40, runId=12, runAttempt=1,
+        return dict(version='1.0.0', sourceSha='a' * 40, runId=12, runAttempt=1,
                     repository='devzyz/Chat', workflowSha='b' * 40)
 
     def admission(self):
@@ -23,14 +23,19 @@ class ReleaseContracts(unittest.TestCase):
                     manifests={'phase3c': 'c' * 64, 'phase3d': 'd' * 64})
 
     def test_R01_BUILD_01(self):
-        identity = dict(version='1.0.0-rc.1', sourceSha='a' * 40, runId=12, runAttempt=1,
+        identity = dict(version='1.0.0', sourceSha='a' * 40, runId=12, runAttempt=1,
                         repository='devzyz/Chat', workflowSha='b' * 40)
         gate.validate_identity(identity)
+        for version in ('1.0.0-rc.1', '1.0.0-alpha.1', '1.0.0+build.1', 'v1.0.0', '01.0.0', '1.0'):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                gate.validate_identity({**identity, 'version': version})
         for field, value in [('version', '../x'), ('sourceSha', 'main'), ('runAttempt', 2), ('runId', 0)]:
             with self.subTest(field=field), self.assertRaises(ValueError):
                 gate.validate_identity({**identity, field: value})
 
     def test_R01_BUILD_02(self):
+        from settings_receipt_cases import check_receipts
+        check_receipts(self)
         checks = [dict(name=name, head_sha='a' * 40, status='completed', conclusion='success', id=n)
                   for n, name in enumerate(gate.CHECKS, 1)]
         gate.admit(self.identity(), self.admission(), checks, [])
@@ -58,7 +63,9 @@ class ReleaseContracts(unittest.TestCase):
 
     def test_R01_BUILD_03(self):
         with self.assertRaises(ValueError):
-            gate.check_unused(self.identity(), [{'environment': 'candidate-1.0.0-rc.1', 'payload': {}}])
+            gate.check_unused(self.identity(), [{'environment': 'candidate-0.9.0', 'sha': 'a' * 40}])
+        with self.assertRaises(ValueError):
+            gate.check_unused(self.identity(), [{'environment': 'candidate-1.0.0', 'payload': {}}])
         gate.check_unused(self.identity(), [{'environment': 'candidate-0.9.0', 'payload': {}}])
         from github_release import reserve
 
@@ -203,7 +210,7 @@ class ReleaseContracts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             stage = Path(root) / 'stage'
             allowed = self.payload(stage)
-            payload = Path(root) / 'Chat-1.0.0-rc.1-windows-x64.zip'
+            payload = Path(root) / 'Chat-1.0.0-windows-x64.zip'
             result = gate.pack(stage, allowed, self.context(), payload)
             gate.verify_candidate(payload, result['payloadSha256'], result['manifestSha256'])
             with self.assertRaises((ValueError, FileExistsError)):
@@ -221,11 +228,11 @@ class ReleaseContracts(unittest.TestCase):
             (stage / 'unexpected').unlink()
             (stage / 'GateServer/config.ini.template').write_bytes(b'[Redis]\nPassword=secret-canary\n')
             with self.assertRaises(ValueError):
-                gate.pack(stage, allowed, self.context(), Path(root) / 'Chat-1.0.0-rc.1-windows-x64.zip')
+                gate.pack(stage, allowed, self.context(), Path(root) / 'Chat-1.0.0-windows-x64.zip')
             (stage / 'GateServer/config.ini.template').write_bytes(b'[Redis]\nPassword=\n')
             (stage / 'proto/chat.proto').write_bytes(b'ghp_' + b'a' * 36)
             with self.assertRaises(ValueError):
-                gate.pack(stage, allowed, self.context(), Path(root) / 'Chat-1.0.0-rc.1-windows-x64.zip')
+                gate.pack(stage, allowed, self.context(), Path(root) / 'Chat-1.0.0-windows-x64.zip')
 
     def test_R01_BUILD_13(self):
         gate.validate_sbom(dict(status=gate.FALLBACK, reason='No approved generator',
@@ -239,10 +246,10 @@ class ReleaseContracts(unittest.TestCase):
             allowed = self.payload(stage)
             (stage / 'dependency-inventory.json').write_bytes(b'{}')
             with self.assertRaises(ValueError):
-                gate.pack(stage, allowed, self.context(), Path(root) / 'Chat-1.0.0-rc.1-windows-x64.zip')
+                gate.pack(stage, allowed, self.context(), Path(root) / 'Chat-1.0.0-windows-x64.zip')
 
     def artifact(self):
-        return dict(id=99, name='release-candidate-1.0.0-rc.1-' + 'a' * 40, digest='sha256:' + 'd' * 64,
+        return dict(id=99, name='release-candidate-1.0.0-' + 'a' * 40, digest='sha256:' + 'd' * 64,
                     expired=False, created_at='2026-09-14T12:00:00Z', expires_at='2026-10-14T12:00:00Z',
                     workflow_run={'id': 12, 'head_sha': 'a' * 40})
 
@@ -267,7 +274,7 @@ class ReleaseContracts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             stage = Path(root) / 'stage'
             allowed = self.payload(stage)
-            payload = Path(root) / 'Chat-1.0.0-rc.1-windows-x64.zip'
+            payload = Path(root) / 'Chat-1.0.0-windows-x64.zip'
             hashes = gate.pack(stage, allowed, self.context(), payload)
             import zipfile
             archive = Path(root) / 'uploaded.zip'
@@ -284,6 +291,13 @@ class ReleaseContracts(unittest.TestCase):
             with self.assertRaises(ValueError):
                 gate.validate_evidence({**evidence, 'extra': 'unapproved'})
         from verify_ci import verify_junit
+        from verify_ci import reserved_run
+        record = {'environment': 'candidate-1.0.0', 'sha': 'a' * 40, 'payload': {'identity': self.identity()}}
+        self.assertEqual(reserved_run([record], 'devzyz/Chat', 'a' * 40), 12)
+        self.assertIsNone(reserved_run([], 'devzyz/Chat', 'a' * 40))
+        for records in ([record, record], [{**record, 'environment': 'candidate-1.0.1'}]):
+            with self.assertRaises(ValueError):
+                reserved_run(records, 'devzyz/Chat', 'a' * 40)
         good = b'<testsuite tests="1"><testcase name="R01-BUILD-01"/></testsuite>'
         verify_junit(good, ['R01-BUILD-01'])
         for data in [good.replace(b'tests="1"', b'tests="2"'),
