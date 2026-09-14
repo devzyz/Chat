@@ -8,6 +8,7 @@
 #include <memory>
 #include "MysqlMgr.h"
 #include "MessageCommit.h"
+#include "HistoryResponse.h"
 #include <chrono>
 #include "StatusGrpcClient.h"
 #include "RedisMgr.h"
@@ -294,6 +295,18 @@ void LogicSystem::RegisterCallBacks() {
 
 		return_value["error"] = ErrorCodes::Success;
 		// 先更新数据库
+
+        // Identity belongs to the authenticated connection, not the request body.
+        if (session->GetAuthenticatedUid() <= 0 || fromuid != session->GetAuthenticatedUid() ||
+            touid <= 0 || fromuid == touid) {
+            return_value["error"] = ErrorCodes::UidInvalid;
+            return;
+        }
+        auto recipient = std::make_shared<UserInfo>();
+        if (!GetUserBaseInfo(USER_BASE_INFO + std::to_string(touid), touid, recipient)) {
+            return_value["error"] = ErrorCodes::UidInvalid;
+            return;
+        }
 		bool success = MysqlMgr::GetInstance()->AddFriendApply(fromuid, touid, description, backname);
 		if (!success) {
 			return_value["error"] = ErrorCodes::UidInvalid;
@@ -390,6 +403,16 @@ void LogicSystem::RegisterCallBacks() {
 			});
 
 		std::vector<std::shared_ptr<ChatMessage>> _chat_msgs;
+
+        if (session->GetAuthenticatedUid() <= 0 || authuid != session->GetAuthenticatedUid() ||
+            applyuid <= 0 || applyuid == authuid || !applyinfo.isObject() || !authinfo.isObject() ||
+            !applyinfo["applyuid"].isInt() || applyinfo["applyuid"].asInt() != applyuid ||
+            !applyinfo["touid"].isInt() || applyinfo["touid"].asInt() != authuid ||
+            !authinfo["authuid"].isInt() || authinfo["authuid"].asInt() != authuid ||
+            !authinfo["touid"].isInt() || authinfo["touid"].asInt() != applyuid) {
+            return_value["error"] = ErrorCodes::UidInvalid;
+            return;
+        }
 		int chat_id = 0;
 		SPDLOG_DEBUG("auth friend description received, applyuid={}, authuid={}, description_size={}", applyuid, authuid, authinfo["description"].asString().size());
 		// 更新数据库
@@ -772,32 +795,29 @@ void LogicSystem::RegisterCallBacks() {
 	_fun_callbacks[MSG_LOAD_CHAT_MESSAGE_REQ] = [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
 		SPDLOG_DEBUG("load chat message request, msg_id={}", static_cast<int>(MSG_LOAD_CHAT_MESSAGE_REQ));
 		// 解析json数据
-		Json::Reader reader;
-		Json::Value root;
-		auto err = reader.parse(msg_data, root);
-		if (!err) {
-			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
-			return;
-		}
-
-		auto chat_id = root["chat_id"].asInt();
-		auto current_msg_id = root["current_msg_id"].asInt();
-
-		Json::Value return_value;
-		return_value["error"] = ErrorCodes::Success;
-		return_value["chat_id"] = chat_id;
-
-		Defer defer([this, &return_value, session]() {
-			std::string return_str = return_value.toStyledString();
-			session->Send(return_str, MSG_LOAD_CHAT_MESSAGE_RSP);
-			});
+        Json::Value return_value;
+        return_value["error"] = ErrorCodes::Error_Json;
+        int request_cursor = 0;
+        Defer defer([&return_value, &request_cursor, session]() {
+            session->Send(SerializeHistoryResponse(return_value, request_cursor), MSG_LOAD_CHAT_MESSAGE_RSP);
+        });
+        Json::Reader reader;
+        Json::Value root;
+        if (!reader.parse(msg_data, root) || !root.isObject() ||
+            !root["chat_id"].isInt() || root["chat_id"].asInt() <= 0 ||
+            !root["current_msg_id"].isInt() || root["current_msg_id"].asInt() < 0) return;
+        const int chat_id = root["chat_id"].asInt();
+        const int current_msg_id = root["current_msg_id"].asInt();
+        request_cursor = current_msg_id;
+        return_value["error"] = ErrorCodes::Success;
+        return_value["chat_id"] = chat_id;
 
 		std::vector<std::shared_ptr<ChatMessage>> chat_msgs;
 
 		// 是否能够加载更多
 		bool load_more = false;
 		int last_msg_id = 0;
-		bool success = GetChatMessageList(chat_id, current_msg_id, PAGE_SIZE, chat_msgs, load_more, last_msg_id);
+		bool success = GetChatMessageList(session->GetAuthenticatedUid(), chat_id, current_msg_id, PAGE_SIZE, chat_msgs, load_more, last_msg_id);
 
 		if (!success) {
 			return_value["error"] = ErrorCodes::UidInvalid;
@@ -1073,7 +1093,7 @@ bool LogicSystem::GetUserChatList(int uid, int current_chat_id, int page_size,
  * @return 
  * 增量加载部分聊天数据
  */
-bool LogicSystem::GetChatMessageList(int chat_id, int current_msg_id, int page_size,
+bool LogicSystem::GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 	std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id) {
-	return MysqlMgr::GetInstance()->GetChatMessageList(chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
+	return MysqlMgr::GetInstance()->GetChatMessageList(principal_uid, chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
 }

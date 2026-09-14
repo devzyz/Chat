@@ -2,6 +2,12 @@
 
 ## Current-N evidence gate (3C-09)
 
+History recovery pages contain at most ten rows and must fit the existing 2048-byte
+TCP body limit. `E03-RECOVER-03` verifies nonempty forward progress, the row cap and
+every persisted ID/UUID/hash across shortened pages; `HistoryResponse.h` owns the
+byte-bound serialization. The Linux preflight's `phase3d-history-response` support
+regression checks the codec boundary without external services.
+
 The hosted workflow runs the production build and the `3C-07` superset once,
 then downloads that run's service evidence into the downstream job. The default
 `scripts/linux-ci.sh --phase 3C --configuration Release` invocation aggregates
@@ -49,7 +55,7 @@ rebuild or dependency restore is needed.
 The driver reuses RunContext/ProcessHarness for identity-checked ownership,
 termination and reaping, and ChatFrameCodec for public TCP traffic. The
 coordinator leases loopback ports and supplies an owned database and synthetic
-credentials. Each child has a 240-second lifetime deadline, graceful shutdown
+credentials. Each child has a 600-second lifetime deadline, graceful shutdown
 has ten seconds, and escalation fails the case. The outer coordinator has a
 680-second execution window, with CTest and shell deadlines of 690/720 seconds.
 
@@ -240,3 +246,164 @@ volume or personal mailbox is used. Individual suites remove only their own
 data before the coordinator performs final fixture teardown. Hosted execution
 remains required; local lifecycle and loopback tests are not acceptance evidence
 for actual Redis/Mailpit integration.
+# Phase 3D foundation
+
+Selector `3D-01` extends `3D-00` with `linux_phase3d_journey.xml` and seven
+`E03-JOURNEY` cases: self/unknown-user rejection (01), cross-instance application
+notification (02), duplicate application (03), recipient acceptance with both
+production models and reciprocal MySQL relations (04), duplicate acceptance
+without extra chats/greetings (05), wrong code/password and duplicate registration
+(06), and real Chat rejection of mismatched/cross-account tokens (07).
+It reuses the same disposable five-service scenario and cleanup; no friend row
+or selected endpoint is written by the fixture. The seven foundation cases also
+remain mandatory. The hosted job selects full `3D` (33 current-N E2E cases).
+
+Full `3D-03` and `3D` extend the four history cases below with
+`E03-RECOVER-05..11`: restart Chat A behind a production-codec fault relay; drop
+the selected committed ACK and disconnect its generation; reauthenticate the
+same process and replay the retained original payload to the same server ID;
+duplicate a real peer notification; restart Chat B and recover discovery before
+cross-instance delivery; reject invalid wire history cursors; stop the relay and
+verify fault/cleanup evidence. Normal preceding journeys connect directly.
+
+Linux listeners enable address reuse before binding so the relay and restarted
+ChatServer can replace closed generations with TIME_WAIT connections. Existing
+live listeners remain exclusive (SO_REUSEPORT is not enabled); Windows keeps its
+previous exclusive binding behavior. The relay support regression actively closes
+a real prior session before binding. Linux preflight additionally executes the
+production CServer occupied-listener and active-close/rebind contracts.
+
+The relay changes only the fault-path listener while preserving discovery and
+peer RPC identity. It uses `ChatFrameCodec`, sequential bounded frames in each
+direction, at most 64 live connection pairs, and a 420-second lifetime. The
+600-second child supervision budget accommodates the additional real 60-second
+Redis publication cycles; existing outer 690/720-second limits remain. Identity
+sidecars record native PID/creation time, and `topology.json` binds both restarts.
+No arbitrary test endpoint override or production EXE test mode is added.
+
+The complete public current-N entry is:
+
+```bash
+bash scripts/linux-ci.sh --phase 3D --configuration Release --junit-dir out/phase3d/contracts
+```
+
+`phase3d-release-admission` consumes the same run's 3C promotion inventory and
+gate, the 33-case 3D manifest, and all nine existing checks for the candidate.
+PR checkout SHA ancestry must contain that candidate; dispatch checks use the
+candidate directly. It emits `phase3d-gate-evidence`, `release-admission.json`,
+the original E2E reports, and the actual `E03-CLOSE-01` aggregation result in
+`linux_phase3d_gate.xml`. Missing/failed checks, report tampering, wrong SHA,
+missing restart/fault evidence or incomplete cleanup fail admission.
+
+The five `E03-COMPAT-01..05` entries reuse the 3C bootstrap resolver for the two
+client/service, two peer RPC and schema directions. An empty published release
+inventory yields five **unexecuted** bootstrap entries/skips, leaves G-017 open,
+and keeps `releaseEligible=false`. Any published runtime requires baseline review
+and blocks this bootstrap route; no old source is rebuilt or fake N-1 substituted.
+Current-N acceptance may route to R-00 preparation, but does not authorize release.
+
+Support regression includes `phase3dGate.test.js`, `relay.test.js` and the existing
+driver/compatibility tests. The compiled relay test uses real local sockets and
+checks exact dropped/replayed bytes; only hosted E2E proves service faults and
+graceful relay cleanup. Synthetic admission inputs are validator tests, not E2E.
+
+The partial `3D-03-history` selector adds four `E03-RECOVER-01..04` cases in
+`linux_phase3d_recovery.xml` (26 cumulative cases). It publicly sends 21 messages,
+starts a new client process for the stopped account, authenticates through normal
+discovery, and traverses at least three pages. Every recovered ID, sender, UUID
+and content hash must match MySQL in server-ID order. A page overlapping one
+previous boundary and a terminal empty request preserve the complete model and
+terminal cursor. The first-page boundary is asserted against the production
+ten-row page size. Existing process supervision owns the restarted client.
+
+```bash
+bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-03-history
+```
+
+The `3D-03-history` selector remains available as the smaller history/process-restart slice.
+
+Selector `3D-02` also requires eight `E03-XMSG-01..08` cases in
+`linux_phase3d_messaging.xml` (22 E2E cases cumulatively): bidirectional Unicode
+delivery; sender-scoped shared UUIDs; in-flight and subsequent retries; conflicting
+content; invalid chat rejection; offline durable recovery through history; real
+nonmember send/history rejection and changed retry scope; forged wire sender
+rejection. A third disposable account is publicly registered only as an offline
+negative fixture; the two observed production clients remain Alice and Bob.
+History authorization uses the authenticated session UID and current private/group
+membership. No schema or public wire fields change. These cases do not prove
+reconnect, lost ACK, server restart, multipage history or compatibility.
+
+```bash
+bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-02
+```
+
+Friend application uses the authenticated session UID, rejects self/unknown
+recipients, and preserves one pending row on duplicate application. Acceptance
+requires the authenticated recipient and consistent nested identity fields;
+the DAO locks only a pending application in the incoming direction. A reverse
+outgoing application cannot authorize acceptance. Repeated acceptance returns
+the existing `UidInvalid` error without new relations, chats or greetings.
+There is no schema or wire-field change; clients using forged identities or
+accepting their own outgoing application now receive an error.
+
+```bash
+bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-01
+```
+
+`phase3d.fixture.json` fixes the logical users, server identities, seed, journey
+and deadlines. `twoServerTopology.js` namespaces physical resources by run ID,
+renders reciprocal peer RPC and Status discovery configuration, and rejects
+missing clients, shared PID/account, or incorrect observed endpoints.
+Configuration strings contain a generated credential and must only be written
+to private run-owned files; the topology descriptor contains no credential.
+
+The public foundation entry is:
+
+```bash
+bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-00
+```
+
+It requires the same-source `CHAT_SERVICE_LAUNCHER`, `CHAT_FOUR_BUNDLE`,
+`CHAT_E2E_CLIENT`, and job-owned container IDs/mapped ports used by the existing
+coordinator. The `two-server-contract` hosted job supplies these inputs and
+uploads `phase3d-contract-evidence`. `clientRuntime.js` packs the Qt binary and
+its dependency closure in the checksummed launcher artifact; no GUI platform
+plugin is needed by this QCoreApplication entry point.
+
+`fiveProcessCases.js` reuses RunContext/ProcessHarness supervisors, the real
+schema migration and dependency coordinator. It runs Varify, Status, Gate,
+Chat A/B and two production client processes; account credentials stay in
+private run-owned configuration/control channels. It registers and logs in
+Alice before Bob, observes real Redis connection counts, checks distinct
+Status endpoints, and correlates one cross-instance message by UUID/server ID
+and text hash in both production models and MySQL. It stops one client while
+the other remains active, then stops all owned processes and removes owned data.
+
+Connection-count waits allow 70 seconds for CServer's 60-second Redis publication
+cycle. While polling, snapshots keep both live controllers below their independent
+60-second inactivity deadline; a stopped controller is excluded. Counts must still
+match exactly, and an unchanged count fails at the bounded deadline.
+
+| Report | IDs | Count | Contract |
+| --- | --- | --- | --- |
+| `linux_phase3d_contract.xml` | E03-CONTRACT-06..12 | 7 | Fresh schema, five-service ready, two client processes, public registration/discovery, durable cross-instance model correlation, independent exit, reverse cleanup |
+
+`phase3d-reports.json` records actual cases and report hashes. Finalization
+requires the exact seven IDs, source SHA, matching report bytes, two distinct
+observed clients, application/process/dependency teardown and redaction evidence.
+Missing or failed evidence remains a failure, including failures before startup.
+These seven cases supplement the five loopback
+[client process contracts](../../chat/tests/session-driver/README.md);
+they do not replace friendship, bidirectional messaging, recovery/history or
+N/N-1 compatibility acceptance. An unqualified/full Phase 3D selector returns
+nonzero until the downstream phase gate is implemented.
+
+Support regression (provide the configured same-source client binary):
+
+```bash
+CHAT_E2E_CLIENT="$PWD/out/build/linux-x64-release/bin/chat_e2e_client" node --test tests/services/twoServerTopology.test.js tests/services/clientControl.test.js tests/services/phase3dEvidence.test.js tests/services/connectionCount.test.js
+```
+
+These seven support cases exercise topology rejection, real Node-to-Qt control,
+bounded controller failures, delayed count publication and evidence validation. Synthetic validator inputs
+are not E2E results; only the real hosted selector can supply that evidence.

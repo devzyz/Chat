@@ -1,5 +1,59 @@
 # 当前自动测试合同矩阵
 
+`E03-RECOVER-CONTRACT-01` (Business / Unit) is the Linux preflight CTest
+`phase3d-history-response`, owned by `tests/server/transport/history_response_tests.cpp`.
+It verifies production history serialization at/beyond the 2048-byte boundary,
+complete-prefix pagination, cursor/termination and bounded errors. It is support
+evidence outside the 33 E2E cases and does not change Windows report counts.
+RECOVER-03 accepts shortened pages of one to ten rows, still requiring every
+persisted ID/UUID/hash exactly once; wire fields, frame limits and schema stay stable.
+
+Full `3D` / `3D-03` register `E03-RECOVER-01..11`; cumulative current-N E2E count
+is 33 across four reports. Recovery includes real codec ACK loss/duplicate
+notification, same-process original-payload retry, both server restarts with
+PID/creation identity, and invalid wire cursors. The full gate adds the real
+`E03-CLOSE-01` aggregation result, and separately records five unexecuted
+`E03-COMPAT-01..05` bootstrap entries when there is no promoted N-1. These five
+are not PASS cases. G-016 requires accepted hosted current-N evidence; G-017 and
+release eligibility remain blocked under bootstrap. See [service contracts](services/README.md).
+
+Partial selector `3D-03-history` adds `E03-RECOVER-01..04` in
+`linux_phase3d_recovery.xml`: public three-page dataset, new-process discovery,
+complete ordered history recovery, and overlapping/terminal page replay.
+It requires 26 cumulative E2E cases and remains a focused subset of the full selector.
+
+The cumulative Linux `3D-02` selector adds `E03-XMSG-01..08` in
+`linux_phase3d_messaging.xml`: bidirectional model/database correlation,
+sender-scoped UUID identity, duplicate retries, content conflicts, invalid chat,
+offline persistence/history, real nonmember access and changed retry scope,
+and authenticated wire sender rejection. It requires 22 E2E cases across three
+reports with matching source SHA, hashes and cleanup evidence. Registration is
+not hosted acceptance; recovery, multipage history and compatibility remain open.
+
+Phase 3D-00 client foundation adds `E03-CONTRACT-01..05`, registered as
+`session_driver.*` in [the client driver module](../chat/tests/session-driver/README.md).
+They execute real client processes and loopback production transports, under
+`client_integration.xml`: 28 Integration cases, 54 total client cases.
+These results do not close G-016 or establish the real five-service topology.
+The registered aggregate becomes 13 reports / 347 cases; this registration
+does not mean all 347 cases were re-executed for this change.
+
+The cumulative Linux `3D-01` selector adds `E03-JOURNEY-01..07` in
+`linux_phase3d_journey.xml`: account failure isolation, cross-account Token
+rejection, invalid/duplicate applications, cross-instance acceptance, reciprocal
+durable relations and duplicate acceptance. It requires all seven foundation
+cases plus these seven journey cases, bound to the same SHA and cleanup evidence.
+These registrations do not establish hosted PASS or close G-016/G-017.
+
+The independent Linux `3D-00` selector adds `E03-CONTRACT-06..12` (seven E2E
+cases) in `linux_phase3d_contract.xml`, owned by
+[the service scenario](services/README.md#phase-3d-foundation). Its actual
+registration and hashes are in `phase3d-reports.json`; it is not part of the
+Windows 347-case aggregate or the Phase 3C 89-case gate. It exercises five
+services, two production Qt clients, real discovery, one durable cross-instance
+message and teardown. G-016/G-017 remain open pending downstream journey,
+recovery/history and applicable compatibility evidence.
+
 Phase 3C-01 adds `T10-BLD-01..10` under CTest label
 `phase3c-build-ownership`, reported in `linux_build_ownership.xml`.
 The [process module contract](server/process-harness/README.md#linux-ownership-and-process-contracts-3c-01)
@@ -392,7 +446,7 @@ Domain/Level：Architecture / Integration。
 | T09-CTCP-12 | `T09_CTCP_Stream.SilentReadIsCancelledAtTheOwnedDeadline` | silent read 在 owned deadline 取消 |
 | T09-CTCP-13 | `T09_CTCP_Stream.QueuedWritesSurvivePartialCompletionsExactlyOnce` | queued writes 经 partial completion/backpressure 保持完整且一次 |
 | T09-CTCP-14 | `T09_CTCP_Stream.OccupiedPortIsRejectedWithoutReplacingTheOwner` | occupied port fail closed 且不窃取 listener |
-| T09-CTCP-15 | `T09_CTCP_Stream.StopCancelsPendingAcceptAndReleasesThePort` | stop 取消 pending accept 并释放 port |
+| T09-CTCP-15 | `T09_CTCP_Stream.StopCancelsPendingAcceptAndReleasesThePort` | stop 取消 pending accept，主动关闭真实连接后立即重绑定；Linux 与 T09-CTCP-14 一同接入 phase3d-chat-rebind，仍拒绝抢占存活监听器 |
 | T09-CTCP-16 | `T09_CTCP_Stream.StopReleasesSessionsThreadsSocketsAndServerOwnership` | stop 完整释放 session/thread/socket/server/port ownership |
 
 ### 3.22 Formal production composition（6 actual；2 planned-only）

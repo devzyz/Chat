@@ -365,13 +365,37 @@ TEST_F(T09_CTCP_Stream, OccupiedPortIsRejectedWithoutReplacingTheOwner) {
 // T09-CTCP-15
 TEST_F(T09_CTCP_Stream, StopCancelsPendingAcceptAndReleasesThePort) {
 	const auto port = server_->BoundPort();
+    auto socket = Connect();
+    Write(socket, Frame(1214, "rebind"));
+    ASSERT_TRUE(WaitFor(1));
 	server_->Stop();
 	EXPECT_TRUE(server_->Stopped());
+    // Observe the server-initiated close before releasing the peer, leaving the
+    // old server generation in TIME_WAIT on Linux.
+    boost::asio::steady_timer deadline(client_ioc_, 2s);
+    bool closed = false;
+    deadline.async_wait([&](auto error) { if (!error) socket.close(); });
+    char byte = 0;
+    socket.async_read_some(boost::asio::buffer(&byte, 1), [&](auto error, auto) {
+        closed = error == boost::asio::error::eof;
+#ifdef _WIN32
+        // Winsock close with a pending receive can report a reset instead of FIN.
+        closed = closed || error == boost::asio::error::connection_reset;
+#endif
+        deadline.cancel();
+    });
+    client_ioc_.run();
+    ASSERT_TRUE(closed);
+    socket.close();
 	boost::asio::io_context probe_ioc;
 	tcp::acceptor probe(probe_ioc);
 	boost::system::error_code error;
 	probe.open(tcp::v4(), error);
 	ASSERT_FALSE(error);
+#ifndef _WIN32
+    probe.set_option(tcp::acceptor::reuse_address(true), error);
+    ASSERT_FALSE(error);
+#endif
 	probe.bind({boost::asio::ip::make_address("127.0.0.1"), port}, error);
 	EXPECT_FALSE(error);
 }

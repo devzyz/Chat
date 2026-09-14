@@ -35,7 +35,13 @@ CServer::CServer(
 	}
 	boost::asio::ip::tcp::endpoint endpoint(bind_address, _port);
 	_acceptor.open(endpoint.protocol());
+#ifdef _WIN32
 	_acceptor.set_option(boost::asio::socket_base::reuse_address(false));
+#else
+    // Linux requires reuse on both generations to rebind after an active close.
+    // SO_REUSEPORT is deliberately not enabled: a live listener remains exclusive.
+    _acceptor.set_option(boost::asio::socket_base::reuse_address(true));
+#endif
 	_acceptor.bind(endpoint);
 	_acceptor.listen();
 	_port = _acceptor.local_endpoint().port();

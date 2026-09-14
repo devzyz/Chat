@@ -151,8 +151,10 @@ void TcpMgr::initHandlers()
                     // 获取到另一个人的uid
                     auto other_info = UserMgr::GetInstance()->GetFriendById(other_id);
                     // 通过对方的uid, 会话id, 当前消息的id来构造ChatInfo
-                    auto chat_info = std::make_shared<ChatInfo> (other_id, other_info->_name, other_info->_icon,
-                                                                other_info->_backname, chat_id, ChatType::PRIVATE);
+                    auto chat_info = std::make_shared<ChatInfo>(other_id,
+                        other_info ? other_info->_name : QString::number(other_id),
+                        other_info ? other_info->_icon : QString(),
+                        other_info ? other_info->_backname : QString(), chat_id, ChatType::PRIVATE);
                     UserMgr::GetInstance()->AddChatInfo(chat_id, chat_info);
                 }else if (type == "group") {
                     // todo 群聊
@@ -952,6 +954,11 @@ void TcpMgr::handleMsg(ReqId id, int len, QByteArray data)
         return ;
     }
     _handlers[id](id, len, data);
+    if (id == ID_CREATE_PRIVATE_CHAT_RSP || id == ID_LOAD_CHAT_MESSAGE_RSP ||
+        id == ID_TEXT_CHAT_MSG_RSP || id == ID_ADD_FRIEND_RSP || id == ID_AUTH_FRIEND_RSP) {
+        const auto object = QJsonDocument::fromJson(data).object();
+        emit requestCompleted(id, object.value("error").toInt(-1));
+    }
 }
 
 // 关闭tcp连接

@@ -1,5 +1,6 @@
 #include "ProcessHarness.h"
 #include "ChatFrameCodec.h"
+#include "FrameFaultRelay.h"
 
 #include <boost/asio.hpp>
 #include <json/json.h>
@@ -92,13 +93,22 @@ int Supervise(int argc, char** argv) {
     Require(argc >= 5);
     std::signal(SIGTERM, StopSignal);
     std::signal(SIGINT, StopSignal);
-    auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 240s);
+    auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 600s);
     integration::ProcessSpec spec;
     spec.executable = std::filesystem::absolute(argv[2]);
     Require(std::filesystem::is_directory(std::filesystem::absolute(argv[3])));
     spec.working_directory = context->TempRoot();
     for (int index = 5; index < argc; ++index) spec.arguments.push_back(std::filesystem::path(argv[index]).wstring());
     auto child = integration::ProcessHarness::Start(*context, std::move(spec));
+    {
+        const auto identity = child->Identity();
+        Json::Value value;
+        value["pid"] = identity.pid;
+        value["creationTime"] = std::to_string(identity.creation_time);
+        std::ofstream output(std::string(argv[4]) + ".identity");
+        output << Json::writeString(Json::StreamWriterBuilder{}, value);
+        Require(static_cast<bool>(output));
+    }
     const bool completed = child->WaitReady([&] { return stopping || child->CollectEvidence().exit_code.has_value(); },
         context->Deadline() - 15s);
     const auto cleanup = child->Stop(std::chrono::steady_clock::now() + 10s);
@@ -118,6 +128,21 @@ int Supervise(int argc, char** argv) {
 int main(int argc, char** argv) {
     try {
         Require(argc >= 2);
+        if (std::string(argv[1]) == "relay") {
+            Require(argc == 3);
+            const auto* raw = std::getenv("CHAT_RELAY_CONFIG");
+            Require(raw != nullptr);
+            const auto config = Parse(raw);
+            const int port = config["port"].asInt(), backend = config["backend"].asInt();
+            Require(port > 0 && port <= 65535 && backend > 0 && backend <= 65535 && port != backend);
+            Require(config["dropUuid"].asString().size() == 36 && config["replayUuid"].asString().size() == 36);
+            Require(std::filesystem::path(argv[2]).is_absolute());
+            std::signal(SIGTERM, StopSignal);
+            std::signal(SIGINT, StopSignal);
+            FrameFaultRelay relay(static_cast<unsigned short>(port), static_cast<unsigned short>(backend),
+                config["dropUuid"].asString(), config["replayUuid"].asString(), argv[2]);
+            return relay.Run([] { return stopping != 0; });
+        }
         if (std::string(argv[1]) == "chat") return Chat();
         if (std::string(argv[1]) == "supervise") return Supervise(argc, argv);
         if (std::string(argv[1]) == "validation") return 0;

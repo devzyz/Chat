@@ -288,15 +288,12 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 		{
 			// 准备修改语句
 			std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-				prepareStatement("SELECT id FROM apply_friend WHERE (from_uid = ? and to_uid = ?) OR (from_uid = ? and to_uid = ?) FOR UPDATE"));
+				prepareStatement("SELECT id FROM apply_friend WHERE from_uid = ? AND to_uid = ? AND status = 0 FOR UPDATE"));
 
 			pstmt->setInt(1, apply_uid);
 			pstmt->setInt(2, auth_uid);
 
-			pstmt->setInt(3, auth_uid);
-			pstmt->setInt(4, apply_uid);
-
-			auto res = pstmt->executeQuery();
+			std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 			if (!res->next()) {
 				connection->_connection->rollback();
 				return false;
@@ -746,8 +743,12 @@ message_commit::Result MysqlDao::AddChatMessageList(message_commit::Authenticate
 }
 
 // 增量加载部分聊天数据
-bool MysqlDao::GetChatMessageList(int chat_id, int current_msg_id, int page_size,
+bool MysqlDao::GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 	std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id) {
+    chat_list.clear();
+    load_more = false;
+    last_msg_id = current_msg_id;
+    if (principal_uid <= 0 || chat_id <= 0 || current_msg_id < 0 || page_size <= 0) return false;
 	auto connection = _pool->GetConnection();
 
 	if (connection == nullptr) {
@@ -759,6 +760,18 @@ bool MysqlDao::GetChatMessageList(int chat_id, int current_msg_id, int page_size
 		});
 
 	try {
+        std::unique_ptr<sql::PreparedStatement> membership(connection->_connection->prepareStatement(
+            "SELECT 1 FROM private_chat WHERE chat_id=? AND (user1_id=? OR user2_id=?) "
+            "UNION ALL SELECT 1 FROM group_chat_member WHERE chat_id=? AND user_id=? LIMIT 1"));
+        membership->setInt(1, chat_id);
+        membership->setInt(2, principal_uid);
+        membership->setInt(3, principal_uid);
+        membership->setInt(4, chat_id);
+        membership->setInt(5, principal_uid);
+        std::unique_ptr<sql::ResultSet> allowed(membership->executeQuery());
+        if (!allowed->next()) return false;
+        allowed.reset();
+
 		// 准备查询
 		std::string sql = "SELECT *,UNIX_TIMESTAMP(created_at) AS created_epoch FROM chat_message "
             "WHERE chat_id = ? and message_id > ? ORDER BY message_id LIMIT ?";

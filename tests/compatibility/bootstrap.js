@@ -35,7 +35,7 @@ function write(root, result) {
         `<testsuite name="runtime-compatibility" tests="5" failures="0" skipped="5">\n${rows.join('\n')}\n</testsuite>\n`);
 }
 
-module.exports = { assess, write };
+module.exports = { assess, write, combinations };
 if (require.main === module) {
     try {
         const result = assess(JSON.parse(fs.readFileSync(process.argv[2], 'utf8')), process.argv[4]);

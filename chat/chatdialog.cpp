@@ -1,4 +1,5 @@
 #include "chatdialog.h"
+#include "clientrequests.h"
 #include "logmgr.h"
 #include "ui_chatdialog.h"
 #include <QAction>
@@ -138,22 +139,6 @@ ChatDialog::ChatDialog(QWidget *parent)
     // 连接服务器通知我添加消息后的信号，将服务器通知的信息刷新到聊天界面上
     connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_update_text_chat_msg,
             this, &ChatDialog::slot_update_text_chat_msg);
-
-    // 心跳检测定时器
-    _timer = new QTimer(this);
-
-    // 连接心跳检测定时器信号
-    connect(_timer, &QTimer::timeout, this, [this]() {
-        auto user_info = UserMgr::GetInstance()->GetUserInfo();
-        QJsonObject jsonObj;
-        jsonObj["uid"] = user_info->_uid;
-        QJsonDocument doc(jsonObj);
-        QByteArray data = doc.toJson(QJsonDocument::Compact); // 转换为字节流，按照压缩方式
-        emit TcpMgr::GetInstance()->sig_send_data(ID_HEART_BEAT_REQ, data);
-    });
-
-    // 每10秒触发一次
-    _timer->start(10000);
 
     // 连接增量加载聊天列表完成
     connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_load_chat_finish, this, &ChatDialog::slot_tcp_load_chat_finish);
@@ -484,15 +469,8 @@ void ChatDialog::slot_from_friend_jump_chat_item(std::shared_ptr<UserInfo> si)
 
 void ChatDialog::LoadOncePrivateChat(int self_id, int other_id, QJsonObject json)
 {
-    QJsonObject obj;
-    obj["self_id"] = self_id;
-    obj["other_id"] = other_id;
-    obj["other_info"] = json;
-
-    QJsonDocument doc(obj);
-    QByteArray data = doc.toJson(QJsonDocument::Compact);
-
-    emit TcpMgr::GetInstance()->sig_send_data(ID_CREATE_PRIVATE_CHAT_REQ, data);
+    emit TcpMgr::GetInstance()->sig_send_data(ID_CREATE_PRIVATE_CHAT_REQ,
+        clientPrivateChatRequest(self_id, other_id, json));
 }
 
 
@@ -803,14 +781,8 @@ void ChatDialog::SetSelectChatPage(int uid) {
 
 // TCP请求加载更多聊天记录
 void ChatDialog::TcpLoadingMoreChatMsg(int chatId, qint64 beforeMessageId) {
-    QJsonObject obj;
-    obj["chat_id"] = chatId;
-    obj["current_msg_id"] = beforeMessageId;
-
-    QJsonDocument doc(obj);
-    QByteArray data = doc.toJson(QJsonDocument::Compact);
-
-    emit TcpMgr::GetInstance()->sig_send_data(ID_LOAD_CHAT_MESSAGE_REQ, data);
+    emit TcpMgr::GetInstance()->sig_send_data(ID_LOAD_CHAT_MESSAGE_REQ,
+        clientHistoryRequest(chatId, beforeMessageId));
 }
 
 // TCP加载更多聊天记录完成
@@ -909,4 +881,3 @@ void ChatDialog::slot_tcp_add_friend_apply(std::shared_ptr<ApplyInfo> applyInfo)
     // 将新的请求插入到列表中
     ui->apply_friend_page->AddNewApply(applyInfo);
 }
-

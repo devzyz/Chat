@@ -7,6 +7,7 @@
 namespace {
 bool messageLess(const MessageRecord &left, const MessageRecord &right)
 {
+    if ((left.messageId > 0) != (right.messageId > 0)) return left.messageId > 0;
     if (left.messageId > 0 && right.messageId > 0 && left.messageId != right.messageId) {
         return left.messageId < right.messageId;
     }
@@ -90,7 +91,7 @@ int MessageListModel::appendMessages(const QVector<MessageRecord> &messages)
     assertGuiThread();
     QVector<MessageRecord> filtered;
     QSet<qint64> batchMessageIds;
-    QSet<QString> batchClientIds;
+    QSet<QPair<int, QString>> batchClientIds;
     filtered.reserve(messages.size());
 
     for (const auto &message : messages) {
@@ -100,11 +101,11 @@ int MessageListModel::appendMessages(const QVector<MessageRecord> &messages)
         if (message.messageId > 0 && batchMessageIds.contains(message.messageId)) {
             continue;
         }
-        if (!message.clientMessageId.isEmpty() && batchClientIds.contains(message.clientMessageId)) {
+        if (!message.clientMessageId.isEmpty() && batchClientIds.contains({message.senderId, message.clientMessageId})) {
             continue;
         }
         if (message.messageId > 0) batchMessageIds.insert(message.messageId);
-        if (!message.clientMessageId.isEmpty()) batchClientIds.insert(message.clientMessageId);
+        if (!message.clientMessageId.isEmpty()) batchClientIds.insert({message.senderId, message.clientMessageId});
         filtered.push_back(message);
     }
 
@@ -127,54 +128,80 @@ int MessageListModel::prependHistory(const QVector<MessageRecord> &messages)
     assertGuiThread();
     QVector<MessageRecord> filtered;
     QSet<qint64> batchMessageIds;
-    QSet<QString> batchClientIds;
+    QSet<QPair<int, QString>> batchClientIds;
     filtered.reserve(messages.size());
 
     for (const auto &message : messages) {
+        const int pendingRow = rowForClientMessageId(message.clientMessageId, message.senderId);
+        if (message.chatId == _chatId && message.messageId > 0 && pendingRow >= 0 &&
+            _messages[pendingRow].messageId == 0) {
+            acknowledgeMessage(message.clientMessageId, message.messageId, message.deliveryStatus, message.senderId);
+        }
         if (message.chatId != _chatId || contains(message)) {
             continue;
         }
         if (message.messageId > 0 && batchMessageIds.contains(message.messageId)) {
             continue;
         }
-        if (!message.clientMessageId.isEmpty() && batchClientIds.contains(message.clientMessageId)) {
+        if (!message.clientMessageId.isEmpty() && batchClientIds.contains({message.senderId, message.clientMessageId})) {
             continue;
         }
         if (message.messageId > 0) batchMessageIds.insert(message.messageId);
-        if (!message.clientMessageId.isEmpty()) batchClientIds.insert(message.clientMessageId);
+        if (!message.clientMessageId.isEmpty()) batchClientIds.insert({message.senderId, message.clientMessageId});
         filtered.push_back(message);
     }
 
-    if (filtered.isEmpty()) {
-        return 0;
+    if (!filtered.isEmpty()) {
+        const int first = _messages.size();
+        beginInsertRows({}, first, first + filtered.size() - 1);
+        _messages += filtered;
+        endInsertRows();
+        rebuildRowIndexes();
     }
-
-    std::stable_sort(filtered.begin(), filtered.end(), messageLess);
-    beginInsertRows({}, 0, filtered.size() - 1);
-    _messages = filtered + _messages;
-    endInsertRows();
-    rebuildRowIndexes();
+    if (!std::is_sorted(_messages.cbegin(), _messages.cend(), messageLess)) {
+        emit layoutAboutToBeChanged({}, QAbstractItemModel::VerticalSortHint);
+        const auto previousIndexes = persistentIndexList();
+        QVector<int> order;
+        for (int row = 0; row < _messages.size(); ++row) order.push_back(row);
+        std::stable_sort(order.begin(), order.end(), [this](int left, int right) {
+            return messageLess(_messages[left], _messages[right]);
+        });
+        QVector<MessageRecord> sorted;
+        QVector<int> newRows(_messages.size());
+        sorted.reserve(_messages.size());
+        for (int row = 0; row < order.size(); ++row) {
+            sorted.push_back(_messages[order[row]]);
+            newRows[order[row]] = row;
+        }
+        _messages = std::move(sorted);
+        rebuildRowIndexes();
+        QModelIndexList updatedIndexes;
+        for (const auto &previous : previousIndexes) updatedIndexes.push_back(index(newRows[previous.row()]));
+        changePersistentIndexList(previousIndexes, updatedIndexes);
+        emit layoutChanged({}, QAbstractItemModel::VerticalSortHint);
+    }
     return filtered.size();
 }
 
 bool MessageListModel::acknowledgeMessage(const QString &clientMessageId, qint64 messageId,
-                                          DeliveryStatus status)
+                                          DeliveryStatus status, int senderId)
 {
     assertGuiThread();
-    int row = rowForClientMessageId(clientMessageId);
+    int row = rowForClientMessageId(clientMessageId, senderId);
     if (row < 0 || messageId <= 0) {
         return false;
     }
 
     const int duplicateRow = rowForMessageId(messageId);
     if (duplicateRow >= 0 && duplicateRow != row) {
+        if (_messages[duplicateRow].senderId != _messages[row].senderId) return false;
         // A history/peer row can arrive before the pending send is acknowledged.
         // Keep the pending UUID identity but collapse the duplicate server ID.
         beginRemoveRows({}, duplicateRow, duplicateRow);
         _messages.removeAt(duplicateRow);
         endRemoveRows();
         rebuildRowIndexes();
-        row = rowForClientMessageId(clientMessageId);
+        row = rowForClientMessageId(clientMessageId, senderId);
     }
 
     auto &message = _messages[row];
@@ -191,10 +218,10 @@ bool MessageListModel::acknowledgeMessage(const QString &clientMessageId, qint64
     return true;
 }
 
-bool MessageListModel::updateStatusByClientId(const QString &clientMessageId, DeliveryStatus status)
+bool MessageListModel::updateStatusByClientId(const QString &clientMessageId, DeliveryStatus status, int senderId)
 {
     assertGuiThread();
-    return updateStatusAtRow(rowForClientMessageId(clientMessageId), status);
+    return updateStatusAtRow(rowForClientMessageId(clientMessageId, senderId), status);
 }
 
 bool MessageListModel::updateStatusByMessageId(qint64 messageId, DeliveryStatus status)
@@ -217,9 +244,13 @@ bool MessageListModel::removeByMessageId(qint64 messageId)
     return true;
 }
 
-int MessageListModel::rowForClientMessageId(const QString &clientMessageId) const
+int MessageListModel::rowForClientMessageId(const QString &clientMessageId, int senderId) const
 {
-    return clientMessageId.isEmpty() ? -1 : _clientIdRows.value(clientMessageId, -1);
+    const auto found = _clientIdRows.constFind(clientMessageId);
+    if (clientMessageId.isEmpty() || found == _clientIdRows.cend()) return -1;
+    if (senderId >= 0) return found->value(senderId, -1);
+    // A UUID without its sender must never select an arbitrary account's row.
+    return found->size() == 1 ? found->cbegin().value() : -1;
 }
 
 int MessageListModel::rowForMessageId(qint64 messageId) const
@@ -263,7 +294,7 @@ void MessageListModel::assertGuiThread() const
 bool MessageListModel::contains(const MessageRecord &message) const
 {
     return (message.messageId > 0 && _messageIdRows.contains(message.messageId))
-        || (!message.clientMessageId.isEmpty() && _clientIdRows.contains(message.clientMessageId));
+        || (rowForClientMessageId(message.clientMessageId, message.senderId) >= 0);
 }
 
 void MessageListModel::rebuildRowIndexes()
@@ -273,7 +304,7 @@ void MessageListModel::rebuildRowIndexes()
     for (int row = 0; row < _messages.size(); ++row) {
         const auto &message = _messages.at(row);
         if (message.messageId > 0) _messageIdRows.insert(message.messageId, row);
-        if (!message.clientMessageId.isEmpty()) _clientIdRows.insert(message.clientMessageId, row);
+        if (!message.clientMessageId.isEmpty()) _clientIdRows[message.clientMessageId].insert(message.senderId, row);
     }
 }
 

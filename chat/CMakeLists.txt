@@ -100,6 +100,15 @@ target_link_libraries(chat_session_core PUBLIC
     chat_tcp_transport
 )
 
+add_library(chat_client_login STATIC
+    clientloginflow.h clientloginflow.cpp
+    clientmessage.h clientmessage.cpp
+)
+target_include_directories(chat_client_login PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_client_login PUBLIC
+    chat_auth_flow chat_gate_http_transport chat_session_core chat_message_model
+)
+
 set(PROJECT_SOURCES
         main.cpp
         mainwindow.cpp
@@ -199,6 +208,7 @@ target_include_directories(chat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(chat PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
 target_link_libraries(chat PRIVATE
+    chat_client_login
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Network
     spdlog::spdlog
@@ -238,6 +248,13 @@ include(CTest)
 if(BUILD_TESTING)
     find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Test)
 
+    add_executable(chat_e2e_client tests/session-driver/client_driver.cpp)
+    target_link_libraries(chat_e2e_client PRIVATE chat_client_login)
+    add_executable(session_driver_tests tests/session-driver/session_driver_tests.cpp)
+    target_link_libraries(session_driver_tests PRIVATE
+        chat_network_core Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Network)
+    add_dependencies(session_driver_tests chat_e2e_client)
+
     add_executable(message_model_tests
         tests/message-model/message_model_tests.cpp
     )
@@ -255,6 +272,18 @@ if(BUILD_TESTING)
     add_executable(auth_flow_tests
         tests/auth-flow/auth_flow_tests.cpp
     )
+    foreach(SESSION_DRIVER_CASE IN ITEMS
+        productionLoginKeepsAccountsAndEndpointsSeparate
+        twoProcessesHaveIndependentLifetimes
+        malformedAndReplayedCommandsFailClosed
+        lostControllerTerminatesClient
+        stopCancelsPendingProductionHttp
+    )
+        add_test(NAME session_driver.${SESSION_DRIVER_CASE}
+            COMMAND session_driver_tests ${SESSION_DRIVER_CASE})
+        set_tests_properties(session_driver.${SESSION_DRIVER_CASE} PROPERTIES
+            ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 20)
+    endforeach()
     target_link_libraries(auth_flow_tests PRIVATE
         chat_auth_flow
         Qt${QT_VERSION_MAJOR}::Test

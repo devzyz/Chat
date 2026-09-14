@@ -5,6 +5,7 @@
 #include "usermgr.h"
 #include <QJsonDocument>
 #include "tcpmgr.h"
+#include "clientrequests.h"
 
 ApplyFriendDialog::ApplyFriendDialog(QWidget *parent)
     : QDialog(parent)
@@ -43,36 +44,21 @@ void ApplyFriendDialog::SetSearchInfo(std::shared_ptr<SearchInfo> si)
 void ApplyFriendDialog::slot_send_apply_sure() {
     SPDLOG_DEBUG("friend application confirmation submitted");
     // 设置发送请求的Json参数
-    QJsonObject jsonObj;
-    // 表示由谁发出申请好友请求
-    auto user_info = UserMgr::GetInstance()->GetUserInfo();
-    jsonObj["fromuid"] = user_info->_uid;
-    jsonObj["applyname"] = user_info->_name;
-    jsonObj["applydescription"] = user_info->_description;
-    jsonObj["applyicon"] = user_info->_icon;
-    jsonObj["applysex"] = user_info->_sex;
-    // 标识要添加的uid是什么，因为我们在搜索的时候已经查出来了，并保存了
-    jsonObj["touid"] = _si->_uid;
-
-
-    // 设置要发送验证好友信息
+    const auto user_info = UserMgr::GetInstance()->GetUserInfo();
     auto description = ui->send_apply_user_description_edit->text();
     // 如果为空，则用默认申请语句
     if (description.isEmpty()) {
         description = "你好！";
     }
 
-    jsonObj["description"] = description;
 
     // 设置备注名
     auto backname = ui->send_apply_user_back_edit->text();
     if (backname.isEmpty()) {
         backname = _si->_name;
     }
-    jsonObj["backname"] = backname;
 
-    QJsonDocument doc(jsonObj);
-    QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
+    const auto jsonData = clientFriendRequest(*user_info, _si->_uid, description, backname);
     SPDLOG_DEBUG("friend application TCP request prepared");
 
     // 发送tcp请求

@@ -38,6 +38,8 @@ public:
 
     // 用于标记当前包的包头是否收全了
 signals:
+    // Safe terminal business status after the production handler updates session state.
+    void requestCompleted(ReqId id, int error);
     /**
      * @brief sig_connected_server
      * @param bSuccess
