@@ -15,6 +15,9 @@ try {
     $destination = Join-Path $scratch 'archive.tar.gz'
     [System.IO.File]::WriteAllText($destination, 'fixture')
     $hash = (Get-FileHash -LiteralPath $destination -Algorithm SHA512).Hash
+    # vcpkg's sanitized child environment may not auto-load the Utility module.
+    # A valid download must still be checked without that optional cmdlet.
+    function Get-FileHash { throw 'Get-FileHash unavailable in vcpkg child process.' }
     Remove-Item -LiteralPath $destination
     $script:downloadFailure = $false
     Invoke-GitHubAsset 'https://github.com/fmtlib/fmt/archive/12.1.0.tar.gz' $hash $destination

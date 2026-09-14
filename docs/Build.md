@@ -35,6 +35,9 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 
 - 禁止提交 `vcpkg_installed`、buildtrees、packages 或 `node_modules`。
 - CI 只可缓存 vcpkg binary archives 和包管理器下载缓存，不缓存已安装树或编译中间目录。
+- Windows vcpkg 的 GitHub archive 下载适配器使用官方 codeload 路径，并以 port 固定的 SHA-512 校验。
+  校验通过 .NET 文件流执行，不依赖子进程能自动加载 `Get-FileHash`；下载失败或摘要不符不得接受文件。
+  `scripts/ci/test-vcpkg-github-asset.ps1` 在 Windows PowerShell 下覆盖命令不可用、正确摘要及失败传播。
 - GitHub Actions MUST 固定第三方 Action 到完整 commit SHA。
 
 ## Qt 客户端
