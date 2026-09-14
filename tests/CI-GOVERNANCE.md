@@ -60,6 +60,12 @@ CI 通过不代表未测试行为绝对正确。自动测试遗漏由人工 UAT 
 
 ## 3. 测试维度与依赖分类
 
+R-00 的 `Release candidate contracts` job 运行 [显式登记](manifests/release-reports.json) 的本地等价合同；
+它不是发布 admission。`Windows release candidate build` 仅在手动候选 dispatch 中执行，必须通过同源上游证据、
+首次 attempt、审批设置/master 保护与精确工具锁预检，再创建不可复用的 deployment 记录。
+其 build/upload artifact 和 `VerifyCiEvidence` 参数/期限见 [Release 模块入口](release/contracts/README.md)。
+PR 中该候选 job 的 skipped 状态、单独合同 JUnit、或者只产生 deployment 都不能作为 R-00 PASS。
+
 测试继续使用两个独立维度：
 
 - Domain：Foundation、Architecture、Business。

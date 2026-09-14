@@ -65,11 +65,17 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 
 ## 发布单元
 
-- GateServer、StatusServer、ChatServer 各自的目录 MUST 包含自身 EXE、`config.ini` 和运行所需 app-local DLL。
+- 上游 develop 检查中的 GateServer、StatusServer、ChatServer 各自目录 MUST 包含自身 EXE、`config.ini` 和运行所需 app-local DLL。
 - ChatServer 发布目录 MUST 包含受支持的实例示例配置。
 - 每个 Server ZIP 解压后不得依赖另一个 Server ZIP 的文件。
 - Qt ZIP 和 VarifyServer ZIP 同样 MUST 自包含。
 - artifact 命名、目录层级和必需文件变化 MUST 同步 CI 校验与文档。
+
+R-00 候选构建使用 [`scripts/release/release.ps1`](../scripts/release/release.ps1) 组合现有 Windows 构建任务，
+生成唯一 `Chat-<version>-windows-x64.zip`。候选中的配置必须为无值 `.template`；Server 携带 MSVC runtime，
+Qt 携带 MinGW/runtime/plugins，Varify 携带 Node runtime/锁定依赖。具体允许文件、模板、工具版本、一次构建和
+下载回验合同见 [Release 模块入口](../tests/release/contracts/README.md)。本机入口不执行 release restore/build；
+只有通过审批设置、同源上游证据和工具锁预检的 GitHub-hosted Windows/master 首次运行可以构建候选。
 
 ## 跨平台要求
 

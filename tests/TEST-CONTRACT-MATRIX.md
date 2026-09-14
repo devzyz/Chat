@@ -813,6 +813,12 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 
 ## 8. 矩阵维护规则
 
+R-00 新增 `R01-BUILD-01..16`，Domain 为 Architecture，Level 为 Unit/Component，
+owner 为 `tests/release/contracts/test_release.py`，公开入口 `release.ps1 -Task VerifyPlanTask -PlanTask R-00-T1`。
+独立报告 `release_candidate_contracts.xml`，真实登记见 [release-reports.json](manifests/release-reports.json)，
+细分合同与未覆盖的 artifact lifecycle/UAT 边界见 [模块入口](release/contracts/README.md)。
+16 个合同 testcase 不代表正式 hosted build PASS；R-00-T2/T3 要求另外绑定真实 build/upload 证据，G-018 不提前关闭。
+
 3C-07 新登记 `T10-4PROC-01..18`，Domain 为 Architecture/Business、Level 为 Integration，
 owner 为 `tests/services/fourProcessCases.js`，公开入口为 Linux `3C-07` selector，
 独立报告为 `linux_four_process.xml`。合同细分、期限和清理见 [模块入口](services/README.md#four-production-processes-3c-07)。

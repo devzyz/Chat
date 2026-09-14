@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_candidate:
+        description: Build one admitted master candidate; never rerun a version
+        type: boolean
+        default: false
+      release_version:
+        description: Unused semantic release version
+        type: string
+      admission_run_id:
+        description: Successful first-attempt Linux admission run for this exact master SHA
+        type: string
+  pull_request:
+    branches: [develop, master]
+  push:
+    branches: [develop, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.release_version || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  contracts:
+    name: Release candidate contracts
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Check out release contracts
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Verify candidate contracts through the public entry point
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          & ./scripts/release/release.ps1 -Task VerifyPlanTask -PlanTask R-00-T1 -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'Release candidate contracts failed.' }
+      - name: Retain contract evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-candidate-contract-evidence
+          path: build/test-results/release_candidate_contracts.xml
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: false
+
+  candidate:
+    name: Windows release candidate build
+    if: github.event_name == 'workflow_dispatch' && inputs.build_candidate
+    needs: contracts
+    runs-on: windows-2022
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      deployments: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VCPKG_ROOT: ${{ github.workspace }}\.ci\vcpkg
+      VCPKG_BINARY_SOURCES: clear
+      VCPKG_DISABLE_METRICS: '1'
+      RELEASE_VERSION: ${{ inputs.release_version }}
+      ADMISSION_RUN_ID: ${{ inputs.admission_run_id }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out exact admitted source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Preflight and reserve immutable candidate before compilation
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          & ./scripts/release/release.ps1 -Task RegisterCandidate -Version $env:RELEASE_VERSION -AdmissionRunId $env:ADMISSION_RUN_ID
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate reservation failed.' }
+      - name: Select exact accepted upstream Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.2
+      - name: Install upstream Qt and MinGW kit
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: 6.5.3
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          tools: tools_mingw90
+          cache: false
+      - name: Check out upstream pinned vcpkg
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: microsoft/vcpkg
+          ref: fc3be1ebea7eaeb3071fe716ac65713af1f3a146
+          path: .ci/vcpkg
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bootstrap hosted vcpkg
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          & "$env:VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) { throw 'Hosted vcpkg bootstrap failed.' }
+      - name: Build and stage each production target once
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          & ./scripts/release/release.ps1 -Task BuildCandidate
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate build failed; this version cannot be retried.' }
+      - name: Upload canonical candidate once
+        id: candidate-upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-candidate-${{ inputs.release_version }}-${{ github.sha }}
+          path: ${{ runner.temp }}/chat-release-${{ github.run_id }}/candidate/*
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: false
+      - name: Retain build identity and contract evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-candidate-build-evidence
+          path: ${{ runner.temp }}/chat-release-${{ github.run_id }}/build-evidence/
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: false
+      - name: Redownload by artifact ID and verify immutable bytes
+        env:
+          EXPECTED_ARTIFACT_ID: ${{ steps.candidate-upload.outputs.artifact-id }}
+          EXPECTED_ARTIFACT_DIGEST: ${{ steps.candidate-upload.outputs.artifact-digest }}
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          & ./scripts/release/release.ps1 -Task VerifyUpload
+          if ($LASTEXITCODE -ne 0) { throw 'Uploaded candidate integrity failed.' }
+      - name: Retain detached upload evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-candidate-upload-evidence
+          path: ${{ runner.temp }}/chat-release-${{ github.run_id }}/upload-evidence/*
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: false
+      - name: Clean only this run's release staging and temporary files
+        if: always()
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          & ./scripts/release/release.ps1 -Task CleanupCandidate
+          if ($LASTEXITCODE -ne 0) { throw 'Release cleanup failed independently of build status.' }

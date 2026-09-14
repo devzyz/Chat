@@ -1,0 +1,153 @@
+{
+  "status": "PROPOSAL_NOT_APPLIED",
+  "repository": "devzyz/Chat",
+  "reviewer": "devzyz",
+  "requests": [
+    {
+      "method": "PUT",
+      "endpoint": "repos/devzyz/Chat/environments/release-uat",
+      "body": {
+        "reviewers": [
+          {
+            "type": "User",
+            "id": 99313511
+          }
+        ],
+        "prevent_self_review": false,
+        "can_admins_bypass": false,
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "endpoint": "repos/devzyz/Chat/environments/release-uat/deployment-branch-policies",
+      "body": {
+        "name": "master",
+        "type": "branch"
+      }
+    },
+    {
+      "method": "POST",
+      "endpoint": "repos/devzyz/Chat/environments/release-uat/deployment-branch-policies",
+      "body": {
+        "name": "v*",
+        "type": "tag"
+      }
+    },
+    {
+      "method": "PUT",
+      "endpoint": "repos/devzyz/Chat/environments/release-promotion",
+      "body": {
+        "reviewers": [
+          {
+            "type": "User",
+            "id": 99313511
+          }
+        ],
+        "prevent_self_review": false,
+        "can_admins_bypass": false,
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "endpoint": "repos/devzyz/Chat/environments/release-promotion/deployment-branch-policies",
+      "body": {
+        "name": "master",
+        "type": "branch"
+      }
+    },
+    {
+      "method": "POST",
+      "endpoint": "repos/devzyz/Chat/environments/release-promotion/deployment-branch-policies",
+      "body": {
+        "name": "v*",
+        "type": "tag"
+      }
+    },
+    {
+      "method": "PUT",
+      "endpoint": "repos/devzyz/Chat/branches/master/protection",
+      "body": {
+        "required_status_checks": {
+          "strict": true,
+          "checks": [
+            {
+              "context": "Static configuration checks",
+              "app_id": 15368
+            },
+            {
+              "context": "Server Release build",
+              "app_id": 15368
+            },
+            {
+              "context": "Qt client Release",
+              "app_id": 15368
+            },
+            {
+              "context": "VarifyServer dependency and package check",
+              "app_id": 15368
+            },
+            {
+              "context": "Linux POSIX process lifecycle",
+              "app_id": 15368
+            },
+            {
+              "context": "Linux configure compile link and startup preflight",
+              "app_id": 15368
+            },
+            {
+              "context": "Linux two-server foundation contract",
+              "app_id": 15368
+            },
+            {
+              "context": "Phase 3C disposable services",
+              "app_id": 15368
+            },
+            {
+              "context": "Phase 3C downstream hard gate",
+              "app_id": 15368
+            },
+            {
+              "context": "Phase 3D current-N release admission",
+              "app_id": 15368
+            }
+          ]
+        },
+        "enforce_admins": true,
+        "required_pull_request_reviews": {
+          "required_approving_review_count": 0,
+          "dismiss_stale_reviews": true,
+          "require_code_owner_reviews": false
+        },
+        "restrictions": null,
+        "allow_force_pushes": false,
+        "allow_deletions": false,
+        "required_conversation_resolution": true
+      }
+    }
+  ],
+  "preflightDecision": {
+    "status": "PENDING_D04_APPROVAL",
+    "recommended": "owner_verified_short_lived_receipt",
+    "actor": "devzyz",
+    "bindings": [
+      "repository",
+      "sourceSha",
+      "releaseVersion",
+      "dispatchChallenge",
+      "createdAt",
+      "expiresAt",
+      "settingsSha256"
+    ],
+    "maximumAgeSeconds": 900,
+    "automationCredential": "GITHUB_TOKEN",
+    "reason": "Management settings REST reads require Administration:read, which GITHUB_TOKEN cannot declare. No credential fallback is implemented."
+  }
+}
