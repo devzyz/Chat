@@ -52,6 +52,9 @@ dependency manifest verifier applied to each relocated bundle. Varify runs
 from the same checkout and locked Node dependencies; no service-job native
 rebuild or dependency restore is needed.
 
+Failed process-stop cases retain only allowlisted stage/category diagnostics in
+JUnit and the report manifest; raw child output and arbitrary error text are excluded.
+
 The driver reuses RunContext/ProcessHarness for identity-checked ownership,
 termination and reaping, and ChatFrameCodec for public TCP traffic. The
 coordinator leases loopback ports and supplies an owned database and synthetic
