@@ -37,6 +37,11 @@ CI 通过不代表未测试行为绝对正确。自动测试遗漏由人工 UAT 
 权限原因、来源信任、时效窗口、迁移影响与独立 UAT/promotion 边界见
 [Release 计划 §3.3](plans/PHASE-RELEASE-PLAN.md#33-least-privilege-与-approvals)。
 
+2026-09-14 PR #6 下载故障修复：GitHub Release 下载改经官方 asset API，仍验证既有固定摘要。
+Linux CMake 3.28.3/Ninja 1.12.1、vcpkg baseline/triplet/install root 和十项预检合同保持；
+T10-LNX-04 从第三方下载 Action 名称检查迁移为仓库固定摘要、工具版本及获取顺序检查。
+工具只在 hosted job 临时目录使用，不增加下载重试，不将失败 run 重新执行后的绿色结果冒充首次验收。
+
 ### 2.1 比例化执行合同
 
 本节是所有未完成正式计划的唯一过程分层权威。执行者先按变更的最高风险面选择一层；同一行为切片只执行该层要求的

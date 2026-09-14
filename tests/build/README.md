@@ -31,6 +31,12 @@ the exact `CHAT_JUNIT_PATH` and writes machine-readable status to the exact
 `PASS` after compiler, CMake, Qt, vcpkg, canonical proto, compile/link, and
 bounded production-main startup checks complete.
 
+`T10-LNX-04` verifies the fixed CMake 3.28.3/Ninja 1.12.1 asset lock and installer ordering.
+`scripts/ci/install-linux-tools.sh` uses the shared, digest-checking GitHub Release API downloader,
+then checks the extracted executable versions before exposing PATH. The download phase has a
+240-second deadline. Only this job's runner-temporary tool directory is used; no local vcpkg tree is modified.
+The API path replaces the intermittently failing release-download redirect while retaining tool versions.
+
 `T10-LNX-10-scope-safety` checks workflow password/token values after trimming
 whitespace and scalar quotes. Only complete GitHub expressions and the exact
 `MYSQL_ALLOW_EMPTY_PASSWORD: "yes"` disposable bootstrap flag are accepted;
