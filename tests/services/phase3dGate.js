@@ -13,6 +13,11 @@ const requiredChecks = ['Static configuration checks', 'Server Release build', '
 const bootstrap = 'BOOTSTRAP_NO_PROMOTED_N_MINUS_1';
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
+function selectCheck(checks, name, candidateSha) {
+    return checks.filter(check => check.name === name && check.head_sha === candidateSha)
+        .sort((left, right) => right.id - left.id)[0];
+}
+
 function aggregate({ services, phase3c, output, sourceSha, candidateSha, commit, checkPages }) {
     fs.mkdirSync(output, { recursive: true });
     fs.mkdirSync(path.join(output, 'junit'), { recursive: true });
@@ -31,9 +36,7 @@ function aggregate({ services, phase3c, output, sourceSha, candidateSha, commit,
         assert.ok(Array.isArray(checkPages) && checkPages.length > 0);
         const checks = checkPages.flatMap(page => page.check_runs);
         result.checks = requiredChecks.map(name => {
-            const matching = checks.filter(check => check.name === name && check.head_sha === candidateSha)
-                .sort((left, right) => right.id - left.id);
-            const check = matching[0];
+            const check = selectCheck(checks, name, candidateSha);
             assert.ok(check && check.status === 'completed' && check.conclusion === 'success');
             assert.match(check.html_url, /^https:\/\/github\.com\//);
             return { name, id: check.id, url: check.html_url };
@@ -82,7 +85,7 @@ function aggregate({ services, phase3c, output, sourceSha, candidateSha, commit,
             '<failure message="required-evidence-invalid"/>'}</testcase></testsuite>\n`);
     return result;
 }
-module.exports = { aggregate, requiredChecks };
+module.exports = { aggregate, requiredChecks, selectCheck };
 if (require.main === module) {
     try {
         const [services, phase3c, output, sourceSha, candidateSha, commitFile, checksFile] = process.argv.slice(2);

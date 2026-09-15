@@ -1,5 +1,9 @@
 # 当前自动测试合同矩阵
 
+Linux `T10-LNX-01..10` 的静态合同及十五项变异可通过 `3C-00-contracts` selector 执行，
+与 hosted `3C-00-T2` 复用同一函数。每份变异输入先通过完整基线检查；工具相关变异验证获取入口、
+摘要和版本。此入口不新增 Test ID、不恢复依赖、不代表 hosted 编译或业务通过，详见 [构建测试](build/README.md)。
+
 `E03-RECOVER-CONTRACT-01` (Business / Unit) is the Linux preflight CTest
 `phase3d-history-response`, owned by `tests/server/transport/history_response_tests.cpp`.
 It verifies production history serialization at/beyond the 2048-byte boundary,
@@ -812,6 +816,13 @@ acceptance. These tests do not prove four-process startup or cross-server public
 E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 
 ## 8. 矩阵维护规则
+
+R-00 新增 `R01-BUILD-01..16`，Domain 为 Architecture，Level 为 Unit/Component，
+其中 BUILD-01 仅允许 `x.x.x`；BUILD-02 包含 owner dispatch 记录的身份、过期、篡改与重放拒绝。
+owner 为 `tests/release/contracts/test_release.py`，公开入口 `release.ps1 -Task VerifyPlanTask -PlanTask R-00-T1`。
+独立报告 `release_candidate_contracts.xml`，真实登记见 [release-reports.json](manifests/release-reports.json)，
+细分合同与未覆盖的 artifact lifecycle/UAT 边界见 [模块入口](release/contracts/README.md)。
+16 个合同 testcase 不代表正式 hosted build PASS；R-00-T2/T3 要求另外绑定真实 build/upload 证据，G-018 不提前关闭。
 
 3C-07 新登记 `T10-4PROC-01..18`，Domain 为 Architecture/Business、Level 为 Integration，
 owner 为 `tests/services/fourProcessCases.js`，公开入口为 Linux `3C-07` selector，

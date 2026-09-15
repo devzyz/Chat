@@ -1,0 +1,14 @@
+{
+  "cmake": {
+    "version": "3.28.3",
+    "url": "https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz",
+    "sha512": "bd311ca835ef0914952f21d70d1753564d58de2ede02e80ede96e78cd2f40b4189e006007643ebb37792e13edd97eb4a33810bc8aca1eab6dd428eaffe1d2e38",
+    "file": "cmake.tar.gz"
+  },
+  "ninja": {
+    "version": "1.12.1",
+    "url": "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-linux.zip",
+    "sha512": "9c2ad534e7e72e67c608de7784cfbae601095bfca96713731a3f1eca268d66a6302f40c138a4ad97f7e8c902cd3fb05994a175e46fe922295dcc2d1334bf9014",
+    "file": "ninja.zip"
+  }
+}

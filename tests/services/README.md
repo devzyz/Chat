@@ -2,6 +2,15 @@
 
 ## Current-N evidence gate (3C-09)
 
+The final 3D admission job waits for required checks on the exact candidate SHA,
+including the independent Windows workflow. It polls every 30 seconds for at most
+190 minutes within a 200-minute job deadline. Missing or queued checks remain
+pending; any completed non-success check fails immediately. The newest check ID
+for each required name is authoritative. This only reads status; it never reruns
+builds or accepts incomplete checks. The final snapshot still passes through all
+existing admission assertions. Offline waiting/failure regressions run with
+`node --test tests/services/phase3dChecks.test.js`.
+
 History recovery pages contain at most ten rows and must fit the existing 2048-byte
 TCP body limit. `E03-RECOVER-03` verifies nonempty forward progress, the row cap and
 every persisted ID/UUID/hash across shortened pages; `HistoryResponse.h` owns the
@@ -51,6 +60,9 @@ Gate/Status/Chat binaries and `FourProcessDriver`, with the existing dynamic
 dependency manifest verifier applied to each relocated bundle. Varify runs
 from the same checkout and locked Node dependencies; no service-job native
 rebuild or dependency restore is needed.
+
+Failed process-stop cases retain only allowlisted stage/category diagnostics in
+JUnit and the report manifest; raw child output and arbitrary error text are excluded.
 
 The driver reuses RunContext/ProcessHarness for identity-checked ownership,
 termination and reaping, and ChatFrameCodec for public TCP traffic. The

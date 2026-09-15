@@ -35,6 +35,15 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 
 - 禁止提交 `vcpkg_installed`、buildtrees、packages 或 `node_modules`。
 - CI 只可缓存 vcpkg binary archives 和包管理器下载缓存，不缓存已安装树或编译中间目录。
+- Windows vcpkg 的 GitHub archive 下载适配器使用官方 codeload 路径，并以 port 固定的 SHA-512 校验。
+  校验通过 .NET 文件流执行，不依赖子进程能自动加载 `Get-FileHash`；下载失败或摘要不符不得接受文件。
+  `scripts/ci/test-vcpkg-github-asset.ps1` 在 Windows PowerShell 下覆盖命令不可用、正确摘要及失败传播。
+- GitHub Release 文件先按原 repository/tag/name/browser URL 解析唯一 asset ID，再通过官方资产 API 下载；
+  仍校验固定 SHA-512，不接受缺失、重复或 URL 不匹配的资产，也不增加重试。
+  Linux 四个 job 通过 `scripts/ci/install-linux-tools.sh` 调用同一下载器，
+  `linux-tool-assets.json` 保持 CMake 3.28.3/Ninja 1.12.1；仅在 job 临时目录解压并验证实际版本后加入 PATH。
+  CMake 摘要核对官方 `cmake-3.28.3-SHA-256.txt` 后固定，Ninja 摘要由官方 v1.12.1 资产计算；
+  迁移只替换失败的 Release 下载入口，不改变工具版本、vcpkg baseline 或 installed root。
 - GitHub Actions MUST 固定第三方 Action 到完整 commit SHA。
 
 ## Qt 客户端
@@ -65,11 +74,17 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 
 ## 发布单元
 
-- GateServer、StatusServer、ChatServer 各自的目录 MUST 包含自身 EXE、`config.ini` 和运行所需 app-local DLL。
+- 上游 develop 检查中的 GateServer、StatusServer、ChatServer 各自目录 MUST 包含自身 EXE、`config.ini` 和运行所需 app-local DLL。
 - ChatServer 发布目录 MUST 包含受支持的实例示例配置。
 - 每个 Server ZIP 解压后不得依赖另一个 Server ZIP 的文件。
 - Qt ZIP 和 VarifyServer ZIP 同样 MUST 自包含。
 - artifact 命名、目录层级和必需文件变化 MUST 同步 CI 校验与文档。
+
+R-00 候选构建使用 [`scripts/release/release.ps1`](../scripts/release/release.ps1) 组合现有 Windows 构建任务，
+生成唯一 `Chat-<version>-windows-x64.zip`。候选中的配置必须为无值 `.template`；Server 携带 MSVC runtime，
+Qt 携带 MinGW/runtime/plugins，Varify 携带 Node runtime/锁定依赖。具体允许文件、模板、工具版本、一次构建和
+下载回验合同见 [Release 模块入口](../tests/release/contracts/README.md)。本机入口不执行 release restore/build；
+只有通过审批设置、同源上游证据和工具锁预检的 GitHub-hosted Windows/master 首次运行可以构建候选。
 
 ## 跨平台要求
 

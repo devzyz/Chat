@@ -32,6 +32,20 @@ CI 通过不代表未测试行为绝对正确。自动测试遗漏由人工 UAT 
 
 任何后续计划都必须引用相关决策 ID。若计划与表中决策冲突，必须先按 D-04 完成评审，不能在实施过程中静默改变治理规则。
 
+2026-09-14 Release R-00 专项评审：用户批准由管理员只读核查管理设置、owner dispatch 消费绑定候选且
+900 秒有效的记录，CI 继续只用 `GITHUB_TOKEN`；版本统一 `x.x.x`，取消预发布后缀。
+权限原因、来源信任、时效窗口、迁移影响与独立 UAT/promotion 边界见
+[Release 计划 §3.3](plans/PHASE-RELEASE-PLAN.md#33-least-privilege-与-approvals)。
+
+2026-09-14 PR #6 下载故障修复：GitHub Release 下载改经官方 asset API，仍验证既有固定摘要。
+Linux CMake 3.28.3/Ninja 1.12.1、vcpkg baseline/triplet/install root 和十项预检合同保持；
+T10-LNX-04 从第三方下载 Action 名称检查迁移为仓库固定摘要、工具版本及获取顺序检查。
+工具只在 hosted job 临时目录使用，不增加下载重试，不将失败 run 重新执行后的绿色结果冒充首次验收。
+
+Linux 静态门禁与变异的本地公开入口为 `3C-00-contracts`，复用 hosted `3C-00-T2` 的同一函数。
+临时工程包含完整输入，先验证未修改基线；工具变异针对当前安装脚本/摘要/版本。此入口不恢复或构建依赖，
+仅保留 `READY_FOR_HOSTED_PREFLIGHT`，不新增运行时 PASS 或 JUnit Test ID。
+
 ### 2.1 比例化执行合同
 
 本节是所有未完成正式计划的唯一过程分层权威。执行者先按变更的最高风险面选择一层；同一行为切片只执行该层要求的
@@ -59,6 +73,12 @@ CI 通过不代表未测试行为绝对正确。自动测试遗漏由人工 UAT 
    等价、确定性、非零退出合同。
 
 ## 3. 测试维度与依赖分类
+
+R-00 的 `Release candidate contracts` job 运行 [显式登记](manifests/release-reports.json) 的本地等价合同；
+它不是发布 admission。`Windows release candidate build` 仅在手动候选 dispatch 中执行，必须通过同源上游证据、
+首次 attempt、审批设置/master 保护与精确工具锁预检，再创建不可复用的 deployment 记录。
+其 build/upload artifact 和 `VerifyCiEvidence` 参数/期限见 [Release 模块入口](release/contracts/README.md)。
+PR 中该候选 job 的 skipped 状态、单独合同 JUnit、或者只产生 deployment 都不能作为 R-00 PASS。
 
 测试继续使用两个独立维度：
 

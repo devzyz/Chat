@@ -112,7 +112,7 @@ jobs:
         run: .\scripts\windows-local.ps1 -Task CheckTestStructure
 
       - name: Verify GitHub asset download handling
-        shell: pwsh
+        shell: powershell
         run: .\scripts\ci\test-vcpkg-github-asset.ps1
 
       - name: Run ChatServer instance script test modules

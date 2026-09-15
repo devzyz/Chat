@@ -79,6 +79,10 @@ compatibility/drift check after restoring/building its pinned protobuf tools.
 
 ## Module documentation
 
+Release R-00 的独立入口和证据边界见 [Release candidate contracts](release/contracts/README.md)。
+它使用显式登记的 16 项 Unit/Component 合同，不加入现有 Server/Qt/Varify 报告总数；
+正式 candidate build/upload 还须提供同源 hosted 身份与下载回验证据。
+
 Every module directory must contain a `README.md` that records:
 
 - production entry and observable contract;
