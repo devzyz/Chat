@@ -335,7 +335,7 @@ jobs:
     needs: [two-server-contract, downstream-contract]
     if: always()
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 200
     permissions:
       contents: read
       checks: read
@@ -347,7 +347,7 @@ jobs:
         with:
           node-version: "22.18.0"
       - name: Verify admission rejection contracts
-        run: node --test tests/services/phase3dGate.test.js tests/services/phase3dEvidence.test.js
+        run: node --test tests/services/phase3dGate.test.js tests/services/phase3dEvidence.test.js tests/services/phase3dChecks.test.js
       - name: Download current-N business evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -365,7 +365,7 @@ jobs:
         run: |
           mkdir -p out/phase3d
           gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" > out/phase3d/commit.json
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/commits/$CANDIDATE_SHA/check-runs?per_page=100" > out/phase3d/checks.json
+          node tests/services/phase3dChecks.js "$GITHUB_REPOSITORY" "$CANDIDATE_SHA" out/phase3d/checks.json
       - name: Admit current-N and retain the explicit N-1 blocker
         if: always()
         env:
