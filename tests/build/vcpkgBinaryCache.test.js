@@ -7,6 +7,17 @@ const { test } = require('node:test');
 
 const script = path.resolve(__dirname, '../../scripts/ci/vcpkgBinaryCache.js');
 
+test('Linux binary cache path is bound on the runner before dependency restoration', () => {
+    const workflow = fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/linux-ci.yml'), 'utf8');
+    const preflight = workflow.slice(workflow.indexOf('  linux-preflight:'));
+    const jobEnv = preflight.slice(preflight.indexOf('    env:'), preflight.indexOf('    steps:'));
+    // GitHub cannot resolve runner context in jobs.<id>.env; YAML parsing alone cannot catch this.
+    assert.doesNotMatch(jobEnv, /\$\{\{\s*runner\./);
+    const binding = preflight.indexOf('VCPKG_BINARY_SOURCES=clear;files,$RUNNER_TEMP/vcpkg-binary-cache,readwrite');
+    assert.ok(binding > 0 && binding < preflight.indexOf('- name: Run fail-closed Linux preflight'));
+    assert.match(preflight.slice(binding).split('\n')[0], /GITHUB_ENV/);
+});
+
 test('stale restored cache is refreshed once; a warm run does not upload identical archives', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-cache-test-'));
     try {

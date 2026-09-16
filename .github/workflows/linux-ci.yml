@@ -38,7 +38,6 @@ jobs:
     env:
       VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
       VCPKG_DISABLE_METRICS: "1"
-      VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
       CHAT_EVIDENCE_ROOT: ${{ github.workspace }}/out/phase3c/preflight
       CHAT_EXPECTED_GNU_VERSION: "13.3.0"
       CHAT_EXPECTED_CMAKE_VERSION: "3.28.3"
@@ -90,7 +89,9 @@ jobs:
 
       - name: Prepare environment-specific binary cache key
         id: binary-cache-key
-        run: node scripts/ci/vcpkgBinaryCache.js prepare "$RUNNER_TEMP/vcpkg-binary-cache" x64-linux-chat-release
+        run: |
+          node scripts/ci/vcpkgBinaryCache.js prepare "$RUNNER_TEMP/vcpkg-binary-cache" x64-linux-chat-release
+          echo "VCPKG_BINARY_SOURCES=clear;files,$RUNNER_TEMP/vcpkg-binary-cache,readwrite" >> "$GITHUB_ENV"
 
       - name: Restore vcpkg binary archives
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
