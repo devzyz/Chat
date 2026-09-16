@@ -115,6 +115,10 @@ jobs:
         shell: powershell
         run: .\scripts\ci\test-vcpkg-github-asset.ps1
 
+      - name: Verify binary cache refresh behavior
+        shell: pwsh
+        run: node --test tests/build/vcpkgBinaryCache.test.js
+
       - name: Run ChatServer instance script test modules
         shell: pwsh
         run: .\scripts\windows-local.ps1 -Task RunScriptTests
@@ -192,18 +196,29 @@ jobs:
               throw "vcpkg version check failed with exit code $LASTEXITCODE."
           }
 
+      - name: Prepare environment-specific binary cache key
+        id: binary-cache-key
+        shell: pwsh
+        run: node scripts/ci/vcpkgBinaryCache.js prepare "$env:RUNNER_TEMP/vcpkg-binary-cache" x64-windows-chat-release
+
       - name: Restore vcpkg binary archives
         id: vcpkg-binary-cache
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ runner.temp }}\vcpkg-binary-cache
-          key: vcpkg-binary-${{ runner.os }}-fc3be1ebea7eaeb3071fe716ac65713af1f3a146-${{ hashFiles('vcpkg.json', 'triplets/x64-windows-chat-release.cmake') }}
-          restore-keys: |
-            vcpkg-binary-${{ runner.os }}-fc3be1ebea7eaeb3071fe716ac65713af1f3a146-
+          key: ${{ steps.binary-cache-key.outputs.key }}
+          restore-keys: ${{ steps.binary-cache-key.outputs.prefix }}
+
+      - name: Record restored binary archives
+        id: binary-cache-before
+        shell: pwsh
+        run: node scripts/ci/vcpkgBinaryCache.js snapshot "$env:RUNNER_TEMP/vcpkg-binary-cache"
 
       - name: Restore server dependencies with binary archives
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
           $binaryCache = Join-Path $env:RUNNER_TEMP 'vcpkg-binary-cache'
           [void](New-Item -ItemType Directory -Path $binaryCache -Force)
           $env:VCPKG_BINARY_SOURCES = "clear;files,$binaryCache,readwrite"
@@ -220,19 +235,22 @@ jobs:
               -VcpkgPackagesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-packages') `
               -ServerIntermediateRoot (Join-Path $env:RUNNER_TEMP 'server-msbuild') `
               -ServerTriplet x64-windows-chat-release `
-              -ServerHostTriplet x64-windows-chat-release
+              -ServerHostTriplet x64-windows-chat-release |
+              Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'vcpkg-restore.log')
+          if ($LASTEXITCODE -ne 0) { throw "Dependency restore failed: $LASTEXITCODE" }
 
-      - name: Save vcpkg binary archives after cache miss
-        if: steps.vcpkg-binary-cache.outputs.cache-hit != 'true'
+      - name: Report actual binary package reuse
+        id: binary-cache-after
+        if: always() && steps.binary-cache-before.outcome == 'success'
+        shell: pwsh
+        run: node scripts/ci/vcpkgBinaryCache.js report "$env:RUNNER_TEMP/vcpkg-binary-cache" "$env:RUNNER_TEMP/vcpkg-restore.log"
+
+      - name: Save new binary packages under an immutable key
+        if: success() && steps.binary-cache-after.outputs.changed == 'true'
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ runner.temp }}\vcpkg-binary-cache
-          key: ${{ steps.vcpkg-binary-cache.outputs.cache-primary-key }}
-
-      - name: Confirm exact vcpkg binary cache hit
-        if: steps.vcpkg-binary-cache.outputs.cache-hit == 'true'
-        shell: pwsh
-        run: Write-Host 'The exact vcpkg binary archive cache key was restored.'
+          key: ${{ steps.binary-cache-key.outputs.key }}
 
       - name: Remove vcpkg binary archives before MSBuild
         shell: pwsh

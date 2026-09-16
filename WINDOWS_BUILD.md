@@ -77,11 +77,22 @@ cache-free `RestoreServers` step completed in 68 minutes 37 seconds. The
 workflow now caches only vcpkg binary archives. It does not cache
 `vcpkg_installed`, buildtrees, packages, MSBuild intermediates or final release
 directories: those are derived state and are recreated and verified by every
-run. After dependency restoration, the archive directory is saved on a new-key
-miss or reported by a separate step on an exact-key hit, then removed before
-MSBuild to reduce runner disk use. Acceptance of the cache change requires one
-new-key miss-and-save run followed by one same-key exact-hit run; those two
-outcomes have not yet been verified. The Node setup step may cache npm's
+run. Windows and Linux CI use `scripts/ci/vcpkgBinaryCache.js` to group binary
+archives by runner OS/architecture/image version, manifest and triplet (plus
+the Linux tool lock on Linux). Each run restores the latest matching group and
+records its archive inventory. Successful dependency restoration saves changed
+archives under a new run/attempt key, even when an older archive was restored;
+unchanged archives are not uploaded again. GitHub archive hits are not evidence
+of vcpkg package reuse: job summaries show actual restored/built package counts.
+Windows removes the archive directory after saving, before MSBuild, to reduce
+disk use. Installed trees and intermediate outputs remain uncached.
+
+The v2 namespace deliberately excludes the stale legacy cache. Its first run
+is cold; acceptance requires a successful save followed by a separate warm run
+in the same cache scope with actual package reuse and no unnecessary save.
+Runner image or dependency changes form a new group. PR caches remain scoped
+by GitHub; a merged base-branch run can seed later PRs. Hosted cold/warm evidence
+is still pending for this change. The Node setup step may cache npm's
 download cache keyed by `package-lock.json`; it does not cache `node_modules`,
 which is always recreated by `npm ci`.
 

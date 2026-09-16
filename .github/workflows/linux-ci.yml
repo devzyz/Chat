@@ -38,6 +38,7 @@ jobs:
     env:
       VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
       VCPKG_DISABLE_METRICS: "1"
+      VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
       CHAT_EVIDENCE_ROOT: ${{ github.workspace }}/out/phase3c/preflight
       CHAT_EXPECTED_GNU_VERSION: "13.3.0"
       CHAT_EXPECTED_CMAKE_VERSION: "3.28.3"
@@ -84,6 +85,24 @@ jobs:
           pkg-config --exists libtirpc
           test -f /usr/include/tirpc/rpc/rpc.h
 
+      - name: Verify binary cache refresh behavior
+        run: node --test tests/build/vcpkgBinaryCache.test.js
+
+      - name: Prepare environment-specific binary cache key
+        id: binary-cache-key
+        run: node scripts/ci/vcpkgBinaryCache.js prepare "$RUNNER_TEMP/vcpkg-binary-cache" x64-linux-chat-release
+
+      - name: Restore vcpkg binary archives
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.binary-cache-key.outputs.key }}
+          restore-keys: ${{ steps.binary-cache-key.outputs.prefix }}
+
+      - name: Record restored binary archives
+        id: binary-cache-before
+        run: node scripts/ci/vcpkgBinaryCache.js snapshot "$RUNNER_TEMP/vcpkg-binary-cache"
+
       - name: Run fail-closed Linux preflight
         # Leave time for blocked evidence and artifact upload before the job cap.
         timeout-minutes: 57
@@ -94,6 +113,18 @@ jobs:
           timeout --signal=TERM --kill-after=30s 55m \
             bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-00-T2 \
             2>&1 | tee "$CHAT_EVIDENCE_ROOT/preflight.log"
+
+      - name: Report actual binary package reuse
+        id: binary-cache-after
+        if: always() && steps.binary-cache-before.outcome == 'success'
+        run: node scripts/ci/vcpkgBinaryCache.js report "$RUNNER_TEMP/vcpkg-binary-cache" "$CHAT_EVIDENCE_ROOT/preflight.log"
+
+      - name: Save new binary packages under an immutable key
+        if: success() && steps.binary-cache-after.outputs.changed == 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.binary-cache-key.outputs.key }}
 
       - name: Verify shared production targets and ProcessHarness
         run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-01

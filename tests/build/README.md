@@ -1,5 +1,22 @@
 # Linux preflight contract
 
+## CI binary dependency cache
+
+Run `node --test tests/build/vcpkgBinaryCache.test.js` for the shared Windows/Linux
+cache regression. It uses temporary archive fixtures and invokes the public
+`scripts/ci/vcpkgBinaryCache.js` CLI; it does not restore or build dependencies.
+Windows static checks and Linux preflight execute this test.
+
+The regression covers a restored old ABI archive followed by newly compiled
+packages, immutable refresh keys, environment separation, an unchanged warm
+inventory, empty-cache save suppression and missing-snapshot rejection. Actual
+vcpkg restore/build counts come from the dependency log, independently of the
+GitHub cache action's hit flag. Only successful restore/preflight can save;
+failed jobs can report diagnostics but cannot publish a new cache. These local
+fixtures do not replace hosted cold-save/warm-reuse evidence.
+
+## Production preflight
+
 Production source ownership is shared with the explicit MSBuild project entries
 through `cmake/ServerSourceOwnership.cmake`. Linux builds the same GateTransport,
 GateRequest, GateGrpcClients, StatusTransport, StatusRouting, ChatTransport,
