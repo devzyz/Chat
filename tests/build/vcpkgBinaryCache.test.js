@@ -139,3 +139,21 @@ test('both workflows restore layered keys and save before business builds', () =
         assert.match(workflow, /include-hidden-files: true/);
     }
 });
+
+test('Linux installs dependencies independently of project configuration using the preset inputs', () => {
+    const root = path.resolve(__dirname, '../..');
+    const workflow = fs.readFileSync(path.join(root, '.github/workflows/linux-ci.yml'), 'utf8');
+    const restore = workflow.split('        id: dependency-restore\n')[1].split('\n      - name:')[0];
+    const preset = JSON.parse(fs.readFileSync(path.join(root, 'CMakePresets.json'), 'utf8'))
+        .configurePresets.find(item => item.name === 'linux-x64-release').cacheVariables;
+    assert.match(restore, /"\$VCPKG_ROOT\/vcpkg" install/);
+    assert.doesNotMatch(restore, /cmake|linux-ci\.sh/);
+    assert.match(restore, /set -o pipefail/);
+    assert.ok(restore.includes(`--triplet ${preset.VCPKG_TARGET_TRIPLET}`));
+    assert.ok(restore.includes(`--host-triplet ${preset.VCPKG_HOST_TRIPLET}`));
+    for (const [flag, setting] of [['--overlay-triplets', 'VCPKG_OVERLAY_TRIPLETS'],
+        ['--x-install-root', 'VCPKG_INSTALLED_DIR']]) {
+        assert.ok(restore.includes(`${flag}="${preset[setting].replace('${sourceDir}', '$GITHUB_WORKSPACE')}"`));
+    }
+    assert.ok(restore.includes('--x-manifest-root="$GITHUB_WORKSPACE"'));
+});

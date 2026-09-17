@@ -28,6 +28,10 @@ actual restored/built package counts, installation time and save reason. Seven-d
 artifacts retain the dependency log, installed package ABI records and compiler detection
 logs. A failed restore can report diagnostics but cannot save new archives.
 
+Linux runs the manifest install independently, with the same triplets, overlay and
+installed root as the production CMake preset. Project configuration stays in preflight
+after cache saving, so a CMake project error cannot discard successfully built dependencies.
+
 Regression fixtures cover image updates, dependency edits, platform separation,
 v2 migration, immutable refresh keys, unchanged warm inventories and empty-cache
 suppression. They do not prove hosted ABI reuse. Validate migration and then a second

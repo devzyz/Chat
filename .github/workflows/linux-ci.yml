@@ -106,12 +106,18 @@ jobs:
         id: binary-cache-before
         run: node scripts/ci/vcpkgBinaryCache.js snapshot "$RUNNER_TEMP/vcpkg-binary-cache"
 
-      - name: Restore dependencies with the production CMake preset
+      - name: Restore dependencies before project configuration
         id: dependency-restore
         timeout-minutes: 50
         run: |
           set -o pipefail
-          cmake --preset linux-x64-release 2>&1 | tee "$RUNNER_TEMP/vcpkg-restore.log"
+          "$VCPKG_ROOT/vcpkg" install \
+            --triplet x64-linux-chat-release \
+            --host-triplet x64-linux-chat-release \
+            --overlay-triplets="$GITHUB_WORKSPACE/triplets" \
+            --x-manifest-root="$GITHUB_WORKSPACE" \
+            --x-install-root="$GITHUB_WORKSPACE/.ci/vcpkg_installed" \
+            2>&1 | tee "$RUNNER_TEMP/vcpkg-restore.log"
 
       - name: Report actual binary package reuse
         id: binary-cache-after
