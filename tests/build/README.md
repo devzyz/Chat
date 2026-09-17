@@ -1,13 +1,11 @@
 # Linux preflight contract
 
-## CI execution budgets
+## CI routing and budgets
 
-Run `node --test tests/build/ciBudget.test.js` to verify that the Windows job
-leaves at least 30 minutes after the observed 174-minute cold dependency restore
-for compilation, tests and packaging. The fake-clock admission regression invokes
-the real check poller through the upstream workflow budgets and verifies that
-the Linux job retains ten minutes for setup and failure evidence. Windows static
-checks run this regression without restoring dependencies.
+`node --test tests/build/ciBudget.test.js` checks develop quick regression, master/weekly/manual full regression,
+master-only publication, failure dependencies and the observed cold Windows build budget.
+`scripts/ci/test-workflows.ps1 -ToolRoot <temporary-directory>` validates every workflow with pinned actionlint.
+There is no cross-workflow check poller. The main workflow uses job dependencies and two stable required checks.
 
 ## CI binary dependency cache
 
@@ -16,13 +14,26 @@ cache regression. It uses temporary archive fixtures and invokes the public
 `scripts/ci/vcpkgBinaryCache.js` CLI; it does not restore or build dependencies.
 Windows static checks and Linux preflight execute this test.
 
-The regression covers a restored old ABI archive followed by newly compiled
-packages, immutable refresh keys, environment separation, an unchanged warm
-inventory, empty-cache save suppression and missing-snapshot rejection. Actual
-vcpkg restore/build counts come from the dependency log, independently of the
-GitHub cache action's hit flag. Only successful restore/preflight can save;
-failed jobs can report diagnostics but cannot publish a new cache. These local
-fixtures do not replace hosted cold-save/warm-reuse evidence.
+The v3 restore order is platform/architecture/image-family/target-and-host-triplet
+plus dependency fingerprint, then the same platform/triplet family, then the
+explicit v2 keys previously saved by PR #6. `ImageVersion` is diagnostic only;
+vcpkg still checks each package ABI, including compiler tracking. The fingerprint
+includes the manifest, triplet, optional registry configuration and Linux tool lock.
+Only binary archives are cached; current source is always built and tested.
+
+Changed archives and a restored older namespace are saved under a unique run/attempt
+key after successful dependency restoration, before business compilation. An unchanged
+warm cache is not uploaded. The summary records the restored key, image revision,
+actual restored/built package counts, installation time and save reason. Seven-day
+artifacts retain the dependency log, installed package ABI records and compiler detection
+logs. A failed restore can report diagnostics but cannot save new archives.
+
+Regression fixtures cover image updates, dependency edits, platform separation,
+v2 migration, immutable refresh keys, unchanged warm inventories and empty-cache
+suppression. They do not prove hosted ABI reuse. Validate migration and then a second
+unchanged run: complete matching archives should yield zero rebuilt dependencies.
+PR caches remain scoped to that PR; develop/master push builds seed their own caches
+for later PRs. The first target-branch build may therefore be cold.
 
 ## Production preflight
 

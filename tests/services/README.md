@@ -1,57 +1,20 @@
 # Disposable dependency coordinator and adapters (3C-02/04/06)
 
-## Current-N evidence gate (3C-09)
+## Integration and business regression
 
-The final 3D admission job waits for required checks on the exact candidate SHA,
-including the independent Windows workflow. It polls every 30 seconds for at most
-260 minutes within a 270-minute job deadline. This covers the Windows 240-minute
-cold-build budget plus static checks and scheduling margin. Missing or queued checks remain
-pending; any completed non-success check fails immediately. The newest check ID
-for each required name is authoritative. This only reads status; it never reruns
-builds or accepts incomplete checks. The final snapshot still passes through all
-existing admission assertions. Offline waiting/failure regressions run with
-`node --test tests/services/phase3dChecks.test.js`.
-
-History recovery pages contain at most ten rows and must fit the existing 2048-byte
-TCP body limit. `E03-RECOVER-03` verifies nonempty forward progress, the row cap and
-every persisted ID/UUID/hash across shortened pages; `HistoryResponse.h` owns the
-byte-bound serialization. The Linux preflight's `phase3d-history-response` support
-regression checks the codec boundary without external services.
-
-The hosted workflow runs the production build and the `3C-07` superset once,
-then downloads that run's service evidence into the downstream job. The default
-`scripts/linux-ci.sh --phase 3C --configuration Release` invocation aggregates
-those existing results; it does not install dependencies or rerun services.
-Local callers must provide `CHAT_JOB_RESULTS`, the same-candidate service outputs
-and the compatibility inventory result. Missing inputs fail closed.
-
-`serviceReports.js` remains the single registration owner. It writes
-`phase3c-reports.json` with actual case IDs/names/results, owner, Level, enclosing
-CTest deadline, relative report paths, candidate SHA and report digests. The gate
-checks that manifest against the current registration, parses every JUnit case,
-and rejects missing, duplicate, skipped, failed, modified or other-SHA service
-evidence. Successful build/POSIX/service job results, process and service teardown,
-and the coordinator's credential/mail-body redaction result are all mandatory.
-The redaction result covers those generated secrets, not an unrestricted scan of
-all files or upstream build logs.
-
-`phase3c-gate-evidence` contains the validated manifest, `junit/*.xml`, `gate.json`,
-`teardown.json`, `redaction.json` and the compatibility result. One aggregate JUnit
-case records the gate verdict; no placeholder CLOSE test IDs are manufactured.
-`currentNPass` can be true while `releaseEligible` remains false and all five
-runtime combinations are bootstrap skips. No compatibility or release approval
-is implied by a successful current-N gate. Windows checks remain separate and
-are required before whole-phase acceptance.
+The reusable Linux workflow runs on master PR/push, weekly develop checks and manual full checks.
+Its final job validates this run's 3C service reports and 3D E2E reports, their source SHA and teardown.
+It does not poll Windows checks or query published releases. The parent CI workflow directly depends
+on both Windows and Linux before it allows master publication. N-1 compatibility is deferred.
 
 ```sh
-python3 tests/services/gate_test.py
-node --test tests/compatibility/bootstrap.test.js
-bash scripts/linux-ci.sh --phase 3C --configuration Release --junit-dir out/phase3c/gate
+python tests/services/gate_test.py
+node --test tests/services/phase3dEvidence.test.js
 ```
 
-The workflow supplies `CHAT_JOB_RESULTS`; optional root overrides are
-`CHAT_PHASE3C_SERVICES_ROOT` and `CHAT_COMPATIBILITY_ROOT`. The `--junit-dir`
-argument is the aggregate artifact root (reports are under its `junit/` folder).
+The existing report writers and real business cases are retained. Missing/failed/skipped cases,
+modified reports, wrong SHA and incomplete cleanup still fail. `phase3dEvidence.js` owns
+business evidence validation; `gate.py` owns service report validation.
 
 ## Four production processes (3C-07)
 
@@ -300,25 +263,11 @@ The complete public current-N entry is:
 bash scripts/linux-ci.sh --phase 3D --configuration Release --junit-dir out/phase3d/contracts
 ```
 
-`phase3d-release-admission` consumes the same run's 3C promotion inventory and
-gate, the 33-case 3D manifest, and all nine existing checks for the candidate.
-PR checkout SHA ancestry must contain that candidate; dispatch checks use the
-candidate directly. It emits `phase3d-gate-evidence`, `release-admission.json`,
-the original E2E reports, and the actual `E03-CLOSE-01` aggregation result in
-`linux_phase3d_gate.xml`. Missing/failed checks, report tampering, wrong SHA,
-missing restart/fault evidence or incomplete cleanup fail admission.
-
-The five `E03-COMPAT-01..05` entries reuse the 3C bootstrap resolver for the two
-client/service, two peer RPC and schema directions. An empty published release
-inventory yields five **unexecuted** bootstrap entries/skips, leaves G-017 open,
-and keeps `releaseEligible=false`. Any published runtime requires baseline review
-and blocks this bootstrap route; no old source is rebuilt or fake N-1 substituted.
-Current-N acceptance may route to R-00 preparation, but does not authorize release.
-
-Support regression includes `phase3dGate.test.js`, `relay.test.js` and the existing
-driver/compatibility tests. The compiled relay test uses real local sockets and
-checks exact dropped/replayed bytes; only hosted E2E proves service faults and
-graceful relay cleanup. Synthetic admission inputs are validator tests, not E2E.
+The full selector validates its 33 business cases through `phase3dEvidence.js` and the
+same-run teardown files. Windows completion is handled by the parent CI dependency,
+not by a GitHub API poller. N-1 runtime compatibility is deferred; existing protocol
+and schema migration tests continue to run. `relay.test.js` and the driver tests
+retain real local-socket failure/recovery coverage.
 
 The partial `3D-03-history` selector adds four `E03-RECOVER-01..04` cases in
 `linux_phase3d_recovery.xml` (26 cumulative cases). It publicly sends 21 messages,
@@ -408,8 +357,7 @@ Missing or failed evidence remains a failure, including failures before startup.
 These seven cases supplement the five loopback
 [client process contracts](../../chat/tests/session-driver/README.md);
 they do not replace friendship, bidirectional messaging, recovery/history or
-N/N-1 compatibility acceptance. An unqualified/full Phase 3D selector returns
-nonzero until the downstream phase gate is implemented.
+N/N-1 compatibility acceptance. The full Phase 3D selector includes friendship, messaging and recovery cases.
 
 Support regression (provide the configured same-source client binary):
 

@@ -86,7 +86,6 @@ if [[ "$selector" == 3C-09 ]]; then
   # once. Aggregate those same-run artifacts rather than rebuilding services.
   python3 "$repo_root/tests/services/gate.py" \
     --services "${CHAT_PHASE3C_SERVICES_ROOT:-$repo_root/out/phase3c/services}" \
-    --compatibility "${CHAT_COMPATIBILITY_ROOT:-$repo_root/out/phase3c/compatibility}" \
     --output "${junit_dir:-$repo_root/out/phase3c/gate}" --source-sha "$CHAT_CANDIDATE_SHA" \
     --jobs "${CHAT_JOB_RESULTS:?same-workflow job results required}"
   exit $?

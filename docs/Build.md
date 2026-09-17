@@ -77,14 +77,15 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 - 上游 develop 检查中的 GateServer、StatusServer、ChatServer 各自目录 MUST 包含自身 EXE、`config.ini` 和运行所需 app-local DLL。
 - ChatServer 发布目录 MUST 包含受支持的实例示例配置。
 - 每个 Server ZIP 解压后不得依赖另一个 Server ZIP 的文件。
-- Qt ZIP 和 VarifyServer ZIP 同样 MUST 自包含。
+- Qt ZIP MUST 自包含；最终合并包 MUST 包含 VarifyServer 运行库及其相邻 proto 目录。
 - artifact 命名、目录层级和必需文件变化 MUST 同步 CI 校验与文档。
 
-R-00 候选构建使用 [`scripts/release/release.ps1`](../scripts/release/release.ps1) 组合现有 Windows 构建任务，
-生成唯一 `Chat-<version>-windows-x64.zip`。候选中的配置必须为无值 `.template`；Server 携带 MSVC runtime，
-Qt 携带 MinGW/runtime/plugins，Varify 携带 Node runtime/锁定依赖。具体允许文件、模板、工具版本、一次构建和
-下载回验合同见 [Release 模块入口](../tests/release/contracts/README.md)。本机入口不执行 release restore/build；
-只有通过审批设置、同源上游证据和工具锁预检的 GitHub-hosted Windows/master 首次运行可以构建候选。
+master push 的全量 CI 成功后，使用 [`scripts/release/package.py`](../scripts/release/package.py)
+组装本次运行的 Windows 制品，生成 `Chat-<version>-windows-x64.zip`，不重新编译业务程序。
+候选配置使用无值 `.template`；Server 携带 MSVC runtime，Qt 携带 MinGW/runtime/plugins，
+Varify 携带 Node runtime/锁定依赖，并由合并包的相邻 proto 目录提供协议文件。
+新 Windows runner 下载该 ZIP 完成启动冒烟后，自动上传、下载回验并发布；无人工审批。
+同 SHA 的未发布草稿允许重试，已发布版本不可覆盖。验证范围和命令见 [Release 模块入口](../tests/release/contracts/README.md)。
 
 ## 跨平台要求
 

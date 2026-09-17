@@ -1,9 +1,7 @@
 name: Linux real dependencies and compatibility
 
 on:
-  workflow_dispatch:
-  pull_request:
-    branches: [develop, master, "phase-3c-integration-*"]
+  workflow_call:
 
 permissions:
   contents: read
@@ -87,22 +85,62 @@ jobs:
       - name: Verify binary cache refresh behavior
         run: node --test tests/build/vcpkgBinaryCache.test.js
 
-      - name: Prepare environment-specific binary cache key
+      - name: Prepare layered binary cache keys
         id: binary-cache-key
         run: |
           node scripts/ci/vcpkgBinaryCache.js prepare "$RUNNER_TEMP/vcpkg-binary-cache" x64-linux-chat-release
           echo "VCPKG_BINARY_SOURCES=clear;files,$RUNNER_TEMP/vcpkg-binary-cache,readwrite" >> "$GITHUB_ENV"
 
       - name: Restore vcpkg binary archives
+        id: vcpkg-binary-cache
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ runner.temp }}/vcpkg-binary-cache
           key: ${{ steps.binary-cache-key.outputs.key }}
-          restore-keys: ${{ steps.binary-cache-key.outputs.prefix }}
+          restore-keys: |
+            ${{ steps.binary-cache-key.outputs.prefix }}
+            ${{ steps.binary-cache-key.outputs.fallback }}
+            ${{ steps.binary-cache-key.outputs.legacy }}
 
       - name: Record restored binary archives
         id: binary-cache-before
         run: node scripts/ci/vcpkgBinaryCache.js snapshot "$RUNNER_TEMP/vcpkg-binary-cache"
+
+      - name: Restore dependencies with the production CMake preset
+        id: dependency-restore
+        timeout-minutes: 50
+        run: |
+          set -o pipefail
+          cmake --preset linux-x64-release 2>&1 | tee "$RUNNER_TEMP/vcpkg-restore.log"
+
+      - name: Report actual binary package reuse
+        id: binary-cache-after
+        if: always() && steps.binary-cache-before.outcome == 'success'
+        env:
+          CACHE_RESTORED_KEY: ${{ steps.vcpkg-binary-cache.outputs.cache-matched-key }}
+          CACHE_PRIMARY_PREFIX: ${{ steps.binary-cache-key.outputs.prefix }}
+        run: node scripts/ci/vcpkgBinaryCache.js report "$RUNNER_TEMP/vcpkg-binary-cache" "$RUNNER_TEMP/vcpkg-restore.log"
+
+      - name: Save new binary packages under an immutable key
+        if: success() && steps.binary-cache-after.outputs.changed == 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.binary-cache-key.outputs.key }}
+
+      - name: Retain dependency ABI and compiler diagnostics
+        if: always() && steps.dependency-restore.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-vcpkg-diagnostics
+          include-hidden-files: true
+          path: |
+            ${{ runner.temp }}/vcpkg-restore.log
+            .ci/vcpkg_installed/x64-linux-chat-release/share/*/vcpkg_abi_info.txt
+            .ci/vcpkg/buildtrees/detect_compiler/**/*.log
+            .ci/vcpkg/buildtrees/detect_compiler/**/*.txt
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Run fail-closed Linux preflight
         # Leave time for blocked evidence and artifact upload before the job cap.
@@ -114,18 +152,6 @@ jobs:
           timeout --signal=TERM --kill-after=30s 55m \
             bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-00-T2 \
             2>&1 | tee "$CHAT_EVIDENCE_ROOT/preflight.log"
-
-      - name: Report actual binary package reuse
-        id: binary-cache-after
-        if: always() && steps.binary-cache-before.outcome == 'success'
-        run: node scripts/ci/vcpkgBinaryCache.js report "$RUNNER_TEMP/vcpkg-binary-cache" "$CHAT_EVIDENCE_ROOT/preflight.log"
-
-      - name: Save new binary packages under an immutable key
-        if: success() && steps.binary-cache-after.outputs.changed == 'true'
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: ${{ runner.temp }}/vcpkg-binary-cache
-          key: ${{ steps.binary-cache-key.outputs.key }}
 
       - name: Verify shared production targets and ProcessHarness
         run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-01
@@ -187,7 +213,7 @@ jobs:
     name: Phase 3C disposable services
     needs: [linux-preflight, posix-process-contracts]
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 20
     services:
       redis:
         image: redis:7.4.2@sha256:fbdbaea47b9ae4ecc2082ecdb4e1cea81e32176ffb1dcf643d422ad07427e5d9
@@ -251,10 +277,10 @@ jobs:
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
-          CHAT_REDIS_PORT: ${{ job.services.redis.ports[6379] }}
-          CHAT_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
-          CHAT_SMTP_PORT: ${{ job.services.mailpit.ports[1025] }}
-          CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports[8025] }}
+          CHAT_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
+          CHAT_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
+          CHAT_SMTP_PORT: ${{ job.services.mailpit.ports['1025'] }}
+          CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports['8025'] }}
         run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-07
       - name: Preserve fail-closed outer evidence
         if: always()
@@ -277,7 +303,7 @@ jobs:
     name: Linux two-server foundation contract
     needs: [linux-preflight, posix-process-contracts]
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 20
     services:
       redis:
         image: redis:7.4.2@sha256:fbdbaea47b9ae4ecc2082ecdb4e1cea81e32176ffb1dcf643d422ad07427e5d9
@@ -340,10 +366,10 @@ jobs:
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
-          CHAT_REDIS_PORT: ${{ job.services.redis.ports[6379] }}
-          CHAT_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
-          CHAT_SMTP_PORT: ${{ job.services.mailpit.ports[1025] }}
-          CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports[8025] }}
+          CHAT_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
+          CHAT_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
+          CHAT_SMTP_PORT: ${{ job.services.mailpit.ports['1025'] }}
+          CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports['8025'] }}
         run: bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D
       - name: Preserve fail-closed outer evidence
         if: always()
@@ -362,104 +388,43 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  phase3d-release-admission:
-    name: Phase 3D current-N release admission
-    needs: [two-server-contract, downstream-contract]
-    if: always()
-    runs-on: ubuntu-24.04
-    # Covers the 260-minute check poll plus setup and fail-closed evidence upload.
-    timeout-minutes: 270
-    permissions:
-      contents: read
-      checks: read
-    steps:
-      - name: Check out candidate source
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Select locked Node runtime
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: "22.18.0"
-      - name: Verify admission rejection contracts
-        run: node --test tests/services/phase3dGate.test.js tests/services/phase3dEvidence.test.js tests/services/phase3dChecks.test.js
-      - name: Download current-N business evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: phase3d-contract-evidence
-          path: out/phase3d/contracts
-      - name: Reuse this run's accepted Phase 3C and promotion inventory
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: phase3c-gate-evidence
-          path: out/phase3d/phase3c
-      - name: Bind candidate checks and actual checkout ancestry
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          mkdir -p out/phase3d
-          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" > out/phase3d/commit.json
-          node tests/services/phase3dChecks.js "$GITHUB_REPOSITORY" "$CANDIDATE_SHA" out/phase3d/checks.json
-      - name: Admit current-N and retain the explicit N-1 blocker
-        if: always()
-        env:
-          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          node tests/services/phase3dGate.js out/phase3d/contracts out/phase3d/phase3c/gate \
-            out/phase3d/gate "$GITHUB_SHA" "$CANDIDATE_SHA" out/phase3d/commit.json out/phase3d/checks.json
-      - name: Upload current-N gate and release admission
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: phase3d-gate-evidence
-          path: out/phase3d/gate/
-          if-no-files-found: error
-          retention-days: 7
-
   downstream-contract:
-    name: Phase 3C downstream hard gate
-    needs: [linux-preflight, posix-process-contracts, disposable-services]
-    if: always()
+    name: Integration report checks
+    needs: [linux-preflight, posix-process-contracts, disposable-services, two-server-contract]
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    env:
-      CHAT_RELEASE_INVENTORY: ${{ github.workspace }}/out/phase3c/releases.json
-      CHAT_JOB_RESULTS: '{"linux-preflight":"${{ needs.linux-preflight.result }}","posix-process-contracts":"${{ needs.posix-process-contracts.result }}","disposable-services":"${{ needs.disposable-services.result }}"}'
     steps:
-      - name: Check out candidate source
+      - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Select locked Node runtime
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: "22.18.0"
-      - name: Test compatibility and evidence failure propagation
+      - name: Test report failure propagation
         run: |
-          node --test tests/compatibility/bootstrap.test.js
           python3 tests/services/gate_test.py
-      - name: Download this run's service evidence
+          node --test tests/services/phase3dEvidence.test.js
+      - name: Download service reports
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: phase3c-services-evidence
           path: out/phase3c/services
-      - name: Resolve published runtime baseline inventory
+      - name: Download business reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phase3d-contract-evidence
+          path: out/phase3d/contracts
+      - name: Check all reports and cleanup
         env:
-          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+          CHAT_JOB_RESULTS: '{"linux-preflight":"${{ needs.linux-preflight.result }}","posix-process-contracts":"${{ needs.posix-process-contracts.result }}","disposable-services":"${{ needs.disposable-services.result }}"}'
+          BUSINESS_RESULT: ${{ needs.two-server-contract.result }}
         run: |
-          mkdir -p out/phase3c
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$CHAT_RELEASE_INVENTORY"
-          result=0
-          bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-08 || result=$?
-          # Exit 2 is an explicit unexecuted bootstrap matrix, not compatibility PASS.
-          test "$result" -eq 2
-      - name: Aggregate current-N reports and preserve compatibility blocker
-        if: always()
-        run: bash scripts/linux-ci.sh --phase 3C --configuration Release --junit-dir out/phase3c/gate
-      - name: Upload phase gate evidence
+          test "$BUSINESS_RESULT" = success
+          python3 tests/services/gate.py --services out/phase3c/services --output out/phase3c/gate --source-sha "$SOURCE_SHA" --jobs "$CHAT_JOB_RESULTS"
+          node scripts/ci/verify-service-reports.js out/phase3d/contracts "$SOURCE_SHA"
+      - name: Upload report validation
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: phase3c-gate-evidence
-          path: |
-            out/phase3c/gate/
-            out/phase3c/compatibility/
+          name: integration-report-checks
+          path: out/phase3c/gate/
           if-no-files-found: error
           retention-days: 7

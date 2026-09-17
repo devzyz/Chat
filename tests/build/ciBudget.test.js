@@ -3,41 +3,50 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-const { waitForChecks } = require('../services/phase3dChecks');
-const { requiredChecks } = require('../services/phase3dGate');
+const workflow = name => fs.readFileSync(path.join(__dirname, '../../.github/workflows', name), 'utf8');
+const ci = workflow('ci.yml');
+const job = (text, name) => text.split(`  ${name}:`)[1]?.split(/\r?\n  [\w-]+:/)[0];
 
-function jobMinutes(file, job) {
-    const text = fs.readFileSync(path.resolve(__dirname, '../../.github/workflows', file), 'utf8');
-    const body = text.split(`  ${job}:`)[1]?.split(/\r?\n  [\w-]+:/)[0];
-    assert.ok(body, `Missing job ${job}`);
-    return Number(body.match(/^    timeout-minutes: (\d+)/m)?.[1]);
-}
-
-test('Windows budget covers the observed cold restore plus build, tests and packaging', () => {
-    // Run 35098718644: restore took 174 minutes; the 180-minute job killed test compilation.
-    assert.ok(jobMinutes('windows-ci.yml', 'servers-release') >= 174 + 30);
+test('develop uses quick regression; master, weekly and manual runs use full regression', () => {
+    const condition = job(ci, 'linux').match(/^    if: (.+)$/m)[1];
+    const full = new Function('github', `return ${condition};`);
+    for (const [event_name, ref, base_ref, expected] of [
+        ['pull_request', 'refs/pull/7/merge', 'develop', false],
+        ['push', 'refs/heads/develop', '', false],
+        ['pull_request', 'refs/pull/7/merge', 'master', true],
+        ['push', 'refs/heads/master', '', true],
+        ['schedule', 'refs/heads/develop', '', true],
+        ['workflow_dispatch', 'refs/heads/feature', '', true]
+    ]) assert.equal(full({ event_name, ref, base_ref }), expected);
+    assert.match(ci, /cron: '17 19 \* \* 0'/);
+    assert.match(ci, /push:\s+branches: \[develop, master\]/);
+    assert.match(ci, /pull_request:\s+branches: \[develop, master\]/);
 });
 
-test('admission waits through the Windows budget plus scheduling margin', async () => {
-    const candidateSha = 'b'.repeat(40);
-    const completeAt = (jobMinutes('windows-ci.yml', 'static-check')
-        + jobMinutes('windows-ci.yml', 'servers-release') + 5) * 60000;
-    let clock = 0;
-    const result = await waitForChecks({ candidateSha,
-        now: () => clock, delay: async ms => { clock += ms; },
-        read: () => [{ check_runs: requiredChecks.map((name, id) => ({
-            name, id, head_sha: candidateSha,
-            status: clock >= completeAt ? 'completed' : 'in_progress',
-            conclusion: clock >= completeAt ? 'success' : null
-        })) }]
-    });
-    assert.equal(result[0].check_runs[0].conclusion, 'success');
+test('publication requires master push and all full checks; failed smoke cannot publish', () => {
+    const release = job(ci, 'release');
+    const condition = release.match(/^    if: (.+)$/m)[1];
+    const publish = new Function('github', `return ${condition};`);
+    assert.equal(publish({ event_name: 'push', ref: 'refs/heads/master' }), true);
+    for (const event_name of ['schedule', 'workflow_dispatch', 'pull_request']) {
+        assert.equal(publish({ event_name, ref: 'refs/heads/master' }), false);
+    }
+    assert.equal(publish({ event_name: 'push', ref: 'refs/heads/develop' }), false);
+    assert.match(release, /needs: full/);
+    assert.match(job(ci, 'full'), /needs: \[windows, linux\]/);
+    const releaseWorkflow = workflow('release.yml');
+    assert.match(job(releaseWorkflow, 'smoke'), /needs: package/);
+    assert.match(job(releaseWorkflow, 'publish'), /needs: smoke/);
+    assert.doesNotMatch(job(releaseWorkflow, 'publish'), /always\(\)|environment:/);
+    assert.doesNotMatch(releaseWorkflow, /BuildCandidate|RestoreServers|settings_receipt/);
 });
 
-test('admission job retains time to publish evidence after its polling deadline', async () => {
-    let clock = 0;
-    await assert.rejects(waitForChecks({ candidateSha: 'b'.repeat(40), read: () => [],
-        now: () => clock, delay: async ms => { clock += ms; }
-    }), /required-check-timeout/);
-    assert.ok(jobMinutes('linux-ci.yml', 'phase3d-release-admission') * 60000 >= clock + 10 * 60000);
+test('cold Windows restore and Linux business steps retain setup and cleanup time', () => {
+    const windows = job(workflow('windows-ci.yml'), 'servers-release');
+    assert.ok(Number(windows.match(/timeout-minutes: (\d+)/)[1]) >= 174 + 30);
+    for (const name of ['disposable-services', 'two-server-contract']) {
+        const body = job(workflow('linux-ci.yml'), name);
+        assert.ok(Number(body.match(/timeout-minutes: (\d+)/)[1]) >= 20);
+    }
+    assert.doesNotMatch(workflow('linux-ci.yml'), /phase3dChecks|checks: read/);
 });

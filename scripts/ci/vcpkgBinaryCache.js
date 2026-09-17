@@ -36,30 +36,49 @@ try {
         if (!['x64-windows-chat-release', 'x64-linux-chat-release'].includes(argument)) {
             throw new Error('Unsupported CI triplet');
         }
-        const environment = ['RUNNER_OS', 'RUNNER_ARCH', 'ImageOS', 'ImageVersion'].map(required);
+        // Image revisions can change unrelated software. vcpkg checks each archive's ABI itself.
+        const environment = ['RUNNER_OS', 'RUNNER_ARCH', 'ImageOS'].map(required);
         const inputs = ['vcpkg.json', `triplets/${argument}.cmake`];
         if (fs.existsSync(path.join(repo, 'vcpkg-configuration.json'))) inputs.push('vcpkg-configuration.json');
         if (argument === 'x64-linux-chat-release') inputs.push('scripts/ci/linux-tool-assets.json');
         const hash = createHash('sha256').update(JSON.stringify(environment));
         for (const input of inputs) hash.update(input).update(fs.readFileSync(path.join(repo, input)));
-        const prefix = `vcpkg-binary-v2-${environment[0]}-${environment[1]}-${hash.digest('hex')}-`;
+        // CI uses the same triplet for target and host. Keep both roles explicit in the namespace.
+        const fallback = `vcpkg-binary-v3-${environment.join('-')}-${argument}-${argument}-`;
+        const prefix = `${fallback}${hash.digest('hex')}-`;
+        // One-time bridge to verified PR #6 archives; do not broaden legacy restore across image families.
+        const legacyPrefixes = {
+            'Windows-X64-win22': 'vcpkg-binary-v2-Windows-X64-6d8874220c41f45f55b7178c2d0e2754ea8a765fab8099a2de1a2fd98aedef9c-',
+            'Linux-X64-ubuntu24': 'vcpkg-binary-v2-Linux-X64-c124e21ad37803a7fc7c0fc69921cfb238512222d4d36b98da0c8889a1a08d3f-'
+        };
         const runId = required('GITHUB_RUN_ID');
         const attempt = required('GITHUB_RUN_ATTEMPT');
         if (!/^\d+$/.test(runId) || !/^\d+$/.test(attempt)) throw new Error('Invalid workflow run identity');
         fs.mkdirSync(directory, { recursive: true });
-        output({ prefix, key: `${prefix}${runId}-${attempt}` });
+        output({ prefix, fallback, legacy: legacyPrefixes[environment.join('-')] || '',
+            key: `${prefix}${runId}-${attempt}` });
     } else if (command === 'snapshot') {
         fs.writeFileSync(beforePath, JSON.stringify(inventory(directory)));
     } else if (command === 'report') {
         const before = JSON.parse(fs.readFileSync(beforePath, 'utf8'));
         const after = inventory(directory);
-        const changed = after.length > 0 && JSON.stringify(before) !== JSON.stringify(after);
+        const restoredKey = process.env.CACHE_RESTORED_KEY || '';
+        const primaryPrefix = process.env.CACHE_PRIMARY_PREFIX || '';
+        const promoted = Boolean(restoredKey && primaryPrefix && !restoredKey.startsWith(primaryPrefix));
+        const changed = after.length > 0 && (JSON.stringify(before) !== JSON.stringify(after) || promoted);
         const log = argument && fs.existsSync(argument) ? fs.readFileSync(argument, 'utf8') : '';
         const restored = [...log.matchAll(/Restored (\d+) package\(s\)/g)];
         const built = [...log.matchAll(/Building [^\s:]+:[^\s]+/g)].length;
         const count = restored.length ? restored.reduce((sum, match) => sum + Number(match[1]), 0) : 'unavailable';
-        const summary = `### vcpkg binary cache\n\nRestored packages: ${count}\n\n` +
+        const elapsed = [...log.matchAll(/All requested installations completed successfully in: ([^\r\n]+)/g)]
+            .map(match => match[1]).join(', ') || 'unavailable';
+        const reason = !after.length ? 'empty' : promoted ? 'promote restored namespace' :
+            changed ? 'archive inventory changed' : 'unchanged';
+        const summary = `### vcpkg binary cache\n\nRestored key: ${restoredKey || 'none'}\n\n` +
+            `Image revision: ${process.env.ImageVersion || 'unavailable'}\n\n` +
+            `Promote restored cache: ${promoted}\n\nRestored packages: ${count}\n\n` +
             `Built packages: ${log ? built : 'unavailable'}\n\n` +
+            `Dependency installation time: ${elapsed}\n\nSave reason: ${reason}\n\n` +
             `Archives: ${before.length} -> ${after.length}; save updated cache: ${changed}\n\n`;
         process.stdout.write(summary);
         if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);

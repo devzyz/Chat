@@ -1362,6 +1362,8 @@ function Confirm-TestStructure {
     if ($LASTEXITCODE -ne 0) {
         throw 'Unable to scan the working diff for credential-shaped assignments.'
     }
+    # Workflow expressions reference runtime credentials; they are not literal secret values.
+    $addedDiff = [regex]::Replace($addedDiff, '\$\{\{[^}]+\}\}', '<runtime>')
     if ($addedDiff -match '(?i)(?:password|passwd|secret|token|verification[-_ ]?code|email)\s*[:=]\s*[^\s<]{3,}') {
         throw 'The working diff contains a credential-shaped assignment.'
     }
@@ -1369,15 +1371,15 @@ function Confirm-TestStructure {
     $workflowPath = Require-File (Join-Path $repoRoot '.github\workflows\windows-ci.yml') `
         'The develop Windows CI workflow is missing.'
     $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $ciPath = Require-File (Join-Path $repoRoot '.github\workflows\ci.yml') 'The CI entry workflow is missing.'
+    $ci = Get-Content -LiteralPath $ciPath -Raw
     foreach ($trigger in @('push', 'pull_request')) {
-        $triggerBlock = [regex]::Match(
-            $workflow,
-            "(?ms)^  $([regex]::Escape($trigger)):\s*\r?\n(?<body>(?:^    .*?(?:\r?\n|\z))*)"
-        )
-        if (-not $triggerBlock.Success -or
-            $triggerBlock.Groups['body'].Value -notmatch '(?m)^\s+-\s+develop\s*$') {
-            throw "Windows CI must run for $trigger events targeting develop."
+        if ($ci -notmatch "(?ms)^  $([regex]::Escape($trigger)):\s*\r?\n    branches: \[develop, master\]") {
+            throw "CI must run for $trigger events targeting develop and master."
         }
+    }
+    if ($workflow -notmatch '(?m)^  workflow_call:') {
+        throw 'Windows CI must remain a reusable workflow.'
     }
     foreach ($requiredTask in @('CheckTestStructure', 'RunScriptTests', 'RunServerTests', 'RunClientTests', 'RunVarifyTests')) {
         if ($workflow -notmatch "(?m)-Task\s+$([regex]::Escape($requiredTask))(?:\s|$)") {

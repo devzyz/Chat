@@ -1,5 +1,10 @@
 # 当前自动测试合同矩阵
 
+> CI 精简后的执行范围以 [CI-GOVERNANCE](CI-GOVERNANCE.md) 为准。
+> 业务 Test ID 和覆盖说明保留；旧 R-00 审批/版本占用、跨 workflow admission、N-1 bootstrap 发布阻断已退出当前 CI。
+> 发布测试通过 unittest 自动发现，不再维护独立的 release-reports.json 数量账本。
+
+
 Linux `T10-LNX-01..10` 的静态合同及十五项变异可通过 `3C-00-contracts` selector 执行，
 与 hosted `3C-00-T2` 复用同一函数。每份变异输入先通过完整基线检查；工具相关变异验证获取入口、
 摘要和版本。此入口不新增 Test ID、不恢复依赖、不代表 hosted 编译或业务通过，详见 [构建测试](build/README.md)。
@@ -817,24 +822,8 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 
 ## 8. 矩阵维护规则
 
-R-00 新增 `R01-BUILD-01..16`，Domain 为 Architecture，Level 为 Unit/Component，
-其中 BUILD-01 仅允许 `x.x.x`；BUILD-02 包含 owner dispatch 记录的身份、过期、篡改与重放拒绝。
-owner 为 `tests/release/contracts/test_release.py`，公开入口 `release.ps1 -Task VerifyPlanTask -PlanTask R-00-T1`。
-独立报告 `release_candidate_contracts.xml`，真实登记见 [release-reports.json](manifests/release-reports.json)，
-细分合同与未覆盖的 artifact lifecycle/UAT 边界见 [模块入口](release/contracts/README.md)。
-16 个合同 testcase 不代表正式 hosted build PASS；R-00-T2/T3 要求另外绑定真实 build/upload 证据，G-018 不提前关闭。
-
-3C-07 新登记 `T10-4PROC-01..18`，Domain 为 Architecture/Business、Level 为 Integration，
-owner 为 `tests/services/fourProcessCases.js`，公开入口为 Linux `3C-07` selector，
-独立报告为 `linux_four_process.xml`。合同细分、期限和清理见 [模块入口](services/README.md#four-production-processes-3c-07)。
-本地驱动/报告回归不计为上述真实依赖用例通过；G-015 的验收须查当前状态页的 hosted 证据。
-
-- 新 testcase 合并时必须先分配 Test ID，并更新本矩阵及所属 Module README。
-- 删除、合并或改写 Test ID 必须遵守 D-04 合同变更流程。
-- `CheckTestStructure` 负责验证测试文件和 runner 注册；本矩阵负责语义、lane 和合同归属，二者不能互相替代。
-- 执行证据按 [`CI-GOVERNANCE.md` section 2.1](CI-GOVERNANCE.md#21-比例化执行合同) 分层；本矩阵不要求任务重复
-  full lane、secret/residue/diff audit 或无意义 mutation，这些聚合证据只由 phase closeout 收集一次。
-- 每次发布后将“上一已发布版本”指针更新到本次 artifact，并保存兼容 fixture 和测试结果。
-- 数量变化必须同时说明新增/删除 Test ID、runner testcase 和报告变化，禁止只报告一个总覆盖率百分比。
-- 本机 vcpkg 工具/安装目录、manifest 自动安装、restore/install/remove/update/upgrade、triplet/baseline 或 install root
-  变化受 DG-25 约束；未取得针对精确命令与目标的批准时必须 fail closed，不得把依赖恢复写成普通测试前置动作。
+- 此矩阵维护业务行为和已知覆盖缺口；测试代码与 runner 决定实际执行用例。
+- 新增或改变业务行为时更新相应说明，不为普通修改另建精确数量账本。
+- 发布打包测试由 unittest 自动发现，入口见 [发布测试](release/contracts/README.md)。
+- CI 分层与发布策略见 [CI-GOVERNANCE](CI-GOVERNANCE.md)。原 R-00 16 项审批/登记合同已由包文件、摘要、配置、启动与发布保护测试替换。
+- 本机依赖仍遵守 DG-25；不因测试失败自动恢复或修改 vcpkg。

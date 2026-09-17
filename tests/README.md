@@ -12,27 +12,18 @@ For example, Redis pool lifecycle tests stay in `tests/server/data` even though
 they are Component tests, while ChatServer process startup tests stay in
 `tests/server/startup` and are Integration tests.
 
-## Governance and plans
+## CI and local validation
 
-- [`CI-GOVERNANCE.md`](CI-GOVERNANCE.md) is the authority for `develop`,
-  `master`, release, failure, coverage, compatibility, feature-flag, and
-  contract-change gates.
-- [`TEST-CONTRACT-MATRIX.md`](TEST-CONTRACT-MATRIX.md) maps the current 250
-  runner testcases to Test IDs, production Module ownership, Level, report,
-  required lane, and known gaps.
-- Phase 2.5, Phase 3A, and Plans 3B-00..01 are complete. The next planned item
-  is Plan 3B-02 in [`plans/PHASE-3B-PLAN.md`](plans/PHASE-3B-PLAN.md).
-- Proportional execution tiers and the once-per-phase closeout evidence contract
-  are canonical in [`CI-GOVERNANCE.md` section 2.1](CI-GOVERNANCE.md#21-比例化执行合同).
-- DG-25 in [`plans/PHASE-3B-RELEASE-DECISIONS.md`](plans/PHASE-3B-RELEASE-DECISIONS.md)
-  and section 10.1 of [`CI-GOVERNANCE.md`](CI-GOVERNANCE.md) make
-  `D:\vcpkg\test-vcpkg` and `D:\git\Chat\vcpkg_installed` read-only by default.
-  A build/test authorization never authorizes package restore, install, update,
-  removal, cleanup, relocation, or implicit manifest installation.
-- [`plans/DG-DECISIONS.md`](plans/DG-DECISIONS.md) records the implementation
-  contracts that must be confirmed before the corresponding Phase 2.5 plan.
-- [`REGRESSION.md`](REGRESSION.md) defines the permanent regression baseline
-  and future-Module admission strategy.
+[CI-GOVERNANCE.md](CI-GOVERNANCE.md) defines quick/full regression and automatic master release.
+Develop PR/push runs existing Windows unit, component and deterministic loopback/process tests.
+Master PR/push, weekly develop and manual runs add Linux real-dependency and full business E2E.
+Only master push can publish, after full checks and Windows package smoke succeed.
+
+Local module commands remain below; release packaging tests are documented in
+[release/contracts/README.md](release/contracts/README.md).
+Tests and runners own executable registration; [TEST-CONTRACT-MATRIX.md](TEST-CONTRACT-MATRIX.md) records business coverage.
+Historical phase plans remain historical evidence, not extra approval steps for normal development.
+Local vcpkg remains read-only under [DG-25](CI-GOVERNANCE.md#101-本机-vcpkg-不可变门禁dg-25).
 
 ## Level contract
 
