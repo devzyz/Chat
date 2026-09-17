@@ -119,6 +119,10 @@ jobs:
         shell: pwsh
         run: node --test tests/build/vcpkgBinaryCache.test.js
 
+      - name: Verify cold-build and admission time budgets
+        shell: pwsh
+        run: node --test tests/build/ciBudget.test.js
+
       - name: Run ChatServer instance script test modules
         shell: pwsh
         run: .\scripts\windows-local.ps1 -Task RunScriptTests
@@ -136,7 +140,8 @@ jobs:
     name: Server Release build
     needs: static-check
     runs-on: windows-2022
-    timeout-minutes: 180
+    # Observed cold restore takes 174 minutes; retain time for tests and packaging.
+    timeout-minutes: 240
     env:
       VCPKG_ROOT: ${{ github.workspace }}\.ci\vcpkg
       VCPKG_BINARY_SOURCES: clear

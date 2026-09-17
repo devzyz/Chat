@@ -367,7 +367,8 @@ jobs:
     needs: [two-server-contract, downstream-contract]
     if: always()
     runs-on: ubuntu-24.04
-    timeout-minutes: 200
+    # Covers the 260-minute check poll plus setup and fail-closed evidence upload.
+    timeout-minutes: 270
     permissions:
       contents: read
       checks: read

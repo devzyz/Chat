@@ -5,7 +5,8 @@ const { performance } = require('node:perf_hooks');
 const { setTimeout: delay } = require('node:timers/promises');
 const { requiredChecks, selectCheck } = require('./phase3dGate');
 
-async function waitForChecks({ candidateSha, read, timeoutMs = 190 * 60 * 1000,
+// Cover Windows static checks, the cold-build budget and cross-workflow scheduling.
+async function waitForChecks({ candidateSha, read, timeoutMs = 260 * 60 * 1000,
     intervalMs = 30000, now = () => performance.now(), delay: sleep = delay }) {
     const deadline = now() + timeoutMs;
     while (true) {

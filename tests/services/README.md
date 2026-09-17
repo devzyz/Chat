@@ -4,7 +4,8 @@
 
 The final 3D admission job waits for required checks on the exact candidate SHA,
 including the independent Windows workflow. It polls every 30 seconds for at most
-190 minutes within a 200-minute job deadline. Missing or queued checks remain
+260 minutes within a 270-minute job deadline. This covers the Windows 240-minute
+cold-build budget plus static checks and scheduling margin. Missing or queued checks remain
 pending; any completed non-success check fails immediately. The newest check ID
 for each required name is authoritative. This only reads status; it never reruns
 builds or accepts incomplete checks. The final snapshot still passes through all

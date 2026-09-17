@@ -1,5 +1,14 @@
 # Linux preflight contract
 
+## CI execution budgets
+
+Run `node --test tests/build/ciBudget.test.js` to verify that the Windows job
+leaves at least 30 minutes after the observed 174-minute cold dependency restore
+for compilation, tests and packaging. The fake-clock admission regression invokes
+the real check poller through the upstream workflow budgets and verifies that
+the Linux job retains ten minutes for setup and failure evidence. Windows static
+checks run this regression without restoring dependencies.
+
 ## CI binary dependency cache
 
 Run `node --test tests/build/vcpkgBinaryCache.test.js` for the shared Windows/Linux
