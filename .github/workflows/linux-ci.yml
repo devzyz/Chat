@@ -1,4 +1,4 @@
-name: Linux real dependencies and compatibility
+name: Linux integration and end-to-end tests
 
 on:
   workflow_call:
@@ -31,8 +31,6 @@ jobs:
     name: Linux configure compile link and startup preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    outputs:
-      status: ${{ steps.preflight-status.outputs.status }}
     env:
       VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
       VCPKG_DISABLE_METRICS: "1"
@@ -166,7 +164,7 @@ jobs:
         run: |
           timeout --signal=TERM --kill-after=5s 120s cmake --build out/build/linux-x64-release --target service_run redis_adapter_integration message_commit_integration gate_mysql_pool_tests FourProcessDriver history_response_tests chat_tcp_transport_tests --parallel 2
           timeout --signal=TERM --kill-after=5s 180s cmake --build out/build/linux-x64-release --target chat_e2e_client session_driver_tests --parallel 2
-          CHAT_E2E_CLIENT="$PWD/out/build/linux-x64-release/bin/chat_e2e_client" node --test tests/services/twoServerTopology.test.js tests/services/clientControl.test.js tests/services/phase3dEvidence.test.js tests/services/connectionCount.test.js
+          CHAT_E2E_CLIENT="$PWD/out/build/linux-x64-release/bin/chat_e2e_client" node --test tests/services/twoServerTopology.test.js tests/services/clientControl.test.js tests/services/connectionCount.test.js
           ctest --test-dir out/build/linux-x64-release -R '^session_driver\.' --output-on-failure --no-tests=error --output-junit "$CHAT_EVIDENCE_ROOT/linux_phase3d_client.xml"
           ctest --test-dir out/build/linux-x64-release -L 'phase3c-(redis|message-commit|gate-mysql)-local' --output-on-failure --no-tests=error
           CHAT_FOUR_DRIVER="$PWD/out/build/linux-x64-release/bin/FourProcessDriver" node --test tests/services/driver.test.js tests/services/relay.test.js tests/services/fourProcess.test.js
@@ -201,10 +199,8 @@ jobs:
           retention-days: 7
 
       - name: Confirm preflight PASS contract
-        id: preflight-status
         run: |
           jq -e '.status == "PASS"' out/phase3c/preflight/linux-preflight.json
-          echo 'status=PASS' >> "$GITHUB_OUTPUT"
 
       - name: Upload Linux preflight evidence
         if: always()

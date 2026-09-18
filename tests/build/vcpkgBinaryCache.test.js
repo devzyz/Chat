@@ -132,7 +132,7 @@ test('both workflows restore layered keys and save before business builds', () =
         assert.match(workflow, /CACHE_RESTORED_KEY: \$\{\{ steps.vcpkg-binary-cache.outputs.cache-matched-key \}\}/);
         assert.match(workflow, /CACHE_PRIMARY_PREFIX: \$\{\{ steps.binary-cache-key.outputs.prefix \}\}/);
         const save = workflow.indexOf('- name: Save new binary packages');
-        const build = workflow.indexOf(platform === 'windows' ? '- name: Build GateServer' : '- name: Run fail-closed Linux preflight');
+        const build = workflow.indexOf(platform === 'windows' ? '- name: Build and run layered Server tests' : '- name: Run fail-closed Linux preflight');
         assert.ok(save > workflow.indexOf('id: dependency-restore') && save < build);
         assert.match(workflow.slice(save, build), /if: success\(\) && steps.binary-cache-after.outputs.changed == 'true'/);
         assert.match(workflow, /share\/\*\/vcpkg_abi_info.txt/);

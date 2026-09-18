@@ -6,6 +6,9 @@ on:
 permissions:
   contents: read
 
+env:
+  BUILD_PACKAGES: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.base_ref == 'master' }}
+
 jobs:
   static-check:
     name: Static configuration checks
@@ -142,7 +145,7 @@ jobs:
 
       - name: Run ChatServer instance script test modules
         shell: pwsh
-        run: .\scripts\windows-local.ps1 -Task RunScriptTests
+        run: .\scripts\windows-local.ps1 -Task RunScriptTests -SkipTestStructureCheck
 
       - name: Upload layered script test reports
         if: always()
@@ -314,20 +317,6 @@ jobs:
               Write-Host "vcpkg binary archive cache already absent: $expectedCache"
           }
 
-      - name: Build GateServer, StatusServer, and ChatServer
-        shell: pwsh
-        run: |
-          & .\scripts\windows-local.ps1 `
-              -Task BuildServers `
-              -Configuration Release `
-              -VcpkgRoot $env:VCPKG_ROOT `
-              -VcpkgInstalledRoot (Join-Path $env:GITHUB_WORKSPACE '.ci\vcpkg_installed') `
-              -VcpkgBuildtreesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-buildtrees') `
-              -VcpkgPackagesRoot (Join-Path $env:RUNNER_TEMP 'vcpkg-packages') `
-              -ServerIntermediateRoot (Join-Path $env:RUNNER_TEMP 'server-msbuild') `
-              -ServerTriplet x64-windows-chat-release `
-              -ServerHostTriplet x64-windows-chat-release
-
       - name: Restore locked VarifyServer dependencies for cross-language tests
         shell: cmd
         working-directory: VarifyServer
@@ -337,7 +326,7 @@ jobs:
         shell: pwsh
         run: |
           & .\scripts\windows-local.ps1 `
-              -Task RunServerTests `
+              -Task RunServerTests -SkipTestStructureCheck `
               -Configuration Release `
               -VcpkgRoot $env:VCPKG_ROOT `
               -VcpkgInstalledRoot (Join-Path $env:GITHUB_WORKSPACE '.ci\vcpkg_installed') `
@@ -390,6 +379,7 @@ jobs:
           }
 
       - name: Create independent server ZIP packages
+        if: env.BUILD_PACKAGES == 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -419,6 +409,7 @@ jobs:
           }
 
       - name: Upload server release directories
+        if: env.BUILD_PACKAGES == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-servers-release
@@ -451,7 +442,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           & .\scripts\windows-local.ps1 `
-              -Task RunClientTests `
+              -Task RunClientTests -SkipTestStructureCheck `
               -Configuration Release `
               -QtRoot $env:QT_ROOT_DIR
 
@@ -465,6 +456,7 @@ jobs:
           retention-days: 7
 
       - name: Deploy and package Qt client
+        if: env.BUILD_PACKAGES == 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -490,6 +482,7 @@ jobs:
           Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal
 
       - name: Upload Qt client ZIP
+        if: env.BUILD_PACKAGES == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-chat-client-release
@@ -537,7 +530,7 @@ jobs:
 
       - name: Run layered VarifyServer tests
         shell: pwsh
-        run: .\scripts\windows-local.ps1 -Task RunVarifyTests
+        run: .\scripts\windows-local.ps1 -Task RunVarifyTests -SkipTestStructureCheck
 
       - name: Upload layered VarifyServer test reports
         if: always()
@@ -549,6 +542,7 @@ jobs:
           retention-days: 7
 
       - name: Package VarifyServer
+        if: env.BUILD_PACKAGES == 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -565,6 +559,7 @@ jobs:
           Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal
 
       - name: Upload VarifyServer ZIP
+        if: env.BUILD_PACKAGES == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-varify-server-release

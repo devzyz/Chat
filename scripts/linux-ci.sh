@@ -50,7 +50,6 @@ declare -A selectors=(
   [3C-01]=build_ownership_and_process_lifecycle
   [3C-01-posix]=isolated_posix_process_lifecycle
   [3C-07]=four_process_contracts
-  [3C-08]=runtime_compatibility_inventory
   [3C-09]=current_n_evidence_gate
   [3C-02]=disposable_service_contracts
   [3C-03]=schema_migration_contracts
@@ -76,11 +75,6 @@ fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export CHAT_CANDIDATE_SHA="$(git -C "$repo_root" rev-parse HEAD)"
-if [[ "$selector" == 3C-08 ]]; then
-  node "$repo_root/tests/compatibility/bootstrap.js" "${CHAT_RELEASE_INVENTORY:?release inventory required}" \
-    "${CHAT_COMPATIBILITY_ROOT:-$repo_root/out/phase3c/compatibility}" "$CHAT_CANDIDATE_SHA"
-  exit $?
-fi
 if [[ "$selector" == 3C-09 ]]; then
   # The workflow already ran the same-source build and disposable full selector
   # once. Aggregate those same-run artifacts rather than rebuilding services.

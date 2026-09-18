@@ -14,12 +14,19 @@ param(
     [string]$ServerTriplet = 'x64-windows-chat',
     [string]$ServerHostTriplet = 'x64-windows',
     [string]$QtRoot = $env:QT_ROOT,
-    [string]$MinGwRoot = $env:MINGW_ROOT
+    [string]$MinGwRoot = $env:MINGW_ROOT,
+    [switch]$SkipTestStructureCheck
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $global:LASTEXITCODE = 0
+$script:testStructureChecked = $false
+if ($SkipTestStructureCheck -and
+    ($env:GITHUB_ACTIONS -ne 'true' -or
+     $Task -notin @('RunScriptTests', 'RunServerTests', 'RunClientTests', 'RunVarifyTests'))) {
+    throw 'SkipTestStructureCheck requires a CI test lane after CheckTestStructure.'
+}
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $fixedVcpkgInstalledRoot = 'D:\git\Chat\vcpkg_installed'
@@ -633,6 +640,8 @@ function Get-RepositoryRelativePath {
 }
 
 function Confirm-TestStructure {
+    # CI lanes depend on the same-source static job; local aggregate calls validate once.
+    if ($SkipTestStructureCheck -or $script:testStructureChecked) { return }
     function Assert-ModuleReadme {
         param([System.IO.FileInfo[]]$TestFiles, [string]$Toolchain)
 
@@ -1399,8 +1408,8 @@ function Confirm-TestStructure {
         throw 'The Server CI job must restore locked VarifyServer Node dependencies for the C++ to Node loopback contract.'
     }
     $ciInstalledRootPattern = '-VcpkgInstalledRoot\s+\(Join-Path\s+\$env:GITHUB_WORKSPACE\s+''\.ci\\vcpkg_installed''\)'
-    foreach ($serverTask in @('RestoreServers', 'BuildServers', 'RunServerTests')) {
-        $serverTaskPattern = "(?ms)-Task\s+$serverTask\s+``(?:(?!-Task\s+).)*?$ciInstalledRootPattern"
+    foreach ($serverTask in @('RestoreServers', 'RunServerTests')) {
+        $serverTaskPattern = "(?ms)-Task\s+$serverTask(?:\s+-SkipTestStructureCheck)?\s+``(?:(?!-Task\s+).)*?$ciInstalledRootPattern"
         if ($serverJob.Groups['body'].Value -notmatch $serverTaskPattern) {
             throw "Server CI task $serverTask must pass the job-owned .ci\\vcpkg_installed root explicitly."
         }
@@ -1477,6 +1486,7 @@ function Confirm-TestStructure {
         }
     }
 
+    $script:testStructureChecked = $true
     Write-Host "Test registration and report grouping verified: $($serverTests.Count) Server, $($clientTests.Count) Qt, $($varifyTests.Count) VarifyServer, $($scriptTests.Count) PowerShell source files."
 }
 
