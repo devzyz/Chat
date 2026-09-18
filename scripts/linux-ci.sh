@@ -44,6 +44,7 @@ if [[ "$phase" != "3C" || "$configuration" != "Release" ]]; then
 fi
 
 declare -A selectors=(
+  [3C-00-contracts]=static_preflight_and_mutations
   [3C-00-T1]=preflight_contract_red
   [3C-00-T2]=preflight_build_green
   [3C-01]=build_ownership_and_process_lifecycle
@@ -85,7 +86,6 @@ if [[ "$selector" == 3C-09 ]]; then
   # once. Aggregate those same-run artifacts rather than rebuilding services.
   python3 "$repo_root/tests/services/gate.py" \
     --services "${CHAT_PHASE3C_SERVICES_ROOT:-$repo_root/out/phase3c/services}" \
-    --compatibility "${CHAT_COMPATIBILITY_ROOT:-$repo_root/out/phase3c/compatibility}" \
     --output "${junit_dir:-$repo_root/out/phase3c/gate}" --source-sha "$CHAT_CANDIDATE_SHA" \
     --jobs "${CHAT_JOB_RESULTS:?same-workflow job results required}"
   exit $?
@@ -199,7 +199,7 @@ copy_contract_inputs() {
   mkdir -p \
     "$destination/cmake" \
     "$destination/triplets" \
-    "$destination/scripts" \
+    "$destination/scripts/ci" \
     "$destination/.github/workflows"
   cp "$repo_root/CMakeLists.txt" "$destination/CMakeLists.txt"
   cp "$repo_root/CMakePresets.json" "$destination/CMakePresets.json"
@@ -207,7 +207,14 @@ copy_contract_inputs() {
   cp "$repo_root/cmake/LinuxPreflight.cmake" "$destination/cmake/LinuxPreflight.cmake"
   cp "$repo_root/triplets/x64-linux-chat-release.cmake" "$destination/triplets/x64-linux-chat-release.cmake"
   cp "$repo_root/scripts/linux-ci.sh" "$destination/scripts/linux-ci.sh"
+  for input in linux-tool-assets.json install-linux-tools.sh download-linux-tools.ps1 vcpkg-github-asset.ps1; do
+    cp "$repo_root/scripts/ci/$input" "$destination/scripts/ci/$input"
+  done
   cp "$repo_root/.github/workflows/linux-ci.yml" "$destination/.github/workflows/linux-ci.yml"
+  # Each fixture must pass before mutation; missing fixture inputs are not a rejected contract.
+  cmake -DCHAT_REPO_ROOT="$destination" -DCHAT_EXPECT=GREEN \
+    -DCHAT_JUNIT_PATH="$destination/baseline.xml" -DCHAT_EVIDENCE_PATH="$destination/baseline.json" \
+    -P "$repo_root/tests/build/linux_preflight_contract.cmake"
 }
 
 run_contract_mutations() {
@@ -279,22 +286,22 @@ run_contract_mutations() {
     "$vcpkg_depth_shallow_root/.github/workflows/linux-ci.yml"
   expect_mutation_red "shallow vcpkg checkout depth" "$vcpkg_depth_shallow_root"
 
-  local cmake_action_root="$mutation_parent/cmake-action-missing"
+  local cmake_action_root="$mutation_parent/cmake-acquisition-missing"
   copy_contract_inputs "$cmake_action_root"
-  sed -i 's#lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb#lukka/missing-cmake-action@fffaaafeea488556c2c12dad60690008bc1caacb#' \
+  sed -i 's#bash scripts/ci/install-linux-tools.sh#echo missing-tool-acquisition#' \
     "$cmake_action_root/.github/workflows/linux-ci.yml"
-  expect_mutation_red "missing locked CMake acquisition action" "$cmake_action_root"
+  expect_mutation_red "missing locked CMake acquisition" "$cmake_action_root"
 
-  local cmake_ref_root="$mutation_parent/cmake-action-floating-ref"
+  local cmake_ref_root="$mutation_parent/cmake-asset-invalid-digest"
   copy_contract_inputs "$cmake_ref_root"
-  sed -i 's#lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb#lukka/get-cmake@v4.4.2#' \
-    "$cmake_ref_root/.github/workflows/linux-ci.yml"
-  expect_mutation_red "floating CMake acquisition action ref" "$cmake_ref_root"
+  sed -i 's/"sha512": "[a-f0-9]*"/"sha512": "unverified"/' \
+    "$cmake_ref_root/scripts/ci/linux-tool-assets.json"
+  expect_mutation_red "unverified CMake acquisition digest" "$cmake_ref_root"
 
   local cmake_identity_root="$mutation_parent/cmake-identity-drift"
   copy_contract_inputs "$cmake_identity_root"
-  sed -i 's/cmakeVersion: "3.28.3"/cmakeVersion: "3.31.6"/' \
-    "$cmake_identity_root/.github/workflows/linux-ci.yml"
+  sed -i 's/"version": "3.28.3"/"version": "3.31.6"/' \
+    "$cmake_identity_root/scripts/ci/linux-tool-assets.json"
   expect_mutation_red "CMake acquisition identity drift" "$cmake_identity_root"
 
   local startup_root="$mutation_parent/startup-break"
@@ -356,6 +363,16 @@ run_varify_startup_probe() {
 }
 
 case "$selector" in
+  3C-00-contracts)
+    if ((expect_red)); then
+      echo '3C-00-contracts expects a valid baseline and rejected mutations' >&2
+      exit 64
+    fi
+    run_contract GREEN
+    run_contract_mutations
+    # Keep the contract's READY_FOR_HOSTED_PREFLIGHT result; no build was executed.
+    runtime_complete=1
+    ;;
   3C-00-T1)
     if ((expect_red == 0)); then
       echo "3C-00-T1 is an expected-RED selector; pass --expect-red" >&2

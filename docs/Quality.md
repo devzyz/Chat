@@ -89,21 +89,13 @@ Qt 当前精确基线为 Unit 7、Component 5。Component 中的 `ClientSession`
 
 ## CI 门禁
 
-`.github/workflows/windows-ci.yml` 在 develop push、PR 和手工触发时运行。新增代码必须保持：
+CI 用于回归保护。develop PR/push 运行现有 Windows 单元、组件、loopback/进程测试和构建；
+master PR/push、每周 develop 与手动执行增加 Linux 真实依赖和完整 E2E。
+master 合并后实际 SHA 的全量与包启动冒烟成功，自动发布同一个包，不需要人工审批。
 
-- `static-check`：构建配置、单一 ChatServer、依赖和脚本测试。
-- `servers-release`：干净 vcpkg 恢复、Server Release、GoogleTest、自包含目录和三个 ZIP。
-- `client-release`：Qt Release、CTest、windeployqt 和客户端 ZIP。
-- `varify-release`：Node.js 22、`npm ci`、语法/依赖、Node Test 和 ZIP。
-
-稳定的 Required Check 候选名称是 `Static configuration checks`、`Server Release build`、
-`Qt client Release` 和 `VarifyServer dependency and package check`。只有对应 clean PR
-在提交 SHA 上实际全绿后，管理员才能把这些名称合并进 `develop` 保护规则。
-
-- 不得通过 `continue-on-error`、吞掉 `$LASTEXITCODE` 或无条件成功来绕过 required 行为。
-- 自动重试不得用于把 flaky test 刷成通过；必须定位不稳定原因。
-- 失败时的测试报告 SHOULD 使用 `if: always()` 上传。
-- 新重型依赖应复用已有 job 的已恢复环境，避免无必要重复冷构建。
+Required Checks、运行时机和失败规则统一见 [CI 治理](../tests/CI-GOVERNANCE.md)。
+发布包命令与测试边界见 [发布测试入口](../tests/release/contracts/README.md)。
+普通修改不要求额外阶段计划或多份证据文档；保留所属测试、失败传播、超时和资源清理。
 
 ## 代码审核清单
 

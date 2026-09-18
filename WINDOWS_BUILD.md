@@ -8,7 +8,7 @@ without changing their build systems:
 - chat: CMake with the existing Qt 6.5.3 MinGW 64-bit kit
 - VarifyServer: npm ci
 
-Linux remains outside the current phase. Windows CI validates the configuration
+Linux real-dependency integration and E2E run in the full regression lane. Windows CI validates the configuration
 from a clean runner, builds and tests the deliverables, and creates independent
 ZIP packages suitable for release testing.
 
@@ -68,8 +68,8 @@ otherwise independent:
    the core Qt and Windows platform plugin before uploading `chat-client.zip`.
 4. `varify-release` uses Node.js 22 and `npm ci --ignore-scripts` from the
    committed lockfile. It syntax-checks the project JavaScript, validates the
-   production dependency tree, and packages the tracked JavaScript, JSON and
-   proto files together with `node_modules` as `VarifyServer.zip`.
+   production dependency tree, and packages JavaScript, JSON, Node and
+   `node_modules` as `VarifyServer.zip`; release assembly adds the sibling proto directory.
 
 GitHub Actions run `31803503805` proved that the server job can restore and
 build successfully on a clean runner with the vcpkg binary cache disabled. Its
@@ -77,13 +77,44 @@ cache-free `RestoreServers` step completed in 68 minutes 37 seconds. The
 workflow now caches only vcpkg binary archives. It does not cache
 `vcpkg_installed`, buildtrees, packages, MSBuild intermediates or final release
 directories: those are derived state and are recreated and verified by every
-run. After dependency restoration, the archive directory is saved on a new-key
-miss or reported by a separate step on an exact-key hit, then removed before
-MSBuild to reduce runner disk use. Acceptance of the cache change requires one
-new-key miss-and-save run followed by one same-key exact-hit run; those two
-outcomes have not yet been verified. The Node setup step may cache npm's
+run. Windows and Linux CI use `scripts/ci/vcpkgBinaryCache.js` with v3 keys:
+OS, architecture, image family, target/host triplets, dependency fingerprint,
+and run/attempt. Restore prefers the same dependency configuration, then the
+same platform/triplet family, then explicit previously saved v2 archives.
+The image revision is logged, not a restore boundary; vcpkg retains compiler
+tracking and decides package reuse by ABI. Successful dependency restoration
+saves changed archives or promotes an older namespace before business builds.
+Unchanged warm archives are not uploaded again. Windows removes archive files
+after saving to reduce disk use; installed trees remain uncached.
+
+Summaries record the restored key, actual package restore/build counts, install
+time and save reason. Diagnostic artifacts retain ABI records and compiler logs.
+PR caches remain scoped by GitHub; develop/master push builds seed caches for
+later PRs. A new target branch can still require a cold build. Hosted v3 migration
+and a second unchanged warm run must confirm real reuse; local fixture success
+is not performance evidence. See [cache regression](tests/build/README.md#ci-binary-dependency-cache).
+The Node setup step may cache npm's
 download cache keyed by `package-lock.json`; it does not cache `node_modules`,
 which is always recreated by `npm ci`.
+
+## CI triggers and automatic release
+
+The entry point is `.github/workflows/ci.yml`. The Windows workflow is reusable and retains
+all existing unit, component, loopback/process and build checks on develop PR/push.
+Master PR/push, weekly Monday 03:17 Asia/Shanghai, and manual runs add the reusable Linux full suite.
+Weekly runs use the default branch, which must be develop.
+
+Required checks: develop uses `Regression checks`; master also uses `Full regression checks`.
+Switch repository protection only after the new checks have appeared and passed.
+Master push revalidates the merge SHA and then calls the release workflow without human approval.
+Update `VERSION` (x.x.x) before merging master. The release assembles the same run's Windows
+ZIPs, downloads the resulting package onto a fresh Windows runner for startup smoke, and
+publishes those same bytes. No second application build, owner receipt or permanent version
+reservation is involved. Published versions cannot be overwritten; unpublished failures can retry.
+
+Server packages include the MSVC redistributable; Varify includes Node. The combined ZIP places
+proto beside VarifyServer, adds schema migrations and replaces runtime configurations with
+blank templates. See [release commands and boundaries](tests/release/contracts/README.md).
 
 ## Environment
 

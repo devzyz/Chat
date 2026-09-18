@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop, master]
+  schedule:
+    # Monday 03:17 Asia/Shanghai (Sunday UTC).
+    - cron: '17 19 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  windows:
+    uses: ./.github/workflows/windows-ci.yml
+
+  linux:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.base_ref == 'master'
+    uses: ./.github/workflows/linux-ci.yml
+
+  regression:
+    name: Regression checks
+    if: ${{ always() }}
+    needs: windows
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every Windows build and regression job
+        env:
+          RESULT: ${{ needs.windows.result }}
+        run: test "$RESULT" = success
+
+  full:
+    name: Full regression checks
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.base_ref == 'master') }}
+    needs: [windows, linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require both platforms and all integration tests
+        env:
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+          LINUX_RESULT: ${{ needs.linux.result }}
+        run: test "$WINDOWS_RESULT" = success && test "$LINUX_RESULT" = success
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: full
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml

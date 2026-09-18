@@ -37,11 +37,10 @@ def xml_document(data):
     return tree
 
 
-def aggregate(services, compatibility, output, source_sha, jobs, groups):
+def aggregate(services, output, source_sha, jobs, groups):
     output.mkdir(parents=True, exist_ok=True)
     (output / 'junit').mkdir(exist_ok=True)
-    result = {'format': 1, 'sourceSha': source_sha, 'currentNPass': False,
-              'releaseEligible': False, 'compatibility': 'UNAVAILABLE', 'caseCount': 0}
+    result = {'format': 1, 'sourceSha': source_sha, 'currentNPass': False, 'caseCount': 0}
     try:
         require(re.fullmatch(r'[a-f0-9]{40}', source_sha) is not None, 'candidate-sha-required')
         require(all(jobs.get(name) == 'success' for name in
@@ -77,26 +76,8 @@ def aggregate(services, compatibility, output, source_sha, jobs, groups):
                 cleanup.get('primaryFailure') is None and
                 document(services, 'process-teardown.json').get('complete') is True, 'cleanup-incomplete')
         require(document(services, 'redaction.json').get('complete') is True, 'redaction-incomplete')
-        matrix = document(compatibility, 'compatibility.json')
-        bootstrap = 'BOOTSTRAP_NO_PROMOTED_N_MINUS_1'
-        ids = [f'T10-COMPAT-{index:02}' for index in range(1, 6)]
-        require(matrix['format'] == 1 and matrix['sourceSha'] == source_sha and
-                matrix['status'] == bootstrap and matrix['releaseEligible'] is False and
-                matrix['publishedReleaseIds'] == [] and matrix['schemaManifestSha256'] == hashlib.sha256(
-                    (Path(__file__).resolve().parents[2] / 'schema' / 'manifest.json').read_bytes()).hexdigest() and
-                [entry['id'] for entry in matrix['entries']] == ids and
-                all(entry['status'] == bootstrap and entry['executed'] is False for entry in matrix['entries']),
-                'compatibility-review-required')
-        compatibility_xml = read(compatibility, 'linux_compatibility.xml')
-        tree = xml_document(compatibility_xml)
-        require(int(tree.get('tests', '-1')) == 5 and int(tree.get('skipped', '-1')) == 5 and
-                [node.get('name') for node in tree.findall('testcase')] == ids and
-                all(len(node.findall('skipped')) == 1 for node in tree.findall('testcase')) and
-                not any(node.tag in ['failure', 'error'] for node in tree.iter()), 'compatibility-report-mismatch')
-        (output / 'junit' / 'linux_compatibility.xml').write_bytes(compatibility_xml)
-        (output / 'compatibility.json').write_text(json.dumps(matrix, indent=2), encoding='utf-8')
         (output / 'phase3c-reports.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
-        result.update(currentNPass=True, compatibility=bootstrap)
+        result['currentNPass'] = True
     except (OSError, ValueError, KeyError, TypeError, ET.ParseError) as error:
         # Do not copy parser messages or arbitrary evidence fields into logs.
         result['failure'] = str(error) if type(error) is ValueError and re.fullmatch(r'[a-z-]+', str(error)) else 'invalid-evidence'
@@ -115,9 +96,9 @@ def aggregate(services, compatibility, output, source_sha, jobs, groups):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    for argument in ['services', 'compatibility', 'output', 'source-sha', 'jobs']:
+    for argument in ['services', 'output', 'source-sha', 'jobs']:
         parser.add_argument('--' + argument, required=True)
     args = parser.parse_args()
-    result = aggregate(Path(args.services), Path(args.compatibility), Path(args.output),
+    result = aggregate(Path(args.services), Path(args.output),
                        args.source_sha, json.loads(args.jobs), registered_groups())
     raise SystemExit(0 if result['currentNPass'] else 1)

@@ -33,6 +33,12 @@ function xml(value) {
         .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
 }
 
+function processDiagnostic(value) {
+    if (!value || !/^stop-(GateServer|StatusServer|ChatServer|VarifyServer)$/.test(value.stage)
+        || !/^(stop-timeout|report-unavailable|stop-escalated|exit-[0-9]{1,10}|harness-incomplete|exit-unavailable|expected-failure)$/.test(value.category)) return undefined;
+    return { stage: value.stage, category: value.category };
+}
+
 function writeReports(root, selector, cases, options = {}) {
     fs.mkdirSync(root, { recursive: true });
     const manifest = { format: 1, sourceSha: process.env.CHAT_CANDIDATE_SHA || null,
@@ -42,13 +48,18 @@ function writeReports(root, selector, cases, options = {}) {
         const incomplete = selected.length === 0 || (group.expected !== undefined && selected.length !== group.expected);
         const duplicate = new Set(selected.map((entry) => entry.id)).size !== selected.length;
         const failures = selected.filter((entry) => !entry.pass).length + Number(incomplete || duplicate);
-        const rows = selected.map((entry) => `<testcase classname="${xml(group.prefix)}" name="${xml(entry.id)} ${xml(entry.name)}" time="${Number(entry.seconds || 0).toFixed(3)}">${entry.pass ? '' : '<failure message="bounded contract failed"/>'}</testcase>`);
+        const rows = selected.map((entry) => {
+            const diagnostic = processDiagnostic(entry.diagnostic);
+            const message = diagnostic ? `${diagnostic.stage}:${diagnostic.category}` : 'bounded contract failed';
+            return `<testcase classname="${xml(group.prefix)}" name="${xml(entry.id)} ${xml(entry.name)}" time="${Number(entry.seconds || 0).toFixed(3)}">${entry.pass ? '' : `<failure message="${xml(message)}"/>`}</testcase>`;
+        });
         if (incomplete || duplicate) rows.push('<testcase name="registration"><failure message="required cases missing or duplicated"/></testcase>');
         fs.writeFileSync(path.join(root, group.file),
             `<testsuite name="${xml(group.file)}" tests="${rows.length}" failures="${failures}">\n${rows.join('\n')}\n</testsuite>\n`);
         manifest.reports.push({ file: group.file, owner: 'tests/services', level: options.level || 'Integration',
             deadlineSeconds: 690, prefix: group.prefix, expected: group.expected,
-            cases: selected.map(entry => ({ id: entry.id, name: entry.name, pass: entry.pass })),
+            cases: selected.map(entry => ({ id: entry.id, name: entry.name, pass: entry.pass,
+                ...(processDiagnostic(entry.diagnostic) ? { diagnostic: processDiagnostic(entry.diagnostic) } : {}) })),
             sha256: createHash('sha256').update(fs.readFileSync(path.join(root, group.file))).digest('hex') });
     }
     fs.writeFileSync(path.join(root, options.manifest || 'phase3c-reports.json'), JSON.stringify(manifest, null, 2));

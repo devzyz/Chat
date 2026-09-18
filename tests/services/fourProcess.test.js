@@ -51,5 +51,18 @@ test('process shutdown reports retain safe failure identity and reject incomplet
         await stop(successful);
         assert.equal(caseDiagnostic(new Error('FourProcess:ChatServer:secret-token')), undefined);
         assert.equal(caseDiagnostic(new Error('FourProcess:private-account:exit-1')), undefined);
+        const cases = [
+            { id: 'T10-4PROC-10', name: 'occupied port', pass: false,
+              diagnostic: caseDiagnostic(new Error('FourProcess:GateServer:harness-incomplete')) },
+            { id: 'T10-4PROC-18', name: 'cleanup', pass: false,
+              diagnostic: { stage: 'private-account', category: 'secret-token' } }
+        ];
+        writeReports(root, '3C-07', cases);
+        const manifest = JSON.parse(fs.readFileSync(path.join(root, 'phase3c-reports.json'), 'utf8'));
+        const recorded = manifest.reports.find(group => group.prefix === 'T10-4PROC-').cases;
+        assert.deepEqual(recorded[0].diagnostic, { stage: 'stop-GateServer', category: 'harness-incomplete' });
+        assert.equal(recorded[1].diagnostic, undefined);
+        assert.match(fs.readFileSync(path.join(root, 'linux_four_process.xml'), 'utf8'), /stop-GateServer:harness-incomplete/);
+        assert.doesNotMatch(JSON.stringify(manifest), /private-account|secret-token/);
     } finally { fs.rmSync(root, { recursive: true }); }
 });
