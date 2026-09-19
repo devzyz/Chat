@@ -1,6 +1,7 @@
 #include "chatpage.h"
 #include "clientmessage.h"
 #include "clientrequests.h"
+#include "resourcetransfermanager.h"
 
 #include "global.h"
 #include "logmgr.h"
@@ -23,6 +24,13 @@ ChatPage::ChatPage(QWidget *parent)
     : QWidget(parent), ui(new Ui::ChatPage)
 {
     ui->setupUi(this);
+    connect(UserMgr::GetInstance().get(), &UserMgr::avatarChanged, this, [this](int uid) {
+        _messageStore.updateSenderAvatar(uid, UserMgr::GetInstance()->avatarFor(uid));
+    });
+    connect(UserMgr::GetInstance()->localAvatar(), &LocalAvatar::imageChanged, this, [this]() {
+        const auto user = UserMgr::GetInstance();
+        _messageStore.updateSenderAvatar(user->GetUid(), user->selfAvatar());
+    });
 
     ui->receive_btn->SetState("normal", "hover", "press");
     ui->send_btn->SetState("normal", "hover", "press");
@@ -31,6 +39,7 @@ ChatPage::ChatPage(QWidget *parent)
 
     _messageDelegate = new MessageItemDelegate(ui->chat_detail_data_list);
     ui->chat_detail_data_list->setItemDelegate(_messageDelegate);
+    initResourceTransfers();
     connect(ui->chat_detail_data_list, &ChatDetailList::viewportResized, this, [this]() {
         _messageDelegate->clearSizeCache();
         ui->chat_detail_data_list->doItemsLayout();
@@ -42,6 +51,7 @@ ChatPage::ChatPage(QWidget *parent)
 
 ChatPage::~ChatPage()
 {
+    _transfer->cancel();
     // QListView does not own the model. Detach it before MessageModelStore is destroyed.
     ui->chat_detail_data_list->setModel(nullptr);
     delete ui;
@@ -255,7 +265,8 @@ void ChatPage::requestOlderHistory()
 MessageRecord ChatPage::toMessageRecord(const std::shared_ptr<ChatDataBase> &message)
 {
     auto record = clientMessageRecord(message);
-    record.avatar = cachedAvatar(record.avatarKey);
+    loadResource(record);
+    record.avatar = UserMgr::GetInstance()->avatarFor(record.senderId, record.avatarKey);
     return record;
 }
 

@@ -1,3 +1,4 @@
+#include "../../common/resource/ResourceCatalog.h"
 #include "LogicSystem.h"
 #include "CSession.h"
 #include "Const.h"
@@ -541,7 +542,8 @@ void LogicSystem::RegisterCallBacks() {
         const int from_uid = root["from_uid"].isInt() ? root["from_uid"].asInt() : 0;
         const int to_uid = root["to_uid"].isInt() ? root["to_uid"].asInt() : 0;
         const int chat_id = root["chat_id"].isInt() ? root["chat_id"].asInt() : 0;
-        const Json::Value data_array = root["text_array"];
+        Json::Value data_array = root["text_array"];
+        const bool resource_message = root.isMember("resource_id");
 
 		Json::Value return_value;
 
@@ -586,9 +588,39 @@ void LogicSystem::RegisterCallBacks() {
 			_cache_msgs.push_back({ msg_uuid, msg_content });
 		}
 
-        const auto result = MysqlMgr::GetInstance()->AddChatMessageList(
-            message_commit::AuthenticatedPrincipal{principal_uid}, from_uid, to_uid, chat_id,
-            _cache_msgs, _chat_msgs, std::chrono::steady_clock::now() + std::chrono::seconds(5));
+        message_commit::Result result;
+        if (resource_message) {
+            try {
+                auto sessions = UserMgr::GetInstance()->Sessions();
+                if (sessions->FindCurrent(from_uid) != session->GetHandle() || data_array.size() != 1
+                    || !root["resource_id"].isString()
+                    || !message_commit::IsCanonicalUuid(data_array[0]["msg_uuid"].asString()))
+                    throw std::runtime_error("invalid resource sender");
+                auto& config = ConfigMgr::GetInstance();
+                static resource::ResourceCatalog catalog(config["Mysql"]["Host"] + ":" + config["Mysql"]["Port"],
+                    config["Mysql"]["User"], config["Mysql"]["Password"], config["Mysql"]["Schema"]);
+                auto saved = catalog.CommitMessage(from_uid, to_uid, chat_id,
+                    data_array[0]["msg_uuid"].asString(), root["resource_id"].asString());
+                data_array[0]["msg_content"] = saved.content;
+                _chat_msgs.push_back(std::make_shared<ChatMessage>(saved.id,
+                    data_array[0]["msg_uuid"].asString(), chat_id, from_uid, to_uid, saved.content, 0));
+            } catch (const std::exception&) {
+                return_value["error"] = ErrorCodes::UidInvalid;
+                return_value["commit_error"] = "StorageUnavailable";
+                return;
+            }
+        } else {
+            for (const auto& item : _cache_msgs) {
+                if (item.second.rfind("@resource:v1:", 0) == 0) {
+                    return_value["error"] = ErrorCodes::UidInvalid;
+                    return_value["commit_error"] = "Conflict";
+                    return;
+                }
+            }
+            result = MysqlMgr::GetInstance()->AddChatMessageList(
+                message_commit::AuthenticatedPrincipal{principal_uid}, from_uid, to_uid, chat_id,
+                _cache_msgs, _chat_msgs, std::chrono::steady_clock::now() + std::chrono::seconds(5));
+        }
         if (!result.IsSuccess()) {
 			return_value["error"] = ErrorCodes::UidInvalid;
             switch (result.error) {

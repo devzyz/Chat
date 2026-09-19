@@ -25,14 +25,14 @@ async function runCases(createSession, database, record) {
     const routine = migration.manifest.migrations[1].statements.at(-1);
     try {
         await record('T10-MIG-01', 'fresh migration reaches current N', async () => {
-            assert.equal((await migration.Apply()).version, 2);
-            assert.equal((await migration.Inspect()).tables.length, 10);
+            assert.equal((await migration.Apply()).version, 3);
+            assert.equal((await migration.Inspect()).tables.length, 13);
         });
         await record('T10-MIG-02', 'repeat application preserves registered user', async () => {
             const uid = await registration(session, 'migration_seed', 'migration_seed@example.invalid');
             assert.ok(uid > 0);
             const before = await session.execute('SELECT COUNT(*),MAX(uid) FROM user');
-            assert.equal((await migration.Apply()).version, 2);
+            assert.equal((await migration.Apply()).version, 3);
             assert.equal(await session.execute('SELECT COUNT(*),MAX(uid) FROM user'), before);
         });
         await record('T10-MIG-03', 'applied checksum drift fails closed', async () => {
@@ -105,7 +105,7 @@ async function runCases(createSession, database, record) {
             await session.execute(`CREATE DATABASE ${identifier(auxiliary)}`);
             created = true;
             const fresh = new SchemaMigration(session, auxiliary);
-            assert.equal((await fresh.Apply()).version, 2);
+            assert.equal((await fresh.Apply()).version, 3);
             const fingerprint = await fresh.Fingerprint();
             await session.execute(`USE ${identifier(database)}`);
             assert.equal(await migration.Fingerprint(), fingerprint);
@@ -116,7 +116,7 @@ async function runCases(createSession, database, record) {
                 await session.execute(routine.replace(
                     '-- All registrations take this one row lock before checking uniqueness.',
                     '-- A different explanatory comment must not change the schema contract.'));
-                assert.equal((await migration.Verify()).version, 2);
+                assert.equal((await migration.Verify()).version, 3);
                 await session.execute('DROP PROCEDURE reg_user');
                 await session.execute(routine.replace('SET result = next_uid;', 'SET result = 42;'));
                 await assert.rejects(migration.Verify(), /SchemaContractDrift/);
@@ -124,7 +124,7 @@ async function runCases(createSession, database, record) {
                 await session.execute('DROP PROCEDURE IF EXISTS reg_user');
                 await session.execute(routine);
             }
-            assert.equal((await migration.Verify()).version, 2);
+            assert.equal((await migration.Verify()).version, 3);
         });
     } catch (error) { primary = error; throw error; }
     finally {

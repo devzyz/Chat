@@ -43,10 +43,14 @@ ChatDialog::ChatDialog(QWidget *parent)
     this->installEventFilter(this);
 
     // 将头像设置上去
-    QPixmap pixmap(":/res/head_1.jpg");
+    QPixmap pixmap = UserMgr::GetInstance()->selfAvatar();
     pixmap = pixmap.scaled(ui->side_head_label->size(), Qt::KeepAspectRatio);
     ui->side_head_label->setPixmap(pixmap);
     ui->side_head_label->setScaledContents(true);
+    connect(UserMgr::GetInstance()->localAvatar(), &LocalAvatar::imageChanged, this, [this]() {
+        ui->side_head_label->setPixmap(UserMgr::GetInstance()->selfAvatar().scaled(
+            ui->side_head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    });
 
     // 设置左侧菜单栏状态
     ui->side_chat_label->SetState("leave", "hover", "select");

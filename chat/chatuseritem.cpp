@@ -30,10 +30,10 @@ void ChatUserItem::SetChatInfo(std::shared_ptr<ChatInfo> chat_info)
         auto info = UserMgr::GetInstance()->GetFriendById(chat_info->GetUid());
 
         // 加载head路径下的头像图片
-        QPixmap pixmap(info->_icon);
+
 
         // 将图片缩放为icon_label的大小，并显示
-        ui->icon_label->setPixmap(pixmap.scaled(ui->icon_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        UserMgr::GetInstance()->bindAvatar(ui->icon_label, info->_uid, info->_icon);
         ui->icon_label->setScaledContents(true);
         // 更新用户名和上次聊天记录
         ui->user_name_label->setText(info->_name);

@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Network)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Network Concurrent)
 
 if(WIN32)
     get_target_property(QT_QMAKE_EXECUTABLE Qt${QT_VERSION_MAJOR}::qmake IMPORTED_LOCATION)
@@ -80,6 +80,18 @@ add_library(chat_message_model STATIC
 target_include_directories(chat_message_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(chat_message_model PUBLIC Qt${QT_VERSION_MAJOR}::Widgets)
 
+add_library(chat_local_avatar STATIC
+    avatarcrop.h avatarcrop.cpp
+    localavatarstore.h localavatarstore.cpp
+    localavatar.h localavatar.cpp
+)
+target_include_directories(chat_local_avatar PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_local_avatar PUBLIC Qt${QT_VERSION_MAJOR}::Gui Qt${QT_VERSION_MAJOR}::Concurrent)
+add_library(chat_storage STATIC userstoragepaths.h userstoragepaths.cpp)
+target_include_directories(chat_storage PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_storage PUBLIC Qt${QT_VERSION_MAJOR}::Core)
+target_link_libraries(chat_local_avatar PUBLIC chat_storage)
+
 add_library(chat_session_core STATIC
     clientsession.h clientsession.cpp
     chattcptransport.h
@@ -98,6 +110,7 @@ target_link_libraries(chat_session_core PUBLIC
     spdlog::spdlog
     chat_network_core
     chat_tcp_transport
+    chat_local_avatar
 )
 
 add_library(chat_client_login STATIC
@@ -164,6 +177,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         friendinfopage.h friendinfopage.cpp friendinfopage.ui
         userinfopage.h userinfopage.cpp userinfopage.ui
         editavatardialog.h editavatardialog.cpp editavatardialog.ui
+        avatarcropwidget.h avatarcropwidget.cpp
         logmgr.h
 
 
@@ -284,6 +298,44 @@ if(BUILD_TESTING)
         set_tests_properties(session_driver.${SESSION_DRIVER_CASE} PROPERTIES
             ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 20)
     endforeach()
+    add_executable(local_avatar_tests
+        tests/local-avatar/local_avatar_tests.cpp
+        avatarcropwidget.h avatarcropwidget.cpp
+        editavatardialog.h editavatardialog.cpp editavatardialog.ui
+        clickedbtn.h clickedbtn.cpp clickedlabel.h clickedlabel.cpp
+    )
+    target_link_libraries(local_avatar_tests PRIVATE
+        chat_local_avatar chat_message_model chat_session_core Qt${QT_VERSION_MAJOR}::Test)
+    add_test(NAME local_avatar.prepare COMMAND local_avatar_tests readsFullPngAndJpeg)
+    set_tests_properties(local_avatar.prepare PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+    add_test(NAME local_avatar.validation COMMAND local_avatar_tests rejectsInvalidAndOversizedImages)
+    set_tests_properties(local_avatar.validation PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+    add_test(NAME local_avatar.persistence COMMAND local_avatar_tests persistsAndIsolatesAccounts)
+    set_tests_properties(local_avatar.persistence PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+    add_test(NAME local_avatar.save_failure COMMAND local_avatar_tests saveFailurePreservesPreviousImage)
+    set_tests_properties(local_avatar.save_failure PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+    add_test(NAME local_avatar.message_refresh COMMAND local_avatar_tests refreshesOnlyMatchingSender)
+    set_tests_properties(local_avatar.message_refresh PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+    add_test(NAME local_avatar.restore COMMAND local_avatar_tests savesAndRestoresThroughController)
+    set_tests_properties(local_avatar.restore PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 10)
+    add_test(NAME local_avatar.session_cancel COMMAND local_avatar_tests cancellationAndResetDiscardPendingResults)
+    set_tests_properties(local_avatar.session_cancel PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 10)
+    add_test(NAME local_avatar.dialog COMMAND local_avatar_tests dialogConfirmsAndCancels)
+    set_tests_properties(local_avatar.dialog PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 10)
+    add_test(NAME local_avatar.crop_geometry COMMAND local_avatar_tests cropGeometryAndSquareOutput)
+    set_tests_properties(local_avatar.crop_geometry PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 10)
+    add_test(NAME local_avatar.crop_interaction COMMAND local_avatar_tests cropWidgetDragsAndZooms)
+    set_tests_properties(local_avatar.crop_interaction PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 10)
     target_link_libraries(auth_flow_tests PRIVATE
         chat_auth_flow
         Qt${QT_VERSION_MAJOR}::Test
@@ -565,4 +617,23 @@ if(BUILD_TESTING)
             TIMEOUT 10
         )
     endforeach()
+endif()
+
+add_library(chat_resource_transfer STATIC resourcetransfermanager.h resourcetransfermanager.cpp)
+target_include_directories(chat_resource_transfer PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_resource_transfer PUBLIC Qt${QT_VERSION_MAJOR}::Network)
+target_link_libraries(chat_resource_transfer PUBLIC chat_storage)
+add_library(chat_avatar_sync STATIC avatarcache.h avatarcache.cpp)
+target_link_libraries(chat_avatar_sync PUBLIC chat_local_avatar chat_resource_transfer)
+target_include_directories(chat_avatar_sync PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_session_core PUBLIC chat_avatar_sync)
+target_link_libraries(chat PRIVATE chat_resource_transfer)
+target_sources(chat PRIVATE chatpageresources.cpp)
+
+if(BUILD_TESTING)
+    add_executable(resource_transfer_tests tests/resource-transfer/resource_transfer_tests.cpp
+        chatpage.h chatpage.cpp chatpage.ui chatpageresources.cpp
+        chatdetaillist.h chatdetaillist.cpp clickedbtn.h clickedbtn.cpp
+        clickedlabel.h clickedlabel.cpp messagetextedit.h messagetextedit.cpp)
+    target_link_libraries(resource_transfer_tests PRIVATE chat_resource_transfer chat_client_login Qt${QT_VERSION_MAJOR}::Test)
 endif()

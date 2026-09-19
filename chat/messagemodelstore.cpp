@@ -44,6 +44,13 @@ void MessageModelStore::markFailed(int chatId, const QVector<QString> &clientIds
     }
 }
 
+void MessageModelStore::updateSenderAvatar(int senderId, const QPixmap &avatar)
+{
+    for (auto &entry : _models) {
+        entry.second->updateSenderAvatar(senderId, avatar);
+    }
+}
+
 MessageListModel *MessageModelStore::getOrCreate(int chatId)
 {
     const auto found = _models.find(chatId);

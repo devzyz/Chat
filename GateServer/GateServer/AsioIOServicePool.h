@@ -1,36 +1,11 @@
 #pragma once
 #include "Singleton.h"
-#include <boost/asio.hpp>
-#include <vector>
-#include <thread>
-#include <memory>
-#include <atomic>
+#include "../../common/asio/IOServicePool.h"
 
-class AsioIOServicePool : public Singleton<AsioIOServicePool>
-{
-	friend class Singleton<AsioIOServicePool>;
+class AsioIOServicePool : public Singleton<AsioIOServicePool>, public common::IOServicePool {
+    friend class Singleton<AsioIOServicePool>;
 public:
-	using IOService = boost::asio::io_context;
-	using Work = boost::asio::executor_work_guard<boost::asio::io_context::executor_type>;
-	using WorkPtr = std::unique_ptr<Work>;
-
-	AsioIOServicePool(const AsioIOServicePool&) = delete;
-	AsioIOServicePool& operator = (const AsioIOServicePool&) = delete;
-	AsioIOServicePool();
-	explicit AsioIOServicePool(std::size_t size);
-	~AsioIOServicePool();
-	
-	// 返回一个io_context
-	boost::asio::io_context& GetIOService();
-
-	void stop();
-
-private:
-	static std::size_t DefaultPoolSize();
-	static std::size_t NormalizePoolSize(std::size_t size);
-	std::vector<IOService> _ioServices;
-	std::vector<WorkPtr> _works; // 假任务，防止io_context内没任务，自动析构
-	std::vector<std::thread> _threads;
-	std::size_t _nextIOService;
-	std::atomic<bool> _b_stop{false};
+    AsioIOServicePool() = default;
+    explicit AsioIOServicePool(std::size_t size) : common::IOServicePool(size) {}
+    void stop() { Stop(); }
 };

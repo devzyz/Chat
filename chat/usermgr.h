@@ -6,6 +6,10 @@
 #include "singleton.h"
 #include "userdata.h"
 #include <QJsonArray>
+#include <QPixmap>
+#include "localavatar.h"
+#include "avatarcache.h"
+class QLabel;
 
 class UserMgr : public QObject, public Singleton<UserMgr>,
                 public std::enable_shared_from_this<UserMgr>
@@ -17,7 +21,16 @@ public:
     void SetToken(QString token);
     QString GetToken() const;
     void SetInfo(std::shared_ptr<UserInfo> user_info);
+    void startResourceSession();
     void resetSession();
+    LocalAvatar *localAvatar() const { return _localAvatar; }
+    QPixmap selfAvatar() const;
+    QPixmap avatarFor(int uid, const QString &fallback = {}) const;
+    void bindAvatar(QLabel *label, int uid, const QString &fallback = {});
+    QString storageRoot() const;
+signals:
+    void avatarChanged(int uid);
+public:
     int GetUid();
 
     // 判断是否已经申请过添加我为好友了
@@ -62,6 +75,8 @@ public:
     std::shared_ptr<ChatInfo> GetChatInfo(int chat_id);
 private:
     UserMgr();
+    LocalAvatar *_localAvatar;
+    AvatarCache *_remoteAvatars = nullptr;
     std::shared_ptr<UserInfo> _user_info;
     QString _token;
 

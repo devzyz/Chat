@@ -7,19 +7,19 @@
     <x>0</x>
     <y>0</y>
     <width>600</width>
-    <height>400</height>
+    <height>520</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>600</width>
-    <height>400</height>
+    <height>520</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>600</width>
-    <height>400</height>
+    <height>520</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -178,11 +178,7 @@
        <number>0</number>
       </property>
       <item>
-       <widget class="QLabel" name="edit_avatar_upload_icon_label">
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
+       <widget class="AvatarCropWidget" name="avatar_crop_widget"/>
       </item>
      </layout>
     </widget>
@@ -306,6 +302,11 @@
   </layout>
  </widget>
  <customwidgets>
+  <customwidget>
+   <class>AvatarCropWidget</class>
+   <extends>QWidget</extends>
+   <header>avatarcropwidget.h</header>
+  </customwidget>
   <customwidget>
    <class>ClickedLabel</class>
    <extends>QLabel</extends>

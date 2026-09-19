@@ -17,6 +17,14 @@
       "checksum": "be6b412a603046f67125d6a3f61aff2bf4054ee5154ca73a25ec7d824f3a2f85",
       "reversible": false,
       "recovery": "Restore a verified pre-migration backup; for an owned empty bootstrap database only, explicitly recreate it and reapply. Never retry partially applied DDL."
+    },
+    {
+      "id": 3,
+      "version": "3",
+      "file": "migrations/003_avatar_resources.sql",
+      "checksum": "0fba30c1dcf87f8e3fe30deef9d296fe8f64d91dd45a7e70cb36f2acb40d68d0",
+      "reversible": false,
+      "recovery": "Restore a verified pre-migration backup; for an owned empty bootstrap database only, explicitly recreate it and reapply. Never retry partially applied DDL."
     }
   ]
 }

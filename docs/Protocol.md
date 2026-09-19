@@ -1,6 +1,12 @@
 <!-- generated-by: gsd-doc-writer -->
 # 协议与数据契约规范
 
+## 头像与资源传输扩展
+
+ResourceServer HTTP、头像权限、用户目录和资源消息合同见 [Resources](Resources.md)
+及 [资源服务](../ResourceServer/README.md)。资源消息复用 1016/1017/1018，
+保留已认证发送者检查；`client_msg_uuid` 写入当前消息表以支持历史身份和重试去重。
+
 ## 范围
 
 本规范覆盖 `message.proto`、gRPC、GateServer HTTP、ChatServer TCP 包、Redis key/value 和 MySQL 持久化边界。它约束项目定义的契约，不测试或重写第三方库内部实现。

@@ -18,6 +18,7 @@
     <ServerUnitName Condition="'$(MSBuildProjectName)' == 'GateServer'">GateServer</ServerUnitName>
     <ServerUnitName Condition="'$(MSBuildProjectName)' == 'StatusServer'">StatusServer</ServerUnitName>
     <ServerUnitName Condition="'$(MSBuildProjectName)' == 'ChatServer'">ChatServer</ServerUnitName>
+    <ServerUnitName Condition="'$(MSBuildProjectName)' == 'ResourceServer'">ResourceServer</ServerUnitName>
     <ServerIntermediateRoot Condition="'$(ServerIntermediateRoot)' == '' and '$(CHAT_SERVER_INTERMEDIATE_ROOT)' != ''">$(CHAT_SERVER_INTERMEDIATE_ROOT)</ServerIntermediateRoot>
     <ServerIntermediateRoot Condition="'$(ServerIntermediateRoot)' == ''">$(MSBuildThisFileDirectory)build\windows-servers-obj</ServerIntermediateRoot>
     <OutDir Condition="'$(Platform)' == 'x64' and '$(ServerUnitName)' != ''">$(MSBuildThisFileDirectory)build\windows-servers\$(Configuration)\$(ServerUnitName)\</OutDir>

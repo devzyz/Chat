@@ -1,11 +1,25 @@
 #include "usermgr.h"
 #include "global.h"
+#include "avatarcrop.h"
+#include <QStandardPaths>
+#include "userstoragepaths.h"
+#include <QCoreApplication>
+#include <QLabel>
 
 UserMgr::UserMgr()
-    : _contact_load_count(0), _current_load_chat_id(0), _last_chat_id(0),
+    : _localAvatar(new LocalAvatar(UserStoragePaths::dataRoot(), this,
+          QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation))),
+      _contact_load_count(0), _current_load_chat_id(0), _last_chat_id(0),
       _is_load_chat_finish(false)
 {
-
+    _localAvatar->setUploadEnabled(true);
+    connect(_localAvatar, &LocalAvatar::uploadRequested, this, [this](const QString &path) {
+        if (_remoteAvatars) _remoteAvatars->upload(path);
+        else _localAvatar->finishUpload(tr("尚未建立资源服务会话"));
+    });
+    connect(_localAvatar, &LocalAvatar::imageChanged, this, [this] {
+        if (_user_info) emit avatarChanged(_user_info->_uid);
+    });
 }
 
 void UserMgr::SetToken(QString token)
@@ -20,12 +34,82 @@ QString UserMgr::GetToken() const
 
 void UserMgr::SetInfo(std::shared_ptr<UserInfo> user_info)
 {
+    delete _remoteAvatars;
+    _remoteAvatars = nullptr;
     _user_info = user_info;
+    _localAvatar->setAccount(gate_url_prefix, user_info->_uid);
+}
+
+void UserMgr::startResourceSession()
+{
+    const auto user_info = _user_info;
+    if (!user_info || _remoteAvatars) return;
+    if (!_token.isEmpty() && !gate_url_prefix.isEmpty()) {
+        QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
+        _remoteAvatars = new AvatarCache(QUrl(settings.value("ResourceServer/Url", "http://127.0.0.1:8090").toString()),
+            user_info->_uid, _token, storageRoot(), this);
+        connect(_remoteAvatars, &AvatarCache::published, this, [this] { _localAvatar->finishUpload(); });
+        connect(_remoteAvatars, &AvatarCache::uploadFailed, _localAvatar, &LocalAvatar::finishUpload);
+        connect(_remoteAvatars, &AvatarCache::changed, this, [this](int uid, const QImage &image) {
+            if (_user_info && uid == _user_info->_uid) _localAvatar->setRemoteImage(image);
+            else emit avatarChanged(uid);
+        });
+        _remoteAvatars->watch(user_info->_uid);
+    }
+}
+
+QString UserMgr::storageRoot() const
+{
+    return UserStoragePaths::accountRoot(UserStoragePaths::dataRoot(), gate_url_prefix,
+        _user_info ? _user_info->_uid : 0);
+}
+
+QPixmap UserMgr::avatarFor(int uid, const QString &fallback) const
+{
+    if (_user_info && uid == _user_info->_uid) return selfAvatar();
+    if (_remoteAvatars && uid > 0) {
+        _remoteAvatars->watch(uid);
+        const auto image = _remoteAvatars->image(uid);
+        if (!image.isNull()) return QPixmap::fromImage(AvatarCrop::circularPreview(image));
+    }
+    // Only bundled resources are accepted as legacy server paths.
+    QPixmap result(fallback.startsWith(":/") ? fallback : ":/res/head_1.jpg");
+    return result;
+}
+
+void UserMgr::bindAvatar(QLabel *label, int uid, const QString &fallback)
+{
+    label->setProperty("avatarUid", uid);
+    label->setProperty("avatarFallback", fallback);
+    const auto update = [this, label] {
+        label->setPixmap(avatarFor(label->property("avatarUid").toInt(),
+            label->property("avatarFallback").toString()).scaled(label->size(),
+                Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    };
+    if (!label->property("avatarBound").toBool()) {
+        label->setProperty("avatarBound", true);
+        connect(this, &UserMgr::avatarChanged, label, [label, update](int changed) {
+            if (label->property("avatarUid").toInt() == changed) update();
+        });
+    }
+    update();
+}
+
+QPixmap UserMgr::selfAvatar() const
+{
+    if (!_localAvatar->image().isNull()) {
+        return QPixmap::fromImage(AvatarCrop::circularPreview(_localAvatar->image()));
+    }
+    const QPixmap serverAvatar(_user_info ? _user_info->_icon : QString());
+    return serverAvatar.isNull() ? QPixmap(":/res/head_1.jpg") : serverAvatar;
 }
 
 void UserMgr::resetSession()
 {
+    delete _remoteAvatars;
+    _remoteAvatars = nullptr;
     _user_info.reset();
+    _localAvatar->reset();
     _token.clear();
     _contact_load_count = 0;
     _apply_map.clear();

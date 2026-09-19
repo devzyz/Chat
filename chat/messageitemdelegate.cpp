@@ -117,6 +117,9 @@ void MessageItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     painter->drawRoundedRect(metrics.bubbleBodyRect, 5, 5);
     painter->drawPolygon(metrics.triangle);
 
+    if (!message.resourcePreview.isNull()) {
+        painter->drawPixmap(metrics.textRect, message.resourcePreview);
+    } else {
     QTextDocument document;
     document.setDocumentMargin(0);
     document.setDefaultFont(textFont());
@@ -132,6 +135,8 @@ void MessageItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     painter->setClipRect(QRect(QPoint(0, 0), metrics.textRect.size()));
     document.documentLayout()->draw(painter, context);
     painter->restore();
+
+    }
 
     painter->setFont(timeFont());
     painter->setPen(QColor(140, 140, 140));
@@ -187,6 +192,7 @@ MessageRecord MessageItemDelegate::recordFromIndex(const QModelIndex &index) con
     message.isSelf = index.data(MessageListModel::IsSelfRole).toBool();
     message.messageType = static_cast<MessageType>(index.data(MessageListModel::MessageTypeRole).toInt());
     message.text = index.data(MessageListModel::TextRole).toString();
+    message.resourcePreview = qvariant_cast<QPixmap>(index.data(MessageListModel::ResourcePreviewRole));
     return message;
 }
 
@@ -200,7 +206,8 @@ MessageItemDelegate::Metrics MessageItemDelegate::calculateMetrics(const Message
                                  qMin(qMax(80, qRound(metrics.itemWidth * 0.63)),
                                       contentLimit));
     const int maximumTextWidth = qMax(32, bubbleLimit - kTriangleWidth - 2 * kBubblePadding);
-    const QSize textSize = textDocumentSize(message.text, maximumTextWidth);
+    const QSize textSize = message.resourcePreview.isNull() ? textDocumentSize(message.text, maximumTextWidth)
+        : message.resourcePreview.size().scaled(QSize(maximumTextWidth, 180), Qt::KeepAspectRatio);
     const int bubbleWidth = textSize.width() + 2 * kBubblePadding + kTriangleWidth;
     const int bubbleHeight = textSize.height() + 2 * kBubblePadding;
     const int avatarX = message.isSelf

@@ -1,3 +1,4 @@
+#include "usermgr.h"
 #include "friendinfopage.h"
 #include "logmgr.h"
 #include "ui_friendinfopage.h"
@@ -21,8 +22,8 @@ void FriendInfoPage::SetInfo(std::shared_ptr<UserInfo> friend_info)
     ui->info_name_label->setText(_friend_info->_name);
 
     // 设置头像
-    QPixmap pixmap(_friend_info->_icon);
-    ui->info_icon_label->setPixmap(pixmap.scaled(ui->info_icon_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+
+    UserMgr::GetInstance()->bindAvatar(ui->info_icon_label, _friend_info->_uid, _friend_info->_icon);
     ui->info_icon_label->setScaledContents(true);
 }
 
