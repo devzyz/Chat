@@ -33,10 +33,11 @@ if (-not (Test-Path -LiteralPath $compiler -PathType Leaf) -or
     $sdks = (Get-ChildItem -LiteralPath $sdkRoot -Directory).Name -join ', '
     throw "Locked MSVC $($lock.msvc.toolset)/SDK $($lock.msvc.sdk) unavailable. Available toolsets: $toolsets; SDKs: $sdks. Run the weekly refresh; refusing an implicit tool upgrade."
 }
-$env:VSLANG = '1033'
-$banner = (& cmd.exe /d /s /c "`"`"$compiler`" 2>&1`"") -join "`n"
-if ($banner -notmatch '\b(19\.\d+\.\d+)(?:\.(\d+))?\b') { throw 'Cannot identify the selected MSVC compiler.' }
-$version = $Matches[1] + '.' + $(if ($Matches[2]) { $Matches[2] } else { '0' })
+# Read numeric PE version fields; shell quoting and localized banners differ
+# between Windows PowerShell and the hosted runner's PowerShell 7.
+$compilerInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($compiler)
+$version = '{0}.{1}.{2}.{3}' -f $compilerInfo.FileMajorPart, $compilerInfo.FileMinorPart,
+    $compilerInfo.FileBuildPart, $compilerInfo.FilePrivatePart
 $compilerHash = (Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($Refresh) {
     $lock.msvc.compilerVersion = $version

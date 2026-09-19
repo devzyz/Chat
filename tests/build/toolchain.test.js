@@ -105,6 +105,8 @@ test('tool selection precedes restore; cold refresh skips caches and promotion r
     assert.match(install, /fetch \$tool\.name --x-stderr-status/);
     assert.match(install, /\$actualVersion -ne \$tool\.version/);
     assert.match(install, /compilerSha256 -ne \$compilerHash/);
+    assert.match(install, /FileVersionInfo\]::GetVersionInfo\(\$compiler\)/);
+    assert.doesNotMatch(install, /cmd\.exe/);
     assert.match(install, /VCPKG_PLATFORM_TOOLSET_VERSION/);
     const runner = read('scripts/windows-local.ps1');
     assert.equal((runner.match(/\+= @\(Get-CiToolchainArguments\)/g) || []).length, 3);
