@@ -35,6 +35,9 @@ struct MessageRecord {
     bool isSelf = false;
     MessageType messageType = MessageType::Text;
     QString text;
+    QString resourceId;
+    QString localResourcePath;
+    QPixmap resourcePreview;
 };
 
 struct MessageAcknowledgement {

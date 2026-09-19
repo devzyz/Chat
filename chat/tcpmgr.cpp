@@ -109,6 +109,7 @@ void TcpMgr::initHandlers()
         auto user_info = std::make_shared<UserInfo> (uid, name, description, icon, sex);
         UserMgr::GetInstance()->SetToken(token);
         UserMgr::GetInstance()->SetInfo(user_info);
+        UserMgr::GetInstance()->startResourceSession();
 
         // 如果包含好友申请列表，则添加上
         if (jsonObj.contains("apply_list")) {

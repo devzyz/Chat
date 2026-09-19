@@ -24,7 +24,10 @@ public:
         DeliveryStatusRole,
         IsSelfRole,
         MessageTypeRole,
-        TextRole
+        TextRole,
+        ResourceIdRole,
+        LocalResourcePathRole,
+        ResourcePreviewRole
     };
     Q_ENUM(Role)
 
@@ -35,11 +38,13 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     int chatId() const;
+    void setResourceFile(const QString& resourceId, const QString& path, const QPixmap& preview);
     const MessageRecord *recordAt(int row) const;
 
     int appendMessage(const MessageRecord &message);
     int appendMessages(const QVector<MessageRecord> &messages);
     int prependHistory(const QVector<MessageRecord> &messages);
+    void updateSenderAvatar(int senderId, const QPixmap &avatar);
 
     bool acknowledgeMessage(const QString &clientMessageId, qint64 messageId,
                             DeliveryStatus status = DeliveryStatus::Sent, int senderId = -1);

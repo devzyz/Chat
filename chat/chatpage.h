@@ -6,6 +6,7 @@
 #include "userdata.h"
 
 #include <QHash>
+#include <QJsonObject>
 #include <QSet>
 #include <QWidget>
 #include <memory>
@@ -15,6 +16,7 @@ class ChatPage;
 }
 
 class MessageItemDelegate;
+class ResourceTransferManager;
 
 /** 右侧聊天区主界面。 */
 class ChatPage : public QWidget
@@ -66,6 +68,16 @@ private:
     void restoreScrollAnchor(int chatId, const ScrollAnchor &anchor);
     void queueScrollToBottom(int chatId);
 
+    void initResourceTransfers();
+    void selectResource();
+    void loadResource(MessageRecord& record);
+    ResourceTransferManager* _transfer = nullptr;
+    QHash<QString, QJsonObject> _resourceDescriptors;
+    QHash<QString, QJsonObject> _pendingResourceRequests;
+    QSet<int> _resourceChats;
+    int _uploadChat = 0;
+    int _uploadRecipient = 0;
+    QString _uploadUuid;
     Ui::ChatPage *ui;
     std::shared_ptr<ChatInfo> _chatInfo;
     MessageModelStore _messageStore;

@@ -38,6 +38,9 @@ QVariant MessageListModel::data(const QModelIndex &index, int role) const
     switch (role) {
     case Qt::DisplayRole:
     case TextRole: return message.text;
+    case ResourceIdRole: return message.resourceId;
+    case LocalResourcePathRole: return message.localResourcePath;
+    case ResourcePreviewRole: return message.resourcePreview;
     case MessageIdRole: return message.messageId;
     case ClientMessageIdRole: return message.clientMessageId;
     case ChatIdRole: return message.chatId;
@@ -74,6 +77,17 @@ QHash<int, QByteArray> MessageListModel::roleNames() const
 int MessageListModel::chatId() const
 {
     return _chatId;
+}
+
+void MessageListModel::updateSenderAvatar(int senderId, const QPixmap &avatar)
+{
+    assertGuiThread();
+    for (int row = 0; row < _messages.size(); ++row) {
+        if (_messages[row].senderId == senderId) {
+            _messages[row].avatar = avatar;
+            emit dataChanged(index(row), index(row), {AvatarRole});
+        }
+    }
 }
 
 const MessageRecord *MessageListModel::recordAt(int row) const
@@ -317,4 +331,16 @@ bool MessageListModel::updateStatusAtRow(int row, DeliveryStatus status)
     const auto changed = index(row);
     emit dataChanged(changed, changed, {DeliveryStatusRole});
     return true;
+}
+
+void MessageListModel::setResourceFile(const QString& resourceId, const QString& path, const QPixmap& preview)
+{
+    assertGuiThread();
+    for (int row = 0; row < _messages.size(); ++row) {
+        auto& message = _messages[row];
+        if (message.resourceId != resourceId) continue;
+        message.localResourcePath = path;
+        message.resourcePreview = preview;
+        emit dataChanged(index(row), index(row), {LocalResourcePathRole, ResourcePreviewRole});
+    }
 }

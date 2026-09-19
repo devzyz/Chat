@@ -1,32 +1,42 @@
 # 项目当前状态
 
-更新：2026-09-18。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
+更新：2026-09-19。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
 项目目标：先完成基本聊天功能，后续主要投入可测量的性能优化。
 
 ## 已合并基线
 
-- PR #2～#6 已合入 develop；本地及远端 develop 为 `719236e5cd7b80908a7b530f6e872b508fd9df2c`。
+- PR #2～#7 已合入 develop；远端 develop 为 `2a706de802ff788ad8a6d62fdd8f395ae2d8f329`。
+  本地主工作区保留功能修改，未切换或拉取；本地 develop 仍为 `719236e5cd7b80908a7b530f6e872b508fd9df2c`。
+- PR #7 于北京时间 9 月 19 日 12:59 合并；[合并后 CI 35422743749](https://github.com/devzyz/Chat/actions/runs/35422743749)
+  已启动，仍在运行，尚不能记为通过。
 - 3B 传输集成、3C 当前版本真实依赖、3D 双实例消息与恢复已有验收记录。
 - [合并后 CI 35337424539](https://github.com/devzyz/Chat/actions/runs/35337424539) 成功，
   Windows 静态检查、Server、Qt、VarifyServer 与 Regression checks 于北京时间 9 月 18 日 22:27 完成。
 - 本轮依赖恢复 0 个包、编译 111 个包，安装约 3.3 小时；develop v3 缓存已保存约 1 GB。
   下一轮实际暖缓存复用仍待确认。Linux/full/release 本轮按 develop push 规则跳过。
 
-## 本轮 CI 去重与旧方案清理
+## 本轮 CI 去重与旧方案清理（PR #7）
 
-工作分支 `fix/ci-redundancy`，基于上述 develop；工作树 `Cache/worktrees/simplify-ci-regression`。
+原工作分支 `fix/ci-redundancy`，基于合并前 develop `719236e`；本地分支已在合并后清理。
+工作树 `Cache/worktrees/simplify-ci-regression` 保留在 detached HEAD `dbb7fcd`，构建产物与测试证据保留。
+
+- 已提交并推送 `dbb7fcde69076190f5f82d3d6e744997e94aea90`，
+  [PR #7](https://github.com/devzyz/Chat/pull/7) 已合入 develop，未发布。
+- [CI 35360816538](https://github.com/devzyz/Chat/actions/runs/35360816538) 已完成此提交的验证；
+  静态检查、Server、Qt、VarifyServer 与 Regression checks 全部通过。
+  Qt 测试报告已上传，应用包生成和上传按预期跳过；本轮已读取 develop v3 缓存，
+  实际 ABI 复用数量仍待核对最终日志。Linux/full/release 按 develop PR 规则跳过。
 
 - Server 由 RunServerTests 一次构建生产与测试目标，移除之前的独立 BuildServers 调用。
 - 静态 job 检查一次全仓测试注册；其成功后四个 CI 测试入口复用结果，测试与报告校验保持。
   本地入口默认检查，RunAllTests 在同一进程内缓存成功检查结果；跳过参数仅允许 CI 测试入口使用。
 - phase3dEvidence.test.js 仅在 Linux 报告 job 执行一次；真实业务报告仍逐项校验。
 - 普通 develop PR/push 不再生成或上传应用 ZIP；master、每周及手动全量保留打包，测试报告照常上传。
-- 已移除 3C-08 bootstrap 入口、实现及三个占位测试；保留 schema 标记与真实协议/迁移回归。
-  Linux 无用预检输出已删除，JSON PASS 断言保留。旧发布计划标记为历史方案，合同矩阵与当前策略一致。
-- 本地验证：17 项 Node 定向回归、7 项发布包回归、8 项报告聚合测试通过；
-  13 项脚本测试、四个工作流 actionlint、Linux 十项静态合同及十五项负向变异通过；
-  Bash 语法及已退役 selector 拒绝检查通过。完整 Server/Qt 构建由本次 PR CI 验证。
-  托管结果以本次 PR 精确提交的检查为准，不继承旧 PR 或上述 develop 的通过结果。
+- 旧 3C-08 bootstrap CLI、实现及三个占位测试已移除；保留真实协议/schema 测试和 schema 标记。
+  Linux 无用预检输出已删除，JSON PASS 校验保留；发布历史计划已明确标记为被替代，矩阵矛盾已修正。
+- 本地验证：17 项 Node 定向回归、7 项发布包回归、8 项报告聚合测试、13 项脚本测试通过；
+  actionlint、Linux 十项静态合同和十五项负向变异、Bash 语法与退役入口拒绝检查均通过。
+  完整 Server/Qt 已由本次 PR CI 验证；合并提交的 push CI 仍需单独确认。
 - 之前复核的 Linux 60 分钟总预算与各步骤预算协调问题仍待单独处理，本轮只修复确认的冗余项。
 
 ## 发布配置与尚未完成的验收
@@ -42,30 +52,43 @@
   的全量、包冒烟和实际发布。新 Linux 安装/v3 路径与首次发布均尚未完整托管验收。
 - N-1 完整矩阵按当前 CI 政策暂缓；保留已有协议/schema 回归，不将缺失的跨版本验证记为通过。
 
-## 本地功能与工作区
+## 当前分支
 
-- 主工作区为 feature/local-avatar，仍基于 `d04512e`，包含既有文档整理和其他用户修改。
-  头像支持选择、预览、圆形框拖动/缩放裁剪、256×256 PNG 保存和登录恢复；只在本机生效。
-  已有 Qt Release 构建及 24/24 Unit、10/10 Component 通过记录，完整窗口和原生选择器待人工验收。
-- feature/resource-stream-transfer 位于 `.worktrees/resource-stream-transfer`，仍有未提交功能。
-  独立 ResourceServer、断点续传、Range 下载、摘要校验、资源消息与权限已有本地测试记录；
-  Redis/Status 部分场景使用替身，真实全依赖联调、双客户端播放、8 GiB 实传与吞吐测试未完成。
-- 两条功能线均未随本轮提交或推送，后续与最新 develop 集成时需处理消息模型等重叠修改。
-- 保留 master、develop、两条功能分支、CI 修复分支；3A 分支仍有未合入文档提交，
-  旧 release-r00 工作树仍有十条未提交变更，待核对后再处理。
+- `feature/avatar-resource-integration`，基于远端 develop `2a706de`（PR #7 合并提交）。
+- 独立工作树：`Cache/worktrees/avatar-resource-integration`。
+- 整合主工作区头像实现与资源传输实现，解决最新 develop 的消息提交、分页、客户端模块和测试注册冲突。
+- 原主工作区及 `.worktrees/resource-stream-transfer` 保留为来源快照；无关文档整理、个人文件、
+  `tests/auto`、旧 release 工作树修改不纳入本分支。后续头像和资源开发以本整合分支为准。
+- 当前为本地整理，未推送、未创建 PR。PR #8 的 CI 工具链修改不属于本分支。
 
-## 文档与清理
+## 功能与兼容
 
-- 旧原始 CI_TASKS、Phase 2 continue-here/HANDOFF 和静态链接迁移清单从 CI 修复工作树删除；
-  主工作区原有相同删除状态保留。构建、测试和发布说明统一指向现有入口，移除过时数量与 R-00 审批说明。
-- 已删除无修改、无忽略文件、提交已合并的 pr6-ci-budget 工作树，释放约 80 MiB；旧 PR 正文临时文件已删除。
-- 其余工作树的可运行产物、依赖、有效测试证据、tests/auto、隔离目录、代理脚本及个人参考资料保留。
-  本轮不恢复或修改本机 vcpkg，也不删除远端分支、缓存或审批环境。
+- 头像裁剪、原子保存、安装目录下按环境/账号隔离、旧本地头像复制迁移、头像上传发布和双账号缓存。
+- ResourceServer 提供流式上传、断点续传、Range 下载、摘要校验和资源权限；ChatServer 复用现有消息通道。
+- 保留 develop 的已认证发送者、文本消息提交/重试、历史分页和客户端会话行为。
+  资源消息同步写入 `chat_message.client_msg_uuid`，使重新登录后的历史保留身份。
+- 数据库唯一迁移入口为 `schema/migrate.js`；版本 3 新增三张头像/资源表。
+  版本 1/2 SQL 与校验和保持不变，完整 schema 指纹与 native 校验同步更新；不绕过结构验证。
+- Qt 门禁在最新基线上新增 6 Unit / 4 Component，当前为 24 / 12 / 28；
+  全仓聚合注册为 13 报告 / 357 项，资源专项仍有独立本地 runner。
+- 合同与启用说明见 [Resources](Resources.md)、[ResourceServer](../ResourceServer/README.md)。
 
-## 下一步
+## 本次验证
 
-1. 提交并验证本轮 CI 去重，确认 develop 暖缓存，处理 Linux 预算后完成一次手动全量验收。
-2. 整理并集成头像与资源传输，完成登录、好友、消息、历史、重连及资源发送的真实依赖和双客户端验收。
-3. 固定 Release 提交、机器和数据规模，建立连接数、接收端吞吐、p50/p95/p99 延迟、CPU/内存、
-   队列长度、数据库/Redis 耗时和错误率基线，再据此确定性能目标。
-4. 按剖析结果逐项优化线程/锁、数据库访问、内存分配、网络背压或 Qt 渲染，每项保留同负载前后对比及正确性回归。
+- 客户端 Release 构建及 owning runner：24 Unit、12 Component、28 Integration 全部通过。
+- Qt 资源专项 5 个业务场景通过（JUnit 另含 init/cleanup 两项）。
+- 资源 Store 8 项、真实 HTTP 5 项、临时 MySQL 2 项，以及生产 Resource/双 Chat 流程通过。
+- Server Unit 68 项、Gate/Status 各 2 项线程池回归通过。
+- schema 静态合同 3 项、真实临时 MySQL 迁移回归 12 项通过。
+- schema 2→3 专项升级通过：旧用户/消息保留，重复应用不改数据，删除头像表仍被结构验证拒绝。
+- 初次旧 schema fixture 引发 native 校验失败；接入真实版本化迁移并补齐用户/会话 fixture 后通过。
+  首次失败日志保留，不计为通过。
+- 日志位于仓库主工作区 `Cache/avatar-resource-integration/`；本工作树报告位于
+  `build/test-results/` 与 `build/resource/`。未运行全仓 357 项或远端 CI。
+
+## 下一步与边界
+
+1. 完成本整合分支的人工窗口与原生文件选择器验收，再按需要推送 PR。
+2. Status/Redis 在资源流程中使用明确 fixture，尚不构成全真实依赖 E2E；8 GiB 实传与吞吐验证未完成。
+3. 本次只迁移测试自建数据库；个人数据库、原运行产物和 vcpkg 安装树保持原样。
+4. ResourceServer 正式 CI/发布纳入、真实 GUI 双客户端验收及性能基线仍需后续推进。

@@ -1,20 +1,68 @@
-﻿// ResourceServer.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
-//
-
+﻿#include "ResourceHttpServer.h"
+#include "../../../common/asio/IOServicePool.h"
+#include "../../../common/resource/ResourceCatalog.h"
+#include "status.grpc.pb.h"
+#include <boost/property_tree/ini_parser.hpp>
+#include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/spdlog.h>
+#include <csignal>
+#include <cstdlib>
+#include <future>
 #include <iostream>
 
-int main()
-{
-    std::cout << "Hello World!\n";
+int main(int argc, char** argv) {
+    try {
+        std::string path = std::getenv("CHAT_CONFIG") ? std::getenv("CHAT_CONFIG") : "config.ini";
+        if (argc == 3 && std::string(argv[1]) == "--config") path = argv[2];
+        else if (argc != 1) throw std::invalid_argument("usage: ResourceServer [--config path]");
+        boost::property_tree::ptree config;
+        boost::property_tree::read_ini(path, config);
+        const auto port = config.get<unsigned int>("ResourceServer.Port");
+        if (!port || port > 65535) throw std::invalid_argument("invalid ResourceServer.Port");
+        std::filesystem::create_directories(config.get<std::string>("Log.LogDir", "logs"));
+        auto logger = spdlog::rotating_logger_mt("ResourceServer",
+            (std::filesystem::path(config.get<std::string>("Log.LogDir", "logs")) / "ResourceServer.log").string(),
+            5 * 1024 * 1024, 2);
+        spdlog::set_default_logger(logger);
+        auto storage_root = std::filesystem::path(config.get<std::string>("ResourceServer.StorageRoot"));
+        if (storage_root.is_relative()) storage_root = std::filesystem::absolute(path).parent_path() / storage_root;
+        resource::ResourceStore store(storage_root,
+            config.get<std::uint64_t>("ResourceServer.MaxFileBytes", 8ull * 1024 * 1024 * 1024));
+        resource::ResourceCatalog catalog(config.get<std::string>("Mysql.Host") + ":" + config.get<std::string>("Mysql.Port"),
+            config.get<std::string>("Mysql.User"), config.get<std::string>("Mysql.Password", ""),
+            config.get<std::string>("Mysql.Schema"));
+        const auto endpoint = config.get<std::string>("StatusServer.Host") + ":" + config.get<std::string>("StatusServer.Port");
+        rpc::BoundedPool<message::StatusService::Stub> status(2, std::chrono::milliseconds(1000), [endpoint] {
+            return message::StatusService::NewStub(grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials()));
+        });
+        common::IOServicePool pool(1);
+        auto& context = pool.GetIOService();
+        resource::ResourceHttpServer server(context, config.get<std::string>("ResourceServer.Host"),
+            static_cast<unsigned short>(port), store,
+            [&status](int uid, const std::string& token) {
+                message::LoginReq request; request.set_uid(uid); request.set_token(token);
+                auto result = rpc::InvokeUnary<decltype(status), message::LoginReq, message::LoginRsp>(
+                    status, request, std::chrono::milliseconds(3000),
+                    [](auto& stub, auto& context, const auto& input, auto& output) { return stub.Login(&context, input, &output); });
+                return result && result.response.error() == 0 && result.response.uid() == uid;
+            }, [&catalog](int uid, const resource::Metadata& metadata) { return catalog.CanRead(uid, metadata.id); },
+            [&catalog](const resource::Metadata& metadata) {
+                catalog.Publish(metadata.id, metadata.owner, metadata.name, metadata.media_type, metadata.size, metadata.sha256);
+            }, [&catalog](int uid) { return catalog.GetAvatar(uid); },
+            [&catalog](int uid, const std::string& id) { catalog.SetAvatar(uid, id); });
+        std::promise<void> stopped;
+        auto future = stopped.get_future();
+        boost::asio::signal_set signals(context, SIGINT, SIGTERM);
+#ifdef _WIN32
+        signals.add(SIGBREAK);
+#endif
+        signals.async_wait([&](auto, auto) { server.Stop(); stopped.set_value(); });
+        boost::asio::post(context, [&] { server.Start(); });
+        SPDLOG_INFO("ResourceServer listening on port {}", port);
+        future.wait();
+        return 0;
+    } catch (const std::exception& error) {
+        std::cerr << "ResourceServer startup failed: " << error.what() << '\n';
+        return 1;
+    }
 }
-
-// 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单
-// 调试程序: F5 或调试 >“开始调试”菜单
-
-// 入门使用技巧: 
-//   1. 使用解决方案资源管理器窗口添加/管理文件
-//   2. 使用团队资源管理器窗口连接到源代码管理
-//   3. 使用输出窗口查看生成输出和其他消息
-//   4. 使用错误列表窗口查看错误
-//   5. 转到“项目”>“添加新项”以创建新的代码文件，或转到“项目”>“添加现有项”以将现有代码文件添加到项目
-//   6. 将来，若要再次打开此项目，请转到“文件”>“打开”>“项目”并选择 .sln 文件

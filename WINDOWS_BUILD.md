@@ -329,3 +329,10 @@ vcpkg versioning also requires the checkout to contain its full Git history.
 If RestoreServers reports a shallow checkout, complete it and retry:
 
     git -C C:\path\to\vcpkg fetch --unshallow --tags
+
+## Avatar and resource integration
+
+Build and test ResourceServer with the existing dependency tree using
+`scripts/resource-local.ps1`; see [ResourceServer](ResourceServer/README.md).
+Avatar Unit/Component cases run through `RunClientTests`; resource integration
+uses the separate local runner. Neither command authorizes dependency restoration.

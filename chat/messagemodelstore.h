@@ -14,6 +14,7 @@ public:
     bool applyHistory(int chatId, const QVector<MessageRecord> &records, bool canLoadMore, qint64 nextCursor);
     void acknowledge(int chatId, const QVector<MessageAcknowledgement> &acknowledgements, int senderId = -1);
     void markFailed(int chatId, const QVector<QString> &clientIds, int senderId = -1);
+    void updateSenderAvatar(int senderId, const QPixmap &avatar);
 
 private:
     std::unordered_map<int, std::unique_ptr<MessageListModel>> _models;

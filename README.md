@@ -44,3 +44,9 @@ are maintained manually for now. A temporarily unavailable peer does not block
 startup; invalid local configuration or a local port bind failure does.
 
 See `WINDOWS_BUILD.md` for the complete Windows development setup.
+
+## 头像与资源传输
+
+头像裁剪、发布与账号缓存，以及附件上传、续传和下载已整合在同一功能分支。
+启用步骤见 [ResourceServer](ResourceServer/README.md)，合同见 [Resources](docs/Resources.md)，
+本次验证与剩余验收见 [Status](docs/Status.md)。

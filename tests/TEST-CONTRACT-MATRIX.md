@@ -820,6 +820,36 @@ N-1 upgrade result. Local MySQL 8.0 evidence does not substitute for hosted 8.4
 acceptance. These tests do not prove four-process startup or cross-server public
 E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 
+## 头像与资源整合注册（2026-09-19）
+
+`Q04-AVATAR-01..10` 由 [头像测试](../chat/tests/local-avatar/README.md) 逐项定义；
+在最新 develop 的 18 Unit / 8 Component / 28 Integration 基线上新增 6 Unit、4 Component，
+客户端报告变为 24 / 12 / 28，Windows 聚合注册为 13 份报告、357 项。
+这只是注册数量，不代表本次执行了全仓 357 项。下文阶段数量保留其历史口径。
+
+### 本地资源扩展合同（尚未纳入发布 CI）
+
+现有 Q04-AVATAR-03 扩展安装目录和旧头像复制迁移断言，不删除原账号/环境隔离语义。
+资源扩展使用 `scripts/resource-local.ps1 -Task Test`，不改变现有聚合报告的预期计数。
+
+| Test ID | 所属入口 | 合同 |
+| --- | --- | --- |
+| Q04-RESOURCE-01 | Qt resource_transfer_tests / avatarPublicationIsolationAndRestore | 头像上传发布、双账号安装目录缓存、恢复及失败保留旧图 |
+| Q04-RESOURCE-02 | 同上 / incomingAttachmentAndPageLifetime | 附件识别及页面销毁取消 |
+| Q04-RESOURCE-03 | 同上 / resourceModelKeepsTextAndAttachmentsSeparate | 文本与资源模型更新隔离 |
+| Q04-RESOURCE-04 | 同上 / resumeUploadAndDownload | 上传中断、控制器重建续传、Range 下载和字节一致 |
+| Q04-RESOURCE-05 | 同上 / rejectsEmptyFile | 空文件本地拒绝 |
+| S05-RESOURCE-01..08 | ResourceTests / StoreTest | 按源码顺序：重建续传、偏移冲突、所有者、未完成、摘要、大小上限、路径、媒体签名 |
+| S05-RESOURCE-09 | stream_integration.py / test_avatar_publication_permissions_and_validation | 头像发布权限、完整 PNG 验证、失败保留引用 |
+| S05-RESOURCE-10 | 同上 / test_generic_attachment_bytes | 普通文件字节传输 |
+| S05-RESOURCE-11 | 同上 / test_image_resume_and_download_range | 图片续传与 Range 下载 |
+| S05-RESOURCE-12 | 同上 / test_video_ten_seconds_resume_after_restart | 重启后视频续传、摘要和帧解码 |
+| S05-RESOURCE-13 | 同上 / test_keep_alive_and_authentication | Keep-Alive 与鉴权 |
+| S05-RESOURCE-14 | catalog_tests.cpp / CommitRetryMembershipAndDownloadAuthorization | 临时 MySQL 消息幂等与参与者权限 |
+| S05-RESOURCE-15 | 同上 / AvatarPublicationIsOwnedPersistentAndSeparateFromMessages | 头像归属、持久引用与附件授权隔离 |
+| S05-RESOURCE-16 | chat_flow_integration.py | 生产 Resource/双 Chat、真实 MySQL，头像重启恢复、跨实例附件及历史；Status/Redis 为替身 |
+| S05-RESOURCE-17 | schema_upgrade.js | 真实受管 schema 2→3、旧用户/消息保留、重复应用及资源表漂移拒绝 |
+
 ## 8. 矩阵维护规则
 
 - 此矩阵维护业务行为和已知覆盖缺口；测试代码与 runner 决定实际执行用例。

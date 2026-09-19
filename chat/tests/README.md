@@ -1,5 +1,13 @@
 # Qt 客户端测试
 
+## 头像与资源整合
+
+- [local-avatar](local-avatar/README.md)：裁剪、原子保存、账号隔离、旧头像迁移及编辑器。
+- [resource-transfer](resource-transfer/README.md)：真实 HTTP 上传续传、头像发布及页面生命周期；本地独立入口。
+
+整合后 owning runner 的 Qt 报告为 Unit 24、Component 12、Integration 28；
+历史阶段数量不构成本次执行声明。
+
 - [session-driver](session-driver/README.md): GUI/driver shared production login,
   isolated client processes and bounded control-channel lifecycle (five Integration cases).
 

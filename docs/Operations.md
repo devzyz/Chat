@@ -157,3 +157,11 @@ getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超�
   主工作区 `docs/Status.md`，本地 loopback fault 测试不代表真实 Redis 数据/重启测试已通过。
 
 ChatServer 已具有较完整的 fail-fast 配置和异常清理。GateServer、StatusServer 和 VarifyServer 的历史启动逻辑仍可能存在校验或错误传播差异；新改动 MUST 朝统一契约收敛，不能把现有差异复制为新的正确行为。
+
+## 资源服务启用
+
+通过现有 `schema/migrate.js plan/apply/verify` 入口迁移到版本 3
+（`schema/migrations/003_avatar_resources.sql`），再配置 ResourceServer 的 MySQL、Status 和存储根目录。
+构建和本地验证命令见 [资源服务说明](../ResourceServer/README.md)，
+目录、头像发布与失败语义见 [Resources](Resources.md)。
+自动集成测试仅初始化自己的临时 MySQL，不修改个人数据库。

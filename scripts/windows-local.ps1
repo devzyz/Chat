@@ -51,8 +51,8 @@ $gateAsioTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuratio
 $statusAsioTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\status_asio_pool_tests.exe"
 $testResults = Join-Path $repoRoot 'build\test-results'
 $clientTestGroups = @(
-    [pscustomobject]@{ Level = 'unit'; Report = (Join-Path $testResults 'client_unit.xml'); ExpectedCount = 18 }
-    [pscustomobject]@{ Level = 'component'; Report = (Join-Path $testResults 'client_component.xml'); ExpectedCount = 8 }
+    [pscustomobject]@{ Level = 'unit'; Report = (Join-Path $testResults 'client_unit.xml'); ExpectedCount = 24 }
+    [pscustomobject]@{ Level = 'component'; Report = (Join-Path $testResults 'client_component.xml'); ExpectedCount = 12 }
     [pscustomobject]@{ Level = 'integration'; Report = (Join-Path $testResults 'client_integration.xml'); ExpectedCount = 28 }
 )
 $scriptTestGroups = @(
@@ -78,8 +78,8 @@ $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
-    [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 18 }
-    [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 8 }
+    [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 24 }
+    [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 12 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 28 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 33 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 21 }
@@ -561,8 +561,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 13 -or $total -ne 347) {
-        throw "Regression report baseline mismatch: expected 13 reports and 347 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 13 -or $total -ne 357) {
+        throw "Regression report baseline mismatch: expected 13 reports and 357 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     $legacyTotal = 0
     foreach ($legacyGroup in $legacyRegressionReportGroups) {
@@ -1149,6 +1149,16 @@ function Confirm-TestStructure {
     }
     $expectedClientLevels = @{
         'network_state_tests' = 'unit'
+        'local_avatar.prepare' = 'unit'
+        'local_avatar.validation' = 'unit'
+        'local_avatar.persistence' = 'unit'
+        'local_avatar.save_failure' = 'unit'
+        'local_avatar.message_refresh' = 'unit'
+        'local_avatar.restore' = 'component'
+        'local_avatar.session_cancel' = 'component'
+        'local_avatar.dialog' = 'component'
+        'local_avatar.crop_geometry' = 'unit'
+        'local_avatar.crop_interaction' = 'component'
         'message_model.append_ack_status_removal' = 'unit'
         'message_model.unknown_ids' = 'unit'
         'message_model.history_order' = 'unit'
@@ -1215,7 +1225,7 @@ function Confirm-TestStructure {
             throw "Invalid Qt report mapping: $($group.Level) -> $($group.Report)"
         }
     }
-    $expectedClientCounts = @{ unit = 18; component = 8; integration = 28 }
+    $expectedClientCounts = @{ unit = 24; component = 12; integration = 28 }
     foreach ($group in $clientTestGroups) {
         if ($group.ExpectedCount -ne $expectedClientCounts[$group.Level]) {
             throw "Qt $($group.Level) report must require exactly $($expectedClientCounts[$group.Level]) testcases."
@@ -1343,11 +1353,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact thirteen-report/347-testcase baseline.'
+        throw 'RunAllTests must audit the exact thirteen-report/357-testcase baseline.'
     }
     if ($regressionReportGroups.Count -ne 13 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 347) {
-        throw 'The registered regression baseline must remain exactly 13 reports and 347 testcases.'
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 357) {
+        throw 'The registered regression baseline must remain exactly 13 reports and 357 testcases.'
     }
     if ($legacyRegressionReportGroups.Count -ne 12 -or
         ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 232) {
