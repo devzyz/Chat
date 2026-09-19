@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "msvc": {
+    "toolset": "14.44.35207",
+    "compilerVersion": "19.44.35228.0",
+    "sdk": "10.0.20348.0"
+  },
+  "tools": [
+    {
+      "name": "cmake", "os": "windows", "arch": "amd64", "version": "3.31.10",
+      "executable": "cmake-3.31.10-windows-x86_64/bin/cmake.exe",
+      "url": "https://github.com/Kitware/CMake/releases/download/v3.31.10/cmake-3.31.10-windows-x86_64.zip",
+      "sha512": "50c71aa15a05eaf8d7592d9648efb986df74ab716dc1f1a03795351284c6212b70ad439a1d9f3575d60cf49b0a5579cad551cc6a3fe2911ae8ecb08add60fc60",
+      "archive": "cmake-3.31.10-windows-x86_64.zip"
+    },
+    {
+      "name": "ninja", "os": "windows", "arch": "x64", "version": "1.13.2",
+      "executable": "ninja.exe",
+      "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-win.zip",
+      "sha512": "55d3d891e8fc6c8ad7f92e172125319896761e57c5125944613d9bbfa5b9374387e9fc1468ad5bcb31464f43fb1c455ea251343942595f42955dc67090aa12ee",
+      "archive": "ninja-win-1.13.2.zip"
+    },
+    {
+      "name": "powershell-core", "os": "windows", "arch": "x64", "version": "7.5.4",
+      "executable": "pwsh.exe",
+      "url": "https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/PowerShell-7.5.4-win-x64.zip",
+      "sha512": "fb5af273bd5fe7293dbf34a9476a74a9d3ffbaaf5dcc47d986ba69a716f3c77b8285f94c15cfcb9ff764fa210c359e8721d1c9d46dc4394143a4206863bb3cf4",
+      "archive": "PowerShell-7.5.4-win-x64.zip"
+    }
+  ]
+}

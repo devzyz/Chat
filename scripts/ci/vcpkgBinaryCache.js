@@ -39,12 +39,21 @@ try {
         // Image revisions can change unrelated software. vcpkg checks each archive's ABI itself.
         const environment = ['RUNNER_OS', 'RUNNER_ARCH', 'ImageOS'].map(required);
         const inputs = ['vcpkg.json', `triplets/${argument}.cmake`];
+        // A newer runner image must not silently switch the native toolchain.
+        // Windows fallbacks stay inside the same approved tool identity.
+        let toolIdentity = '';
+        if (process.env.RUNNER_OS === 'Windows') {
+            const lockPath = process.env.CHAT_WINDOWS_TOOLCHAIN;
+            if (!lockPath) throw new Error('Windows cache requires a verified toolchain');
+            toolIdentity = require('./toolchain').identity(JSON.parse(fs.readFileSync(lockPath, 'utf8')));
+        }
         if (fs.existsSync(path.join(repo, 'vcpkg-configuration.json'))) inputs.push('vcpkg-configuration.json');
         if (argument === 'x64-linux-chat-release') inputs.push('scripts/ci/linux-tool-assets.json');
         const hash = createHash('sha256').update(JSON.stringify(environment));
         for (const input of inputs) hash.update(input).update(fs.readFileSync(path.join(repo, input)));
         // CI uses the same triplet for target and host. Keep both roles explicit in the namespace.
-        const fallback = `vcpkg-binary-v3-${environment.join('-')}-${argument}-${argument}-`;
+        const fallback = toolIdentity ? `vcpkg-binary-v4-${environment.join('-')}-${argument}-${argument}-${toolIdentity}-` :
+            `vcpkg-binary-v3-${environment.join('-')}-${argument}-${argument}-`;
         const prefix = `${fallback}${hash.digest('hex')}-`;
         // One-time bridge to verified PR #6 archives; do not broaden legacy restore across image families.
         const legacyPrefixes = {
@@ -55,7 +64,7 @@ try {
         const attempt = required('GITHUB_RUN_ATTEMPT');
         if (!/^\d+$/.test(runId) || !/^\d+$/.test(attempt)) throw new Error('Invalid workflow run identity');
         fs.mkdirSync(directory, { recursive: true });
-        output({ prefix, fallback, legacy: legacyPrefixes[environment.join('-')] || '',
+        output({ prefix, fallback, legacy: toolIdentity ? '' : legacyPrefixes[environment.join('-')] || '',
             key: `${prefix}${runId}-${attempt}` });
     } else if (command === 'snapshot') {
         fs.writeFileSync(beforePath, JSON.stringify(inventory(directory)));
