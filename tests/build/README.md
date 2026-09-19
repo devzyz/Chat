@@ -14,12 +14,55 @@ There is no cross-workflow check poller. The main workflow uses job dependencies
 
 ## CI binary dependency cache
 
+### Validated weekly Windows toolchain
+
+`node --test tests/build/toolchain.test.js tests/build/vcpkgBinaryCache.test.js tests/build/ciBudget.test.js`
+checks tool lock validation, PowerShell patch-version cache isolation, trusted promotion,
+default-branch refresh routing, cold-cache selection and early compiler/version guards.
+Windows static checks own the toolchain regression; these infrastructure tests do not
+change business Test IDs or report counts.
+
+Ordinary PR/push/manual CI selects the newest `ci-toolchain-approved` artifact from a
+successful scheduled or explicit refresh run of `ci.yml` on the repository default branch.
+PRs, other workflows, failed/in-progress runs and other branches cannot supply the lock.
+Selection happens once per run. API/download/validation failures fail closed. Before the
+first promotion, `scripts/ci/windows-toolchain.json` supplies the bootstrap identity.
+The approved artifact is retained 90 days; an expired approved record requires a new
+default-branch refresh rather than silently upgrading. A refresh does not depend on an
+old artifact remaining downloadable.
+
+The weekly run (or `gh workflow run ci.yml --ref develop -f refresh_tools=true`) discovers
+the latest stable Windows PowerShell/CMake/Ninja releases and the newest MSVC 2022 toolset
+and Windows SDK available on the hosted runner. Release SHA256 digests are verified before
+recording SHA512 hashes in the candidate vcpkg tool catalog. Both platforms skip binary
+cache restoration for this run. Only successful Windows and Linux full regression can
+publish the candidate as approved; native archives have already been saved on the default
+branch. A failed refresh leaves the previous approved record active.
+
+Every Windows build uses the approved exact tool catalog with
+`VCPKG_FORCE_DOWNLOADED_BINARIES=1`, fetches each tool, and verifies its executable version
+before installing any dependency. MSVC version (and binary digest after the first promotion)
+and SDK presence are checked first; the exact toolset/SDK are passed to both vcpkg and
+MSBuild. If a hosted image drops the locked compiler, CI fails early with a refresh message.
+It does not modify the hosted Visual Studio installation or fall back to a different compiler.
+
+Windows v4 cache keys and fallbacks include the complete tool identity; they never restore
+a different toolchain namespace. The initial migration can require one cold build, and
+cache eviction or dependency changes can still cause legitimate rebuilding. Linux keeps
+its existing explicitly supported GCC/Qt/CMake/Ninja/Node versions; GCC drift is checked
+before dependency restoration and vcpkg uses its pinned downloaded tools. This maintenance
+cycle does not upgrade application dependencies, Qt, Node, GCC or the vcpkg source baseline.
+Those changes retain their existing compatibility-review requirements.
+
+Hosted validation must still prove both the first candidate's full regression and a later
+ordinary run with zero rebuilt dependencies. Static fixtures do not claim this result.
+
 Run `node --test tests/build/vcpkgBinaryCache.test.js` for the shared Windows/Linux
 cache regression. It uses temporary archive fixtures and invokes the public
 `scripts/ci/vcpkgBinaryCache.js` CLI; it does not restore or build dependencies.
 Windows static checks and Linux preflight execute this test.
 
-The v3 restore order is platform/architecture/image-family/target-and-host-triplet
+The Linux v3 restore order is platform/architecture/image-family/target-and-host-triplet
 plus dependency fingerprint, then the same platform/triplet family, then the
 explicit v2 keys previously saved by PR #6. `ImageVersion` is diagnostic only;
 vcpkg still checks each package ABI, including compiler tracking. The fingerprint

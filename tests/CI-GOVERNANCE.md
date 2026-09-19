@@ -21,6 +21,16 @@ develop Required Check 为 `Regression checks`；master 为 `Regression checks` 
 两者都是汇总真实 job 结果，失败或 skipped 不算通过。master 禁止直接推送、强推和删除，不要求人工审批。
 切换保护检查须在新工作流出现并验证后完成，避免只改名称导致合并失去保护或永久等待。
 
+### 1.1 工具链维护周期
+
+日常 PR、push 和普通手动运行使用已验证的 Windows 工具链版本；每周在默认分支获取
+最新稳定 PowerShell/CMake/Ninja，以及 runner 提供的最新 MSVC 2022/SDK，执行双平台冷构建和完整回归。
+只有完整回归成功且依赖缓存已保存，才发布新的不可变工具链记录供日常 CI 选择；失败保留旧记录。
+显式手动刷新仅允许默认分支的 `refresh_tools=true`。PR、其他分支或其他 workflow 的记录不可被采用。
+本次调整由用户要求的“每周升级、日常固定”策略授权；不升级业务依赖、Qt、Node、GCC 或 vcpkg baseline。
+编译器漂移在依赖恢复前失败，不自动修改 Visual Studio、不静默回退。首次引导、缓存和记录保留期
+见 [构建测试入口](build/README.md#validated-weekly-windows-toolchain)。本机 DG-25 边界不变。
+
 ## 2. 回归测试
 
 保留已有业务行为测试。快速流程的“快速”指不启用 Docker 真实依赖和完整 E2E，不省略单元测试；首次冷依赖构建仍可能较慢。

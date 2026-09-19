@@ -2,6 +2,10 @@ name: Linux integration and end-to-end tests
 
 on:
   workflow_call:
+    inputs:
+      cold_build:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -30,10 +34,12 @@ jobs:
   linux-preflight:
     name: Linux configure compile link and startup preflight
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # Cold dependency restoration plus the existing 57-minute preflight and cleanup.
+    timeout-minutes: 240
     env:
       VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
       VCPKG_DISABLE_METRICS: "1"
+      VCPKG_FORCE_DOWNLOADED_BINARIES: "1"
       CHAT_EVIDENCE_ROOT: ${{ github.workspace }}/out/phase3c/preflight
       CHAT_EXPECTED_GNU_VERSION: "13.3.0"
       CHAT_EXPECTED_CMAKE_VERSION: "3.28.3"
@@ -73,6 +79,11 @@ jobs:
       - name: Bootstrap run-owned vcpkg
         run: bash "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
 
+      - name: Reject compiler drift before installing dependencies
+        run: |
+          test "$(gcc -dumpfullversion)" = "$CHAT_EXPECTED_GNU_VERSION"
+          test "$(g++ -dumpfullversion)" = "$CHAT_EXPECTED_GNU_VERSION"
+
       - name: Install MySQL native RPC prerequisite
         run: |
           sudo apt-get update
@@ -91,6 +102,7 @@ jobs:
 
       - name: Restore vcpkg binary archives
         id: vcpkg-binary-cache
+        if: ${{ !inputs.cold_build }}
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ runner.temp }}/vcpkg-binary-cache
@@ -106,7 +118,7 @@ jobs:
 
       - name: Restore dependencies before project configuration
         id: dependency-restore
-        timeout-minutes: 50
+        timeout-minutes: 170
         run: |
           set -o pipefail
           "$VCPKG_ROOT/vcpkg" install \
