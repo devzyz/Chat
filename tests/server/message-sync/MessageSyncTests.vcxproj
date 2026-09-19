@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals"><ProjectGuid>{632BB311-A643-4760-A11D-4399AE4B35B1}</ProjectGuid><WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion></PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration"><ConfigurationType>Application</ConfigurationType><UseDebugLibraries>false</UseDebugLibraries><PlatformToolset>v143</PlatformToolset></PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup><OutDir>$(MSBuildThisFileDirectory)..\..\..\build\message-sync\</OutDir><IntDir>$(OutDir)obj\</IntDir></PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile><LanguageStandard>stdcpp17</LanguageStandard><ConformanceMode>true</ConformanceMode><AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions></ClCompile>
+    <Link><AdditionalDependencies>gtest.lib;jsoncpp.lib;%(AdditionalDependencies)</AdditionalDependencies></Link>
+  </ItemDefinitionGroup>
+  <ItemGroup><ClCompile Include="message_sync_tests.cpp" /><ClCompile Include="../../../ChatServer/ChatServer/MessageCommit.cpp" /><ClCompile Include="../../../ChatServer/ChatServer/MySqlMessageCommitAdapter.cpp" /></ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

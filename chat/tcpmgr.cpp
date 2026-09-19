@@ -3,6 +3,7 @@
 #include <QSet>
 #include "logmgr.h"
 #include "usermgr.h"
+#include "messageservice.h"
 
 TcpMgr::TcpMgr() : _host("") {
 
@@ -43,6 +44,13 @@ TcpMgr::TcpMgr() : _host("") {
     // 处理断开连接信号
     // 连接发送数据信号与槽函数
     connect(this, &TcpMgr::sig_send_data, this, &TcpMgr::slot_send_data);
+    auto *messages = UserMgr::GetInstance()->messages();
+    connect(messages, &MessageService::syncRequested, this, [this](const QJsonObject &request) {
+        emit sig_send_data(ID_LOAD_CHAT_MESSAGE_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
+    });
+    connect(messages, &MessageService::sendRequested, this, [this](const QJsonObject &request) {
+        emit sig_send_data(ID_TEXT_CHAT_MSG_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
+    });
 
     // 注册回调处理逻辑
     initHandlers();
@@ -110,6 +118,7 @@ void TcpMgr::initHandlers()
         UserMgr::GetInstance()->SetToken(token);
         UserMgr::GetInstance()->SetInfo(user_info);
         UserMgr::GetInstance()->startResourceSession();
+        UserMgr::GetInstance()->messages()->start(UserMgr::GetInstance()->storageRoot(), uid);
 
         // 如果包含好友申请列表，则添加上
         if (jsonObj.contains("apply_list")) {
@@ -131,7 +140,7 @@ void TcpMgr::initHandlers()
 
         // 更新状态
         UserMgr::GetInstance()->SetCurrentChatId(current_chat_id);
-        UserMgr::GetInstance()->SetIsLoadFinish(load_more);
+        UserMgr::GetInstance()->SetIsLoadFinish(!load_more);
 
         if (jsonObj.contains("chat_list")) {
             const auto chat_list = jsonObj["chat_list"].toArray();
@@ -162,6 +171,10 @@ void TcpMgr::initHandlers()
                 }
             }
             emit sig_tcp_load_chat_finish(chat_list);
+            if (load_more && current_chat_id > 0) {
+                QJsonObject next{{"uid", self_id}, {"current_chat_id", current_chat_id}};
+                emit sig_send_data(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(next).toJson(QJsonDocument::Compact));
+            }
         }
         // Authentication is complete. Retry the original bytes/UUIDs once per successful login.
         const auto pending = _pendingTextBatches;
@@ -563,6 +576,7 @@ void TcpMgr::initHandlers()
         if (err != ErrorCodes::SUCCESS) {
             SPDLOG_WARN("text chat response failed, msg_id={}, error={}",
                         static_cast<int>(id), err);
+            UserMgr::GetInstance()->messages()->markUncertain(responseChatId, pendingClientIds);
             emit sig_text_chat_msg_failed(responseChatId, pendingClientIds);
             return ;
         }
@@ -594,6 +608,7 @@ void TcpMgr::initHandlers()
                 }
             }
             acknowledgements.push_back({uuid, msgid});
+            UserMgr::GetInstance()->messages()->acknowledge(chat_id, uuid, msgid);
         }
 
         emit sig_text_chat_msg_rsp_finish(chat_id, acknowledgements);
@@ -660,6 +675,8 @@ void TcpMgr::initHandlers()
         }
 
         emit sig_update_text_chat_msg(from_uid, to_uid, chat_id, msgs);
+        UserMgr::GetInstance()->messages()->registerChat(chat_id);
+        UserMgr::GetInstance()->messages()->synchronize(chat_id);
     });
 
     // 服务器通知客户端下线
@@ -820,6 +837,10 @@ void TcpMgr::initHandlers()
         }
 
         emit sig_tcp_load_chat_finish(chat_list);
+        if (load_more && current_chat_id > 0) {
+            QJsonObject next{{"uid", self_id}, {"current_chat_id", current_chat_id}};
+            emit sig_send_data(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(next).toJson(QJsonDocument::Compact));
+        }
     });
 
     // 创建私有聊天请求回包
@@ -894,6 +915,16 @@ void TcpMgr::initHandlers()
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
+        if (jsonObj.contains("request_id")) {
+            UserMgr::GetInstance()->messages()->acceptSyncPage(jsonObj);
+            return;
+        }
+        if (UserMgr::GetInstance()->messages()->isActive()) {
+            // An old server response cannot establish the incremental sync contract.
+            emit sig_tcp_load_chat_msg_failed(jsonObj["chat_id"].toInt());
+            return;
+        }
+
         if (jsonObj.isEmpty()) {
             SPDLOG_WARN("load chat message response contains an empty JSON object, msg_id={}",
                         static_cast<int>(id));

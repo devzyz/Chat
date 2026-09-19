@@ -19,11 +19,13 @@ void CheckDeadline(Deadline deadline) {
 }
 
 bool IsMember(sql::Connection& connection, int sender, int recipient, int chat) {
+    // Serialize ID allocation/commit with resource writers and incremental sync
+    // on the private_chat row, so a sync cursor cannot pass an uncommitted ID.
     std::unique_ptr<sql::PreparedStatement> query(connection.prepareStatement(
         "SELECT c.chat_id FROM chat c JOIN private_chat p ON p.chat_id=c.chat_id "
         "JOIN user s ON s.uid=? JOIN user r ON r.uid=? "
         "WHERE c.chat_id=? AND c.type='private' AND "
-        "((p.user1_id=s.uid AND p.user2_id=r.uid) OR (p.user1_id=r.uid AND p.user2_id=s.uid)) FOR SHARE"));
+        "((p.user1_id=s.uid AND p.user2_id=r.uid) OR (p.user1_id=r.uid AND p.user2_id=s.uid)) FOR UPDATE"));
     query->setInt(1, sender);
     query->setInt(2, recipient);
     query->setInt(3, chat);

@@ -101,3 +101,7 @@ Varify 携带 Node runtime/锁定依赖，并由合并包的相邻 proto 目录�
 ## 构建配置审核
 
 修改 `Chat.sln`、`.vcxproj`、MSBuild props/targets、CMake、vcpkg、triplet、package files 或 workflow 时，至少执行：语法解析、个人路径扫描、静态 triplet/旧 ChatServer 路径扫描、相关构建和对应 CI job。
+
+## Message storage runtime
+
+The Qt client requires Qt SQL and the kit QSQLITE plugin. CMake checks the Windows driver and copies QtSql plus `sqldrivers/qsqlite.dll` beside the local application; existing windeployqt packaging remains responsible for the release bundle. See [MessageStorage](MessageStorage.md).

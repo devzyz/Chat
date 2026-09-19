@@ -5,3 +5,7 @@ This module now tests only `MsgNode` buffer ownership: zero initialization, clea
 Domain is Foundation and Level is Unit. The eight in-memory tests use no socket, thread, or external service. Run `RunServerTests` or filter `MsgNodeTests.*:SendNodeTests.*:RecvNodeTests.*`; results are in `server_unit.xml`.
 
 Full TCP partial/sticky packet, peer disconnect, and session-close behavior remains an Integration gap. No test-only production method is exposed.
+
+`OversizedApplicationBodyIsRejectedBeforeAllocation` also checks the 1028 history/sync
+response exception: up to 65535 bytes, with overflow rejected before allocation.
+Other message types keep the 2048-byte limit; inbound validation is unchanged.

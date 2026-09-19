@@ -4,6 +4,7 @@
 #include "ui_chatpage.h"
 #include "tcpmgr.h"
 #include "usermgr.h"
+#include "messageservice.h"
 #include <QCoreApplication>
 #include <QFileDialog>
 #include <QDesktopServices>
@@ -33,9 +34,8 @@ void ChatPage::initResourceTransfers()
         AppendChatMsg(message);
         QJsonObject payload{{"from_uid", UserMgr::GetInstance()->GetUid()}, {"to_uid", _uploadRecipient},
             {"chat_id", _uploadChat}, {"resource_id", descriptor["resource_id"]},
-            {"text_array", QJsonArray{QJsonObject{{"msg_uuid", _uploadUuid}, {"msg_content", ""}}}}};
-        _pendingResourceRequests[_uploadUuid] = payload;
-        emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+            {"text_array", QJsonArray{QJsonObject{{"msg_uuid", _uploadUuid}, {"msg_content", content}}}}};
+        UserMgr::GetInstance()->messages()->send(payload);
         ui->file_label->setToolTip(tr("上传完成"));
     });
     connect(_transfer, &ResourceTransferManager::downloaded, this, [this](const QString& id, const QString& path) {
@@ -54,10 +54,20 @@ void ChatPage::initResourceTransfers()
     });
     connect(ui->chat_detail_data_list, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
         const auto uuid = index.data(MessageListModel::ClientMessageIdRole).toString();
-        if (index.data(MessageListModel::DeliveryStatusRole).toInt() == int(DeliveryStatus::Failed)
-            && _pendingResourceRequests.contains(uuid)) {
-            emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ,
-                QJsonDocument(_pendingResourceRequests.value(uuid)).toJson(QJsonDocument::Compact));
+        const auto status = static_cast<DeliveryStatus>(index.data(MessageListModel::DeliveryStatusRole).toInt());
+        if ((status == DeliveryStatus::Failed || status == DeliveryStatus::Uncertain)
+            && !uuid.isEmpty() && _chatInfo) {
+            QJsonObject payload{{"from_uid", UserMgr::GetInstance()->GetUid()},
+                {"to_uid", _chatInfo->GetUid()}, {"chat_id", _currentChatId}};
+            QString content = index.data(MessageListModel::TextRole).toString();
+            const auto resourceId = index.data(MessageListModel::ResourceIdRole).toString();
+            if (!resourceId.isEmpty()) {
+                payload["resource_id"] = resourceId;
+                content = "@resource:v1:" + QString::fromUtf8(
+                    QJsonDocument(_resourceDescriptors.value(resourceId)).toJson(QJsonDocument::Compact));
+            }
+            payload["text_array"] = QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"msg_content", content}}};
+            UserMgr::GetInstance()->messages()->send(payload);
             if (auto* model = _messageStore.find(_currentChatId)) model->updateStatusByClientId(uuid, DeliveryStatus::Sending);
             return;
         }
@@ -77,9 +87,10 @@ void ChatPage::loadResource(MessageRecord& record)
     record.messageType = type.startsWith("image/") ? MessageType::Image :
         type.startsWith("video/") ? MessageType::Video : MessageType::File;
     record.text = descriptor["name"].toString() + tr("（双击打开或重试下载）");
+    const bool known = _resourceDescriptors.contains(record.resourceId);
     _resourceDescriptors[record.resourceId] = descriptor;
     _resourceChats.insert(record.chatId);
-    QTimer::singleShot(0, this, [this, descriptor] { _transfer->download(descriptor); });
+    if (!known) QTimer::singleShot(0, this, [this, descriptor] { _transfer->download(descriptor); });
 }
 
 void ChatPage::selectResource()

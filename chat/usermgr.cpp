@@ -3,15 +3,25 @@
 #include "avatarcrop.h"
 #include <QStandardPaths>
 #include "userstoragepaths.h"
+#include "messageservice.h"
 #include <QCoreApplication>
 #include <QLabel>
 
 UserMgr::UserMgr()
-    : _localAvatar(new LocalAvatar(UserStoragePaths::dataRoot(), this,
+    : _messages(new MessageService(this)),
+      _localAvatar(new LocalAvatar(UserStoragePaths::dataRoot(), this,
           QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation))),
       _contact_load_count(0), _current_load_chat_id(0), _last_chat_id(0),
       _is_load_chat_finish(false)
 {
+    // The singleton outlives QApplication. Drain storage before Qt tears down
+    // posted-event delivery, otherwise its worker cannot receive the quit task.
+    qAddPostRoutine([] {
+        const auto user = UserMgr::GetInstance();
+        if (!user) return; // Normal application exit may already release the singleton.
+        delete user->_messages;
+        user->_messages = nullptr;
+    });
     _localAvatar->setUploadEnabled(true);
     connect(_localAvatar, &LocalAvatar::uploadRequested, this, [this](const QString &path) {
         if (_remoteAvatars) _remoteAvatars->upload(path);
@@ -106,6 +116,7 @@ QPixmap UserMgr::selfAvatar() const
 
 void UserMgr::resetSession()
 {
+    _messages->stop();
     delete _remoteAvatars;
     _remoteAvatars = nullptr;
     _user_info.reset();
@@ -307,6 +318,7 @@ bool UserMgr::ChatIsLoadFinish()
 
 void UserMgr::AddChatInfo(int chat_id, std::shared_ptr<ChatInfo> chat_info)
 {
+    _messages->registerChat(chat_id);
     if (_chat_map.find(chat_id) != _chat_map.end()) {
         return;
     }

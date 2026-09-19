@@ -10,6 +10,7 @@
 #include <QMouseEvent>
 #include "tcpmgr.h"
 #include "usermgr.h"
+#include "messageservice.h"
 #include "chatuseritem.h"
 #include "contactuseritem.h"
 #include <QTimer>
@@ -139,6 +140,28 @@ ChatDialog::ChatDialog(QWidget *parent)
             this, &ChatDialog::slot_append_send_text_cache_msg);
     connect(ui->chat_page, &ChatPage::sig_request_history,
             this, &ChatDialog::TcpLoadingMoreChatMsg);
+    auto *messages = UserMgr::GetInstance()->messages();
+    connect(messages, &MessageService::historyLoaded, ui->chat_page, &ChatPage::applyStoredHistory);
+    connect(messages, &MessageService::sendFailed, ui->chat_page, &ChatPage::MarkMessagesFailed);
+    connect(messages, &MessageService::historyLoaded, this,
+        [this](int chatId, qint64 before, const QVector<StoredMessage> &rows, bool) {
+            if (before != 0 || rows.isEmpty() || !_chat_item_map.contains(chatId)) return;
+            auto *item = qobject_cast<ChatUserItem*>(ui->chat_user_list->itemWidget(_chat_item_map.value(chatId)));
+            if (!item) return;
+            QString summary = rows.back().content;
+            if (summary.startsWith("@resource:v1:")) {
+                summary = QJsonDocument::fromJson(summary.mid(13).toUtf8()).object()["name"].toString();
+            }
+            item->SetLastTextChatMsg(summary);
+        });
+    connect(messages, &MessageService::messagesChanged, this, [this, messages](int chatId) {
+        messages->loadHistory(chatId, 0, ui->chat_page->oldestLoadedMessageId(chatId));
+    });
+    connect(messages, &MessageService::failed, this, [this](int chatId, const QString &reason) {
+        ui->chat_page->HistoryLoadFailed(chatId);
+        ui->chat_page->setToolTip(reason);
+        SPDLOG_WARN("local message operation failed, chat_id={}, reason={}", chatId, LogMgr::ToUtf8(reason));
+    });
 
     // 连接服务器通知我添加消息后的信号，将服务器通知的信息刷新到聊天界面上
     connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_update_text_chat_msg,
@@ -637,6 +660,7 @@ void ChatDialog::slot_tcp_load_chat_finish(QJsonArray jsonArray)
         auto obj = chat.toObject();
 
         auto chat_id = obj["chat_id"].toInt();
+        if (_chat_item_map.contains(chat_id)) continue;
 
         auto chat_info = UserMgr::GetInstance()->GetChatInfo(chat_id);
         if (chat_info == nullptr) {
@@ -657,6 +681,7 @@ void ChatDialog::slot_tcp_load_chat_finish(QJsonArray jsonArray)
         ui->chat_user_list->setItemWidget(item, chat_user_item);
 
         _chat_item_map.insert(chat_id, item);
+        UserMgr::GetInstance()->messages()->loadHistory(chat_id);
     }
 
     // 如果当前ui哪一个都没有选中，则选中第一个
@@ -785,8 +810,7 @@ void ChatDialog::SetSelectChatPage(int uid) {
 
 // TCP请求加载更多聊天记录
 void ChatDialog::TcpLoadingMoreChatMsg(int chatId, qint64 beforeMessageId) {
-    emit TcpMgr::GetInstance()->sig_send_data(ID_LOAD_CHAT_MESSAGE_REQ,
-        clientHistoryRequest(chatId, beforeMessageId));
+    UserMgr::GetInstance()->messages()->loadHistory(chatId, beforeMessageId);
 }
 
 // TCP加载更多聊天记录完成

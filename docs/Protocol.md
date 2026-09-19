@@ -106,3 +106,11 @@ Qt 消费者已按 `load_more` 和页尾游标继续翻页；不需要迁移或�
 5. 是否增加 Redis/MySQL 清理或迁移步骤？
 
 至少应有项目级 round-trip、handler 或 Integration 测试验证契约，而不是只确认生成代码能编译。
+
+## Incremental private-message synchronization (`sync_v1`)
+
+Request 1027 adds `mode: "sync_v1"`, authenticated `uid`, `chat_id`, nonnegative `after_id`, and `request_id` (at most 64 bytes). Response 1028 echoes the envelope and returns `error`, `msgs`, `next_cursor`, `load_more`. Each row has `message_id`, `send_id`, `recv_id`, raw `content`, epoch-seconds `created_at`, and `msg_uuid`.
+
+Rows are ordered by increasing server ID; only IDs greater than `after_id` are returned. A page contains at most 50 rows and fits the complete encoded response. Only response 1028 permits a body up to 65535 bytes; other messages and client requests retain the 2048-byte bound. Legacy history keeps its existing serializer and fields. Old clients cannot consume large sync responses; update all ChatServer writers before deploying the new client.
+
+The client atomically commits a whole page and its cursor; ACKs/pushes never advance it. Existing committed local history is trusted. Synchronization and deployment details: [MessageStorage](MessageStorage.md).

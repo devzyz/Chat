@@ -78,5 +78,13 @@ int main(int argc, char *argv[])
     passed &= expect(freshFrames[0].body == QByteArray("fresh", 5),
                      "fresh connection frame inherited old body bytes");
 
+    TcpFrameDecoder history;
+    const QByteArray historyBody(65535, 'x');
+    const auto historyFrames = history.append(frame(1028, historyBody));
+    passed &= expect(historyFrames.size() == 1 && historyFrames[0].body == historyBody,
+                     "history response did not preserve the full uint16 body");
+    TcpFrameDecoder bounded;
+    passed &= expect(bounded.append(frame(1018, QByteArray(2049, 'x'))).isEmpty()
+                     && bounded.hasError(), "non-history response exceeded its existing bound");
     return passed ? 0 : 1;
 }

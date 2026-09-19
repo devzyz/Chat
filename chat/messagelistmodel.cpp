@@ -18,6 +18,39 @@ bool messageLess(const MessageRecord &left, const MessageRecord &right)
 }
 }
 
+void MessageListModel::mergeMessages(const QVector<MessageRecord> &messages)
+{
+    assertGuiThread();
+    beginResetModel();
+    for (const auto &message : messages) {
+        if (message.chatId != _chatId) continue;
+        int match = -1;
+        for (int row = _messages.size() - 1; row >= 0; --row) {
+            const auto &existing = _messages[row];
+            if ((message.messageId > 0 && existing.messageId == message.messageId)
+                || (!message.clientMessageId.isEmpty() && existing.clientMessageId == message.clientMessageId
+                    && existing.senderId == message.senderId)) {
+                if (match >= 0) _messages.removeAt(match);
+                match = row;
+            }
+        }
+        if (match < 0) _messages.push_back(message);
+        else {
+            auto updated = message;
+            const auto &existing = _messages[match];
+            if (updated.clientMessageId.isEmpty()) updated.clientMessageId = existing.clientMessageId;
+            if (updated.localResourcePath.isEmpty()) {
+                updated.localResourcePath = existing.localResourcePath;
+                updated.resourcePreview = existing.resourcePreview;
+            }
+            _messages[match] = std::move(updated);
+        }
+    }
+    std::stable_sort(_messages.begin(), _messages.end(), messageLess);
+    rebuildRowIndexes();
+    endResetModel();
+}
+
 MessageListModel::MessageListModel(int chatId)
     : QAbstractListModel(nullptr), _chatId(chatId)
 {
@@ -36,6 +69,10 @@ QVariant MessageListModel::data(const QModelIndex &index, int role) const
 
     const auto &message = _messages.at(index.row());
     switch (role) {
+    case Qt::ToolTipRole:
+        if (message.deliveryStatus == DeliveryStatus::Uncertain) return tr("发送结果待核实，可双击使用原消息编号重试");
+        if (message.deliveryStatus == DeliveryStatus::Failed) return tr("消息未能发送");
+        return {};
     case Qt::DisplayRole:
     case TextRole: return message.text;
     case ResourceIdRole: return message.resourceId;

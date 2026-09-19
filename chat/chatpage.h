@@ -4,6 +4,7 @@
 #include "messagemodelstore.h"
 #include "messagerecord.h"
 #include "userdata.h"
+#include "localmessagestore.h"
 
 #include <QHash>
 #include <QJsonObject>
@@ -36,6 +37,8 @@ public:
     void ApplyDeliveryAcknowledgements(int chatId,
                                        const QVector<MessageAcknowledgement> &acknowledgements);
     void MarkMessagesFailed(int chatId, const QVector<QString> &clientMessageIds);
+    void applyStoredHistory(int chatId, qint64 before, const QVector<StoredMessage> &messages, bool hasMore);
+    qint64 oldestLoadedMessageId(int chatId) const;
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -73,7 +76,6 @@ private:
     void loadResource(MessageRecord& record);
     ResourceTransferManager* _transfer = nullptr;
     QHash<QString, QJsonObject> _resourceDescriptors;
-    QHash<QString, QJsonObject> _pendingResourceRequests;
     QSet<int> _resourceChats;
     int _uploadChat = 0;
     int _uploadRecipient = 0;
