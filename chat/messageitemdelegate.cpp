@@ -272,6 +272,7 @@ const QPixmap *MessageItemDelegate::statusPixmap(DeliveryStatus status) const
     case DeliveryStatus::Sending:
     case DeliveryStatus::Sent: return &_sendingPixmap;
     case DeliveryStatus::Failed: return &_failedPixmap;
+    case DeliveryStatus::Uncertain: return &_failedPixmap;
     case DeliveryStatus::Read: return &_readPixmap;
     case DeliveryStatus::None: return nullptr;
     }

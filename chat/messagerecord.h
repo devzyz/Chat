@@ -19,7 +19,8 @@ enum class DeliveryStatus {
     Sending,
     Sent,
     Failed,
-    Read
+    Read,
+    Uncertain
 };
 
 struct MessageRecord {

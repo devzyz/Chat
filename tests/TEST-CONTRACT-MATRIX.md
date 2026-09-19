@@ -857,3 +857,9 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 - 发布打包测试由 unittest 自动发现，入口见 [发布测试](release/contracts/README.md)。
 - CI 分层与发布策略见 [CI-GOVERNANCE](CI-GOVERNANCE.md)。原 R-00 16 项审批/登记合同已由包文件、摘要、配置、启动与发布保护测试替换。
 - 本机依赖仍遵守 DG-25；不因测试失败自动恢复或修改 vcpkg。
+
+## Local message synchronization
+
+Q05-STORE-01..07 are mapped in [message-storage](../chat/tests/message-storage/README.md), aggregated as one component CTest case. Client Component increases from 12 to 13; the thirteen-report registration increases from 357 to 358. Other lane counts stay unchanged.
+
+S06-SYNC-01..05 are opt-in real MySQL / production ChatServer / Qt-SQLite contracts in [message-sync](server/message-sync/README.md), outside that aggregate. Local conflict rollback, original-ID retry, ordered commit/cursor behavior and process restart are covered; production Status/Redis and full GUI workflows are not claimed.

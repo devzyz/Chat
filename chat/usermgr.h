@@ -10,6 +10,7 @@
 #include "localavatar.h"
 #include "avatarcache.h"
 class QLabel;
+class MessageService;
 
 class UserMgr : public QObject, public Singleton<UserMgr>,
                 public std::enable_shared_from_this<UserMgr>
@@ -28,6 +29,7 @@ public:
     QPixmap avatarFor(int uid, const QString &fallback = {}) const;
     void bindAvatar(QLabel *label, int uid, const QString &fallback = {});
     QString storageRoot() const;
+    MessageService *messages() const { return _messages; }
 signals:
     void avatarChanged(int uid);
 public:
@@ -75,6 +77,7 @@ public:
     std::shared_ptr<ChatInfo> GetChatInfo(int chat_id);
 private:
     UserMgr();
+    MessageService *_messages;
     LocalAvatar *_localAvatar;
     AvatarCache *_remoteAvatars = nullptr;
     std::shared_ptr<UserInfo> _user_info;

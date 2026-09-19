@@ -3,6 +3,25 @@
 更新：2026-09-19。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
 项目目标：先完成基本聊天功能，后续主要投入可测量的性能优化。
 
+## 当前工作：本地消息持久化与增量同步
+
+- PR #9 已合入 develop；本次从 `eed758a37932357a749afc8f0929402b89dc25bf` 创建
+  `feature/local-message-sync` 独立工作树。主工作区已有修改保留，未用旧工作区覆盖远端代码。
+- 按账号隔离 SQLite、先落盘再发送、本地历史分页、上线与实时通知后的增量补拉、事务游标和重启恢复已接入。
+  复用现有 `chat_message.client_msg_uuid`，没有新增 MySQL 迁移；流程与部署见 [MessageStorage](MessageStorage.md)。
+- 需求/规范复核发现的问题已修复：UUID 身份冲突不能静默跳过、满队列账号切换不能丢失打开操作、
+  旧历史非法请求保留错误回包、事务对象不可复制且回滚失败关闭连接。
+- 客户端公开 runner：24 Unit / 13 Component / 28 Integration 通过；资源 Qt 的 5 个业务场景通过。
+  脚本公开 runner：9 Component / 4 Integration 通过。新增同步专项：3 个真实 MySQL 测试、
+  双 ChatServer TCP 流程及 Qt/SQLite 进程重启增量验证通过。
+- 同步专项首次移植遗漏测试 UID 计数器，补齐测试数据后重跑通过；没有弱化生产 schema 校验。
+  测试仅迁移临时 MySQL，未修改个人运行库、依赖安装树或原工作区运行产物。
+- 本次聚合注册为 13 份报告 / 358 项；未声称执行全仓聚合、完整 GUI 或生产 Status/Redis E2E。
+  报告保存在本工作树 `build/test-results/`、`build/message-sync/`。远端 PR CI 以当前提交检查为准。
+- 下一步：完成 PR 检查；实际启用时先更新全部 ChatServer，再部署带 QSQLITE 的客户端。
+
+以下为前序阶段和头像资源功能的历史记录，数量与证据按原阶段保留。
+
 ## 已合并基线
 
 - PR #2～#8 已合入 develop；远端 develop 为 `4ae014c90e5084b1d0bc152de87b748d4f3d7673`。

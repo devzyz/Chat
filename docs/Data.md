@@ -86,3 +86,7 @@ MySQL references: [implicit DDL commits](https://dev.mysql.com/doc/refman/8.4/en
 [session advisory locks](https://dev.mysql.com/doc/refman/8.4/en/locking-functions.html),
 [SQL diagnostics](https://dev.mysql.com/doc/refman/8.4/en/get-diagnostics.html), and
 [routine security and parameter definitions](https://dev.mysql.com/doc/refman/8.4/en/create-procedure.html).
+
+## Local message database
+
+The account-scoped SQLite schema, transaction/cursor rules and deployment workflow are documented in [MessageStorage](MessageStorage.md). Server sync reuses `chat_message.client_msg_uuid` from existing migration 002; it adds no parallel identity table or MySQL migration.

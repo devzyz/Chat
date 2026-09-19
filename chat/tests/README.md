@@ -41,3 +41,5 @@ Phase 3C message retry adds two session Component cases and one real loopback
 Integration case in the existing session-reset module. The authoritative report
 counts are maintained by `scripts/windows-local.ps1`; `client_integration.xml`
 includes the authenticated retry alongside the existing HTTP/TCP transport cases.
+
+Message persistence adds one component case (`message_storage.persistence`), covering seven business contracts in [message-storage](message-storage/README.md). Client registration is now 24 Unit / 13 Component / 28 Integration. Network-state coverage also checks full-size 1028 responses and the unchanged bound for other frames.

@@ -2,6 +2,8 @@
 #include <functional>
 
 #define MAX_LENGTH 1024 * 2
+// Only server history/sync responses may use the full uint16 wire body length.
+constexpr unsigned int MAX_HISTORY_BODY_LENGTH = 0xffff;
 #define MAX_RECVQUE 10000
 #define MAX_SENDQUE 1000
 #define MAX_DEALQUE 1000

@@ -1,4 +1,6 @@
 #pragma once
+#include <cstdint>
+#include <json/json.h>
 #include "Singleton.h"
 #include "MysqlDao.h"
 #include "Const.h"
@@ -36,6 +38,7 @@ public:
 	// 增量加载部分聊天数据
 	bool GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
+    bool SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response);
 private:
 	MysqlMgr();
 	MysqlDao _dao;

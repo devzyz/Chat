@@ -44,6 +44,7 @@ public:
     int appendMessage(const MessageRecord &message);
     int appendMessages(const QVector<MessageRecord> &messages);
     int prependHistory(const QVector<MessageRecord> &messages);
+    void mergeMessages(const QVector<MessageRecord> &messages);
     void updateSenderAvatar(int senderId, const QPixmap &avatar);
 
     bool acknowledgeMessage(const QString &clientMessageId, qint64 messageId,
