@@ -57,6 +57,7 @@ test('stale restored cache is refreshed once; a warm run does not upload identic
         const summary = path.join(root, 'summary');
         const log = path.join(root, 'restore.log');
         const env = { ...process.env, RUNNER_TEMP: root, RUNNER_OS: 'Windows', RUNNER_ARCH: 'X64',
+            CHAT_WINDOWS_TOOLCHAIN: path.resolve(__dirname, '../../scripts/ci/windows-toolchain.json'),
             ImageOS: 'win22', ImageVersion: 'fixture-1', GITHUB_RUN_ID: '100', GITHUB_RUN_ATTEMPT: '1',
             GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary };
         function run(command, overrides = {}) {
@@ -76,7 +77,14 @@ test('stale restored cache is refreshed once; a warm run does not upload identic
         assert.equal(run('prepare', { ImageVersion: 'fixture-2' }).prefix, first.prefix);
         assert.notEqual(run('prepare', { ImageOS: 'win25' }).fallback, first.fallback);
         assert.ok(first.prefix.startsWith(first.fallback));
-        assert.match(first.legacy, /^vcpkg-binary-v2-Windows-X64-/);
+        assert.equal(first.legacy, '', 'do not restore archives from an unverified toolchain');
+        const upgradedLock = JSON.parse(fs.readFileSync(env.CHAT_WINDOWS_TOOLCHAIN, 'utf8'));
+        upgradedLock.tools.find(tool => tool.name === 'powershell-core').version = '7.6.6';
+        const upgradedPath = path.join(root, 'upgraded-toolchain.json');
+        fs.writeFileSync(upgradedPath, JSON.stringify(upgradedLock));
+        const upgraded = run('prepare', { CHAT_WINDOWS_TOOLCHAIN: upgradedPath });
+        assert.notEqual(upgraded.prefix, first.prefix);
+        assert.notEqual(upgraded.fallback, first.fallback, 'PowerShell patch drift must not reuse the old namespace');
         assert.notEqual(run('prepare', { RUNNER_OS: 'Linux' }).prefix, first.prefix);
         assert.notEqual(run('prepare', { GITHUB_RUN_ATTEMPT: '2' }).key, first.key);
 
@@ -97,7 +105,7 @@ test('stale restored cache is refreshed once; a warm run does not upload identic
         assert.match(fs.readFileSync(summary, 'utf8'), /Dependency installation time: 1.5 s/);
         assert.match(fs.readFileSync(summary, 'utf8'), /Save reason: unchanged/);
         assert.match(fs.readFileSync(summary, 'utf8'), /Restored packages: 2/);
-        const migration = { CACHE_RESTORED_KEY: `${first.legacy}100-1`, CACHE_PRIMARY_PREFIX: first.prefix };
+        const migration = { CACHE_RESTORED_KEY: `${first.fallback}old-manifest-100-1`, CACHE_PRIMARY_PREFIX: first.prefix };
         assert.equal(run('report', migration).changed, 'true', 'legacy archives must seed the new namespace');
         assert.equal(run('report', { ...migration, CACHE_RESTORED_KEY: first.key }).changed, 'false');
         assert.equal(run('report', { ...migration,

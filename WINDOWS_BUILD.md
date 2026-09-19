@@ -83,10 +83,11 @@ cache-free `RestoreServers` step completed in 68 minutes 37 seconds. The
 workflow now caches only vcpkg binary archives. It does not cache
 `vcpkg_installed`, buildtrees, packages, MSBuild intermediates or final release
 directories: those are derived state and are recreated and verified by every
-run. Windows and Linux CI use `scripts/ci/vcpkgBinaryCache.js` with v3 keys:
-OS, architecture, image family, target/host triplets, dependency fingerprint,
-and run/attempt. Restore prefers the same dependency configuration, then the
-same platform/triplet family, then explicit previously saved v2 archives.
+run. Both platforms use `scripts/ci/vcpkgBinaryCache.js`. Windows v4 keys include
+the approved Windows toolchain identity as well as OS, architecture, image family,
+target/host triplets, dependency fingerprint and run/attempt. Windows fallbacks
+never cross tool identities. Linux retains its v3 same-platform/triplet fallbacks
+and explicit previously saved v2 archives.
 The image revision is logged, not a restore boundary; vcpkg retains compiler
 tracking and decides package reuse by ABI. Successful dependency restoration
 saves changed archives or promotes an older namespace before business builds.
@@ -96,9 +97,22 @@ after saving to reduce disk use; installed trees remain uncached.
 Summaries record the restored key, actual package restore/build counts, install
 time and save reason. Diagnostic artifacts retain ABI records and compiler logs.
 PR caches remain scoped by GitHub; develop/master push builds seed caches for
-later PRs. A new target branch can still require a cold build. Hosted v3 migration
+later PRs. A new target branch can still require a cold build. Hosted toolchain migration
 and a second unchanged warm run must confirm real reuse; local fixture success
 is not performance evidence. See [cache regression](tests/build/README.md#ci-binary-dependency-cache).
+
+Ordinary CI uses the latest fully validated weekly Windows toolchain record,
+with the committed `scripts/ci/windows-toolchain.json` as the initial bootstrap.
+Weekly CI cold-builds on both platforms, tests the latest stable Windows
+PowerShell/CMake/Ninja and runner-provided MSVC 2022/SDK, then publishes the record
+only after full regression. An unsuccessful weekly run cannot replace the approved
+record. Tool versions are verified before dependency installation; runner compiler
+drift fails early instead of silently triggering hours of rebuilding.
+The first transition may require one cold build. For a deliberate refresh on the
+default branch, use `gh workflow run ci.yml --ref develop -f refresh_tools=true`;
+ordinary manual runs retain approved versions. See the
+[toolchain contract](tests/build/README.md#validated-weekly-windows-toolchain) for
+retention, upgrade boundaries and cache prewarming.
 The Node setup step may cache npm's
 download cache keyed by `package-lock.json`; it does not cache `node_modules`,
 which is always recreated by `npm ci`.

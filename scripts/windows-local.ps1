@@ -280,6 +280,16 @@ function Restore-Servers {
     }
 }
 
+function Get-CiToolchainArguments {
+    if ($env:GITHUB_ACTIONS -ne 'true' -or [string]::IsNullOrWhiteSpace($env:CHAT_WINDOWS_TOOLCHAIN)) { return }
+    $lock = Get-Content -LiteralPath $env:CHAT_WINDOWS_TOOLCHAIN -Raw | ConvertFrom-Json
+    if ($lock.msvc.toolset -notmatch '^14\.\d+\.\d+$' -or $lock.msvc.sdk -notmatch '^10\.0\.\d+\.0$') {
+        throw 'Invalid CI compiler identity.'
+    }
+    "/p:VCToolsVersion=$($lock.msvc.toolset)"
+    "/p:WindowsTargetPlatformVersion=$($lock.msvc.sdk)"
+}
+
 function Build-Servers {
     $vcpkg = Resolve-Vcpkg
     $msbuild = Resolve-MSBuild
@@ -296,6 +306,7 @@ function Build-Servers {
         '/p:VcpkgManifestInstall=false'
         "/p:VcpkgInstalledDir=$VcpkgInstalledRoot\"
     )
+    $arguments += @(Get-CiToolchainArguments)
     & $msbuild @arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Server build failed with exit code $LASTEXITCODE."
@@ -338,6 +349,7 @@ function Run-ServerTests {
         }
     }
 
+    $arguments += @(Get-CiToolchainArguments)
     & $msbuild @arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Server test build failed with exit code $LASTEXITCODE."
@@ -358,6 +370,7 @@ function Run-ServerTests {
             '/p:VcpkgManifestInstall=false'
             "/p:VcpkgInstalledDir=$installedRoot\"
         )
+        $poolArguments += @(Get-CiToolchainArguments)
         & $msbuild @poolArguments
         if ($LASTEXITCODE -ne 0) {
             throw "Server Asio lifecycle test build failed with exit code $LASTEXITCODE`: $project"

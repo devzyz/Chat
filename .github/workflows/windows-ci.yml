@@ -2,6 +2,13 @@ name: Windows CI
 
 on:
   workflow_call:
+    inputs:
+      toolchain_lock:
+        type: string
+        required: true
+      refresh_tools:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -117,7 +124,7 @@ jobs:
 
       - name: Verify binary cache refresh behavior
         shell: pwsh
-        run: node --test tests/build/vcpkgBinaryCache.test.js
+        run: node --test tests/build/vcpkgBinaryCache.test.js tests/build/toolchain.test.js
 
       - name: Verify CI triggers and execution budgets
         shell: pwsh
@@ -221,6 +228,24 @@ jobs:
               throw "vcpkg version check failed with exit code $LASTEXITCODE."
           }
 
+      - name: Select and verify locked Windows toolchain before dependency restoration
+        shell: pwsh
+        env:
+          CHAT_TOOLCHAIN_LOCK: ${{ inputs.toolchain_lock }}
+          CHAT_REFRESH_TOOLS: ${{ inputs.refresh_tools }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci/install-windows-toolchain.ps1 -VcpkgRoot $env:VCPKG_ROOT -Refresh:($env:CHAT_REFRESH_TOOLS -eq 'true')
+
+      - name: Retain candidate toolchain for full-regression promotion
+        if: inputs.refresh_tools
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-toolchain-candidate
+          path: .ci/windows-toolchain.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Prepare layered binary cache keys
         id: binary-cache-key
         shell: pwsh
@@ -228,6 +253,7 @@ jobs:
 
       - name: Restore vcpkg binary archives
         id: vcpkg-binary-cache
+        if: ${{ !inputs.refresh_tools }}
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ runner.temp }}\vcpkg-binary-cache
@@ -291,6 +317,7 @@ jobs:
           name: windows-vcpkg-diagnostics
           include-hidden-files: true
           path: |
+            .ci/windows-toolchain.json
             ${{ runner.temp }}/vcpkg-restore.log
             .ci/vcpkg_installed/x64-windows-chat-release/share/*/vcpkg_abi_info.txt
             ${{ runner.temp }}/vcpkg-buildtrees/detect_compiler/**/*.log

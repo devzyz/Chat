@@ -35,6 +35,9 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 
 - 禁止提交 `vcpkg_installed`、buildtrees、packages 或 `node_modules`。
 - CI 只可缓存 vcpkg binary archives 和包管理器下载缓存，不缓存已安装树或编译中间目录。
+- Windows CI 日常使用已通过完整回归的精确工具链；每周以新版 PowerShell/CMake/Ninja 和 runner 提供的最新 MSVC 2022/SDK 冷构建。
+  全量回归成功、缓存预热完成后才发布新的工具链记录，失败保留上次已验证版本；发现编译器漂移须在恢复依赖前失败。
+  首次引导、手动刷新、保留期及升级边界见 [构建测试入口](../tests/build/README.md#validated-weekly-windows-toolchain)。
 - Windows vcpkg 的 GitHub archive 下载适配器使用官方 codeload 路径，并以 port 固定的 SHA-512 校验。
   校验通过 .NET 文件流执行，不依赖子进程能自动加载 `Get-FileHash`；下载失败或摘要不符不得接受文件。
   `scripts/ci/test-vcpkg-github-asset.ps1` 在 Windows PowerShell 下覆盖命令不可用、正确摘要及失败传播。
