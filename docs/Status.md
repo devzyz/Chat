@@ -5,7 +5,7 @@
 
 ## 已合并基线
 
-- PR #2～#7 已合入 develop；远端 develop 为 `2a706de802ff788ad8a6d62fdd8f395ae2d8f329`。
+- PR #2～#8 已合入 develop；远端 develop 为 `4ae014c90e5084b1d0bc152de87b748d4f3d7673`。
   本地主工作区保留功能修改，未切换或拉取；本地 develop 仍为 `719236e5cd7b80908a7b530f6e872b508fd9df2c`。
 - PR #7 于北京时间 9 月 19 日 12:59 合并；[合并后 CI 35422743749](https://github.com/devzyz/Chat/actions/runs/35422743749)
   已启动，仍在运行，尚不能记为通过。
@@ -54,12 +54,13 @@
 
 ## 当前分支
 
-- `feature/avatar-resource-integration`，基于远端 develop `2a706de`（PR #7 合并提交）。
+- `feature/avatar-resource-integration`，已无冲突合并远端 develop `4ae014c`（PR #8 合并提交）。
 - 独立工作树：`Cache/worktrees/avatar-resource-integration`。
 - 整合主工作区头像实现与资源传输实现，解决最新 develop 的消息提交、分页、客户端模块和测试注册冲突。
 - 原主工作区及 `.worktrees/resource-stream-transfer` 保留为来源快照；无关文档整理、个人文件、
   `tests/auto`、旧 release 工作树修改不纳入本分支。后续头像和资源开发以本整合分支为准。
-- 当前为本地整理，未推送、未创建 PR。PR #8 的 CI 工具链修改不属于本分支。
+- 本轮按要求将头像与资源变更提交至 develop PR；PR #8 的工具链修改已作为合并基线继承，
+  不属于本 PR 的功能差异。远端检查结果以 GitHub 当前提交为准。
 
 ## 功能与兼容
 
@@ -81,6 +82,8 @@
 - Server Unit 68 项、Gate/Status 各 2 项线程池回归通过。
 - schema 静态合同 3 项、真实临时 MySQL 迁移回归 12 项通过。
 - schema 2→3 专项升级通过：旧用户/消息保留，重复应用不改数据，删除头像表仍被结构验证拒绝。
+- 合并 PR #8 后，测试注册、diff 检查，以及工具链/缓存/CI 路由/schema 的 22 项定向回归通过。
+  本轮未改生产功能代码，先前业务验证保留；不把它当作新提交已通过远端 CI 的证明。
 - 初次旧 schema fixture 引发 native 校验失败；接入真实版本化迁移并补齐用户/会话 fixture 后通过。
   首次失败日志保留，不计为通过。
 - 日志位于仓库主工作区 `Cache/avatar-resource-integration/`；本工作树报告位于
@@ -88,7 +91,7 @@
 
 ## 下一步与边界
 
-1. 完成本整合分支的人工窗口与原生文件选择器验收，再按需要推送 PR。
+1. 跟进头像与资源 PR 的当前提交检查，完成人工窗口与原生文件选择器验收。
 2. Status/Redis 在资源流程中使用明确 fixture，尚不构成全真实依赖 E2E；8 GiB 实传与吞吐验证未完成。
 3. 本次只迁移测试自建数据库；个人数据库、原运行产物和 vcpkg 安装树保持原样。
 4. ResourceServer 正式 CI/发布纳入、真实 GUI 双客户端验收及性能基线仍需后续推进。
