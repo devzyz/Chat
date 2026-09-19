@@ -26,6 +26,12 @@ develop Required Check 为 `Regression checks`；master 为 `Regression checks` 
 保留已有业务行为测试。快速流程的“快速”指不启用 Docker 真实依赖和完整 E2E，不省略单元测试；首次冷依赖构建仍可能较慢。
 全量流程额外运行 POSIX 生命周期、Linux 同源构建、MySQL/Redis/SMTP、四服务和双客户端双服务完整 E2E。
 
+Windows 静态 job 统一执行一次 `CheckTestStructure`；其成功后，各测试入口使用
+`-SkipTestStructureCheck` 复用同一提交的检查结果。该参数仅允许 GitHub CI 的四个测试入口使用，
+本地独立运行默认保留检查，`RunAllTests` 在同一进程内只检查一次。测试执行和报告校验不跳过。
+Server 由 `RunServerTests` 一次构建生产与测试目标，不先单独调用 `BuildServers`。
+develop PR/push 保留所有测试及报告上传，不生成或上传应用 ZIP；master、每周和手动全量保留打包。
+
 - 测输入输出、状态与错误行为，不绑定私有容器、文件排列和内部调用顺序。
 - 修复缺陷时补能复现问题的回归；重构不改变行为预期。功能确需改变旧行为，在变更说明中说明并更新相关测试。
 - 测试失败、必需报告缺失、超时和清理失败都返回非零；不自动重试业务测试刷绿。

@@ -59,8 +59,14 @@ entry points remain `RunServerTests`, `RunClientTests`, `RunVarifyTests`, and
 currently owned by that toolchain. `TestPhase1` is retained only as a
 compatibility alias.
 
+Local entries validate registration by default; `RunAllTests` validates it once per process.
+In CI, the prerequisite static job runs `CheckTestStructure` once and the four test lanes use
+`-SkipTestStructureCheck`. This CI-only switch does not skip tests or report checks.
+`RunServerTests` builds both production and test targets; no separate CI `BuildServers` call is needed.
+
 `CheckTestReports` is the no-build integrity audit for the current baseline. It
-requires all 12 reports, exactly 250 testcases, and zero failure/error nodes.
+requires every report and expected testcase count registered in `scripts/windows-local.ps1`,
+with zero failure/error/skipped cases.
 Every owning runner performs the same per-report checks before returning; the
 aggregate runner repeats the exact whole-baseline audit.
 
@@ -70,9 +76,9 @@ compatibility/drift check after restoring/building its pinned protobuf tools.
 
 ## Module documentation
 
-Release R-00 的独立入口和证据边界见 [Release candidate contracts](release/contracts/README.md)。
-它使用显式登记的 16 项 Unit/Component 合同，不加入现有 Server/Qt/Varify 报告总数；
-正式 candidate build/upload 还须提供同源 hosted 身份与下载回验证据。
+发布包回归、实际冒烟和自动发布边界见 [发布包验证](release/contracts/README.md)。
+发布测试单独报告，不加入 Server/Qt/Varify 计数；master 使用同一次 CI 的 Windows 包，
+下载冒烟和上传回验成功后自动发布。旧 R-00 审批/版本占用机制不再使用。
 
 Every module directory must contain a `README.md` that records:
 

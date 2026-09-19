@@ -20,11 +20,12 @@ persisted ID/UUID/hash exactly once; wire fields, frame limits and schema stay s
 Full `3D` / `3D-03` register `E03-RECOVER-01..11`; cumulative current-N E2E count
 is 33 across four reports. Recovery includes real codec ACK loss/duplicate
 notification, same-process original-payload retry, both server restarts with
-PID/creation identity, and invalid wire cursors. The full gate adds the real
-`E03-CLOSE-01` aggregation result, and separately records five unexecuted
-`E03-COMPAT-01..05` bootstrap entries when there is no promoted N-1. These five
-are not PASS cases. G-016 requires accepted hosted current-N evidence; G-017 and
-release eligibility remain blocked under bootstrap. See [service contracts](services/README.md).
+PID/creation identity, and invalid wire cursors. The current full workflow validates
+these real reports, source identity and cleanup in its integration-report job.
+The old `E03-CLOSE-01` release-admission wrapper and five `E03-COMPAT-01..05`
+bootstrap entries are no longer emitted by the current runner. G-017 runtime
+compatibility remains deferred and is not a publication gate.
+See [service contracts](services/README.md) and [CI policy](CI-GOVERNANCE.md).
 
 Partial selector `3D-03-history` adds `E03-RECOVER-01..04` in
 `linux_phase3d_recovery.xml`: public three-page dataset, new-process discovery,
@@ -702,10 +703,10 @@ Domain/Level：Architecture / Integration。
 [`PHASE-3B-PLAN.md`](plans/PHASE-3B-PLAN.md)、
 [`PHASE-3C-PLAN.md`](plans/PHASE-3C-PLAN.md)、
 [`PHASE-3D-PLAN.md`](plans/PHASE-3D-PLAN.md) 和
-[`PHASE-RELEASE-PLAN.md`](plans/PHASE-RELEASE-PLAN.md)。这些 route 均为 planned/open owner 定位，
-不构成远端完成证据，不改变当前 13 份报告、313 个 runner testcase 或仍为 planned-only 的 Test ID 统计状态；
-阶段边界与 actual-or-bootstrap 条件继续严格遵守 DG-09..DG-24；所有后续计划同时受 DG-25 的本机 vcpkg
-不可变/审批门禁约束。
+[`PHASE-RELEASE-PLAN.md`](plans/PHASE-RELEASE-PLAN.md)。这些条目保留历史计划归属与登记过程，
+不构成当前远端完成证据；精确报告数由 runner 定义，实际状态查 [Status](../docs/Status.md)。
+Release 计划已被替代，旧审批、bootstrap 与 admission 规则不再适用；当前执行政策和
+本机依赖保护统一遵循 [CI 治理](CI-GOVERNANCE.md)。
 
 | Plan / Gap | Planned Test IDs | 唯一生产 Interface | Planned Level / report | 当前状态 |
 | --- | --- | --- | --- | --- |
@@ -751,20 +752,19 @@ The following identifiers are frozen by [`PHASE-3B-TEST-PLAN.md`](plans/PHASE-3B
 | G-014 | SMTP Adapter | 真实发送参数和错误映射未证明 | Integration | [3C §11 / 3C-02；§15 / 3C-06；§16 / 3C-07；§18 / 3C-09](plans/PHASE-3C-PLAN.md) | master |
 | G-015 | 四进程生命周期 | run-owned process/port/temp/deadline 与 Gate/Status 单进程 ready/stop 已覆盖；四发布单元依赖编排、共享状态与业务恢复仍未证明 | Integration | [3B §8 / 3B-01；§10 / 3B-03；§11 / 3B-04；§12 / 3B-05](plans/PHASE-3B-PLAN.md) → [3C §9 / 3C-00；§10 / 3C-01；§11 / 3C-02；§16 / 3C-07；§18 / 3C-09](plans/PHASE-3C-PLAN.md) | master |
 | G-016 | 双 ChatServer 业务流 | 跨实例好友/消息/重连/历史没有公开 E2E | E2E | [3C §14 / 3C-05（持久化前置）](plans/PHASE-3C-PLAN.md) → [3D §9..12 / 3D-00..03；§14 / 3D-05（current-N owner）](plans/PHASE-3D-PLAN.md) | master/release |
-| G-017 | 版本兼容 | 当前版与上一发布版无自动矩阵 | Compatibility | [3C §12 / 3C-03；§17 / 3C-08；§18 / 3C-09](plans/PHASE-3C-PLAN.md) → [3D §13 / 3D-04；§14 / 3D-05](plans/PHASE-3D-PLAN.md) → [Release §10 / R-01；§12 / R-03](plans/PHASE-RELEASE-PLAN.md) | master |
-| G-018 | artifact/UAT | 尚无同产物 smoke 与版本化人工清单 | Release | [Release §9 / R-00；§10 / R-01；§11 / R-02；§12 / R-03](plans/PHASE-RELEASE-PLAN.md) | release |
+| G-017 | 版本兼容 | 真实 N/N-1 矩阵暂缓；旧 bootstrap 入口已退役 | Compatibility | [兼容性范围](compatibility/README.md)；当前策略见 [CI 治理](CI-GOVERNANCE.md) | 暂缓，不阻断发布 |
+| G-018 | 发布包 | 组包、同包冒烟、上传回验已实现；首次实际发布仍待验收，人工审批方案已取消 | Release | [发布包验证](release/contracts/README.md)；实际证据见 [Status](../docs/Status.md) | master push |
 
-### Phase 3C compatibility and aggregate evidence registration
+### Current report aggregation and deferred compatibility
 
-3C-08 的实际 bootstrap 分支登记 `T10-COMPAT-01..05`：双向 client/server、双向 service RPC、
-N-1 schema→N。owner 为 [compatibility](compatibility/README.md)，Level 为 Compatibility。
-没有 published Release 时五项均为未执行的 bootstrap skips，G-017 保持开放；不能以保留的
-18 个 ID 范围或 descriptor 检查替代真实跨版本运行。
+旧 3C-08 bootstrap CLI、实现及配套测试已移除，`T10-COMPAT-01..05` 不再属于当前执行登记。
+G-017 的真实跨版本验证仍暂缓，不记为通过，也不阻断当前自动发布；
+范围与保留的协议/schema 测试见 [兼容性说明](compatibility/README.md)。
 
 3C-09 从 `tests/services/serviceReports.js` 实际注册产生 `phase3c-reports.json`，并由
 [aggregate gate](services/README.md#current-n-evidence-gate-3c-09) 检查同 SHA 的 JUnit、摘要和清理。
-仅登记一个真实聚合断言，不为填满 CLOSE 范围创建占位用例。`currentNPass` 与
-`releaseEligible` 分开；兼容 bootstrap 允许当前版门禁通过，但不关闭 G-017 或授予发布准入。
+仅登记真实报告聚合断言，不为填满 CLOSE 范围创建占位用例。`currentNPass` 反映本轮服务报告，
+不再产生或消费旧 `releaseEligible` 字段。发布由父工作流的全量成功依赖及包冒烟决定。
 具体报告和用例数以实际 manifest 为准，状态与远端证据由 `docs/Status.md` 维护。
 
 ### Phase 3C disposable services registration

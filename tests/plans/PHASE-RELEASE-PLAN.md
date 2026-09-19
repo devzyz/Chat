@@ -2,7 +2,7 @@
 document: tests/plans/PHASE-RELEASE-PLAN.md
 phase: Release gate
 title: Build-once Windows x64 artifact, artifact-only smoke, same-digest UAT, and same-bytes promotion
-status: Planned
+status: Superseded
 plan_ids: [R-00, R-01, R-02, R-03]
 plan_count: 4
 wave_range: [19, 22]
@@ -57,9 +57,13 @@ must_haves:
     - "promoted Release asset digest + schema/migration identity -> N-1 pointer -> Phase 3C/3D compatibility resolver"
 ---
 
-# Release gate 正式执行计划
+# Release gate 历史方案
 
-状态：**Planned（尚未执行）**
+状态：**已被替代，仅保留历史设计，不作为后续执行清单。**
+
+当前发布流程以 [CI 治理](../CI-GOVERNANCE.md) 和 [发布包验证](../release/contracts/README.md) 为准。
+本方案中的 owner/settings receipt、人工 UAT/promotion 环境、永久版本占用、跨 workflow admission
+及 N-1 bootstrap 发布阻断均已退出当前方案。下文保留当时的设计与计划假设，勿据此恢复旧机制。
 
 本文件完整展开 R-00..R-03。所有标为 planned 的路径、symbol、Test ID range、report family、workflow check、
 artifact identity 与 GitHub environment 都不是当前仓库事实；执行时必须先读取 Phase 3A/3B/3C/3D 的实际 Summary、

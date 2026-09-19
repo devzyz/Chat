@@ -68,24 +68,17 @@ MSBuild/CMake/npm/PowerShell runner and that every CTest target declares a test
 Level. The permanent regression baseline and future-module admission contract
 are defined in `tests/REGRESSION.md`.
 
-The confirmed branch/release gate policy is defined in
-`tests/CI-GOVERNANCE.md`; the current Test ID and gap inventory is
-`tests/TEST-CONTRACT-MATRIX.md`; the next baseline-hardening execution plan is
-`tests/plans/PHASE-2.5-PLAN.md`. These documents are planning and governance
-contracts: they do not claim a gate is implemented until its verification and
-clean-runner acceptance criteria pass.
+The branch/release policy is defined in [CI governance](../tests/CI-GOVERNANCE.md).
+The [contract matrix](../tests/TEST-CONTRACT-MATRIX.md) explains Test IDs and coverage;
+[current status](Status.md) records validated progress and remaining work.
 
-- Server GoogleTest 报告：`server_unit.xml`、`server_component.xml`、`server_integration.xml`、
-  `server_chat_grpc_integration.xml`、`server_gate_unit.xml`、`server_status_unit.xml`。
-- Qt CTest 报告：`client_unit.xml`、`client_component.xml`。
-- VarifyServer Node Test 报告：`varify_unit.xml`、`varify_integration.xml`。
-- PowerShell 轻量测试报告：`script_component.xml`、`script_integration.xml`。
-- 上述报告均位于 `build/test-results`。
-- 当前精确基线为 12 份报告、173 个 testcase；`CheckTestReports` 对缺失、数量漂移、
-  failure/error 节点返回非零，`RunAllTests` 结束前调用同一审计。
-- PowerShell 轻量 runner 通过逐项 PASS/FAIL 和非零退出传播失败。
+Reports live in `build/test-results`. Exact report groups and expected counts are owned by
+`scripts/windows-local.ps1`; do not duplicate changing totals here. Each runner checks its
+reports, and `RunAllTests` audits the full set. Missing reports, failed/skipped cases and
+nonzero test exits fail the entry point.
 
-Qt 当前精确基线为 Unit 7、Component 5。Component 中的 `ClientSession` 合同要求登出、切号、被踢和异常掉线返回登录页前清除账号/connection transient state，并销毁旧页面与消息模型；预期关闭不得复用异常掉线提示路径。
+Windows CI checks registration once in the static job; local entries retain the default check.
+Quick develop runs upload test reports; application ZIPs are generated only in full runs.
 
 ## CI 门禁
 

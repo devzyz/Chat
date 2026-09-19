@@ -46,7 +46,7 @@ triplet for host tools also avoids a second full `x64-windows` install tree.
 Local development keeps `x64-windows-chat` plus the normal `x64-windows` host
 triplet so Debug builds remain available.
 
-## GitHub Actions phase-two baseline
+## GitHub Actions Windows regression
 
 `.github/workflows/windows-ci.yml` runs four Windows Server 2022 jobs. The
 three build/package jobs depend on the static configuration check, but are
@@ -56,13 +56,13 @@ otherwise independent:
    baseline, the repository triplets, and the absence of legacy ChatServer or
    static-triplet references in active build inputs.
 2. `servers-release` checks out the pinned vcpkg source baseline, restores both
-   target and host dependencies with `x64-windows-chat-release`, and builds
-   GateServer, StatusServer and ChatServer in Release. It verifies that each
+   target and host dependencies with `x64-windows-chat-release`, and invokes
+   `RunServerTests` to build production servers and test targets together in Release. It verifies that each
    app-local directory contains its executable, configuration and required
    DLLs, then uploads three independent ZIP files in the
    `windows-servers-release` artifact.
 3. `client-release` installs Qt 6.5.3 with its MinGW toolchain, invokes the same
-   `BuildClient -Configuration Release` entry point used locally, runs CTest,
+   `RunClientTests -Configuration Release` entry point used locally, builds and runs CTest,
    and stages `chat.exe`, `config.ini` and `static`. `windeployqt` auto-detects
    the Release executable and adds the Qt and compiler runtime DLLs; CI verifies
    the core Qt and Windows platform plugin before uploading `chat-client.zip`.
@@ -70,6 +70,12 @@ otherwise independent:
    committed lockfile. It syntax-checks the project JavaScript, validates the
    production dependency tree, and packages JavaScript, JSON, Node and
    `node_modules` as `VarifyServer.zip`; release assembly adds the sibling proto directory.
+
+Application staging, ZIP creation and application-artifact upload run only for master PR/push,
+weekly and manual full runs. Develop PR/push still compile and test every existing lane and
+upload their test reports. The static job validates test registration once; its dependent
+test entries use the CI-only `-SkipTestStructureCheck` switch. Local entries retain the check,
+and `RunAllTests` reuses its first successful check within the same process.
 
 GitHub Actions run `31803503805` proved that the server job can restore and
 build successfully on a clean runner with the vcpkg binary cache disabled. Its

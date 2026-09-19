@@ -2,6 +2,8 @@
 
 CI 用 `.github/workflows/release.yml` 复用本次 Windows 构建包，不单独重新编译。
 master 全量成功后自动组装、下载冒烟、发布；没有 owner receipt、永久版本登记或环境审批。
+应用 ZIP 仅在 master PR/push、每周和手动全量生成；普通 develop PR/push 仍运行打包合同测试，
+但不生成或上传整套应用包。只有 master push 触发公开发布。
 
 ## 本地回归
 

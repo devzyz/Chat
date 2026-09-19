@@ -4,6 +4,11 @@
 
 `node --test tests/build/ciBudget.test.js` checks develop quick regression, master/weekly/manual full regression,
 master-only publication, failure dependencies and the observed cold Windows build budget.
+It also checks that server compilation has one owner, registration is checked once before
+CI test lanes, the local check bypass is rejected, and only full lanes generate application packages.
+The evidence-validator regression runs once in the Linux report job; that job still validates actual reports.
+The retired `3C-08` compatibility selector is rejected. Linux keeps its preflight PASS assertion,
+but no longer exposes an unused status output. Protocol/schema compatibility tests remain active.
 `scripts/ci/test-workflows.ps1 -ToolRoot <temporary-directory>` validates every workflow with pinned actionlint.
 There is no cross-workflow check poller. The main workflow uses job dependencies and two stable required checks.
 
