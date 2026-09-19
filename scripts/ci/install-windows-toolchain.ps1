@@ -29,7 +29,9 @@ if ($Refresh) {
 $compiler = Join-Path $vs "VC/Tools/MSVC/$($lock.msvc.toolset)/bin/Hostx64/x64/cl.exe"
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf) -or
     -not (Test-Path -LiteralPath (Join-Path $sdkRoot "$($lock.msvc.sdk)/um/Windows.h") -PathType Leaf)) {
-    throw 'Locked MSVC/SDK unavailable. Run the weekly refresh; refusing an implicit tool upgrade.'
+    $toolsets = (Get-ChildItem -LiteralPath (Join-Path $vs 'VC/Tools/MSVC') -Directory).Name -join ', '
+    $sdks = (Get-ChildItem -LiteralPath $sdkRoot -Directory).Name -join ', '
+    throw "Locked MSVC $($lock.msvc.toolset)/SDK $($lock.msvc.sdk) unavailable. Available toolsets: $toolsets; SDKs: $sdks. Run the weekly refresh; refusing an implicit tool upgrade."
 }
 $env:VSLANG = '1033'
 $banner = (& cmd.exe /d /s /c "`"`"$compiler`" 2>&1`"") -join "`n"

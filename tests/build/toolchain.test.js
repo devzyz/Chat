@@ -71,7 +71,7 @@ test('PowerShell patch upgrades and compiler identity changes isolate native cac
     const original = identity(bootstrap);
     for (const change of [lock => { lock.tools[2].version = '7.6.6'; },
         lock => { lock.msvc.compilerVersion = '19.44.35229.0'; },
-        lock => { lock.msvc.sdk = '10.0.26100.0'; }]) {
+        lock => { lock.msvc.sdk = '10.0.22621.0'; }]) {
         const candidate = structuredClone(bootstrap);
         change(candidate);
         assert.notEqual(identity(candidate), original);
