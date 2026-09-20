@@ -1,3 +1,4 @@
+#include "../../common/message/MessagePersistence.h"
 #include "../../common/resource/ResourceCatalog.h"
 #include "LogicSystem.h"
 #include "CSession.h"
@@ -827,16 +828,44 @@ void LogicSystem::RegisterCallBacks() {
 	_fun_callbacks[MSG_LOAD_CHAT_MESSAGE_REQ] = [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
 		SPDLOG_DEBUG("load chat message request, msg_id={}", static_cast<int>(MSG_LOAD_CHAT_MESSAGE_REQ));
 		// 解析json数据
+        Json::Reader reader;
+        Json::Value root;
+        if (!reader.parse(msg_data, root) || !root.isObject()) {
+            Json::Value invalid;
+            invalid["error"] = ErrorCodes::Error_Json;
+            session->Send(SerializeHistoryResponse(invalid, 0), MSG_LOAD_CHAT_MESSAGE_RSP);
+            return;
+        }
+        if (root.isMember("mode")) {
+            Json::Value response;
+            response["mode"] = "sync_v1";
+            response["error"] = ErrorCodes::UidInvalid;
+            response["chat_id"] = root["chat_id"];
+            response["request_id"] = root["request_id"];
+            response["after_id"] = root["after_id"];
+            if (root["mode"].isString() && root["mode"].asString() == "sync_v1"
+                && root["uid"].isInt() && root["uid"].asInt() > 0
+                && root["chat_id"].isInt() && root["chat_id"].asInt() > 0
+                && root["after_id"].isInt64() && root["after_id"].asInt64() >= 0
+                && root["request_id"].isString() && root["request_id"].asString().size() <= 64
+                && UserMgr::GetInstance()->Sessions()->FindCurrent(root["uid"].asInt()) == session->GetHandle()) {
+                response["error"] = ErrorCodes::Success;
+                if (!MysqlMgr::GetInstance()->SyncChatMessages(root["uid"].asInt(), root["chat_id"].asInt(),
+                    root["after_id"].asInt64(), response)) {
+                    response["error"] = ErrorCodes::UidInvalid;
+                    response.removeMember("msgs");
+                }
+            }
+            session->Send(messaging::CompactJson(response), MSG_LOAD_CHAT_MESSAGE_RSP);
+            return;
+        }
         Json::Value return_value;
         return_value["error"] = ErrorCodes::Error_Json;
         int request_cursor = 0;
         Defer defer([&return_value, &request_cursor, session]() {
             session->Send(SerializeHistoryResponse(return_value, request_cursor), MSG_LOAD_CHAT_MESSAGE_RSP);
         });
-        Json::Reader reader;
-        Json::Value root;
-        if (!reader.parse(msg_data, root) || !root.isObject() ||
-            !root["chat_id"].isInt() || root["chat_id"].asInt() <= 0 ||
+        if (!root["chat_id"].isInt() || root["chat_id"].asInt() <= 0 ||
             !root["current_msg_id"].isInt() || root["current_msg_id"].asInt() < 0) return;
         const int chat_id = root["chat_id"].asInt();
         const int current_msg_id = root["current_msg_id"].asInt();

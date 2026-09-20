@@ -6,9 +6,10 @@
 
 namespace {
 
-std::size_t CheckedSendTotalLength(const char* message, std::size_t message_length) {
-	if (message_length > MAX_LENGTH) {
-		throw std::length_error("message body exceeds MAX_LENGTH");
+std::size_t CheckedSendTotalLength(const char* message, std::size_t message_length, std::uint16_t message_id) {
+    const auto limit = message_id == MSG_LOAD_CHAT_MESSAGE_RSP ? MAX_HISTORY_BODY_LENGTH : MAX_LENGTH;
+    if (message_length > limit) {
+        throw std::length_error("message body exceeds send limit");
 	}
 	if (message_length > 0 && message == nullptr) {
 		throw std::invalid_argument("message body must not be null");
@@ -16,9 +17,10 @@ std::size_t CheckedSendTotalLength(const char* message, std::size_t message_leng
 	return message_length + HEAD_TOTAL_LEN;
 }
 
-std::size_t CheckedSendTotalLength(const std::string& message, std::size_t message_length) {
-	if (message_length > MAX_LENGTH) {
-		throw std::length_error("message body exceeds MAX_LENGTH");
+std::size_t CheckedSendTotalLength(const std::string& message, std::size_t message_length, std::uint16_t message_id) {
+    const auto limit = message_id == MSG_LOAD_CHAT_MESSAGE_RSP ? MAX_HISTORY_BODY_LENGTH : MAX_LENGTH;
+    if (message_length > limit) {
+        throw std::length_error("message body exceeds send limit");
 	}
 	if (message_length > message.size()) {
 		throw std::invalid_argument("message length exceeds the source string");
@@ -49,7 +51,7 @@ void MsgNode::Clear() {
  * @param msgLen 
  * 注意要将本地字节序转换为网络字节序
  */
-SendNode::SendNode(const char* msg, std::uint16_t msgId, std::size_t msgLen) : MsgNode(CheckedSendTotalLength(msg, msgLen)), _msg_id(msgId) {
+SendNode::SendNode(const char* msg, std::uint16_t msgId, std::size_t msgLen) : MsgNode(CheckedSendTotalLength(msg, msgLen, msgId)), _msg_id(msgId) {
 	// id本地转网络
 	const auto header = ChatFrameCodec::EncodeHeader(
 		static_cast<std::uint16_t>(msgId), static_cast<std::uint16_t>(msgLen));
@@ -65,7 +67,7 @@ SendNode::SendNode(const char* msg, std::uint16_t msgId, std::size_t msgLen) : M
  * @param msgLen 要发送的数据长度
  * 注意要将本地字节序转换为网络字节序
  */
-SendNode::SendNode(const std::string& msg, std::uint16_t msgId, std::size_t msgLen) : MsgNode(CheckedSendTotalLength(msg, msgLen)), _msg_id(msgId) {
+SendNode::SendNode(const std::string& msg, std::uint16_t msgId, std::size_t msgLen) : MsgNode(CheckedSendTotalLength(msg, msgLen, msgId)), _msg_id(msgId) {
 	// id本地转网络
 	const auto header = ChatFrameCodec::EncodeHeader(
 		static_cast<std::uint16_t>(msgId), static_cast<std::uint16_t>(msgLen));

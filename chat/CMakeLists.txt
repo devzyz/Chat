@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Network Concurrent)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Network Concurrent Sql)
 
 if(WIN32)
     get_target_property(QT_QMAKE_EXECUTABLE Qt${QT_VERSION_MAJOR}::qmake IMPORTED_LOCATION)
@@ -30,6 +30,10 @@ if(WIN32)
         message(FATAL_ERROR "The selected Qt kit does not provide the qminimal platform plugin")
     endif()
     file(TO_CMAKE_PATH "${QT_INSTALL_PLUGINS}/platforms" QT_TEST_PLATFORM_PLUGIN_PATH)
+    file(TO_CMAKE_PATH "${QT_INSTALL_PLUGINS}" QT_TEST_PLUGIN_PATH)
+    if(NOT EXISTS "${QT_INSTALL_PLUGINS}/sqldrivers/qsqlite.dll")
+        message(FATAL_ERROR "The selected Qt kit does not provide the QSQLITE driver")
+    endif()
 endif()
 
 set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Build spdlog as a static library" FORCE)
@@ -92,6 +96,13 @@ target_include_directories(chat_storage PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(chat_storage PUBLIC Qt${QT_VERSION_MAJOR}::Core)
 target_link_libraries(chat_local_avatar PUBLIC chat_storage)
 
+add_library(chat_message_storage STATIC
+    localmessagestore.h localmessagestore.cpp
+    messageservice.h messageservice.cpp
+)
+target_include_directories(chat_message_storage PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_message_storage PUBLIC Qt${QT_VERSION_MAJOR}::Sql chat_storage)
+
 add_library(chat_session_core STATIC
     clientsession.h clientsession.cpp
     chattcptransport.h
@@ -111,6 +122,7 @@ target_link_libraries(chat_session_core PUBLIC
     chat_network_core
     chat_tcp_transport
     chat_local_avatar
+    chat_message_storage
 )
 
 add_library(chat_client_login STATIC
@@ -219,6 +231,16 @@ add_custom_command(
 
 target_include_directories(chat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
+if(WIN32)
+    add_custom_command(TARGET chat POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:Qt${QT_VERSION_MAJOR}::Sql>" "$<TARGET_FILE_DIR:chat>"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:chat>/sqldrivers"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${QT_INSTALL_PLUGINS}/sqldrivers/qsqlite.dll" "$<TARGET_FILE_DIR:chat>/sqldrivers/qsqlite.dll"
+    )
+endif()
+
 target_compile_definitions(chat PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
 target_link_libraries(chat PRIVATE
@@ -268,6 +290,13 @@ if(BUILD_TESTING)
     target_link_libraries(session_driver_tests PRIVATE
         chat_network_core Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Network)
     add_dependencies(session_driver_tests chat_e2e_client)
+    add_executable(message_storage_tests tests/message-storage/message_storage_tests.cpp)
+    add_executable(message_sync_probe tests/message-storage/message_sync_probe.cpp)
+    target_link_libraries(message_sync_probe PRIVATE chat_message_storage chat_network_core Qt${QT_VERSION_MAJOR}::Network)
+    target_link_libraries(message_storage_tests PRIVATE chat_message_storage Qt${QT_VERSION_MAJOR}::Test)
+    add_test(NAME message_storage.persistence COMMAND message_storage_tests)
+    set_tests_properties(message_storage.persistence PROPERTIES LABELS "component" TIMEOUT 30
+        ENVIRONMENT "QT_PLUGIN_PATH=${QT_TEST_PLUGIN_PATH}")
 
     add_executable(message_model_tests
         tests/message-model/message_model_tests.cpp

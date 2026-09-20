@@ -59,6 +59,12 @@ TEST(SendNodeTests, OversizedApplicationBodyIsRejectedBeforeAllocation) {
     const std::string body(MAX_LENGTH + 1, 'x');
 
     EXPECT_THROW(SendNode(body, 1024, body.size()), std::length_error);
+    const std::string history(MAX_HISTORY_BODY_LENGTH, 'h');
+    SendNode response(history, MSG_LOAD_CHAT_MESSAGE_RSP, history.size());
+    EXPECT_EQ(response._total_len, history.size() + HEAD_TOTAL_LEN);
+    EXPECT_EQ(std::memcmp(response._data + HEAD_TOTAL_LEN, history.data(), history.size()), 0);
+    EXPECT_THROW(SendNode(std::string(MAX_HISTORY_BODY_LENGTH + 1, 'h'), MSG_LOAD_CHAT_MESSAGE_RSP,
+        MAX_HISTORY_BODY_LENGTH + 1), std::length_error);
 }
 
 TEST(SendNodeTests, DeclaredLengthCannotExceedTheSourceString) {

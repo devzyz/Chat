@@ -1,3 +1,4 @@
+#include "../../common/message/MessagePersistence.h"
 #include "MysqlDao.h"
 #include <string>
 #include <chrono>
@@ -740,6 +741,19 @@ message_commit::Result MysqlDao::AddChatMessageList(message_commit::Authenticate
         chat_msgs.push_back(std::move(message));
     }
     return result;
+}
+
+bool MysqlDao::SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response) {
+    auto connection = _pool->GetConnection();
+    if (!connection) return false;
+    Defer release([this, &connection] { _pool->returnConnection(std::move(connection)); });
+    try {
+        messaging::SyncPage(*connection->_connection, uid, chat_id, after, response, MAX_HISTORY_BODY_LENGTH);
+        return true;
+    } catch (const std::exception&) {
+        SPDLOG_WARN("mysql message synchronization failed, chat_id={}", chat_id);
+        return false;
+    }
 }
 
 // 增量加载部分聊天数据

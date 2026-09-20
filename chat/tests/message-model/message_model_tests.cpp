@@ -173,6 +173,12 @@ void MessageModelTests::multipleHistoryPagesRemainChronological()
                  expectedIds.at(row));
     }
     QCOMPARE(model.oldestMessageId(), 10);
+    model.appendMessage(message(0, "pending"));
+    model.appendMessage(message(60, {}));
+    model.mergeMessages({message(60, "pending"), message(25, "late-sync")});
+    QCOMPARE(model.rowCount(), 7);
+    QCOMPARE(model.rowForClientMessageId("pending"), model.rowForMessageId(60));
+    QCOMPARE(model.data(model.index(2), MessageListModel::MessageIdRole).toLongLong(), 25);
 }
 
 void MessageModelTests::removalAndAcknowledgementRebuildShiftedIndexes()

@@ -1,5 +1,7 @@
 # Windows Server tests
 
+消息持久化与增量同步的独立真实 MySQL/TCP 入口见 [message-sync](message-sync/README.md)，不计入下方快速回归数量。
+
 `RunServerTests` is the single local/CI entry. It builds separate ChatServer Unit, Component, and Integration executables plus independent Gate/Status Asio Unit executables, all against real production sources and the already-restored vcpkg tree.
 
 | Module | Domain | Level | Target/report |
