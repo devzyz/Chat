@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     std::shared_ptr<AsioIOServicePool> pool;
     std::shared_ptr<RedisMgr> redis;
     std::shared_ptr<SessionLifecycleCoordinator> lifecycle;
-    std::shared_ptr<CServer> tcp;
+    std::shared_ptr<chat_transport::CServer> tcp;
     std::unique_ptr<LogicSystem> logic;
     std::unique_ptr<ChatServiceImpl> service;
     std::unique_ptr<grpc::Server> rpc;
@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
                 if (response.error() != ErrorCodes::Success) SPDLOG_WARN("remote replacement failed, uid={}", uid);
             });
         logic = std::make_unique<LogicSystem>(directory, presence);
-        tcp = std::make_shared<CServer>(io, static_cast<unsigned short>(port), lifecycle, directory,
+        tcp = std::make_shared<chat_transport::CServer>(io, config["SelfServer"]["Host"], static_cast<unsigned short>(port), lifecycle, directory,
             [&](LogicMessage message) { return logic->Submit(std::move(message)); },
             [&]() -> boost::asio::io_context& { return pool->GetIOService(); });
         lifecycle->AttachServer(tcp);

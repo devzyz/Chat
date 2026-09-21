@@ -106,3 +106,14 @@ ChatServer instance A <---gRPC---> ChatServer instance B ... N
 6. 是否保持未来 Linux Server 的可实现性？
 
 无法清楚回答时，不应通过复制现有目录先行实现。
+
+## 头像与资源传输
+
+ResourceServer 现提供头像、图片、视频和附件的 HTTP 上传、续传与下载，
+不再只是占位程序。它复用 Status 鉴权，资源引用存 MySQL，字节存文件系统；
+ChatServer 负责资源消息的参与者权限、事务提交及现有 TCP/gRPC 通知。
+客户端统一存储路径、头像会话与传输管理器的边界见 [Resources](Resources.md)。
+
+## Local message persistence
+
+`UserMgr` owns `MessageService`; its worker owns the SQLite connection. UI models consume stored value objects; TCP requests and callbacks enter through the service. Server sync uses the existing MySQL pool and locks the same conversation row as text/resource writers. See [MessageStorage](MessageStorage.md).

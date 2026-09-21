@@ -5,6 +5,7 @@
 #include "usermgr.h"
 #include <QJsonDocument>
 #include "tcpmgr.h"
+#include "clientrequests.h"
 
 AuthFriendDialog::AuthFriendDialog(QWidget *parent)
     : QDialog(parent)
@@ -49,35 +50,7 @@ void AuthFriendDialog::slot_auth_apply_sure()
 {
     SPDLOG_DEBUG("friend authentication confirmation submitted");
     // 准备tcp请求，发送认证信息
-    QJsonObject jsonObj;
-    auto uid = UserMgr::GetInstance()->GetUid();
-    jsonObj["authuid"] = uid; // 被申请人uid
-    jsonObj["applyuid"] = _apply_info->_apply_uid; // 申请人uid
-
-    QJsonObject applyinfo;
-    QJsonObject authinfo;
-
-    // 将申请人信息添加上
-    applyinfo["applyuid"] = _apply_info->_apply_uid;
-    applyinfo["applyname"] = _apply_info->_apply_name;
-    applyinfo["applydescription"] = _apply_info->_apply_description;
-    applyinfo["applyicon"] = _apply_info->_apply_icon;
-    applyinfo["applysex"] = _apply_info->_apply_sex;
-    applyinfo["touid"] = _apply_info->_to_uid;
-    applyinfo["description"] = _apply_info->_description;
-    applyinfo["backname"] = _apply_info->_backname;
-    jsonObj["applyinfo"] = applyinfo;
-
-
-    auto self_info = UserMgr::GetInstance()->GetUserInfo();
-    // 将被申请人的信息添加上
-    authinfo["authuid"] = self_info->_uid;
-    authinfo["authname"] = self_info->_name;
-    authinfo["authdescription"] = self_info->_description;
-    authinfo["authicon"] = self_info->_icon;
-    authinfo["authsex"] = self_info->_sex;
-    authinfo["touid"] = _apply_info->_apply_uid;
-
+    const auto self_info = UserMgr::GetInstance()->GetUserInfo();
     QString description = ui->send_auth_user_description_edit->text();
     if (description.isEmpty()) {
         description = "你好！";
@@ -88,14 +61,8 @@ void AuthFriendDialog::slot_auth_apply_sure()
         back_name = _apply_info->_apply_name;
     }
 
-    authinfo["description"] = description;
-    authinfo["backname"] = back_name;
-    jsonObj["authinfo"] = authinfo;
+    const auto jsonData = clientAcceptFriendRequest(*self_info, *_apply_info, description, back_name);
 
-    QJsonDocument doc(jsonObj);
-    QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-
-    // 发送tcp请求给chat server进行认证
     emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_AUTH_FRIEND_REQ, jsonData);
 
     this->hide();

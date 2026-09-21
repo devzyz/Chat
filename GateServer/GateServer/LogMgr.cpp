@@ -16,7 +16,8 @@ void LogMgr::Close() {
 	if (_logger) {
 		_logger->flush();
 	}
-	spdlog::shutdown();
+	// Static service destructors may still log after Close(). The spdlog
+	// registry owns final teardown; application close only flushes its sink.
 }
 
 spdlog::level::level_enum LogMgr::GetLevel(

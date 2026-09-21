@@ -1,45 +1,56 @@
 #include "tcpmgr.h"
 #include <QJsonDocument>
+#include <QSet>
 #include "logmgr.h"
 #include "usermgr.h"
+#include "messageservice.h"
 
-TcpMgr::TcpMgr() : _host(""), _port(0) {
+TcpMgr::TcpMgr() : _host("") {
 
     // 绑定连接完成信号到lambda槽函数上
-    connect(&_socket, &QTcpSocket::connected, this, [&]() {
+    connect(&_transport, &ChatTcpTransport::connected, this,
+            [this](quint64, quint64) {
         _acceptingSends = true;
         SPDLOG_INFO("connected to chat server");
         emit sig_tcp_connect_success(true);
     });
 
     // 绑定socket可读取信号到lambda槽函数上
-    connect(&_socket, &QTcpSocket::readyRead, this, [&]() {
-        const auto frames = _frameDecoder.append(_socket.readAll());
-        for (const auto &frame : frames) {
-            handleMsg(ReqId(frame.messageId), frame.body.size(), frame.body);
-        }
+    connect(&_transport, &ChatTcpTransport::frameReceived, this,
+            [this](const ChatTcpFrame &frame) {
+        handleMsg(ReqId(frame.messageId), frame.body.size(), frame.body);
     });
 
     // 处理错误信号
-    connect(&_socket, &QTcpSocket::errorOccurred, this, [&](QAbstractSocket::SocketError socketError) {
-        SPDLOG_WARN("chat server socket error, code={}, message={}",
-                    static_cast<int>(socketError),
-                    LogMgr::ToUtf8(_socket.errorString()));
+    connect(&_transport, &ChatTcpTransport::finished, this,
+            [this](const ChatTcpOutcome &outcome) {
+        const bool expectedClose = _expectedClose
+            || outcome.terminal == ChatTcpTerminal::LocalClosed
+            || outcome.terminal == ChatTcpTerminal::Reset
+            || outcome.terminal == ChatTcpTerminal::Superseded;
+        _expectedClose = false;
+        _acceptingSends = false;
+        if (expectedClose && !_retainingPending) {
+            _pendingTextBatches.clear();
+        }
+        if (outcome.terminal == ChatTcpTerminal::Refused
+            || outcome.terminal == ChatTcpTerminal::ConnectDeadlineExceeded) {
+            emit sig_tcp_connect_success(false);
+        } else {
+            emit sig_connection_close(expectedClose);
+        }
     });
 
     // 处理断开连接信号
-    connect(&_socket, &QTcpSocket::disconnected, this, [&]() {
-        const bool expectedClose = _expectedClose;
-        _expectedClose = false;
-        _acceptingSends = false;
-        _frameDecoder.reset();
-        _pendingTextBatches.clear();
-        SPDLOG_INFO("disconnected from chat server");
-        emit sig_connection_close(expectedClose);
-    });
-
     // 连接发送数据信号与槽函数
     connect(this, &TcpMgr::sig_send_data, this, &TcpMgr::slot_send_data);
+    auto *messages = UserMgr::GetInstance()->messages();
+    connect(messages, &MessageService::syncRequested, this, [this](const QJsonObject &request) {
+        emit sig_send_data(ID_LOAD_CHAT_MESSAGE_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
+    });
+    connect(messages, &MessageService::sendRequested, this, [this](const QJsonObject &request) {
+        emit sig_send_data(ID_TEXT_CHAT_MSG_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
+    });
 
     // 注册回调处理逻辑
     initHandlers();
@@ -91,6 +102,12 @@ void TcpMgr::initHandlers()
         }
 
         auto uid = jsonObj["uid"].toInt();
+        // An uncertain send belongs to the account that created it, never to the next login.
+        for (qsizetype i = _pendingTextBatches.size(); i > 0; --i) {
+            if (_pendingTextBatches[i - 1].senderUid != uid) {
+                _pendingTextBatches.removeAt(i - 1);
+            }
+        }
         auto name =jsonObj["name"].toString();
         auto description = jsonObj["description"].toString();
         auto icon = jsonObj["icon"].toString();
@@ -100,6 +117,8 @@ void TcpMgr::initHandlers()
         auto user_info = std::make_shared<UserInfo> (uid, name, description, icon, sex);
         UserMgr::GetInstance()->SetToken(token);
         UserMgr::GetInstance()->SetInfo(user_info);
+        UserMgr::GetInstance()->startResourceSession();
+        UserMgr::GetInstance()->messages()->start(UserMgr::GetInstance()->storageRoot(), uid);
 
         // 如果包含好友申请列表，则添加上
         if (jsonObj.contains("apply_list")) {
@@ -121,7 +140,7 @@ void TcpMgr::initHandlers()
 
         // 更新状态
         UserMgr::GetInstance()->SetCurrentChatId(current_chat_id);
-        UserMgr::GetInstance()->SetIsLoadFinish(load_more);
+        UserMgr::GetInstance()->SetIsLoadFinish(!load_more);
 
         if (jsonObj.contains("chat_list")) {
             const auto chat_list = jsonObj["chat_list"].toArray();
@@ -142,14 +161,25 @@ void TcpMgr::initHandlers()
                     // 获取到另一个人的uid
                     auto other_info = UserMgr::GetInstance()->GetFriendById(other_id);
                     // 通过对方的uid, 会话id, 当前消息的id来构造ChatInfo
-                    auto chat_info = std::make_shared<ChatInfo> (other_id, other_info->_name, other_info->_icon,
-                                                                other_info->_backname, chat_id, ChatType::PRIVATE);
+                    auto chat_info = std::make_shared<ChatInfo>(other_id,
+                        other_info ? other_info->_name : QString::number(other_id),
+                        other_info ? other_info->_icon : QString(),
+                        other_info ? other_info->_backname : QString(), chat_id, ChatType::PRIVATE);
                     UserMgr::GetInstance()->AddChatInfo(chat_id, chat_info);
                 }else if (type == "group") {
                     // todo 群聊
                 }
             }
             emit sig_tcp_load_chat_finish(chat_list);
+            if (load_more && current_chat_id > 0) {
+                QJsonObject next{{"uid", self_id}, {"current_chat_id", current_chat_id}};
+                emit sig_send_data(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(next).toJson(QJsonDocument::Compact));
+            }
+        }
+        // Authentication is complete. Retry the original bytes/UUIDs once per successful login.
+        const auto pending = _pendingTextBatches;
+        for (const auto &batch : pending) {
+            _transport.send(static_cast<quint16>(ReqId::ID_TEXT_CHAT_MSG_REQ), batch.payload);
         }
     });
 
@@ -370,6 +400,7 @@ void TcpMgr::initHandlers()
             auto content = msg_info["content"].toString();
             auto status = msg_info["status"].toInt();
             auto text_msg = std::make_shared<TextChatData> (message_id, chat_id, ChatType::PRIVATE, ChatMessageType::TEXT_TYPE, content, send_id, QTime::currentTime());
+            text_msg->SetClientMessageId(msg_info["msg_uuid"].toString());
             chat_info->AddChatData(text_msg);
         }
 
@@ -452,6 +483,7 @@ void TcpMgr::initHandlers()
             auto status = msg_info["status"].toInt();
             auto text_msg = std::make_shared<TextChatData> (message_id, chat_id, ChatType::PRIVATE,
                                                            ChatMessageType::TEXT_TYPE, content, send_id, QTime::currentTime());
+            text_msg->SetClientMessageId(msg_info["msg_uuid"].toString());
             chat_info->AddChatData(text_msg);
         }
 
@@ -499,17 +531,52 @@ void TcpMgr::initHandlers()
         // 取出error键，判断是否为运行正确
         int err = jsonObj["error"].toInt();
         const int responseChatId = jsonObj["chat_id"].toInt();
+        QSet<QString> responseIds;
+        for (const auto &id : jsonObj["client_msg_uuids"].toArray()) {
+            responseIds.insert(id.toString());
+        }
+        if (responseIds.isEmpty() && err == ErrorCodes::SUCCESS) {
+            for (const auto &entry : jsonObj["uuid_msgId"].toArray()) {
+                responseIds.insert(entry.toObject()["msg_uuid"].toString());
+            }
+        }
+        responseIds.remove(QString());
+        if (err == ErrorCodes::SUCCESS) {
+            QSet<QString> acknowledgedIds;
+            QSet<qint64> serverIds;
+            for (const auto &entry : jsonObj["uuid_msgId"].toArray()) {
+                const auto item = entry.toObject();
+                const auto uuid = item["msg_uuid"].toString();
+                const auto serverId = item["message_id"].toInteger();
+                if (uuid.isEmpty() || serverId <= 0 || acknowledgedIds.contains(uuid)
+                    || serverIds.contains(serverId)) {
+                    return;
+                }
+                acknowledgedIds.insert(uuid);
+                serverIds.insert(serverId);
+            }
+            // Incomplete/invalid acknowledgements are uncertain, not a terminal confirmation.
+            if (acknowledgedIds.isEmpty() || acknowledgedIds != responseIds) {
+                return;
+            }
+        }
         QVector<QString> pendingClientIds;
         for (qsizetype i = 0; i < _pendingTextBatches.size(); ++i) {
-            if (_pendingTextBatches.at(i).chatId == responseChatId) {
+            const auto &batch = _pendingTextBatches.at(i);
+            const QSet<QString> batchIds(batch.clientMessageIds.begin(), batch.clientMessageIds.end());
+            if (batch.chatId == responseChatId && !responseIds.isEmpty() && batchIds == responseIds) {
                 pendingClientIds = _pendingTextBatches.at(i).clientMessageIds;
-                _pendingTextBatches.removeAt(i);
+                const auto commitError = jsonObj["commit_error"].toString();
+                if (commitError != "StorageUnavailable" && commitError != "DeadlineExceeded") {
+                    _pendingTextBatches.removeAt(i);
+                }
                 break;
             }
         }
         if (err != ErrorCodes::SUCCESS) {
             SPDLOG_WARN("text chat response failed, msg_id={}, error={}",
                         static_cast<int>(id), err);
+            UserMgr::GetInstance()->messages()->markUncertain(responseChatId, pendingClientIds);
             emit sig_text_chat_msg_failed(responseChatId, pendingClientIds);
             return ;
         }
@@ -527,6 +594,9 @@ void TcpMgr::initHandlers()
             auto info = msg.toObject();
             auto uuid = info["msg_uuid"].toString();
             auto msgid = info["message_id"].toInt();
+            if (uuid.isEmpty() || msgid <= 0) {
+                continue;
+            }
             // ChatInfo 缓存暂时保留给左侧摘要兼容；右侧状态由 Model 独立更新。
             if (chat_info) {
                 auto text_msg = chat_info->GetCacheChatMessage(uuid);
@@ -538,6 +608,7 @@ void TcpMgr::initHandlers()
                 }
             }
             acknowledgements.push_back({uuid, msgid});
+            UserMgr::GetInstance()->messages()->acknowledge(chat_id, uuid, msgid);
         }
 
         emit sig_text_chat_msg_rsp_finish(chat_id, acknowledgements);
@@ -596,11 +667,16 @@ void TcpMgr::initHandlers()
             auto text_msg = std::make_shared<TextChatData> (msgid, chat_id, ChatType::PRIVATE,
                                                            ChatMessageType::TEXT_TYPE, msgcontent,
                                                            from_uid, QTime::currentTime());
-            chat_info->AddChatData(text_msg);
+            text_msg->SetClientMessageId(info["msg_uuid"].toString());
+            if (chat_info) {
+                chat_info->AddChatData(text_msg);
+            }
             msgs.push_back(text_msg);
         }
 
         emit sig_update_text_chat_msg(from_uid, to_uid, chat_id, msgs);
+        UserMgr::GetInstance()->messages()->registerChat(chat_id);
+        UserMgr::GetInstance()->messages()->synchronize(chat_id);
     });
 
     // 服务器通知客户端下线
@@ -761,6 +837,10 @@ void TcpMgr::initHandlers()
         }
 
         emit sig_tcp_load_chat_finish(chat_list);
+        if (load_more && current_chat_id > 0) {
+            QJsonObject next{{"uid", self_id}, {"current_chat_id", current_chat_id}};
+            emit sig_send_data(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(next).toJson(QJsonDocument::Compact));
+        }
     });
 
     // 创建私有聊天请求回包
@@ -835,6 +915,16 @@ void TcpMgr::initHandlers()
 
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
+        if (jsonObj.contains("request_id")) {
+            UserMgr::GetInstance()->messages()->acceptSyncPage(jsonObj);
+            return;
+        }
+        if (UserMgr::GetInstance()->messages()->isActive()) {
+            // An old server response cannot establish the incremental sync contract.
+            emit sig_tcp_load_chat_msg_failed(jsonObj["chat_id"].toInt());
+            return;
+        }
+
         if (jsonObj.isEmpty()) {
             SPDLOG_WARN("load chat message response contains an empty JSON object, msg_id={}",
                         static_cast<int>(id));
@@ -877,6 +967,7 @@ void TcpMgr::initHandlers()
             auto msg_info = std::make_shared<TextChatData> (message_id, chat_id, ChatType::PRIVATE,
                                                            ChatMessageType::TEXT_TYPE,
                                                             content, send_id, dt);
+            msg_info->SetClientMessageId(msg_obj["msg_uuid"].toString());
             if (status >= ChatStatus::STATUS_EMPTY && status <= ChatStatus::STATUS_READ_ALREADY) {
                 msg_info->SetStatus(static_cast<ChatStatus>(status));
             }
@@ -895,6 +986,11 @@ void TcpMgr::handleMsg(ReqId id, int len, QByteArray data)
         return ;
     }
     _handlers[id](id, len, data);
+    if (id == ID_CREATE_PRIVATE_CHAT_RSP || id == ID_LOAD_CHAT_MESSAGE_RSP ||
+        id == ID_TEXT_CHAT_MSG_RSP || id == ID_ADD_FRIEND_RSP || id == ID_AUTH_FRIEND_RSP) {
+        const auto object = QJsonDocument::fromJson(data).object();
+        emit requestCompleted(id, object.value("error").toInt(-1));
+    }
 }
 
 // 关闭tcp连接
@@ -911,17 +1007,15 @@ void TcpMgr::beginSession()
 void TcpMgr::resetConnection(bool expectedClose)
 {
     _acceptingSends = false;
-    _frameDecoder.reset();
-    _pendingTextBatches.clear();
+    if (expectedClose) {
+        _pendingTextBatches.clear();
+    }
     _host.clear();
     _port = 0;
     _expectedClose = expectedClose;
-
-    if (_socket.state() != QAbstractSocket::UnconnectedState) {
-        _socket.abort();
-    } else {
-        _expectedClose = false;
-    }
+    _retainingPending = !expectedClose;
+    _transport.reset();
+    _retainingPending = false;
 }
 
 /**
@@ -942,37 +1036,41 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
             const QJsonObject object = document.object();
             PendingTextBatch batch;
             batch.chatId = object["chat_id"].toInt();
+            batch.senderUid = object["from_uid"].toInt();
+            batch.payload = dataBytes;
             for (const auto &entry : object["text_array"].toArray()) {
                 batch.clientMessageIds.push_back(entry.toObject()["msg_uuid"].toString());
             }
-            if (batch.chatId > 0 && !batch.clientMessageIds.isEmpty()) {
+            if (batch.chatId <= 0 || batch.senderUid <= 0
+                || batch.senderUid != UserMgr::GetInstance()->GetUid()
+                || batch.clientMessageIds.isEmpty() || dataBytes.size() > ChatTcpTransport::MaxBodyBytes()) {
+                return;
+            }
+            bool existing = false;
+            for (const auto &pending : _pendingTextBatches) {
+                if (pending.senderUid == batch.senderUid && pending.clientMessageIds == batch.clientMessageIds) {
+                    if (pending.payload != batch.payload) {
+                        emit sig_text_chat_msg_failed(batch.chatId, batch.clientMessageIds);
+                        return;
+                    }
+                    existing = true;
+                    break;
+                }
+            }
+            if (!existing) {
+                if (_pendingTextBatches.size() >= 128) {
+                    emit sig_text_chat_msg_failed(batch.chatId, batch.clientMessageIds);
+                    return;
+                }
                 _pendingTextBatches.enqueue(std::move(batch));
             }
+        } else {
+            return;
         }
     }
 
-    uint16_t id = reqId;
-
-    // 计算长度
-    quint16 len = static_cast<quint16> (dataBytes.size());
-
-    // 字节流数组，保存要发送的，id, len, data
-    QByteArray sendData;
-    // 创建一个字节写入流，绑定sendData
-    QDataStream out(&sendData, QIODevice::WriteOnly);
-
-    // 设置数据流采用网络字节序
-    out.setByteOrder(QDataStream::BigEndian);
-
-    // 写入id和长度
-    out << id << len;
-
-    // 在结尾添加data的字节流
-    sendData.append(dataBytes);
-
-    if (_socket.state() == QAbstractSocket::ConnectedState) {
-        _socket.write(sendData);
-    }
+    // A failed write is uncertain: keep its immutable payload for authenticated retry.
+    _transport.send(static_cast<quint16>(reqId), dataBytes);
 }
 
 /**
@@ -983,7 +1081,7 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
 void TcpMgr::slot_tcp_connect(ServerInfo si)
 {
     SPDLOG_DEBUG("received TCP connect signal");
-    resetConnection(true);
+    resetConnection(false);
     // 尝试连接到服务器
     SPDLOG_INFO("connecting to chat server, host={}, port={}",
                 LogMgr::ToUtf8(si.Host),
@@ -991,10 +1089,15 @@ void TcpMgr::slot_tcp_connect(ServerInfo si)
     _host = si.Host;
     _port = static_cast<quint16> (si.Port.toUInt());
 
-    // 异步连接服务器
-    _socket.connectToHost(_host, _port);
+    ChatTcpEndpoint endpoint;
+    endpoint.host = _host;
+    endpoint.port = _port;
+    endpoint.flowId = ++_transportFlowId;
+    endpoint.connectDeadlineMs = 5000;
+    endpoint.writeDeadlineMs = 5000;
+    _transport.connectTo(endpoint);
 }
 
 TcpMgr::~TcpMgr() {
-
+    _transport.reset();
 }

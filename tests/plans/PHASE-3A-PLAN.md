@@ -1,6 +1,6 @@
 # Phase 3A 正式计划：Windows PR 快速业务回归
 
-状态：**Plan 3A-05 complete（2026-09-02）— 下一项 3A-06**
+状态：**Phase 3A complete（2026-09-03）— 下一阶段 Phase 3B / Plan 3B-00**
 
 制定日期：2026-08-30
 
@@ -445,6 +445,9 @@ POST route 与 Component 测试调用同一 Interface；`GateResponse` 继续唯
 
 ## 12. Plan 3A-06 — 回归、报告与 CI 收口
 
+状态：**Complete（2026-09-03）**。本地 12-report / 232-testcase Release lane、clean PR checks、
+受保护合并及精确 merge-SHA 的 develop push checks 均已完成；下一项为 **Phase 3B / Plan 3B-00**。
+
 ### 任务
 
 1. 每个新增 testcase 分配稳定 Test ID，并更新 Module README 与 `TEST-CONTRACT-MATRIX.md`。
@@ -471,6 +474,24 @@ POST route 与 Component 测试调用同一 Interface；`GateResponse` 继续唯
 - 四个 Required Check 名称不漂移；
 - post-merge develop CI GREEN 后才将 Phase 3A 标记完成；
 - 无 staging/commit 包含 `tests/auto/`、`.planning/` 旧 handoff、隔离目录、proxy、build 或凭据。
+
+### 完成证据（2026-09-03）
+
+- 唯一完整本地 Release lane 以 12 份 JUnit 报告、232/232 testcase、0 failure、0 error 通过；
+  structure negative probe、secret、residue、Test ID、文档链接和 diff 审计均通过。
+- PR [#2](https://github.com/devzyz/Chat/pull/2) 的精确 HEAD
+  `eb6239b0f479f2cc0b76aa7e7b1cf4eeb9e617ad` 在 pull-request run
+  [33646763982](https://github.com/devzyz/Chat/actions/runs/33646763982) 上通过四个 Required Checks。
+- 合并前 PR 为 `MERGEABLE/CLEAN`，develop protection 保持 strict、admin-enforced、禁止 force push/
+  deletion，并要求四个精确 context；PR 经正常受保护流程合并，无 admin bypass。
+- 实际 merge SHA 为 `d04512e864890303f4c38ec8ca0a78e35e8c671c`。该精确 SHA 的 develop push run
+  [33750918123](https://github.com/devzyz/Chat/actions/runs/33750918123) 于
+  `2026-09-03T13:02:19Z` completed/success；`Static configuration checks`、
+  `Server Release build`、`Qt client Release`、`VarifyServer dependency and package check` 全部成功。
+- 本地 `develop` 仅通过 fast-forward 同步至该 merge SHA。未合并的本地 checkpoint `b25effb` topic
+  分支保留，未推送、未删除；用户保护路径未暂存或提交。
+- 因此 Phase 3A 完成；G-008/G-009/G-011 的真实 transport/Adapter/process gap 与 G-015 仍按
+  canonical route 进入 Phase 3B，首项为 Plan 3B-00。
 
 ## 13. 风险与停止条件
 

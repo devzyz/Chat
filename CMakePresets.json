@@ -1,0 +1,43 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 3
+  },
+  "configurePresets": [
+    {
+      "name": "linux-x64-release",
+      "displayName": "Pinned hosted Ubuntu x64 Release",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/out/build/linux-x64-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/.ci/vcpkg_installed",
+        "VCPKG_MANIFEST_MODE": "ON",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-chat-release",
+        "VCPKG_HOST_TRIPLET": "x64-linux-chat-release",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-x64-release",
+      "configurePreset": "linux-x64-release",
+      "configuration": "Release",
+      "jobs": 2
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "linux-x64-release",
+      "configurePreset": "linux-x64-release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+#include "usermgr.h"
 #include "contactuseritem.h"
 #include "ui_contactuseritem.h"
 
@@ -35,10 +36,10 @@ void ContactUserItem::SetInfo(std::shared_ptr<AuthInfo> auth_info)
     _friend_info = std::make_shared<UserInfo> (auth_info);
 
     // 加载图片
-    QPixmap pixmap(_friend_info->_icon);
+
 
     // 设置图片自动缩放
-    ui->contact_user_head_label->setPixmap(pixmap.scaled(ui->contact_user_head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    UserMgr::GetInstance()->bindAvatar(ui->contact_user_head_label, _friend_info->_uid, _friend_info->_icon);
     ui->contact_user_head_label->setScaledContents(true);
 
     ui->contact_user_name_label->setText(_friend_info->_name);
@@ -55,10 +56,10 @@ void ContactUserItem::SetInfo(int uid, QString name, QString icon)
 {
     _friend_info = std::make_shared<UserInfo> (uid, name, icon);
 
-    QPixmap pixmap(_friend_info->_icon);
+
 
     // 设置图片自动缩放
-    ui->contact_user_head_label->setPixmap(pixmap.scaled(ui->contact_user_head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    UserMgr::GetInstance()->bindAvatar(ui->contact_user_head_label, _friend_info->_uid, _friend_info->_icon);
     ui->contact_user_head_label->setScaledContents(true);
 
     ui->contact_user_name_label->setText(_friend_info->_name);
@@ -73,10 +74,10 @@ void ContactUserItem::SetInfo(std::shared_ptr<UserInfo> friend_info)
 {
     _friend_info = friend_info;
 
-    QPixmap pixmap(_friend_info->_icon);
+
 
     // 设置图片自动缩放
-    ui->contact_user_head_label->setPixmap(pixmap.scaled(ui->contact_user_head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    UserMgr::GetInstance()->bindAvatar(ui->contact_user_head_label, _friend_info->_uid, _friend_info->_icon);
     ui->contact_user_head_label->setScaledContents(true);
 
     ui->contact_user_name_label->setText(_friend_info->_name);

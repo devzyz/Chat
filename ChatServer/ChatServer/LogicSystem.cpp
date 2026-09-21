@@ -1,12 +1,17 @@
+#include "../../common/message/MessagePersistence.h"
+#include "../../common/resource/ResourceCatalog.h"
 #include "LogicSystem.h"
 #include "CSession.h"
 #include "Const.h"
-#include <Json/Json.h>
-#include <Json/reader.h>
-#include <Json/value.h>
+#include <json/json.h>
+#include <json/reader.h>
+#include <json/value.h>
 #include "Data.h"
 #include <memory>
 #include "MysqlMgr.h"
+#include "MessageCommit.h"
+#include "HistoryResponse.h"
+#include <chrono>
 #include "StatusGrpcClient.h"
 #include "RedisMgr.h"
 #include "ConfigMgr.h"
@@ -253,6 +258,18 @@ void LogicSystem::RegisterCallBacks() {
 
 		return_value["error"] = ErrorCodes::Success;
 		// 先更新数据库
+
+        // Identity belongs to the authenticated connection, not the request body.
+        if (session->AuthenticatedUid() <= 0 || fromuid != session->AuthenticatedUid() ||
+            touid <= 0 || fromuid == touid) {
+            return_value["error"] = ErrorCodes::UidInvalid;
+            return;
+        }
+        auto recipient = std::make_shared<UserInfo>();
+        if (!GetUserBaseInfo(USER_BASE_INFO + std::to_string(touid), touid, recipient)) {
+            return_value["error"] = ErrorCodes::UidInvalid;
+            return;
+        }
 		bool success = MysqlMgr::GetInstance()->AddFriendApply(fromuid, touid, description, backname);
 		if (!success) {
 			return_value["error"] = ErrorCodes::UidInvalid;
@@ -352,6 +369,16 @@ void LogicSystem::RegisterCallBacks() {
 			});
 
 		std::vector<std::shared_ptr<ChatMessage>> _chat_msgs;
+
+        if (session->AuthenticatedUid() <= 0 || authuid != session->AuthenticatedUid() ||
+            applyuid <= 0 || applyuid == authuid || !applyinfo.isObject() || !authinfo.isObject() ||
+            !applyinfo["applyuid"].isInt() || applyinfo["applyuid"].asInt() != applyuid ||
+            !applyinfo["touid"].isInt() || applyinfo["touid"].asInt() != authuid ||
+            !authinfo["authuid"].isInt() || authinfo["authuid"].asInt() != authuid ||
+            !authinfo["touid"].isInt() || authinfo["touid"].asInt() != applyuid) {
+            return_value["error"] = ErrorCodes::UidInvalid;
+            return;
+        }
 		int chat_id = 0;
 		SPDLOG_DEBUG("auth friend description received, applyuid={}, authuid={}, description_size={}", applyuid, authuid, authinfo["description"].asString().size());
 		// 更新数据库
@@ -370,6 +397,7 @@ void LogicSystem::RegisterCallBacks() {
 		for (auto& msg : _chat_msgs) {
 			Json::Value msg_info;
 			msg_info["message_id"] = msg->_message_id;
+            msg_info["msg_uuid"] = msg->_client_msg_id;
 			msg_info["chat_id"] = msg->_chat_id;
 			msg_info["send_id"] = msg->_send_id;
 			msg_info["recv_id"] = msg->_recv_id;
@@ -457,6 +485,7 @@ void LogicSystem::RegisterCallBacks() {
 			message_chat_message->set_recvid(msg->_recv_id);
 			message_chat_message->set_content(msg->_content);
 			message_chat_message->set_status(msg->_status);
+            message_chat_message->set_client_msg_uuid(msg->_client_msg_id);
 		}
 
 		ChatGrpcClient::GetInstance()->NotifyOtherAuthFriend(applyuid_ip_value, auth_req);
@@ -469,16 +498,20 @@ void LogicSystem::RegisterCallBacks() {
 		Json::Reader reader;
 		Json::Value root;
 		auto err = reader.parse(msg_data, root);
-		if (!err) {
-			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
-			return;
-		}
+        if (!err || !root.isObject()) {
+            Json::Value invalid;
+            invalid["error"] = ErrorCodes::Error_Json;
+            invalid["commit_error"] = "InvalidUuid";
+            session->Send(invalid.toStyledString(), MSG_TEXT_CHAT_MSG_RSP);
+            return;
+        }
 
-		auto from_uid = root["from_uid"].asInt();
-		auto to_uid = root["to_uid"].asInt();
-		auto chat_id = root["chat_id"].asInt();
-
-		const Json::Value data_array = root["text_array"];
+        const int principal_uid = session->AuthenticatedUid();
+        const int from_uid = root["from_uid"].isInt() ? root["from_uid"].asInt() : 0;
+        const int to_uid = root["to_uid"].isInt() ? root["to_uid"].asInt() : 0;
+        const int chat_id = root["chat_id"].isInt() ? root["chat_id"].asInt() : 0;
+        Json::Value data_array = root["text_array"];
+        const bool resource_message = root.isMember("resource_id");
 
 		Json::Value return_value;
 
@@ -492,17 +525,80 @@ void LogicSystem::RegisterCallBacks() {
 		return_value["to_uid"] = to_uid;
 		return_value["chat_id"] = chat_id;
 
-		std::vector<std::pair<std::string, std::string>> _cache_msgs;
+        return_value["client_msg_uuids"] = Json::Value(Json::arrayValue);
+        if (data_array.isArray()) {
+            for (const auto& msg : data_array) {
+                if (msg.isObject() && msg["msg_uuid"].isString()) {
+                    return_value["client_msg_uuids"].append(msg["msg_uuid"]);
+                }
+            }
+        }
+        if (principal_uid <= 0 || principal_uid != from_uid) {
+            return_value["error"] = ErrorCodes::UidInvalid;
+            return_value["commit_error"] = "UnauthorizedSender";
+            return;
+        }
+        if (!data_array.isArray() || data_array.empty() || to_uid <= 0 || chat_id <= 0) {
+            return_value["error"] = ErrorCodes::Error_Json;
+            return_value["commit_error"] = "InvalidMembership";
+            return;
+        }
+        std::vector<std::pair<std::string, std::string>> _cache_msgs;
 		std::vector<std::shared_ptr<ChatMessage>> _chat_msgs;
 		for (auto& msg : data_array) {
+            if (!msg.isObject() || !msg["msg_content"].isString() || !msg["msg_uuid"].isString()) {
+                return_value["error"] = ErrorCodes::Error_Json;
+                return_value["commit_error"] = "InvalidUuid";
+                return;
+            }
 			auto msg_content = msg["msg_content"].asString();
 			auto msg_uuid = msg["msg_uuid"].asString();
 			_cache_msgs.push_back({ msg_uuid, msg_content });
 		}
 
-		int success = MysqlMgr::GetInstance()->AddChatMessageList(from_uid, to_uid, chat_id, _cache_msgs, _chat_msgs);
-		if (!success) {
+        message_commit::Result result;
+        if (resource_message) {
+            try {
+                auto sessions = _directory;
+                if (!sessions->IsCurrent(from_uid, session->Id()) || data_array.size() != 1
+                    || !root["resource_id"].isString()
+                    || !message_commit::IsCanonicalUuid(data_array[0]["msg_uuid"].asString()))
+                    throw std::runtime_error("invalid resource sender");
+                auto& config = ConfigMgr::GetInstance();
+                static resource::ResourceCatalog catalog(config["Mysql"]["Host"] + ":" + config["Mysql"]["Port"],
+                    config["Mysql"]["User"], config["Mysql"]["Password"], config["Mysql"]["Schema"]);
+                auto saved = catalog.CommitMessage(from_uid, to_uid, chat_id,
+                    data_array[0]["msg_uuid"].asString(), root["resource_id"].asString());
+                data_array[0]["msg_content"] = saved.content;
+                _chat_msgs.push_back(std::make_shared<ChatMessage>(saved.id,
+                    data_array[0]["msg_uuid"].asString(), chat_id, from_uid, to_uid, saved.content, 0));
+            } catch (const std::exception&) {
+                return_value["error"] = ErrorCodes::UidInvalid;
+                return_value["commit_error"] = "StorageUnavailable";
+                return;
+            }
+        } else {
+            for (const auto& item : _cache_msgs) {
+                if (item.second.rfind("@resource:v1:", 0) == 0) {
+                    return_value["error"] = ErrorCodes::UidInvalid;
+                    return_value["commit_error"] = "Conflict";
+                    return;
+                }
+            }
+            result = MysqlMgr::GetInstance()->AddChatMessageList(
+                message_commit::AuthenticatedPrincipal{principal_uid}, from_uid, to_uid, chat_id,
+                _cache_msgs, _chat_msgs, std::chrono::steady_clock::now() + std::chrono::seconds(5));
+        }
+        if (!result.IsSuccess()) {
 			return_value["error"] = ErrorCodes::UidInvalid;
+            switch (result.error) {
+            case message_commit::Error::UNAUTHORIZED_SENDER: return_value["commit_error"] = "UnauthorizedSender"; break;
+            case message_commit::Error::INVALID_UUID: return_value["commit_error"] = "InvalidUuid"; break;
+            case message_commit::Error::INVALID_MEMBERSHIP: return_value["commit_error"] = "InvalidMembership"; break;
+            case message_commit::Error::CONFLICT: return_value["commit_error"] = "Conflict"; break;
+            case message_commit::Error::DEADLINE_EXCEEDED: return_value["commit_error"] = "DeadlineExceeded"; break;
+            default: return_value["commit_error"] = "StorageUnavailable"; break;
+            }
 			return;
 		}
 
@@ -525,7 +621,7 @@ void LogicSystem::RegisterCallBacks() {
         bool b_success = presence.status == PresenceStatus::Found;
         if (presence.presence) touid_ip_value = presence.presence->server_id;
 		if (!b_success) {
-			return_value["error"] = ErrorCodes::UidInvalid;
+            // Routing failure cannot revoke the already committed acknowledgement.
 			return;
 		}
 
@@ -547,6 +643,7 @@ void LogicSystem::RegisterCallBacks() {
 				for (auto& msg : _chat_msgs) {
 					Json::Value info;
 					info["message_id"] = msg->_message_id;
+                    info["msg_uuid"] = msg->_client_msg_id;
 					info["msg_content"] = msg->_content;
 					notify_msgs.append(info);
 				}
@@ -701,32 +798,57 @@ void LogicSystem::RegisterCallBacks() {
 	_fun_callbacks[MSG_LOAD_CHAT_MESSAGE_REQ] = [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
 		SPDLOG_DEBUG("load chat message request, msg_id={}", static_cast<int>(MSG_LOAD_CHAT_MESSAGE_REQ));
 		// 解析json数据
-		Json::Reader reader;
-		Json::Value root;
-		auto err = reader.parse(msg_data, root);
-		if (!err) {
-			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
-			return;
-		}
-
-		auto chat_id = root["chat_id"].asInt();
-		auto current_msg_id = root["current_msg_id"].asInt();
-
-		Json::Value return_value;
-		return_value["error"] = ErrorCodes::Success;
-		return_value["chat_id"] = chat_id;
-
-		Defer defer([this, &return_value, session]() {
-			std::string return_str = return_value.toStyledString();
-			session->Send(return_str, MSG_LOAD_CHAT_MESSAGE_RSP);
-			});
+        Json::Reader reader;
+        Json::Value root;
+        if (!reader.parse(msg_data, root) || !root.isObject()) {
+            Json::Value invalid;
+            invalid["error"] = ErrorCodes::Error_Json;
+            session->Send(SerializeHistoryResponse(invalid, 0), MSG_LOAD_CHAT_MESSAGE_RSP);
+            return;
+        }
+        if (root.isMember("mode")) {
+            Json::Value response;
+            response["mode"] = "sync_v1";
+            response["error"] = ErrorCodes::UidInvalid;
+            response["chat_id"] = root["chat_id"];
+            response["request_id"] = root["request_id"];
+            response["after_id"] = root["after_id"];
+            if (root["mode"].isString() && root["mode"].asString() == "sync_v1"
+                && root["uid"].isInt() && root["uid"].asInt() > 0
+                && root["chat_id"].isInt() && root["chat_id"].asInt() > 0
+                && root["after_id"].isInt64() && root["after_id"].asInt64() >= 0
+                && root["request_id"].isString() && root["request_id"].asString().size() <= 64
+                && _directory->IsCurrent(root["uid"].asInt(), session->Id())) {
+                response["error"] = ErrorCodes::Success;
+                if (!MysqlMgr::GetInstance()->SyncChatMessages(root["uid"].asInt(), root["chat_id"].asInt(),
+                    root["after_id"].asInt64(), response)) {
+                    response["error"] = ErrorCodes::UidInvalid;
+                    response.removeMember("msgs");
+                }
+            }
+            session->Send(messaging::CompactJson(response), MSG_LOAD_CHAT_MESSAGE_RSP);
+            return;
+        }
+        Json::Value return_value;
+        return_value["error"] = ErrorCodes::Error_Json;
+        int request_cursor = 0;
+        Defer defer([&return_value, &request_cursor, session]() {
+            session->Send(SerializeHistoryResponse(return_value, request_cursor), MSG_LOAD_CHAT_MESSAGE_RSP);
+        });
+        if (!root["chat_id"].isInt() || root["chat_id"].asInt() <= 0 ||
+            !root["current_msg_id"].isInt() || root["current_msg_id"].asInt() < 0) return;
+        const int chat_id = root["chat_id"].asInt();
+        const int current_msg_id = root["current_msg_id"].asInt();
+        request_cursor = current_msg_id;
+        return_value["error"] = ErrorCodes::Success;
+        return_value["chat_id"] = chat_id;
 
 		std::vector<std::shared_ptr<ChatMessage>> chat_msgs;
 
 		// 是否能够加载更多
 		bool load_more = false;
 		int last_msg_id = 0;
-		bool success = GetChatMessageList(chat_id, current_msg_id, PAGE_SIZE, chat_msgs, load_more, last_msg_id);
+		bool success = GetChatMessageList(session->AuthenticatedUid(), chat_id, current_msg_id, PAGE_SIZE, chat_msgs, load_more, last_msg_id);
 
 		if (!success) {
 			return_value["error"] = ErrorCodes::UidInvalid;
@@ -740,6 +862,7 @@ void LogicSystem::RegisterCallBacks() {
 			Json::Value item;
 
 			item["message_id"] = chat->_message_id;
+            item["msg_uuid"] = chat->_client_msg_id;
 			item["send_id"] = chat->_send_id;
 			item["recv_id"] = chat->_recv_id;
 			item["content"] = chat->_content;
@@ -1001,7 +1124,7 @@ bool LogicSystem::GetUserChatList(int uid, int current_chat_id, int page_size,
  * @return 
  * 增量加载部分聊天数据
  */
-bool LogicSystem::GetChatMessageList(int chat_id, int current_msg_id, int page_size,
+bool LogicSystem::GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 	std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id) {
-	return MysqlMgr::GetInstance()->GetChatMessageList(chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
+	return MysqlMgr::GetInstance()->GetChatMessageList(principal_uid, chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
 }

@@ -3,6 +3,7 @@
 
 #include <QWidget>
 #include "editavatardialog.h"
+#include <QPointer>
 
 namespace Ui {
 class UserInfoPage;
@@ -21,7 +22,7 @@ private slots:
 
 private:
     Ui::UserInfoPage *ui;
-    EditAvatarDialog * _edit_avatar_dialog;
+    QPointer<EditAvatarDialog> _edit_avatar_dialog;
 };
 
 #endif // USERINFOPAGE_H

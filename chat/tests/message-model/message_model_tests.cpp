@@ -60,10 +60,51 @@ void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized
     QVERIFY(model.removeByMessageId(42));
     QCOMPARE(removed, 1);
     QCOMPARE(model.rowCount(), 0);
+    // History may beat the acknowledgement, including a legacy record without UUID.
+    model.appendMessage(message(0, QStringLiteral("retry-uuid")));
+    model.prependHistory({message(9001, {})});
+    QCOMPARE(model.rowCount(), 2);
+    QVERIFY(model.acknowledgeMessage(QStringLiteral("retry-uuid"), 9001, DeliveryStatus::Sent));
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.rowForMessageId(9001), model.rowForClientMessageId(QStringLiteral("retry-uuid")));
+    QCOMPARE(model.appendMessage(message(9001, QStringLiteral("retry-uuid"))), 0);
+    QVERIFY(model.acknowledgeMessage(QStringLiteral("retry-uuid"), 9001, DeliveryStatus::Sent));
+    QCOMPARE(model.rowCount(), 1);
 }
 
 void MessageModelTests::unknownStableIdsDoNotMutateTheModel()
 {
+    MessageListModel sharedUuid(7);
+    auto own = message(0, QStringLiteral("shared-uuid"));
+    auto peer = message(55, QStringLiteral("shared-uuid"));
+    peer.senderId = 2;
+    peer.isSelf = false;
+    QCOMPARE(sharedUuid.appendMessages({own, peer}), 2);
+    QCOMPARE(sharedUuid.prependHistory({peer}), 0);
+    QCOMPARE(sharedUuid.rowCount(), 2);
+    QCOMPARE(sharedUuid.rowForClientMessageId("shared-uuid"), -1);
+    QVERIFY(!sharedUuid.acknowledgeMessage("shared-uuid", 56));
+    QVERIFY(!sharedUuid.acknowledgeMessage("shared-uuid", 55, DeliveryStatus::Sent, 1));
+    QVERIFY(sharedUuid.acknowledgeMessage("shared-uuid", 56, DeliveryStatus::Sent, 1));
+    QCOMPARE(sharedUuid.recordAt(sharedUuid.rowForMessageId(55))->senderId, 2);
+    QCOMPARE(sharedUuid.recordAt(sharedUuid.rowForMessageId(56))->senderId, 1);
+    QVERIFY(sharedUuid.updateStatusByClientId("shared-uuid", DeliveryStatus::Failed, 1));
+    QCOMPARE(sharedUuid.recordAt(sharedUuid.rowForMessageId(55))->deliveryStatus, DeliveryStatus::Read);
+    QVERIFY(sharedUuid.removeByMessageId(55));
+    QCOMPARE(sharedUuid.rowForClientMessageId("shared-uuid", 1), 0);
+    MessageListModel history(7);
+    own.messageId = 56;
+    QCOMPARE(history.prependHistory({own, peer}), 2);
+    QCOMPARE(history.appendMessages({own, peer}), 0);
+    MessageListModel uncertain(7);
+    auto pending = message(0, "history-confirmation");
+    uncertain.appendMessage(pending);
+    pending.messageId = 57;
+    pending.deliveryStatus = DeliveryStatus::Sent;
+    uncertain.prependHistory({pending});
+    QCOMPARE(uncertain.rowCount(), 1);
+    QCOMPARE(uncertain.recordAt(0)->messageId, 57);
+
     MessageListModel model(7);
     model.appendMessage(message(101, QStringLiteral("known-client")));
     int changes = 0;
@@ -89,6 +130,7 @@ void MessageModelTests::historyDeduplicatesAndRemainsChronological()
 {
     MessageListModel model(7);
     model.appendMessage(message(30, {}));
+    QPersistentModelIndex anchor(model.index(0));
     const QVector<MessageRecord> history = {
         message(20, {}, QStringLiteral("中文")),
         message(10, {}, QStringLiteral("English 😄\nmanual wrap")),
@@ -101,6 +143,8 @@ void MessageModelTests::historyDeduplicatesAndRemainsChronological()
     QCOMPARE(model.data(model.index(0), MessageListModel::MessageIdRole).toLongLong(), 10);
     QCOMPARE(model.data(model.index(1), MessageListModel::MessageIdRole).toLongLong(), 20);
     QCOMPARE(model.data(model.index(2), MessageListModel::MessageIdRole).toLongLong(), 30);
+    QCOMPARE(anchor.row(), 2);
+    QCOMPARE(anchor.data(MessageListModel::MessageIdRole).toLongLong(), 30);
     QCOMPARE(model.data(model.index(0), MessageListModel::TextRole).toString(),
              QStringLiteral("English 😄\nmanual wrap"));
 }
@@ -129,6 +173,12 @@ void MessageModelTests::multipleHistoryPagesRemainChronological()
                  expectedIds.at(row));
     }
     QCOMPARE(model.oldestMessageId(), 10);
+    model.appendMessage(message(0, "pending"));
+    model.appendMessage(message(60, {}));
+    model.mergeMessages({message(60, "pending"), message(25, "late-sync")});
+    QCOMPARE(model.rowCount(), 7);
+    QCOMPARE(model.rowForClientMessageId("pending"), model.rowForMessageId(60));
+    QCOMPARE(model.data(model.index(2), MessageListModel::MessageIdRole).toLongLong(), 25);
 }
 
 void MessageModelTests::removalAndAcknowledgementRebuildShiftedIndexes()
@@ -191,6 +241,31 @@ void MessageModelTests::storeRetainsOneModelAndPaginationStatePerChat()
     QVERIFY(!first->canLoadMore());
     QVERIFY(first->hasLoadedInitialPage());
     QCOMPARE(first->historyCursor(), 123);
+
+    first->setInitialPageLoaded(false);
+    QVERIFY(store.applyHistory(7, {message(10, "server-10"), message(20, "server-20")}, true, 20));
+    QPersistentModelIndex anchor(first->index(1));
+    QVERIFY(store.applyHistory(7, {message(20, "server-20"), message(30, "server-30")}, true, 30));
+    QVERIFY(store.applyHistory(7, {message(40, "server-40")}, false, 40));
+    QCOMPARE(first->rowCount(), 4);
+    for (int row = 0; row < 4; ++row) QCOMPARE(first->recordAt(row)->messageId, qint64((row + 1) * 10));
+    QCOMPARE(anchor.data(MessageListModel::MessageIdRole).toLongLong(), 20);
+    QVERIFY(store.applyHistory(7, {message(10, "server-10"), message(20, "server-20")}, true, 20));
+    QCOMPARE(first->historyCursor(), 40);
+    QVERIFY(!first->canLoadMore());
+    QVERIFY(store.applyHistory(7, {}, false, 40));
+    QVERIFY(!store.applyHistory(7, {message(50, "bad-cursor")}, true, 49));
+    QVERIFY(!store.applyHistory(7, {message(60, "unordered"), message(50, "unordered-2")}, true, 50));
+    QCOMPARE(first->historyCursor(), 40);
+    QCOMPARE(first->rowCount(), 4);
+    first->appendMessage(message(0, "pending"));
+    store.markFailed(8, {"pending"});
+    store.markFailed(7, {"pending"});
+    QCOMPARE(first->recordAt(4)->deliveryStatus, DeliveryStatus::Failed);
+    store.acknowledge(7, {{"pending", 50}});
+    QCOMPARE(first->recordAt(4)->messageId, 50);
+    QCOMPARE(first->recordAt(4)->deliveryStatus, DeliveryStatus::Sent);
+    QCOMPARE(store.find(8)->rowCount(), 0);
 }
 
 void MessageModelTests::delegateReflowsLongTextForANarrowViewport()

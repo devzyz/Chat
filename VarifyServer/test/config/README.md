@@ -9,7 +9,7 @@ precedence is `--config`, then `CHAT_CONFIG`, then the working-directory
 Credentials are required exclusively through these environment variables:
 
 - `CHAT_VARIFY_EMAIL_USER`
-- `CHAT_VARIFY_EMAIL_PASS`
+- `CHAT_VARIFY_EMAIL_PASS` (required for `email.auth=login`, omitted for `none`)
 - `CHAT_VARIFY_MYSQL_PASSWORD`
 - `CHAT_VARIFY_REDIS_PASSWORD`
 
@@ -19,7 +19,8 @@ reintroduced.
 
 ## Isolation and execution
 
-`config.test.js` contains nine `node:test` cases. Each case loads the production
+`config.test.js` contains ten `node:test` cases, including no-auth SMTP configuration.
+Each case loads the production
 module in an isolated child process with temporary JSON and synthetic
 credentials. It does not connect to Redis, MySQL, SMTP, or the public network.
 

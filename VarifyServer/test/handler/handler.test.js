@@ -198,6 +198,18 @@ test('false mail result returns Exception', async () => {
     assert.equal(response.error, constModule.Errors.Exception);
 });
 
+test('structured SMTP statuses retain the public error mapping and single callback', async () => {
+    for (const status of ['Delivered', 'Rejected', 'Unavailable', 'DeadlineExceeded', 'InvalidConfig']) {
+        const handler = createGetVarifyCodeHandler({
+            redisModule: { async GetRedis() { return 'M4IL'; } },
+            emailModule: { async SendMail() { return { status }; } },
+            logger: silentLogger
+        });
+        const response = await invoke(handler);
+        assert.equal(response.error, status === 'Delivered' ? constModule.Errors.Success : constModule.Errors.Exception);
+    }
+});
+
 // V06-HDL-05
 test('Redis read rejection returns Exception without sending mail', async () => {
     // Arrange

@@ -69,3 +69,13 @@ TEST(SessionComponentTests, CloseBeforeStartCannotReactivate) {
     Harness h; auto session = h.Create(); session->Close(); session->Start(); session->Start();
     EXPECT_EQ(h.Snapshot(session).first, SessionState::Closing);
 }
+
+TEST(SessionComponentTests, ForeignSessionCannotRemoveDirectoryOwner) {
+    Harness first, second;
+    auto owner = first.Create();
+    auto foreign = second.Create();
+    first.directory->Register(42, owner->Id(), owner);
+    first.directory->UnregisterIfCurrent(42, foreign->Id());
+    EXPECT_EQ(first.directory->FindCurrent(42), owner);
+    EXPECT_FALSE(second.directory->FindCurrent(42));
+}

@@ -1,5 +1,16 @@
 # Qt 客户端测试
 
+## 头像与资源整合
+
+- [local-avatar](local-avatar/README.md)：裁剪、原子保存、账号隔离、旧头像迁移及编辑器。
+- [resource-transfer](resource-transfer/README.md)：真实 HTTP 上传续传、头像发布及页面生命周期；本地独立入口。
+
+整合后 owning runner 的 Qt 报告为 Unit 24、Component 12、Integration 28；
+历史阶段数量不构成本次执行声明。
+
+- [session-driver](session-driver/README.md): GUI/driver shared production login,
+  isolated client processes and bounded control-channel lifecycle (five Integration cases).
+
 Qt 测试由 `chat/CMakeLists.txt` 显式注册，测试源码按客户端模块组织：
 
 - [message-model](message-model/README.md)：Business / Unit + Component；前六项保护单一模型规则，store 分页状态和真实 delegate 布局保持 Component。
@@ -22,6 +33,13 @@ Module containing `ClientSession`, `TcpMgr`, and `UserMgr`.
 - [network-state](network-state/README.md): Foundation / Unit, the `TcpMgr` frame decoder's partial-read,
   adjacent-frame, byte-order, and zero-body state transitions.
 
-CI 的 `client-release` job 按 CTest 标签运行，并生成 `build/test-results/client_unit.xml`（18）和
-`client_component.xml`（6）。新增模块必须创建独立
+CI 的 `client-release` job 按 CTest 标签运行，并生成 `build/test-results/client_unit.xml` 和
+`client_component.xml`。新增模块必须创建独立
 子目录和 `README.md`，并在 CMake 中显式注册，不能依赖目录通配符发现。
+
+Phase 3C message retry adds two session Component cases and one real loopback
+Integration case in the existing session-reset module. The authoritative report
+counts are maintained by `scripts/windows-local.ps1`; `client_integration.xml`
+includes the authenticated retry alongside the existing HTTP/TCP transport cases.
+
+Message persistence adds one component case (`message_storage.persistence`), covering seven business contracts in [message-storage](message-storage/README.md). Client registration is now 24 Unit / 13 Component / 28 Integration. Network-state coverage also checks full-size 1028 responses and the unchanged bound for other frames.

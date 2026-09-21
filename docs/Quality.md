@@ -68,42 +68,27 @@ MSBuild/CMake/npm/PowerShell runner and that every CTest target declares a test
 Level. The permanent regression baseline and future-module admission contract
 are defined in `tests/REGRESSION.md`.
 
-The confirmed branch/release gate policy is defined in
-`tests/CI-GOVERNANCE.md`; the current Test ID and gap inventory is
-`tests/TEST-CONTRACT-MATRIX.md`; the next baseline-hardening execution plan is
-`tests/plans/PHASE-2.5-PLAN.md`. These documents are planning and governance
-contracts: they do not claim a gate is implemented until its verification and
-clean-runner acceptance criteria pass.
+The branch/release policy is defined in [CI governance](../tests/CI-GOVERNANCE.md).
+The [contract matrix](../tests/TEST-CONTRACT-MATRIX.md) explains Test IDs and coverage;
+[current status](Status.md) records validated progress and remaining work.
 
-- Server GoogleTest 报告：`server_unit.xml`、`server_component.xml`、`server_integration.xml`、
-  `server_chat_grpc_integration.xml`、`server_gate_unit.xml`、`server_status_unit.xml`。
-- Qt CTest 报告：`client_unit.xml`、`client_component.xml`。
-- VarifyServer Node Test 报告：`varify_unit.xml`、`varify_integration.xml`。
-- PowerShell 轻量测试报告：`script_component.xml`、`script_integration.xml`。
-- 上述报告均位于 `build/test-results`。
-- 当前精确基线为 12 份报告、173 个 testcase；`CheckTestReports` 对缺失、数量漂移、
-  failure/error 节点返回非零，`RunAllTests` 结束前调用同一审计。
-- PowerShell 轻量 runner 通过逐项 PASS/FAIL 和非零退出传播失败。
+Reports live in `build/test-results`. Exact report groups and expected counts are owned by
+`scripts/windows-local.ps1`; do not duplicate changing totals here. Each runner checks its
+reports, and `RunAllTests` audits the full set. Missing reports, failed/skipped cases and
+nonzero test exits fail the entry point.
 
-Qt 当前精确基线为 Unit 7、Component 5。Component 中的 `ClientSession` 合同要求登出、切号、被踢和异常掉线返回登录页前清除账号/connection transient state，并销毁旧页面与消息模型；预期关闭不得复用异常掉线提示路径。
+Windows CI checks registration once in the static job; local entries retain the default check.
+Quick develop runs upload test reports; application ZIPs are generated only in full runs.
 
 ## CI 门禁
 
-`.github/workflows/windows-ci.yml` 在 develop push、PR 和手工触发时运行。新增代码必须保持：
+CI 用于回归保护。develop PR/push 运行现有 Windows 单元、组件、loopback/进程测试和构建；
+master PR/push、每周 develop 与手动执行增加 Linux 真实依赖和完整 E2E。
+master 合并后实际 SHA 的全量与包启动冒烟成功，自动发布同一个包，不需要人工审批。
 
-- `static-check`：构建配置、单一 ChatServer、依赖和脚本测试。
-- `servers-release`：干净 vcpkg 恢复、Server Release、GoogleTest、自包含目录和三个 ZIP。
-- `client-release`：Qt Release、CTest、windeployqt 和客户端 ZIP。
-- `varify-release`：Node.js 22、`npm ci`、语法/依赖、Node Test 和 ZIP。
-
-稳定的 Required Check 候选名称是 `Static configuration checks`、`Server Release build`、
-`Qt client Release` 和 `VarifyServer dependency and package check`。只有对应 clean PR
-在提交 SHA 上实际全绿后，管理员才能把这些名称合并进 `develop` 保护规则。
-
-- 不得通过 `continue-on-error`、吞掉 `$LASTEXITCODE` 或无条件成功来绕过 required 行为。
-- 自动重试不得用于把 flaky test 刷成通过；必须定位不稳定原因。
-- 失败时的测试报告 SHOULD 使用 `if: always()` 上传。
-- 新重型依赖应复用已有 job 的已恢复环境，避免无必要重复冷构建。
+Required Checks、运行时机和失败规则统一见 [CI 治理](../tests/CI-GOVERNANCE.md)。
+发布包命令与测试边界见 [发布测试入口](../tests/release/contracts/README.md)。
+普通修改不要求额外阶段计划或多份证据文档；保留所属测试、失败传播、超时和资源清理。
 
 ## 代码审核清单
 

@@ -31,17 +31,25 @@ test('direct process exits with a failure status when its port is occupied', asy
     t.after(() => blocker.close());
     await new Promise((resolve, reject) => {
         blocker.once('error', reject);
-        blocker.listen(50051, '0.0.0.0', resolve);
+        blocker.listen(0, '127.0.0.1', resolve);
     });
 
     const result = spawnSync(process.execPath, ['server.js'], {
         cwd: serverRoot,
-        env: { ...process.env, ...credentialEnvironment, CHAT_CONFIG: configPath },
+        env: {
+            ...process.env,
+            ...credentialEnvironment,
+            CHAT_CONFIG: configPath,
+            CHAT_VARIFY_BIND_ADDRESS: `127.0.0.1:${blocker.address().port}`
+        },
         encoding: 'utf8',
         timeout: 2000
     });
 
     assert.equal(result.signal, null, `process did not exit on its own: ${result.error ?? ''}`);
     assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /grpc server failed to start/);
+    assert.match(result.stderr, /EADDRINUSE/);
+    assert.doesNotMatch(result.stdout, /grpc server started/);
     assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, /test-(?:email|mysql|redis)-password/);
 });

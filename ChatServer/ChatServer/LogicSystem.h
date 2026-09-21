@@ -8,7 +8,7 @@
 #include <json/value.h>
 
 class CSession;
-class CServer;
+namespace chat_transport { class CServer; }
 typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> FunCallBack;
 class LogicSystem : public LogicDispatcher
 {
@@ -93,7 +93,7 @@ private:
 	 * @return 
 	 * 增量加载部分聊天数据
 	 */
-	bool GetChatMessageList(int chat_id, int current_msg_id, int page_size,
+	bool GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
 	
 	/**

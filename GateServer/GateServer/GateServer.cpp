@@ -5,6 +5,8 @@
 #include "RedisMgr.h"
 #include "LogMgr.h"
 #include "AsioIOServicePool.h"
+#include "GateRequestProduction.h"
+#include "LogicSystem.h"
 #include <csignal>
 #include <iostream>
 
@@ -53,7 +55,9 @@ int main(int argc, char* argv[])
 #ifdef _WIN32
         signals.add(SIGBREAK);
 #endif
-        auto server = std::make_shared<CServer>(ioc, port);
+        auto gate_request = gate::CreateProductionGateRequest();
+        auto logic = std::make_shared<LogicSystem>(*gate_request);
+        auto server = std::make_shared<CServer>(ioc, port, logic);
         auto pool = AsioIOServicePool::GetInstance();
 
         signals.async_wait([&ioc, pool, server](const boost::system::error_code& err, int signal_number) {

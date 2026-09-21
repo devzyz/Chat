@@ -1,7 +1,7 @@
 #include "session_test_support.h"
 using namespace session_test;
 
-// T09-CTCP-01
+// T09-SESSION-01
 TEST(SessionRuntimeIntegrationTests, SplitHeaderBodyAndCoalescedFrames) {
     Harness h;
     auto done = std::make_shared<std::promise<std::vector<std::string>>>();
@@ -19,7 +19,7 @@ TEST(SessionRuntimeIntegrationTests, SplitHeaderBodyAndCoalescedFrames) {
     boost::asio::write(c.peer, boost::asio::buffer(rest));
     EXPECT_EQ(Await(std::move(future)), (std::vector<std::string>{"hello", "", std::string(MAX_LENGTH, 'x')}));
 }
-// T09-CTCP-02
+// T09-SESSION-02
 TEST(SessionRuntimeIntegrationTests, OversizedHeaderClosesWithoutDispatch) {
     Harness h; std::atomic<int> dispatches{0};
     Connected c(h, [&](LogicMessage) { ++dispatches; return LogicSubmitResult::Accepted; });
@@ -34,7 +34,7 @@ TEST(SessionRuntimeIntegrationTests, OversizedHeaderClosesWithoutDispatch) {
     EXPECT_EQ(h.Snapshot(c.session).second, SessionCloseReason::ProtocolError);
     EXPECT_EQ(dispatches, 0);
 }
-// T09-CTCP-03
+// T09-SESSION-03
 TEST(SessionRuntimeIntegrationTests, RepeatedStartKeepsOneReadChain) {
     Harness h; auto result = std::make_shared<std::promise<std::string>>(); auto future = result->get_future();
     Connected c(h, [result](LogicMessage message) { result->set_value(message.body); return LogicSubmitResult::Accepted; });
@@ -42,7 +42,7 @@ TEST(SessionRuntimeIntegrationTests, RepeatedStartKeepsOneReadChain) {
     boost::asio::write(c.peer, boost::asio::buffer(Frame(100, "one")));
     EXPECT_EQ(Await(std::move(future)), "one");
 }
-// T09-CTCP-04
+// T09-SESSION-04
 TEST(SessionRuntimeIntegrationTests, SendsUseFifoAndAdmissionOnly) {
     Harness h; Connected c(h);
     EXPECT_EQ(h.Send(c.session, {100, "first"}), SessionSendResult::Accepted);
@@ -50,7 +50,7 @@ TEST(SessionRuntimeIntegrationTests, SendsUseFifoAndAdmissionOnly) {
     const auto expected = Frame(100, "first") + Frame(101, "second");
     EXPECT_EQ(c.Read(expected.size()), expected);
 }
-// T09-CTCP-05
+// T09-SESSION-05
 TEST(SessionRuntimeIntegrationTests, ExactQueueCapacityAndCloseDuringWrite) {
     Harness h; Connected c(h);
     auto entered = std::make_shared<std::promise<void>>(); auto entered_future = entered->get_future();
@@ -76,7 +76,7 @@ TEST(SessionRuntimeIntegrationTests, ExactQueueCapacityAndCloseDuringWrite) {
         [received, bytes](boost::system::error_code, std::size_t count) { received->set_value(count); });
     EXPECT_LE(Await(std::move(remaining)), static_cast<std::size_t>(MAX_LENGTH + HEAD_TOTAL_LEN));
 }
-// T09-CTCP-06
+// T09-SESSION-06
 TEST(SessionRuntimeIntegrationTests, AuthenticationReplacementCannotDeleteNewPresence) {
     Harness h; Connected a(h), b(h);
     ASSERT_EQ(h.Bind(a.session), SessionBindResult::Bound);
@@ -87,7 +87,7 @@ TEST(SessionRuntimeIntegrationTests, AuthenticationReplacementCannotDeleteNewPre
     EXPECT_EQ(a.session->AuthenticatedUid(), 0);
     EXPECT_EQ(h.Bind(b.session, 43), SessionBindResult::AlreadyBound);
 }
-// T09-CTCP-07
+// T09-SESSION-07
 TEST(SessionRuntimeIntegrationTests, CloseDuringPublicationRollsBackAndNeverAuthenticates) {
     Harness h; Connected c(h);
     auto entered = std::make_shared<std::promise<void>>(); auto entering = entered->get_future();
@@ -103,13 +103,13 @@ TEST(SessionRuntimeIntegrationTests, CloseDuringPublicationRollsBackAndNeverAuth
     EXPECT_FALSE(h.directory->FindCurrent(42));
     EXPECT_EQ(h.presence->Find(42).status, PresenceStatus::NotFound);
 }
-// T09-CTCP-08
+// T09-SESSION-08
 TEST(SessionRuntimeIntegrationTests, StorageFailureDoesNotPublishLocalIdentity) {
     Harness h; Connected c(h); h.presence->unavailable = true;
     EXPECT_EQ(h.Bind(c.session), SessionBindResult::Unavailable);
     EXPECT_FALSE(h.directory->FindCurrent(42)); EXPECT_EQ(c.session->AuthenticatedUid(), 0);
 }
-// T09-CTCP-09
+// T09-SESSION-09
 TEST(SessionRuntimeIntegrationTests, SlowCleanupDoesNotBlockSocketClose) {
     Harness h; Connected c(h); ASSERT_EQ(h.Bind(c.session), SessionBindResult::Bound);
     auto entered = std::make_shared<std::promise<void>>(); auto future = entered->get_future();
@@ -121,7 +121,7 @@ TEST(SessionRuntimeIntegrationTests, SlowCleanupDoesNotBlockSocketClose) {
     EXPECT_EQ(h.Send(c.session), SessionSendResult::NotActive);
     release->set_value();
 }
-// T09-CTCP-10
+// T09-SESSION-10
 TEST(SessionRuntimeIntegrationTests, RemoteReplacementCarriesOldSessionIdentity) {
     auto kicked = std::make_shared<std::promise<chat_session::UserPresence>>(); auto future = kicked->get_future();
     Harness h([kicked](int uid, const chat_session::UserPresence& old) { EXPECT_EQ(uid, 42); kicked->set_value(old); });
@@ -129,7 +129,7 @@ TEST(SessionRuntimeIntegrationTests, RemoteReplacementCarriesOldSessionIdentity)
     Connected c(h); ASSERT_EQ(h.Bind(c.session), SessionBindResult::Bound);
     EXPECT_EQ(Await(std::move(future)).session_id, "old-session");
 }
-// T09-CTCP-11
+// T09-SESSION-11
 TEST(SessionRuntimeIntegrationTests, InterruptedReadAndPeerDisconnectReleaseSession) {
     Harness h; auto dispatched = std::make_shared<std::atomic<int>>(0);
     Connected c(h, [dispatched](LogicMessage) { ++*dispatched; return LogicSubmitResult::Accepted; });
@@ -140,11 +140,11 @@ TEST(SessionRuntimeIntegrationTests, InterruptedReadAndPeerDisconnectReleaseSess
     EXPECT_EQ(h.Snapshot(c.session).second, SessionCloseReason::ReadError);
     EXPECT_EQ(dispatched->load(), 0);
 }
-// T09-CTCP-12
+// T09-SESSION-12
 TEST(SessionRuntimeIntegrationTests, ServerStopDrainsAcceptAndSessionOwnership) {
     Harness h;
     auto received = std::make_shared<std::promise<std::shared_ptr<CSession>>>(); auto incoming = received->get_future();
-    auto server = std::make_shared<CServer>(h.io, 0, h.lifecycle, h.directory,
+    auto server = std::make_shared<chat_transport::CServer>(h.io, "127.0.0.1", 0, h.lifecycle, h.directory,
         [received](LogicMessage message) { received->set_value(message.session); return LogicSubmitResult::Accepted; });
     h.lifecycle->AttachServer(server); server->Start();
     boost::asio::ip::tcp::socket peer(h.io);
@@ -163,7 +163,7 @@ TEST(SessionRuntimeIntegrationTests, ServerStopDrainsAcceptAndSessionOwnership) 
     server->Stop([again] { again->set_value(); }); Await(std::move(completed));
 }
 
-// T09-CTCP-13
+// T09-SESSION-13
 TEST(SessionRuntimeIntegrationTests, WriteFailureClosesAndCleansMatchingPresenceOnce) {
     Harness h;
     auto session = h.Create();

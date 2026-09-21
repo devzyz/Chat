@@ -1,3 +1,4 @@
+#include "usermgr.h"
 #include "applyfrienditem.h"
 #include "ui_applyfrienditem.h"
 
@@ -26,10 +27,10 @@ ApplyFriendItem::ApplyFriendItem(QWidget *parent)
 void ApplyFriendItem::SetInfo(std::shared_ptr<ApplyInfo> apply_info) {
     _apply_info = apply_info;
     // 加载图片
-    QPixmap pixmap(_apply_info->_apply_icon);
+
 
     // 设置图片大小以及自动缩放
-    ui->apply_friend_head_label->setPixmap(pixmap.scaled(ui->apply_friend_head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    UserMgr::GetInstance()->bindAvatar(ui->apply_friend_head_label, _apply_info->_apply_uid, _apply_info->_apply_icon);
     ui->apply_friend_head_label->setScaledContents(true);
 
     // 添加昵称

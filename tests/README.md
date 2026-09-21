@@ -12,27 +12,18 @@ For example, Redis pool lifecycle tests stay in `tests/server/data` even though
 they are Component tests, while ChatServer process startup tests stay in
 `tests/server/startup` and are Integration tests.
 
-## Governance and plans
+## CI and local validation
 
-- [`CI-GOVERNANCE.md`](CI-GOVERNANCE.md) is the authority for `develop`,
-  `master`, release, failure, coverage, compatibility, feature-flag, and
-  contract-change gates.
-- [`TEST-CONTRACT-MATRIX.md`](TEST-CONTRACT-MATRIX.md) maps the current 232
-  runner testcases to Test IDs, production Module ownership, Level, report,
-  required lane, and known gaps.
-- Phase 2.5 and Plans 3A-01..05 are complete. The next planned item is Plan
-  3A-06 in [`plans/PHASE-3A-PLAN.md`](plans/PHASE-3A-PLAN.md).
-- Proportional execution tiers and the once-per-phase closeout evidence contract
-  are canonical in [`CI-GOVERNANCE.md` section 2.1](CI-GOVERNANCE.md#21-比例化执行合同).
-- DG-25 in [`plans/PHASE-3B-RELEASE-DECISIONS.md`](plans/PHASE-3B-RELEASE-DECISIONS.md)
-  and section 10.1 of [`CI-GOVERNANCE.md`](CI-GOVERNANCE.md) make
-  `D:\vcpkg\test-vcpkg` and `D:\git\Chat\vcpkg_installed` read-only by default.
-  A build/test authorization never authorizes package restore, install, update,
-  removal, cleanup, relocation, or implicit manifest installation.
-- [`plans/DG-DECISIONS.md`](plans/DG-DECISIONS.md) records the implementation
-  contracts that must be confirmed before the corresponding Phase 2.5 plan.
-- [`REGRESSION.md`](REGRESSION.md) defines the permanent regression baseline
-  and future-Module admission strategy.
+[CI-GOVERNANCE.md](CI-GOVERNANCE.md) defines quick/full regression and automatic master release.
+Develop PR/push runs existing Windows unit, component and deterministic loopback/process tests.
+Master PR/push, weekly develop and manual runs add Linux real-dependency and full business E2E.
+Only master push can publish, after full checks and Windows package smoke succeed.
+
+Local module commands remain below; release packaging tests are documented in
+[release/contracts/README.md](release/contracts/README.md).
+Tests and runners own executable registration; [TEST-CONTRACT-MATRIX.md](TEST-CONTRACT-MATRIX.md) records business coverage.
+Historical phase plans remain historical evidence, not extra approval steps for normal development.
+Local vcpkg remains read-only under [DG-25](CI-GOVERNANCE.md#101-本机-vcpkg-不可变门禁dg-25).
 
 ## Level contract
 
@@ -54,7 +45,7 @@ network.
 | --- | --- | --- |
 | ChatServer deterministic logic, Status selection, plus Gate/Status Asio contracts | Unit | `server_unit.xml`, `server_gate_unit.xml`, `server_status_unit.xml` |
 | ChatServer service-free Redis pool, session registry/send state, Gate response/request orchestration, plus Status token/store behavior | Component | `server_component.xml` |
-| Chat/Gate/Status CLI, config, bind, ready, shutdown plus C++→Node Varify and production gRPC-client loopback | Integration | `server_integration.xml`, `server_chat_grpc_integration.xml` |
+| Chat/Gate/Status CLI, config, bind, ready, shutdown plus C++→Node Varify, run-owned process harness, and production gRPC-client loopback | Integration | `server_integration.xml`, `server_chat_grpc_integration.xml` |
 | Qt frame decoder, message-model rules Q01-MODEL-01..06, auth outcomes Q03-AUTH-01..11 | Unit | `client_unit.xml` |
 | Qt message store/delegate Q01-MODEL-07..08, authenticated-session reset Q02-SESSION-01..06, auth abnormal-reset wiring Q03-AUTH-12 | Component | `client_component.xml` |
 | Varify protocol, injected handler, fake startup transition | Unit | `varify_unit.xml` |
@@ -68,8 +59,14 @@ entry points remain `RunServerTests`, `RunClientTests`, `RunVarifyTests`, and
 currently owned by that toolchain. `TestPhase1` is retained only as a
 compatibility alias.
 
+Local entries validate registration by default; `RunAllTests` validates it once per process.
+In CI, the prerequisite static job runs `CheckTestStructure` once and the four test lanes use
+`-SkipTestStructureCheck`. This CI-only switch does not skip tests or report checks.
+`RunServerTests` builds both production and test targets; no separate CI `BuildServers` call is needed.
+
 `CheckTestReports` is the no-build integrity audit for the current baseline. It
-requires all 12 reports, exactly 232 testcases, and zero failure/error nodes.
+requires every report and expected testcase count registered in `scripts/windows-local.ps1`,
+with zero failure/error/skipped cases.
 Every owning runner performs the same per-report checks before returning; the
 aggregate runner repeats the exact whole-baseline audit.
 
@@ -78,6 +75,10 @@ Protocol generation and compatibility use the additional public entries
 compatibility/drift check after restoring/building its pinned protobuf tools.
 
 ## Module documentation
+
+发布包回归、实际冒烟和自动发布边界见 [发布包验证](release/contracts/README.md)。
+发布测试单独报告，不加入 Server/Qt/Varify 计数；master 使用同一次 CI 的 Windows 包，
+下载冒烟和上传回验成功后自动发布。旧 R-00 审批/版本占用机制不再使用。
 
 Every module directory must contain a `README.md` that records:
 

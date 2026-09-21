@@ -95,6 +95,7 @@ public:
     void SetStatus(ChatStatus status);
     ChatStatus GetStatus();
     QString GetCacheMsgId();
+    void SetClientMessageId(const QString &clientMessageId);
 private:
     // 客户端本地保存的id
     QString _client_msg_id;

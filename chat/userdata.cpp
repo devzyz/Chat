@@ -29,6 +29,10 @@ ChatDataBase::ChatDataBase(int msg_id, int chat_id, ChatType chat_type,
 {
 }
 
+void ChatDataBase::SetClientMessageId(const QString &clientMessageId) {
+    _client_msg_id = clientMessageId;
+}
+
 int ChatDataBase::GetMsgId() {
     return _msg_id;
 }

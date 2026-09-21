@@ -9,7 +9,7 @@ SessionLifecycleCoordinator::SessionLifecycleCoordinator(std::shared_ptr<UserSes
     : _directory(std::move(directory)), _presence(std::move(presence)),
       _server_id(std::move(server_id)), _kick(std::move(kick)) {}
 SessionLifecycleCoordinator::~SessionLifecycleCoordinator() { _worker.join(); }
-void SessionLifecycleCoordinator::AttachServer(std::weak_ptr<CServer> server) { _server = std::move(server); }
+void SessionLifecycleCoordinator::AttachServer(std::weak_ptr<chat_transport::CServer> server) { _server = std::move(server); }
 void SessionLifecycleCoordinator::Drain() { _worker.join(); }
 void SessionLifecycleCoordinator::OnAuthenticated(std::shared_ptr<CSession> session, int uid,
     BindCompletion completion) {

@@ -74,7 +74,6 @@ private:
     int _cur_chat_id;
 
     // 心跳定时器
-    QTimer * _timer;
 private slots:
     // 加载更多聊天列表
     void slot_loading_chat_list();

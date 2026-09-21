@@ -2,13 +2,12 @@
 #define HTTPMGR_H
 
 #include "singleton.h"
+#include "gatehttptransport.h"
 #include <QString>
 #include <QUrl>
 #include <QObject>
-#include <QtNetwork/QNetworkAccessManager>
 #include <QJsonObject>
 #include <QJsonDocument>
-#include <QNetworkReply>
 #include "global.h"
 #include "authflowcoordinator.h"
 
@@ -44,7 +43,7 @@ private:
      */
     friend class Singleton<HttpMgr>;
     HttpMgr();
-    QNetworkAccessManager _manager;
+    GateHttpTransport _transport;
 
 private slots:
     void slot_http_finish(AuthFlowId flowId, ReqId id, Modules mod,

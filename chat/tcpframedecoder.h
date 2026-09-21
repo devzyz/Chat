@@ -13,12 +13,16 @@ struct DecodedTcpFrame {
 class TcpFrameDecoder
 {
 public:
+    static constexpr qsizetype MaxBodyBytes() noexcept { return 2048; }
+
     QVector<DecodedTcpFrame> append(const QByteArray &bytes);
     void reset();
     qsizetype bufferedBytes() const;
+    bool hasError() const;
 
 private:
     QByteArray _buffer;
+    bool _error = false;
 };
 
 #endif // TCPFRAMEDECODER_H

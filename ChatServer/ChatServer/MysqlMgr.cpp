@@ -42,12 +42,16 @@ bool MysqlMgr::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 	return _dao.CreatePrivateChat(user1_id, user2_id, chat_id);
 }
 
-bool MysqlMgr::AddChatMessageList(int from_uid, int to_uid, int chat_id, std::vector<std::pair<std::string, std::string>> cache_msgs,
-	std::vector<std::shared_ptr<ChatMessage>>& chat_msgs) {
-	return _dao.AddChatMessageList(from_uid, to_uid, chat_id, cache_msgs, chat_msgs);
+message_commit::Result MysqlMgr::AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
+    int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
+    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline) {
+    return _dao.AddChatMessageList(principal, from_uid, to_uid, chat_id, cache_msgs, chat_msgs, deadline);
 }
 
-bool MysqlMgr::GetChatMessageList(int chat_id, int current_msg_id, int page_size,
+bool MysqlMgr::GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 	std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id) {
-	return _dao.GetChatMessageList(chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
+	return _dao.GetChatMessageList(principal_uid, chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
+}
+bool MysqlMgr::SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response) {
+    return _dao.SyncChatMessages(uid, chat_id, after, response);
 }

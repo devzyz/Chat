@@ -1,4 +1,5 @@
 #include "chatdialog.h"
+#include "clientrequests.h"
 #include "logmgr.h"
 #include "ui_chatdialog.h"
 #include <QAction>
@@ -9,6 +10,7 @@
 #include <QMouseEvent>
 #include "tcpmgr.h"
 #include "usermgr.h"
+#include "messageservice.h"
 #include "chatuseritem.h"
 #include "contactuseritem.h"
 #include <QTimer>
@@ -42,10 +44,14 @@ ChatDialog::ChatDialog(QWidget *parent)
     this->installEventFilter(this);
 
     // 将头像设置上去
-    QPixmap pixmap(":/res/head_1.jpg");
+    QPixmap pixmap = UserMgr::GetInstance()->selfAvatar();
     pixmap = pixmap.scaled(ui->side_head_label->size(), Qt::KeepAspectRatio);
     ui->side_head_label->setPixmap(pixmap);
     ui->side_head_label->setScaledContents(true);
+    connect(UserMgr::GetInstance()->localAvatar(), &LocalAvatar::imageChanged, this, [this]() {
+        ui->side_head_label->setPixmap(UserMgr::GetInstance()->selfAvatar().scaled(
+            ui->side_head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    });
 
     // 设置左侧菜单栏状态
     ui->side_chat_label->SetState("leave", "hover", "select");
@@ -134,26 +140,32 @@ ChatDialog::ChatDialog(QWidget *parent)
             this, &ChatDialog::slot_append_send_text_cache_msg);
     connect(ui->chat_page, &ChatPage::sig_request_history,
             this, &ChatDialog::TcpLoadingMoreChatMsg);
+    auto *messages = UserMgr::GetInstance()->messages();
+    connect(messages, &MessageService::historyLoaded, ui->chat_page, &ChatPage::applyStoredHistory);
+    connect(messages, &MessageService::sendFailed, ui->chat_page, &ChatPage::MarkMessagesFailed);
+    connect(messages, &MessageService::historyLoaded, this,
+        [this](int chatId, qint64 before, const QVector<StoredMessage> &rows, bool) {
+            if (before != 0 || rows.isEmpty() || !_chat_item_map.contains(chatId)) return;
+            auto *item = qobject_cast<ChatUserItem*>(ui->chat_user_list->itemWidget(_chat_item_map.value(chatId)));
+            if (!item) return;
+            QString summary = rows.back().content;
+            if (summary.startsWith("@resource:v1:")) {
+                summary = QJsonDocument::fromJson(summary.mid(13).toUtf8()).object()["name"].toString();
+            }
+            item->SetLastTextChatMsg(summary);
+        });
+    connect(messages, &MessageService::messagesChanged, this, [this, messages](int chatId) {
+        messages->loadHistory(chatId, 0, ui->chat_page->oldestLoadedMessageId(chatId));
+    });
+    connect(messages, &MessageService::failed, this, [this](int chatId, const QString &reason) {
+        ui->chat_page->HistoryLoadFailed(chatId);
+        ui->chat_page->setToolTip(reason);
+        SPDLOG_WARN("local message operation failed, chat_id={}, reason={}", chatId, LogMgr::ToUtf8(reason));
+    });
 
     // 连接服务器通知我添加消息后的信号，将服务器通知的信息刷新到聊天界面上
     connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_update_text_chat_msg,
             this, &ChatDialog::slot_update_text_chat_msg);
-
-    // 心跳检测定时器
-    _timer = new QTimer(this);
-
-    // 连接心跳检测定时器信号
-    connect(_timer, &QTimer::timeout, this, [this]() {
-        auto user_info = UserMgr::GetInstance()->GetUserInfo();
-        QJsonObject jsonObj;
-        jsonObj["uid"] = user_info->_uid;
-        QJsonDocument doc(jsonObj);
-        QByteArray data = doc.toJson(QJsonDocument::Compact); // 转换为字节流，按照压缩方式
-        emit TcpMgr::GetInstance()->sig_send_data(ID_HEART_BEAT_REQ, data);
-    });
-
-    // 每10秒触发一次
-    _timer->start(10000);
 
     // 连接增量加载聊天列表完成
     connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_load_chat_finish, this, &ChatDialog::slot_tcp_load_chat_finish);
@@ -484,15 +496,8 @@ void ChatDialog::slot_from_friend_jump_chat_item(std::shared_ptr<UserInfo> si)
 
 void ChatDialog::LoadOncePrivateChat(int self_id, int other_id, QJsonObject json)
 {
-    QJsonObject obj;
-    obj["self_id"] = self_id;
-    obj["other_id"] = other_id;
-    obj["other_info"] = json;
-
-    QJsonDocument doc(obj);
-    QByteArray data = doc.toJson(QJsonDocument::Compact);
-
-    emit TcpMgr::GetInstance()->sig_send_data(ID_CREATE_PRIVATE_CHAT_REQ, data);
+    emit TcpMgr::GetInstance()->sig_send_data(ID_CREATE_PRIVATE_CHAT_REQ,
+        clientPrivateChatRequest(self_id, other_id, json));
 }
 
 
@@ -655,6 +660,7 @@ void ChatDialog::slot_tcp_load_chat_finish(QJsonArray jsonArray)
         auto obj = chat.toObject();
 
         auto chat_id = obj["chat_id"].toInt();
+        if (_chat_item_map.contains(chat_id)) continue;
 
         auto chat_info = UserMgr::GetInstance()->GetChatInfo(chat_id);
         if (chat_info == nullptr) {
@@ -675,6 +681,7 @@ void ChatDialog::slot_tcp_load_chat_finish(QJsonArray jsonArray)
         ui->chat_user_list->setItemWidget(item, chat_user_item);
 
         _chat_item_map.insert(chat_id, item);
+        UserMgr::GetInstance()->messages()->loadHistory(chat_id);
     }
 
     // 如果当前ui哪一个都没有选中，则选中第一个
@@ -803,14 +810,7 @@ void ChatDialog::SetSelectChatPage(int uid) {
 
 // TCP请求加载更多聊天记录
 void ChatDialog::TcpLoadingMoreChatMsg(int chatId, qint64 beforeMessageId) {
-    QJsonObject obj;
-    obj["chat_id"] = chatId;
-    obj["current_msg_id"] = beforeMessageId;
-
-    QJsonDocument doc(obj);
-    QByteArray data = doc.toJson(QJsonDocument::Compact);
-
-    emit TcpMgr::GetInstance()->sig_send_data(ID_LOAD_CHAT_MESSAGE_REQ, data);
+    UserMgr::GetInstance()->messages()->loadHistory(chatId, beforeMessageId);
 }
 
 // TCP加载更多聊天记录完成
@@ -909,4 +909,3 @@ void ChatDialog::slot_tcp_add_friend_apply(std::shared_ptr<ApplyInfo> applyInfo)
     // 将新的请求插入到列表中
     ui->apply_friend_page->AddNewApply(applyInfo);
 }
-

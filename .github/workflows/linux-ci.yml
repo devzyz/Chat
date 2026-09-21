@@ -1,0 +1,444 @@
+name: Linux integration and end-to-end tests
+
+on:
+  workflow_call:
+    inputs:
+      cold_build:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  posix-process-contracts:
+    name: Linux POSIX process lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out candidate source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Acquire locked CMake
+        run: bash scripts/ci/install-linux-tools.sh
+      - name: Run real child lifecycle without service dependencies
+        run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-01-posix
+      - name: Upload process lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase3c-posix-process-evidence
+          path: out/phase3c/ownership/junit/*.xml
+          if-no-files-found: error
+          retention-days: 7
+
+  linux-preflight:
+    name: Linux configure compile link and startup preflight
+    runs-on: ubuntu-24.04
+    # Cold dependency restoration plus the existing 57-minute preflight and cleanup.
+    timeout-minutes: 240
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
+      VCPKG_DISABLE_METRICS: "1"
+      VCPKG_FORCE_DOWNLOADED_BINARIES: "1"
+      CHAT_EVIDENCE_ROOT: ${{ github.workspace }}/out/phase3c/preflight
+      CHAT_EXPECTED_GNU_VERSION: "13.3.0"
+      CHAT_EXPECTED_CMAKE_VERSION: "3.28.3"
+      CHAT_EXPECTED_QT_VERSION: "6.5.3"
+      CHAT_EXPECTED_NODE_VERSION: "22.18.0"
+    steps:
+      - name: Check out candidate source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Acquire locked CMake
+        run: bash scripts/ci/install-linux-tools.sh
+
+      - name: Select locked Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.18.0"
+          cache: npm
+          cache-dependency-path: VarifyServer/package-lock.json
+
+      - name: Acquire locked Qt runtime
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: "6.5.3"
+          host: linux
+          target: desktop
+          arch: gcc_64
+          cache: false
+
+      - name: Check out repository-pinned vcpkg
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: microsoft/vcpkg
+          ref: fc3be1ebea7eaeb3071fe716ac65713af1f3a146
+          path: .ci/vcpkg
+          fetch-depth: 0
+
+      - name: Bootstrap run-owned vcpkg
+        run: bash "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+
+      - name: Reject compiler drift before installing dependencies
+        run: |
+          test "$(gcc -dumpfullversion)" = "$CHAT_EXPECTED_GNU_VERSION"
+          test "$(g++ -dumpfullversion)" = "$CHAT_EXPECTED_GNU_VERSION"
+
+      - name: Install MySQL native RPC prerequisite
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libtirpc-dev
+          pkg-config --exists libtirpc
+          test -f /usr/include/tirpc/rpc/rpc.h
+
+      - name: Verify binary cache refresh behavior
+        run: node --test tests/build/vcpkgBinaryCache.test.js
+
+      - name: Prepare layered binary cache keys
+        id: binary-cache-key
+        run: |
+          node scripts/ci/vcpkgBinaryCache.js prepare "$RUNNER_TEMP/vcpkg-binary-cache" x64-linux-chat-release
+          echo "VCPKG_BINARY_SOURCES=clear;files,$RUNNER_TEMP/vcpkg-binary-cache,readwrite" >> "$GITHUB_ENV"
+
+      - name: Restore vcpkg binary archives
+        id: vcpkg-binary-cache
+        if: ${{ !inputs.cold_build }}
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.binary-cache-key.outputs.key }}
+          restore-keys: |
+            ${{ steps.binary-cache-key.outputs.prefix }}
+            ${{ steps.binary-cache-key.outputs.fallback }}
+            ${{ steps.binary-cache-key.outputs.legacy }}
+
+      - name: Record restored binary archives
+        id: binary-cache-before
+        run: node scripts/ci/vcpkgBinaryCache.js snapshot "$RUNNER_TEMP/vcpkg-binary-cache"
+
+      - name: Restore dependencies before project configuration
+        id: dependency-restore
+        timeout-minutes: 170
+        run: |
+          set -o pipefail
+          "$VCPKG_ROOT/vcpkg" install \
+            --triplet x64-linux-chat-release \
+            --host-triplet x64-linux-chat-release \
+            --overlay-triplets="$GITHUB_WORKSPACE/triplets" \
+            --x-manifest-root="$GITHUB_WORKSPACE" \
+            --x-install-root="$GITHUB_WORKSPACE/.ci/vcpkg_installed" \
+            2>&1 | tee "$RUNNER_TEMP/vcpkg-restore.log"
+
+      - name: Report actual binary package reuse
+        id: binary-cache-after
+        if: always() && steps.binary-cache-before.outcome == 'success'
+        env:
+          CACHE_RESTORED_KEY: ${{ steps.vcpkg-binary-cache.outputs.cache-matched-key }}
+          CACHE_PRIMARY_PREFIX: ${{ steps.binary-cache-key.outputs.prefix }}
+        run: node scripts/ci/vcpkgBinaryCache.js report "$RUNNER_TEMP/vcpkg-binary-cache" "$RUNNER_TEMP/vcpkg-restore.log"
+
+      - name: Save new binary packages under an immutable key
+        if: success() && steps.binary-cache-after.outputs.changed == 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.binary-cache-key.outputs.key }}
+
+      - name: Retain dependency ABI and compiler diagnostics
+        if: always() && steps.dependency-restore.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-vcpkg-diagnostics
+          include-hidden-files: true
+          path: |
+            ${{ runner.temp }}/vcpkg-restore.log
+            .ci/vcpkg_installed/x64-linux-chat-release/share/*/vcpkg_abi_info.txt
+            .ci/vcpkg/buildtrees/detect_compiler/**/*.log
+            .ci/vcpkg/buildtrees/detect_compiler/**/*.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Run fail-closed Linux preflight
+        # Leave time for blocked evidence and artifact upload before the job cap.
+        timeout-minutes: 57
+        run: |
+          node --test tests/server/schema-migration/migration.test.js
+          mkdir -p "$CHAT_EVIDENCE_ROOT"
+          set -o pipefail
+          timeout --signal=TERM --kill-after=30s 55m \
+            bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-00-T2 \
+            2>&1 | tee "$CHAT_EVIDENCE_ROOT/preflight.log"
+
+      - name: Verify shared production targets and ProcessHarness
+        run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-01
+
+      - name: Build same-source service RunContext launcher
+        run: |
+          timeout --signal=TERM --kill-after=5s 120s cmake --build out/build/linux-x64-release --target service_run redis_adapter_integration message_commit_integration gate_mysql_pool_tests FourProcessDriver history_response_tests chat_tcp_transport_tests --parallel 2
+          timeout --signal=TERM --kill-after=5s 180s cmake --build out/build/linux-x64-release --target chat_e2e_client session_driver_tests --parallel 2
+          CHAT_E2E_CLIENT="$PWD/out/build/linux-x64-release/bin/chat_e2e_client" node --test tests/services/twoServerTopology.test.js tests/services/clientControl.test.js tests/services/connectionCount.test.js
+          ctest --test-dir out/build/linux-x64-release -R '^session_driver\.' --output-on-failure --no-tests=error --output-junit "$CHAT_EVIDENCE_ROOT/linux_phase3d_client.xml"
+          ctest --test-dir out/build/linux-x64-release -L 'phase3c-(redis|message-commit|gate-mysql)-local' --output-on-failure --no-tests=error
+          CHAT_FOUR_DRIVER="$PWD/out/build/linux-x64-release/bin/FourProcessDriver" node --test tests/services/driver.test.js tests/services/relay.test.js tests/services/fourProcess.test.js
+          ctest --test-dir out/build/linux-x64-release -R '^phase3d-(history-response|chat-rebind)$' --output-on-failure --no-tests=error
+          mkdir -p out/phase3c/service-launcher
+          cp out/build/linux-x64-release/bin/service_run out/phase3c/service-launcher/
+          cp out/build/linux-x64-release/bin/redis_adapter_integration out/phase3c/service-launcher/
+          cp out/build/linux-x64-release/bin/libhiredis.so.1 out/phase3c/service-launcher/
+          node tests/services/serviceRuntime.js out/phase3c/service-launcher
+          env -u LD_LIBRARY_PATH -u LD_PRELOAD out/phase3c/service-launcher/redis_adapter_integration lifecycle
+          node tests/services/messageRuntime.js pack out/build/linux-x64-release/bin/message_commit_integration out/phase3c/service-launcher/message .ci/vcpkg_installed
+          git rev-parse HEAD > out/phase3c/service-launcher/source-sha.txt
+          node tests/services/fourRuntime.js pack out/build/linux-x64-release/bin out/phase3c/service-launcher/four .ci/vcpkg_installed
+          node tests/services/clientRuntime.js pack out/build/linux-x64-release/bin/chat_e2e_client out/phase3c/service-launcher/client "$(qmake -query QT_INSTALL_PREFIX)"
+          (cd out/phase3c/service-launcher && sha256sum service_run redis_adapter_integration libhiredis.so.1 message/* four/*/* client/* > service_run.sha256)
+
+      - name: Upload same-run service launcher
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase3c-service-launcher
+          path: out/phase3c/service-launcher/*
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload build ownership evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase3c-build-ownership-evidence
+          path: out/phase3c/ownership/junit/*.xml
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Confirm preflight PASS contract
+        run: |
+          jq -e '.status == "PASS"' out/phase3c/preflight/linux-preflight.json
+
+      - name: Upload Linux preflight evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase3c-linux-preflight
+          path: out/phase3c/preflight/**
+          if-no-files-found: error
+          retention-days: 7
+
+  disposable-services:
+    name: Phase 3C disposable services
+    needs: [linux-preflight, posix-process-contracts]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7.4.2@sha256:fbdbaea47b9ae4ecc2082ecdb4e1cea81e32176ffb1dcf643d422ad07427e5d9
+        ports: ["127.0.0.1::6379"]
+      mysql:
+        image: mysql:8.4.4@sha256:23818b7d7de427096ab1427b2e3d9d5e14a5b933f9a4431a482d6414bc879091
+        env: &disposable-mysql-bootstrap
+          # Bootstrap only in this disposable loopback-only job. The coordinator
+          # installs random credentials over stdin before creating any run data.
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_INITDB_SKIP_TZINFO: "yes"
+        ports: ["127.0.0.1::3306"]
+      mailpit:
+        image: axllent/mailpit:v1.24.1@sha256:4873e5a441ed368f1e98a832f61257a033859f5e829542cd03fb772d2282ea4e
+        env:
+          MP_DATABASE: /tmp/phase3c-mailpit.db
+        ports: ["127.0.0.1::1025", "127.0.0.1::8025"]
+    env:
+      CHAT_SERVICE_LAUNCHER: ${{ github.workspace }}/out/phase3c/service-launcher/service_run
+      CHAT_REDIS_TEST_BINARY: ${{ github.workspace }}/out/phase3c/service-launcher/redis_adapter_integration
+      CHAT_FOUR_BUNDLE: ${{ github.workspace }}/out/phase3c/service-launcher/four
+      CHAT_MESSAGE_TEST_BINARY: ${{ github.workspace }}/out/phase3c/service-launcher/message/message_commit_integration
+    steps:
+      - name: Check out candidate source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Select locked Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.18.0"
+          cache: npm
+          cache-dependency-path: VarifyServer/package-lock.json
+      - name: Acquire locked CMake
+        run: bash scripts/ci/install-linux-tools.sh
+      - name: Download launcher from this workflow run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phase3c-service-launcher
+          path: out/phase3c/service-launcher
+      - name: Verify launcher identity and locked service configuration
+        run: |
+          test "$(cat out/phase3c/service-launcher/source-sha.txt)" = "$(git rev-parse HEAD)"
+          (cd out/phase3c/service-launcher && sha256sum --check service_run.sha256)
+          chmod u+x "$CHAT_SERVICE_LAUNCHER"
+          chmod u+x "$CHAT_REDIS_TEST_BINARY"
+          chmod u+x "$CHAT_MESSAGE_TEST_BINARY"
+          node tests/services/serviceRuntime.js out/phase3c/service-launcher
+          find out/phase3c/service-launcher/four -type f -name "*Server" -exec chmod u+x {} +
+          chmod u+x out/phase3c/service-launcher/four/driver/FourProcessDriver
+          node tests/services/fourRuntime.js verify out/phase3c/service-launcher/four
+          node tests/services/messageRuntime.js verify out/phase3c/service-launcher/message
+          env -u LD_LIBRARY_PATH -u LD_PRELOAD "$CHAT_REDIS_TEST_BINARY" lifecycle
+          node --test tests/services/coordinator.test.js
+      - name: Restore existing locked Node libraries
+        timeout-minutes: 2
+        working-directory: VarifyServer
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Prove bounded disposable service lifecycle
+        timeout-minutes: 13
+        env:
+          CHAT_SERVICE_SELECTOR: 3C-07
+          CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
+          CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+          CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
+          CHAT_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
+          CHAT_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
+          CHAT_SMTP_PORT: ${{ job.services.mailpit.ports['1025'] }}
+          CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports['8025'] }}
+        run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-07
+      - name: Preserve fail-closed outer evidence
+        if: always()
+        env:
+          CHAT_SERVICE_SELECTOR: 3C-07
+          CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
+          CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+          CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
+        run: node tests/services/finalizeEvidence.js out/phase3c/services
+      - name: Upload disposable dependency evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase3c-services-evidence
+          path: out/phase3c/services/*
+          if-no-files-found: error
+          retention-days: 7
+
+  two-server-contract:
+    name: Linux two-server foundation contract
+    needs: [linux-preflight, posix-process-contracts]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7.4.2@sha256:fbdbaea47b9ae4ecc2082ecdb4e1cea81e32176ffb1dcf643d422ad07427e5d9
+        ports: ["127.0.0.1::6379"]
+      mysql:
+        image: mysql:8.4.4@sha256:23818b7d7de427096ab1427b2e3d9d5e14a5b933f9a4431a482d6414bc879091
+        env: *disposable-mysql-bootstrap
+        ports: ["127.0.0.1::3306"]
+      mailpit:
+        image: axllent/mailpit:v1.24.1@sha256:4873e5a441ed368f1e98a832f61257a033859f5e829542cd03fb772d2282ea4e
+        env:
+          MP_DATABASE: /tmp/phase3c-mailpit.db
+        ports: ["127.0.0.1::1025", "127.0.0.1::8025"]
+    env:
+      CHAT_CANDIDATE_SHA: ${{ github.sha }}
+      CHAT_E2E_CLIENT: ${{ github.workspace }}/out/phase3c/service-launcher/client/chat_e2e_client
+      CHAT_SERVICE_LAUNCHER: ${{ github.workspace }}/out/phase3c/service-launcher/service_run
+      CHAT_REDIS_TEST_BINARY: ${{ github.workspace }}/out/phase3c/service-launcher/redis_adapter_integration
+      CHAT_FOUR_BUNDLE: ${{ github.workspace }}/out/phase3c/service-launcher/four
+      CHAT_MESSAGE_TEST_BINARY: ${{ github.workspace }}/out/phase3c/service-launcher/message/message_commit_integration
+    steps:
+      - name: Check out candidate source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Select locked Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.18.0"
+          cache: npm
+          cache-dependency-path: VarifyServer/package-lock.json
+      - name: Acquire locked CMake
+        run: bash scripts/ci/install-linux-tools.sh
+      - name: Download launcher from this workflow run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phase3c-service-launcher
+          path: out/phase3c/service-launcher
+      - name: Verify launcher identity and locked service configuration
+        run: |
+          test "$(cat out/phase3c/service-launcher/source-sha.txt)" = "$(git rev-parse HEAD)"
+          (cd out/phase3c/service-launcher && sha256sum --check service_run.sha256)
+          chmod u+x "$CHAT_SERVICE_LAUNCHER"
+          chmod u+x "$CHAT_REDIS_TEST_BINARY"
+          chmod u+x "$CHAT_MESSAGE_TEST_BINARY"
+          node tests/services/serviceRuntime.js out/phase3c/service-launcher
+          find out/phase3c/service-launcher/four -type f -name "*Server" -exec chmod u+x {} +
+          chmod u+x out/phase3c/service-launcher/four/driver/FourProcessDriver
+          node tests/services/fourRuntime.js verify out/phase3c/service-launcher/four
+          node tests/services/messageRuntime.js verify out/phase3c/service-launcher/message
+          env -u LD_LIBRARY_PATH -u LD_PRELOAD "$CHAT_REDIS_TEST_BINARY" lifecycle
+          node tests/services/clientRuntime.js verify out/phase3c/service-launcher/client
+          chmod u+x "$CHAT_E2E_CLIENT"
+      - name: Restore existing locked Node libraries
+        timeout-minutes: 2
+        working-directory: VarifyServer
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Prove complete current-N two-instance business and recovery journey
+        timeout-minutes: 13
+        env:
+          CHAT_SERVICE_SELECTOR: 3D
+          CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
+          CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+          CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
+          CHAT_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
+          CHAT_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
+          CHAT_SMTP_PORT: ${{ job.services.mailpit.ports['1025'] }}
+          CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports['8025'] }}
+        run: bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D
+      - name: Preserve fail-closed outer evidence
+        if: always()
+        env:
+          CHAT_SERVICE_SELECTOR: 3D
+          CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
+          CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+          CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
+        run: node tests/services/finalizeEvidence.js out/phase3d/contracts
+      - name: Upload disposable dependency evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phase3d-contract-evidence
+          path: out/phase3d/contracts/*
+          if-no-files-found: error
+          retention-days: 7
+
+  downstream-contract:
+    name: Integration report checks
+    needs: [linux-preflight, posix-process-contracts, disposable-services, two-server-contract]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Test report failure propagation
+        run: |
+          python3 tests/services/gate_test.py
+          node --test tests/services/phase3dEvidence.test.js
+      - name: Download service reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phase3c-services-evidence
+          path: out/phase3c/services
+      - name: Download business reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: phase3d-contract-evidence
+          path: out/phase3d/contracts
+      - name: Check all reports and cleanup
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          CHAT_JOB_RESULTS: '{"linux-preflight":"${{ needs.linux-preflight.result }}","posix-process-contracts":"${{ needs.posix-process-contracts.result }}","disposable-services":"${{ needs.disposable-services.result }}"}'
+          BUSINESS_RESULT: ${{ needs.two-server-contract.result }}
+        run: |
+          test "$BUSINESS_RESULT" = success
+          python3 tests/services/gate.py --services out/phase3c/services --output out/phase3c/gate --source-sha "$SOURCE_SHA" --jobs "$CHAT_JOB_RESULTS"
+          node scripts/ci/verify-service-reports.js out/phase3d/contracts "$SOURCE_SHA"
+      - name: Upload report validation
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: integration-report-checks
+          path: out/phase3c/gate/
+          if-no-files-found: error
+          retention-days: 7

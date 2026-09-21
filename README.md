@@ -3,15 +3,16 @@
 This repository contains a Qt chat client and the GateServer, StatusServer,
 ChatServer and VarifyServer services.
 
-## Current testing plan
+## Current status and development
 
-Phase 2.5 and Plans 3A-01..05 are complete. The current closeout item is Plan 3A-06 in
-[`tests/plans/PHASE-3A-PLAN.md`](tests/plans/PHASE-3A-PLAN.md). Its current required
-packages are restored and each plan proceeds only after its authorized read-only DG-25 preflight. Local
-vcpkg paths remain immutable by default; builds and tests may not restore, install,
-remove, update, or relocate packages implicitly. Proportional execution and
-once-per-phase closeout evidence are defined in
-[`tests/CI-GOVERNANCE.md` section 2.1](tests/CI-GOVERNANCE.md#21-比例化执行合同).
+Current progress, remaining verification and next steps are maintained in
+[docs/Status.md](docs/Status.md). The project first completes basic chat functionality,
+then focuses on measured performance improvements.
+
+[WINDOWS_BUILD.md](WINDOWS_BUILD.md) owns build and release commands;
+[tests/README.md](tests/README.md) owns test entries and
+[CI governance](tests/CI-GOVERNANCE.md) owns regression and publication policy.
+Local vcpkg dependencies remain read-only unless separately authorized.
 
 ## Running one or more ChatServer instances
 
@@ -43,3 +44,9 @@ are maintained manually for now. A temporarily unavailable peer does not block
 startup; invalid local configuration or a local port bind failure does.
 
 See `WINDOWS_BUILD.md` for the complete Windows development setup.
+
+## 头像与资源传输
+
+头像裁剪、发布与账号缓存，以及附件上传、续传和下载已整合在同一功能分支。
+启用步骤见 [ResourceServer](ResourceServer/README.md)，合同见 [Resources](docs/Resources.md)，
+本次验证与剩余验收见 [Status](docs/Status.md)。

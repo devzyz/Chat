@@ -1,86 +1,89 @@
-const config_module = require('./config');
-const Redis = require("ioredis");
+'use strict';
 
-// 创建redis客户端实例
-const RedisCli = new Redis({
-    host : config_module.redis_host, 
-    port : config_module.redis_port,
-    password: config_module.redis_passwd,
-});
+function normalizeRedisConfig(config = {}, password = config.password) {
+    const host = config.host === 'localhost' ? '127.0.0.1' : config.host;
+    const port = config.port;
+    const connectTimeoutMs = config.connectTimeoutMs ?? 1000;
+    const commandTimeoutMs = config.commandTimeoutMs ?? 1000;
+    if (typeof host !== 'string' || host.trim() === '' || !Number.isInteger(port) || port < 1 || port > 65535 ||
+        [connectTimeoutMs, commandTimeoutMs].some((value) =>
+            !Number.isInteger(value) || value < 1 || value > 60000) ||
+        (password !== undefined && typeof password !== 'string')) {
+        throw new Error('Invalid Redis endpoint or finite deadline configuration');
+    }
+    return { host, port, password, connectTimeoutMs, commandTimeoutMs };
+}
 
-/**
- * 连接redis服务器
- */
-RedisCli.on("error", function (err) {
-    console.log("RedisCli connect error");
-    RedisCli.quit();
-});
+function createRedisAdapter(configuration, dependencies = {}) {
+    const config = normalizeRedisConfig(configuration);
+    const Redis = dependencies.Redis || require('ioredis');
+    let client;
+    let connecting;
+    let closed = false;
 
-/**
- * 根据key获取value
- * @param {*} key
- */
-async function GetRedis(key) {
-    try {
-        const result = await RedisCli.get(key);
-        if (result == null) {
-            console.log('Redis key not found');
-            return null;
+    function discard(candidate) {
+        if (!candidate) return;
+        candidate.disconnect();
+        if (client === candidate) client = undefined;
+    }
+
+    async function connection() {
+        if (closed) throw new Error('Redis adapter closed');
+        if (client?.status === 'ready') return client;
+        if (connecting) return connecting;
+        discard(client);
+        const candidate = new Redis({
+            host: config.host, port: config.port, password: config.password,
+            lazyConnect: true, connectTimeout: config.connectTimeoutMs,
+            commandTimeout: config.commandTimeoutMs, retryStrategy: null,
+            maxRetriesPerRequest: 0, enableOfflineQueue: false,
+            autoResendUnfulfilledCommands: false, autoResubscribe: false,
+            enableReadyCheck: false
+        });
+        client = candidate;
+        candidate.on('error', () => { /* Awaited operations own failure; never emit raw secrets. */ });
+        let timer;
+        const deadline = new Promise((resolve, reject) => {
+            timer = setTimeout(() => reject(new Error('Redis connection deadline')),
+                config.connectTimeoutMs + config.commandTimeoutMs);
+        });
+        const begin = Promise.resolve().then(() => {
+            if (closed) throw new Error('Redis adapter closed');
+            return candidate.connect();
+        });
+        const attempt = Promise.race([begin, deadline]).then(() => {
+            if (closed || client !== candidate) throw new Error('Redis adapter closed');
+            return candidate;
+        }).catch((error) => { discard(candidate); throw error; }).finally(() => clearTimeout(timer));
+        connecting = attempt;
+        try { return await attempt; }
+        finally { if (connecting === attempt) connecting = undefined; }
+    }
+
+    async function execute(action, failure) {
+        let candidate;
+        try {
+            candidate = await connection();
+            return await action(candidate);
+        } catch {
+            discard(candidate);
+            return failure;
         }
-
-        console.log('Redis key read succeeded');
-        return result;
-    }catch(error) {
-        console.log('Redis key read failed');
-        return null;
     }
-}
 
-/**
- * 根据key查询redis中是否存在key
- * @param {*} key
- */
-async function QueryRedis(key) {
-    try {
-        const result = await RedisCli.exists(key);
-        // 
-        if (result == 0) {
-            console.log('Redis key not found');
-            return null;
+    return {
+        GetRedis(key) { return execute((active) => active.get(key), null); },
+        QueryRedis(key) { return execute(async (active) => (await active.exists(key)) || null, null); },
+        setRedisExpire(key, value, seconds) {
+            if (!Number.isSafeInteger(seconds) || seconds <= 0) return Promise.resolve(false);
+            return execute(async (active) => (await active.set(key, value, 'EX', seconds)) === 'OK', false);
+        },
+        async Quit() {
+            closed = true;
+            discard(client);
+            // No QUIT command: disconnect cancels pending I/O without a network wait.
         }
-        console.log('Redis key exists');
-        return result;
-    }catch(error) {
-        console.log('Redis key query failed');
-        return null;
-    }
+    };
 }
 
-/**
- * 设置key,value,过期时间
- * @param {*} key
- * @param {*} value
- * @param {*} exptime
- */
-
-async function setRedisExpire(key, value, exptime) {
-    try {
-        // 设置key和value
-        await RedisCli.set(key, value);
-        // 设置过期时间, 当时间超过exptime后，这个key会被删除掉
-        await RedisCli.expire(key, exptime);
-        return true;
-    }catch(error) {
-        console.log('Redis key write failed');
-        return false;
-    }
-}
-
-/**
- * 退出函数
- */
-function Quit() {
-    RedisCli.quit();
-}
-
-module.exports = {GetRedis, QueryRedis, setRedisExpire, Quit}
+module.exports = { createRedisAdapter, normalizeRedisConfig };

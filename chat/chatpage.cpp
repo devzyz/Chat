@@ -1,4 +1,8 @@
 #include "chatpage.h"
+#include "clientmessage.h"
+#include "clientrequests.h"
+#include "messageservice.h"
+#include "resourcetransfermanager.h"
 
 #include "global.h"
 #include "logmgr.h"
@@ -21,6 +25,13 @@ ChatPage::ChatPage(QWidget *parent)
     : QWidget(parent), ui(new Ui::ChatPage)
 {
     ui->setupUi(this);
+    connect(UserMgr::GetInstance().get(), &UserMgr::avatarChanged, this, [this](int uid) {
+        _messageStore.updateSenderAvatar(uid, UserMgr::GetInstance()->avatarFor(uid));
+    });
+    connect(UserMgr::GetInstance()->localAvatar(), &LocalAvatar::imageChanged, this, [this]() {
+        const auto user = UserMgr::GetInstance();
+        _messageStore.updateSenderAvatar(user->GetUid(), user->selfAvatar());
+    });
 
     ui->receive_btn->SetState("normal", "hover", "press");
     ui->send_btn->SetState("normal", "hover", "press");
@@ -29,6 +40,7 @@ ChatPage::ChatPage(QWidget *parent)
 
     _messageDelegate = new MessageItemDelegate(ui->chat_detail_data_list);
     ui->chat_detail_data_list->setItemDelegate(_messageDelegate);
+    initResourceTransfers();
     connect(ui->chat_detail_data_list, &ChatDetailList::viewportResized, this, [this]() {
         _messageDelegate->clearSizeCache();
         ui->chat_detail_data_list->doItemsLayout();
@@ -40,6 +52,7 @@ ChatPage::ChatPage(QWidget *parent)
 
 ChatPage::~ChatPage()
 {
+    _transfer->cancel();
     // QListView does not own the model. Detach it before MessageModelStore is destroyed.
     ui->chat_detail_data_list->setModel(nullptr);
     delete ui;
@@ -88,6 +101,54 @@ void ChatPage::SetChatInfo(std::shared_ptr<ChatInfo> chatInfo)
     }
 }
 
+qint64 ChatPage::oldestLoadedMessageId(int chatId) const
+{
+    const auto *model = _messageStore.find(chatId);
+    return model && model->hasLoadedInitialPage() ? model->oldestMessageId() : 0;
+}
+
+void ChatPage::applyStoredHistory(int chatId, qint64 before,
+                                 const QVector<StoredMessage> &messages, bool hasMore)
+{
+    auto *model = _messageStore.find(chatId);
+    if (!model) return;
+    const bool current = _currentChatId == chatId;
+    const auto anchor = current ? captureScrollAnchor() : ScrollAnchor{};
+    const bool initial = !model->hasLoadedInitialPage();
+    QVector<MessageRecord> records;
+    for (const auto &stored : messages) {
+        MessageRecord record;
+        record.messageId = stored.messageId;
+        record.chatId = chatId;
+        record.senderId = stored.senderId;
+        record.isSelf = stored.senderId == UserMgr::GetInstance()->GetUid();
+        // Client UUIDs are sender-scoped; remote rows use their server ID in the GUI index.
+        if (record.isSelf) record.clientMessageId = stored.clientMessageId;
+        record.sentAt = QDateTime::fromMSecsSinceEpoch(stored.sentAt);
+        record.text = stored.content;
+        const auto sender = record.isSelf ? UserMgr::GetInstance()->GetUserInfo()
+                                         : UserMgr::GetInstance()->GetFriendById(stored.senderId);
+        if (sender) { record.senderName = sender->_name; record.avatarKey = sender->_icon; }
+        record.avatar = UserMgr::GetInstance()->avatarFor(stored.senderId, record.avatarKey);
+        record.deliveryStatus = !record.isSelf ? DeliveryStatus::None :
+            stored.state == StoredMessage::Confirmed ? DeliveryStatus::Sent :
+            stored.state == StoredMessage::Pending ? DeliveryStatus::Sending : DeliveryStatus::Uncertain;
+        loadResource(record);
+        records.push_back(record);
+    }
+    model->mergeMessages(records);
+    if (before > 0 || initial || model->oldestMessageId() == 0) model->setCanLoadMore(hasMore);
+    else if (hasMore) model->setCanLoadMore(true);
+    model->setHistoryCursor(model->oldestMessageId());
+    model->setInitialPageLoaded(true);
+    model->setLoadingHistory(false);
+    if (current) {
+        _messageDelegate->clearSizeCache();
+        if (initial || anchor.wasAtBottom) queueScrollToBottom(chatId);
+        else restoreScrollAnchor(chatId, anchor);
+    }
+}
+
 void ChatPage::AppendChatMsg(const std::shared_ptr<ChatDataBase> &message)
 {
     Q_ASSERT(QThread::currentThread() == thread());
@@ -130,32 +191,14 @@ void ChatPage::ApplyHistoryPage(int chatId,
         }
     }
 
-    // The required cursor contract returns ids older than the current first row.
-    // Refuse a legacy forward page instead of prepending newer records out of order.
-    const qint64 currentOldestId = model->oldestMessageId();
-    if (!initialPage && currentOldestId > 0) {
-        const bool incompatibleDirection = std::any_of(
-            records.cbegin(), records.cend(), [currentOldestId](const MessageRecord &record) {
-                return record.messageId > 0 && record.messageId >= currentOldestId;
+    if (!_messageStore.applyHistory(chatId, records, canLoadMore, nextCursor)) {
+        if (affectsCurrentView) {
+            QTimer::singleShot(0, this, [this, chatId] {
+                if (_currentChatId == chatId) _suppressHistoryRequests = false;
             });
-        if (incompatibleDirection) {
-            SPDLOG_WARN("history response direction is incompatible for chat_id={}", chatId);
-            model->setCanLoadMore(false);
-            model->setLoadingHistory(false);
-            if (affectsCurrentView) {
-                QTimer::singleShot(0, this, [this, chatId]() {
-                    if (_currentChatId == chatId) _suppressHistoryRequests = false;
-                });
-            }
-            return;
         }
+        return;
     }
-
-    model->prependHistory(records);
-    model->setCanLoadMore(canLoadMore);
-    model->setHistoryCursor(nextCursor > 0 ? nextCursor : model->oldestMessageId());
-    model->setInitialPageLoaded(true);
-    model->setLoadingHistory(false);
 
     if (!affectsCurrentView) {
         return;
@@ -184,27 +227,13 @@ void ChatPage::ApplyDeliveryAcknowledgements(
     int chatId, const QVector<MessageAcknowledgement> &acknowledgements)
 {
     Q_ASSERT(QThread::currentThread() == thread());
-    auto *model = _messageStore.find(chatId);
-    if (!model) {
-        return;
-    }
-    for (const auto &acknowledgement : acknowledgements) {
-        model->acknowledgeMessage(acknowledgement.clientMessageId,
-                                  acknowledgement.messageId,
-                                  DeliveryStatus::Sent);
-    }
+    _messageStore.acknowledge(chatId, acknowledgements, UserMgr::GetInstance()->GetUid());
 }
 
 void ChatPage::MarkMessagesFailed(int chatId, const QVector<QString> &clientMessageIds)
 {
     Q_ASSERT(QThread::currentThread() == thread());
-    auto *model = _messageStore.find(chatId);
-    if (!model) {
-        return;
-    }
-    for (const auto &clientMessageId : clientMessageIds) {
-        model->updateStatusByClientId(clientMessageId, DeliveryStatus::Failed);
-    }
+    _messageStore.markFailed(chatId, clientMessageIds, UserMgr::GetInstance()->GetUid());
 }
 
 void ChatPage::paintEvent(QPaintEvent *event)
@@ -230,22 +259,17 @@ void ChatPage::on_send_btn_clicked()
 
     const QVector<MsgInfo> &messages = ui->chat_edit->getMsgList();
     int textLength = 0;
-    QJsonObject textObject;
     QJsonArray textArray;
 
-    auto sendTextBatch = [this, selfInfo, &textObject, &textArray, &textLength]() {
+    auto sendTextBatch = [this, selfInfo, &textArray, &textLength]() {
         if (textArray.isEmpty()) {
             return;
         }
-        textObject["from_uid"] = selfInfo->_uid;
-        textObject["to_uid"] = _chatInfo->GetUid();
-        textObject["text_array"] = textArray;
-        textObject["chat_id"] = _chatInfo->GetChatId();
-        const QByteArray data = QJsonDocument(textObject).toJson(QJsonDocument::Compact);
-        emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_TEXT_CHAT_MSG_REQ, data);
+        const QByteArray data = clientTextRequest(selfInfo->_uid, _chatInfo->GetUid(),
+                                                  _chatInfo->GetChatId(), textArray);
+        UserMgr::GetInstance()->messages()->send(QJsonDocument::fromJson(data).object());
         textLength = 0;
         textArray = QJsonArray();
-        textObject = QJsonObject();
     };
 
     for (const auto &message : messages) {
@@ -259,7 +283,7 @@ void ChatPage::on_send_btn_clicked()
             sendTextBatch();
         }
 
-        const QString uuid = QUuid::createUuid().toString();
+        const QString uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
         QJsonObject payload;
         payload["msg_content"] = message.content;
         payload["msg_uuid"] = uuid;
@@ -289,47 +313,9 @@ void ChatPage::requestOlderHistory()
 
 MessageRecord ChatPage::toMessageRecord(const std::shared_ptr<ChatDataBase> &message)
 {
-    MessageRecord record;
-    record.messageId = message->GetMsgId();
-    record.clientMessageId = message->GetCacheMsgId();
-    record.chatId = message->GetChatId();
-    record.senderId = message->GetSendId();
-    record.sentAt = message->GetSentAt();
-    record.text = message->GetContent();
-
-    switch (message->GetChatMsgType()) {
-    case ChatMessageType::TEXT_TYPE: record.messageType = MessageType::Text; break;
-    case ChatMessageType::IMAGE_TYPE: record.messageType = MessageType::Image; break;
-    case ChatMessageType::FILE_TYPE: record.messageType = MessageType::File; break;
-    }
-
-    const auto selfInfo = UserMgr::GetInstance()->GetUserInfo();
-    record.isSelf = selfInfo && record.senderId == selfInfo->_uid;
-    if (record.isSelf) {
-        record.senderName = selfInfo->_name;
-        record.avatarKey = selfInfo->_icon;
-    } else {
-        const auto chatInfo = UserMgr::GetInstance()->GetChatInfo(record.chatId);
-        const auto friendInfo = chatInfo
-            ? UserMgr::GetInstance()->GetFriendById(chatInfo->GetUid()) : nullptr;
-        if (friendInfo) {
-            record.senderName = friendInfo->_name;
-            record.avatarKey = friendInfo->_icon;
-        }
-    }
-    record.avatar = cachedAvatar(record.avatarKey);
-
-    if (!record.isSelf) {
-        record.deliveryStatus = DeliveryStatus::None;
-    } else if (message->GetStatus() == ChatStatus::STATUS_SEND_FAILURE) {
-        record.deliveryStatus = DeliveryStatus::Failed;
-    } else if (record.messageId <= 0 && !record.clientMessageId.isEmpty()) {
-        record.deliveryStatus = DeliveryStatus::Sending;
-    } else if (message->GetStatus() == ChatStatus::STATUS_READ_ALREADY) {
-        record.deliveryStatus = DeliveryStatus::Read;
-    } else {
-        record.deliveryStatus = DeliveryStatus::Sent;
-    }
+    auto record = clientMessageRecord(message);
+    loadResource(record);
+    record.avatar = UserMgr::GetInstance()->avatarFor(record.senderId, record.avatarKey);
     return record;
 }
 

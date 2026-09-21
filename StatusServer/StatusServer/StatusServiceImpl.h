@@ -19,10 +19,10 @@ using message::StatusService;
 class StatusServiceImpl final : public StatusService::Service
 {
 public:
-	StatusServiceImpl();
+	explicit StatusServiceImpl(StatusRouting& routing);
 
 	Status GetChatServer(ServerContext* context, const GetChatServerReq* request, GetChatServerRsp* reply) override;
 	Status Login(ServerContext* context, const LoginReq* request, LoginRsp* response) override;
 private:
-	std::unique_ptr<StatusRouting> routing_;
+	StatusRouting& routing_;
 };

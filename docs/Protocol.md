@@ -1,6 +1,12 @@
 <!-- generated-by: gsd-doc-writer -->
 # 协议与数据契约规范
 
+## 头像与资源传输扩展
+
+ResourceServer HTTP、头像权限、用户目录和资源消息合同见 [Resources](Resources.md)
+及 [资源服务](../ResourceServer/README.md)。资源消息复用 1016/1017/1018，
+保留已认证发送者检查；`client_msg_uuid` 写入当前消息表以支持历史身份和重试去重。
+
 ## 范围
 
 本规范覆盖 `message.proto`、gRPC、GateServer HTTP、ChatServer TCP 包、Redis key/value 和 MySQL 持久化边界。它约束项目定义的契约，不测试或重写第三方库内部实现。
@@ -30,6 +36,10 @@
 
 ## ChatServer TCP
 
+ChatServer 的 Linux TCP 监听器在 bind 前启用 SO_REUSEADDR，使旧会话主动关闭后可以立即重启或接管
+已释放的监听端口；不启用 SO_REUSEPORT，已有存活监听器仍必须使新绑定失败。Windows 保留原有
+独占绑定设置。此行为不修改消息 wire 字段、服务发现端点或持久化数据。
+
 - 包头中的消息 ID 和 body 长度 MUST 使用明确的网络字节序。
 - 读取 MUST 支持半包和连续多包，不得假设一次 read 得到完整消息。
 - body 长度 MUST 在分配、复制和解析前限制在协议最大值内。
@@ -37,6 +47,27 @@
 - 认证前后允许的消息集合 MUST 明确，未认证连接不得执行需要用户身份的操作。
 - 写入 MUST 通过单连接顺序队列串行化，避免多个 `async_write` 交叉数据。
 - protobuf 或 JSON payload 解析失败不得继续进入业务 handler。
+
+好友申请的 `fromuid`、好友确认的 `authuid` 必须匹配连接的认证 UID。
+申请拒绝自身及不存在的目标用户；确认的内嵌 `applyinfo` / `authinfo` 身份必须与外层一致，
+且只能确认发给当前用户的待处理申请。身份不符、反向申请和重复确认返回既有 `UidInvalid`，
+不新增好友关系或问候消息。消息 ID、JSON 字段及 schema 不变；重复申请仍保持已有单行。
+对应真实依赖合同见 [3D 好友旅程](../tests/services/README.md#phase-3d-foundation)。
+
+历史消息查询使用连接的认证 UID，DAO 在读取消息前检查私聊双方或群成员关系。
+非成员访问返回既有 `UidInvalid`，不返回消息；请求和响应字段不变。
+客户端按发送者与 UUID 组合去重，ACK/失败只更新当前发送者；历史记录可以确认
+同一发送者的待发送 UUID 对应的持久化 ID。对应边界见服务场景 `E03-XMSG-01..08`。
+
+历史按 `message_id > current_msg_id` 升序推进，每页最多十条，并受 2048 字节 TCP body 上限约束。
+服务端按紧凑 JSON 的实际字节数返回可容纳的完整前缀，缩短页时保留 `load_more=true`，
+游标只推进至实际返回的最后一条，剩余记录由下一页读取；客户端按服务端 ID 合并各页。
+非空页游标必须等于页尾 ID，页内 ID 必须严格递增；空页不能声称还有下一页。
+重放旧页不倒退已确认游标，也不能重新打开已结束的扫描。模型重新排序时保留持久索引。
+历史请求拒绝缺失/非整数/负数/超出当前服务端 int 范围的游标，以及无效 chat_id，
+返回既有 `Error_Json`，不返回消息。单条旧数据编码后仍超出帧上限时同样返回此错误，避免空页循环。
+本次修复保持 wire 字段、帧长上限和数据库不变；十条是行数上限，不是每次响应的保证数量。
+Qt 消费者已按 `load_more` 和页尾游标继续翻页；不需要迁移或新增配置。N-1 运行兼容性仍须实际发布基线验证。
 
 ## HTTP/JSON
 
@@ -86,3 +117,11 @@ Session ID。查询区分 Found、NotFound、Unavailable；发布失败不报告
 5. 是否增加 Redis/MySQL 清理或迁移步骤？
 
 至少应有项目级 round-trip、handler 或 Integration 测试验证契约，而不是只确认生成代码能编译。
+
+## Incremental private-message synchronization (`sync_v1`)
+
+Request 1027 adds `mode: "sync_v1"`, authenticated `uid`, `chat_id`, nonnegative `after_id`, and `request_id` (at most 64 bytes). Response 1028 echoes the envelope and returns `error`, `msgs`, `next_cursor`, `load_more`. Each row has `message_id`, `send_id`, `recv_id`, raw `content`, epoch-seconds `created_at`, and `msg_uuid`.
+
+Rows are ordered by increasing server ID; only IDs greater than `after_id` are returned. A page contains at most 50 rows and fits the complete encoded response. Only response 1028 permits a body up to 65535 bytes; other messages and client requests retain the 2048-byte bound. Legacy history keeps its existing serializer and fields. Old clients cannot consume large sync responses; update all ChatServer writers before deploying the new client.
+
+The client atomically commits a whole page and its cursor; ACKs/pushes never advance it. Existing committed local history is trusted. Synchronization and deployment details: [MessageStorage](MessageStorage.md).

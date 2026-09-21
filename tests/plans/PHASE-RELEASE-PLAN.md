@@ -2,7 +2,7 @@
 document: tests/plans/PHASE-RELEASE-PLAN.md
 phase: Release gate
 title: Build-once Windows x64 artifact, artifact-only smoke, same-digest UAT, and same-bytes promotion
-status: Planned
+status: Superseded
 plan_ids: [R-00, R-01, R-02, R-03]
 plan_count: 4
 wave_range: [19, 22]
@@ -57,9 +57,13 @@ must_haves:
     - "promoted Release asset digest + schema/migration identity -> N-1 pointer -> Phase 3C/3D compatibility resolver"
 ---
 
-# Release gate 正式执行计划
+# Release gate 历史方案
 
-状态：**Planned（尚未执行）**
+状态：**已被替代，仅保留历史设计，不作为后续执行清单。**
+
+当前发布流程以 [CI 治理](../CI-GOVERNANCE.md) 和 [发布包验证](../release/contracts/README.md) 为准。
+本方案中的 owner/settings receipt、人工 UAT/promotion 环境、永久版本占用、跨 workflow admission
+及 N-1 bootstrap 发布阻断均已退出当前方案。下文保留当时的设计与计划假设，勿据此恢复旧机制。
 
 本文件完整展开 R-00..R-03。所有标为 planned 的路径、symbol、Test ID range、report family、workflow check、
 artifact identity 与 GitHub environment 都不是当前仓库事实；执行时必须先读取 Phase 3A/3B/3C/3D 的实际 Summary、
@@ -90,7 +94,7 @@ R-00 开始前必须同时满足：
   Summary。仅 Planned 文件、局部 focused run 或 Adapter-only evidence 不满足前置。
 - candidate source SHA 与 Phase 3D release-admission record 完全相同；它的 source tree、submodule/lock identity 与
   upstream report hashes 已冻结。任何 SHA 或 lock 变化都产生新 candidate identity，旧 evidence 不继承。
-- 同一 SHA 的 section 3.1 六个 master checks 均为 authoritative `success`；`skipped`、`neutral`、`cancelled`、
+- 同一 SHA 的 section 3.1 十个 master checks 均为 authoritative `success`；`skipped`、`neutral`、`cancelled`、
   unavailable、timeout、missing report、cleanup failure、retry-to-green 或 waiver 都不是 success。
 - Phase 3C/3D compatibility 状态要么是实际 supported N/N-1 results，要么是精确非-PASS
   `BOOTSTRAP_NO_PROMOTED_N_MINUS_1`。首发 bootstrap 不阻止 current-N release，但不能被记录为 compatibility PASS，
@@ -128,8 +132,12 @@ release report/secret/residue/diff/evidence-chain closeout；不重跑 upstream 
 | `Server Release build` | inherited Windows develop gate | exact name and success on candidate SHA required |
 | `Qt client Release` | inherited Windows develop gate | exact name and success on candidate SHA required |
 | `VarifyServer dependency and package check` | inherited Windows develop gate | exact name and success on candidate SHA required |
-| `Linux real dependencies and compatibility` | Phase 3C | actual supported result or explicit bootstrap status; check itself must succeed |
-| `Linux two-server business E2E` | Phase 3D | current-N two-server journey must succeed; actual N-1 or explicit bootstrap recorded |
+| `Linux POSIX process lifecycle` | Phase 3C | production POSIX adapter lifecycle passes |
+| `Linux configure compile link and startup preflight` | Phase 3C | same-source production build and startup pass |
+| `Linux two-server foundation contract` | Phase 3D | two-server foundation and current-N journeys pass |
+| `Phase 3C disposable services` | Phase 3C | isolated real dependencies and four-process contracts pass |
+| `Phase 3C downstream hard gate` | Phase 3C | report aggregation and explicit N-1 status accepted |
+| `Phase 3D current-N release admission` | Phase 3D | current-N business evidence passes; actual N-1 or explicit bootstrap recorded |
 
 ### 3.2 Release admission 与 publication checks
 
@@ -147,13 +155,27 @@ release report/secret/residue/diff/evidence-chain closeout；不重跑 upstream 
 
 | Stage | Workflow permissions | Environment / approval |
 | --- | --- | --- |
-| R-00 | `contents: read`, `actions: read`, `deployments: write`; attestation 子 job 条件启用 `id-token: write`, `attestations: write` | no human approval after six master checks; candidate deployment record is created before compilation |
+| R-00 | `contents: read`, `actions: read`, `checks: read`, `deployments: write`; attestation 子 job 条件启用 `id-token` 与 `attestations` 的 write 权限 | owner-reviewed settings receipt plus same-source checks; candidate deployment record is created before compilation |
 | R-01 | `contents: read` only for workflow metadata, `actions: read`; no `contents: write`, no deployment secret | protected `release-smoke-windows` only when run-scoped dependency endpoints are required; hosted Windows runner remains authoritative |
 | R-02 | `contents: read`, `actions: read`, `pull-requests: read`; evidence submission PR uses normal contributor identity | `release-uat` requires the user/release owner as reviewer; environment stores no application secret |
 | R-03 | `contents: write`, `actions: read`, `pull-requests: write`, `deployments: write`; no package/secret administration | `release-promotion` requires a different explicit approval after R-00/R-01/R-02; one concurrency group per version |
 
 `GITHUB_TOKEN` is the only automation credential. If organization policy prevents the required narrow operation, the stage stops for
 an administrator-controlled configuration change; it never requests or logs a personal PAT, password, token value or long-lived key.
+
+**D-04 专项决定（2026-09-14，用户明确批准）：** 管理设置接口需要 `Administration: read`，
+不在 `GITHUB_TOKEN` 可声明权限中。R-00 改由管理员 devzyz 使用已有登录只读检查设置，
+`PrepareCandidate` 生成绑定 repository/source SHA/版本/随机 challenge/设置摘要的 900 秒记录。
+hosted CI 通过 GitHub run API 的 actor/triggering actor ID 与 dispatch event 核实提交人，
+检查记录有效期、同源 workflow、master 和持久化消费记录；随后仍只用 `GITHUB_TOKEN`。
+摘要用于检查内容一致性，来源信任来自 GitHub 认证的 owner dispatch，不把摘要当作签名。
+核查到准入之间存在最多 15 分钟设置变化窗口；排队过期重新核查，不能延长旧记录期限。
+版本消费后不可重用，失败和 retry 不改写为通过。此决定替代原 R-00 无人工设置核查步骤的安排，
+不改变 R-02 UAT 与 R-03 发布的独立审批，也不引入 CI 长期管理凭据。
+
+**版本决定（同次批准）：** 发布身份仅接受 `x.x.x` 三段非负整数，无前导零、预发布后缀或 build metadata。
+首次拟用 `1.0.0`；candidate/UAT/published 是流程状态，不编码成 `rc`/`beta` 等版本后缀。
+晋升保留同一包的版本和字节；已预留版本构建失败时使用新的数字版本，不能覆盖旧身份。
 
 ### 3.4 Retention
 

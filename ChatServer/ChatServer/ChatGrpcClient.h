@@ -3,7 +3,7 @@
 #include "../../common/grpc/GrpcClientRuntime.h"
 #include "Const.h"
 #include "chat.grpc.pb.h"
-#include "singleton.h"
+#include "Singleton.h"
 
 #include <chrono>
 #include <cstddef>

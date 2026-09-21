@@ -4,8 +4,10 @@
 #include "messagemodelstore.h"
 #include "messagerecord.h"
 #include "userdata.h"
+#include "localmessagestore.h"
 
 #include <QHash>
+#include <QJsonObject>
 #include <QSet>
 #include <QWidget>
 #include <memory>
@@ -15,6 +17,7 @@ class ChatPage;
 }
 
 class MessageItemDelegate;
+class ResourceTransferManager;
 
 /** 右侧聊天区主界面。 */
 class ChatPage : public QWidget
@@ -34,6 +37,8 @@ public:
     void ApplyDeliveryAcknowledgements(int chatId,
                                        const QVector<MessageAcknowledgement> &acknowledgements);
     void MarkMessagesFailed(int chatId, const QVector<QString> &clientMessageIds);
+    void applyStoredHistory(int chatId, qint64 before, const QVector<StoredMessage> &messages, bool hasMore);
+    qint64 oldestLoadedMessageId(int chatId) const;
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -66,6 +71,15 @@ private:
     void restoreScrollAnchor(int chatId, const ScrollAnchor &anchor);
     void queueScrollToBottom(int chatId);
 
+    void initResourceTransfers();
+    void selectResource();
+    void loadResource(MessageRecord& record);
+    ResourceTransferManager* _transfer = nullptr;
+    QHash<QString, QJsonObject> _resourceDescriptors;
+    QSet<int> _resourceChats;
+    int _uploadChat = 0;
+    int _uploadRecipient = 0;
+    QString _uploadUuid;
     Ui::ChatPage *ui;
     std::shared_ptr<ChatInfo> _chatInfo;
     MessageModelStore _messageStore;

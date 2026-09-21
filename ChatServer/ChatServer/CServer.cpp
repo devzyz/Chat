@@ -1,20 +1,39 @@
 #include "CServer.h"
 #include "SessionLifecycleCoordinator.h"
 
-CServer::CServer(boost::asio::io_context& io, unsigned short port,
+namespace chat_transport {
+
+CServer::CServer(boost::asio::io_context& io, std::string address, unsigned short port,
     std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
     std::shared_ptr<UserSessionDirectory> directory, CSession::Submit submit, ContextSource contexts)
-    : _io(io), _strand(boost::asio::make_strand(io)),
-      _acceptor(io, {boost::asio::ip::tcp::v4(), port}), _lifecycle(std::move(lifecycle)),
+    : _io(io), _work(boost::asio::make_work_guard(io)), _strand(boost::asio::make_strand(io)),
+      _acceptor(io), _lifecycle(std::move(lifecycle)),
       _directory(std::move(directory)), _submit(std::move(submit)), _contexts(std::move(contexts)),
-      _address(_acceptor.local_endpoint().address().to_string()), _port(_acceptor.local_endpoint().port()) {}
-void CServer::Start() {
+      _address(std::move(address)), _port(port) {
+    if (!_lifecycle || !_directory || !_submit) throw std::invalid_argument("Chat transport dependencies required");
+    const auto bind_address = boost::asio::ip::make_address(_address);
+    if (!bind_address.is_loopback()) throw std::invalid_argument("Chat transport address must be numeric loopback");
+    boost::asio::ip::tcp::endpoint endpoint(bind_address, port);
+    _acceptor.open(endpoint.protocol());
+#ifdef _WIN32
+    _acceptor.set_option(boost::asio::socket_base::reuse_address(false));
+#else
+    // Preserve Linux restart after active close without allowing duplicate listeners.
+    _acceptor.set_option(boost::asio::socket_base::reuse_address(true));
+#endif
+    _acceptor.bind(endpoint);
+    _acceptor.listen();
+    _port = _acceptor.local_endpoint().port();
+}
+bool CServer::Start() {
+    if (_stop_requested.load()) return false;
+    _ready.store(true);
     boost::asio::post(_strand, [self = shared_from_this()] {
         if (self->_started || self->_stopping) return;
         self->_started = true;
-        self->_ready.store(true);
         self->Accept();
     });
+    return true;
 }
 void CServer::Accept() {
     if (_stopping) return;
@@ -34,6 +53,7 @@ void CServer::Accept() {
         }));
 }
 void CServer::Stop(std::function<void()> completion) {
+    _stop_requested.store(true);
     boost::asio::post(_strand, [self = shared_from_this(), completion = std::move(completion)]() mutable {
         if (completion) self->_stop_completions.push_back(std::move(completion));
         if (!self->_stopping) {
@@ -55,7 +75,11 @@ void CServer::RemoveSession(const SessionId& id) {
 }
 void CServer::CompleteStop() {
     if (!_stopping || _accept_pending || !_sessions.empty()) return;
+    _stopped.store(true);
+    _work.reset();
     auto completions = std::move(_stop_completions);
     _stop_completions.clear();
     for (const auto& completion : completions) completion();
 }
+
+} // namespace chat_transport

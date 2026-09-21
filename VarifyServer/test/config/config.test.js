@@ -137,3 +137,20 @@ test('plaintext credential fields in config.json are rejected', (t) => {
     assert.match(result.stderr, /environment variables/);
     assert.equal(result.stderr.includes(legacySecret), false);
 });
+
+test('SMTP no-auth configuration needs no SMTP password and retains sender identity', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const file = writeConfig(root, 'smtp');
+    const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+    config.email = { host: '127.0.0.1', port: 1025, secure: false, auth: 'none', deadlineMs: 1500 };
+    fs.writeFileSync(file, JSON.stringify(config));
+    const credentials = { ...credentialEnvironment };
+    delete credentials.CHAT_VARIFY_EMAIL_PASS;
+    const result = loadConfigInChild({ cwd: root, credentials });
+    assert.equal(result.status, 0, result.stderr);
+    const loaded = JSON.parse(result.stdout);
+    assert.deepEqual(loaded.smtp, config.email);
+    assert.equal(loaded.email_user, credentials.CHAT_VARIFY_EMAIL_USER);
+    assert.equal(loaded.email_pass, undefined);
+});

@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QPointer>
+#include <QTimer>
 
 enum class SessionResetReason {
     Logout,
@@ -30,6 +31,7 @@ signals:
 private:
     bool _active = false;
     QPointer<QObject> _ownedSessionRoot;
+    QTimer _heartbeat;
 };
 
 #endif // CLIENTSESSION_H

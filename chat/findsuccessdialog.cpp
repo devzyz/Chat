@@ -1,3 +1,4 @@
+#include "usermgr.h"
 #include "findsuccessdialog.h"
 #include "logmgr.h"
 #include "ui_findsuccessdialog.h"
@@ -15,17 +16,6 @@ FindSuccessDialog::FindSuccessDialog(QWidget *parent)
     // 隐藏对话框标题栏
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
 
-    // 获取当前应用程序的路径
-    QString app_path = QCoreApplication::applicationDirPath();
-    // 头像需要去请求服务器，然后将头像资源下载下来，保存到static下
-    QString pix_path = QDir::toNativeSeparators(app_path + QDir::separator() +
-                                                "static" + QDir::separator() + "head_5.jpg");
-
-    // 将拿到的头像添加到搜索弹框上
-    QPixmap head_pix(pix_path);
-    // 缩放
-    head_pix = head_pix.scaled(ui->head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    ui->head_label->setPixmap(head_pix);
     ui->add_friend_btn->SetState("normal", "hover","press");
     this->setModal(true); // 将主窗口等禁用，直到关闭当前窗口
 }
@@ -45,6 +35,7 @@ void FindSuccessDialog::SetSearchInfo(std::shared_ptr<SearchInfo> si)
 {
     ui->name_label->setText(si->_name);
     _si = si;
+    UserMgr::GetInstance()->bindAvatar(ui->head_label, si->_uid, si->_icon);
 }
 
 /**
@@ -61,4 +52,3 @@ void FindSuccessDialog::on_add_friend_btn_clicked()
     applyFriend->setModal(true);
     applyFriend->show();
 }
-

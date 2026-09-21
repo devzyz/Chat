@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Windows release package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Download this run's tested Windows packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: windows-*-release
+          path: ${{ runner.temp }}/chat-artifacts
+      - name: Assemble release without rebuilding applications
+        shell: pwsh
+        run: |
+          python scripts/release/package.py --artifacts "$env:RUNNER_TEMP/chat-artifacts" --output "$env:RUNNER_TEMP/chat-release" --sha "$env:GITHUB_SHA"
+          if ($LASTEXITCODE -ne 0) { throw 'Release packaging failed.' }
+      - name: Upload release package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-release-candidate
+          path: ${{ runner.temp }}/chat-release/*
+          if-no-files-found: error
+          retention-days: 30
+
+  smoke:
+    name: Windows package smoke
+    needs: package
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Download the exact package to a fresh runner
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: windows-release-candidate
+          path: ${{ runner.temp }}/chat-release
+      - name: Run packaged applications outside the source tree
+        shell: pwsh
+        run: |
+          python scripts/release/smoke.py --directory "$env:RUNNER_TEMP/chat-release" --sha "$env:GITHUB_SHA" --report "$env:RUNNER_TEMP/package-smoke.xml"
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged application smoke failed.' }
+      - name: Retain smoke result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-package-smoke
+          path: ${{ runner.temp }}/package-smoke.xml
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish tested Windows package
+    needs: smoke
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: windows-release-candidate
+          path: ${{ runner.temp }}/chat-release
+      - name: Publish the same ZIP after upload verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release/publish.py --directory "$RUNNER_TEMP/chat-release" --sha "$GITHUB_SHA"

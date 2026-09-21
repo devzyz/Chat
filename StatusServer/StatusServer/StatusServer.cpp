@@ -3,11 +3,29 @@
 
 #include <iostream>
 #include "ConfigMgr.h"
-#include "StatusServiceImpl.h"
+#include "StatusGrpcServer.h"
+#include "StatusRoutingProduction.h"
 #include "const.h"
 #include "LogMgr.h"
+#include <boost/algorithm/string/trim.hpp>
 #include <csignal>
+#include <sstream>
 #include <stdexcept>
+#include <utility>
+#include <vector>
+
+std::unique_ptr<StatusRouting> CreateConfiguredStatusRouting() {
+	auto& config = ConfigMgr::GetInstance();
+	std::stringstream names(config["ChatServers"]["Name"]);
+	std::string section_name;
+	std::vector<RoutingServer> servers;
+	while (std::getline(names, section_name, ',')) {
+		boost::algorithm::trim(section_name);
+		auto section = config[section_name];
+		servers.push_back({section["Name"], section["Host"], section["Port"]});
+	}
+	return CreateProductionStatusRouting(std::move(servers));
+}
 
 void RunServer() {
 	auto& configMgr = ConfigMgr::GetInstance();
@@ -16,20 +34,12 @@ void RunServer() {
 	std::string port = configMgr["StatusServer"]["Port"];
 	std::string server_address = host + ":" + port;
 
-	StatusServiceImpl service;
-
-	grpc::ServerBuilder builder;
-	// 监听端口和添加服务
-	int selected_port = 0;
-	builder.AddListeningPort(server_address, grpc::InsecureServerCredentials(), &selected_port);
-	builder.RegisterService(&service);
-
-	// 构建并启动gRPC服务器
-	std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-	if (!server || selected_port == 0) {
+	auto routing = CreateConfiguredStatusRouting();
+	status::StatusGrpcServer server(*routing);
+	if (!server.Start(server_address)) {
 		throw std::runtime_error("failed to listen on gRPC address " + server_address);
 	}
-	SPDLOG_INFO("StatusServer listening on {}", server_address);
+	SPDLOG_INFO("StatusServer listening on {}", server.BoundEndpoint());
 
 	// 下面的逻辑是用来优雅关闭的
 	// io_context的目的是为了构造signal_set，signal_set将异步等待函数注册到io_context内
@@ -49,7 +59,7 @@ void RunServer() {
 	signals.async_wait([&server](const boost::system::error_code& error, int signal_number) {
 		if (!error) {
 			SPDLOG_INFO("StatusServer shutting down");
-			server->Shutdown(); // 优雅地关闭服务器
+			server.Stop(std::chrono::system_clock::now() + std::chrono::seconds(5));
 		}
 		});
 
@@ -60,7 +70,7 @@ void RunServer() {
 			io_context.run();
 			});
 
-		server->Wait();
+		server.Wait();
 		io_context.stop();
 		if (signal_thread.joinable()) {
 			signal_thread.join();
@@ -68,7 +78,7 @@ void RunServer() {
 		SPDLOG_INFO("StatusServer stopped");
 	}
 	catch (...) {
-		server->Shutdown();
+		server.Stop(std::chrono::system_clock::now() + std::chrono::seconds(5));
 		io_context.stop();
 		if (signal_thread.joinable()) {
 			signal_thread.join();

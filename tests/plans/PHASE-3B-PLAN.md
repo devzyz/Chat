@@ -1,7 +1,7 @@
 ---
 phase: "3B"
 title: "Deterministic production-transport and process Integration"
-status: "Planned"
+status: "Local Complete — Remote CI Pending"
 depends_on:
   - "Phase 3A complete, including 3A-01..3A-06 production Module and runner evidence"
 plans: 6
@@ -11,7 +11,7 @@ requirements: [G-008, G-009, G-010, G-011, G-015]
 decisions: [DG-09, DG-10, DG-11, DG-12, DG-14, DG-19, DG-20, DG-25]
 baseline:
   reports: 12
-  runner_testcases: 180
+  runner_testcases: 232
   stable_develop_checks:
     - "Static configuration checks"
     - "Server Release build"
@@ -22,7 +22,7 @@ must_haves:
     - "Gate HTTP, Status gRPC, Chat TCP, Qt QNetworkAccessManager and Qt QTcpSocket cross real production transport code on deterministic loopback."
     - "Every host uses Phase 3A production business Modules with in-memory Adapters and never reaches real Redis, MySQL, SMTP or the public network."
     - "Fragmentation/coalescing, size boundaries, malformed input, interruption, refusal, deadlines, late completion, port conflict and owned-resource cleanup have deterministic evidence."
-    - "The existing 180 testcase / 12 report baseline remains intact; new actual counts are registered only after real tests exist."
+    - "The existing 232 testcase / 12 report baseline remains intact; new actual counts are registered only after real tests exist."
     - "The four existing develop check names remain exact and the new deterministic suites are Required through their owning public runners."
   artifacts:
     - "planned tests/plans/PHASE-3B-TEST-PLAN.md"
@@ -38,10 +38,10 @@ must_haves:
 
 # Phase 3B 正式计划：确定性 production transport / process Integration
 
-状态：**Planned；Phase 3A 完成前禁止执行**
+状态：**本地实现与 313-case 回归已完成；PR Required Checks 与合并后 `develop` 证据待定**
 
 本文件是 3B-00..3B-05 的执行合同。所有以“planned”标识的新文件、target、Interface、symbol、Test ID
-和 report 都尚未实现；它们不得被当作当前仓库事实或当前 180-case baseline 的一部分。
+和 report 都尚未实现；它们不得被当作当前仓库事实或当前 232-case baseline 的一部分。
 
 ## 1. 目标
 
@@ -49,7 +49,7 @@ must_haves:
 Gate HTTP、Status gRPC、Chat TCP、Qt `QNetworkAccessManager` 与 `QTcpSocket` transport 上，通过
 deterministic loopback 和受控进程证明 framing、deadline、取消、连接生命周期、完成去重以及资源释放。
 
-3B 结束时，`develop` 的四个既有 Required Check 名称保持不变；它们在保留全部原 180 个 testcase 和
+3B 结束时，`develop` 的四个既有 Required Check 名称保持不变；它们在保留全部原 232 个 testcase 和
 12 份报告的同时，执行新增的真实 transport/process contracts。新增总数只能由落地后的真实 runner
 registration 与 JUnit manifest 得出，本计划不预填未来总数。
 
@@ -72,7 +72,7 @@ registration 与 JUnit manifest 得出，本计划不预填未来总数。
 ### 2.1a 比例化执行与共享 phase 前置
 
 过程分层以 [`tests/CI-GOVERNANCE.md` section 2.1](../CI-GOVERNANCE.md#21-比例化执行合同) 为唯一权威。Phase entry
-一次性读取上述 Phase 3A Summary、DG-09..DG-25、G-008..G-015 ownership、当前 12-report/180-case baseline，并执行
+一次性读取上述 Phase 3A Summary、DG-09..DG-25、G-008..G-015 ownership、当前 12-report/232-case baseline，并执行
 一次 DG-25 read-only dependency preflight；task 不重复治理栈、tool hash、package identity 或 vcpkg fingerprint。
 每个 task 的 `read_first` 仅保留 edited source、closest analog 与一个必要 authority。行为切片先 focused RED/GREEN，
 只对可观察 transport/failure/lifecycle/gate enforcement 做 meaningful mutation；process/port/temp cleanup 只由实际创建者
@@ -139,7 +139,7 @@ G-010 的 Status gRPC transport extension、G-011 的 Qt HTTP/TCP、G-015 的无
 ## 5. Planned Test ID / report namespace
 
 Test ID 是 planned behavior contract，不等于 runner testcase。只有测试 source、target 和实际 JUnit case 均存在后，
-3B-05 才更新 runner manifest 的真实每报告数量与 aggregate。现有 180 个 testcase 和 12 个报告不得减少、改名
+3B-05 才更新 runner manifest 的真实每报告数量与 aggregate。现有 232 个 testcase 和 12 个报告不得减少、改名
 或被新测试替代。
 
 | Plan | Planned Test ID range | Contract family | Planned owning report |
@@ -173,6 +173,9 @@ Test ID 是 planned behavior contract，不等于 runner testcase。只有测试
 ownership 串行合并这些共享注册文件。
 
 ## 7. Plan 3B-00 — Contract / shared-target preflight
+
+状态：**Complete（2026-09-04）**。完成证据见
+[`PHASE-3B-00-SUMMARY.md`](PHASE-3B-00-SUMMARY.md)；下一项为 **Plan 3B-01**。
 
 <objective>
 确认 Phase 3A 真实 production Modules 已完成并冻结 IntegrationHost 的最小 Interface、planned Test ID、report
@@ -211,7 +214,7 @@ the current matrix counts and open Gap states; do not create empty future test d
   </verify>
   <acceptance_criteria>
 Phase 3A complete evidence and actual target/header mappings are recorded; every 3B Test ID is unique and explicitly planned;
-180/12 and G-008..G-018 current states are unchanged; no empty directory, source stub or placeholder test exists.
+232/12 and G-008..G-018 current states are unchanged; no empty directory, source stub or placeholder test exists.
   </acceptance_criteria>
 </task>
 
@@ -279,6 +282,9 @@ all pre-existing Server cases remain registered and no other public runner is in
 </tasks>
 
 ## 8. Plan 3B-01 — RunContext and Windows ProcessHarness
+
+状态：**Complete（2026-09-06）**。完成证据见
+[`PHASE-3B-01-SUMMARY.md`](PHASE-3B-01-SUMMARY.md)；下一项为 **Plan 3B-02**。
 
 <objective>
 Create the deterministic runtime owner used by every later 3B test: unique resources, protocol-ready process control, bounded
@@ -386,6 +392,9 @@ threads/temp paths are released and pre-existing state is untouched.
 
 ## 9. Plan 3B-02 — Gate HTTP and Qt QNetworkAccessManager
 
+状态：**Complete（2026-09-06）**。完成证据见
+[`PHASE-3B-02-SUMMARY.md`](PHASE-3B-02-SUMMARY.md)；下一项为 **Plan 3B-03**。
+
 <objective>
 Drive real HTTP bytes through the production Gate Beast transport into Phase 3A `GateRequest`, and drive the production Qt HTTP
 Module through real QNetworkAccessManager loopback, with deterministic HTTP faults and cleanup.
@@ -492,7 +501,7 @@ aggregate `RunAllTests` or rename the existing Server/Qt check jobs.
     <automated>powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/windows-local.ps1 -Task RunServerTests -Configuration Release</automated>
   </verify>
   <acceptance_criteria>
-Both focused suites and the owning Server public runner are green; actual counts, IDs, README, matrix and reports agree; old 180 cases
+Both focused suites and the owning Server public runner are green; actual counts, IDs, README, matrix and reports agree; old 232 cases
 and 12 reports remain present; HTTP logs/reports contain no synthetic code/token/password/email marker.
   </acceptance_criteria>
 </task>
@@ -500,6 +509,9 @@ and 12 reports remain present; HTTP logs/reports contain no synthetic code/token
 </tasks>
 
 ## 10. Plan 3B-03 — Status gRPC
+
+状态：**Complete（2026-09-06）**。完成证据见
+[`PHASE-3B-03-SUMMARY.md`](PHASE-3B-03-SUMMARY.md)；下一项为 **Plan 3B-04**。
 
 <objective>
 Run the production Status gRPC service and generated stub over real loopback while delegating selection/token behavior to Phase 3A
@@ -605,6 +617,9 @@ structure mutation disconnecting the shared target fails.
 </tasks>
 
 ## 11. Plan 3B-04 — Chat TCP and Qt QTcpSocket
+
+状态：**Complete（2026-09-07）**。完成证据见
+[`PHASE-3B-04-SUMMARY.md`](PHASE-3B-04-SUMMARY.md)；下一项为 **Plan 3B-05**。
 
 <objective>
 Drive real TCP byte streams through the production Chat acceptor/session/frame/dispatcher path and the production Qt TCP Module,
@@ -722,6 +737,10 @@ owned runtime objects are released; prior frame/session/model contracts remain u
 
 ## 12. Plan 3B-05 — Composition, report and develop CI closeout
 
+状态：**Local Complete（2026-09-07）；Remote CI Pending**。本地证据见
+[`PHASE-3B-05-SUMMARY.md`](PHASE-3B-05-SUMMARY.md) 与
+[`PHASE-3B-SUMMARY.md`](PHASE-3B-SUMMARY.md)。PR 四项 Required Checks 与合并后 `develop` 证据尚未完成。
+
 <objective>
 Protect formal production composition roots, converge real Test ID/report counts, run the phase's only complete local lane and make
 the unchanged four Windows check names authoritative for the new deterministic transport suites.
@@ -783,7 +802,7 @@ fake modes/macros are absent; any real-dependency-only lifecycle remains explici
   </files>
   <action>
 Enumerate actual registered 3B runner testcases from real sources/reports and update every affected per-report expected count plus
-aggregate; retain all original 180 cases and 12 reports, add `client_integration.xml` only if actual Qt Integration cases emit it,
+aggregate; retain all original 232 cases and 12 reports, add `client_integration.xml` only if actual Qt Integration cases emit it,
 and never infer count from ID range. Extend residue/teardown checks for all 3B run-id prefixes and fail on missing report, failure,
 error, timeout, unavailable runner or cleanup ledger entry. Scan XML/stdout/stderr and added diff lines for synthetic password/token/
 verification-code/email markers without reading or echoing real secret values. Keep exact job/check names and `if: always()` plus
@@ -899,7 +918,7 @@ unchanged checks successful on the intended SHA; protected/user files and secret
 - Required runner unavailable, process/dependency startup failure, timeout, missing report, count drift, secret leakage or cleanup
   failure. None may be manually bypassed or retried into a green result.
 - The same failure reason occurs three times without new evidence: stop, preserve logs/ledger and create a handoff rather than loop.
-- Existing 180 testcase/12 report baseline, four check names, user/protected paths or staged-index scope would be reduced or altered
+- Existing 232 testcase/12 report baseline, four check names, user/protected paths or staged-index scope would be reduced or altered
   without D-04 review.
 - 本地 vcpkg 固定路径缺失/不一致、发生隐式 manifest install，或任一 restore/install/remove/update/upgrade/path change
   未取得 DG-25 的本次明确批准；立即停止，不得切换 installed tree 或删除重建。
@@ -913,7 +932,7 @@ unchanged checks successful on the intended SHA; protected/user files and secret
   Modules with in-memory Adapters only.
 - DG-20 matrix is deterministic and mutation-proven; every wait/operation has deadline and each run has run-id plus complete
   identity-scoped teardown ledger.
-- All pre-existing 180 testcases and 12 reports remain; actual new counts/reports match runner manifest, matrix, READMEs and Summary.
+- All pre-existing 232 testcases and 12 reports remain; actual new counts/reports match runner manifest, matrix, READMEs and Summary.
 - `RunServerTests`, `RunClientTests`, unaffected `RunVarifyTests`/`RunScriptTests`, and the single final `RunAllTests` are green;
   reports contain zero failure/error and no secret marker.
 - Four exact `develop` check names are unchanged and green on clean PR plus post-merge SHA. No self-hosted Required runner exists.

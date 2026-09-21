@@ -37,6 +37,8 @@ private:
 	std::queue<std::unique_ptr<SqlConnection>> _pool; // 连接池
 	std::mutex _mutex;
 	std::condition_variable _cond;
+    std::condition_variable _check_cond;
+    std::mutex _close_mutex;
 	std::atomic<bool> _b_stop;
 	std::thread _check_thread;
 };
@@ -59,4 +61,3 @@ public:
 private:
 	std::unique_ptr<MysqlConnectionPool> _pool;
 };
-

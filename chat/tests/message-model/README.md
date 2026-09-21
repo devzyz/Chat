@@ -5,6 +5,9 @@
 - 生产代码：`messagelistmodel.*`、`messagemodelstore.*`、`messageitemdelegate.*` 和 `messagerecord.h`。
 - 契约：插入、确认、状态更新和删除同步稳定 ID 索引；多页历史去重且保持时间顺序；Unicode、空文本和换行
   无损；每个 chat 保留独立模型与分页状态；窄视口增加长文本布局高度。
+- Q01-MODEL-01 also covers history arriving before acknowledgement, including a legacy
+  row without UUID: confirmation merges by server ID and preserves the pending UUID;
+  duplicate peer/history/ack observations cannot create a second row.
 
 ## 用例、依赖与隔离
 
@@ -45,5 +48,18 @@ CI job 为 `client-release`。Unit case 写入 `build/test-results/client_unit.x
 Component case 写入 `build/test-results/client_component.xml`；两组任一失败或缺报告都会使 runner 失败。
 
 ## 已知缺口
+
+The stable-ID regression also covers two senders sharing a UUID, sender-scoped
+ACK/failure updates, ambiguous unscoped lookup rejection, and history resolving
+a pending UUID to its durable server ID. UUID deduplication uses sender plus UUID;
+server IDs remain globally unique within the model.
+
+The store Component case also exercises the production history reducer shared
+by GUI and process driver: forward pages merge by server ID, overlapping/replayed
+pages cannot rewind the cursor or reopen an exhausted scan, and malformed order
+or cursor is rejected without advancing state. Persistent model indexes survive
+history sorting; pending rows follow committed rows. ACK/failure
+updates remain isolated by chat. ClientSession owns production heartbeats;
+the process-driver Integration case observes them on real loopback TCP.
 
 - 不覆盖真实窗口事件、网络管理器、登录/好友/聊天跨页面流程或平台字体的精确像素。

@@ -4,41 +4,33 @@
 HttpMgr::HttpMgr() {
     // 连接信号与槽
     connect(this, &HttpMgr::sig_http_finish, this, &HttpMgr::slot_http_finish);
+    connect(&_transport, &GateHttpTransport::finished, this,
+            [this](const GateHttpResult &result) {
+        ErrorCodes error = ErrorCodes::ERR_NETWORK;
+        if (result.terminal == GateHttpTerminal::Success) {
+            error = ErrorCodes::SUCCESS;
+        } else if (result.terminal == GateHttpTerminal::MalformedResponse) {
+            error = ErrorCodes::ERR_JSON;
+        }
+        emit sig_http_finish(static_cast<AuthFlowId>(result.flowId),
+                             static_cast<ReqId>(result.requestId),
+                             static_cast<Modules>(result.module),
+                             QString::fromUtf8(result.body), error);
+    });
 }
 
 // post请求
 void HttpMgr::PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod,
                           AuthFlowId flowId)
 {
-    QByteArray data = QJsonDocument(json).toJson();
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    request.setHeader(QNetworkRequest::ContentLengthHeader, QByteArray::number(data.length()));
-    auto self = shared_from_this();
-    // 发起异步post请求，立即返回
-    QNetworkReply * reply = _manager.post(request, data);
-    // 连接信号与槽，当post异步请求结束后，reply发出QNetworkReply::finished信号，此时执行后面的lambda函数
-    QObject::connect(reply, &QNetworkReply::finished, [self, reply, req_id, mod, flowId]() {
-        // 处理错误
-        if (reply->error() != QNetworkReply::NoError) {
-            SPDLOG_ERROR(
-                "HTTP request failed, request_id={}, module={}, error={}",
-                static_cast<int>(req_id),
-                static_cast<int>(mod),
-                LogMgr::ToUtf8(reply->errorString()));
-            // 发送信号通知完成
-            emit self->sig_http_finish(flowId, req_id, mod, "", ErrorCodes::ERR_NETWORK);
-            reply->deleteLater();
-            return ;
-        }
-
-        // 无错误
-        QString res = reply->readAll();
-        // 发送信号通知完成
-        emit self->sig_http_finish(flowId, req_id, mod, res, ErrorCodes::SUCCESS);
-        reply->deleteLater();
-        return ;
-    });
+    GateHttpRequest request;
+    request.url = std::move(url);
+    request.body = QJsonDocument(json).toJson(QJsonDocument::Compact);
+    request.flowId = static_cast<quint64>(flowId);
+    request.requestId = static_cast<int>(req_id);
+    request.module = static_cast<int>(mod);
+    request.deadlineMs = 5000;
+    _transport.post(request);
 }
 
 void HttpMgr::slot_http_finish(AuthFlowId flowId, ReqId id, Modules mod,
@@ -60,5 +52,5 @@ void HttpMgr::slot_http_finish(AuthFlowId flowId, ReqId id, Modules mod,
 }
 
 HttpMgr::~HttpMgr() {
-
+    _transport.reset();
 }

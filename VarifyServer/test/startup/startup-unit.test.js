@@ -4,10 +4,24 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const grpc = require('@grpc/grpc-js');
 
-const { startServer } = require('../../server');
+const { startServer, getBindAddress, main } = require('../../server');
 
 // V07-START-01
-test('bind failure rejects startup and never starts the server', async () => {
+test('bind failure rejects startup and never starts the server', async (t) => {
+    assert.equal(getBindAddress({}), '0.0.0.0:50051');
+    assert.equal(getBindAddress({ CHAT_VARIFY_BIND_ADDRESS: '127.0.0.1:32123' }), '127.0.0.1:32123');
+    for (const address of ['', 'localhost:1234', '999.0.0.1:1234', '127.0.0.1:0', '127.0.0.1:65536']) {
+        assert.throws(() => getBindAddress({ CHAT_VARIFY_BIND_ADDRESS: address }), /Invalid CHAT_VARIFY_BIND_ADDRESS/);
+    }
+    const previous = process.env.CHAT_VARIFY_BIND_ADDRESS;
+    t.after(() => {
+        if (previous === undefined) delete process.env.CHAT_VARIFY_BIND_ADDRESS;
+        else process.env.CHAT_VARIFY_BIND_ADDRESS = previous;
+    });
+    process.env.CHAT_VARIFY_BIND_ADDRESS = '127.0.0.1:65536';
+    let binds = 0;
+    await assert.rejects(main({ server: { bindAsync() { binds += 1; } } }), /Invalid CHAT_VARIFY_BIND_ADDRESS/);
+    assert.equal(binds, 0);
     let starts = 0;
     const server = {
         bindAsync(address, credentials, callback) {

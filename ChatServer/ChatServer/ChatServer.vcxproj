@@ -144,7 +144,6 @@
     <ClCompile Include="$(ProtocolGeneratedDir)\chat.pb.cc" />
     <ClCompile Include="$(ProtocolGeneratedDir)\status.grpc.pb.cc" />
     <ClCompile Include="$(ProtocolGeneratedDir)\status.pb.cc" />
-    <ClCompile Include="MsgNode.cpp" />
     <ClCompile Include="MysqlDao.cpp" />
     <ClCompile Include="MysqlMgr.cpp" />
     <ClCompile Include="RedisMgr.cpp" />
@@ -186,14 +185,17 @@
     <None Include="..\..\proto\status.proto" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="ChatSessionRuntime.vcxproj">
-      <Project>{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}</Project>
+    <ProjectReference Include="ChatTransport.vcxproj">
+      <Project>{4B7AD04F-6F24-45BC-BF1B-3B0400000001}</Project>
     </ProjectReference>
     <ProjectReference Include="LogicDispatcher.vcxproj">
       <Project>{B251FB8A-0C7D-4BFA-8F1B-31C75DFBDA01}</Project>
     </ProjectReference>
     <ProjectReference Include="ChatGrpcClients.vcxproj">
       <Project>{65DC3290-A9BB-4FAD-9930-096BC5B82102}</Project>
+    </ProjectReference>
+    <ProjectReference Include="MessageCommit.vcxproj">
+      <Project>{AC1F5D07-BDA4-4A95-A095-3C0500000001}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

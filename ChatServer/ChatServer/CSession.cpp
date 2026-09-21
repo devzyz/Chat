@@ -101,7 +101,7 @@ void CSession::Send(SessionFrame frame, SendCompletion completion) {
         completion = std::move(completion)]() mutable {
         auto result = SessionSendResult::NotActive;
         if (self->_state == SessionState::Active) {
-            const auto limit = frame.message_id == MSG_LOAD_CHAT_MESSAGE_RSP ? static_cast<unsigned int>(0xffff) : MAX_LENGTH;
+            const auto limit = frame.message_id == MSG_LOAD_CHAT_MESSAGE_RSP ? MAX_HISTORY_BODY_LENGTH : MAX_LENGTH;
             if (frame.body.size() > limit) {
                 self->BeginClosing(SessionCloseReason::ProtocolError);
             } else if (self->_frames.size() >= MAX_SENDQUE) {

@@ -3,7 +3,7 @@
 
 #include <QWidget>
 #include <functional>
-#include "Qstyle"
+#include <QStyle>
 #include <QRegularExpression>
 #include <memory>
 #include <iostream>

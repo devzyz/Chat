@@ -61,7 +61,6 @@
     <ClCompile Include="gate-response\gate_response_tests.cpp" />
     <ClCompile Include="gate-request\gate_request_component_tests.cpp" />
     <ClCompile Include="status-routing\status_routing_component_tests.cpp" />
-    <ClCompile Include="..\..\GateServer\GateServer\GateResponse.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\ConfigMgr.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\Const.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\DistLock.cpp" />
@@ -71,8 +70,11 @@
     <ProjectReference Include="..\..\GateServer\GateServer\GateRequest.vcxproj">
       <Project>{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\..\ChatServer\ChatServer\ChatSessionRuntime.vcxproj">
-      <Project>{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}</Project>
+    <ProjectReference Include="..\..\ChatServer\ChatServer\ChatTransport.vcxproj">
+      <Project>{4B7AD04F-6F24-45BC-BF1B-3B0400000001}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\GateServer\GateServer\GateTransport.vcxproj">
+      <Project>{C9E57E0E-3B02-4F26-8DB4-5A5C1B9D7021}</Project>
     </ProjectReference>
     <ProjectReference Include="..\..\StatusServer\StatusServer\StatusRouting.vcxproj">
       <Project>{7C67B8A2-A0A4-44A0-9020-5D87915CE3E2}</Project>

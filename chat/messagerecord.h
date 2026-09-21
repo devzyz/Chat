@@ -19,7 +19,8 @@ enum class DeliveryStatus {
     Sending,
     Sent,
     Failed,
-    Read
+    Read,
+    Uncertain
 };
 
 struct MessageRecord {
@@ -35,6 +36,9 @@ struct MessageRecord {
     bool isSelf = false;
     MessageType messageType = MessageType::Text;
     QString text;
+    QString resourceId;
+    QString localResourcePath;
+    QPixmap resourcePreview;
 };
 
 struct MessageAcknowledgement {

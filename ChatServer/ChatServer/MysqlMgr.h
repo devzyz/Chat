@@ -1,4 +1,6 @@
 #pragma once
+#include <cstdint>
+#include <json/json.h>
 #include "Singleton.h"
 #include "MysqlDao.h"
 #include "Const.h"
@@ -30,13 +32,14 @@ public:
 	// 创建私聊会话
 	bool CreatePrivateChat(int user1_id, int user2_id, int& chat_id);
 	// 插入from_uid发给to_uid的对话
-	bool AddChatMessageList(int from_uid, int to_uid, int chat_id, std::vector<std::pair<std::string, std::string>> cache_msgs,
-		std::vector<std::shared_ptr<ChatMessage>>& chat_msgs);
+	message_commit::Result AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
+        int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
+        std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline);
 	// 增量加载部分聊天数据
-	bool GetChatMessageList(int chat_id, int current_msg_id, int page_size,
+	bool GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
+    bool SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response);
 private:
 	MysqlMgr();
 	MysqlDao _dao;
 };
-
