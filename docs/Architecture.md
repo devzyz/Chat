@@ -3,6 +3,16 @@
 
 ## 系统边界
 
+ChatServer 的 TCP Session 由 `CServer` 持有，`CSession` 在独立 strand 内管理
+`Created → Active → Closing`、读写队列、心跳与幂等关闭。Active 表示 TCP 可通信，
+`AuthenticatedUid` 才表示 Chat 登录绑定成功；业务入口另查本机 current 身份。
+`UserSessionDirectory` 以弱引用维护 UID 路由；`UserPresenceStore` 管集群在线位置；
+`SessionLifecycleCoordinator` 在独立工作队列执行发布、条件清理和跨服替换。
+这些依赖由 `ChatServer.cpp` 显式组装，旧 Server `UserMgr`、`ChatSessionState`
+及 writer adapter 已移除。关闭先处理本地状态和 socket，Redis 失败不阻塞本地关闭。
+停机等待 accept、Session 的在途 I/O 与绑定完成，再排空生命周期任务，最后停 I/O 和依赖。
+
+
 Chat 是由 Qt 桌面客户端和多个独立服务组成的分布式聊天项目。当前 Windows 发布基线包含 GateServer、StatusServer、ChatServer、VarifyServer 和 Qt 客户端；Server 之间通过 HTTP/TCP、gRPC、Redis 和 MySQL 协作。
 
 ```text

@@ -6,11 +6,11 @@
 
 ## 1. 统计口径
 
-当前本地基线包含 232 个 runner testcase：Server 166、Qt 24、VarifyServer 29、PowerShell 13。
+当前本地基线包含 245 个 runner testcase：Server 179、Qt 24、VarifyServer 29、PowerShell 13。
 
 Test ID 表示被保护的 Interface 合同，runner testcase 表示测试框架实际报告的用例。二者不必一一对应：例如 Qt `network_state_tests` 是一个 runner testcase，但同时保护拆分 header、拆分 body 和相邻 frame 三个合同。覆盖率、testcase 数量和合同数量必须分别报告，不能相互替代。
 
-当前所有 232 个 testcase 都属于 `develop` 全量快速门禁；`master` 和 release 继承它们。真实 Redis/MySQL/SMTP 与业务 E2E 尚不存在，因此不在当前 232 个基线中。
+当前所有 245 个 testcase 都属于 `develop` 全量快速门禁；`master` 和 release 继承它们。真实 Redis/MySQL/SMTP 与业务 E2E 尚不存在，因此不在当前 232 个基线中。
 
 Plan 2.5-07 的历史本地证据为 12 份报告 / 173 testcase。Plan 3A-01 在同一报告集合中新增
 7 个 `LogicDispatcherTests` runner testcase；focused 7/7 与完整 `server_unit.xml` 60/60
@@ -30,7 +30,7 @@ branch protection 仍必须由 3A-06/实际 GitHub check 证明。
 | Gate Asio | Gate lifecycle | Foundation | Unit | 2 | `server_gate_unit.xml` | in-process thread/io_context | develop required |
 | Status Asio | Status lifecycle | Foundation | Unit | 2 | `server_status_unit.xml` | in-process thread/io_context | develop required |
 | Server component | Chat Redis pool/session state、Gate response/request、Status token/store | Foundation/Architecture/Business | Component | 56 | `server_component.xml` | in-process fake；不连接 Redis/MySQL/Status/Varify | develop required |
-| Server integration | Chat/Gate/Status startup、C++→Node Varify、Gate gRPC clients | Architecture | Integration | 34 | `server_integration.xml` | 受控子进程、动态 loopback 端口 | develop required |
+| Server integration | Chat/Gate/Status startup、C++→Node Varify、Gate gRPC clients | Architecture | Integration | 47 | `server_integration.xml` | 受控子进程、动态 loopback 端口 | develop required |
 | Chat gRPC integration | Chat production gRPC clients | Architecture | Integration | 4 | `server_chat_grpc_integration.xml` | 动态 loopback 端口、无外部服务 | develop required |
 | Qt unit | frame decoder、message model rules Q01-MODEL-01..06、auth outcomes Q03-AUTH-01..11 | Foundation/Architecture/Business | Unit | 18 | `client_unit.xml` | Qt Core/Widgets minimal，无 socket | develop required |
 | Qt component | message store/delegate Q01-MODEL-07..08、session reset Q02-SESSION-01..06、auth reset wiring Q03-AUTH-12 | Architecture/Business | Component | 6 | `client_component.xml` | Qt Widgets/Network minimal；真实 in-process Module，无连接 | develop required |
@@ -38,7 +38,7 @@ branch protection 仍必须由 3A-06/实际 GitHub check 证明。
 | Varify integration | config、loopback RPC、process startup | Foundation/Architecture | Integration | 11 | `varify_integration.xml` | 子进程或动态 loopback | develop required |
 | Script component | instance validation | Architecture | Component | 9 | `script_component.xml` | 临时目录、占位进程 | develop required |
 | Script integration | instance lifecycle | Architecture | Integration | 4 | `script_integration.xml` | 受控子进程/PID identity | develop required |
-| **合计** |  |  |  | **232** | 12 份报告 | 无个人服务或凭据 |  |
+| **合计** |  |  |  | **245** | 12 份报告 | 无个人服务或凭据 |  |
 
 PowerShell 报告逐项输出 13 个 testcase：validation 9 个、lifecycle 4 个；控制台同步保留逐 Test ID 的 PASS/FAIL。该报告粒度改进不改变本表的逻辑基线数量。
 
@@ -158,24 +158,17 @@ Domain/Level：Business/Architecture；01..07/14 为 Unit，08..13 为 Component
 | T08-STATUS-13 | `MatchingTokenSucceeds` | Token 匹配返回成功 UID/token |
 | T08-STATUS-14 | `ConcurrentSelectionIsDeterministic` | barrier 并发选择确定且无 container-order 依赖 |
 
-### 3.8 Chat session registry/send state（10）
+### 3.8 Chat Session runtime (10 Component + 13 loopback Integration)
 
-Interface：production `ChatSessionState::Create/RegisterCurrent/FindCurrent/Close/Send`；唯一外部身份为 opaque session handle。`UserMgr` 持有唯一 registry，`CServer`、`CSession`、`LogicSystem` 和 `ChatServiceImpl` 统一委托该 Interface。
-Domain/Level：Architecture / Component。
-报告：`server_component.xml`。固定 session ID source、手工完成 writer callback 与 presence recorder 均为 in-process Adapter；不连接真实 TCP/Redis。
+Production interfaces: CSession Start/Send/Close/BindAuthenticatedUser,
+UserSessionDirectory Register/FindCurrent/UnregisterIfCurrent, Coordinator and CServer Stop.
+The old ChatSessionState/UserMgr contracts migrate to the actual connection runtime.
+Detailed ID mapping and approved migration: [Session contracts](server/chat-session-state/README.md).
+T08-SESSION-01..10 remain in server_component.xml; T09-CTCP-01..13 enter server_integration.xml.
+FIFO/capacity/write-failure assertions now exercise the production socket path, including
+close during binding/write, stale targeted kicks, and server shutdown ownership release.
+Redis storage is substituted; Lua and true cross-instance business E2E are not claimed here.
 
-| Test ID | Runner testcase | 合同 |
-| --- | --- | --- |
-| T08-SESSION-01 | `NewSessionHandlesAreNonEmptyAndUnique` | session ID 非空且唯一 |
-| T08-SESSION-02 | `FirstRegistrationBecomesTheCurrentSession` | 首次认证建立 UID current mapping |
-| T08-SESSION-03 | `ANewSessionAtomicallyReplacesTheCurrentSession` | 同 UID 新认证原子替换 current session |
-| T08-SESSION-04 | `ClosingTheReplacedSessionDoesNotDeleteTheNewMapping` | 旧 session Close 不删除 replacement 或触发错误 cleanup |
-| T08-SESSION-05 | `ClosingTheCurrentSessionCleansUpOnceAndIsIdempotent` | 当前 session 重复 Close 幂等且 presence cleanup 一次 |
-| T08-SESSION-06 | `ConcurrentClosePerformsPresenceCleanupAtMostOnce` | barrier 并发 Close 最多一次 cleanup |
-| T08-SESSION-07 | `AcceptedFramesAreWrittenInFifoOrder` | accepted frame 依次启动 writer，保持每 session FIFO |
-| T08-SESSION-08 | `ExactCapacityRejectsOnlyTheNextFrameWithoutOverwriting` | 精确接受 `MAX_SENDQUE`，下一帧 `Full` 且不覆盖 |
-| T08-SESSION-09 | `ClosedSessionRejectsNewFramesImmediately` | 关闭后 Send 立即 `Closed` |
-| T08-SESSION-10 | `WriterFailureClosesAndCleansUpExactlyOnce` | writer failure exactly-once Close 与 matching cleanup |
 
 ### 3.9 Gate request orchestration（16）
 
@@ -474,7 +467,7 @@ Domain/Level：Architecture / Integration。
 [`PHASE-3C-PLAN.md`](plans/PHASE-3C-PLAN.md)、
 [`PHASE-3D-PLAN.md`](plans/PHASE-3D-PLAN.md) 和
 [`PHASE-RELEASE-PLAN.md`](plans/PHASE-RELEASE-PLAN.md)。这些 route 均为 planned/open owner 定位，
-不构成完成证据，不改变当前 12 份报告、232 个 runner testcase 或仍为 planned 的 Test ID 统计状态；
+不构成完成证据，不改变当前 12 份报告、245 个 runner testcase 或仍为 planned 的 Test ID 统计状态；
 阶段边界与 actual-or-bootstrap 条件继续严格遵守 DG-09..DG-24；所有后续计划同时受 DG-25 的本机 vcpkg
 不可变/审批门禁约束。
 

@@ -48,6 +48,17 @@
 
 ## Redis
 
+Chat 在线位置继续使用 `uip_<uid>`（实例名）与 `usessionid_<uid>`（全局唯一 Session ID）。
+仅 `RedisUserPresenceStore` 维护这两个 key：Lua 原子读取/发布两项，删除时同时比较实例名和
+Session ID。查询区分 Found、NotFound、Unavailable；发布失败不报告 Chat 登录成功。
+本次保留原有无 TTL 的在线记录，崩溃残留及租约续期作为后续设计，不声称已解决。
+
+跨服 `KickUserReq.session_id = 2` 指定被替换连接；缺失字段返回 UidInvalid 并拒绝踢人。
+这是 protobuf 的附加字段，但旧服务端仍会按 UID 踢人，因此本次要求所有 ChatServer 同步升级，
+不支持新旧实例混合运行。客户端 TCP 帧和登录响应字段不变。替换以服务端关闭连接为准，
+不保证客户端收到离线通知；Send 的 Accepted 只表示排队，不表示写入或送达。
+
+
 - Redis key 前缀和 hash 字段属于跨实例契约，修改前 MUST 搜索全部读写方。
 - 新 key SHOULD 包含清晰命名空间；测试 key MUST 带唯一 run id，避免污染开发数据。
 - 临时数据 MUST 定义 TTL；永久数据必须说明为什么不应过期。

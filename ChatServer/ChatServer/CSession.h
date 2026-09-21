@@ -1,111 +1,58 @@
 #pragma once
+#include "SessionTypes.h"
+#include "LogicDispatcher.h"
+#include "ChatFrameCodec.h"
 #include <boost/asio.hpp>
 #include <atomic>
-#include "ChatSessionState.h"
-#include "Const.h"
-#include "MsgNode.h"
+#include <deque>
+#include <memory>
+#include <optional>
 
-class LogicSystem;
-class CServer;
-class CSessionWriterAdapter;
-/**
- * @brief 
- * 与tcp客户端通信的会话类
- */
-class CSession : public std::enable_shared_from_this<CSession>
-{
+class SessionLifecycleCoordinator;
+class UserSessionDirectory;
+class CSession : public std::enable_shared_from_this<CSession> {
 public:
-	CSession(boost::asio::io_context& ioc, std::shared_ptr<CServer> server,
-		std::shared_ptr<ChatSessionState> session_state);
-	~CSession();
-
-	boost::asio::ip::tcp::socket& GetSocket();
-	void Start();
-	/**
-	 * @brief 
-	 * @return 
-	 * 每个session有唯一的一个id,可以有CServer管理，方便通过CServer将对应的Session移除
-	 */
-	const ChatSessionState::Handle& GetHandle() const;
-	/**
-	 * @brief 
-	 * @param uid 
-	 * 每个session会跟一个tcp客户端建立通信，这里用来设置session对应的tcp客户端的uid
-	 */
-	void SetUserId(int uid);
-	/**
-	 * @brief 
-	 * @return 
-	 * 获取当前session对应的tcp客户端的uid
-	 */
-	void Close();
-	SessionSendResult Send(const char* msg, std::uint16_t msg_id, std::size_t msg_len);
-	SessionSendResult Send(const std::string& msg, std::uint16_t msg_id);
-	// 检测与当前session连接的客户端的心跳是否正确,正确返回true,否则返回false
-	bool CheckHeartBeatAccurate(std::time_t& now);
-	// 更新当前的心跳时间
-	void UpdateHeartBeat();
-	/**
-	 * @brief
-	 * 处理异常的session链接，因为服务器踢人是通过通知客户端，由客户端断开链接的，当出现异常的session链接后
-	 * 可能是服务器踢人导致的，或者是出现了异常，不管哪种情况，都需要删除其session链接
-	 */
-	void DealExceptionSession();
+    using Submit = std::function<LogicSubmitResult(LogicMessage)>;
+    CSession(boost::asio::io_context& io, std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
+        std::shared_ptr<UserSessionDirectory> directory, Submit submit);
+    ~CSession() = default;
+    boost::asio::ip::tcp::socket& Socket(); // Acceptor only, before Start.
+    const SessionId& Id() const noexcept { return _id; }
+    int AuthenticatedUid() const noexcept { return _authenticated_uid.load(); }
+    void Start();
+    void Send(SessionFrame frame, SendCompletion completion = {});
+    void Send(const std::string& body, std::uint16_t id, SendCompletion completion = {});
+    void Close(SessionCloseReason reason = SessionCloseReason::LocalRequest);
+    void BindAuthenticatedUser(int uid, BindCompletion completion);
+    void Inspect(std::function<void(SessionState, std::optional<SessionCloseReason>)> completion);
 private:
-	/**
-	 * @brief 
-	 * @param head_total_len 
-	 * 异步读取完整的包头
-	 */
-	void AsyncReadHead(std::size_t head_total_len);
-	/**
-	 * @brief 
-	 * @param body_total_len 
-	 * 异步读取完整的包体
-	 */
-	void AsyncReadBody(std::size_t body_total_len);
-	/**
-	 * @brief 
-	 * @param maxLength 
-	 * @param handler 
-	 * 异步读取完整的成都maxLength
-	 */
-	void asyncReadFull(std::size_t maxLength,
-		std::function<void(const boost::system::error_code& ec, std::size_t bytestransferred)> handler);
-	/**
-	 * @brief 
-	 * @param read_len 当前已读字节
-	 * @param total_len 总字节
-	 * @param handler 回调函数
-	 * 异步读取完整的total_len长度字节的数据
-	 */
-	void asyncReadLen(std::size_t read_len, std::size_t total_len,
-		std::function<void(const boost::system::error_code& ec, std::size_t bytestransferred)> handler);
-	/**
-	 * @brief 
-	 * @param ec 
-	 * @param self 
-	 * 异步写的回调函数
-	 */
-	friend class CSessionWriterAdapter;
-
-	boost::asio::ip::tcp::socket _socket;
-	std::shared_ptr<CServer> _server;
-	std::shared_ptr<ChatSessionState> _session_state;
-	std::shared_ptr<CSessionWriterAdapter> _writer;
-	ChatSessionState::Handle _handle;
-	char _data[MAX_LENGTH];
-
-	// 收到的消息体
-	std::shared_ptr<RecvNode> _recv_msg_node;
-	// 当前包头部是否处理完成
-	bool _b_head_parse;
-	// 收到的头部
-	std::shared_ptr<MsgNode> _recv_head_node;
-
-	// 用于标记当前session有没有被关闭
-	std::atomic<bool> _b_stop;
-
-	// 上次接受数据的时间，包括正常发送的数据以及心跳包
-	std::atomic<std::time_t> _last_heart_beat;
+    friend class SessionLifecycleCoordinator;
+    void FinishBinding(int uid, SessionBindResult result, BindCompletion completion,
+        std::shared_ptr<std::atomic<bool>> cancelled, std::function<void(bool)> committed);
+    void BeginClosing(SessionCloseReason reason);
+    void ReleaseIfIdle();
+    void ReadHeader();
+    void ReadBody(std::uint16_t id, std::size_t length);
+    void OnFrame(std::uint16_t id);
+    void StartWrite();
+    void ArmHeartbeat();
+    boost::asio::strand<boost::asio::io_context::executor_type> _strand;
+    boost::asio::ip::tcp::socket _socket;
+    boost::asio::steady_timer _heartbeat;
+    std::shared_ptr<SessionLifecycleCoordinator> _lifecycle;
+    std::shared_ptr<UserSessionDirectory> _directory;
+    Submit _submit;
+    const SessionId _id;
+    SessionState _state = SessionState::Created;
+    std::optional<SessionCloseReason> _close_reason;
+    std::atomic<int> _authenticated_uid{0}; // Read-only snapshot for business threads.
+    int _binding_uid = 0;
+    bool _binding = false;
+    bool _released = false;
+    std::size_t _io_pending = 0;
+    bool _write_active = false;
+    ChatFrameCodec::HeaderBytes _header{};
+    std::string _body;
+    std::deque<std::shared_ptr<std::string>> _frames;
+    std::chrono::steady_clock::time_point _last_activity;
 };

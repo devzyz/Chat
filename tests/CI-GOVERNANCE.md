@@ -84,7 +84,7 @@ fake Redis、MySQL、SMTP 或 gRPC 只能证明 Unit/Component，不能计入真
 
 本地公开入口为 `scripts/windows-local.ps1`。`RunAllTests` 只编排
 `RunScriptTests`、`RunServerTests`、`RunClientTests` 和 `RunVarifyTests`，并在结尾通过
-`CheckTestReports` 同一实现核验精确的 12 份 XML、180 个 testcase、零 failure 和零 error。
+`CheckTestReports` 同一实现核验精确的 12 份 XML、245 个 testcase、零 failure 和零 error。
 每个子入口先移除自己的旧报告，缺报告、数量漂移、失败节点、非零测试退出码或本次新增的已知临时目录残留都会返回非零。
 
 GitHub workflow 的稳定 job/check 名为：

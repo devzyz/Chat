@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<ItemGroup>
+<ClCompile Include="CSession.cpp" />
+<ClCompile Include="CServer.cpp" />
+<ClCompile Include="UserSessionDirectory.cpp" />
+<ClCompile Include="SessionLifecycleCoordinator.cpp" />
+<ClCompile Include="ChatFrameCodec.cpp" />
+<ClInclude Include="CSession.h" />
+<ClInclude Include="CServer.h" />
+<ClInclude Include="SessionTypes.h" />
+<ClInclude Include="UserSessionDirectory.h" />
+<ClInclude Include="UserPresenceStore.h" />
+<ClInclude Include="SessionLifecycleCoordinator.h" />
+<ClInclude Include="ChatFrameCodec.h" />
+</ItemGroup>
+</Project>

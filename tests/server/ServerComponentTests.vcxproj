@@ -71,7 +71,7 @@
     <ProjectReference Include="..\..\GateServer\GateServer\GateRequest.vcxproj">
       <Project>{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\..\ChatServer\ChatServer\ChatSessionState.vcxproj">
+    <ProjectReference Include="..\..\ChatServer\ChatServer\ChatSessionRuntime.vcxproj">
       <Project>{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}</Project>
     </ProjectReference>
     <ProjectReference Include="..\..\StatusServer\StatusServer\StatusRouting.vcxproj">

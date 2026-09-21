@@ -1,39 +1,43 @@
 #pragma once
+#include "CSession.h"
 #include <boost/asio.hpp>
-#include "ChatSessionState.h"
-#include <mutex>
+#include <atomic>
+#include <unordered_map>
 #include <vector>
 
-class CSession;
-/**
- * @brief 
- * Server类，用来管理所有的Session连接
- */
-class CServer : public std::enable_shared_from_this<CServer>
-{
+class SessionLifecycleCoordinator;
+class UserSessionDirectory;
+class CServer : public std::enable_shared_from_this<CServer> {
 public:
-	CServer(boost::asio::io_context& ioc, short port);
-	~CServer();
-	// 清除根据某个session_id清除某个session
-	void ClearSession(const ChatSessionState::Handle& session);
-	bool CheckSessionValid(const ChatSessionState::Handle& session);
-	void on_timer(const boost::system::error_code& e);
-	// 后置初始化，保证shared_from_this已经存在
-	void init();
-	// io_context stop前的处理
-	void stop();
+    using ContextSource = std::function<boost::asio::io_context&()>;
+    CServer(boost::asio::io_context& io, unsigned short port,
+        std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
+        std::shared_ptr<UserSessionDirectory> directory, CSession::Submit submit,
+        ContextSource contexts = {});
+    void Start();
+    void Stop(std::function<void()> completion = {});
+    void RemoveSession(const SessionId& id);
+    bool Ready() const noexcept { return _ready.load(); }
+    std::string BoundAddress() const { return _address; }
+    unsigned short BoundPort() const noexcept { return _port; }
+    std::size_t ConnectionCount() const noexcept { return _connection_count.load(); }
 private:
-	void StartAcceptor();
-	void HandleAcceptor(std::shared_ptr<CSession> new_session, const boost::system::error_code& error);
-	boost::asio::io_context& _ioc;
-	short _port;
-	boost::asio::ip::tcp::acceptor _acceptor;
-	// 用来根据session_id管理所有的session
-	std::vector<std::pair<ChatSessionState::Handle, std::shared_ptr<CSession>>> _sessions;
-	std::shared_ptr<ChatSessionState> _session_state;
-	std::mutex _mutex;
-
-	// 定时检测器，每隔一段时间，判断一下客户端的心跳时间间隔是否正确
-	// 如果不正确，代表客户端异常，则直接断开与客户端的连接
-	boost::asio::steady_timer _timer;
+    void Accept();
+    void CompleteStop();
+    boost::asio::io_context& _io;
+    boost::asio::strand<boost::asio::io_context::executor_type> _strand;
+    boost::asio::ip::tcp::acceptor _acceptor;
+    std::shared_ptr<SessionLifecycleCoordinator> _lifecycle;
+    std::shared_ptr<UserSessionDirectory> _directory;
+    CSession::Submit _submit;
+    ContextSource _contexts;
+    std::unordered_map<SessionId, std::shared_ptr<CSession>> _sessions;
+    std::vector<std::function<void()>> _stop_completions;
+    bool _started = false;
+    bool _stopping = false;
+    bool _accept_pending = false;
+    std::atomic<bool> _ready{false};
+    std::atomic<std::size_t> _connection_count{0};
+    const std::string _address;
+    const unsigned short _port;
 };

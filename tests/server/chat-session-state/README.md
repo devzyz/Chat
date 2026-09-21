@@ -1,35 +1,48 @@
-# Chat session state contracts
+# Chat Session runtime contracts
 
-Production ownership: `ChatServer/ChatServer/ChatSessionState.h`.
+Production: `ChatSessionRuntime.vcxproj`, shared by ChatServer and the quick test executables.
+The runtime is CSession (strand/FSM/I/O), CServer (accept/ownership), UserSessionDirectory
+(weak current mapping), and SessionLifecycleCoordinator (asynchronous presence/replacement).
+Tests inject an in-memory UserPresenceStore; no personal Redis/MySQL or service configuration is used.
 
-The single caller-facing Interface is `ChatSessionState::Create`,
-`RegisterCurrent`, `FindCurrent`, `Close`, and `Send`. Its opaque handle hides
-the session ID, UID mapping, send queue, active writer, and closed state.
+## Component contracts (10, server_component.xml)
 
-`SessionWriter` and `SessionPresence` are internal seams with both production
-and deterministic in-memory Adapters. Tests use a fixed ID source, a manually
-completed writer, and a presence recorder. No test connects to TCP or Redis.
-The production writer reuses `SendNode` and `boost::asio::async_write`; the
-production presence Adapter delegates registration and session/IP cleanup to
-the existing Redis manager. UID/session matching remains inside the Module.
+T08-SESSION-01..06 cover identity, directory registration/replacement, conditional deletion,
+first-close-wins, and concurrent close. The remaining cases cover weak directory ownership,
+Created/Closing send rejection, closed authentication rejection, and Close-before-Start.
 
-| Test ID | Domain | Level | Contract |
-| --- | --- | --- | --- |
-| T08-SESSION-01 | Architecture | Component | New handles are non-empty and unique |
-| T08-SESSION-02 | Architecture | Component | First registration becomes the UID's current session |
-| T08-SESSION-03 | Architecture | Component | A new session atomically replaces the UID's current session |
-| T08-SESSION-04 | Architecture | Component | Closing a replaced session cannot delete the replacement |
-| T08-SESSION-05 | Architecture | Component | Closing current cleans up once; repeat close is idempotent |
-| T08-SESSION-06 | Architecture | Component | Barrier-synchronized concurrent close cleans up at most once |
-| T08-SESSION-07 | Architecture | Component | Accepted frames advance through the writer in FIFO order |
-| T08-SESSION-08 | Architecture | Component | Exactly MAX_SENDQUE frames are accepted; the next is Full without overwrite |
-| T08-SESSION-09 | Architecture | Component | Close rejects new frames immediately |
-| T08-SESSION-10 | Architecture | Component | Writer failure closes and matching-cleans exactly once |
+Migration approved with the Session redesign: the old opaque handle and synchronous Closed send
+result are retired. Admission now completes on the strand with Accepted/Full/NotActive.
+Old FIFO (T08-SESSION-07), capacity (08), and write-failure (10) contracts move to production
+TCP tests T09-CTCP-04, 05, and 13 respectively; they are not removed or tested through a second FSM.
 
-The owning public runner is
-`scripts/windows-local.ps1 -Task RunServerTests -Configuration Release`. The
-owning report is `server_component.xml`; these ten cases make that report 40
-cases and the Server family 150. Every wait is bounded by two
-seconds and each test leaves no callback or thread pending. Real TCP partial
-writes, peer disconnects, and process cleanup remain Phase 3B; real Redis
-presence commands, locks, and TTL remain Phase 3C.
+## Loopback Integration contracts (13, server_integration.xml)
+
+| ID | Contract |
+| --- | --- |
+| T09-CTCP-01 | Split header/body, adjacent frames, empty body, maximum receive body |
+| T09-CTCP-02 | Oversized body rejected before dispatch |
+| T09-CTCP-03 | Repeated Start creates only one read chain |
+| T09-CTCP-04 | FIFO writes and admission semantics |
+| T09-CTCP-05 | Exact MAX_SENDQUE capacity, close during write, buffer lifetime |
+| T09-CTCP-06 | Replacement, stale kick, old close cannot erase new presence; UID cannot change |
+| T09-CTCP-07 | Targeted kick during publication cancels binding and rolls back presence |
+| T09-CTCP-08 | Storage unavailable cannot authenticate or register locally |
+| T09-CTCP-09 | Slow presence cleanup does not block local close/send rejection |
+| T09-CTCP-10 | Remote kick carries the previous Session ID |
+| T09-CTCP-11 | Interrupted body read cannot dispatch or restart after close |
+| T09-CTCP-12 | Stop drains accept/I/O, releases Session ownership and listening port |
+| T09-CTCP-13 | Actual write failure closes and cleans matching presence once |
+
+Both I/O threads run the same context. Futures/barriers have three-second deadlines; fixtures
+cancel sockets/timers, drain lifecycle tasks, and join threads. Tests execute real Asio socket
+operations; storage is a fake and does not prove Redis Lua or real cross-process replacement.
+
+Owning quick runner (not RunAllTests):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows-local.ps1 -Task RunServerTests -Configuration Release
+```
+
+The Server family contains 179 cases: 68 Unit, 56 Component, 47 main Integration,
+4 Chat gRPC, and 2 each Gate/Status lifecycle. No full E2E or external dependency lane is included.

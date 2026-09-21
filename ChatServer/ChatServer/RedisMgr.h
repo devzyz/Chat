@@ -6,6 +6,8 @@
 #include <memory>
 #include <atomic>
 #include <chrono>
+#include <optional>
+#include <vector>
 #include <hiredis/hiredis.h>
 
 // redis连接池
@@ -57,6 +59,8 @@ public:
 	bool HSet(const std::string& first_key, const std::string& second_key, const std::string& value);
 	bool HDel(const std::string& first_key, const std::string& second_key);
 	bool Del(const std::string& key);
+    std::optional<std::vector<std::string>> Eval(const std::string& script,
+        const std::vector<std::string>& keys, const std::vector<std::string>& arguments);
 	void Close();
 
 	std::string acquireLock(const std::string& lockName, int lockTimeout, int acquireTimeout);

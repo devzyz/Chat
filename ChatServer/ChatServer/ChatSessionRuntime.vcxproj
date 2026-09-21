@@ -9,7 +9,7 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <ProjectGuid>{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}</ProjectGuid>
-    <RootNamespace>ChatSessionState</RootNamespace>
+    <RootNamespace>ChatSessionRuntime</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -20,9 +20,9 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
     <OutDir>$(MSBuildThisFileDirectory)..\..\build\windows-libs\$(Configuration)\</OutDir>
-    <IntDir Condition="'$(ServerIntermediateRoot)' != ''">$(ServerIntermediateRoot)\$(Configuration)\ChatSessionState\</IntDir>
-    <IntDir Condition="'$(ServerIntermediateRoot)' == ''">$(MSBuildThisFileDirectory)..\..\build\windows-servers-obj\$(Configuration)\ChatSessionState\</IntDir>
-    <TargetName>ChatSessionState</TargetName>
+    <IntDir Condition="'$(ServerIntermediateRoot)' != ''">$(ServerIntermediateRoot)\$(Configuration)\ChatSessionRuntime\</IntDir>
+    <IntDir Condition="'$(ServerIntermediateRoot)' == ''">$(MSBuildThisFileDirectory)..\..\build\windows-servers-obj\$(Configuration)\ChatSessionRuntime\</IntDir>
+    <TargetName>ChatSessionRuntime</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -35,13 +35,20 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="ChatSessionState.cpp" />
-    <ClCompile Include="ChatSessionStateProduction.cpp" />
+    <ClCompile Include="CSession.cpp" />
+    <ClCompile Include="CServer.cpp" />
+    <ClCompile Include="UserSessionDirectory.cpp" />
+    <ClCompile Include="SessionLifecycleCoordinator.cpp" />
+    <ClCompile Include="ChatFrameCodec.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ChatSessionState.h" />
-    <ClInclude Include="ChatSessionStateInternal.h" />
-    <ClInclude Include="ChatSessionStateProduction.h" />
+    <ClInclude Include="CSession.h" />
+    <ClInclude Include="CServer.h" />
+    <ClInclude Include="SessionTypes.h" />
+    <ClInclude Include="UserSessionDirectory.h" />
+    <ClInclude Include="UserPresenceStore.h" />
+    <ClInclude Include="SessionLifecycleCoordinator.h" />
+    <ClInclude Include="ChatFrameCodec.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

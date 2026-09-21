@@ -1,131 +1,118 @@
-#include <mutex>
-#include <thread>
 #include "ConfigMgr.h"
-#include <iostream>
-#include <csignal>
 #include "AsioIOServicePool.h"
 #include "CServer.h"
 #include "RedisMgr.h"
-#include "Const.h"
+#include "RedisUserPresenceStore.h"
+#include "SessionLifecycleCoordinator.h"
 #include "ChatServiceImpl.h"
-#include <memory>
-#include <stdexcept>
+#include "ChatGrpcClient.h"
 #include "LogicSystem.h"
-#include "RedisMgr.h"
 #include "LogMgr.h"
+#include <csignal>
+#include <iostream>
+#include <stdexcept>
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
     if (argc != 1 && (argc != 3 || std::string(argv[1]) != "--config")) {
         std::cerr << "Usage: ChatServer.exe [--config <path>]" << std::endl;
         return EXIT_FAILURE;
     }
-    if (argc == 3) {
-        ConfigMgr::SetConfigPath(argv[2]);
-    }
-    try {
-        auto logger = LogMgr::GetInstance();
-        if (!logger->InitLogMgr()) {
-            std::cerr << "ChatServer failed to initialize logging." << std::endl;
-            return EXIT_FAILURE;
-        }
-    }
-    catch (const std::exception& e) {
-        std::cerr << "ChatServer configuration error: " << e.what() << std::endl;
-        return EXIT_FAILURE;
-    }
-
-    auto& configMgr = ConfigMgr::GetInstance();
-    // chatserver服务器启动后，将连接数更新到redis中
-    auto self_server_name = configMgr["SelfServer"]["Name"];
-    boost::asio::io_context io_context;
+    boost::asio::io_context io;
+    boost::asio::steady_timer count_timer(io);
+    boost::asio::thread_pool maintenance(1);
     std::shared_ptr<AsioIOServicePool> pool;
-    std::shared_ptr<CServer> p_server;
     std::shared_ptr<RedisMgr> redis;
-    std::unique_ptr<grpc::Server> server;
-    std::thread grpc_server_thread;
-    bool login_count_registered = false;
+    std::shared_ptr<SessionLifecycleCoordinator> lifecycle;
+    std::shared_ptr<CServer> tcp;
+    std::unique_ptr<LogicSystem> logic;
+    std::unique_ptr<ChatServiceImpl> service;
+    std::unique_ptr<grpc::Server> rpc;
+    std::string server_id;
+    bool registered = false;
+    bool stopping = false;
+    bool tcp_stopped = false;
+    auto shutdown = [&] {
+        if (stopping) return;
+        stopping = true;
+        boost::system::error_code ignored;
+        count_timer.cancel();
+        if (tcp) tcp->Stop([&] { tcp_stopped = true; io.stop(); });
+        else { tcp_stopped = true; io.stop(); }
+    };
+    auto finish = [&] {
+        // Run the acceptor executor until all sessions have completed close and cancelled I/O.
+        if (!tcp_stopped) { io.restart(); io.run(); }
+        // Blocking worker/RPC joins run on the owner after the acceptor has stopped, not in its handler.
+        if (rpc) rpc->Shutdown(std::chrono::system_clock::now() + std::chrono::seconds(5));
+        if (logic) logic->Stop();
+        if (lifecycle) lifecycle->Drain();
+        maintenance.join();
+        if (pool) pool->stop();
+        if (rpc) rpc->Wait();
+        if (registered) { redis->HDel(LOGIN_COUNT, server_id); registered = false; }
+        if (redis) redis->Close();
+    };
     try {
-        boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
-
-        // 先完成所有本地端口绑定。任何端口冲突都必须在启动线程和登记Redis状态前失败。
-        auto port_str = configMgr["SelfServer"]["Port"];
-        p_server = std::make_shared<CServer>(io_context, std::stoi(port_str));
-
-        // chatserver对应的grpc服务器地址
-        std::string server_address = configMgr["SelfServer"]["Host"] + ":" + configMgr["SelfServer"]["RPCPort"];
-        ChatServiceImpl service;
+        if (argc == 3) ConfigMgr::SetConfigPath(argv[2]);
+        if (!LogMgr::GetInstance()->InitLogMgr()) throw std::runtime_error("logging initialization failed");
+        auto& config = ConfigMgr::GetInstance();
+        server_id = config["SelfServer"]["Name"];
+        const auto port_text = config["SelfServer"]["Port"];
+        std::size_t parsed = 0;
+        const int port = std::stoi(port_text, &parsed);
+        if (parsed != port_text.size() || port < 1 || port > 65535) throw std::runtime_error("invalid TCP port");
+        auto directory = std::make_shared<UserSessionDirectory>();
+        // The adapter resolves Redis lazily: bind both ports before connecting to dependencies.
+        auto presence = std::make_shared<RedisUserPresenceStore>();
+        lifecycle = std::make_shared<SessionLifecycleCoordinator>(directory, presence, server_id,
+            [](int uid, const chat_session::UserPresence& old) {
+                message::KickUserReq request;
+                request.set_uid(uid);
+                request.set_session_id(old.session_id);
+                const auto response = ChatGrpcClient::GetInstance()->NotifyOtherKickUser(old.server_id, request);
+                if (response.error() != ErrorCodes::Success) SPDLOG_WARN("remote replacement failed, uid={}", uid);
+            });
+        logic = std::make_unique<LogicSystem>(directory, presence);
+        tcp = std::make_shared<CServer>(io, static_cast<unsigned short>(port), lifecycle, directory,
+            [&](LogicMessage message) { return logic->Submit(std::move(message)); },
+            [&]() -> boost::asio::io_context& { return pool->GetIOService(); });
+        lifecycle->AttachServer(tcp);
+        service = std::make_unique<ChatServiceImpl>(directory, lifecycle);
         grpc::ServerBuilder builder;
-        // 添加监听的端口，以及注册grpc服务
-        builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-        builder.RegisterService(&service);
-
-        // 构建并启动gRPC服务器
-        server = builder.BuildAndStart();
-        if (!server) {
-            throw std::runtime_error("failed to listen on gRPC address " + server_address);
-        }
-        SPDLOG_INFO("chat grpc Server listening on {}\n", server_address);
-
-        // Start workers only after both local listeners are known-good.
-        pool = AsioIOServicePool::GetInstance();
-        p_server->init(); // 启动定时器
-
-        // 所有监听端口均已成功绑定后，才向Redis登记本实例。
+        builder.AddListeningPort(config["SelfServer"]["Host"] + ":" + config["SelfServer"]["RPCPort"],
+            grpc::InsecureServerCredentials());
+        builder.RegisterService(service.get());
+        rpc = builder.BuildAndStart();
+        if (!rpc) throw std::runtime_error("failed to listen on gRPC address");
         redis = RedisMgr::GetInstance();
-        login_count_registered = redis->HSet(LOGIN_COUNT, self_server_name, "0");
-
-        // 创建一个单独的线程等待grpc
-        grpc_server_thread = std::thread([&server]() {
-            server->Wait();
+        presence->AttachRedis(redis);
+        pool = AsioIOServicePool::GetInstance();
+        registered = redis->HSet(LOGIN_COUNT, server_id, "0");
+        tcp->Start();
+        std::function<void()> update_count;
+        update_count = [&] {
+            count_timer.expires_after(std::chrono::seconds(60));
+            count_timer.async_wait([&](boost::system::error_code error) {
+                if (error || stopping) return;
+                const auto count = tcp->ConnectionCount();
+                boost::asio::post(maintenance, [redis, server_id, count] {
+                    if (!redis->HSet(LOGIN_COUNT, server_id, std::to_string(count)))
+                        SPDLOG_WARN("connection count publication failed");
+                });
+                update_count();
             });
-
-        // 优雅的退出
-        signals.async_wait([&io_context, pool, &server, &p_server](auto, auto) {
-            p_server->stop();
-            io_context.stop();
-            pool->stop();
-            server->Shutdown();
-            });
-
-        LogicSystem::GetInstance()->SetServer(p_server);
-        service.SetServer(p_server);
-        io_context.run(); // 通过signals来保活
-
-        // 结束后将一些状态清空
-        server->Shutdown();
-        grpc_server_thread.join(); // 等待线程结束
-        if (login_count_registered) {
-            redis->HDel(LOGIN_COUNT, self_server_name);
-            login_count_registered = false;
-        }
-        redis->Close();
-    }
-    catch (const std::exception& e) {
-        if (p_server) {
-            p_server->stop();
-        }
-        io_context.stop();
-        if (pool) {
-            pool->stop();
-        }
-        if (server) {
-            server->Shutdown();
-        }
-        if (grpc_server_thread.joinable()) {
-            grpc_server_thread.join();
-        }
-        if (redis) {
-            if (login_count_registered) {
-                redis->HDel(LOGIN_COUNT, self_server_name);
-            }
-            redis->Close();
-        }
-        SPDLOG_ERROR("ChatServer exception: {}", e.what());
-        LogMgr::GetInstance()->Close();
-        std::cerr << "ChatServer startup error: " << e.what() << std::endl;
+        };
+        update_count();
+        boost::asio::signal_set signals(io, SIGINT, SIGTERM);
+        signals.async_wait([&](boost::system::error_code error, int) { if (!error) shutdown(); });
+        io.run();
+        shutdown();
+        finish();
+        return EXIT_SUCCESS;
+    } catch (const std::exception& error) {
+        shutdown();
+        finish();
+        std::cerr << "ChatServer startup error: " << error.what() << std::endl;
         return EXIT_FAILURE;
     }
-
-    return 0;
 }

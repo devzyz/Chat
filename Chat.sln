@@ -24,7 +24,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LogicDispatcher", "ChatServ
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "StatusRouting", "StatusServer\StatusServer\StatusRouting.vcxproj", "{7C67B8A2-A0A4-44A0-9020-5D87915CE3E2}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ChatSessionState", "ChatServer\ChatServer\ChatSessionState.vcxproj", "{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ChatSessionRuntime", "ChatServer\ChatServer\ChatSessionRuntime.vcxproj", "{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GateRequest", "GateServer\GateServer\GateRequest.vcxproj", "{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}"
 EndProject
