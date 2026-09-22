@@ -144,10 +144,21 @@ void MessageItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
                       (message.isSelf ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter,
                       message.sentAt.isValid() ? message.sentAt.toString(QStringLiteral("HH:mm")) : QString());
 
-    if (const QPixmap *status = statusPixmap(message.deliveryStatus)) {
-        painter->drawPixmap(metrics.statusRect,
-                            status->scaled(metrics.statusRect.size(), Qt::KeepAspectRatio,
-                                           Qt::SmoothTransformation));
+    if (message.isSelf && message.deliveryStatus != DeliveryStatus::None) {
+        QString glyph;
+        QColor color(100, 100, 100);
+        switch (message.deliveryStatus) {
+        case DeliveryStatus::Queued: glyph = QStringLiteral("○"); break;
+        case DeliveryStatus::Sending: glyph = QStringLiteral("…"); break;
+        case DeliveryStatus::Sent: glyph = QStringLiteral("✓"); break;
+        case DeliveryStatus::Delivered: glyph = QStringLiteral("✓✓"); break;
+        case DeliveryStatus::Read: glyph = QStringLiteral("✓✓"); color = QColor(20, 120, 220); break;
+        case DeliveryStatus::Uncertain: glyph = QStringLiteral("?"); color = QColor(190, 120, 0); break;
+        case DeliveryStatus::Failed: glyph = QStringLiteral("!"); color = QColor(200, 40, 40); break;
+        default: break;
+        }
+        painter->setPen(color);
+        painter->drawText(metrics.statusRect.adjusted(-5, 0, 2, 0), Qt::AlignCenter, glyph);
     }
     painter->restore();
 }
@@ -266,15 +277,7 @@ QString MessageItemDelegate::sizeCacheKey(const MessageRecord &message, int widt
         .arg(qHash(message.senderName));
 }
 
-const QPixmap *MessageItemDelegate::statusPixmap(DeliveryStatus status) const
+QRect MessageItemDelegate::bubbleRect(const QModelIndex &index, const QRect &rowRect) const
 {
-    switch (status) {
-    case DeliveryStatus::Sending:
-    case DeliveryStatus::Sent: return &_sendingPixmap;
-    case DeliveryStatus::Failed: return &_failedPixmap;
-    case DeliveryStatus::Uncertain: return &_failedPixmap;
-    case DeliveryStatus::Read: return &_readPixmap;
-    case DeliveryStatus::None: return nullptr;
-    }
-    return nullptr;
+    return calculateMetrics(recordFromIndex(index), rowRect.width()).bubbleBodyRect.translated(rowRect.topLeft());
 }

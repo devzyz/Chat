@@ -20,8 +20,18 @@ enum class DeliveryStatus {
     Sent,
     Failed,
     Read,
-    Uncertain
+    Uncertain,
+    Queued,
+    Delivered
 };
+
+inline DeliveryStatus mergeDeliveryStatus(DeliveryStatus prior, DeliveryStatus incoming) {
+    const auto rank = [](DeliveryStatus state) {
+        return state == DeliveryStatus::Read ? 3 : state == DeliveryStatus::Delivered ? 2 :
+            state == DeliveryStatus::Sent ? 1 : 0;
+    };
+    return rank(prior) > rank(incoming) ? prior : incoming;
+}
 
 struct MessageRecord {
     qint64 messageId = 0;
@@ -34,6 +44,8 @@ struct MessageRecord {
     QDateTime sentAt;
     DeliveryStatus deliveryStatus = DeliveryStatus::None;
     bool isSelf = false;
+    bool durable = false;
+    bool readConfirmed = false;
     MessageType messageType = MessageType::Text;
     QString text;
     QString resourceId;

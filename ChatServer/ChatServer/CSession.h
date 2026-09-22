@@ -19,6 +19,8 @@ public:
     boost::asio::ip::tcp::socket& Socket(); // Acceptor only, before Start.
     const SessionId& Id() const noexcept { return _id; }
     int AuthenticatedUid() const noexcept { return _authenticated_uid.load(); }
+    bool SupportsReceipts() const noexcept { return _receipts.load(); }
+    void EnableReceipts(bool enabled) noexcept { _receipts.store(enabled); }
     void Start();
     void Send(SessionFrame frame, SendCompletion completion = {});
     void Send(const std::string& body, std::uint16_t id, SendCompletion completion = {});
@@ -45,6 +47,7 @@ private:
     const SessionId _id;
     SessionState _state = SessionState::Created;
     std::optional<SessionCloseReason> _close_reason;
+    std::atomic<bool> _receipts{false};
     std::atomic<int> _authenticated_uid{0}; // Read-only snapshot for business threads.
     int _binding_uid = 0;
     bool _binding = false;

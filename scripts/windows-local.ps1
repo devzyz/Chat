@@ -72,7 +72,7 @@ $scriptTestGroups = @(
     }
 )
 $regressionReportGroups = @(
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 75 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 77 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 58 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 107 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
@@ -401,7 +401,7 @@ function Run-ServerTests {
     $chatGrpcClientBinary = Require-File $chatGrpcClientTestExecutable 'Build the ChatGrpcClientTests target first.'
 
     $executions = @(
-        @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 75 }
+        @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 77 }
         @{ Binary = $componentBinary; Report = $reports[1]; ExpectedCount = 58 }
         @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 107 }
         @{ Binary = $chatGrpcClientBinary; Report = $reports[3]; ExpectedCount = 4 }
@@ -574,8 +574,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 13 -or $total -ne 380) {
-        throw "Regression report baseline mismatch: expected 13 reports and 380 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 13 -or $total -ne 382) {
+        throw "Regression report baseline mismatch: expected 13 reports and 382 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     $legacyTotal = 0
     foreach ($legacyGroup in $legacyRegressionReportGroups) {
@@ -1247,9 +1247,11 @@ function Confirm-TestStructure {
     if ($decoderSource -notmatch 'void\s+TcpFrameDecoder::reset\s*\(' -or
         $tcpTransportSource -notmatch '(?m)^\s*decoder\.reset\s*\(' -or
         $tcpMgrSource -notmatch '_transport\.reset\s*\(' -or
-        $tcpMgrSource -notmatch '_pendingTextBatches\.clear\s*\(' -or
+        $tcpMgrSource -notmatch 'messages\(\)->pauseOutgoing\s*\(' -or
+        $tcpMgrSource -notmatch 'messages\(\)->stop\s*\(' -or
+        $tcpMgrHeader -match 'PendingTextBatch' -or
         $tcpMgrSource -notmatch 'slot_tcp_connect[\s\S]*?resetConnection\s*\(') {
-        throw 'TcpMgr connection reset must clear decoder/pending state and run before reconnect.'
+        throw 'TcpMgr connection reset must reset transport and stop the MessageService outbox and run before reconnect.'
     }
     if ($tcpMgrHeader -match 'QTcpSocket|TcpFrameDecoder') {
         throw 'TcpMgr must not expose transport socket or decoder ownership.'
@@ -1307,7 +1309,7 @@ function Confirm-TestStructure {
             throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
         }
     }
-    foreach ($requiredCount in @(75, 58, 107, 4)) {
+    foreach ($requiredCount in @(77, 58, 107, 4)) {
         if ($runServerTests.Groups['body'].Value -notmatch "ExpectedCount\s*=\s*$requiredCount") {
             throw "RunServerTests is missing the exact current Server testcase count $requiredCount."
         }
@@ -1340,11 +1342,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact thirteen-report/380-testcase baseline.'
+        throw 'RunAllTests must audit the exact thirteen-report/382-testcase baseline.'
     }
     if ($regressionReportGroups.Count -ne 13 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 380) {
-        throw 'The registered regression baseline must remain exactly 13 reports and 380 testcases.'
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 382) {
+        throw 'The registered regression baseline must remain exactly 13 reports and 382 testcases.'
     }
     if ($legacyRegressionReportGroups.Count -ne 12 -or
         ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 232) {

@@ -233,3 +233,19 @@ bool ChatServiceImpl::GetUserBaseInfo(std::string baseinfo_key, int uid, std::sh
 
 	return true;
 }
+
+Status ChatServiceImpl::NotifyMessageReceiptChanged(ServerContext*, const message::ReceiptChangedReq* request,
+    message::ReceiptChangedRsp* response) {
+    if (request->uid() <= 0 || request->chat_id() <= 0 || request->revision() <= 0) {
+        response->set_error(ErrorCodes::UidInvalid);
+        return Status::OK;
+    }
+    auto session = _directory->FindCurrent(request->uid());
+    if (session && session->SupportsReceipts()) {
+        Json::Value hint;
+        hint["chat_id"] = request->chat_id();
+        hint["latest_revision"] = std::to_string(request->revision());
+        session->Send(hint.toStyledString(), MSG_MESSAGE_RECEIPT_CHANGED_NOTIFY);
+    }
+    return Status::OK;
+}

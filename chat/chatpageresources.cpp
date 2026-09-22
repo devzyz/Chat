@@ -57,18 +57,7 @@ void ChatPage::initResourceTransfers()
         const auto status = static_cast<DeliveryStatus>(index.data(MessageListModel::DeliveryStatusRole).toInt());
         if ((status == DeliveryStatus::Failed || status == DeliveryStatus::Uncertain)
             && !uuid.isEmpty() && _chatInfo) {
-            QJsonObject payload{{"from_uid", UserMgr::GetInstance()->GetUid()},
-                {"to_uid", _chatInfo->GetUid()}, {"chat_id", _currentChatId}};
-            QString content = index.data(MessageListModel::TextRole).toString();
-            const auto resourceId = index.data(MessageListModel::ResourceIdRole).toString();
-            if (!resourceId.isEmpty()) {
-                payload["resource_id"] = resourceId;
-                content = "@resource:v1:" + QString::fromUtf8(
-                    QJsonDocument(_resourceDescriptors.value(resourceId)).toJson(QJsonDocument::Compact));
-            }
-            payload["text_array"] = QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"msg_content", content}}};
-            UserMgr::GetInstance()->messages()->send(payload);
-            if (auto* model = _messageStore.find(_currentChatId)) model->updateStatusByClientId(uuid, DeliveryStatus::Sending);
+            UserMgr::GetInstance()->messages()->retry(_currentChatId, uuid);
             return;
         }
         const auto id = index.data(MessageListModel::ResourceIdRole).toString();

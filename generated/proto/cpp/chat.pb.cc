@@ -82,6 +82,58 @@ struct TextChatDataDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 TextChatDataDefaultTypeInternal _TextChatData_default_instance_;
 
+inline constexpr ReceiptChangedRsp::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_{0} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR ReceiptChangedRsp::ReceiptChangedRsp(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(ReceiptChangedRsp_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct ReceiptChangedRspDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR ReceiptChangedRspDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ReceiptChangedRspDefaultTypeInternal() {}
+  union {
+    ReceiptChangedRsp _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ReceiptChangedRspDefaultTypeInternal _ReceiptChangedRsp_default_instance_;
+
+inline constexpr ReceiptChangedReq::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        uid_{0},
+        chat_id_{0},
+        revision_{::int64_t{0}} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR ReceiptChangedReq::ReceiptChangedReq(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(ReceiptChangedReq_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct ReceiptChangedReqDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR ReceiptChangedReqDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ReceiptChangedReqDefaultTypeInternal() {}
+  union {
+    ReceiptChangedReq _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ReceiptChangedReqDefaultTypeInternal _ReceiptChangedReq_default_instance_;
+
 inline constexpr KickUserRsp::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
@@ -590,6 +642,20 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::message::KickUserRsp, _impl_.uid_),
         0,
         1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::message::ReceiptChangedReq, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::message::ReceiptChangedReq, _impl_.uid_),
+        PROTOBUF_FIELD_OFFSET(::message::ReceiptChangedReq, _impl_.chat_id_),
+        PROTOBUF_FIELD_OFFSET(::message::ReceiptChangedReq, _impl_.revision_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::message::ReceiptChangedRsp, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::message::ReceiptChangedRsp, _impl_.error_),
+        0,
 };
 
 static const ::_pbi::MigrationSchema
@@ -606,6 +672,8 @@ static const ::_pbi::MigrationSchema
         {139, sizeof(::message::TextChatMsgRsp)},
         {144, sizeof(::message::KickUserReq)},
         {151, sizeof(::message::KickUserRsp)},
+        {158, sizeof(::message::ReceiptChangedReq)},
+        {167, sizeof(::message::ReceiptChangedRsp)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::message::_AddFriendReq_default_instance_._instance,
@@ -620,6 +688,8 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::message::_TextChatMsgRsp_default_instance_._instance,
     &::message::_KickUserReq_default_instance_._instance,
     &::message::_KickUserRsp_default_instance_._instance,
+    &::message::_ReceiptChangedReq_default_instance_._instance,
+    &::message::_ReceiptChangedRsp_default_instance_._instance,
 };
 const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -657,28 +727,32 @@ const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIA
     "msgs\030\004 \003(\0132\025.message.TextChatData\"\037\n\016Tex"
     "tChatMsgRsp\022\r\n\005error\030\001 \001(\005\".\n\013KickUserRe"
     "q\022\013\n\003uid\030\001 \001(\005\022\022\n\nsession_id\030\002 \001(\t\")\n\013Ki"
-    "ckUserRsp\022\r\n\005error\030\001 \001(\005\022\013\n\003uid\030\002 \001(\0052\272\002"
-    "\n\013ChatService\022F\n\024NotifyOtherAddFriend\022\025."
-    "message.AddFriendReq\032\025.message.AddFriend"
-    "Rsp\"\000\022I\n\025NotifyOtherAuthFriend\022\026.message"
-    ".AuthFriendReq\032\026.message.AuthFriendRsp\"\000"
-    "\022S\n\035NotifyOtherReceiveTextChatMsg\022\027.mess"
-    "age.TextChatMsgReq\032\027.message.TextChatMsg"
-    "Rsp\"\000\022C\n\023NotifyOtherKickUser\022\024.message.K"
-    "ickUserReq\032\024.message.KickUserRsp\"\000b\006prot"
-    "o3"
+    "ckUserRsp\022\r\n\005error\030\001 \001(\005\022\013\n\003uid\030\002 \001(\005\"C\n"
+    "\021ReceiptChangedReq\022\013\n\003uid\030\001 \001(\005\022\017\n\007chat_"
+    "id\030\002 \001(\005\022\020\n\010revision\030\003 \001(\003\"\"\n\021ReceiptCha"
+    "ngedRsp\022\r\n\005error\030\001 \001(\0052\223\003\n\013ChatService\022W"
+    "\n\033NotifyMessageReceiptChanged\022\032.message."
+    "ReceiptChangedReq\032\032.message.ReceiptChang"
+    "edRsp\"\000\022F\n\024NotifyOtherAddFriend\022\025.messag"
+    "e.AddFriendReq\032\025.message.AddFriendRsp\"\000\022"
+    "I\n\025NotifyOtherAuthFriend\022\026.message.AuthF"
+    "riendReq\032\026.message.AuthFriendRsp\"\000\022S\n\035No"
+    "tifyOtherReceiveTextChatMsg\022\027.message.Te"
+    "xtChatMsgReq\032\027.message.TextChatMsgRsp\"\000\022"
+    "C\n\023NotifyOtherKickUser\022\024.message.KickUse"
+    "rReq\032\024.message.KickUserRsp\"\000b\006proto3"
 };
 static ::absl::once_flag descriptor_table_chat_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_chat_2eproto = {
     false,
     false,
-    1722,
+    1916,
     descriptor_table_protodef_chat_2eproto,
     "chat.proto",
     &descriptor_table_chat_2eproto_once,
     nullptr,
     0,
-    12,
+    14,
     schemas,
     file_default_instances,
     TableStruct_chat_2eproto::offsets,
@@ -5762,6 +5836,575 @@ void KickUserRsp::InternalSwap(KickUserRsp* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
 }
 
 ::google::protobuf::Metadata KickUserRsp::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class ReceiptChangedReq::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<ReceiptChangedReq>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ReceiptChangedReq, _impl_._has_bits_);
+};
+
+ReceiptChangedReq::ReceiptChangedReq(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReceiptChangedReq_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:message.ReceiptChangedReq)
+}
+ReceiptChangedReq::ReceiptChangedReq(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReceiptChangedReq& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReceiptChangedReq_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ReceiptChangedReq::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ReceiptChangedReq::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, uid_),
+           0,
+           offsetof(Impl_, revision_) -
+               offsetof(Impl_, uid_) +
+               sizeof(Impl_::revision_));
+}
+ReceiptChangedReq::~ReceiptChangedReq() {
+  // @@protoc_insertion_point(destructor:message.ReceiptChangedReq)
+  SharedDtor(*this);
+}
+inline void ReceiptChangedReq::SharedDtor(MessageLite& self) {
+  ReceiptChangedReq& this_ = static_cast<ReceiptChangedReq&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL ReceiptChangedReq::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ReceiptChangedReq(arena);
+}
+constexpr auto ReceiptChangedReq::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ReceiptChangedReq),
+                                            alignof(ReceiptChangedReq));
+}
+constexpr auto ReceiptChangedReq::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_ReceiptChangedReq_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &ReceiptChangedReq::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ReceiptChangedReq>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ReceiptChangedReq::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ReceiptChangedReq>(), &ReceiptChangedReq::ByteSizeLong,
+              &ReceiptChangedReq::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ReceiptChangedReq, _impl_._cached_size_),
+          false,
+      },
+      &ReceiptChangedReq::kDescriptorMethods,
+      &descriptor_table_chat_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ReceiptChangedReq_class_data_ =
+        ReceiptChangedReq::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReceiptChangedReq::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReceiptChangedReq_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ReceiptChangedReq_class_data_.tc_table);
+  return ReceiptChangedReq_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<2, 3, 0, 0, 2>
+ReceiptChangedReq::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(ReceiptChangedReq, _impl_._has_bits_),
+    0, // no _extensions_
+    3, 24,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967288,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    3,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    ReceiptChangedReq_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::message::ReceiptChangedReq>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // int32 uid = 1;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReceiptChangedReq, _impl_.uid_), 0>(),
+     {8, 0, 0,
+      PROTOBUF_FIELD_OFFSET(ReceiptChangedReq, _impl_.uid_)}},
+    // int32 chat_id = 2;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReceiptChangedReq, _impl_.chat_id_), 1>(),
+     {16, 1, 0,
+      PROTOBUF_FIELD_OFFSET(ReceiptChangedReq, _impl_.chat_id_)}},
+    // int64 revision = 3;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReceiptChangedReq, _impl_.revision_), 2>(),
+     {24, 2, 0,
+      PROTOBUF_FIELD_OFFSET(ReceiptChangedReq, _impl_.revision_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // int32 uid = 1;
+    {PROTOBUF_FIELD_OFFSET(ReceiptChangedReq, _impl_.uid_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+    // int32 chat_id = 2;
+    {PROTOBUF_FIELD_OFFSET(ReceiptChangedReq, _impl_.chat_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+    // int64 revision = 3;
+    {PROTOBUF_FIELD_OFFSET(ReceiptChangedReq, _impl_.revision_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+  }},
+  // no aux_entries
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void ReceiptChangedReq::Clear() {
+// @@protoc_insertion_point(message_clear_start:message.ReceiptChangedReq)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.uid_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.revision_) -
+        reinterpret_cast<char*>(&_impl_.uid_)) + sizeof(_impl_.revision_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ReceiptChangedReq::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ReceiptChangedReq& this_ = static_cast<const ReceiptChangedReq&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ReceiptChangedReq::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ReceiptChangedReq& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:message.ReceiptChangedReq)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // int32 uid = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_uid() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<1>(
+              stream, this_._internal_uid(), target);
+    }
+  }
+
+  // int32 chat_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_chat_id() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<2>(
+              stream, this_._internal_chat_id(), target);
+    }
+  }
+
+  // int64 revision = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_revision() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<3>(
+              stream, this_._internal_revision(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:message.ReceiptChangedReq)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ReceiptChangedReq::ByteSizeLong(const MessageLite& base) {
+  const ReceiptChangedReq& this_ = static_cast<const ReceiptChangedReq&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ReceiptChangedReq::ByteSizeLong() const {
+  const ReceiptChangedReq& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:message.ReceiptChangedReq)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // int32 uid = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_uid() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
+            this_._internal_uid());
+      }
+    }
+    // int32 chat_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_chat_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
+            this_._internal_chat_id());
+      }
+    }
+    // int64 revision = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_revision());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ReceiptChangedReq::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<ReceiptChangedReq*>(&to_msg);
+  auto& from = static_cast<const ReceiptChangedReq&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:message.ReceiptChangedReq)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_uid() != 0) {
+        _this->_impl_.uid_ = from._impl_.uid_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_chat_id() != 0) {
+        _this->_impl_.chat_id_ = from._impl_.chat_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_revision() != 0) {
+        _this->_impl_.revision_ = from._impl_.revision_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ReceiptChangedReq::CopyFrom(const ReceiptChangedReq& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:message.ReceiptChangedReq)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ReceiptChangedReq::InternalSwap(ReceiptChangedReq* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ReceiptChangedReq, _impl_.revision_)
+      + sizeof(ReceiptChangedReq::_impl_.revision_)
+      - PROTOBUF_FIELD_OFFSET(ReceiptChangedReq, _impl_.uid_)>(
+          reinterpret_cast<char*>(&_impl_.uid_),
+          reinterpret_cast<char*>(&other->_impl_.uid_));
+}
+
+::google::protobuf::Metadata ReceiptChangedReq::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+class ReceiptChangedRsp::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<ReceiptChangedRsp>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ReceiptChangedRsp, _impl_._has_bits_);
+};
+
+ReceiptChangedRsp::ReceiptChangedRsp(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReceiptChangedRsp_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:message.ReceiptChangedRsp)
+}
+ReceiptChangedRsp::ReceiptChangedRsp(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ReceiptChangedRsp& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ReceiptChangedRsp_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ReceiptChangedRsp::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ReceiptChangedRsp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.error_ = {};
+}
+ReceiptChangedRsp::~ReceiptChangedRsp() {
+  // @@protoc_insertion_point(destructor:message.ReceiptChangedRsp)
+  SharedDtor(*this);
+}
+inline void ReceiptChangedRsp::SharedDtor(MessageLite& self) {
+  ReceiptChangedRsp& this_ = static_cast<ReceiptChangedRsp&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL ReceiptChangedRsp::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ReceiptChangedRsp(arena);
+}
+constexpr auto ReceiptChangedRsp::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ReceiptChangedRsp),
+                                            alignof(ReceiptChangedRsp));
+}
+constexpr auto ReceiptChangedRsp::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &_ReceiptChangedRsp_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &ReceiptChangedRsp::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ReceiptChangedRsp>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ReceiptChangedRsp::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ReceiptChangedRsp>(), &ReceiptChangedRsp::ByteSizeLong,
+              &ReceiptChangedRsp::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ReceiptChangedRsp, _impl_._cached_size_),
+          false,
+      },
+      &ReceiptChangedRsp::kDescriptorMethods,
+      &descriptor_table_chat_2eproto,
+      nullptr,  // tracker
+  };
+}
+
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ReceiptChangedRsp_class_data_ =
+        ReceiptChangedRsp::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ReceiptChangedRsp::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ReceiptChangedRsp_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ReceiptChangedRsp_class_data_.tc_table);
+  return ReceiptChangedRsp_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 1, 0, 0, 2>
+ReceiptChangedRsp::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(ReceiptChangedRsp, _impl_._has_bits_),
+    0, // no _extensions_
+    1, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967294,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    1,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    ReceiptChangedRsp_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallback,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::message::ReceiptChangedRsp>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    // int32 error = 1;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReceiptChangedRsp, _impl_.error_), 0>(),
+     {8, 0, 0,
+      PROTOBUF_FIELD_OFFSET(ReceiptChangedRsp, _impl_.error_)}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // int32 error = 1;
+    {PROTOBUF_FIELD_OFFSET(ReceiptChangedRsp, _impl_.error_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+  }},
+  // no aux_entries
+  {{
+  }},
+};
+PROTOBUF_NOINLINE void ReceiptChangedRsp::Clear() {
+// @@protoc_insertion_point(message_clear_start:message.ReceiptChangedRsp)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.error_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ReceiptChangedRsp::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ReceiptChangedRsp& this_ = static_cast<const ReceiptChangedRsp&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ReceiptChangedRsp::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ReceiptChangedRsp& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:message.ReceiptChangedRsp)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // int32 error = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_error() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<1>(
+              stream, this_._internal_error(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:message.ReceiptChangedRsp)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ReceiptChangedRsp::ByteSizeLong(const MessageLite& base) {
+  const ReceiptChangedRsp& this_ = static_cast<const ReceiptChangedRsp&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ReceiptChangedRsp::ByteSizeLong() const {
+  const ReceiptChangedRsp& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:message.ReceiptChangedRsp)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // int32 error = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_error() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
+            this_._internal_error());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ReceiptChangedRsp::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                            const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this =
+      static_cast<ReceiptChangedRsp*>(&to_msg);
+  auto& from = static_cast<const ReceiptChangedRsp&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:message.ReceiptChangedRsp)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_error() != 0) {
+      _this->_impl_.error_ = from._impl_.error_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ReceiptChangedRsp::CopyFrom(const ReceiptChangedRsp& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:message.ReceiptChangedRsp)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ReceiptChangedRsp::InternalSwap(ReceiptChangedRsp* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.error_, other->_impl_.error_);
+}
+
+::google::protobuf::Metadata ReceiptChangedRsp::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

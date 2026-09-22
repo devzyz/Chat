@@ -29,6 +29,8 @@ class SessionLifecycleCoordinator;
 class ChatServiceImpl final : public ChatService::Service
 {
 public:
+    Status NotifyMessageReceiptChanged(ServerContext* context, const message::ReceiptChangedReq* request,
+        message::ReceiptChangedRsp* response) override;
 	ChatServiceImpl(std::shared_ptr<UserSessionDirectory> directory,
         std::shared_ptr<SessionLifecycleCoordinator> lifecycle);
 	virtual Status NotifyOtherAddFriend(ServerContext* context, const AddFriendReq* request, AddFriendRsp* response) override;

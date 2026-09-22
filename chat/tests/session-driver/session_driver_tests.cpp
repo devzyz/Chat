@@ -112,6 +112,19 @@ public:
             QObject::connect(peer, &QTcpSocket::readyRead, peer, [this, peer, decoder = TcpFrameDecoder()]() mutable {
                 for (const auto &frame : decoder.append(peer->readAll())) {
                     if (frame.messageId == 1020) { ++heartbeats; continue; }
+                    if (frame.messageId == 1027) {
+                        auto result = QJsonDocument::fromJson(frame.body).object();
+                        result["error"] = 0;
+                        result["msgs"] = QJsonArray{};
+                        result["next_cursor"] = result["after_id"];
+                        result["load_more"] = false;
+                        const auto payload = QJsonDocument(result).toJson(QJsonDocument::Compact);
+                        QByteArray header(4, '\0');
+                        qToBigEndian<quint16>(1028, header.data());
+                        qToBigEndian<quint16>(static_cast<quint16>(payload.size()), header.data() + 2);
+                        peer->write(header + payload);
+                        continue;
+                    }
                     if (frame.messageId == 1009 || frame.messageId == 1013) {
                         const auto request = QJsonDocument::fromJson(frame.body).object();
                         QJsonObject result{{"error", 0}};
@@ -143,9 +156,13 @@ public:
                             ++sentFrames;
                             if (dropNextText) { dropNextText = false; peer->abort(); continue; }
                             sentBody = request;
+                            result["from_uid"] = userId;
+                            result["to_uid"] = request["to_uid"];
+                            result["attempt_id"] = request["attempt_id"];
+                            const auto uuid = request["text_array"].toArray().first().toObject()["msg_uuid"].toString();
+                            if (!messageIds.contains(uuid)) messageIds.insert(uuid, 81 + messageIds.size());
                             result["uuid_msgId"] = QJsonArray{QJsonObject{
-                                {"msg_uuid", request["text_array"].toArray().first().toObject()["msg_uuid"]},
-                                {"message_id", 81}}};
+                                {"msg_uuid", uuid}, {"message_id", messageIds.value(uuid)}}};
                         }
                         const auto payload = QJsonDocument(result).toJson(QJsonDocument::Compact);
                         QByteArray header(4, '\0');
@@ -174,6 +191,7 @@ public:
     QTcpServer gate, chat;
     QJsonObject gateBody, chatBody, sentBody;
     QJsonObject applicationBody, acceptanceBody;
+    QHash<QString, int> messageIds;
     int heartbeats = 0;
     int sentFrames = 0;
     bool dropNextText = false;
@@ -214,26 +232,31 @@ private slots:
         const QString uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
         alice.send({{"id", 3}, {"command", "send"}, {"chatId", 7}, {"toUid", 42},
                     {"uuid", uuid}, {"text", QString::fromUtf8("跨实例 🙂\nsecond line")}, {"copies", 2}});
-        QCOMPARE(alice.receive().value("error").toInt(-1), 0);
+        const auto sendResult = alice.receive();
+        QCOMPARE(sendResult.value("error").toInt(-1), 0);
         QCOMPARE(first.sentBody.value("from_uid").toInt(), 41);
         QCOMPARE(first.sentFrames, 2);
-        alice.send({{"id", 4}, {"command", "snapshot"}, {"chatId", 7}});
+        alice.send({{"id", 4}, {"command", "send"}, {"chatId", 7}, {"toUid", 42},
+                    {"uuid", uuid}, {"text", QString::fromUtf8("跨实例 🙂\nsecond line")}});
+        QCOMPARE(alice.receive().value("error").toInt(-1), 0);
+        QCOMPARE(first.sentFrames, 3); // Explicit committed replay remains a server idempotency probe.
+        alice.send({{"id", 5}, {"command", "snapshot"}, {"chatId", 7}});
         const auto rows = alice.receive().value("messages").toArray();
         QCOMPARE(rows.size(), 1);
         QCOMPARE(rows.first().toObject()["messageId"].toString(), QString("81"));
         QCOMPARE(rows.first().toObject()["uuid"].toString(), uuid);
         QVERIFY(!rows.first().toObject().contains("text"));
-        alice.send({{"id", 5}, {"command", "apply"}, {"toUid", 42},
+        alice.send({{"id", 6}, {"command", "apply"}, {"toUid", 42},
                     {"description", "hello peer"}, {"backname", "peer alias"}});
         QCOMPARE(alice.receive().value("error").toInt(-1), 0);
         QCOMPARE(first.applicationBody.value("fromuid").toInt(), 41);
         QCOMPARE(first.applicationBody.value("touid").toInt(), 42);
         QCOMPARE(first.applicationBody.value("description").toString(), QString("hello peer"));
-        alice.send({{"id", 6}, {"command", "snapshot"}, {"otherUid", 42}});
+        alice.send({{"id", 7}, {"command", "snapshot"}, {"otherUid", 42}});
         const auto application = alice.receive();
         QVERIFY(application.value("applied").toBool());
         QVERIFY(!application.value("friend").toBool());
-        alice.send({{"id", 7}, {"command", "accept"}, {"toUid", 42},
+        alice.send({{"id", 8}, {"command", "accept"}, {"toUid", 42},
                     {"description", "accepted"}, {"backname", "accepted alias"}});
         QCOMPARE(alice.receive().value("error").toInt(-1), 0);
         QCOMPARE(first.acceptanceBody.value("authuid").toInt(), 41);
@@ -242,26 +265,30 @@ private slots:
                  QString("original alias"));
         QCOMPARE(first.acceptanceBody.value("authinfo").toObject().value("backname").toString(),
                  QString("accepted alias"));
-        alice.send({{"id", 8}, {"command", "snapshot"}, {"otherUid", 42}});
+        alice.send({{"id", 9}, {"command", "snapshot"}, {"otherUid", 42}});
         const auto accepted = alice.receive();
         QVERIFY(accepted.value("friend").toBool());
         QCOMPARE(accepted.value("chatId").toInt(), 7);
         QVERIFY(!accepted.contains("token"));
-        alice.send({{"id", 9}, {"command", "accept"}, {"toUid", 999},
+        alice.send({{"id", 10}, {"command", "accept"}, {"toUid", 999},
                     {"description", "unknown"}, {"backname", "unknown"}});
         QCOMPARE(alice.receive().value("status").toString(), QString("no-application"));
         QTRY_VERIFY_WITH_TIMEOUT(first.heartbeats > 0 && second.heartbeats > 0, 12000);
         first.dropNextText = true;
-        alice.send({{"id", 10}, {"command", "send"}, {"chatId", 7}, {"toUid", 42},
-                    {"uuid", uuid}, {"text", QString::fromUtf8("\u8de8\u5b9e\u4f8b \U0001f642\nsecond line")}});
+        const QString uncertainUuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        alice.send({{"id", 11}, {"command", "send"}, {"chatId", 7}, {"toUid", 42},
+                    {"uuid", uncertainUuid}, {"text", QString::fromUtf8("\u8de8\u5b9e\u4f8b \U0001f642\nsecond line")}});
         QCOMPARE(alice.receive().value("status").toString(), QString("disconnected"));
-        alice.send({{"id", 11}, {"command", "login"}, {"gate", first.url()},
+        alice.send({{"id", 12}, {"command", "login"}, {"gate", first.url()},
                     {"email", "alice@example.invalid"}, {"password", "fixture-only"}});
         QCOMPARE(alice.receive().value("status").toString(), QString("authenticated"));
-        QTRY_COMPARE_WITH_TIMEOUT(first.sentFrames, 4, 3000);
-        alice.send({{"id", 12}, {"command", "snapshot"}, {"chatId", 7}});
-        QCOMPARE(alice.receive().value("messages").toArray().size(), 1);
-        QVERIFY(alice.stop(13));
+        QTRY_COMPARE_WITH_TIMEOUT(first.sentFrames, 5, 3000);
+        alice.send({{"id", 13}, {"command", "snapshot"}, {"chatId", 7}});
+        const auto recovered = alice.receive().value("messages").toArray();
+        QCOMPARE(recovered.size(), 2);
+        QCOMPARE(recovered.last().toObject()["uuid"].toString(), uncertainUuid);
+        QCOMPARE(first.sentBody["attempt_id"].toString(), QString("2"));
+        QVERIFY(alice.stop(14));
         bob.send({{"id", 2}, {"command", "snapshot"}});
         QCOMPARE(bob.receive().value("uid").toInt(), 42);
         QVERIFY(bob.stop(3));

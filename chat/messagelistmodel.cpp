@@ -38,6 +38,7 @@ void MessageListModel::mergeMessages(const QVector<MessageRecord> &messages)
         else {
             auto updated = message;
             const auto &existing = _messages[match];
+            updated.deliveryStatus = mergeDeliveryStatus(existing.deliveryStatus, updated.deliveryStatus);
             if (updated.clientMessageId.isEmpty()) updated.clientMessageId = existing.clientMessageId;
             if (updated.localResourcePath.isEmpty()) {
                 updated.localResourcePath = existing.localResourcePath;
@@ -72,7 +73,17 @@ QVariant MessageListModel::data(const QModelIndex &index, int role) const
     case Qt::ToolTipRole:
         if (message.deliveryStatus == DeliveryStatus::Uncertain) return tr("发送结果待核实，可双击使用原消息编号重试");
         if (message.deliveryStatus == DeliveryStatus::Failed) return tr("消息未能发送");
-        return {};
+        switch (message.deliveryStatus) {
+        case DeliveryStatus::Queued: return tr("等待发送");
+        case DeliveryStatus::Sending: return tr("正在发送");
+        case DeliveryStatus::Sent: return tr("已发送至服务器，尚未确认对方收到");
+        case DeliveryStatus::Delivered: return tr("已送达对方客户端，尚未确认阅读");
+        case DeliveryStatus::Read: return tr("对方已读");
+        default: return {};
+        }
+    case DurableRole: return message.durable;
+    case ReadConfirmedRole: return message.readConfirmed;
+    case Qt::AccessibleTextRole: return message.text + " " + data(index, Qt::ToolTipRole).toString();
     case Qt::DisplayRole:
     case TextRole: return message.text;
     case ResourceIdRole: return message.resourceId;
@@ -239,13 +250,17 @@ bool MessageListModel::acknowledgeMessage(const QString &clientMessageId, qint64
 {
     assertGuiThread();
     int row = rowForClientMessageId(clientMessageId, senderId);
-    if (row < 0 || messageId <= 0) {
+    if (row < 0 || messageId <= 0
+        || (_messages[row].messageId > 0 && _messages[row].messageId != messageId)) {
         return false;
     }
 
     const int duplicateRow = rowForMessageId(messageId);
     if (duplicateRow >= 0 && duplicateRow != row) {
         if (_messages[duplicateRow].senderId != _messages[row].senderId) return false;
+        status = mergeDeliveryStatus(_messages[duplicateRow].deliveryStatus, status);
+        _messages[row].durable |= _messages[duplicateRow].durable;
+        _messages[row].readConfirmed |= _messages[duplicateRow].readConfirmed;
         // A history/peer row can arrive before the pending send is acknowledged.
         // Keep the pending UUID identity but collapse the duplicate server ID.
         beginRemoveRows({}, duplicateRow, duplicateRow);
@@ -260,7 +275,7 @@ bool MessageListModel::acknowledgeMessage(const QString &clientMessageId, qint64
         _messageIdRows.remove(message.messageId);
     }
     message.messageId = messageId;
-    message.deliveryStatus = status;
+    message.deliveryStatus = mergeDeliveryStatus(message.deliveryStatus, status);
     if (messageId > 0) {
         _messageIdRows.insert(messageId, row);
     }
@@ -364,6 +379,8 @@ bool MessageListModel::updateStatusAtRow(int row, DeliveryStatus status)
     if (row < 0 || row >= _messages.size() || _messages[row].deliveryStatus == status) {
         return false;
     }
+    status = mergeDeliveryStatus(_messages[row].deliveryStatus, status);
+    if (_messages[row].deliveryStatus == status) return false;
     _messages[row].deliveryStatus = status;
     const auto changed = index(row);
     emit dataChanged(changed, changed, {DeliveryStatusRole});

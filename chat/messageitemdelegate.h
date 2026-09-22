@@ -15,6 +15,7 @@ class MessageItemDelegate final : public QStyledItemDelegate
 
 public:
     explicit MessageItemDelegate(QListView *view);
+    QRect bubbleRect(const QModelIndex &index, const QRect &rowRect) const;
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option,
                const QModelIndex &index) const override;
@@ -40,7 +41,6 @@ private:
     MessageRecord recordFromIndex(const QModelIndex &index) const;
     Metrics calculateMetrics(const MessageRecord &message, int width) const;
     QString sizeCacheKey(const MessageRecord &message, int width) const;
-    const QPixmap *statusPixmap(DeliveryStatus status) const;
 
     QListView *_view;
     QPixmap _sendingPixmap;

@@ -1,4 +1,5 @@
 #include "../../common/message/MessagePersistence.h"
+#include "../../common/message/MessageReceipts.h"
 #include "../../common/resource/ResourceCatalog.h"
 #include "LogicSystem.h"
 #include "CSession.h"
@@ -59,6 +60,49 @@ bool LogicSystem::Dispatch(const LogicMessage& message) {
  * 回调函数注册位置
  */
 void LogicSystem::RegisterCallBacks() {
+    for (const auto id : {MSG_MESSAGE_RECEIPT_REPORT_REQ, MSG_MESSAGE_RECEIPT_SYNC_REQ}) {
+        _fun_callbacks[id] = [this](std::shared_ptr<CSession> session, const short& request_id,
+                                    const std::string& body) {
+            const bool report = request_id == MSG_MESSAGE_RECEIPT_REPORT_REQ;
+            Json::Value request;
+            Json::Reader reader;
+            Json::Value response;
+            response["version"] = 1;
+            response["error"] = ErrorCodes::Error_Json;
+            int peer = 0;
+            bool success = false;
+            try {
+                if (!session->SupportsReceipts()) throw messaging::ReceiptError("Unauthorized");
+                if (!reader.parse(body, request)) throw messaging::ReceiptError("InvalidRequest");
+                messaging::ValidateReceiptRequest(request, report);
+                response["chat_id"] = request["chat_id"];
+                response["request_id"] = request["request_id"];
+                response["error"] = 0;
+                success = MysqlMgr::GetInstance()->Receipts(session->AuthenticatedUid(), request, report, response, peer);
+                if (!success) response["error"] = ErrorCodes::UidInvalid;
+            } catch (const messaging::ReceiptError& error) {
+                response["receipt_error"] = error.what();
+            }
+            session->Send(messaging::CompactJson(response),
+                report ? MSG_MESSAGE_RECEIPT_REPORT_RSP : MSG_MESSAGE_RECEIPT_SYNC_RSP);
+            if (!success || !report) return;
+            Json::Value notification;
+            notification["chat_id"] = request["chat_id"];
+            notification["latest_revision"] = response["latest_revision"];
+            if (auto local = _directory->FindCurrent(peer)) {
+                if (local->SupportsReceipts()) local->Send(messaging::CompactJson(notification), MSG_MESSAGE_RECEIPT_CHANGED_NOTIFY);
+                return;
+            }
+            const auto presence = _presence->Find(peer);
+            if (presence.status != PresenceStatus::Found || !presence.presence) return;
+            message::ReceiptChangedReq hint;
+            hint.set_uid(peer);
+            hint.set_chat_id(request["chat_id"].asInt());
+            hint.set_revision(messaging::ReceiptRevision(response["latest_revision"]));
+            const auto result = ChatGrpcClient::GetInstance()->NotifyMessageReceiptChanged(presence.presence->server_id, hint);
+            if (result.error() != 0) SPDLOG_WARN("receipt notification unavailable, chat_id={}", hint.chat_id());
+        };
+    }
 	// 处理用户登录请求
 	_fun_callbacks[MSG_CHAT_LOGIN_REQ] = [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
 		// 解析msg_data对应的json数据
@@ -190,6 +234,14 @@ void LogicSystem::RegisterCallBacks() {
 
 		// 添加分布式锁
         binding_started = true;
+        bool receipts = false;
+        if (root["capabilities"].isArray()) {
+            for (const auto& capability : root["capabilities"])
+                if (capability.isString() && capability.asString() == "message_receipts_v1") receipts = true;
+        }
+        session->EnableReceipts(receipts);
+        return_value["capabilities"] = Json::Value(Json::arrayValue);
+        if (receipts) return_value["capabilities"].append("message_receipts_v1");
         session->BindAuthenticatedUser(uid, [session, response = std::move(return_value)](SessionBindResult result) mutable {
             if (result != SessionBindResult::Bound) response["error"] = ErrorCodes::RPCFailed;
             session->Send(response.toStyledString(), MSG_CHAT_LOGIN_RSP);
@@ -514,6 +566,8 @@ void LogicSystem::RegisterCallBacks() {
         const bool resource_message = root.isMember("resource_id");
 
 		Json::Value return_value;
+        if (root["attempt_id"].isString() && root["attempt_id"].asString().size() <= 20)
+            return_value["attempt_id"] = root["attempt_id"];
 
 		Defer defer([this, &return_value, session]() {
 			std::string return_str = return_value.toStyledString();

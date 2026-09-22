@@ -23,6 +23,7 @@
 namespace message {
 
 static const char* ChatService_method_names[] = {
+  "/message.ChatService/NotifyMessageReceiptChanged",
   "/message.ChatService/NotifyOtherAddFriend",
   "/message.ChatService/NotifyOtherAuthFriend",
   "/message.ChatService/NotifyOtherReceiveTextChatMsg",
@@ -36,11 +37,35 @@ std::unique_ptr< ChatService::Stub> ChatService::NewStub(const std::shared_ptr< 
 }
 
 ChatService::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options)
-  : channel_(channel), rpcmethod_NotifyOtherAddFriend_(ChatService_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_NotifyOtherAuthFriend_(ChatService_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_NotifyOtherReceiveTextChatMsg_(ChatService_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_NotifyOtherKickUser_(ChatService_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  : channel_(channel), rpcmethod_NotifyMessageReceiptChanged_(ChatService_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_NotifyOtherAddFriend_(ChatService_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_NotifyOtherAuthFriend_(ChatService_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_NotifyOtherReceiveTextChatMsg_(ChatService_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_NotifyOtherKickUser_(ChatService_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
+
+::grpc::Status ChatService::Stub::NotifyMessageReceiptChanged(::grpc::ClientContext* context, const ::message::ReceiptChangedReq& request, ::message::ReceiptChangedRsp* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::message::ReceiptChangedReq, ::message::ReceiptChangedRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_NotifyMessageReceiptChanged_, context, request, response);
+}
+
+void ChatService::Stub::async::NotifyMessageReceiptChanged(::grpc::ClientContext* context, const ::message::ReceiptChangedReq* request, ::message::ReceiptChangedRsp* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::message::ReceiptChangedReq, ::message::ReceiptChangedRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyMessageReceiptChanged_, context, request, response, std::move(f));
+}
+
+void ChatService::Stub::async::NotifyMessageReceiptChanged(::grpc::ClientContext* context, const ::message::ReceiptChangedReq* request, ::message::ReceiptChangedRsp* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyMessageReceiptChanged_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::message::ReceiptChangedRsp>* ChatService::Stub::PrepareAsyncNotifyMessageReceiptChangedRaw(::grpc::ClientContext* context, const ::message::ReceiptChangedReq& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::message::ReceiptChangedRsp, ::message::ReceiptChangedReq, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_NotifyMessageReceiptChanged_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::message::ReceiptChangedRsp>* ChatService::Stub::AsyncNotifyMessageReceiptChangedRaw(::grpc::ClientContext* context, const ::message::ReceiptChangedReq& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncNotifyMessageReceiptChangedRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
 
 ::grpc::Status ChatService::Stub::NotifyOtherAddFriend(::grpc::ClientContext* context, const ::message::AddFriendReq& request, ::message::AddFriendRsp* response) {
   return ::grpc::internal::BlockingUnaryCall< ::message::AddFriendReq, ::message::AddFriendRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_NotifyOtherAddFriend_, context, request, response);
@@ -138,6 +163,16 @@ ChatService::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       ChatService_method_names[0],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< ChatService::Service, ::message::ReceiptChangedReq, ::message::ReceiptChangedRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ChatService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::message::ReceiptChangedReq* req,
+             ::message::ReceiptChangedRsp* resp) {
+               return service->NotifyMessageReceiptChanged(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      ChatService_method_names[1],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
       new ::grpc::internal::RpcMethodHandler< ChatService::Service, ::message::AddFriendReq, ::message::AddFriendRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](ChatService::Service* service,
              ::grpc::ServerContext* ctx,
@@ -146,7 +181,7 @@ ChatService::Service::Service() {
                return service->NotifyOtherAddFriend(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      ChatService_method_names[1],
+      ChatService_method_names[2],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
       new ::grpc::internal::RpcMethodHandler< ChatService::Service, ::message::AuthFriendReq, ::message::AuthFriendRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](ChatService::Service* service,
@@ -156,7 +191,7 @@ ChatService::Service::Service() {
                return service->NotifyOtherAuthFriend(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      ChatService_method_names[2],
+      ChatService_method_names[3],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
       new ::grpc::internal::RpcMethodHandler< ChatService::Service, ::message::TextChatMsgReq, ::message::TextChatMsgRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](ChatService::Service* service,
@@ -166,7 +201,7 @@ ChatService::Service::Service() {
                return service->NotifyOtherReceiveTextChatMsg(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      ChatService_method_names[3],
+      ChatService_method_names[4],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
       new ::grpc::internal::RpcMethodHandler< ChatService::Service, ::message::KickUserReq, ::message::KickUserRsp, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
           [](ChatService::Service* service,
@@ -178,6 +213,13 @@ ChatService::Service::Service() {
 }
 
 ChatService::Service::~Service() {
+}
+
+::grpc::Status ChatService::Service::NotifyMessageReceiptChanged(::grpc::ServerContext* context, const ::message::ReceiptChangedReq* request, ::message::ReceiptChangedRsp* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
 ::grpc::Status ChatService::Service::NotifyOtherAddFriend(::grpc::ServerContext* context, const ::message::AddFriendReq* request, ::message::AddFriendRsp* response) {

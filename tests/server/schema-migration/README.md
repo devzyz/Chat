@@ -17,7 +17,7 @@ C++ DAO or four-process workflow proof.
 
 | ID | Real contract |
 | --- | --- |
-| 01 | Empty database reaches current version 3 and complete schema, including avatar/resource tables |
+| 01 | Empty database reaches current version 4 and complete schema, including avatar/resource and message receipt tables |
 | 02 | Reapply is a no-op preserving registered data |
 | 03..04 | Applied checksum drift and unknown version fail closed |
 | 05..06 | Missing UUID unique index or stored procedure fails verification |

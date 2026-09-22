@@ -5,6 +5,7 @@
 #include <QSignalSpy>
 #include <QFile>
 #include <QTemporaryDir>
+#include <QSqlQuery>
 #include <QtTest>
 
 class MessageStorageTests : public QObject
@@ -18,6 +19,13 @@ private slots:
     void serviceSyncAndSessionIsolation();
     void outgoingRequiresDurableStorage();
     void refreshKeepsTheDisplayedIntervalComplete();
+    void receiptsAreDurableMonotonicAndIndependent();
+    void deliveredAckCannotEraseNewReadIntent();
+    void outgoingBatchRetriesUseStableIdentityAndAttempt();
+    void invalidReceiptPageRollsBackAndDoesNotAdvance();
+    void serviceReceiptRoundTripAndAccountIsolation();
+    void schemaOneUpgradePreservesHistoryAndBackup();
+    void resourceIntentSurvivesRecoveryAndRetryBudget();
 };
 
 static StoredMessage message(qint64 id, QString uuid = {})
@@ -32,6 +40,51 @@ static StoredMessage message(qint64 id, QString uuid = {})
     result.sentAt = 1700000000000LL + id;
     result.state = id > 0 ? StoredMessage::Confirmed : StoredMessage::Pending;
     return result;
+}
+
+void MessageStorageTests::schemaOneUpgradePreservesHistoryAndBackup()
+{
+    QTemporaryDir directory;
+    const auto connection = QString("schema-one-fixture");
+    {
+        auto db = QSqlDatabase::addDatabase("QSQLITE", connection);
+        db.setDatabaseName(directory.path() + "/messages.sqlite");
+        QVERIFY(db.open());
+        QSqlQuery query(db);
+        QVERIFY(query.exec("CREATE TABLE messages(local_id INTEGER PRIMARY KEY,message_id INTEGER,client_uuid TEXT,"
+            "chat_id INTEGER,sender_id INTEGER,recipient_id INTEGER,content TEXT,sent_at INTEGER,state INTEGER,"
+            "server_copy INTEGER DEFAULT 0)"));
+        QVERIFY(query.exec("CREATE UNIQUE INDEX message_server_id ON messages(chat_id,message_id) WHERE message_id IS NOT NULL"));
+        QVERIFY(query.exec("CREATE UNIQUE INDEX message_client_id ON messages(sender_id,client_uuid) WHERE client_uuid IS NOT NULL"));
+        QVERIFY(query.exec("CREATE TABLE sync_state(chat_id INTEGER PRIMARY KEY,cursor INTEGER NOT NULL)"));
+        QVERIFY(query.exec("INSERT INTO messages VALUES(1,10,'old',12,7,8,'preserved',1700000000000,1,1)"));
+        QVERIFY(query.exec("INSERT INTO sync_state VALUES(12,10)"));
+        QVERIFY(query.exec("PRAGMA user_version=1"));
+    }
+    QSqlDatabase::removeDatabase(connection);
+    LocalMessageStore store;
+    store.open(directory.path(), 8);
+    QCOMPARE(store.cursor(12), 10);
+    QCOMPARE(store.history(12, 0, 50).messages.first().content, QString("preserved"));
+    QCOMPARE(store.history(12, 0, 50).messages.first().receipt, ReceiptLevel::None);
+    QCOMPARE(store.pendingReceipts(12).size(), 1);
+    QVERIFY(QFile::exists(directory.path() + "/messages.schema1.sqlite"));
+    {
+        auto db = QSqlDatabase::addDatabase("QSQLITE", connection);
+        db.setDatabaseName(directory.path() + "/messages.schema1.sqlite");
+        QVERIFY(db.open());
+        QSqlQuery query(db);
+        QVERIFY(query.exec("PRAGMA user_version"));
+        QVERIFY(query.next());
+        QCOMPARE(query.value(0).toInt(), 1);
+        QVERIFY(query.exec("SELECT content FROM messages WHERE message_id=10"));
+        QVERIFY(query.next());
+        QCOMPARE(query.value(0).toString(), QString("preserved"));
+    }
+    QSqlDatabase::removeDatabase(connection);
+    store.close();
+    store.open(directory.path(), 8);
+    QCOMPARE(store.cursor(12), 10);
 }
 
 void MessageStorageTests::restartAndIncrementalCursor()
@@ -186,6 +239,12 @@ void MessageStorageTests::outgoingRequiresDurableStorage()
     service.send(request);
     QTRY_COMPARE_WITH_TIMEOUT(failed.size(), 1, 5000);
     QVERIFY(sent.isEmpty());
+    QVERIFY(blocker.remove());
+    service.retry(12, "outgoing");
+    QTRY_COMPARE_WITH_TIMEOUT(sent.size(), 1, 5000);
+    auto retried = sent.first()[0].toJsonObject();
+    retried.remove("attempt_id");
+    QCOMPARE(retried, request); // Recover the original intent, including resource payloads, without UI text.
 }
 
 void MessageStorageTests::refreshKeepsTheDisplayedIntervalComplete()
@@ -202,6 +261,177 @@ void MessageStorageTests::refreshKeepsTheDisplayedIntervalComplete()
     const auto refresh = store.history(12, 0, 50, 1);
     QCOMPARE(refresh.messages.size(), 160);
     for (int row = 0; row < refresh.messages.size(); ++row) QCOMPARE(refresh.messages[row].messageId, row + 1);
+}
+
+
+static QJsonObject receipt(qint64 id, int uid, int level, int revision)
+{
+    return {{"message_id", id}, {"recipient_uid", uid}, {"level", level == 2 ? "read" : "delivered"},
+        {"revision", QString::number(revision)}, {"delivered_at", 1700000000000LL},
+        {"read_at", level == 2 ? QJsonValue(1700000000001LL) : QJsonValue()}};
+}
+
+void MessageStorageTests::receiptsAreDurableMonotonicAndIndependent()
+{
+    QTemporaryDir directory;
+    LocalMessageStore store;
+    store.open(directory.path(), 7);
+    store.acceptReceipts(12, {receipt(10, 8, 2, 2)}, 0, 2); // Receipt can precede the message and ACK.
+    QCOMPARE(store.cursor(12), 0);
+    store.applySyncPage(12, 0, 10, {message(10, "receipt-first")});
+    QCOMPARE(store.history(12, 0, 50).messages.front().receipt, ReceiptLevel::Read);
+    store.acceptReceipts(12, {receipt(10, 8, 1, 1)}); // A delayed report cannot downgrade read.
+    store.close();
+    store.open(directory.path(), 7);
+    QCOMPARE(store.receiptCursor(12), 2);
+    QCOMPARE(store.history(12, 0, 50).messages.front().receipt, ReceiptLevel::Read);
+    QVERIFY_EXCEPTION_THROWN(store.observeRead(12, {10}), std::exception); // Cannot read your own outgoing message.
+}
+
+void MessageStorageTests::deliveredAckCannotEraseNewReadIntent()
+{
+    QTemporaryDir directory;
+    LocalMessageStore store;
+    store.open(directory.path(), 8);
+    store.applySyncPage(12, 0, 10, {message(10)});
+    QCOMPARE(store.pendingReceipts(12).first().toObject()["level"].toString(), QString("delivered"));
+    store.observeRead(12, {10});
+    store.acceptReceipts(12, {receipt(10, 8, 1, 1)});
+    QCOMPARE(store.pendingReceipts(12).first().toObject()["level"].toString(), QString("read"));
+    store.close();
+    store.open(directory.path(), 8);
+    QCOMPARE(store.pendingReceipts(12).size(), 1);
+    store.acceptReceipts(12, {receipt(10, 8, 2, 2)});
+    QVERIFY(store.pendingReceipts(12).isEmpty());
+    QVERIFY_EXCEPTION_THROWN(store.observeRead(12, {999}), std::exception);
+}
+
+void MessageStorageTests::outgoingBatchRetriesUseStableIdentityAndAttempt()
+{
+    QTemporaryDir directory;
+    LocalMessageStore store;
+    store.open(directory.path(), 7);
+    const QJsonObject request{{"chat_id", 12}, {"from_uid", 7}, {"to_uid", 8},
+        {"text_array", QJsonArray{QJsonObject{{"msg_uuid", "a"}, {"msg_content", "immutable"}}}}};
+    store.saveOutgoingRequest(request);
+    store.saveOutgoingRequest(request);
+    auto first = store.dispatchDue(0);
+    QCOMPARE(first.size(), 1);
+    QCOMPARE(first.first()["attempt_id"].toString(), QString("1"));
+    QVERIFY(store.dispatchDue(14999).isEmpty());
+    QVERIFY(store.dispatchDue(15000).isEmpty());
+    QCOMPARE(store.history(12, 0, 50).messages.front().state, StoredMessage::Uncertain);
+    auto second = store.dispatchDue(16000);
+    QCOMPARE(second.size(), 1);
+    auto original = first.first(); original.remove("attempt_id");
+    auto retried = second.first(); retried.remove("attempt_id");
+    QCOMPARE(original, request);
+    QCOMPARE(original, retried);
+    store.acceptSendResponse({{"error", 1}, {"chat_id", 12}, {"attempt_id", "1"},
+        {"commit_error", "Conflict"}, {"client_msg_uuids", QJsonArray{"a"}}});
+    QCOMPARE(store.history(12, 0, 50).messages.front().state, StoredMessage::Pending);
+    auto ack = QJsonObject{{"error", 0}, {"chat_id", 12}, {"from_uid", 7}, {"to_uid", 8},
+        {"uuid_msgId", QJsonArray{QJsonObject{{"msg_uuid", "a"}, {"message_id", 10}}}}};
+    store.acceptSendResponse(ack);
+    QCOMPARE(store.history(12, 0, 50).messages.front().state, StoredMessage::Confirmed);
+    QVERIFY(store.dispatchDue(100000).isEmpty());
+    QCOMPARE(store.cursor(12), 0);
+    store.saveOutgoingRequest(request);
+    QVERIFY(store.dispatchDue(100001).isEmpty());
+    auto conflict = request; conflict["text_array"] = QJsonArray{QJsonObject{{"msg_uuid", "a"}, {"msg_content", "changed"}}};
+    QVERIFY_EXCEPTION_THROWN(store.saveOutgoingRequest(conflict), std::exception);
+    auto conflictingAck = ack;
+    conflictingAck["uuid_msgId"] = QJsonArray{QJsonObject{{"msg_uuid", "a"}, {"message_id", 11}}};
+    QVERIFY_EXCEPTION_THROWN(store.acceptSendResponse(conflictingAck), std::exception);
+}
+
+void MessageStorageTests::resourceIntentSurvivesRecoveryAndRetryBudget()
+{
+    QTemporaryDir directory;
+    LocalMessageStore store;
+    store.open(directory.path(), 7);
+    const QString descriptor = "@resource:v1:{\"resource_id\":\"original-resource\",\"name\":\"original.png\"}";
+    const QJsonObject request{{"chat_id", 12}, {"from_uid", 7}, {"to_uid", 8}, {"resource_id", "original-resource"},
+        {"text_array", QJsonArray{QJsonObject{{"msg_uuid", "resource-uuid"}, {"msg_content", descriptor}}}}};
+    store.saveOutgoingRequest(request);
+    QCOMPARE(store.dispatchDue(0).size(), 1);
+    QSet<int> changed;
+    QVERIFY(store.dispatchDue(15000, {}, &changed).isEmpty());
+    QVERIFY(changed.contains(12));
+    QCOMPARE(store.dispatchDue(16000).first()["attempt_id"].toString(), QString("2"));
+    QVERIFY(store.dispatchDue(31000).isEmpty());
+    QVERIFY(store.dispatchDue(33999).isEmpty());
+    QCOMPARE(store.dispatchDue(34000).first()["attempt_id"].toString(), QString("3"));
+    QVERIFY(store.dispatchDue(49000).isEmpty());
+    QCOMPARE(store.dispatchDue(59000).first()["attempt_id"].toString(), QString("4"));
+    QVERIFY(store.dispatchDue(74000).isEmpty());
+    QVERIFY(store.dispatchDue(999999).isEmpty()); // No fifth automatic attempt in this cycle.
+    store.close();
+    store.open(directory.path(), 7);
+    QCOMPARE(store.recoveryChats(), QSet<int>{12});
+    store.resumeOutgoing();
+    QVERIFY(store.dispatchDue(1000000, {12}).isEmpty()); // Wait for recovery verification.
+    auto replay = store.dispatchDue(1000000).first();
+    QCOMPARE(replay.take("attempt_id").toString(), QString("5"));
+    QCOMPARE(replay, request);
+    auto canonical = message(10, "resource-uuid");
+    canonical.content = "@resource:v1:{\"name\":\"original.png\",\"resource_id\":\"original-resource\"}";
+    auto forged = canonical;
+    forged.content.replace("original-resource", "wrong-resource");
+    QVERIFY_EXCEPTION_THROWN(store.applySyncPage(12, 0, 10, {forged}), std::exception);
+    store.applySyncPage(12, 0, 10, {canonical});
+    QVERIFY(store.dispatchDue(2000000).isEmpty());
+    QCOMPARE(store.history(12, 0, 50).messages.first().state, StoredMessage::Confirmed);
+}
+
+void MessageStorageTests::invalidReceiptPageRollsBackAndDoesNotAdvance()
+{
+    QTemporaryDir directory;
+    LocalMessageStore store;
+    store.open(directory.path(), 7);
+    store.applySyncPage(12, 0, 20, {message(10), message(20)});
+    QVERIFY_EXCEPTION_THROWN(store.acceptReceipts(12, {receipt(10, 8, 1, 1), receipt(20, 9, 2, 2)}, 0, 2), std::exception);
+    QCOMPARE(store.receiptCursor(12), 0);
+    QCOMPARE(store.history(12, 0, 50).messages.front().receipt, ReceiptLevel::None);
+    QVERIFY_EXCEPTION_THROWN(store.acceptReceipts(12, {receipt(10, 8, 1, 2), receipt(20, 8, 1, 1)}, 0, 2), std::exception);
+    store.acceptReceipts(12, {receipt(10, 8, 1, 1)}, 0, 1);
+    QVERIFY_EXCEPTION_THROWN(store.acceptReceipts(12, {}, 0, 0), std::exception);
+    QCOMPARE(store.receiptCursor(12), 1);
+}
+
+void MessageStorageTests::serviceReceiptRoundTripAndAccountIsolation()
+{
+    QTemporaryDir directory;
+    MessageService service;
+    QSignalSpy requests(&service, &MessageService::receiptRequested);
+    QSignalSpy sync(&service, &MessageService::syncRequested);
+    QSignalSpy changed(&service, &MessageService::messagesChanged);
+    service.start(directory.path(), 8, true);
+    service.registerChat(12);
+    QTRY_COMPARE_WITH_TIMEOUT(sync.size(), 1, 5000);
+    auto page = sync.first()[0].toJsonObject();
+    page["error"] = 0; page["next_cursor"] = 10; page["load_more"] = false;
+    page["msgs"] = QJsonArray{QJsonObject{{"message_id", 10}, {"send_id", 7}, {"recv_id", 8},
+        {"content", "incoming"}, {"created_at", 1700000000}, {"msg_uuid", "x"}}};
+    service.acceptSyncPage(page);
+    QTRY_VERIFY_WITH_TIMEOUT(requests.size() >= 2, 5000);
+    QJsonObject report;
+    for (const auto &entry : requests) if (entry[0].toUInt() == 1029) report = entry[1].toJsonObject();
+    QVERIFY(!report.isEmpty());
+    QCOMPARE(report["items"].toArray().first().toObject()["level"].toString(), QString("delivered"));
+    service.observeRead(12, {10});
+    report["error"] = 0; report["items"] = QJsonArray{receipt(10, 8, 1, 1)};
+    service.acceptReceiptResponse(report);
+    QTRY_VERIFY_WITH_TIMEOUT(requests.size() >= 3, 5000);
+    QCOMPARE(requests.last()[1].toJsonObject()["items"].toArray().first().toObject()["level"].toString(), QString("read"));
+    service.stop(); service.start(directory.path() + "/other", 7, true);
+    const auto count = changed.size();
+    service.acceptReceiptResponse(report);
+    service.loadHistory(12);
+    QSignalSpy loaded(&service, &MessageService::historyLoaded);
+    QTRY_COMPARE_WITH_TIMEOUT(loaded.size(), 1, 5000);
+    QCOMPARE(changed.size(), count);
+    QVERIFY(qvariant_cast<QVector<StoredMessage>>(loaded.first()[2]).isEmpty());
 }
 
 QTEST_GUILESS_MAIN(MessageStorageTests)

@@ -1,4 +1,6 @@
 #include "messageitemdelegate.h"
+#include "messagereadtracker.h"
+#include "messagestate.h"
 #include "messagelistmodel.h"
 #include "messagemodelstore.h"
 
@@ -40,6 +42,14 @@ private slots:
 
 void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized()
 {
+    auto facts = MessageStateReducer::reduce({}, MessageStateReducer::Event::Dispatch, 1);
+    facts = MessageStateReducer::reduce(facts, MessageStateReducer::Event::Dispatch, 2);
+    QCOMPARE(MessageStateReducer::reduce(facts, MessageStateReducer::Event::Dispatch, 2).phase, SendPhase::InFlight);
+    QCOMPARE(MessageStateReducer::reduce(facts, MessageStateReducer::Event::Timeout, 1).phase, SendPhase::InFlight);
+    facts = MessageStateReducer::reduce(facts, MessageStateReducer::Event::Commit, 1, 42);
+    facts = MessageStateReducer::reduce(facts, MessageStateReducer::Event::Read, 0, 42);
+    QCOMPARE(MessageStateReducer::reduce(facts, MessageStateReducer::Event::Rejected, 2).receipt, ReceiptLevel::Read);
+    QCOMPARE(MessageStateReducer::reduce(facts, MessageStateReducer::Event::Commit, 2, 43).messageId, 42);
     MessageListModel model(7);
     int inserted = 0;
     int changed = 0;
@@ -57,6 +67,10 @@ void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized
     QCOMPARE(changed, 1);
     QVERIFY(model.updateStatusByMessageId(42, DeliveryStatus::Read));
     QCOMPARE(changed, 2);
+    QVERIFY(model.acknowledgeMessage(QStringLiteral("uuid-1"), 42, DeliveryStatus::Sent));
+    QCOMPARE(model.recordAt(0)->deliveryStatus, DeliveryStatus::Read);
+    QVERIFY(!model.updateStatusByMessageId(42, DeliveryStatus::Failed));
+    QCOMPARE(model.recordAt(0)->deliveryStatus, DeliveryStatus::Read);
     QVERIFY(model.removeByMessageId(42));
     QCOMPARE(removed, 1);
     QCOMPARE(model.rowCount(), 0);
@@ -66,6 +80,8 @@ void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized
     QCOMPARE(model.rowCount(), 2);
     QVERIFY(model.acknowledgeMessage(QStringLiteral("retry-uuid"), 9001, DeliveryStatus::Sent));
     QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.recordAt(0)->deliveryStatus, DeliveryStatus::Read);
+    QVERIFY(!model.acknowledgeMessage(QStringLiteral("retry-uuid"), 9002, DeliveryStatus::Sent));
     QCOMPARE(model.rowForMessageId(9001), model.rowForClientMessageId(QStringLiteral("retry-uuid")));
     QCOMPARE(model.appendMessage(message(9001, QStringLiteral("retry-uuid"))), 0);
     QVERIFY(model.acknowledgeMessage(QStringLiteral("retry-uuid"), 9001, DeliveryStatus::Sent));
@@ -88,7 +104,8 @@ void MessageModelTests::unknownStableIdsDoNotMutateTheModel()
     QVERIFY(sharedUuid.acknowledgeMessage("shared-uuid", 56, DeliveryStatus::Sent, 1));
     QCOMPARE(sharedUuid.recordAt(sharedUuid.rowForMessageId(55))->senderId, 2);
     QCOMPARE(sharedUuid.recordAt(sharedUuid.rowForMessageId(56))->senderId, 1);
-    QVERIFY(sharedUuid.updateStatusByClientId("shared-uuid", DeliveryStatus::Failed, 1));
+    QVERIFY(!sharedUuid.updateStatusByClientId("shared-uuid", DeliveryStatus::Failed, 1));
+    QCOMPARE(sharedUuid.recordAt(sharedUuid.rowForMessageId(56))->deliveryStatus, DeliveryStatus::Sent);
     QCOMPARE(sharedUuid.recordAt(sharedUuid.rowForMessageId(55))->deliveryStatus, DeliveryStatus::Read);
     QVERIFY(sharedUuid.removeByMessageId(55));
     QCOMPARE(sharedUuid.rowForClientMessageId("shared-uuid", 1), 0);
@@ -195,15 +212,36 @@ void MessageModelTests::removalAndAcknowledgementRebuildShiftedIndexes()
     QCOMPARE(model.rowForClientMessageId(QStringLiteral("client-100")), -1);
     QCOMPARE(model.rowForMessageId(200), 0);
     QCOMPARE(model.rowForMessageId(300), 1);
-    QVERIFY(model.acknowledgeMessage(QStringLiteral("client-200"), 250,
+    QVERIFY(!model.acknowledgeMessage(QStringLiteral("client-200"), 250,
                                      DeliveryStatus::Sent));
-    QCOMPARE(model.rowForMessageId(200), -1);
-    QCOMPARE(model.rowForMessageId(250), 0);
+    QCOMPARE(model.rowForMessageId(200), 0);
+    QCOMPARE(model.rowForMessageId(250), -1);
     QCOMPARE(model.indexForStableId(0, QStringLiteral("client-200")).row(), 0);
+    model.appendMessage(message(0, QStringLiteral("client-pending")));
+    QVERIFY(model.acknowledgeMessage(QStringLiteral("client-pending"), 250, DeliveryStatus::Sent));
+    QCOMPARE(model.rowForMessageId(250), 2);
+    QCOMPARE(model.rowForClientMessageId(QStringLiteral("client-pending")), 2);
 }
 
 void MessageModelTests::textAndChatIdentityRoundTripWithoutNormalization()
 {
+    MessageReadExposure exposure;
+    const QRect viewport(0, 0, 300, 300);
+    const QHash<qint64, QRect> visible{{1, QRect(0, 0, 100, 100)}, {3, QRect(0, 200, 100, 100)}};
+    QVERIFY(exposure.sample(7, false, visible, viewport, 0).isEmpty());
+    QVERIFY(exposure.sample(7, true, visible, viewport, 1000).isEmpty());
+    QVERIFY(exposure.sample(7, true, visible, viewport, 1499).isEmpty());
+    const auto read = exposure.sample(7, true, visible, viewport, 1500);
+    QCOMPARE(QSet<qint64>(read.begin(), read.end()), (QSet<qint64>{1, 3})); // Skipped ID 2 is not read.
+    QVERIFY(exposure.sample(8, true, visible, viewport, 1600).isEmpty());
+    QVERIFY(exposure.sample(8, false, visible, viewport, 1900).isEmpty());
+    QVERIFY(exposure.sample(8, true, visible, viewport, 2000).isEmpty());
+    QVERIFY(exposure.sample(8, true, visible, viewport, 2499).isEmpty());
+    exposure.clear();
+    QHash<qint64, QRect> tall{{4, QRect(0, -100, 100, 1000)}};
+    QVERIFY(exposure.sample(7, true, tall, viewport, 0).isEmpty());
+    QCOMPARE(exposure.sample(7, true, tall, viewport, 500), (QVector<qint64>{4}));
+
     MessageListModel model(7);
     const QString unicodeText = QStringLiteral("你好，组合字符 e\u0301，😄\nsecond line");
     QCOMPARE(model.appendMessages({
@@ -286,6 +324,38 @@ void MessageModelTests::delegateReflowsLongTextForANarrowViewport()
     const QSize narrowSize = delegate.sizeHint(narrow, model.index(0));
     QVERIFY(wideSize.height() > 0);
     QVERIFY(narrowSize.height() > wideSize.height());
+
+    // Exercise the real timer, delegate geometry and widget visibility gate.
+    MessageListModel incoming(7);
+    auto row = message(99, "visible", "readable card");
+    row.isSelf = false;
+    row.durable = false;
+    incoming.appendMessage(row);
+    view.setModel(&incoming);
+    view.setItemDelegate(&delegate);
+    view.resize(500, 300);
+    MessageReadTracker tracker(&view);
+    QSignalSpy observed(&tracker, &MessageReadTracker::observed);
+    view.show();
+    view.activateWindow();
+    QTRY_VERIFY(view.isActiveWindow());
+    QTest::qWait(650);
+    QVERIFY(observed.isEmpty()); // Network/model presence without SQLite is insufficient.
+    row.durable = true;
+    incoming.mergeMessages({row});
+    QTRY_COMPARE_WITH_TIMEOUT(observed.size(), 1, 1500);
+    QCOMPARE(observed.first()[0].toInt(), 7);
+    QCOMPARE(qvariant_cast<QVector<qint64>>(observed.first()[1]), QVector<qint64>{99});
+    observed.clear();
+    view.hide();
+    QTest::qWait(600);
+    QVERIFY(observed.isEmpty());
+    view.show();
+    view.activateWindow();
+    QTest::qWait(200);
+    view.showMinimized();
+    QTest::qWait(600);
+    QVERIFY(observed.isEmpty());
 }
 
 QTEST_MAIN(MessageModelTests)

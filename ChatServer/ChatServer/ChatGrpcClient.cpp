@@ -1,5 +1,21 @@
 #include "ChatGrpcClient.h"
 
+message::ReceiptChangedRsp ChatGrpcClient::NotifyMessageReceiptChanged(
+    const std::string& server_name, const message::ReceiptChangedReq& request) {
+    auto found = _pool.find(server_name);
+    if (found == _pool.end()) {
+        message::ReceiptChangedRsp response;
+        response.set_error(ErrorCodes::RPCFailed);
+        return response;
+    }
+    auto result = rpc::InvokeUnary<ChatConnectionPool, message::ReceiptChangedReq, message::ReceiptChangedRsp>(
+        *found->second, request, _policy.rpc_deadline,
+        [](ChatService::Stub& stub, ClientContext& context, const message::ReceiptChangedReq& req,
+           message::ReceiptChangedRsp& rsp) { return stub.NotifyMessageReceiptChanged(&context, req, &rsp); });
+    if (!result) result.response.set_error(ErrorCodes::RPCFailed);
+    return result.response;
+}
+
 #include "ConfigMgr.h"
 #include "PeerServerRouting.h"
 

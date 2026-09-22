@@ -76,7 +76,8 @@ target_link_libraries(chat_gate_http_transport PUBLIC
 )
 
 add_library(chat_message_model STATIC
-    messagerecord.h
+    messagerecord.h messagestate.h
+    messagereadtracker.h messagereadtracker.cpp
     messagelistmodel.h messagelistmodel.cpp
     messagemodelstore.h messagemodelstore.cpp
     messageitemdelegate.h messageitemdelegate.cpp
@@ -325,7 +326,7 @@ if(BUILD_TESTING)
         add_test(NAME session_driver.${SESSION_DRIVER_CASE}
             COMMAND session_driver_tests ${SESSION_DRIVER_CASE})
         set_tests_properties(session_driver.${SESSION_DRIVER_CASE} PROPERTIES
-            ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 20)
+            ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT};QT_PLUGIN_PATH=${QT_TEST_PLUGIN_PATH}" LABELS "integration" TIMEOUT 20)
     endforeach()
     add_executable(local_avatar_tests
         tests/local-avatar/local_avatar_tests.cpp
