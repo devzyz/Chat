@@ -11,7 +11,7 @@ int main() {
     try {
         const auto started = std::chrono::steady_clock::now();
         {
-            // An empty pool exercises the actual worker and waiting borrowers
+            // An empty pool exercises the actual pool and waiting borrowers
             // without opening a database connection or using a test adapter.
             MysqlConnectionPool pool("", "", "", "", 0);
             auto borrower = std::async(std::launch::async, [&pool] { return pool.getConnection(); });

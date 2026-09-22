@@ -72,9 +72,9 @@ $scriptTestGroups = @(
     }
 )
 $regressionReportGroups = @(
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 68 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 57 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 106 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 75 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 58 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 107 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
@@ -401,9 +401,9 @@ function Run-ServerTests {
     $chatGrpcClientBinary = Require-File $chatGrpcClientTestExecutable 'Build the ChatGrpcClientTests target first.'
 
     $executions = @(
-        @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 68 }
-        @{ Binary = $componentBinary; Report = $reports[1]; ExpectedCount = 57 }
-        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 106 }
+        @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 75 }
+        @{ Binary = $componentBinary; Report = $reports[1]; ExpectedCount = 58 }
+        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 107 }
         @{ Binary = $chatGrpcClientBinary; Report = $reports[3]; ExpectedCount = 4 }
         @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4]; ExpectedCount = 2 }
         @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5]; ExpectedCount = 2 }
@@ -574,8 +574,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 13 -or $total -ne 371) {
-        throw "Regression report baseline mismatch: expected 13 reports and 371 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 13 -or $total -ne 380) {
+        throw "Regression report baseline mismatch: expected 13 reports and 380 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     $legacyTotal = 0
     foreach ($legacyGroup in $legacyRegressionReportGroups) {
@@ -764,9 +764,9 @@ function Confirm-TestStructure {
     $logicSystemSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\LogicSystem.cpp') -Raw
     $chatSessionSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\CSession.cpp') -Raw
     $logicDispatcherTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\logic-dispatcher\logic_dispatcher_tests.cpp') -Raw
-    if (@([regex]::Matches($logicDispatcherTests, 'TEST\(LogicDispatcherTests,')).Count -ne 7 -or
-        @([regex]::Matches($logicDispatcherTests, 'T08-LOGIC-0[1-7]')).Count -ne 7) {
-        throw 'Logic dispatcher tests must register exactly T08-LOGIC-01..07 as seven Server Unit testcases.'
+    if (@([regex]::Matches($logicDispatcherTests, 'TEST\(LogicDispatcherTests,')).Count -ne 8 -or
+        @([regex]::Matches($logicDispatcherTests, 'T08-LOGIC-0[1-8]')).Count -ne 8) {
+        throw 'Logic dispatcher tests must register exactly T08-LOGIC-01..08 as eight Server Unit testcases.'
     }
     if ($logicDispatcherSource -notmatch 'messages\.size\(\)\s*>=\s*MAX_DEALQUE' -or
         $logicDispatcherSource -notmatch 'stopping\s*&&\s*messages\.empty\(\)' -or
@@ -1307,7 +1307,7 @@ function Confirm-TestStructure {
             throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
         }
     }
-    foreach ($requiredCount in @(68, 57, 106, 4)) {
+    foreach ($requiredCount in @(75, 58, 107, 4)) {
         if ($runServerTests.Groups['body'].Value -notmatch "ExpectedCount\s*=\s*$requiredCount") {
             throw "RunServerTests is missing the exact current Server testcase count $requiredCount."
         }
@@ -1340,11 +1340,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact thirteen-report/371-testcase baseline.'
+        throw 'RunAllTests must audit the exact thirteen-report/380-testcase baseline.'
     }
     if ($regressionReportGroups.Count -ne 13 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 371) {
-        throw 'The registered regression baseline must remain exactly 13 reports and 371 testcases.'
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 380) {
+        throw 'The registered regression baseline must remain exactly 13 reports and 380 testcases.'
     }
     if ($legacyRegressionReportGroups.Count -ne 12 -or
         ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 232) {

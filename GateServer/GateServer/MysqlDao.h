@@ -1,6 +1,6 @@
 #pragma once
 #include "const.h"
-#include <thread>
+#include "../../common/mysql/ConnectionPool.h"
 #include <jdbc/mysql_driver.h>
 #include <jdbc/mysql_connection.h>
 #include <jdbc/cppconn/prepared_statement.h>
@@ -8,39 +8,21 @@
 #include <jdbc/cppconn/resultset.h>
 #include <jdbc/cppconn/statement.h>
 
-/**
- * 用于维持每个链接的活性, 有一个线程没隔一段时间，就检测一下每个连接上次跟sql通信过去多久了，如果超过了一定时间，此线程就通过该链接
- * 与sql通信一下，让sql知道这个链接还是有用的
- */
-
 class SqlConnection {
 public:
-	SqlConnection(sql::Connection* con, int64_t lasttime);
-	std::unique_ptr<sql::Connection> _con;
-	int64_t _last_oper_time;
+    explicit SqlConnection(std::unique_ptr<sql::Connection> connection = {}) : _con(std::move(connection)) {}
+    std::unique_ptr<sql::Connection> _con;
 };
 
 class MysqlConnectionPool {
 public:
-	MysqlConnectionPool(const std::string& url, const std::string& user, const std::string& pass, const std::string& schema, int poolsize);
-	void checkConnection();
-	~MysqlConnectionPool();
-	void close();
-	std::unique_ptr<SqlConnection> getConnection();
-	void returnConnection(std::unique_ptr<SqlConnection> con);
+    MysqlConnectionPool(const std::string& url, const std::string& user, const std::string& pass,
+        const std::string& schema, int poolsize);
+    void close();
+    std::unique_ptr<SqlConnection> getConnection();
+    void returnConnection(std::unique_ptr<SqlConnection> connection) noexcept;
 private:
-	std::string _url;
-	std::string _user;
-	std::string _pass;
-	std::string _schema;
-	int _poolSize; // 连接池大小
-	std::queue<std::unique_ptr<SqlConnection>> _pool; // 连接池
-	std::mutex _mutex;
-	std::condition_variable _cond;
-    std::condition_variable _check_cond;
-    std::mutex _close_mutex;
-	std::atomic<bool> _b_stop;
-	std::thread _check_thread;
+    std::unique_ptr<chat_mysql::ConnectionPool<>> _connections;
 };
 
 struct UserInfo {

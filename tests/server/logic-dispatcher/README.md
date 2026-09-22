@@ -11,6 +11,7 @@
 | T08-LOGIC-05 | Unit | Stop drains accepted messages and completes within two seconds. |
 | T08-LOGIC-06 | Unit | Submit after close is `Closed`; repeated Stop is idempotent. |
 | T08-LOGIC-07 | Unit | Unknown IDs do not block later valid messages and diagnostics omit bodies. |
+| T08-LOGIC-08 | Unit | A throwing handler does not terminate the worker; later messages run and exception/payload text is not logged. |
 
 Domain is Architecture and Level is Unit. The only dependency is in-process synchronization; no Adapter, socket, Redis, MySQL, or gRPC is used. Tests synchronize with condition variables, futures, and barriers with a two-second hard limit and explicitly stop every dispatcher. `RunServerTests` writes the cases to `server_unit.xml`; the Windows Server CI lane uploads `server_*.xml`.
 

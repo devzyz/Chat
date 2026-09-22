@@ -57,6 +57,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="config\config_mgr_tests.cpp" />
+    <ClCompile Include="data\mysql_pool_tests.cpp" />
     <ClCompile Include="messaging\msg_node_tests.cpp" />
     <ClCompile Include="lifecycle\asio_pool_contract_tests.cpp" />
     <ClCompile Include="logic-dispatcher\logic_dispatcher_tests.cpp" />

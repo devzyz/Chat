@@ -1,5 +1,6 @@
 #pragma once
-#include "../grpc/GrpcClientRuntime.h"
+#include "../mysql/ConnectionPool.h"
+#include "../message/MessagePersistence.h"
 #include <jdbc/mysql_driver.h>
 #include <jdbc/mysql_connection.h>
 #include <jdbc/cppconn/prepared_statement.h>
@@ -13,10 +14,11 @@ class ResourceCatalog {
 public:
     ResourceCatalog(const std::string& host, const std::string& user,
                     const std::string& password, const std::string& schema)
-        : _pool(2, std::chrono::milliseconds(2000), [=] {
+        : _pool(2, [=] {
             sql::ConnectOptionsMap options;
             options["hostName"] = host; options["userName"] = user; options["password"] = password;
             options["OPT_CONNECT_TIMEOUT"] = 3; options["OPT_READ_TIMEOUT"] = 5; options["OPT_WRITE_TIMEOUT"] = 5;
+            options["OPT_RECONNECT"] = false;
             std::unique_ptr<sql::Connection> connection(sql::mysql::get_mysql_driver_instance()->connect(options));
             connection->setSchema(schema); return connection;
         }) {}
@@ -74,8 +76,8 @@ public:
     Message CommitMessage(int sender, int recipient, int chat, const std::string& uuid, const std::string& id) {
         if (uuid.empty() || uuid.size() > 64) throw std::invalid_argument("invalid message UUID");
         auto lease = Acquire();
-        lease->setAutoCommit(false);
-        try {
+        messaging::Transaction transaction(*lease);
+        {
             // Lock the conversation row to serialize duplicate submissions across Chat instances.
             std::unique_ptr<sql::PreparedStatement> membership(lease->prepareStatement(
                 "SELECT chat_id FROM private_chat WHERE chat_id=? AND "
@@ -94,7 +96,7 @@ public:
                 if (prior->getString(3) != id || prior->getInt(4) != chat || prior->getInt(5) != recipient)
                     throw std::runtime_error("message UUID conflict");
                 Message message{prior->getInt(1), prior->getString(2)};
-                lease->commit(); lease->setAutoCommit(true); return message;
+                transaction.Commit(); return message;
             }
             prior.reset();
             std::unique_ptr<sql::PreparedStatement> resource(lease->prepareStatement(
@@ -118,19 +120,12 @@ public:
             std::unique_ptr<sql::PreparedStatement> reference(lease->prepareStatement(
                 "INSERT INTO resource_message(message_id,resource_id,sender_uid,client_uuid) VALUES(?,?,?,?)"));
             reference->setInt(1, message_id); reference->setString(2, id); reference->setInt(3, sender); reference->setString(4, uuid);
-            reference->executeUpdate(); lease->commit(); lease->setAutoCommit(true);
+            reference->executeUpdate(); transaction.Commit();
             return {message_id, content};
-        } catch (...) {
-            try { lease->rollback(); lease->setAutoCommit(true); } catch (...) {}
-            throw;
         }
     }
 private:
-    rpc::BoundedPool<sql::Connection>::Lease Acquire() {
-        auto result = _pool.Acquire();
-        if (!result) throw std::runtime_error("resource database pool unavailable");
-        return std::move(result.lease);
-    }
-    rpc::BoundedPool<sql::Connection> _pool;
+    chat_mysql::ConnectionPool<>::Lease Acquire() { return _pool.Acquire(); }
+    chat_mysql::ConnectionPool<> _pool;
 };
 }

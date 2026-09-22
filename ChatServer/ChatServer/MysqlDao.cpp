@@ -7,81 +7,28 @@
 #include "MySqlMessageCommitAdapter.h"
 #include "../../schema/SchemaContract.h"
 
-SQLConnection::SQLConnection(sql::Connection* connection, int64_t lasttime) 
-	: _connection(connection), _last_operator_time(lasttime) {
-
-}
-
 MysqlPool::MysqlPool(const std::string& url, const std::string& user, const std::string& password,
     const std::string& schema, int pool_size)
-    : _url(url), _user(user), _password(password), _schema(schema), _pool_size(pool_size), _b_stop(false) {
-    for (int index = 0; index < _pool_size; ++index) {
-        auto connection = message_commit::ConnectBounded(_url, _user, _password, _schema);
-        if (index == 0) { chat_schema::Verify(*connection); }
-        _que.push(std::make_unique<SQLConnection>(connection.release(), 0));
-        ++_live_count;
+    : _connections(std::make_unique<chat_mysql::ConnectionPool<>>(pool_size, [=] {
+        return message_commit::ConnectBounded(url, user, password, schema);
+    })) {
+    if (pool_size > 0) {
+        auto lease = _connections->Acquire();
+        chat_schema::Verify(*lease);
     }
 }
 
-MysqlPool::~MysqlPool() { close(); }
-
 std::unique_ptr<SQLConnection> MysqlPool::GetConnection(message_commit::Deadline deadline) {
-    std::unique_lock<std::mutex> lock(_que_mutex);
-    if (!_cond.wait_until(lock, deadline, [this] {
-        return _b_stop || !_que.empty() || _live_count < _pool_size;
-    }) || _b_stop) { return nullptr; }
-    if (!_que.empty()) {
-        auto connection = std::move(_que.front());
-        _que.pop();
-        return connection;
-    }
-    ++_live_count;
-    lock.unlock();
-    try {
-        auto connection = message_commit::ConnectBounded(_url, _user, _password, _schema);
-        auto borrowed = std::make_unique<SQLConnection>(connection.release(), 0);
-        if (std::chrono::steady_clock::now() >= deadline || _b_stop) {
-            returnConnection(std::move(borrowed));
-            return nullptr;
-        }
-        return borrowed;
-    } catch (const std::exception&) {
-        lock.lock();
-        --_live_count;
-        _cond.notify_all();
-        return nullptr;
-    }
+    auto result = std::make_unique<SQLConnection>();
+    result->_connection = _connections->Borrow(deadline);
+    return result->_connection ? std::move(result) : nullptr;
 }
 
 void MysqlPool::returnConnection(std::unique_ptr<SQLConnection> connection) noexcept {
-    bool reusable = false;
-    try {
-        reusable = connection && connection->_connection && !connection->_connection->isClosed();
-    } catch (const std::exception&) {
-        // A health-query exception invalidates the session; callers include noexcept cleanup paths.
-        reusable = false;
-    }
-    std::lock_guard<std::mutex> lock(_que_mutex);
-    if (_b_stop) { return; }
-    if (!reusable) {
-        --_live_count;
-    } else {
-        try { _que.push(std::move(connection)); }
-        catch (const std::exception&) { --_live_count; }
-    }
-    _cond.notify_all();
+    if (connection) _connections->Return(std::move(connection->_connection));
 }
 
-void MysqlPool::close() {
-    std::queue<std::unique_ptr<SQLConnection>> closing;
-    {
-        std::lock_guard<std::mutex> lock(_que_mutex);
-        if (_b_stop.exchange(true)) { return; }
-        closing.swap(_que);
-        _cond.notify_all();
-    }
-    // Connection destructors may perform IO; never hold the pool mutex here.
-}
+void MysqlPool::close() { _connections->Close(); }
 
 MysqlDao::MysqlDao() {
 	auto& configMgr = ConfigMgr::GetInstance();
@@ -277,13 +224,12 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 	}
 
 	Defer defer([this, &connection]() {
-		connection->_connection->setAutoCommit(true);
 		_pool->returnConnection(std::move(connection));
 		});
 
 	try {
 		// 手动提交事务
-		connection->_connection->setAutoCommit(false);
+		messaging::Transaction transaction(*connection->_connection);
 
 		// 首先查询一下当前申请是否已经完成，如果没有完成，则通过行级锁进行加锁
 		{
@@ -296,7 +242,6 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 
 			std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 			if (!res->next()) {
-				connection->_connection->rollback();
 				return false;
 			}
 		}
@@ -318,7 +263,6 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 
 			// 执行
 			if (res <= 0) {
-				connection->_connection->rollback();
 				return false;
 			}
 		}
@@ -334,7 +278,6 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 
 			// 执行
 			if (pstmt1->executeUpdate() != 1) {
-				connection->_connection->rollback();
 				return false;
 			}
 
@@ -348,7 +291,6 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 
 			// 执行
 			if (pstmt2->executeUpdate() != 1) {
-				connection->_connection->rollback();
 				return false;
 			}
 		}
@@ -370,7 +312,6 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 				chat_id = res->getInt(1);
 			}
 			else {
-				connection->_connection->rollback();
 				return false;
 			}
 		}
@@ -393,7 +334,6 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 			// 执行修改
 			if (pstmt2->executeUpdate() != 1) {
 				_chat_id = 0;
-				connection->_connection->rollback();
 				return false;
 			}
 		}
@@ -415,7 +355,6 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 				int result = pstmt->executeUpdate();
 				if (result == 0) {
 					_chat_id = 0;
-					connection->_connection->rollback();
 					return false;
 				}
 
@@ -428,7 +367,6 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 				}
 				else {
 					_chat_id = 0;
-					connection->_connection->rollback();
 					return false;
 				}
 
@@ -452,7 +390,6 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 				int result = pstmt->executeUpdate();
 				if (result == 0) {
 					_chat_id = 0;
-					connection->_connection->rollback();
 					return false;
 				}
 
@@ -465,7 +402,6 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 				}
 				else {
 					_chat_id = 0;
-					connection->_connection->rollback();
 					return false;
 				}
 
@@ -475,13 +411,12 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 		}
 
 		// 无错误，则提交事务
-		connection->_connection->commit();
+		transaction.Commit();
 		return true;
 	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql AuthFriendApply failed, apply_uid={}, auth_uid={}, error={}", apply_uid, auth_uid, e.what());
+	catch (const std::exception&) {
+		SPDLOG_ERROR("mysql AuthFriendApply failed, apply_uid={}, auth_uid={}", apply_uid, auth_uid);
 		// 有错误，则回滚
-		connection->_connection->rollback();
 		return false;
 	}
 }
@@ -610,6 +545,7 @@ bool MysqlDao::GetUserChatList(int uid, int current_chat_id, int page_size,
 
 // 创建私聊
 bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
+	chat_id = -1;
 	auto connection = _pool->GetConnection();
 
 	if (connection == nullptr) {
@@ -617,13 +553,12 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 	}
 
 	Defer defer([this, &connection]() {
-		connection->_connection->setAutoCommit(true);
 		_pool->returnConnection(std::move(connection));
 		});
 
 	try {
 		// 手动提交事务
-		connection->_connection->setAutoCommit(false);
+		messaging::Transaction transaction(*connection->_connection);
 
 		// 先查看一下，是否已经有过聊天数据了
 		{
@@ -634,8 +569,8 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 			auto minn = std::min(user1_id, user2_id);
 			auto maxn = std::max(user1_id, user2_id);
 
-			pstmt->setInt(1, user1_id);
-			pstmt->setInt(2, user2_id);
+			pstmt->setInt(1, minn);
+			pstmt->setInt(2, maxn);
 
 			std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 
@@ -645,7 +580,7 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 			}
 
 			if (chat_id != -1) {
-				connection->_connection->commit();
+				transaction.Commit();
 				return true;
 			}
 		}
@@ -664,7 +599,6 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 				chat_id = res->getInt(1);
 			}
 			else {
-				connection->_connection->rollback();
 				return false;
 			}
 		}
@@ -684,17 +618,17 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 			pstmt2->setInt(3, max_userid);
 			// 执行修改
 			if (pstmt2->executeUpdate() != 1) {
-				connection->_connection->rollback();
 				return false;
 			}
 		}
 		
 		// 无错误，则提交事务
-		connection->_connection->commit();
+		transaction.Commit();
 		return true;
 	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql CreatePrivateChat failed, user1_id={}, user2_id={}, error={}", user1_id, user2_id, e.what());
+	catch (const std::exception&) {
+		SPDLOG_ERROR("mysql CreatePrivateChat failed, user1_id={}, user2_id={}", user1_id, user2_id);
+		chat_id = -1;
 		return false;
 	}
 }

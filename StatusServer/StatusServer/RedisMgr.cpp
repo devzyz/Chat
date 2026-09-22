@@ -1,4 +1,5 @@
 #include "RedisMgr.h"
+#include "../../common/redis/Reply.h"
 #include "ConfigMgr.h"
 #include "DistLock.h"
 
@@ -45,6 +46,7 @@ bool RedisMgr::LPush(const std::string& key, const std::string& value) {
 }
 
 bool RedisMgr::LPop(const std::string& key, std::string& value) {
+    value.clear();
 	auto connect = _pool->getConnection();
 	if (connect == nullptr) {
 		return false;
@@ -65,7 +67,11 @@ bool RedisMgr::LPop(const std::string& key, std::string& value) {
 		return false;
 	}
 
-	value = reply->str;
+	if (!chat_redis::ReadString(reply, value)) {
+        freeReplyObject(reply);
+        _pool->returnConnection(connect);
+        return false;
+    }
 	freeReplyObject(reply);
 	SPDLOG_DEBUG("redis LPOP success, key={}", key);
 	_pool->returnConnection(connect);
@@ -88,7 +94,7 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value) {
 	}
 
 	// 执行失败
-	if (reply->type == REDIS_REPLY_INTEGER || reply->integer <= 0) {
+	if (!chat_redis::IsPositiveInteger(reply)) {
 		SPDLOG_WARN("redis RPUSH failed, key={}, value_size={}, reason=unexpected_reply", key, value.size());
 		freeReplyObject(reply);
 		_pool->returnConnection(connect);
@@ -102,6 +108,7 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value) {
 }
 
 bool RedisMgr::RPop(const std::string& key, std::string& value) {
+    value.clear();
 	auto connect = _pool->getConnection();
 	if (connect == nullptr) {
 		return false;
@@ -122,7 +129,11 @@ bool RedisMgr::RPop(const std::string& key, std::string& value) {
 		return false;
 	}
 
-	value = reply->str;
+	if (!chat_redis::ReadString(reply, value)) {
+        freeReplyObject(reply);
+        _pool->returnConnection(connect);
+        return false;
+    }
 	freeReplyObject(reply);
 	SPDLOG_DEBUG("redis RPOP success, key={}", key);
 	_pool->returnConnection(connect);
@@ -209,6 +220,7 @@ void RedisMgr::Close() {
  * 3. 返回值类型必须为string
  */
 bool RedisMgr::Get(const std::string& key, std::string& value) {
+    value.clear();
 	auto connection = _pool->getConnection();
 	if (connection == nullptr) {
 		value = "";
@@ -240,7 +252,9 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
 		return false;
 	}
 
-	value = reply->str;
+	if (!chat_redis::ReadString(reply, value)) {
+        return false;
+    }
 	SPDLOG_DEBUG("redis GET success, key={}, value_size={}", key, value.size()); // 日志todo...
 
 	return true;
@@ -295,6 +309,7 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
  * 3. 返回类型必须为string
  */
 bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key, std::string& value) {
+    value.clear();
 	auto connection = _pool->getConnection();
 	if (connection == nullptr) {
 		value = "";
@@ -326,7 +341,9 @@ bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key,
 		return false;
 	}
 
-	value = reply->str;
+	if (!chat_redis::ReadString(reply, value)) {
+        return false;
+    }
 	SPDLOG_DEBUG("redis HGET success, key={}, field={}, value_size={}", first_key, second_key, value.size()); //日志todo...
 	return true;
 }

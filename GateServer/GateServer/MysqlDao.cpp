@@ -19,142 +19,30 @@ std::unique_ptr<sql::Connection> ConnectGateMysql(const std::string& url, const 
 }
 }
 
-SqlConnection::SqlConnection(sql::Connection* con, int64_t lasttime) : _con(con), _last_oper_time(lasttime) {
-	
-};
-
-/**
- * @brief 
- * @param url ip地址
- * @param user 用户名
- * @param pass 密码
- * @param schema 属于那个服务
- * @param poolsize 连接池大小
- * 
- * 创建sql连接池，并启动心跳检测线程
- */
-MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::string& user, const std::string& pass, const std::string& schema, int poolsize) : 
-	_url(url), _user(user), _pass(pass), _schema(schema), _poolSize(poolsize), _b_stop(false) {
-	try {
-		for (int i = 0; i < _poolSize; i++) {
-            auto owned_connection = ConnectGateMysql(_url, _user, _pass, _schema);
-            chat_schema::Verify(*owned_connection);
-			auto* con = owned_connection.release();
-			// 获取当前时间戳
-			auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-			// 将时间戳转换为秒
-			long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
-			_pool.push(std::make_unique<SqlConnection>(con, timestamp));
-		}
-
-        _check_thread = std::thread([this] {
-            std::unique_lock<std::mutex> lock(_mutex);
-            while (!_b_stop) {
-                if (_check_cond.wait_for(lock, std::chrono::seconds(60), [this] { return _b_stop.load(); })) {
-                    break;
-                }
-                lock.unlock();
-                try { checkConnection(); }
-                catch (const std::exception&) {
-                    SPDLOG_WARN("mysql keepalive unavailable");
-                }
-                lock.lock();
-            }
-        });
-	}
-	catch (const sql::SQLException&) {
-        throw std::runtime_error("mysql_initialization_failed");
-	}
-}
-
-// 用于保证每个sql连接的活性
-void MysqlConnectionPool::checkConnection() {
-	std::lock_guard<std::mutex> lock(_mutex);
-	int poolsize = _pool.size();
-	// 获取当前时间戳
-	auto currentTime = std::chrono::system_clock::now().time_since_epoch();
-	// 将时间戳转换为秒
-	long long timestamp = std::chrono::duration_cast<std::chrono::seconds>(currentTime).count();
-
-	for (int i = 0; i < poolsize; i++) {
-        if (_b_stop) { break; }
-		auto con = std::move(_pool.front());
-		_pool.pop();
-
-		// 每次循环结束，都会自动执行这个函数
-		Defer defer([this, &con]() {
-			_pool.push(std::move(con));
-			});
-
-		if (timestamp - con->_last_oper_time < 600) {
-			continue;
-		}
-
-		try {
-			std::unique_ptr<sql::Statement> stmt(con->_con->createStatement());
-            std::unique_ptr<sql::ResultSet> rows(stmt->executeQuery("SELECT 1"));
-			con->_last_oper_time = timestamp;
-			SPDLOG_TRACE("mysql keepalive succeeded, timestamp={}", timestamp);
-		}
-		catch (const sql::SQLException&) {
-            SPDLOG_WARN("mysql keepalive failed");
-			// 重新创建连接，并替换旧的连接
-            if (_b_stop) { break; }
-            con->_con = ConnectGateMysql(_url, _user, _pass, _schema);
-			con->_last_oper_time = timestamp;
-		}
-	}
-}
-
-MysqlConnectionPool::~MysqlConnectionPool() {
-    close();
+MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::string& user,
+    const std::string& pass, const std::string& schema, int poolsize)
+    try : _connections(std::make_unique<chat_mysql::ConnectionPool<>>(poolsize, [=] {
+        return ConnectGateMysql(url, user, pass, schema);
+    })) {
+    if (poolsize > 0) {
+        auto lease = _connections->Acquire();
+        chat_schema::Verify(*lease);
+    }
+} catch (const sql::SQLException&) {
+    throw std::runtime_error("mysql_initialization_failed");
 }
 
 std::unique_ptr<SqlConnection> MysqlConnectionPool::getConnection() {
-	std::unique_lock<std::mutex> lock(_mutex);
-	_cond.wait(lock, [this] {
-		if (_b_stop) {
-			return true;
-		}
-		return !_pool.empty();
-		});
-
-	if (_b_stop) {
-		return nullptr;
-	}
-
-	std::unique_ptr<SqlConnection> con(std::move(_pool.front()));
-	_pool.pop();
-	return con;
+    auto result = std::make_unique<SqlConnection>();
+    result->_con = _connections->Borrow();
+    return result->_con ? std::move(result) : nullptr;
 }
 
-void MysqlConnectionPool::returnConnection(std::unique_ptr<SqlConnection> con) {
-	std::unique_lock<std::mutex> lock(_mutex);
-	if (_b_stop) {
-		return;
-	}
-	_pool.push(std::move(con));
-	_cond.notify_one();
+void MysqlConnectionPool::returnConnection(std::unique_ptr<SqlConnection> connection) noexcept {
+    if (connection) _connections->Return(std::move(connection->_con));
 }
 
-void MysqlConnectionPool::close() {
-    // Serialize concurrent close callers, but never join while holding the
-    // mutex needed by the health worker or a waiting borrower.
-    std::lock_guard<std::mutex> close_lock(_close_mutex);
-    _b_stop = true;
-    {
-        std::lock_guard<std::mutex> lock(_mutex);
-        // Synchronize with the predicate check before notifying waiters.
-    }
-    _cond.notify_all();
-    _check_cond.notify_all();
-    if (_check_thread.joinable()) { _check_thread.join(); }
-    std::queue<std::unique_ptr<SqlConnection>> closing;
-    {
-        std::lock_guard<std::mutex> lock(_mutex);
-        closing.swap(_pool);
-    }
-}
+void MysqlConnectionPool::close() { _connections->Close(); }
 
 MysqlDao::MysqlDao() {
 	auto& configmgr  = ConfigMgr::GetInstance();
@@ -172,10 +60,11 @@ MysqlDao::~MysqlDao() {
 
 int MysqlDao::RegUser(const std::string& name, const std::string& email, const std::string& pwd) {
 	auto con = _pool->getConnection();
+    Defer release([this, &con] { _pool->returnConnection(std::move(con)); });
 
 	try {
 		if (con == nullptr) {
-			return false;
+			return -1;
 		}
 
 		// 准备调用存储过程
@@ -197,14 +86,11 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
 		if (res->next()) {
 			int result = res->getInt("result");
 			SPDLOG_DEBUG("mysql user registration completed, uid={}", result);
-			_pool->returnConnection(std::move(con));
 			return result;
 		}
-		_pool->returnConnection(std::move(con));
 		return -1;
 	}
 	catch (sql::SQLException& e) {
-		_pool->returnConnection(std::move(con));
 		SPDLOG_ERROR("mysql RegUser failed, name={}, error={}, code={}, state={}", name, e.what(), e.getErrorCode(), e.getSQLState().c_str());
 		return -1;
 	}
