@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "RedisMgr.h"
+#include "../../../common/redis/Reply.h"
 
 #include <chrono>
 #include <future>
@@ -45,6 +46,31 @@ TEST(ServerRedisPoolTests, ExhaustedBorrowReturnsWhenItsFiniteWaitExpires) {
 
     EXPECT_GE(elapsed, std::chrono::milliseconds(25));
     EXPECT_LT(elapsed, std::chrono::milliseconds(500));
+}
+
+TEST(ServerRedisReplyTests, MissingErrorAndBinaryRepliesHaveUnambiguousResults) {
+    std::string value = "old";
+    EXPECT_FALSE(chat_redis::ReadString(nullptr, value));
+    EXPECT_TRUE(value.empty());
+    redisReply reply = {};
+    for (int type : {REDIS_REPLY_NIL, REDIS_REPLY_ERROR, REDIS_REPLY_INTEGER}) {
+        reply.type = type;
+        EXPECT_FALSE(chat_redis::ReadString(&reply, value));
+    }
+    char bytes[] = {'a', '\0', 'b'};
+    reply.type = REDIS_REPLY_STRING;
+    reply.str = bytes;
+    reply.len = sizeof(bytes);
+    EXPECT_TRUE(chat_redis::ReadString(&reply, value));
+    EXPECT_EQ(value, std::string(bytes, sizeof(bytes)));
+    reply.type = REDIS_REPLY_INTEGER;
+    reply.integer = 1;
+    EXPECT_TRUE(chat_redis::IsPositiveInteger(&reply));
+    reply.integer = 0;
+    EXPECT_FALSE(chat_redis::IsPositiveInteger(&reply));
+    reply.type = REDIS_REPLY_ERROR;
+    reply.integer = 1;
+    EXPECT_FALSE(chat_redis::IsPositiveInteger(&reply));
 }
 
 } // namespace

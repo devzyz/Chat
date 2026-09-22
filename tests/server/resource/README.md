@@ -5,6 +5,13 @@ Test IDs: S05-RESOURCE-01..17; method mapping and CI boundary are in `tests/TEST
 Run `scripts/resource-local.ps1 -Task Test` with existing dependency/tool paths; no CI workflow is changed.
 Reports and build logs live in `build/resource`.
 
+For database-only regression, build `ResourceTests.vcxproj` with manifest restore
+disabled and run `python -B tests/server/resource/catalog_integration.py --catalog-only`.
+This includes killed-idle-connection recovery in the real ResourceCatalog pool and
+the Chat DAO symmetry/rollback tests owned by `../data`. Results are written to
+`build/resource/catalog.xml`; the native child is limited to 30 seconds. This
+focused option does not claim production Redis/Status or TCP-flow coverage.
+
 - `StoreTest.*`: restart/resume, offset conflict, owner isolation, incomplete upload, checksum mismatch,
   size/buffer bounds, path validation and media signature. Actual temporary files, no database.
 - `stream_integration.py`: real HTTP Keep-Alive, partial request interruption, offset recovery, Range downloads,

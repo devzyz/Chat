@@ -1,6 +1,7 @@
 #include "HttpConnection.h"
 #include "CServer.h"
 #include "LogicSystem.h"
+#include <stdexcept>
 
 HttpConnection::HttpConnection(boost::asio::io_context& ioc, std::shared_ptr<LogicSystem> logic)
 	: _socket(ioc), _logic(std::move(logic)) {
@@ -61,13 +62,11 @@ unsigned char ToHex(unsigned char x) {
 }
 
 // 16进制转数字
-unsigned char FromHex(unsigned char x) {
-	unsigned char y;
-	if (x >= 'A' && x <= 'Z') y = x - 'A' + 10;
-	else if (x >= 'a' && x <= 'z') y = x - 'a' + 10;
-	else if (x >= '0' && x <= '9') y = x - '0';
-	else assert(0);
-	return y;
+unsigned char FromHex(unsigned char value) {
+    if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+    if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+    if (value >= '0' && value <= '9') return value - '0';
+    throw std::invalid_argument("invalid percent encoding");
 }
 
 // 生成可发送的请求串
@@ -109,7 +108,7 @@ std::string UrlDecode(const std::string& str) {
 		if (str[i] == '+') strTemp += " ";
 		// 遇到%则将后面的
 		else if (str[i] == '%') {
-			assert(i + 2 < length);
+			if (length - i < 3) throw std::invalid_argument("incomplete percent encoding");
 			unsigned char high = FromHex((unsigned char)str[++i]);
 			unsigned char low = FromHex((unsigned char)str[++i]);
 			strTemp += high * 16 + low;
@@ -171,7 +170,15 @@ void HttpConnection::HandleReq() {
 
 	// 处理get请求
 	if (_request.method() == http::verb::get) {
-		PreParseGetParam();
+        try {
+            PreParseGetParam();
+        } catch (const std::invalid_argument&) {
+            _response.result(http::status::bad_request);
+            _response.set(http::field::content_type, "text/plain");
+            beast::ostream(_response.body()) << "invalid query encoding\r\n";
+            WriteResponse();
+            return;
+        }
 		bool success = _logic->HandleGet(_get_url, shared_from_this());
 		if (!success) {
 			// 失败原因

@@ -6,6 +6,7 @@ import socket
 import subprocess
 import tempfile
 import time
+import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 
@@ -46,10 +47,20 @@ def run():
                 subprocess.run(["node", str(ROOT / "schema/migrate.js"), "apply"],
                                env=migration_env, check=True, timeout=60)
             env = os.environ.copy(); env["RESOURCE_TEST_MYSQL"] = f"tcp://127.0.0.1:{port}"
+            config = path / "dao.ini"
+            config.write_text("\n".join([
+                "[Mysql]", "Host=127.0.0.1", f"Port={port}", "User=root", "Password=", "Schema=resource_test",
+                "[SelfServer]", "Name=dao-fixture", "Host=127.0.0.1", "Port=18080", "RPCPort=18081",
+                "[Redis]", "Host=127.0.0.1", "Port=16379",
+                "[StatusServer]", "Host=127.0.0.1", "Port=18082",
+                "[Log]", "Name=dao-fixture", f"LogDir={path / 'logs'}", ""]), encoding="utf-8")
+            env["MYSQL_DAO_TEST_CONFIG"] = str(config)
             subprocess.run([str(ROOT / "build/resource/ResourceTests.exe"),
-                            "--gtest_filter=ResourceCatalogIntegration.*"], env=env, check=True, timeout=30)
-            from chat_flow_integration import run_flow
-            run_flow(path, command, port)
+                            "--gtest_filter=MysqlDaoIntegration.*:ResourceCatalogIntegration.*",
+                            f"--gtest_output=xml:{ROOT / 'build/resource/catalog.xml'}"], env=env, check=True, timeout=30)
+            if "--catalog-only" not in sys.argv:
+                from chat_flow_integration import run_flow
+                run_flow(path, command, port)
         except Exception:
             evidence = ROOT / "build/resource/failed-flow"
             evidence.mkdir(parents=True, exist_ok=True)

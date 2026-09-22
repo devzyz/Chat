@@ -2,6 +2,24 @@
 #include <gtest/gtest.h>
 #include <cstdlib>
 
+TEST(ResourceCatalogIntegration, KilledIdleConnectionsAreReplacedBeforeTheNextOperation) {
+    const auto* endpoint = std::getenv("RESOURCE_TEST_MYSQL");
+    if (!endpoint) GTEST_SKIP() << "Requires disposable MySQL";
+    std::unique_ptr<sql::Connection> control(sql::mysql::get_mysql_driver_instance()->connect(endpoint, "root", ""));
+    control->setSchema("resource_test");
+    resource::ResourceCatalog catalog(endpoint, "root", "", "resource_test");
+    std::unique_ptr<sql::Statement> statement(control->createStatement());
+    std::unique_ptr<sql::ResultSet> rows(statement->executeQuery(
+        "SELECT ID FROM information_schema.PROCESSLIST WHERE DB='resource_test' AND ID<>CONNECTION_ID()"));
+    std::vector<int> ids;
+    while (rows->next()) ids.push_back(rows->getInt(1));
+    rows.reset();
+    ASSERT_EQ(ids.size(), 2);
+    for (int id : ids) statement->execute("KILL CONNECTION " + std::to_string(id));
+    EXPECT_NO_THROW(catalog.GetAvatar(900001));
+    EXPECT_NO_THROW(catalog.GetAvatar(900002));
+}
+
 TEST(ResourceCatalogIntegration, CommitRetryMembershipAndDownloadAuthorization) {
     const auto* endpoint = std::getenv("RESOURCE_TEST_MYSQL");
     if (!endpoint) GTEST_SKIP() << "RESOURCE_TEST_MYSQL must identify the disposable test MySQL";

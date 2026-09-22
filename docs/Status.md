@@ -1,9 +1,26 @@
 # 项目当前状态
 
-更新：2026-09-19。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
+更新：2026-09-22。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
 项目目标：先完成基本聊天功能，后续主要投入可测量的性能优化。
 
-## 当前工作：本地消息持久化与增量同步
+## 当前工作：连接与输入错误修复
+
+- 分支 `fix/storage-input-hardening` 基于 develop `1f7e2fe`。按本轮要求保留依赖版本、
+  数据库结构、消息协议和既有状态机设计；本次不做总体优化方案或认证流程改造。
+- Gate/Chat/ResourceCatalog 共用有界 MySQL 连接池：锁外检查连接、借出前替换失效连接、
+  归还时回滚未完成事务，清理失败则丢弃。修复私聊双方顺序及异常导致的部分提交。
+- 修复 Gate 非法 URL 编码导致断言退出、Chat 处理器异常逃出线程，以及 Gate/Status
+  Redis RPUSH/HGET 等返回值误判和字符串截断。
+- 本地公开 Server runner：75 Unit / 58 Component / 107 Integration / 4 Chat gRPC /
+  Gate 与 Status 各 2 项，共 248 项通过；脚本公开 runner 13 项通过。
+- 独立临时 MySQL 的 4 项测试通过，包括主动断开池连接后恢复、交换双方顺序复用私聊、
+  中途注入 SQL 错误后无孤立会话；只操作测试自建数据库。ResourceServer 生产构建通过。
+- 测试注册和 diff 检查通过。日志位于 `build/hardening/`，报告位于 `build/test-results/`
+  与 `build/resource/catalog.xml`。Qt、完整资源消息流及真实 Redis E2E 本轮未重新执行。
+  全仓注册为 13 报告 / 380 项，不等于本地全仓执行通过。
+- 下一步：向 develop 提交 PR，触发快速 CI；远端结果以 PR 当前提交检查为准，尚未计为通过。
+
+## 前序记录：本地消息持久化与增量同步
 
 - PR #9 已合入 develop；本次从 `eed758a37932357a749afc8f0929402b89dc25bf` 创建
   `feature/local-message-sync` 独立工作树。主工作区已有修改保留，未用旧工作区覆盖远端代码。

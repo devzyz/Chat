@@ -1,5 +1,6 @@
 ﻿#include "ResourceHttpServer.h"
 #include "../../../common/asio/IOServicePool.h"
+#include "../../../common/grpc/GrpcClientRuntime.h"
 #include "../../../common/resource/ResourceCatalog.h"
 #include "status.grpc.pb.h"
 #include <boost/property_tree/ini_parser.hpp>

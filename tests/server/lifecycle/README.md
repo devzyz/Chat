@@ -13,10 +13,10 @@ Domain is Foundation and Level is Unit. `RunServerTests` builds both projects wi
 
 RED was the real compile error that both constructors were private. GREEN is 2/2 per executable after making lifecycle construction public and making Stop atomic, idempotent, and join-safe. Saturation, task exceptions, cancellation races, and stress remain gaps.
 
-## Gate MySQL worker shutdown (3C-07 prerequisite)
+## Gate MySQL pool shutdown (3C-07 prerequisite)
 
 `gate_mysql_pool_tests` links the production `gate_server_modules` target and
-constructs an empty pool, exercising its actual health worker without opening
+constructs an empty pool, exercising close and waiting borrowers without opening
 a database connection. It checks repeated close, rejected borrowing after close,
 borrower completion, and destruction with and without explicit close within two
 seconds. CTest applies a five-second process timeout and the hosted preflight

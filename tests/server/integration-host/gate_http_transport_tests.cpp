@@ -180,4 +180,21 @@ TEST_F(T09_GHTTP_Core, OverLimitMalformedAndInterruptedRequestsNeverDispatch) {
 	EXPECT_EQ(Post("/user_login", "{}").result(), http::status::ok);
 }
 
+TEST_F(T09_GHTTP_Core, InvalidPercentEncodingReturnsBadRequestAndServerRemainsUsable) {
+    for (const auto& query : {"%", "%1", "%GG", "%0/", "%/0", "%z1"}) {
+        boost::asio::io_context client_ioc;
+        beast::tcp_stream stream(client_ioc);
+        stream.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
+        http::request<http::empty_body> request{http::verb::get, std::string("/get_test?key=") + query, 11};
+        request.set(http::field::host, "127.0.0.1");
+        http::write(stream, request);
+        beast::flat_buffer buffer;
+        http::response<http::dynamic_body> response;
+        http::read(stream, buffer, response);
+        EXPECT_EQ(response.result(), http::status::bad_request) << query;
+    }
+    EXPECT_TRUE(request_->Endpoints().empty());
+    EXPECT_EQ(Post("/user_login", "{}").result(), http::status::ok);
+}
+
 } // namespace

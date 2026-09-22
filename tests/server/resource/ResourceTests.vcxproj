@@ -15,6 +15,12 @@
   <ItemGroup>
     <ClCompile Include="resource_tests.cpp" />
     <ClCompile Include="catalog_tests.cpp" />
+    <ClCompile Include="../data/mysql_dao_integration.cpp" />
+    <ClCompile Include="../../../ChatServer/ChatServer/MysqlDao.cpp" />
+    <ClCompile Include="../../../ChatServer/ChatServer/MessageCommit.cpp" />
+    <ClCompile Include="../../../ChatServer/ChatServer/MySqlMessageCommitAdapter.cpp" />
+    <ClCompile Include="../../../ChatServer/ChatServer/ConfigMgr.cpp" />
+    <ClCompile Include="../../../ChatServer/ChatServer/Const.cpp" />
     <ClCompile Include="..\..\..\generated\proto\cpp\status.pb.cc" />
     <ClCompile Include="..\..\..\generated\proto\cpp\status.grpc.pb.cc" />
     <ClCompile Include="..\..\..\ResourceServer\ResourceServer\ResourceServer\ResourceStore.cpp" />

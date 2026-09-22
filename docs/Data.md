@@ -90,3 +90,23 @@ MySQL references: [implicit DDL commits](https://dev.mysql.com/doc/refman/8.4/en
 ## Local message database
 
 The account-scoped SQLite schema, transaction/cursor rules and deployment workflow are documented in [MessageStorage](MessageStorage.md). Server sync reuses `chat_message.client_msg_uuid` from existing migration 002; it adds no parallel identity table or MySQL migration.
+
+## MySQL connection recovery
+
+Gate, Chat and ResourceCatalog use `common/mysql/ConnectionPool.h` for bounded
+borrowing, checkout validation and one replacement attempt before business SQL.
+Connection setup and health checks run outside the pool mutex. Close wakes waiters;
+checked-out work must finish before destroying the pool. Gate no longer needs a
+background keepalive worker. Pool capacity remains 8 for Gate/Chat and 2 for resources.
+
+Queue waiting defaults to two seconds. Gate/Chat connector connect/read/write
+timeouts remain two seconds each; resources retain 3/5/5 seconds. Synchronous
+in-flight I/O cannot be cancelled at the queue deadline,
+so this is not a two-second end-to-end request guarantee. Failed business writes
+are never automatically replayed. Return rolls back unfinished work and discards
+connections whose reset fails; checkout replaces dead idle sessions.
+
+Private-chat creation normalizes both query and insert participant order. Friend
+confirmation, private-chat creation and resource-message writes use the existing
+rollback-on-exit transaction helper, so exception cleanup cannot commit partial work.
+No schema, dependency version, protocol or session-state transition changes are required.

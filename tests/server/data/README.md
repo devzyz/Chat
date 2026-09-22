@@ -1,4 +1,23 @@
-# Redis pool lifecycle tests
+# Database connection and Redis reply tests
+
+`mysql_pool_tests.cpp` adds Foundation / Unit coverage of the shared production
+`common/mysql/ConnectionPool.h` algorithm using a controllable connection object:
+finite exhaustion, close wakeup, idle replacement, failed reconnect recovery,
+rollback/reset failure, and close during slow validation. No database is used in
+these six tests; `RunServerTests` owns them in `server_unit.xml`.
+
+`mysql_dao_integration.cpp` links the real Chat DAO in `ResourceTests.vcxproj`.
+`python -B tests/server/resource/catalog_integration.py --catalog-only` creates
+a disposable MySQL and versioned schema, verifies reversed private-chat IDs and
+injects an insert failure to prove no orphan chat is committed. It drops its test
+trigger, shuts down only its owned MySQL, and has a 30-second native process limit.
+This test is separate from quick CI; it does not access a personal database.
+
+The existing Redis Component executable also verifies shared production reply
+decoding: null/NIL/error are false, integer success is true, and binary strings
+preserve their length. Both Gate and Status use these helpers for their wrappers.
+
+## Redis pool lifecycle
 
 The tests compile the real `RedisConnectionPool` and use a zero-sized pool, so no Redis connection is attempted.
 

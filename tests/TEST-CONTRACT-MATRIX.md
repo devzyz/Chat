@@ -4,6 +4,14 @@
 > 业务 Test ID 和覆盖说明保留；旧 R-00 审批/版本占用、跨 workflow admission、N-1 bootstrap 发布阻断已退出当前 CI。
 > 发布测试通过 unittest 自动发现，不再维护独立的 release-reports.json 数量账本。
 
+2026-09 连接与输入修复补充：MySQL 连接池的超时、关闭、失效重建及事务清理由
+[data](server/data/README.md) 的六项 Unit 覆盖；Redis 回复类型和二进制内容由该模块 Component 覆盖。
+`T08-LOGIC-08` 验证处理器异常后分发线程继续运行且不记录请求载荷；Gate HTTP Integration
+验证非法百分号编码返回 400 且服务仍可处理后续请求。快速回归数量以公开 runner 为准。
+真实 MySQL 的失效连接恢复、私聊双方顺序和失败事务回滚使用
+[资源测试](server/resource/README.md) 的独立 `--catalog-only` 入口，不计入快速 CI 数量，
+也不代表完整消息或会话状态机 E2E 已重新验收。
+
 
 Linux `T10-LNX-01..10` 的静态合同及十五项变异可通过 `3C-00-contracts` selector 执行，
 与 hosted `3C-00-T2` 复用同一函数。每份变异输入先通过完整基线检查；工具相关变异验证获取入口、

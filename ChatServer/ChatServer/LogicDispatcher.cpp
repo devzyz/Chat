@@ -26,9 +26,15 @@ struct LogicDispatcher::Impl {
 				message = std::move(messages.front());
 				messages.pop();
 			}
-			if (!handler(message)) {
-				SPDLOG_WARN("logic message handler not found, msg_id={}", message.id);
-			}
+            try {
+                if (!handler(message)) {
+                    SPDLOG_WARN("logic message handler not found, msg_id={}", message.id);
+                }
+            } catch (...) {
+                // Malformed field conversions and dependency failures must not
+                // escape the worker. Exception text may contain private payloads.
+                SPDLOG_ERROR("logic message handler failed, msg_id={}", message.id);
+            }
 		}
 	}
 

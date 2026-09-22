@@ -265,4 +265,21 @@ TEST(LogicDispatcherTests, UnknownIdDoesNotBlockValidMessageAndLogOmitsBody) {
 	EXPECT_EQ(text.find("SYNTHETIC_BODY_MARKER_3A01"), std::string::npos);
 }
 
+// T08-LOGIC-08
+TEST(LogicDispatcherTests, ThrowingHandlerDoesNotTerminateWorkerOrExposePayload) {
+    ScopedLogCapture logs;
+    std::promise<void> handled;
+    auto ready = handled.get_future();
+    LogicDispatcher dispatcher([&](const LogicMessage& message) {
+        if (message.id == 90) throw std::runtime_error("PRIVATE_EXCEPTION_PAYLOAD");
+        handled.set_value();
+        return true;
+    });
+    ASSERT_EQ(dispatcher.Submit({nullptr, 90, "PRIVATE_REQUEST_PAYLOAD"}), LogicSubmitResult::Accepted);
+    ASSERT_EQ(dispatcher.Submit({nullptr, 91, "valid"}), LogicSubmitResult::Accepted);
+    ASSERT_EQ(ready.wait_for(2s), std::future_status::ready);
+    dispatcher.Stop();
+    EXPECT_EQ(logs.Text().find("PRIVATE_"), std::string::npos);
+}
+
 } // namespace

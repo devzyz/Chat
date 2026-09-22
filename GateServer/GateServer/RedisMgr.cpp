@@ -1,4 +1,5 @@
 #include "RedisMgr.h"
+#include "../../common/redis/Reply.h"
 #include "ConfigMgr.h"
 
 
@@ -15,6 +16,7 @@ RedisMgr::~RedisMgr() {
 }
 
 bool RedisMgr::Get(const std::string& key, std::string& value) {
+    value.clear();
 	auto connect = _redis_pool->GetConnection();
 	if (connect == nullptr) {
 		return false;
@@ -44,7 +46,11 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
 		return false;
 	}
 
-	value = reply->str;
+	if (!chat_redis::ReadString(reply, value)) {
+        freeReplyObject(reply);
+        _redis_pool->returnConnection(connect);
+        return false;
+    }
 	freeReplyObject(reply);
 
 	SPDLOG_DEBUG("redis GET success, key={}, value_size={}", key, value.size());
@@ -115,6 +121,7 @@ bool RedisMgr::LPush(const std::string& key, const std::string& value) {
 }
 
 bool RedisMgr::LPop(const std::string& key, std::string& value) {
+    value.clear();
 	auto connect = _redis_pool->GetConnection();
 	if (connect == nullptr) {
 		return false;
@@ -135,7 +142,11 @@ bool RedisMgr::LPop(const std::string& key, std::string& value) {
 		return false;
 	}
 
-	value = reply->str;
+	if (!chat_redis::ReadString(reply, value)) {
+        freeReplyObject(reply);
+        _redis_pool->returnConnection(connect);
+        return false;
+    }
 	freeReplyObject(reply);
 	SPDLOG_DEBUG("redis LPOP success, key={}", key);
 	_redis_pool->returnConnection(connect);
@@ -158,7 +169,7 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value) {
 	}
 
 	// 执行失败
-	if (reply->type == REDIS_REPLY_INTEGER || reply->integer <= 0) {
+	if (!chat_redis::IsPositiveInteger(reply)) {
 		SPDLOG_WARN("redis RPUSH failed, key={}, value_size={}, reason=unexpected_reply", key, value.size());
 		freeReplyObject(reply);
 		_redis_pool->returnConnection(connect);
@@ -172,6 +183,7 @@ bool RedisMgr::RPush(const std::string& key, const std::string& value) {
 }
 
 bool RedisMgr::RPop(const std::string& key, std::string& value) {
+    value.clear();
 	auto connect = _redis_pool->GetConnection();
 	if (connect == nullptr) {
 		return false;
@@ -192,7 +204,11 @@ bool RedisMgr::RPop(const std::string& key, std::string& value) {
 		return false;
 	}
 
-	value = reply->str;
+	if (!chat_redis::ReadString(reply, value)) {
+        freeReplyObject(reply);
+        _redis_pool->returnConnection(connect);
+        return false;
+    }
 	freeReplyObject(reply);
 	SPDLOG_DEBUG("redis RPOP success, key={}", key);
 	_redis_pool->returnConnection(connect);
@@ -265,6 +281,7 @@ bool RedisMgr::HSet(const char* key, const char* hkey, const char* hvalue, size_
 }
 
 bool RedisMgr::HGet(const std::string& key, const std::string& hkey, std::string& value) {
+    value.clear();
 	const char* argv[3];
 	size_t argvlen[3];
 	argv[0] = "HGET";
@@ -283,16 +300,20 @@ bool RedisMgr::HGet(const std::string& key, const std::string& hkey, std::string
 		SPDLOG_ERROR("redis HGET failed, key={}, field={}, reason=null_reply", key, hkey);
 
 		_redis_pool->returnConnection(connect);
-		return "";
+		return false;
 	}
 
 	if (reply->type == REDIS_REPLY_NIL) {
 		freeReplyObject(reply);
 		SPDLOG_WARN("redis HGET failed, key={}, field={}, reason=unexpected_reply", key, hkey);
 		_redis_pool->returnConnection(connect);
-		return "";
+		return false;
 	}
-	value = reply->str;
+	if (!chat_redis::ReadString(reply, value)) {
+        freeReplyObject(reply);
+        _redis_pool->returnConnection(connect);
+        return false;
+    }
 
 	freeReplyObject(reply);
 	SPDLOG_DEBUG("redis HGET success, key={}, field={}, value_size={}", key, hkey, value.size());
