@@ -40,6 +40,13 @@ public:
 
 class ControlledChatService final : public message::ChatService::Service {
 public:
+    grpc::Status NotifyOtherKickUser(grpc::ServerContext*, const message::KickUserReq* request,
+        message::KickUserRsp* response) override {
+        response->set_error(request->uid() == 42 && request->session_id() == "old-session"
+            ? ErrorCodes::Success : ErrorCodes::UidInvalid);
+        response->set_uid(request->uid());
+        return grpc::Status::OK;
+    }
     grpc::Status NotifyOtherAddFriend(
         grpc::ServerContext*,
         const message::AddFriendReq* request,
@@ -110,6 +117,10 @@ TEST(ChatGrpcClientIntegrationTests, StatusAndChatClientsCallDynamicLoopbackServ
 
     EXPECT_EQ(status.Login(42, "synthetic-token").error(), ErrorCodes::Success);
     EXPECT_EQ(chat.NotifyOtherAddFriend("peer", AddFriendRequest()).error(), ErrorCodes::Success);
+    message::KickUserReq kick;
+    kick.set_uid(42);
+    kick.set_session_id("old-session");
+    EXPECT_EQ(chat.NotifyOtherKickUser("peer", kick).error(), ErrorCodes::Success);
 }
 
 TEST(ChatGrpcClientIntegrationTests, DeadlineExceededMapsToRpcFailedWithinConfiguredDeadline) {

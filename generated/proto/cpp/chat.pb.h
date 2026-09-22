@@ -872,8 +872,24 @@ class KickUserReq final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
+    kSessionIdFieldNumber = 2,
     kUidFieldNumber = 1,
   };
+  // string session_id = 2;
+  void clear_session_id() ;
+  const ::std::string& session_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_session_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_session_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_session_id();
+  void set_allocated_session_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_session_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_session_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_session_id();
+
+  public:
   // int32 uid = 1;
   void clear_uid() ;
   ::int32_t uid() const;
@@ -888,8 +904,8 @@ class KickUserReq final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 1,
-                                   0, 0,
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 38,
                                    2>
       _table_;
 
@@ -910,6 +926,7 @@ class KickUserReq final : public ::google::protobuf::Message
         const KickUserReq& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr session_id_;
     ::int32_t uid_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -5769,7 +5786,7 @@ inline void KickUserReq::clear_uid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.uid_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000001U);
+                  0x00000002U);
 }
 inline ::int32_t KickUserReq::uid() const {
   // @@protoc_insertion_point(field_get:message.KickUserReq.uid)
@@ -5777,7 +5794,7 @@ inline ::int32_t KickUserReq::uid() const {
 }
 inline void KickUserReq::set_uid(::int32_t value) {
   _internal_set_uid(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:message.KickUserReq.uid)
 }
 inline ::int32_t KickUserReq::_internal_uid() const {
@@ -5787,6 +5804,71 @@ inline ::int32_t KickUserReq::_internal_uid() const {
 inline void KickUserReq::_internal_set_uid(::int32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.uid_ = value;
+}
+
+// string session_id = 2;
+inline void KickUserReq::clear_session_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& KickUserReq::session_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:message.KickUserReq.session_id)
+  return _internal_session_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void KickUserReq::set_session_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.session_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:message.KickUserReq.session_id)
+}
+inline ::std::string* PROTOBUF_NONNULL KickUserReq::mutable_session_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_session_id();
+  // @@protoc_insertion_point(field_mutable:message.KickUserReq.session_id)
+  return _s;
+}
+inline const ::std::string& KickUserReq::_internal_session_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.session_id_.Get();
+}
+inline void KickUserReq::_internal_set_session_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL KickUserReq::_internal_mutable_session_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.session_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE KickUserReq::release_session_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:message.KickUserReq.session_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.session_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.session_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void KickUserReq::set_allocated_session_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.session_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.session_id_.IsDefault()) {
+    _impl_.session_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:message.KickUserReq.session_id)
 }
 
 // -------------------------------------------------------------------

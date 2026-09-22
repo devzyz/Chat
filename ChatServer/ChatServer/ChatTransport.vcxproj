@@ -36,16 +36,21 @@
     <ClCompile Include="ChatFrameCodec.cpp" />
     <ClCompile Include="CServer.cpp" />
     <ClCompile Include="CSession.cpp" />
+    <ClCompile Include="UserSessionDirectory.cpp" />
+    <ClCompile Include="SessionLifecycleCoordinator.cpp" />
     <ClCompile Include="MsgNode.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ChatFrameCodec.h" />
     <ClInclude Include="CServer.h" />
     <ClInclude Include="CSession.h" />
+    <ClInclude Include="SessionTypes.h" />
+    <ClInclude Include="UserSessionDirectory.h" />
+    <ClInclude Include="UserPresenceStore.h" />
+    <ClInclude Include="SessionLifecycleCoordinator.h" />
     <ClInclude Include="MsgNode.h" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="ChatSessionState.vcxproj"><Project>{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}</Project></ProjectReference>
     <ProjectReference Include="LogicDispatcher.vcxproj"><Project>{B251FB8A-0C7D-4BFA-8F1B-31C75DFBDA01}</Project></ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

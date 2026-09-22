@@ -99,6 +99,7 @@ message TextChatMsgRsp {
 
 message KickUserReq {
   int32 uid = 1;
+  string session_id = 2;
 }
 
 message KickUserRsp {

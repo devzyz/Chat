@@ -7,7 +7,7 @@
 #include <mutex>
 #include <string>
 
-class ChatSessionState;
+class SessionLifecycleCoordinator;
 class LogicDispatcher;
 class StatusRouting;
 
@@ -57,7 +57,7 @@ struct ProductionModules {
 	ProductionModules& operator=(const ProductionModules&) = delete;
 
 	std::unique_ptr<LogicDispatcher> logic_dispatcher;
-	std::unique_ptr<ChatSessionState> chat_sessions;
+	std::unique_ptr<SessionLifecycleCoordinator> chat_sessions;
 	std::unique_ptr<gate::GateRequest> gate_request;
 	std::unique_ptr<StatusRouting> status_routing;
 };

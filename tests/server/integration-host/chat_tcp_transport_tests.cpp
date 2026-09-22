@@ -3,7 +3,7 @@
 #include "../../../ChatServer/ChatServer/CServer.h"
 #include "../../../ChatServer/ChatServer/CSession.h"
 #include "../../../ChatServer/ChatServer/ChatFrameCodec.h"
-#include "../../../ChatServer/ChatServer/ChatSessionStateInternal.h"
+#include "../chat-session-state/session_test_support.h"
 #include "../../../ChatServer/ChatServer/Const.h"
 #include "../../../ChatServer/ChatServer/LogicDispatcher.h"
 
@@ -25,19 +25,6 @@ namespace {
 
 using namespace std::chrono_literals;
 using tcp = boost::asio::ip::tcp;
-
-class SequentialSessionIds final : public SessionIdSource {
-public:
-	std::string Next() override { return "chat-loopback-" + std::to_string(++next_); }
-private:
-	std::uint64_t next_ = 0;
-};
-
-class InMemoryPresence final : public SessionPresence {
-public:
-	void Register(int, const std::string&) override {}
-	void Cleanup(int, const std::string&) override {}
-};
 
 struct ReceivedFrame {
 	std::uint16_t id;
@@ -90,20 +77,24 @@ std::string Frame(std::uint16_t id, const std::string& body) {
 class T09_CTCP_Stream : public testing::Test {
 protected:
 	void SetUp() override {
-		state_ = std::make_shared<ChatSessionState>(
-			std::make_shared<SequentialSessionIds>(), std::make_shared<InMemoryPresence>());
+		directory_ = std::make_shared<UserSessionDirectory>();
+        lifecycle_ = std::make_shared<SessionLifecycleCoordinator>(directory_,
+            std::make_shared<session_test::MemoryPresence>(), "transport-test");
 		dispatcher_ = std::make_shared<LogicDispatcher>(
 			[this](const LogicMessage& message) { return recorder_.Record(message); });
-		server_ = std::make_shared<chat_transport::CServer>(ioc_, "127.0.0.1", 0, state_, dispatcher_);
-		ASSERT_TRUE(server_->Start());
+		server_ = std::make_shared<chat_transport::CServer>(ioc_, "127.0.0.1", 0, lifecycle_, directory_,
+            [this](LogicMessage message) { return dispatcher_->Submit(std::move(message)); });
+		lifecycle_->AttachServer(server_);
+        ASSERT_TRUE(server_->Start());
 		server_thread_ = std::thread([this] { ioc_.run(); });
 		ASSERT_TRUE(server_->Ready());
 	}
 
 	void TearDown() override {
 		if (server_) {
-			server_->Stop();
+			StopServer();
 		}
+		lifecycle_->Drain();
 		ioc_.stop();
 		if (server_thread_.joinable()) {
 			server_thread_.join();
@@ -112,6 +103,14 @@ protected:
 			dispatcher_->Stop();
 		}
 	}
+
+    void StopServer() {
+        if (server_->Stopped()) return;
+        auto done = std::make_shared<std::promise<void>>();
+        auto ready = done->get_future();
+        server_->Stop([done] { done->set_value(); });
+        session_test::Await(std::move(ready));
+    }
 
 	tcp::socket Connect() {
 		tcp::socket socket(client_ioc_);
@@ -129,7 +128,8 @@ protected:
 
 	boost::asio::io_context ioc_;
 	boost::asio::io_context client_ioc_;
-	std::shared_ptr<ChatSessionState> state_;
+	std::shared_ptr<UserSessionDirectory> directory_;
+    std::shared_ptr<SessionLifecycleCoordinator> lifecycle_;
 	std::shared_ptr<LogicDispatcher> dispatcher_;
 	std::shared_ptr<chat_transport::CServer> server_;
 	FrameRecorder recorder_;
@@ -241,8 +241,8 @@ TEST_F(T09_CTCP_Stream, StopDuringWriteInterruptionIsBoundedAndIdempotent) {
 	boost::system::error_code ignored;
 	socket.close(ignored);
 	const auto started = std::chrono::steady_clock::now();
-	server_->Stop();
-	server_->Stop();
+	StopServer();
+	StopServer();
 	EXPECT_LT(std::chrono::steady_clock::now() - started, 1s);
 	EXPECT_FALSE(server_->Ready());
 }
@@ -250,7 +250,7 @@ TEST_F(T09_CTCP_Stream, StopDuringWriteInterruptionIsBoundedAndIdempotent) {
 // T09-CTCP-11
 TEST_F(T09_CTCP_Stream, RefusedConnectionCompletesBeforeOwnedDeadline) {
 	const auto port = server_->BoundPort();
-	server_->Stop();
+	StopServer();
 	boost::asio::io_context connect_ioc;
 	tcp::socket socket(connect_ioc);
 	boost::asio::steady_timer deadline(connect_ioc, 250ms);
@@ -309,10 +309,8 @@ TEST_F(T09_CTCP_Stream, QueuedWritesSurvivePartialCompletionsExactlyOnce) {
 	std::atomic<std::size_t> accepted{0};
 	recorder_.SetResponder([&](const LogicMessage& message) {
 		for (std::size_t index = 0; index < reply_count; ++index) {
-			if (message.session->Send(body, static_cast<std::uint16_t>(2200 + (index % 100)))
-				== SessionSendResult::Accepted) {
-				++accepted;
-			}
+			message.session->Send(body, static_cast<std::uint16_t>(2200 + (index % 100)),
+                [&](SessionSendResult result) { if (result == SessionSendResult::Accepted) ++accepted; });
 		}
 	});
 	auto socket = Connect();
@@ -350,12 +348,11 @@ TEST_F(T09_CTCP_Stream, QueuedWritesSurvivePartialCompletionsExactlyOnce) {
 
 // T09-CTCP-14
 TEST_F(T09_CTCP_Stream, OccupiedPortIsRejectedWithoutReplacingTheOwner) {
-	auto second_state = std::make_shared<ChatSessionState>(
-		std::make_shared<SequentialSessionIds>(), std::make_shared<InMemoryPresence>());
 	auto second_dispatcher = std::make_shared<LogicDispatcher>([](const LogicMessage&) { return true; });
 	EXPECT_THROW({
 		const auto duplicate = std::make_shared<chat_transport::CServer>(
-			ioc_, "127.0.0.1", server_->BoundPort(), second_state, second_dispatcher);
+			ioc_, "127.0.0.1", server_->BoundPort(), lifecycle_, directory_,
+            [second_dispatcher](LogicMessage message) { return second_dispatcher->Submit(std::move(message)); });
 		(void)duplicate;
 	}, boost::system::system_error);
 	EXPECT_TRUE(server_->Ready());
@@ -368,7 +365,7 @@ TEST_F(T09_CTCP_Stream, StopCancelsPendingAcceptAndReleasesThePort) {
     auto socket = Connect();
     Write(socket, Frame(1214, "rebind"));
     ASSERT_TRUE(WaitFor(1));
-	server_->Stop();
+	StopServer();
 	EXPECT_TRUE(server_->Stopped());
     // Observe the server-initiated close before releasing the peer, leaving the
     // old server generation in TIME_WAIT on Linux.
@@ -409,7 +406,7 @@ TEST_F(T09_CTCP_Stream, StopReleasesSessionsThreadsSocketsAndServerOwnership) {
 	boost::system::error_code ignored;
 	socket.close(ignored);
 	std::weak_ptr<chat_transport::CServer> weak_server = server_;
-	server_->Stop();
+	StopServer();
 	EXPECT_TRUE(server_->Stopped());
 	server_.reset();
 	const auto deadline = std::chrono::steady_clock::now() + 1s;

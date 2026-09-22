@@ -15,23 +15,20 @@
 #include "StatusGrpcClient.h"
 #include "RedisMgr.h"
 #include "ConfigMgr.h"
-#include "UserMgr.h"
+#include "UserSessionDirectory.h"
 #include "ChatGrpcClient.h"
 #include "CServer.h"
 #include "LogMgr.h"
 
-LogicSystem::LogicSystem()
+LogicSystem::LogicSystem(std::shared_ptr<UserSessionDirectory> directory,
+    std::shared_ptr<UserPresenceStore> presence)
 	: LogicDispatcher([this](const LogicMessage& message) { return Dispatch(message); }),
-	  _p_server(nullptr) {
+	  _directory(std::move(directory)), _presence(std::move(presence)) {
 	RegisterCallBacks();
 }
 
 LogicSystem::~LogicSystem() {
 	Stop();
-}
-
-void LogicSystem::SetServer(std::shared_ptr<chat_transport::CServer> pserver) {
-	_p_server = pserver;
 }
 
 bool LogicSystem::Dispatch(const LogicMessage& message) {
@@ -40,6 +37,19 @@ bool LogicSystem::Dispatch(const LogicMessage& message) {
 	if (callback == _fun_callbacks.end()) {
 		return false;
 	}
+    if (message.id != MSG_CHAT_LOGIN_REQ) {
+        const int uid = message.session->AuthenticatedUid();
+        if (uid <= 0 || !_directory->IsCurrent(uid, message.session->Id())) return true;
+        Json::Value request;
+        Json::Reader reader;
+        if (!reader.parse(message.body, request) || !request.isObject()) return true;
+        for (const auto* field : {"uid", "fromuid", "authuid", "from_uid", "self_id"}) {
+            if (request.isMember(field) && (!request[field].isInt() || request[field].asInt() != uid)) {
+                message.session->Close(SessionCloseReason::ProtocolError);
+                return true;
+            }
+        }
+    }
 	callback->second(message.session, message.id, message.body);
 	return true;
 }
@@ -69,7 +79,9 @@ void LogicSystem::RegisterCallBacks() {
 
 		Json::Value return_value;
 		// 自动返回函数，当函数执行到右括号后，局部变量会被析构，此时defer被析构，其析构时，回调用lambda函数
-		Defer defer1([this, &return_value, session]() {
+		bool binding_started = false;
+		Defer defer1([this, &return_value, &binding_started, session]() {
+            if (binding_started) return;
 			std::string return_str = return_value.toStyledString();
 			session->Send(return_str, MSG_CHAT_LOGIN_RSP);
 			});
@@ -177,62 +189,11 @@ void LogicSystem::RegisterCallBacks() {
 		}
 
 		// 添加分布式锁
-		auto lock_key = LOCK_PREFIX + std::to_string(uid); // 锁的名字，这里我们锁住的就是uid，所有与uid有关的操作，都会给当前线程独占
-		auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, LOCK_ACQUIRE_TIME_OUT); // 获取锁
-		Defer defer2([this, identifier, lock_key]() {
-			RedisMgr::GetInstance()->releaseLock(lock_key, identifier); // 释放锁
-			});
-
-		// 取到本服务器的信息
-		auto self_server_name = ConfigMgr::GetInstance()["SelfServer"]["Name"];
-
-		// 在这里判断该用户是否已经在本服务器或者其他服务器登录了
-		// 如果已经登录，则进行踢人
-		std::string uid_ip_value = "";
-		auto uid_ip_key = USER_IP_PREFIX + std::to_string(uid);
-		bool b_ip = RedisMgr::GetInstance()->Get(uid_ip_key, uid_ip_value);
-		// 能够查到，说明用户在之前已经登录，开始进行踢人操作
-		if (b_ip) {
-			// 如果查到的之前登录的服务器与当前服务器相同，代表是同服务器再次登录，则直接在本服务器将之前的链接剔除掉
-			if (uid_ip_value == self_server_name) {
-				// 拿到旧的链接
-				auto sessions = UserMgr::GetInstance()->Sessions();
-				auto old_session = sessions->FindCurrent(uid);
-
-				// 发送消息剔除旧链接
-				if (old_session) {
-					// 发送消息通知客户端，由客户端断开链接，不然会出现TIME_OUT
-					Json::Value notify;
-					notify["error"] = ErrorCodes::Success;
-					notify["uid"] = uid;
-
-					std::string return_str = notify.toStyledString();
-
-					sessions->Send(old_session, {MSG_NOTIFY_OFF_LINE_REQ, return_str});
-					//old_session->NotifyOffline(uid);
-					// 清除旧的链接
-
-					_p_server->ClearSession(old_session);
-				}
-			}
-			else {
-				// 代表不在本服务器，需要进行跨服踢人
-				KickUserReq kick_req;
-				kick_req.set_uid(uid);
-				// 参数为serverIp
-				ChatGrpcClient::GetInstance()->NotifyOtherKickUser(uid_ip_value, kick_req);
-			}
-		}
-
-		// 完成登录不需要更新本服务器的计数
-		// 计数通过心跳检测来实现
-
-		// 连接完成后，将session绑定uid
-		session->SetUserId(uid);
-
-		// 如果需要跟其他的用户通信，其他的用户可能在其他服务器上，因此需要知道每个tcp客户端登陆在哪一个服务器上
-		std::string user_server_key = USER_IP_PREFIX + std::to_string(uid);
-		RedisMgr::GetInstance()->Set(user_server_key, self_server_name);
+        binding_started = true;
+        session->BindAuthenticatedUser(uid, [session, response = std::move(return_value)](SessionBindResult result) mutable {
+            if (result != SessionBindResult::Bound) response["error"] = ErrorCodes::RPCFailed;
+            session->Send(response.toStyledString(), MSG_CHAT_LOGIN_RSP);
+        });
 
 	};
 
@@ -299,7 +260,7 @@ void LogicSystem::RegisterCallBacks() {
 		// 先更新数据库
 
         // Identity belongs to the authenticated connection, not the request body.
-        if (session->GetAuthenticatedUid() <= 0 || fromuid != session->GetAuthenticatedUid() ||
+        if (session->AuthenticatedUid() <= 0 || fromuid != session->AuthenticatedUid() ||
             touid <= 0 || fromuid == touid) {
             return_value["error"] = ErrorCodes::UidInvalid;
             return;
@@ -318,9 +279,12 @@ void LogicSystem::RegisterCallBacks() {
 		// 接下来查找touid连接到哪一个服务器上，如果在本服务器，则直接转发，否则通过grpc转发
 		// 如果查不到，代表touid已离线，则直接返回
 		auto to_uid_str = std::to_string(touid);
-		auto to_uid_ip_key = USER_IP_PREFIX + to_uid_str;
+
 		std::string to_ip_value = "";
-		bool b_to_ip = RedisMgr::GetInstance()->Get(to_uid_ip_key, to_ip_value);
+		const auto presence = _presence->Find(touid);
+        if (presence.status == PresenceStatus::Unavailable) { SPDLOG_WARN("presence lookup unavailable"); return; }
+        bool b_to_ip = presence.status == PresenceStatus::Found;
+        if (presence.presence) to_ip_value = presence.presence->server_id;
 		if (!b_to_ip) {
 			return;
 		}
@@ -331,7 +295,7 @@ void LogicSystem::RegisterCallBacks() {
 
 		// 查询到在同一服务器
 		if (to_ip_value == self_name) {
-			auto sessions = UserMgr::GetInstance()->Sessions();
+			auto sessions = _directory;
 			auto touid_session = sessions->FindCurrent(touid);
 			if (touid_session) {
 				// 直接通知对方
@@ -346,7 +310,7 @@ void LogicSystem::RegisterCallBacks() {
 				notify["description"] = description;
 				notify["backname"] = backname;
 				std::string notity_str = notify.toStyledString();
-				sessions->Send(touid_session, {MSG_NOTIFY_ADD_FRIEND_REQ, notity_str});
+				touid_session->Send({MSG_NOTIFY_ADD_FRIEND_REQ, notity_str});
 			}
 			return;
 		}
@@ -406,7 +370,7 @@ void LogicSystem::RegisterCallBacks() {
 
 		std::vector<std::shared_ptr<ChatMessage>> _chat_msgs;
 
-        if (session->GetAuthenticatedUid() <= 0 || authuid != session->GetAuthenticatedUid() ||
+        if (session->AuthenticatedUid() <= 0 || authuid != session->AuthenticatedUid() ||
             applyuid <= 0 || applyuid == authuid || !applyinfo.isObject() || !authinfo.isObject() ||
             !applyinfo["applyuid"].isInt() || applyinfo["applyuid"].asInt() != applyuid ||
             !applyinfo["touid"].isInt() || applyinfo["touid"].asInt() != authuid ||
@@ -445,9 +409,12 @@ void LogicSystem::RegisterCallBacks() {
 		// 通知对方认证成功
 		// 先查询redis，查看对方的server_ip
 		auto applyuid_str = std::to_string(applyuid);
-		auto applyuid_ip_key = USER_IP_PREFIX + applyuid_str;
+
 		std::string applyuid_ip_value = "";
-		bool isSuccess = RedisMgr::GetInstance()->Get(applyuid_ip_key, applyuid_ip_value);
+		const auto presence = _presence->Find(applyuid);
+        if (presence.status == PresenceStatus::Unavailable) { SPDLOG_WARN("presence lookup unavailable"); return; }
+        bool isSuccess = presence.status == PresenceStatus::Found;
+        if (presence.presence) applyuid_ip_value = presence.presence->server_id;
 		// 查询不到，说明对方已离线，则不对界面进行更新。因为已经对数据库更新了，因此下次登录是正确结果
 		if (!isSuccess) {
 			return;
@@ -459,7 +426,7 @@ void LogicSystem::RegisterCallBacks() {
 
 		// 两个人在同一个服务器上，则直接找到对方的session，并发送请求
 		if (self_server_name == applyuid_ip_value) {
-			auto sessions = UserMgr::GetInstance()->Sessions();
+			auto sessions = _directory;
 			auto session = sessions->FindCurrent(applyuid);
 			if (session) {
 				Json::Value notify;
@@ -476,7 +443,7 @@ void LogicSystem::RegisterCallBacks() {
 
 				// 通过session发送
 				std::string notify_str = notify.toStyledString();
-				sessions->Send(session, {MSG_NOTIFY_AUTH_FRIEND_REQ, notify_str});
+				session->Send({MSG_NOTIFY_AUTH_FRIEND_REQ, notify_str});
 			}
 
 			return;
@@ -539,7 +506,7 @@ void LogicSystem::RegisterCallBacks() {
             return;
         }
 
-        const int principal_uid = session->GetAuthenticatedUid();
+        const int principal_uid = session->AuthenticatedUid();
         const int from_uid = root["from_uid"].isInt() ? root["from_uid"].asInt() : 0;
         const int to_uid = root["to_uid"].isInt() ? root["to_uid"].asInt() : 0;
         const int chat_id = root["chat_id"].isInt() ? root["chat_id"].asInt() : 0;
@@ -592,8 +559,8 @@ void LogicSystem::RegisterCallBacks() {
         message_commit::Result result;
         if (resource_message) {
             try {
-                auto sessions = UserMgr::GetInstance()->Sessions();
-                if (sessions->FindCurrent(from_uid) != session->GetHandle() || data_array.size() != 1
+                auto sessions = _directory;
+                if (!sessions->IsCurrent(from_uid, session->Id()) || data_array.size() != 1
                     || !root["resource_id"].isString()
                     || !message_commit::IsCanonicalUuid(data_array[0]["msg_uuid"].asString()))
                     throw std::runtime_error("invalid resource sender");
@@ -647,9 +614,12 @@ void LogicSystem::RegisterCallBacks() {
 		return_value["uuid_msgId"] = uuid_msgId;
 
 		// 查询redis查看对方的ip
-		std::string touid_ip_key = USER_IP_PREFIX + std::to_string(to_uid);
+
 		std::string touid_ip_value = "";
-		bool b_success = RedisMgr::GetInstance()->Get(touid_ip_key, touid_ip_value);
+		const auto presence = _presence->Find(to_uid);
+        if (presence.status == PresenceStatus::Unavailable) { SPDLOG_WARN("presence lookup unavailable"); return; }
+        bool b_success = presence.status == PresenceStatus::Found;
+        if (presence.presence) touid_ip_value = presence.presence->server_id;
 		if (!b_success) {
             // Routing failure cannot revoke the already committed acknowledgement.
 			return;
@@ -660,7 +630,7 @@ void LogicSystem::RegisterCallBacks() {
 
 		// 两者在同一个服务器，则直接发送
 		if (self_server_name == touid_ip_value) {
-			auto sessions = UserMgr::GetInstance()->Sessions();
+			auto sessions = _directory;
 			auto session = sessions->FindCurrent(to_uid);
 			if (session) {
 				// 这是往另一个客户端的通知信息
@@ -682,7 +652,7 @@ void LogicSystem::RegisterCallBacks() {
 
 				// 直接在这里通知
 				std::string notify_str = notify.toStyledString();
-				sessions->Send(session, {MSG_NOTIFY_CHAT_MSG_REQ, notify_str});
+				session->Send({MSG_NOTIFY_CHAT_MSG_REQ, notify_str});
 			}
 			
 			return;
@@ -848,7 +818,7 @@ void LogicSystem::RegisterCallBacks() {
                 && root["chat_id"].isInt() && root["chat_id"].asInt() > 0
                 && root["after_id"].isInt64() && root["after_id"].asInt64() >= 0
                 && root["request_id"].isString() && root["request_id"].asString().size() <= 64
-                && UserMgr::GetInstance()->Sessions()->FindCurrent(root["uid"].asInt()) == session->GetHandle()) {
+                && _directory->IsCurrent(root["uid"].asInt(), session->Id())) {
                 response["error"] = ErrorCodes::Success;
                 if (!MysqlMgr::GetInstance()->SyncChatMessages(root["uid"].asInt(), root["chat_id"].asInt(),
                     root["after_id"].asInt64(), response)) {
@@ -878,7 +848,7 @@ void LogicSystem::RegisterCallBacks() {
 		// 是否能够加载更多
 		bool load_more = false;
 		int last_msg_id = 0;
-		bool success = GetChatMessageList(session->GetAuthenticatedUid(), chat_id, current_msg_id, PAGE_SIZE, chat_msgs, load_more, last_msg_id);
+		bool success = GetChatMessageList(session->AuthenticatedUid(), chat_id, current_msg_id, PAGE_SIZE, chat_msgs, load_more, last_msg_id);
 
 		if (!success) {
 			return_value["error"] = ErrorCodes::UidInvalid;

@@ -1,6 +1,6 @@
 #include "IntegrationHostFactory.h"
 
-#include "ChatSessionState.h"
+#include "SessionLifecycleCoordinator.h"
 #include "GateRequest.h"
 #include "LogicDispatcher.h"
 #include "StatusRouting.h"

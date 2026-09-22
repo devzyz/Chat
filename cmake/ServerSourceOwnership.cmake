@@ -48,7 +48,6 @@ set(CHAT_SERVER_SOURCE_OWNERS
     StatusServer/StatusServer/StatusTransport
     StatusServer/StatusServer/StatusServer
     ChatServer/ChatServer/ChatTransport
-    ChatServer/ChatServer/ChatSessionState
     ChatServer/ChatServer/LogicDispatcher
     ChatServer/ChatServer/ChatGrpcClients
     ChatServer/ChatServer/MessageCommit

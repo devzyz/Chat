@@ -55,6 +55,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="chat-session-state\session_runtime_integration_tests.cpp" />
     <ClCompile Include="startup\gate_status_startup_tests.cpp" />
     <ClCompile Include="startup\startup_config_tests.cpp" />
     <ClCompile Include="..\support\IntegrationHostFactory.cpp" />
@@ -87,9 +88,6 @@
     </ProjectReference>
     <ProjectReference Include="..\..\ChatServer\ChatServer\LogicDispatcher.vcxproj">
       <Project>{B251FB8A-0C7D-4BFA-8F1B-31C75DFBDA01}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\..\ChatServer\ChatServer\ChatSessionState.vcxproj">
-      <Project>{3F8301B8-91A7-4A0E-88B6-EC650CDDC303}</Project>
     </ProjectReference>
     <ProjectReference Include="..\..\ChatServer\ChatServer\ChatTransport.vcxproj">
       <Project>{4B7AD04F-6F24-45BC-BF1B-3B0400000001}</Project>

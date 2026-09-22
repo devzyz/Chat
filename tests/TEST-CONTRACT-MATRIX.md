@@ -107,7 +107,7 @@ branch protection 仍必须由 3A-06/实际 GitHub check 证明。
 | Gate Asio | Gate lifecycle | Foundation | Unit | 2 | `server_gate_unit.xml` | in-process thread/io_context | develop required |
 | Status Asio | Status lifecycle | Foundation | Unit | 2 | `server_status_unit.xml` | in-process thread/io_context | develop required |
 | Server component | Chat Redis pool/session state/principal、Gate response/request、Status token/store | Foundation/Architecture/Business | Component | 57 | `server_component.xml` | in-process fake；不连接 Redis/MySQL/Status/Varify | develop required |
-| Server integration | Chat/Gate/Status startup、C++→Node Varify、Gate gRPC clients、IntegrationHost composition、run-owned process harness、Gate Beast HTTP、Status gRPC、Chat TCP、formal production composition | Architecture | Integration | 93 | `server_integration.xml` | 受控子进程、动态 loopback 端口、run-owned temp、in-memory Adapter；Chat real-ready 留在 G-015/3C | develop required |
+| Server integration | Chat/Gate/Status startup、C++→Node Varify、Gate gRPC clients、IntegrationHost composition、run-owned process harness、Gate Beast HTTP、Status gRPC、Chat TCP、formal production composition | Architecture | Integration | 106 | `server_integration.xml` | 受控子进程、动态 loopback 端口、run-owned temp、in-memory Adapter；Chat real-ready 留在 G-015/3C | develop required |
 | Chat gRPC integration | Chat production gRPC clients | Architecture | Integration | 4 | `server_chat_grpc_integration.xml` | 动态 loopback 端口、无外部服务 | develop required |
 | Qt unit | frame decoder、message model rules Q01-MODEL-01..06、auth outcomes Q03-AUTH-01..11 | Foundation/Architecture/Business | Unit | 18 | `client_unit.xml` | Qt Core/Widgets minimal，无 socket | develop required |
 | Qt component | message store/delegate Q01-MODEL-07..08、session reset/pending Q02-SESSION-01..08、auth reset wiring Q03-AUTH-12 | Architecture/Business | Component | 8 | `client_component.xml` | Qt Widgets/Network minimal；真实 in-process Module，无连接 | develop required |
@@ -238,25 +238,17 @@ Domain/Level：Business/Architecture；01..07/14 为 Unit，08..13 为 Component
 | T08-STATUS-13 | `MatchingTokenSucceeds` | Token 匹配返回成功 UID/token |
 | T08-STATUS-14 | `ConcurrentSelectionIsDeterministic` | barrier 并发选择确定且无 container-order 依赖 |
 
-### 3.8 Chat session registry/send state（11）
+### 3.8 Chat Session lifecycle (11 Component + 13 Integration)
 
-Interface：production `ChatSessionState::Create/RegisterCurrent/FindCurrent/AuthenticatedUid/Close/Send`；唯一外部身份为 opaque session handle。`UserMgr` 持有唯一 registry，`CServer`、`CSession`、`LogicSystem` 和 `ChatServiceImpl` 统一委托该 Interface。
-Domain/Level：Architecture / Component。
-报告：`server_component.xml`。固定 session ID source、手工完成 writer callback 与 presence recorder 均为 in-process Adapter；不连接真实 TCP/Redis。
+Production owner: `ChatTransport.vcxproj` (`CSession`, `UserSessionDirectory`, `SessionLifecycleCoordinator`).
+The Component report retains 11 cases; the Integration report adds 13 `T09-SESSION-01..13` cases.
+Full mapping and fixture limitations: [Session contracts](server/chat-session-state/README.md).
 
-| Test ID | Runner testcase | 合同 |
-| --- | --- | --- |
-| T08-SESSION-01 | `NewSessionHandlesAreNonEmptyAndUnique` | session ID 非空且唯一 |
-| T08-SESSION-02 | `FirstRegistrationBecomesTheCurrentSession` | 首次认证建立 UID current mapping |
-| T08-SESSION-03 | `ANewSessionAtomicallyReplacesTheCurrentSession` | 同 UID 新认证原子替换 current session |
-| T08-SESSION-04 | `ClosingTheReplacedSessionDoesNotDeleteTheNewMapping` | 旧 session Close 不删除 replacement 或触发错误 cleanup |
-| T08-SESSION-05 | `ClosingTheCurrentSessionCleansUpOnceAndIsIdempotent` | 当前 session 重复 Close 幂等且 presence cleanup 一次 |
-| T08-SESSION-06 | `ConcurrentClosePerformsPresenceCleanupAtMostOnce` | barrier 并发 Close 最多一次 cleanup |
-| T08-SESSION-07 | `AcceptedFramesAreWrittenInFifoOrder` | accepted frame 依次启动 writer，保持每 session FIFO |
-| T08-SESSION-08 | `ExactCapacityRejectsOnlyTheNextFrameWithoutOverwriting` | 精确接受 `MAX_SENDQUE`，下一帧 `Full` 且不覆盖 |
-| T08-SESSION-09 | `ClosedSessionRejectsNewFramesImmediately` | 关闭后 Send 立即 `Closed` |
-| T08-SESSION-10 | `WriterFailureClosesAndCleansUpExactlyOnce` | writer failure exactly-once Close 与 matching cleanup |
-| T08-SESSION-11 | `ChatSessionPrincipal.OnlyCurrentLiveOwnedHandleAuthenticates` | 仅本 registry 当前 live handle 产生认证 UID；被替换/已关闭/外部 handle 不认证，关闭后不可重新注册 |
+Migration of T08-SESSION-01..11: identity/current mapping/conditional removal/close remain in
+Component tests. FIFO, exact capacity, write failure and principal replacement are exercised
+through real TCP by T09-SESSION-04/05/06/13. The opaque handle and writer adapter are retired;
+Send admission completes on the strand with Accepted/Full/NotActive. This replaces the old
+contracts without removing the existing T09-CTCP-01..16 transport suite.
 
 ### 3.9 Gate request orchestration（16）
 
@@ -863,3 +855,5 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 Q05-STORE-01..07 are mapped in [message-storage](../chat/tests/message-storage/README.md), aggregated as one component CTest case. Client Component increases from 12 to 13; the thirteen-report registration increases from 357 to 358. Other lane counts stay unchanged.
 
 S06-SYNC-01..05 are opt-in real MySQL / production ChatServer / Qt-SQLite contracts in [message-sync](server/message-sync/README.md), outside that aggregate. Local conflict rollback, original-ID retry, ordered commit/cursor behavior and process restart are covered; production Status/Redis and full GUI workflows are not claimed.
+
+Session FSM adaptation to current develop: the current runner manifest is 13 reports / 371 cases, including 239 Server cases. Historical baselines above remain historical evidence.

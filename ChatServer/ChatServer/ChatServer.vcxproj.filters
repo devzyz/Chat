@@ -1,15 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClInclude Include="ChatSessionState.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="ChatSessionStateInternal.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="ChatSessionStateProduction.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <Filter Include="源文件">
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
@@ -34,12 +25,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="AsioIOServicePool.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="CServer.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="CSession.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="LogicSystem.cpp">
@@ -78,13 +63,7 @@
     <ClCompile Include="ChatGrpcClient.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="ChatFrameCodec.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="PeerServerRouting.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="UserMgr.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="ChatServiceImpl.cpp">
@@ -105,12 +84,6 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="AsioIOServicePool.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="CServer.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="CSession.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Const.h">
@@ -155,13 +128,7 @@
     <ClInclude Include="ChatGrpcClient.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="ChatFrameCodec.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="PeerServerRouting.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="UserMgr.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="ChatServiceImpl.h">
@@ -175,6 +142,8 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="RedisUserPresenceStore.cpp" />
+    <ClInclude Include="RedisUserPresenceStore.h" />
     <None Include="config.ini" />
     <None Include="configs\chat-01.ini" />
     <None Include="configs\chat-02.ini" />

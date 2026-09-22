@@ -74,7 +74,7 @@ $scriptTestGroups = @(
 $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 68 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 57 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 93 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 106 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
@@ -403,7 +403,7 @@ function Run-ServerTests {
     $executions = @(
         @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 68 }
         @{ Binary = $componentBinary; Report = $reports[1]; ExpectedCount = 57 }
-        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 93 }
+        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 106 }
         @{ Binary = $chatGrpcClientBinary; Report = $reports[3]; ExpectedCount = 4 }
         @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4]; ExpectedCount = 2 }
         @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5]; ExpectedCount = 2 }
@@ -574,8 +574,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 13 -or $total -ne 358) {
-        throw "Regression report baseline mismatch: expected 13 reports and 358 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 13 -or $total -ne 371) {
+        throw "Regression report baseline mismatch: expected 13 reports and 371 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     $legacyTotal = 0
     foreach ($legacyGroup in $legacyRegressionReportGroups) {
@@ -730,8 +730,6 @@ function Confirm-TestStructure {
     $statusProject = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusServer.vcxproj') -Raw
     $statusRoutingProject = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusRouting.vcxproj') -Raw
     $statusTransportProject = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusTransport.vcxproj') -Raw
-    $chatSessionStateProject = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatSessionState.vcxproj') -Raw
-    $chatSessionStateFilters = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatSessionState.vcxproj.filters') -Raw
     $solutionRegistration = Get-Content -LiteralPath (Join-Path $repoRoot 'Chat.sln') -Raw
     $unitProject = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\ServerUnitTests.vcxproj') -Raw
     $componentProject = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\ServerComponentTests.vcxproj') -Raw
@@ -781,12 +779,12 @@ function Confirm-TestStructure {
         $logicSystemSource -match '_msg_que|_worker_thread|condition_variable|PostMsgToQue|DealMsg') {
         throw 'LogicSystem must retain handler registration while queue/worker ownership stays in LogicDispatcher.'
     }
-    foreach ($submitResult in @('Accepted', 'Full', 'Closed')) {
+    foreach ($submitResult in @('Full', 'Closed')) {
         if ($chatSessionSource -notmatch "LogicSubmitResult::$submitResult") {
             throw "CSession must handle LogicDispatcher result $submitResult."
         }
     }
-    if ($chatSessionSource -notmatch '_dispatcher->Submit\s*\(' -or
+    if ($chatSessionSource -notmatch '_submit\s*\(' -or
         $chatSessionSource -match 'PostMsgToQue') {
         throw 'CSession must submit through the production LogicDispatcher Interface.'
     }
@@ -878,48 +876,23 @@ function Confirm-TestStructure {
         $statusServiceSource -match 'RedisMgr|_servers|\.begin\(\)') {
         throw 'StatusServiceImpl must call only the two-method production StatusRouting Interface.'
     }
-    $chatSessionStateHeader = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatSessionState.h') -Raw
-    $chatSessionStateSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatSessionState.cpp') -Raw
     $chatSessionTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\chat-session-state\chat_session_state_tests.cpp') -Raw
-    $chatServerSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\CServer.cpp') -Raw
-    $chatSessionHeader = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\CSession.h') -Raw
-    $userManagerSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\UserMgr.cpp') -Raw
-    if (@([regex]::Matches($chatSessionTests, 'TEST\(ChatSessionStateTests,')).Count -ne 10 -or
-        @([regex]::Matches($chatSessionTests, 'T08-SESSION-(?:0[1-9]|10)')).Count -ne 10) {
-        throw 'Chat session state tests must register exactly T08-SESSION-01..10 as ten Server Component testcases.'
+    $sessionRuntimeTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\chat-session-state\session_runtime_integration_tests.cpp') -Raw
+    if (@([regex]::Matches($chatSessionTests, 'TEST\(SessionComponentTests,')).Count -ne 11 -or
+        @([regex]::Matches($sessionRuntimeTests, 'TEST\(SessionRuntimeIntegrationTests,')).Count -ne 13) {
+        throw 'Session runtime must register 11 component and 13 loopback integration contracts.'
     }
-    foreach ($registration in @(
-        @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatSessionState\.vcxproj"'; Owner = 'ChatServer' }
-        @{ Text = $componentProject; Pattern = 'chat-session-state\\chat_session_state_tests\.cpp'; Owner = 'Server Component tests' }
-        @{ Text = $componentProject; Pattern = 'ChatSessionState\.vcxproj'; Owner = 'Server Component tests' }
-        @{ Text = $chatSessionStateProject; Pattern = 'ClCompile Include="ChatSessionState\.cpp"'; Owner = 'Chat session state library' }
-        @{ Text = $chatSessionStateProject; Pattern = 'ClCompile Include="ChatSessionStateProduction\.cpp"'; Owner = 'Chat session production Adapters' }
-        @{ Text = $chatSessionStateFilters; Pattern = 'ChatSessionStateProduction\.cpp'; Owner = 'Chat session state filters' }
-        @{ Text = $solutionRegistration; Pattern = '"ChatSessionState", "ChatServer\\ChatServer\\ChatSessionState\.vcxproj"'; Owner = 'Chat solution' }
-    )) {
-        if ($registration.Text -notmatch $registration.Pattern) {
-            throw "$($registration.Owner) must share and register the production ChatSessionState Module."
+    foreach ($source in @('UserSessionDirectory', 'SessionLifecycleCoordinator')) {
+        if ($chatTransportProject -notmatch ('ClCompile Include="' + $source + '\.cpp"')) {
+            throw "ChatTransport must own $source."
         }
     }
-    if ($chatSessionStateHeader -notmatch 'Handle Create\s*\(' -or
-        $chatSessionStateHeader -notmatch 'RegisterCurrent\s*\(' -or
-        $chatSessionStateHeader -notmatch 'Handle FindCurrent\s*\(' -or
-        $chatSessionStateHeader -notmatch 'void Close\s*\(' -or
-        $chatSessionStateHeader -notmatch 'SessionSendResult Send\s*\(' -or
-        $chatSessionStateHeader -match 'clearForTest|unordered_map|deque<') {
-        throw 'ChatSessionState must expose its opaque-handle production Interface without private state or test helpers.'
-    }
-    if ($chatSessionStateSource -notmatch 'frames\.size\(\)\s*>=\s*MAX_SENDQUE' -or
-        $chatSessionStateSource -notmatch 'found->second\s*!=\s*session' -or
-        $chatSessionStateSource -notmatch 'write_generation\s*!=\s*generation') {
-        throw 'ChatSessionState must own exact capacity, matching delete, and exactly-once writer completion.'
-    }
-    if ($chatServerSource -notmatch '_session_state->Close\s*\(' -or
-        $chatSessionHeader -match '_send_que|_send_mutex|HandleWrite' -or
-        $chatSessionSource -notmatch '_session_state->Send\s*\(' -or
-        $userManagerSource -notmatch 'MakeProductionChatSessionState' -or
-        $userManagerSource -match '_uid_to_session|RemoveUserSession|SetUserSession') {
-        throw 'CServer, CSession, and UserMgr must delegate session identity/send state to one ChatSessionState Interface.'
+    if ($componentProject -notmatch 'ChatTransport\.vcxproj' -or
+        $integrationProject -notmatch 'session_runtime_integration_tests\.cpp' -or
+        $chatSessionSource -notmatch '_frames\.size\(\)\s*>=\s*MAX_SENDQUE' -or
+        $chatSessionSource -notmatch 'bind_executor\(_strand' -or
+        $chatSessionSource -notmatch 'SessionState::Closing') {
+        throw 'Session contracts must exercise the shared strand runtime with bounded writes and idempotent close.'
     }
     $gateLogic = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\LogicSystem.cpp') -Raw
     $gateRequestHeader = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\GateRequest.h') -Raw
@@ -986,7 +959,7 @@ function Confirm-TestStructure {
         @{ Pattern = 'integration-host\\integration_host_contract_tests\.cpp'; Owner = 'T09-HOST contract source' }
         @{ Pattern = '\.\.\\support\\IntegrationHostFactory\.cpp'; Owner = 'IntegrationHostFactory composition source' }
         @{ Pattern = 'LogicDispatcher\.vcxproj'; Owner = 'LogicDispatcher shared target' }
-        @{ Pattern = 'ChatSessionState\.vcxproj'; Owner = 'ChatSessionState shared target' }
+        @{ Pattern = 'ChatTransport\.vcxproj'; Owner = 'ChatSessionState shared target' }
         @{ Pattern = 'GateRequest\.vcxproj'; Owner = 'GateRequest shared target' }
         @{ Pattern = 'StatusRouting\.vcxproj'; Owner = 'StatusRouting shared target' }
     )) {
@@ -1020,10 +993,10 @@ function Confirm-TestStructure {
         @{ Text = $integrationProject; Pattern = [regex]::Escape('StatusServer\StatusServer\StatusRouting.vcxproj'); Owner = 'Status Integration business Module' }
         @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatTransport\.vcxproj"'; Owner = 'formal Chat transport' }
         @{ Text = $chatProject; Pattern = 'ProjectReference Include="LogicDispatcher\.vcxproj"'; Owner = 'formal Chat dispatcher Module' }
-        @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatSessionState\.vcxproj"'; Owner = 'formal Chat session Module' }
+        @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatTransport\.vcxproj"'; Owner = 'formal Chat session Module' }
         @{ Text = $integrationProject; Pattern = [regex]::Escape('ChatServer\ChatServer\ChatTransport.vcxproj'); Owner = 'Chat Integration transport' }
         @{ Text = $integrationProject; Pattern = [regex]::Escape('ChatServer\ChatServer\LogicDispatcher.vcxproj'); Owner = 'Chat Integration dispatcher Module' }
-        @{ Text = $integrationProject; Pattern = [regex]::Escape('ChatServer\ChatServer\ChatSessionState.vcxproj'); Owner = 'Chat Integration session Module' }
+        @{ Text = $integrationProject; Pattern = [regex]::Escape('ChatServer\ChatServer\ChatTransport.vcxproj'); Owner = 'Chat Integration session Module' }
     )) {
         if ($registration.Text -notmatch $registration.Pattern) {
             throw "$($registration.Owner) must share the production target used by the formal executable and Integration tests."
@@ -1034,8 +1007,8 @@ function Confirm-TestStructure {
     $chatFormalSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatServer.cpp') -Raw
     if ($gateFormalSource -notmatch 'gate::CreateProductionGateRequest\s*\(' -or
         $statusFormalSource -notmatch 'CreateProductionStatusRouting\s*\(' -or
-        $chatFormalSource -notmatch 'LogicSystem::GetInstance\s*\(' -or
-        $chatFormalSource -notmatch 'UserMgr::GetInstance\s*\(\)->Sessions\s*\(' -or
+        $chatFormalSource -notmatch 'make_unique<LogicSystem>\s*\(' -or
+        $chatFormalSource -notmatch 'make_shared<RedisUserPresenceStore>\s*\(' -or
         $chatFormalSource -notmatch 'RedisMgr::GetInstance\s*\(') {
         throw 'Formal Gate, Status, and Chat composition roots must select their real production Adapters and Modules.'
     }
@@ -1334,7 +1307,7 @@ function Confirm-TestStructure {
             throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
         }
     }
-    foreach ($requiredCount in @(68, 57, 93, 4)) {
+    foreach ($requiredCount in @(68, 57, 106, 4)) {
         if ($runServerTests.Groups['body'].Value -notmatch "ExpectedCount\s*=\s*$requiredCount") {
             throw "RunServerTests is missing the exact current Server testcase count $requiredCount."
         }
@@ -1367,11 +1340,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact thirteen-report/358-testcase baseline.'
+        throw 'RunAllTests must audit the exact thirteen-report/371-testcase baseline.'
     }
     if ($regressionReportGroups.Count -ne 13 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 358) {
-        throw 'The registered regression baseline must remain exactly 13 reports and 358 testcases.'
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 371) {
+        throw 'The registered regression baseline must remain exactly 13 reports and 371 testcases.'
     }
     if ($legacyRegressionReportGroups.Count -ne 12 -or
         ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 232) {

@@ -26,6 +26,8 @@ Configured values must be decimal milliseconds in the inclusive range 100..60000
 
 The loopback fixtures bind `127.0.0.1:0`, use scoped server shutdown deadlines, expose no public network, and create no external Redis/MySQL/SMTP dependency. Gate and Chat production executables and their tests link the same `GateGrpcClients` / `ChatGrpcClients` static libraries; there is no copied parser, test-only switch, or private-method test seam.
 
+The Chat success case also verifies that `KickUserReq.session_id` survives the production client and real gRPC transport.
+
 ## Execution
 
 ```powershell

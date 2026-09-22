@@ -1,69 +1,51 @@
 #pragma once
-
-#include "ChatSessionState.h"
-
+#include "CSession.h"
 #include <boost/asio.hpp>
-
 #include <atomic>
-#include <cstdint>
-#include <functional>
-#include <memory>
-#include <mutex>
-#include <string>
+#include <unordered_map>
 #include <vector>
 
-class CSession;
-class LogicDispatcher;
-
+class SessionLifecycleCoordinator;
+class UserSessionDirectory;
 namespace chat_transport {
 
-class CServer : public std::enable_shared_from_this<CServer>
-{
+class CServer : public std::enable_shared_from_this<CServer> {
 public:
-	using SessionCountObserver = std::function<void(std::size_t)>;
-
-	CServer(
-		boost::asio::io_context& ioc,
-		std::string address,
-		std::uint16_t port,
-		std::shared_ptr<ChatSessionState> session_state,
-		std::shared_ptr<LogicDispatcher> dispatcher,
-		SessionCountObserver session_count_observer = {});
-	~CServer();
-
-	bool Start();
-	void Stop();
-	bool Ready() const noexcept;
-	bool Stopped() const noexcept;
-	const std::string& BoundAddress() const noexcept;
-	std::uint16_t BoundPort() const noexcept;
-
-	// Compatibility names retained for existing formal callers.
-	void init();
-	void stop();
-
-	void ClearSession(const ChatSessionState::Handle& session);
-	bool CheckSessionValid(const ChatSessionState::Handle& session);
-	void on_timer(const boost::system::error_code& error);
-
+    using ContextSource = std::function<boost::asio::io_context&()>;
+    CServer(boost::asio::io_context& io, std::string address, unsigned short port,
+        std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
+        std::shared_ptr<UserSessionDirectory> directory, CSession::Submit submit,
+        ContextSource contexts = {});
+    bool Start();
+    void Stop(std::function<void()> completion = {});
+    void RemoveSession(const SessionId& id);
+    bool Ready() const noexcept { return _ready.load() && !_stop_requested.load(); }
+    bool Stopped() const noexcept { return _stopped.load(); }
+    std::string BoundAddress() const { return _address; }
+    unsigned short BoundPort() const noexcept { return _port; }
+    std::size_t ConnectionCount() const noexcept { return _connection_count.load(); }
 private:
-	void StartAcceptor();
-	void HandleAcceptor(
-		std::shared_ptr<CSession> new_session,
-		const boost::system::error_code& error);
-
-	boost::asio::io_context& _ioc;
-	std::string _address;
-	std::uint16_t _port;
-	boost::asio::ip::tcp::acceptor _acceptor;
-	std::vector<std::pair<ChatSessionState::Handle, std::shared_ptr<CSession>>> _sessions;
-	std::shared_ptr<ChatSessionState> _session_state;
-	std::shared_ptr<LogicDispatcher> _dispatcher;
-	SessionCountObserver _session_count_observer;
-	mutable std::mutex _mutex;
-	boost::asio::steady_timer _timer;
-	std::atomic<bool> _started{false};
-	std::atomic<bool> _stopping{false};
+    void Accept();
+    void CompleteStop();
+    boost::asio::io_context& _io;
+    boost::asio::executor_work_guard<boost::asio::io_context::executor_type> _work;
+    boost::asio::strand<boost::asio::io_context::executor_type> _strand;
+    boost::asio::ip::tcp::acceptor _acceptor;
+    std::shared_ptr<SessionLifecycleCoordinator> _lifecycle;
+    std::shared_ptr<UserSessionDirectory> _directory;
+    CSession::Submit _submit;
+    ContextSource _contexts;
+    std::unordered_map<SessionId, std::shared_ptr<CSession>> _sessions;
+    std::vector<std::function<void()>> _stop_completions;
+    bool _started = false;
+    bool _stopping = false;
+    bool _accept_pending = false;
+    std::atomic<bool> _ready{false};
+    std::atomic<bool> _stop_requested{false};
+    std::atomic<bool> _stopped{false};
+    std::atomic<std::size_t> _connection_count{0};
+    const std::string _address;
+    unsigned short _port;
 };
 
 } // namespace chat_transport

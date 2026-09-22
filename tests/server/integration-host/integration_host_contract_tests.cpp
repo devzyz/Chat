@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "ChatSessionState.h"
-#include "ChatSessionStateInternal.h"
+#include "SessionLifecycleCoordinator.h"
+#include "../chat-session-state/session_test_support.h"
 #include "GateRequestInternal.h"
 #include "IntegrationHostFactory.h"
 #include "LogicDispatcher.h"
@@ -18,22 +18,6 @@
 namespace {
 
 using namespace std::chrono_literals;
-
-class FixedSessionIdSource final : public SessionIdSource {
-public:
-	std::string Next() override {
-		return "host-contract-session";
-	}
-};
-
-class InMemoryPresence final : public SessionPresence {
-public:
-	void Register(int, const std::string&) override {
-	}
-
-	void Cleanup(int, const std::string&) override {
-	}
-};
 
 class InMemoryVerification final : public gate::internal::VerificationPort {
 public:
@@ -102,9 +86,8 @@ integration::ProductionModules CreateProductionModules() {
 	integration::ProductionModules modules;
 	modules.logic_dispatcher = std::make_unique<LogicDispatcher>(
 		[](const LogicMessage&) { return true; });
-	modules.chat_sessions = std::make_unique<ChatSessionState>(
-		std::make_shared<FixedSessionIdSource>(),
-		std::make_shared<InMemoryPresence>());
+	modules.chat_sessions = std::make_unique<SessionLifecycleCoordinator>(
+        std::make_shared<UserSessionDirectory>(), std::make_shared<session_test::MemoryPresence>(), "host-contract");
 	modules.gate_request = gate::internal::CreateGateRequest(
 		std::make_shared<InMemoryVerification>(),
 		std::make_shared<InMemoryCodeStore>(),

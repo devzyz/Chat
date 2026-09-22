@@ -111,6 +111,9 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 inline constexpr KickUserReq::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        session_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         uid_{0} {}
 
 template <typename>
@@ -575,8 +578,10 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::message::KickUserReq, _impl_._has_bits_),
-        4, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::message::KickUserReq, _impl_.uid_),
+        PROTOBUF_FIELD_OFFSET(::message::KickUserReq, _impl_.session_id_),
+        1,
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::message::KickUserRsp, _impl_._has_bits_),
@@ -600,7 +605,7 @@ static const ::_pbi::MigrationSchema
         {128, sizeof(::message::TextChatMsgReq)},
         {139, sizeof(::message::TextChatMsgRsp)},
         {144, sizeof(::message::KickUserReq)},
-        {149, sizeof(::message::KickUserRsp)},
+        {151, sizeof(::message::KickUserRsp)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::message::_AddFriendReq_default_instance_._instance,
@@ -650,23 +655,24 @@ const char descriptor_table_protodef_chat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIA
     "\030\003 \001(\005\"i\n\016TextChatMsgReq\022\017\n\007fromuid\030\001 \001("
     "\005\022\r\n\005touid\030\002 \001(\005\022\016\n\006chatid\030\003 \001(\005\022\'\n\010text"
     "msgs\030\004 \003(\0132\025.message.TextChatData\"\037\n\016Tex"
-    "tChatMsgRsp\022\r\n\005error\030\001 \001(\005\"\032\n\013KickUserRe"
-    "q\022\013\n\003uid\030\001 \001(\005\")\n\013KickUserRsp\022\r\n\005error\030\001"
-    " \001(\005\022\013\n\003uid\030\002 \001(\0052\272\002\n\013ChatService\022F\n\024Not"
-    "ifyOtherAddFriend\022\025.message.AddFriendReq"
-    "\032\025.message.AddFriendRsp\"\000\022I\n\025NotifyOther"
-    "AuthFriend\022\026.message.AuthFriendReq\032\026.mes"
-    "sage.AuthFriendRsp\"\000\022S\n\035NotifyOtherRecei"
-    "veTextChatMsg\022\027.message.TextChatMsgReq\032\027"
-    ".message.TextChatMsgRsp\"\000\022C\n\023NotifyOther"
-    "KickUser\022\024.message.KickUserReq\032\024.message"
-    ".KickUserRsp\"\000b\006proto3"
+    "tChatMsgRsp\022\r\n\005error\030\001 \001(\005\".\n\013KickUserRe"
+    "q\022\013\n\003uid\030\001 \001(\005\022\022\n\nsession_id\030\002 \001(\t\")\n\013Ki"
+    "ckUserRsp\022\r\n\005error\030\001 \001(\005\022\013\n\003uid\030\002 \001(\0052\272\002"
+    "\n\013ChatService\022F\n\024NotifyOtherAddFriend\022\025."
+    "message.AddFriendReq\032\025.message.AddFriend"
+    "Rsp\"\000\022I\n\025NotifyOtherAuthFriend\022\026.message"
+    ".AuthFriendReq\032\026.message.AuthFriendRsp\"\000"
+    "\022S\n\035NotifyOtherReceiveTextChatMsg\022\027.mess"
+    "age.TextChatMsgReq\032\027.message.TextChatMsg"
+    "Rsp\"\000\022C\n\023NotifyOtherKickUser\022\024.message.K"
+    "ickUserReq\032\024.message.KickUserRsp\"\000b\006prot"
+    "o3"
 };
 static ::absl::once_flag descriptor_table_chat_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_chat_2eproto = {
     false,
     false,
-    1702,
+    1722,
     descriptor_table_protodef_chat_2eproto,
     "chat.proto",
     &descriptor_table_chat_2eproto_once,
@@ -5175,21 +5181,36 @@ KickUserReq::KickUserReq(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:message.KickUserReq)
 }
+PROTOBUF_NDEBUG_INLINE KickUserReq::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::message::KickUserReq& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        session_id_(arena, from.session_id_) {}
+
 KickUserReq::KickUserReq(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const KickUserReq& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const KickUserReq& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, KickUserReq_class_data_.base()),
+    : ::google::protobuf::Message(arena, KickUserReq_class_data_.base()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
+  KickUserReq* const _this = this;
+  (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.uid_ = from._impl_.uid_;
+
+  // @@protoc_insertion_point(copy_constructor:message.KickUserReq)
 }
 PROTOBUF_NDEBUG_INLINE KickUserReq::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        session_id_(arena) {}
 
 inline void KickUserReq::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -5206,6 +5227,7 @@ inline void KickUserReq::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.session_id_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -5215,7 +5237,7 @@ inline void* PROTOBUF_NONNULL KickUserReq::PlacementNew_(
   return ::new (mem) KickUserReq(arena);
 }
 constexpr auto KickUserReq::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(KickUserReq),
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(KickUserReq),
                                             alignof(KickUserReq));
 }
 constexpr auto KickUserReq::InternalGenerateClassData_() {
@@ -5252,16 +5274,16 @@ KickUserReq::GetClassData() const {
   return KickUserReq_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 1, 0, 0, 2>
+const ::_pbi::TcParseTable<1, 2, 0, 38, 2>
 KickUserReq::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(KickUserReq, _impl_._has_bits_),
     0, // no _extensions_
-    1, 0,  // max_field_number, fast_idx_mask
+    2, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967294,  // skipmap
+    4294967292,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    1,  // num_field_entries
+    2,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     KickUserReq_class_data_.base(),
@@ -5271,18 +5293,27 @@ KickUserReq::_table_ = {
     ::_pbi::TcParser::GetTable<::message::KickUserReq>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    // string session_id = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 0, 0,
+      PROTOBUF_FIELD_OFFSET(KickUserReq, _impl_.session_id_)}},
     // int32 uid = 1;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(KickUserReq, _impl_.uid_), 0>(),
-     {8, 0, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(KickUserReq, _impl_.uid_), 1>(),
+     {8, 1, 0,
       PROTOBUF_FIELD_OFFSET(KickUserReq, _impl_.uid_)}},
   }}, {{
     65535, 65535
   }}, {{
     // int32 uid = 1;
-    {PROTOBUF_FIELD_OFFSET(KickUserReq, _impl_.uid_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+    {PROTOBUF_FIELD_OFFSET(KickUserReq, _impl_.uid_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+    // string session_id = 2;
+    {PROTOBUF_FIELD_OFFSET(KickUserReq, _impl_.session_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
   }},
   // no aux_entries
   {{
+    "\23\0\12\0\0\0\0\0"
+    "message.KickUserReq"
+    "session_id"
   }},
 };
 PROTOBUF_NOINLINE void KickUserReq::Clear() {
@@ -5292,6 +5323,10 @@ PROTOBUF_NOINLINE void KickUserReq::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.session_id_.ClearNonDefaultToEmpty();
+  }
   _impl_.uid_ = 0;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -5317,11 +5352,21 @@ PROTOBUF_NOINLINE void KickUserReq::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // int32 uid = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_uid() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<1>(
               stream, this_._internal_uid(), target);
+    }
+  }
+
+  // string session_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_session_id().empty()) {
+      const ::std::string& _s = this_._internal_session_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "message.KickUserReq.session_id");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
     }
   }
 
@@ -5348,10 +5393,18 @@ PROTOBUF_NOINLINE void KickUserReq::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
-    // int32 uid = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string session_id = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_session_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_session_id());
+      }
+    }
+    // int32 uid = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_uid() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_uid());
@@ -5376,9 +5429,20 @@ void KickUserReq::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (from._internal_uid() != 0) {
-      _this->_impl_.uid_ = from._impl_.uid_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_session_id().empty()) {
+        _this->_internal_set_session_id(from._internal_session_id());
+      } else {
+        if (_this->_impl_.session_id_.IsDefault()) {
+          _this->_internal_set_session_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_uid() != 0) {
+        _this->_impl_.uid_ = from._impl_.uid_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -5396,8 +5460,11 @@ void KickUserReq::CopyFrom(const KickUserReq& from) {
 
 void KickUserReq::InternalSwap(KickUserReq* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.session_id_, &other->_impl_.session_id_, arena);
   swap(_impl_.uid_, other->_impl_.uid_);
 }
 

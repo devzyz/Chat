@@ -1,5 +1,6 @@
 #pragma once
-#include "Singleton.h"
+#include "UserSessionDirectory.h"
+#include "UserPresenceStore.h"
 #include "LogicDispatcher.h"
 #include <functional>
 #include <map>
@@ -9,14 +10,12 @@
 class CSession;
 namespace chat_transport { class CServer; }
 typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> FunCallBack;
-class LogicSystem : public Singleton<LogicSystem>, public LogicDispatcher
+class LogicSystem : public LogicDispatcher
 {
-	friend class Singleton<LogicSystem>;
 public:
 	~LogicSystem();
-	void SetServer(std::shared_ptr<chat_transport::CServer> pserver);
+    LogicSystem(std::shared_ptr<UserSessionDirectory> directory, std::shared_ptr<UserPresenceStore> presence);
 private:
-	LogicSystem();
 	bool Dispatch(const LogicMessage& message);
 	void RegisterCallBacks();
 
@@ -108,5 +107,6 @@ private:
 	std::map<short, FunCallBack> _fun_callbacks;
 
 	// 保存server
-	std::shared_ptr<chat_transport::CServer> _p_server;
+	std::shared_ptr<UserSessionDirectory> _directory;
+    std::shared_ptr<UserPresenceStore> _presence;
 };
