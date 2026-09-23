@@ -7,9 +7,13 @@ ClientLoginFlow::ClientLoginFlow(AuthFlowCoordinator &coordinator, QObject *pare
 {
     _deadline.setSingleShot(true);
     // 登录总期限到达时结束当前尝试。
-    connect(&_deadline, &QTimer::timeout, this, [this] { finishError(AuthError::Network); });
+    connect(&_deadline, &QTimer::timeout, this,
+        /** @brief 登录流程超时后报告网络失败。 */
+        [this] { finishError(AuthError::Network); });
     // 将选服 HTTP 结果转换为认证流程事件。
-    connect(&_http, &GateHttpTransport::finished, this, [this](const GateHttpResult &result) {
+    connect(&_http, &GateHttpTransport::finished, this,
+        /** @brief 仅处理当前待完成流程的 HTTP 选服结果。 */
+        [this](const GateHttpResult &result) {
         if (!_pending || result.flowId != _flowId) return;
         AuthOutcome outcome;
         outcome.module = Modules::LOGINMOD;
@@ -44,7 +48,9 @@ ClientLoginFlow::ClientLoginFlow(AuthFlowCoordinator &coordinator, QObject *pare
     });
     const auto tcp = TcpMgr::GetInstance();
     // 连接成功且流程仍有效时发送聊天登录请求。
-    connect(tcp.get(), &TcpMgr::connectionAttemptFinished, this, [this](bool success) {
+    connect(tcp.get(), &TcpMgr::connectionAttemptFinished, this,
+        /** @brief 将连接结果交给认证协调器并决定是否发送聊天登录。 */
+        [this](bool success) {
         if (!_pending) return;
         AuthOutcome outcome;
         outcome.kind = success ? AuthOutcomeKind::TcpConnected : AuthOutcomeKind::TcpConnectFailed;
@@ -59,14 +65,18 @@ ClientLoginFlow::ClientLoginFlow(AuthFlowCoordinator &coordinator, QObject *pare
         }
     });
     // 将聊天登录拒绝交给认证流程处理。
-    connect(tcp.get(), &TcpMgr::loginFailed, this, [this](int error) {
+    connect(tcp.get(), &TcpMgr::loginFailed, this,
+        /** @brief 将聊天登录错误映射为认证失败结果。 */
+        [this](int error) {
         AuthOutcome outcome;
         outcome.kind = AuthOutcomeKind::ChatLoginFailed;
         outcome.businessError = error;
         apply(outcome);
     });
     // 将聊天登录成功交给认证流程处理。
-    connect(tcp.get(), &TcpMgr::loginSucceeded, this, [this] {
+    connect(tcp.get(), &TcpMgr::loginSucceeded, this,
+        /** @brief 将聊天登录成功推进为认证完成。 */
+        [this] {
         AuthOutcome outcome;
         outcome.kind = AuthOutcomeKind::ChatLoginSucceeded;
         apply(outcome);

@@ -48,7 +48,9 @@ ChatDialog::ChatDialog(QWidget *parent)
     pixmap = pixmap.scaled(ui->side_head_label->size(), Qt::KeepAspectRatio);
     ui->side_head_label->setPixmap(pixmap);
     ui->side_head_label->setScaledContents(true);
-    connect(UserMgr::GetInstance()->localAvatar(), &LocalAvatar::imageChanged, this, [this]() {
+    connect(UserMgr::GetInstance()->localAvatar(), &LocalAvatar::imageChanged, this,
+        /** @brief 头像变化时刷新侧栏本人头像。 */
+        [this]() {
         ui->side_head_label->setPixmap(UserMgr::GetInstance()->selfAvatar().scaled(
             ui->side_head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     });
@@ -72,7 +74,9 @@ ChatDialog::ChatDialog(QWidget *parent)
     ui->search_list->SetSearchEdit(ui->search_edit);
 
     // 当需要显示搜索框内的清除图标时，更改为实际的清除图标
-    connect(ui->search_edit, &QLineEdit::textChanged, [clearAction](const QString& text) {
+    connect(ui->search_edit, &QLineEdit::textChanged,
+        /** @brief 按搜索框是否为空切换清除按钮图标。 */
+        [clearAction](const QString& text) {
         if (!text.isEmpty()) {
             clearAction->setIcon(QIcon(":/res/close_search.png"));
         }else {
@@ -82,7 +86,9 @@ ChatDialog::ChatDialog(QWidget *parent)
 
     // 点击清除图标后的逻辑
     // 清空输入框，清除图标删除，失去焦点
-    connect(clearAction, &QAction::triggered, [this, clearAction]() {
+    connect(clearAction, &QAction::triggered,
+        /** @brief 清空搜索内容、焦点及搜索结果列表。 */
+        [this, clearAction]() {
         ui->search_edit->clear();
         clearAction->setIcon(QIcon(":/res/close_transport.png"));
         ui->search_edit->clearFocus();
@@ -144,6 +150,7 @@ ChatDialog::ChatDialog(QWidget *parent)
     connect(messages, &MessageService::historyLoaded, ui->chat_page, &ChatPage::applyStoredHistory);
     connect(messages, &MessageService::sendFailed, ui->chat_page, &ChatPage::MarkMessagesFailed);
     connect(messages, &MessageService::historyLoaded, this,
+        /** @brief 用初始本地历史更新会话列表的最新消息摘要。 */
         [this](int chatId, qint64 before, const QVector<StoredMessage> &rows, bool) {
             if (before != 0 || rows.isEmpty() || !_chat_item_map.contains(chatId)) return;
             auto *item = qobject_cast<ChatUserItem*>(ui->chat_user_list->itemWidget(_chat_item_map.value(chatId)));
@@ -154,10 +161,14 @@ ChatDialog::ChatDialog(QWidget *parent)
             }
             item->SetLastTextChatMsg(summary);
         });
-    connect(messages, &MessageService::messagesChanged, this, [this, messages](int chatId) {
+    connect(messages, &MessageService::messagesChanged, this,
+        /** @brief 消息事实变化后重新加载当前可见范围。 */
+        [this, messages](int chatId) {
         messages->loadHistory(chatId, 0, ui->chat_page->oldestLoadedMessageId(chatId));
     });
-    connect(messages, &MessageService::failed, this, [this](int chatId, const QString &reason) {
+    connect(messages, &MessageService::failed, this,
+        /** @brief 结束失败的历史加载并显示存储错误。 */
+        [this](int chatId, const QString &reason) {
         ui->chat_page->HistoryLoadFailed(chatId);
         ui->chat_page->setToolTip(reason);
         SPDLOG_WARN("local message operation failed, chat_id={}, reason={}", chatId, LogMgr::ToUtf8(reason));
@@ -388,9 +399,8 @@ void ChatDialog::AddNewChat(std::shared_ptr<ChatInfo> chat_info) {
 }
 
 /**
- * @brief ChatDialog::slot_tcp_add_auth_friend
- * @param auth_info
- * 认证回包，或者服务器通知回包
+ * @brief 收到会话通知后补充聊天列表。
+ * @param chat_info 已认证会话的展示信息。
  */
 void ChatDialog::slot_tcp_add_chat_list(std::shared_ptr<ChatInfo> chat_info)
 {
@@ -399,6 +409,7 @@ void ChatDialog::slot_tcp_add_chat_list(std::shared_ptr<ChatInfo> chat_info)
 }
 
 // 搜索到的人是好友后，跳转到与该好友的聊天界面
+/** @brief 从搜索结果打开已有聊天，缺失会话时发起私聊创建。 */
 void ChatDialog::slot_from_search_jump_chat_item(std::shared_ptr<SearchInfo> si)
 {
     SPDLOG_DEBUG("opening chat from search result");
@@ -434,6 +445,7 @@ void ChatDialog::slot_from_search_jump_chat_item(std::shared_ptr<SearchInfo> si)
     slot_midlist_to_chat_list();
 }
 
+/** @brief 插入新私聊列表项并选中对应聊天页。 */
 void ChatDialog::slot_create_private_chat_finish(std::shared_ptr<ChatInfo> chat_info) {
     // 创建信息进行插入
     auto * chat_user_item = new ChatUserItem();
@@ -459,6 +471,7 @@ void ChatDialog::slot_create_private_chat_finish(std::shared_ptr<ChatInfo> chat_
 }
 
 // 在好友详细信息界面，点击聊天后跳转到聊天界面
+/** @brief 从好友详情打开聊天，缺失会话时请求创建。 */
 void ChatDialog::slot_from_friend_jump_chat_item(std::shared_ptr<UserInfo> si)
 {
     SPDLOG_DEBUG("opening chat from user information");
@@ -502,6 +515,7 @@ void ChatDialog::LoadOncePrivateChat(int self_id, int other_id, QJsonObject json
 
 
 // 右侧跳转到好友详细信息界面
+/** @brief 将右侧页面切换为给定好友的详情。 */
 void ChatDialog::slot_switch_friend_info_page(std::shared_ptr<UserInfo> friend_info)
 {
     SPDLOG_DEBUG("switching to friend information page");
@@ -510,6 +524,7 @@ void ChatDialog::slot_switch_friend_info_page(std::shared_ptr<UserInfo> friend_i
 }
 
 // 当聊天列表的item被点击后，触发的槽函数
+/** @brief 处理聊天列表选择并重置该项提示，更新当前会话。 */
 void ChatDialog::slot_chat_item_clicked(QListWidgetItem * item)
 {
     // 获取到这个item内部绑定的自定义item
@@ -550,6 +565,7 @@ void ChatDialog::slot_chat_item_clicked(QListWidgetItem * item)
 }
 
 // 将发送的文本插入到聊天缓存中
+/** @brief 把待发文本按 UUID 加入对应会话缓存；找不到会话项时返回。 */
 void ChatDialog::slot_append_send_text_cache_msg(QString uuid, std::shared_ptr<ChatDataBase> text_chat_data)
 {
     SPDLOG_DEBUG("appending outgoing text chat message");
@@ -589,6 +605,7 @@ void ChatDialog::slot_append_send_text_cache_msg(QString uuid, std::shared_ptr<C
 }
 
 // 将服务器通知的信息，刷新到界面上
+/** @brief 把消息写入所属会话模型并更新非当前会话的新消息提示。 */
 void ChatDialog::slot_update_text_chat_msg(int from_uid, int to_uid, int chat_id, std::vector<std::shared_ptr<ChatDataBase>>& msgs)
 {
     Q_UNUSED(from_uid);
@@ -653,6 +670,7 @@ void ChatDialog::slot_switch_user_info_page()
 }
 
 // 聊天会话加载完成
+/** @brief 按服务端会话列表建立缺失展示项并请求本地历史。 */
 void ChatDialog::slot_tcp_load_chat_finish(QJsonArray jsonArray)
 {
     // 添加聊天列表数据
@@ -814,6 +832,7 @@ void ChatDialog::TcpLoadingMoreChatMsg(int chatId, qint64 beforeMessageId) {
 }
 
 // TCP加载更多聊天记录完成
+/** @brief 应用会话的历史消息页，并更新分页游标及后续页标志。 */
 void ChatDialog::slot_tcp_loading_more_chat_finish(
     int chat_id, std::vector<std::shared_ptr<ChatDataBase>> chat_msgs,
     bool can_load_more, qint64 next_cursor) {
@@ -826,18 +845,21 @@ void ChatDialog::slot_tcp_loading_more_chat_finish(
     ui->chat_page->ApplyHistoryPage(chat_id, chat_msgs, can_load_more, next_cursor);
 }
 
+/** @brief 结束指定会话的历史加载状态，允许后续重试。 */
 void ChatDialog::slot_tcp_loading_more_chat_failed(int chat_id)
 {
     ui->chat_page->HistoryLoadFailed(chat_id);
 }
 
 // 服务器确认后按 UUID 更新正式 messageId 与发送状态。
+/** @brief 处理发送确认，更新缓存消息与展示状态。 */
 void ChatDialog::slot_text_chat_msg_rsp_finish(
     int chat_id, QVector<MessageAcknowledgement> acknowledgements)
 {
     ui->chat_page->ApplyDeliveryAcknowledgements(chat_id, acknowledgements);
 }
 
+/** @brief 处理文本发送失败并更新对应消息状态。 */
 void ChatDialog::slot_text_chat_msg_failed(int chat_id, QVector<QString> client_message_ids)
 {
     ui->chat_page->MarkMessagesFailed(chat_id, client_message_ids);
@@ -885,6 +907,7 @@ void ChatDialog::slot_loading_contact_list()
 }
 
 // 别人添加我为好友，好友列表显示逻辑
+/** @brief 将新好友申请加入页面并更新导航提示。 */
 void ChatDialog::slot_tcp_add_friend_apply(std::shared_ptr<ApplyInfo> applyInfo)
 {
     SPDLOG_DEBUG("friend application received from TCP");

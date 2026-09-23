@@ -35,6 +35,7 @@ QRectF AvatarCropWidget::frameRect() const
     return {(width() - diameter) / 2, (height() - diameter) / 2, diameter, diameter};
 }
 
+/** @brief 绘制原图、裁剪范围与遮罩。 */
 void AvatarCropWidget::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);

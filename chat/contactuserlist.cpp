@@ -96,7 +96,9 @@ bool ContactUserList::eventFilter(QObject *watched, QEvent *event)
             }
             _loading_contact = true;
             // 放置短时间内重复加载
-            QTimer::singleShot(100, this, [this]() {
+            QTimer::singleShot(100, this,
+                /** @brief 分页等待结束后允许下一次联系人加载。 */
+                [this]() {
                 _loading_contact = false;
             });
             // 发送信号通知聊天界面加载更多聊天内容
@@ -212,6 +214,7 @@ void ContactUserList::slot_item_clicked(QListWidgetItem * item)
 }
 
 // 添加联系人
+/** @brief 创建并插入联系人展示项。 */
 void ContactUserList::AddNewContact(std::shared_ptr<AuthInfo> auth_info)
 {
     // 否则更新contactlist列表
@@ -229,6 +232,7 @@ void ContactUserList::AddNewContact(std::shared_ptr<AuthInfo> auth_info)
 }
 
 // Tcp发出添加好友
+/** @brief 收到新增好友通知后补充联系人列表。 */
 void ContactUserList::slot_tcp_add_friend(std::shared_ptr<AuthInfo> auth_info)
 {
     SPDLOG_DEBUG("authenticated friend added to contact list");

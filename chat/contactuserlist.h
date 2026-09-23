@@ -15,7 +15,6 @@ public:
     ContactUserList(QWidget * parent = nullptr);
     /**
      * @brief ShowRedPoint
-     * @param bshow
      * _add_friend_item保存的是新的朋友那个item
      * 当有新的请求过来时，调用当前函数，设置红点
      */
@@ -35,7 +34,6 @@ private:
 public slots:
     /**
      * @brief slot_item_clicked
-     * @param item
      * 当某个item被点击后，触发的槽函数
      */
     void slot_item_clicked(QListWidgetItem * item);

@@ -16,14 +16,20 @@ AvatarCache::AvatarCache(QUrl endpoint, int uid, QString token, QString accountR
 {
     _worker.setMaxThreadCount(1);
     connect(&_reader, &ResourceTransferManager::avatarResolved, this, &AvatarCache::resolve);
-    connect(&_reader, &ResourceTransferManager::downloaded, this, [this](const QString &id, const QString &path) {
+    connect(&_reader, &ResourceTransferManager::downloaded, this,
+        /** @brief 只读取仍匹配当前资源版本的下载结果。 */
+        [this](const QString &id, const QString &path) {
         const int owner = _owners.value(id);
         if (owner > 0 && _versions.value(owner) == id) readImage(owner, path, id, true);
     });
-    connect(&_uploader, &ResourceTransferManager::uploaded, this, [this](const QJsonObject &value) {
+    connect(&_uploader, &ResourceTransferManager::uploaded, this,
+        /** @brief 上传成功后请求发布为本人头像。 */
+        [this](const QJsonObject &value) {
         _uploader.commitAvatar(value["resource_id"].toString());
     });
-    connect(&_uploader, &ResourceTransferManager::avatarCommitted, this, [this](const QJsonObject &value) {
+    connect(&_uploader, &ResourceTransferManager::avatarCommitted, this,
+        /** @brief 发布完成后取消旧查询，校验归属并读取新头像缓存。 */
+        [this](const QJsonObject &value) {
         _reader.cancel(); // Discard lookups started before the new profile was committed.
         _committingId = value["resource_id"].toString();
         static const QRegularExpression safeId("^[0-9a-f-]{36}$");
@@ -35,7 +41,9 @@ AvatarCache::AvatarCache(QUrl endpoint, int uid, QString token, QString accountR
         _versions[_uid] = _committingId;
         readImage(_uid, _uploadPath, _committingId, true);
     });
-    connect(&_uploader, &ResourceTransferManager::failed, this, [this](const QString &error) {
+    connect(&_uploader, &ResourceTransferManager::failed, this,
+        /** @brief 结束发布状态并报告上传错误。 */
+        [this](const QString &error) {
         _publishing = false;
         emit uploadFailed(error);
     });
@@ -50,7 +58,9 @@ void AvatarCache::watch(int owner)
     _watched.insert(owner);
     const auto directory = UserStoragePaths::avatarDirectory(_root, owner);
     auto *watcher = new QFutureWatcher<QString>(this);
-    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher, owner, directory] {
+    connect(watcher, &QFutureWatcher<QString>::finished, this,
+        /** @brief 读取本地索引完成后加载缓存并查询远端头像。 */
+        [this, watcher, owner, directory] {
         const auto id = watcher->result(); watcher->deleteLater();
         if (!id.isEmpty() && !_versions.contains(owner)) {
             _versions[owner] = id;
@@ -58,7 +68,9 @@ void AvatarCache::watch(int owner)
         }
         _reader.fetchAvatar(owner);
     });
-    watcher->setFuture(QtConcurrent::run(&_worker, [directory] {
+    watcher->setFuture(QtConcurrent::run(&_worker,
+        /** @brief 在工作线程读取并校验头像索引中的资源 ID。 */
+        [directory] {
         QFile file(QDir(directory).filePath("index.json"));
         if (!file.open(QIODevice::ReadOnly)) return QString();
         const auto id = QJsonDocument::fromJson(file.readAll()).object()["resource_id"].toString();
@@ -81,7 +93,9 @@ void AvatarCache::resolve(int owner, const QJsonObject &descriptor)
 void AvatarCache::readImage(int owner, QString path, QString id, bool persist)
 {
     auto *watcher = new QFutureWatcher<AvatarResult>(this);
-    connect(watcher, &QFutureWatcher<AvatarResult>::finished, this, [this, watcher, owner, id] {
+    connect(watcher, &QFutureWatcher<AvatarResult>::finished, this,
+        /** @brief 仅应用当前版本的解码结果并完成头像发布通知。 */
+        [this, watcher, owner, id] {
         const auto result = watcher->result(); watcher->deleteLater();
         if (_versions.value(owner) != id) return;
         if (!result.error.isEmpty() || result.image.size() != QSize(256, 256)) {
@@ -101,7 +115,9 @@ void AvatarCache::readImage(int owner, QString path, QString id, bool persist)
         }
     });
     const auto directory = UserStoragePaths::avatarDirectory(_root, owner);
-    watcher->setFuture(QtConcurrent::run(&_worker, [path, id, persist, directory] {
+    watcher->setFuture(QtConcurrent::run(&_worker,
+        /** @brief 在工作线程读取图片，按需原子保存图片和索引。 */
+        [path, id, persist, directory] {
         auto result = LocalAvatarStore::readImage(path);
         if (result.error.isEmpty() && result.image.size() == QSize(256, 256) && persist) {
             const auto target = QDir(directory).filePath(id + ".png");

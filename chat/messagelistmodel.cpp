@@ -5,6 +5,7 @@
 #include <algorithm>
 
 namespace {
+/** @brief 已确认消息优先按服务器 ID 排序，其余按发送时间及客户端 UUID 排序。 */
 bool messageLess(const MessageRecord &left, const MessageRecord &right)
 {
     if ((left.messageId > 0) != (right.messageId > 0)) return left.messageId > 0;
@@ -225,7 +226,9 @@ int MessageListModel::prependHistory(const QVector<MessageRecord> &messages)
         const auto previousIndexes = persistentIndexList();
         QVector<int> order;
         for (int row = 0; row < _messages.size(); ++row) order.push_back(row);
-        std::stable_sort(order.begin(), order.end(), [this](int left, int right) {
+        std::stable_sort(order.begin(), order.end(),
+            /** @brief 按消息时间和稳定身份对合并行排序。 */
+            [this](int left, int right) {
             return messageLess(_messages[left], _messages[right]);
         });
         QVector<MessageRecord> sorted;

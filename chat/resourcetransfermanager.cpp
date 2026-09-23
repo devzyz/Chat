@@ -37,7 +37,9 @@ void ResourceTransferManager::jsonRequest(const QByteArray& method, const QStrin
     auto* reply = _network.sendCustomRequest(headers, method, body);
     _replies.insert(reply);
     const auto generation = _generation;
-    connect(reply, &QNetworkReply::finished, this, [this, reply, generation, done = std::move(done)] {
+    connect(reply, &QNetworkReply::finished, this,
+        /** @brief 释放响应对象，仅向当前任务代交付成功结果或报告失败。 */
+        [this, reply, generation, done = std::move(done)] {
         _replies.remove(reply); reply->deleteLater();
         if (generation != _generation) return;
         const auto response = QJsonDocument::fromJson(reply->readAll()).object();
@@ -67,7 +69,9 @@ void ResourceTransferManager::hashNext() {
     _hash.addData(bytes);
     if (!_source.atEnd()) {
         const auto generation = _generation;
-        QTimer::singleShot(0, this, [this, generation] { if (generation == _generation) hashNext(); });
+        QTimer::singleShot(0, this,
+            /** @brief 只为仍有效的上传代继续计算摘要。 */
+            [this, generation] { if (generation == _generation) hashNext(); });
         return;
     }
     _metadata["sha256"] = QString::fromLatin1(_hash.result().toHex());
@@ -85,14 +89,18 @@ void ResourceTransferManager::beginUpload() {
         _uploadId = QJsonDocument::fromJson(checkpoint.readAll()).object()["upload_id"].toString();
     }
     if (!_uploadId.isEmpty()) {
-        jsonRequest("GET", "/uploads/" + _uploadId, {}, [this](QJsonObject value) {
+        jsonRequest("GET", "/uploads/" + _uploadId, {},
+            /** @brief 校验服务端续传偏移后继续上传。 */
+            [this](QJsonObject value) {
             bool valid = false; const auto offset = value["offset"].toString().toLongLong(&valid);
             if (!valid || offset < 0 || offset > _source.size()) { fail(tr("服务端返回了无效续传位置")); return; }
             sendNext(offset);
         });
         return;
     }
-    jsonRequest("POST", "/uploads", QJsonDocument(_metadata).toJson(QJsonDocument::Compact), [this](QJsonObject value) {
+    jsonRequest("POST", "/uploads", QJsonDocument(_metadata).toJson(QJsonDocument::Compact),
+        /** @brief 保存服务端新上传 ID 和断点文件后发送首块。 */
+        [this](QJsonObject value) {
         _uploadId = value["upload_id"].toString();
         if (_uploadId.isEmpty()) { fail(tr("服务端未返回上传任务")); return; }
         QSaveFile checkpoint(_checkpoint);
@@ -107,7 +115,9 @@ void ResourceTransferManager::sendNext(qint64 offset) {
     emit progress(offset, _source.size());
     if (!_busy || generation != _generation) return;
     if (offset == _source.size()) {
-        jsonRequest("POST", "/uploads/" + _uploadId + "/complete", {}, [this](QJsonObject value) {
+        jsonRequest("POST", "/uploads/" + _uploadId + "/complete", {},
+            /** @brief 完成资源校验后释放源文件并通知上传成功。 */
+            [this](QJsonObject value) {
             _source.close(); _busy = false; emit uploaded(value);
         });
         return;
@@ -115,7 +125,9 @@ void ResourceTransferManager::sendNext(qint64 offset) {
     if (!_source.seek(offset)) { fail(tr("无法定位文件续传位置")); return; }
     const auto bytes = _source.read(blockSize);
     if (bytes.isEmpty()) { fail(tr("读取上传文件失败")); return; }
-    jsonRequest("PATCH", "/uploads/" + _uploadId, bytes, [this, offset, count = bytes.size()](QJsonObject value) {
+    jsonRequest("PATCH", "/uploads/" + _uploadId, bytes,
+        /** @brief 核对块确认偏移，正确时发送下一块。 */
+        [this, offset, count = bytes.size()](QJsonObject value) {
         bool valid = false; const auto next = value["offset"].toString().toLongLong(&valid);
         if (!valid || next != offset + count) { fail(tr("服务端确认位置不一致")); return; }
         sendNext(next);
@@ -162,7 +174,9 @@ void ResourceTransferManager::download(const QJsonObject& descriptor, bool avata
     auto* reply = _network.get(headers); reply->setReadBufferSize(blockSize);
     _replies.insert(reply); _downloads.insert(id);
     auto failedWrite = std::make_shared<bool>(false);
-    auto drain = [reply, file, failedWrite, start, size] {
+    auto drain =
+        /** @brief 检查响应范围并有界写入下载文件，保留写失败标志。 */
+        [reply, file, failedWrite, start, size] {
         const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (status != (start > 0 ? 206 : 200)) return;
         if (start > 0 && !reply->rawHeader("Content-Range").startsWith("bytes " + QByteArray::number(start) + "-")) {
@@ -176,7 +190,9 @@ void ResourceTransferManager::download(const QJsonObject& descriptor, bool avata
         }
     };
     connect(reply, &QNetworkReply::readyRead, this, drain);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, file, failedWrite, drain, descriptor, path, id, size] {
+    connect(reply, &QNetworkReply::finished, this,
+        /** @brief 下载结束后校验文件长度和网络结果，再进入摘要验证。 */
+        [this, reply, file, failedWrite, drain, descriptor, path, id, size] {
         drain(); _replies.remove(reply); reply->deleteLater();
         if (!file->flush() || *failedWrite || reply->error() != QNetworkReply::NoError || file->size() != size) {
             _downloads.remove(id);
@@ -192,7 +208,9 @@ void ResourceTransferManager::fetchAvatar(int owner)
 {
     if (owner <= 0) return;
     const auto revision = ++_avatarRequests[owner];
-    jsonRequest("GET", "/avatars/" + QString::number(owner), {}, [this, owner, revision](QJsonObject value) {
+    jsonRequest("GET", "/avatars/" + QString::number(owner), {},
+        /** @brief 仅发布该用户最新一次头像查询结果。 */
+        [this, owner, revision](QJsonObject value) {
         if (_avatarRequests.value(owner) == revision) emit avatarResolved(owner, value);
     });
 }
@@ -201,6 +219,7 @@ void ResourceTransferManager::commitAvatar(const QString &resourceId)
 {
     const QJsonObject value{{"resource_id", resourceId}};
     jsonRequest("PUT", "/avatars/" + QString::number(_uid), QJsonDocument(value).toJson(QJsonDocument::Compact),
+        /** @brief 发布头像提交成功的资源描述。 */
         [this](QJsonObject result) { emit avatarCommitted(result); });
 }
 
@@ -214,7 +233,9 @@ void ResourceTransferManager::verifyDownload(std::shared_ptr<QFile> file,
     }
     digest->addData(bytes);
     if (!file->atEnd()) {
-        QTimer::singleShot(0, this, [this, file, digest, expected, path, id, generation, finalFile] {
+        QTimer::singleShot(0, this,
+            /** @brief 只在匹配任务代时继续分块摘要校验。 */
+            [this, file, digest, expected, path, id, generation, finalFile] {
             verifyDownload(file, digest, expected, path, id, generation, finalFile);
         });
         return;

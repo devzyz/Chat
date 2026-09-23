@@ -9,7 +9,9 @@ UserInfoPage::UserInfoPage(QWidget *parent)
     ui->setupUi(this);
     ui->user_info_page_upload_btn->setText(tr("上传头像"));
     ui->user_info_page_upload_btn->setToolTip(tr("上传成功后同步到其他设备"));
-    const auto updateAvatar = [this]() {
+    const auto updateAvatar =
+        /** @brief 头像变化后刷新本人资料页的头像显示。 */
+        [this]() {
         ui->user_info_page_head_label->setPixmap(UserMgr::GetInstance()->selfAvatar().scaled(
             ui->user_info_page_head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     };

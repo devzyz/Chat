@@ -23,17 +23,23 @@ LoginDialog::LoginDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     ui->err_tip->setProperty("state", "normal");
     repolish(ui->err_tip);
     // 绑定email和password实时检验信号
-    connect(ui->email_edit, &QLineEdit::editingFinished, [this]() {
+    connect(ui->email_edit, &QLineEdit::editingFinished,
+        /** @brief 邮箱编辑结束时更新校验提示。 */
+        [this]() {
         checkEmailValid();
     });
-    connect(ui->password_edit, &QLineEdit::editingFinished, [this]() {
+    connect(ui->password_edit, &QLineEdit::editingFinished,
+        /** @brief 密码编辑结束时更新校验提示。 */
+        [this]() {
         checkPasswordValid();
     });
 
     // 密码隐藏逻辑
     ui->password_visible->SetState("invisible_leave","invisible_hover","invisible_press","visible_leave","visible_hover","visible_presss");
     ui->password_edit->setEchoMode(QLineEdit::Password);
-    connect(ui->password_visible, &ClickedLabel::clicked, [this](){
+    connect(ui->password_visible, &ClickedLabel::clicked,
+        /** @brief 根据可见性标签状态切换密码显示模式。 */
+        [this](){
         auto curState = ui->password_visible->GetCurState();
 
         if (curState == ClickLabelState::Normal) {
@@ -46,8 +52,10 @@ LoginDialog::LoginDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     // 头像处理逻辑
     initHead();
     connect(&_loginFlow, &ClientLoginFlow::failed, this,
+            /** @brief 展示当前认证流程失败的错误。 */
             [this](AuthFlowId, AuthError error) { showAuthError(error); });
     connect(&_loginFlow, &ClientLoginFlow::connected, this,
+            /** @brief 展示聊天连接成功但尚待登录确认的状态。 */
             [this] { showTip(tr("聊天服务器连接成功，正在登录..."), true); });
     connect(&_loginFlow, &ClientLoginFlow::authenticated,
             this, &LoginDialog::loginSucceeded);

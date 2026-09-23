@@ -18,17 +18,17 @@ class ApplyFriendItem : public ListItemBase
     Q_OBJECT
 
 public:
+    /** @brief 初始化对象，用于展示一条好友申请及审批入口。 */
     explicit ApplyFriendItem(QWidget *parent = nullptr);
+    /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ApplyFriendItem();
     /**
      * @brief SetInfo
-     * @param apply_info
      * 设置当前item的信息
      */
     void SetInfo(std::shared_ptr<ApplyInfo> apply_info);
     /**
      * @brief ShowAddBtn
-     * @param bshow
      * 是否显示添加按钮，当点击添加后，将添加按钮隐藏，显示已添加的label
      */
     void ShowAddBtn(bool bshow);
@@ -53,6 +53,7 @@ private:
 
 signals:
     // 点击添加按钮后，发出认证成功信号
+    /** @brief 点击添加按钮后，发出认证成功信号。 */
     void sig_auth_friend(std::shared_ptr<ApplyInfo> apply_info);
 };
 

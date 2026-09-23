@@ -26,10 +26,14 @@ ChatPage::ChatPage(QWidget *parent)
     : QWidget(parent), ui(new Ui::ChatPage)
 {
     ui->setupUi(this);
-    connect(UserMgr::GetInstance().get(), &UserMgr::avatarChanged, this, [this](int uid) {
+    connect(UserMgr::GetInstance().get(), &UserMgr::avatarChanged, this,
+        /** @brief 更新对应发送者的消息头像。 */
+        [this](int uid) {
         _messageStore.updateSenderAvatar(uid, UserMgr::GetInstance()->avatarFor(uid));
     });
-    connect(UserMgr::GetInstance()->localAvatar(), &LocalAvatar::imageChanged, this, [this]() {
+    connect(UserMgr::GetInstance()->localAvatar(), &LocalAvatar::imageChanged, this,
+        /** @brief 本人头像变化时更新所有关联消息行。 */
+        [this]() {
         const auto user = UserMgr::GetInstance();
         _messageStore.updateSenderAvatar(user->uid(), user->selfAvatar());
     });
@@ -44,7 +48,9 @@ ChatPage::ChatPage(QWidget *parent)
     _readTracker = new MessageReadTracker(ui->chat_detail_data_list);
     connect(_readTracker, &MessageReadTracker::observed, UserMgr::GetInstance()->messages(), &MessageService::observeRead);
     initResourceTransfers();
-    connect(ui->chat_detail_data_list, &ChatDetailList::viewportResized, this, [this]() {
+    connect(ui->chat_detail_data_list, &ChatDetailList::viewportResized, this,
+        /** @brief 视口变化时清空尺寸缓存并重新布局。 */
+        [this]() {
         _messageDelegate->clearSizeCache();
         ui->chat_detail_data_list->doItemsLayout();
         ui->chat_detail_data_list->viewport()->update();
@@ -94,7 +100,9 @@ void ChatPage::SetChatInfo(std::shared_ptr<ChatInfo> chatInfo)
         queueScrollToBottom(_currentChatId);
     }
     const int selectedChatId = _currentChatId;
-    QTimer::singleShot(0, this, [this, selectedChatId]() {
+    QTimer::singleShot(0, this,
+        /** @brief 仅为仍被选中的会话恢复历史加载。 */
+        [this, selectedChatId]() {
         if (_currentChatId == selectedChatId) {
             _suppressHistoryRequests = false;
         }
@@ -203,7 +211,9 @@ void ChatPage::ApplyHistoryPage(int chatId,
 
     if (!_messageStore.applyHistory(chatId, records, canLoadMore, nextCursor)) {
         if (affectsCurrentView) {
-            QTimer::singleShot(0, this, [this, chatId] {
+            QTimer::singleShot(0, this,
+                /** @brief 本地历史完成后解除当前会话的请求抑制。 */
+                [this, chatId] {
                 if (_currentChatId == chatId) _suppressHistoryRequests = false;
             });
         }
@@ -218,7 +228,9 @@ void ChatPage::ApplyHistoryPage(int chatId,
     } else if (anchor.valid) {
         restoreScrollAnchor(chatId, anchor);
     }
-    QTimer::singleShot(0, this, [this, chatId]() {
+    QTimer::singleShot(0, this,
+        /** @brief 仅解除仍匹配当前会话的历史请求抑制。 */
+        [this, chatId]() {
         if (_currentChatId == chatId) {
             _suppressHistoryRequests = false;
         }
@@ -271,7 +283,9 @@ void ChatPage::on_send_btn_clicked()
     int textLength = 0;
     QJsonArray textArray;
 
-    auto sendTextBatch = [this, selfInfo, &textArray, &textLength]() {
+    auto sendTextBatch =
+        /** @brief 同步打包当前文本数组并发送，引用捕获不离开本次函数调用。 */
+        [this, selfInfo, &textArray, &textLength]() {
         if (textArray.isEmpty()) {
             return;
         }
@@ -404,7 +418,9 @@ void ChatPage::saveCurrentScrollAnchor()
 
 void ChatPage::restoreScrollAnchor(int chatId, const ScrollAnchor &anchor)
 {
-    QTimer::singleShot(0, this, [this, chatId, anchor]() {
+    QTimer::singleShot(0, this,
+        /** @brief 布局完成后仅对原会话及模型恢复滚动锚点。 */
+        [this, chatId, anchor]() {
         auto *model = _messageStore.find(chatId);
         if (chatId != _currentChatId || !model
             || ui->chat_detail_data_list->model() != model) {
@@ -427,7 +443,9 @@ void ChatPage::restoreScrollAnchor(int chatId, const ScrollAnchor &anchor)
 
 void ChatPage::queueScrollToBottom(int chatId)
 {
-    QTimer::singleShot(0, this, [this, chatId]() {
+    QTimer::singleShot(0, this,
+        /** @brief 排队布局结束后仅滚动仍处于当前页的模型。 */
+        [this, chatId]() {
         auto *model = _messageStore.find(chatId);
         if (chatId == _currentChatId && model
             && ui->chat_detail_data_list->model() == model) {

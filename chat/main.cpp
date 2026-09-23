@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QMessageBox>
 
+/** @brief 加载客户端配置和日志，创建主窗口并运行 Qt 事件循环。 */
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);

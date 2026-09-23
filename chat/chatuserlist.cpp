@@ -66,7 +66,9 @@ bool ChatUserList::eventFilter(QObject *watched, QEvent *event) {
                 return true;
             }
             _loading_chat = true;
-            QTimer::singleShot(100, [this]() {
+            QTimer::singleShot(100,
+                /** @brief 分页等待结束后允许下一次会话列表加载。 */
+                [this]() {
                 _loading_chat = false;
             });
             // 发送信号通知聊天界面加载更多聊天内容

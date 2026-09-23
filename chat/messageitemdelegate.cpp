@@ -25,6 +25,7 @@ constexpr int kTimeHeight = 14;
 constexpr int kBottomMargin = 8;
 constexpr int kMaximumBubbleWidth = 400;
 
+/** @brief 构造消息正文绘制字体。 */
 QFont textFont()
 {
     QFont font(QStringLiteral("Microsoft YaHei"));
@@ -32,6 +33,7 @@ QFont textFont()
     return font;
 }
 
+/** @brief 构造发送者名称绘制字体。 */
 QFont nameFont()
 {
     QFont font(QStringLiteral("Microsoft YaHei"));
@@ -39,6 +41,7 @@ QFont nameFont()
     return font;
 }
 
+/** @brief 构造时间标签绘制字体。 */
 QFont timeFont()
 {
     QFont font(QStringLiteral("Microsoft YaHei"));
@@ -46,6 +49,7 @@ QFont timeFont()
     return font;
 }
 
+/** @brief 按纯文本和最大宽度计算换行后的文档尺寸。 */
 QSize textDocumentSize(const QString &text, int maximumWidth)
 {
     QTextDocument document;

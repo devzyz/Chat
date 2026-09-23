@@ -8,7 +8,9 @@ ClientSession::ClientSession(QObject *parent)
     : QObject(parent)
 {
     _heartbeat.setInterval(10000);
-    connect(&_heartbeat, &QTimer::timeout, this, [this] {
+    connect(&_heartbeat, &QTimer::timeout, this,
+        /** @brief 只为仍活跃且有效的账号发送心跳。 */
+        [this] {
         const int uid = UserMgr::GetInstance()->uid();
         if (!_active || uid <= 0) return;
         emit TcpMgr::GetInstance()->sendRequested(ID_HEART_BEAT_REQ,

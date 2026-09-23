@@ -15,6 +15,7 @@
  * 搜索好友的信息
  */
 struct SearchInfo {
+    /** @brief 创建保存用户搜索结果的身份及展示资料。 */
     SearchInfo(int uid, QString name, QString description, QString icon, int sex) :
         _uid(uid), _name(name), _description(description), _sex(sex), _icon(icon) {}
     int _uid;
@@ -70,27 +71,43 @@ struct AuthInfo {
  */
 class ChatDataBase {
 public:
+    /** @brief 以服务器消息 ID 和日内时间构造消息，日期按当前日期补齐。 */
     ChatDataBase(int msg_id, int chat_id, ChatType chat_type,
                  ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time);
 
+    /** @brief 以客户端 UUID 构造待确认消息，日内时间按当前日期补齐。 */
     ChatDataBase(QString client_msg_id, int chat_id, ChatType chat_type,
                  ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time);
 
+    /** @brief 以服务器消息 ID 和完整日期时间构造已确认消息。 */
     ChatDataBase(int msg_id, int chat_id, ChatType chat_type,
                  ChatMessageType chat_msg_type, QString content, int send_uid, QDateTime sent_at);
 
+    /** @brief 返回服务器分配的消息 ID，本地待发消息可能尚无有效 ID。 */
     int GetMsgId();
+    /** @brief 返回消息或资料所属会话 ID。 */
     int GetChatId();
+    /** @brief 返回消息所属会话类型；保留旧接口拼写供后续兼容改名。 */
     ChatType GetChatTpe();
+    /** @brief 返回消息内容类型。 */
     ChatMessageType GetChatMsgType();
+    /** @brief 返回消息正文副本。 */
     QString GetContent();
+    /** @brief 返回发送者 UID。 */
     int GetSendId();
+    /** @brief 返回消息时间的日内部分。 */
     QTime GetSendTime();
+    /** @brief 返回包含日期的完整发送时间。 */
     QDateTime GetSentAt();
+    /** @brief 保存服务器确认的消息 ID。 */
     void SetMessageId(int msg_id);
+    /** @brief 更新旧界面消息状态值。 */
     void SetStatus(ChatStatus status);
+    /** @brief 返回旧界面消息状态值。 */
     ChatStatus GetStatus();
+    /** @brief 返回客户端生成的消息 UUID，用于 ACK 和重试关联。 */
     QString GetCacheMsgId();
+    /** @brief 设置客户端消息 UUID，保持与本地发送身份一致。 */
     void SetClientMessageId(const QString &clientMessageId);
 private:
     // 客户端本地保存的id
@@ -114,14 +131,18 @@ private:
 };
 
 // 一条文本消息
+/** @brief 保存文本消息的旧界面数据，支持本地 UUID 与服务器消息 ID 两种身份。 */
 class TextChatData : public ChatDataBase{
 public:
+    /** @brief 以服务器消息 ID 和日内时间构造消息，日期按当前日期补齐。 */
     TextChatData (int msg_id, int chat_id, ChatType chat_type,
                  ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time);
 
+    /** @brief 以客户端 UUID 构造待确认消息，日内时间按当前日期补齐。 */
     TextChatData (QString client_msg_id, int chat_id, ChatType chat_type,
                  ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time);
 
+    /** @brief 以服务器消息 ID 和完整日期时间构造已确认消息。 */
     TextChatData (int msg_id, int chat_id, ChatType chat_type,
                   ChatMessageType chat_msg_type, QString content, int send_uid, QDateTime sent_at);
 };
@@ -140,37 +161,55 @@ public:
  */
 class ChatInfo{
 public:
+    /** @brief 以对方 UID、会话 ID 和末尾消息 ID 构造会话索引。 */
     ChatInfo(int uid, int chat_id, int last_msg_id);
+    /** @brief 以完整展示资料及会话类型构造会话信息。 */
     ChatInfo(int uid, QString name, QString icon, QString back_name, int chat_id,
              ChatType chat_type);
 
     // 添加一条聊天数据
+    /** @brief 添加一条聊天数据。 */
     void AddChatData(std::shared_ptr<ChatDataBase>);
     // 添加一条聊天缓存数据
+    /** @brief 添加一条聊天缓存数据。 */
     void AddCacheChatData(QString uuid, std::shared_ptr<ChatDataBase>);
 
     // 获取当前聊天对方的uid
+    /** @brief 获取当前聊天对方的uid。 */
     int GetUid();
+    /** @brief 返回当前记录的最后服务器消息 ID。 */
     int GetLastMsgId();
+    /** @brief 返回消息或资料所属会话 ID。 */
     int GetChatId();
+    /** @brief 更新此会话是否还允许请求更多历史。 */
     void SetIsCanLoadMore(bool flag);
+    /** @brief 记录最近历史页或消息中的末尾服务器 ID。 */
     void SetLastMsgId(int current_msg_id);
+    /** @brief 返回私聊或群聊会话类型。 */
     ChatType GetChatType();
     // 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息
+    /** @brief 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息。 */
     std::shared_ptr<ChatDataBase> GetChatDataByMsgId(int msg_id);
     // 获取聊天记录数据
+    /** @brief 获取聊天记录数据。 */
     QMap<int, std::shared_ptr<ChatDataBase>>& GetChatMsgs();
     // 获取缓存聊天记录数据
+    /** @brief 获取缓存聊天记录数据。 */
     QMap<QString, std::shared_ptr<ChatDataBase>>& GetCacheChatMsgs();
     // 添加缓存聊天数据
+    /** @brief 添加缓存聊天数据。 */
     void AddCacheChatMessage(QString uuid, std::shared_ptr<ChatDataBase> _cache_text_msg);
     // 获取聊天数据
+    /** @brief 获取聊天数据。 */
     std::shared_ptr<ChatDataBase> GetCacheChatMessage(QString uuid);
     // 删除聊天数据
+    /** @brief 删除聊天数据。 */
     void EraseCacheChatMessage(QString uuid);
     // 获取是否能够加载更多
+    /** @brief 获取是否能够加载更多。 */
     bool GetIsCanLoadMore();
     // 聊天记录是否是空的
+    /** @brief 聊天记录是否是空的。 */
     bool IsEmpty();
 private:
     // private: 对方的uid, group: 0
@@ -204,15 +243,19 @@ private:
  * 第二，表示当前客户端的好友，在这种使用方式下，_backname有意义
  */
 struct UserInfo {
+    /** @brief 从完整账号资料构造用户信息，不设置好友备注。 */
     UserInfo(int uid, QString name, QString description,
              QString icon, int sex);
 
+    /** @brief 从完整用户资料及本账号备注名构造好友信息。 */
     UserInfo(int uid, QString name, QString description,
              QString icon, int sex, QString backname);
 
+    /** @brief 从好友审批资料复制用户信息。 */
     UserInfo(std::shared_ptr<AuthInfo>);
 
     // 这个是为"新的朋友item"开放的接口
+    /** @brief 从 UID、名称和头像构造列表展示用简要资料。 */
     UserInfo(int uid, QString name, QString icon);
 
     int _uid;

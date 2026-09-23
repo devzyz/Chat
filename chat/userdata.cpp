@@ -115,6 +115,7 @@ UserInfo::UserInfo(int uid, QString name, QString description, QString icon, int
     _uid(uid), _name(name), _description(description), _icon(icon),
     _sex(sex), _backname(backname) {}
 
+/** @brief 从认证好友资料构造用户展示信息。 */
 UserInfo::UserInfo(std::shared_ptr<AuthInfo> auth_info) :
     _uid(auth_info->_auth_uid), _name(auth_info->_auth_name), _description(auth_info->_auth_description)
     , _icon(auth_info->_auth_icon), _sex(auth_info->_auth_sex){}
@@ -133,6 +134,7 @@ ChatInfo::ChatInfo(int uid, QString name, QString icon, QString back_name, int c
     _chat_type(chat_type), _is_can_load_more(true) {}
 
 // 添加一条聊天数据
+/** @brief 按服务端消息 ID 保存会话消息。 */
 void ChatInfo::AddChatData(std::shared_ptr<ChatDataBase> chat_data) {
     _chat_msgs.insert(chat_data->GetMsgId(), chat_data);
     _last_msg_id = chat_data->GetMsgId();
@@ -177,6 +179,7 @@ QMap<int, std::shared_ptr<ChatDataBase> > &ChatInfo::GetChatMsgs()
 }
 
 // 添加一条聊天缓存数据
+/** @brief 按客户端 UUID 保存待确认会话消息。 */
 void ChatInfo::AddCacheChatData(QString uuid, std::shared_ptr<ChatDataBase> chat_data) {
     _cache_msgs.insert(uuid, chat_data);
 }

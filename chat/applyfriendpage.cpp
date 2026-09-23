@@ -28,6 +28,7 @@ ApplyFriendPage::~ApplyFriendPage()
 }
 
 // 添加一条申请信息
+/** @brief 添加好友申请展示项并更新申请列表。 */
 void ApplyFriendPage::AddNewApply(std::shared_ptr<ApplyInfo> applyInfo)
 {
     auto * apply_item = new ApplyFriendItem();
@@ -44,7 +45,9 @@ void ApplyFriendPage::AddNewApply(std::shared_ptr<ApplyInfo> applyInfo)
     _apply_items_map.insert(applyInfo->_apply_uid, apply_item);
 
     // 收到审核好友信号
-    connect(apply_item, &ApplyFriendItem::sig_auth_friend, this, [this](std::shared_ptr<ApplyInfo> apply_info) {
+    connect(apply_item, &ApplyFriendItem::sig_auth_friend, this,
+        /** @brief 为选中申请创建有父对象的审批对话框。 */
+        [this](std::shared_ptr<ApplyInfo> apply_info) {
         auto *authFriendDialog =  new AuthFriendDialog(this);
         authFriendDialog->setModal(true);
         authFriendDialog->SetApplyInfo(apply_info);
@@ -89,7 +92,9 @@ void ApplyFriendPage::loadApplyList()
         _apply_items_map.insert(apply_list[i]->_apply_uid, apply_item);
 
         // 给每一个item绑定一个槽函数，收到好友验证好友信号后，弹出验证对话框
-        connect(apply_item, &ApplyFriendItem::sig_auth_friend, [this](std::shared_ptr<ApplyInfo> apply_info){
+        connect(apply_item, &ApplyFriendItem::sig_auth_friend,
+            /** @brief 为追加申请条目打开审批对话框。 */
+            [this](std::shared_ptr<ApplyInfo> apply_info){
             auto *authFriendDialog =  new AuthFriendDialog(this);
             authFriendDialog->setModal(true);
             authFriendDialog->SetApplyInfo(apply_info);
@@ -99,6 +104,7 @@ void ApplyFriendPage::loadApplyList()
 }
 
 // 当本客户端同意认证后，在服务器回包后，将添加按钮，变为已添加
+/** @brief 按认证结果更新对应的申请项。 */
 void ApplyFriendPage::slot_auth_finish(std::shared_ptr<AuthInfo> auth_info)
 {
     auto uid = auth_info->_auth_uid;

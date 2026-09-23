@@ -15,6 +15,7 @@ FriendInfoPage::~FriendInfoPage()
     delete ui;
 }
 
+/** @brief 保存好友信息并刷新详情页面。 */
 void FriendInfoPage::SetInfo(std::shared_ptr<UserInfo> friend_info)
 {
     _friend_info = friend_info;

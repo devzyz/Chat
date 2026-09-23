@@ -8,6 +8,7 @@ class ChatUserList : public QListWidget
 {
     Q_OBJECT
 public:
+    /** @brief 初始化对象，用于展示会话列表并通知滚动分页。 */
     ChatUserList(QWidget *parent = nullptr);
 
 protected:
@@ -16,6 +17,7 @@ protected:
 
 signals:
     // 发送加载用户更多聊天信息的信号
+    /** @brief 发送加载用户更多聊天信息的信号。 */
     void sig_loading_chat_list();
 
 private:

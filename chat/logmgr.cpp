@@ -16,6 +16,7 @@ constexpr int kDefaultMaxSizeMb = 10;
 constexpr int kDefaultMaxTotalFiles = 10;
 constexpr int kDefaultFlushIntervalSeconds = 3;
 
+/** @brief 将 Qt 消息类别转换为日志库级别。 */
 spdlog::level::level_enum ToSpdlogLevel(QtMsgType type)
 {
     switch (type) {

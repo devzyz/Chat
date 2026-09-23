@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include "userdata.h"
 
+/** @brief 将好友申请资料序列化为现有协议字段，不发送请求。 */
 inline QByteArray clientFriendRequest(const UserInfo &self, int toUid,
                                      const QString &description, const QString &backname)
 {
@@ -13,6 +14,7 @@ inline QByteArray clientFriendRequest(const UserInfo &self, int toUid,
         {"touid", toUid}, {"description", description}, {"backname", backname}}).toJson(QJsonDocument::Compact);
 }
 
+/** @brief 序列化申请人和审批人资料，保留现有好友确认协议字段。 */
 inline QByteArray clientAcceptFriendRequest(const UserInfo &self, const ApplyInfo &apply,
                                            const QString &description, const QString &backname)
 {
@@ -27,18 +29,21 @@ inline QByteArray clientAcceptFriendRequest(const UserInfo &self, const ApplyInf
         {"applyinfo", applicant}, {"authinfo", acceptor}}).toJson(QJsonDocument::Compact);
 }
 
+/** @brief 按会话与消息游标构造历史请求字节。 */
 inline QByteArray clientHistoryRequest(int chatId, qint64 beforeId)
 {
     return QJsonDocument(QJsonObject{{"chat_id", chatId}, {"current_msg_id", beforeId}})
         .toJson(QJsonDocument::Compact);
 }
 
+/** @brief 构造双方 UID 及可选对方资料的创建私聊请求。 */
 inline QByteArray clientPrivateChatRequest(int uid, int otherUid, const QJsonObject &otherInfo = {})
 {
     return QJsonDocument(QJsonObject{{"self_id", uid}, {"other_id", otherUid}, {"other_info", otherInfo}})
         .toJson(QJsonDocument::Compact);
 }
 
+/** @brief 将发送者、接收者、会话及消息数组序列化为文本发送请求。 */
 inline QByteArray clientTextRequest(int uid, int toUid, int chatId, const QJsonArray &texts)
 {
     return QJsonDocument(QJsonObject{{"from_uid", uid}, {"to_uid", toUid},

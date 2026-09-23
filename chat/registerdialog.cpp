@@ -28,23 +28,33 @@ RegisterDialog::RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     ui->err_tip->setText("");
 
     // 连接信号与槽，当QLabel编辑完成信号触发后，调用对应的检查函数，并进行提示
-    connect(ui->user_edit, &QLineEdit::editingFinished, this, [this](){
+    connect(ui->user_edit, &QLineEdit::editingFinished, this,
+        /** @brief 用户名编辑结束时校验。 */
+        [this](){
         checkUserValid();
     });
 
-    connect(ui->email_edit, &QLineEdit::editingFinished, this, [this](){
+    connect(ui->email_edit, &QLineEdit::editingFinished, this,
+        /** @brief 邮箱编辑结束时校验。 */
+        [this](){
         checkEmailValid();
     });
 
-    connect(ui->password_edit, &QLineEdit::editingFinished, this, [this](){
+    connect(ui->password_edit, &QLineEdit::editingFinished, this,
+        /** @brief 密码编辑结束时校验。 */
+        [this](){
         checkPasswordValid();
     });
 
-    connect(ui->confirm_edit, &QLineEdit::editingFinished, this, [this](){
+    connect(ui->confirm_edit, &QLineEdit::editingFinished, this,
+        /** @brief 确认密码编辑结束时校验。 */
+        [this](){
         checkConfirmValid();
     });
 
-    connect(ui->varify_edit, &QLineEdit::editingFinished, this, [this](){
+    connect(ui->varify_edit, &QLineEdit::editingFinished, this,
+        /** @brief 验证码编辑结束时校验。 */
+        [this](){
         checkVarifyValid();
     });
 
@@ -55,7 +65,9 @@ RegisterDialog::RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
                                    "visible_leave", "visible_hover", "");
 
     // 连接槽函数，触发真正的密码的隐藏与显示
-    connect(ui->password_visible, &ClickedLabel::clicked, this, [this]() {
+    connect(ui->password_visible, &ClickedLabel::clicked, this,
+        /** @brief 按标签状态切换密码可见性。 */
+        [this]() {
         auto state = ui->password_visible->GetCurState();
 
         // 当为隐藏状态时，切换编辑框为密码模式;否则为显示模式
@@ -66,7 +78,9 @@ RegisterDialog::RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
         }
     });
 
-    connect(ui->confirm_visible, &ClickedLabel::clicked, this, [this]() {
+    connect(ui->confirm_visible, &ClickedLabel::clicked, this,
+        /** @brief 按标签状态切换确认密码可见性。 */
+        [this]() {
         auto state = ui->confirm_visible->GetCurState();
 
         // 当为隐藏状态时，切换编辑框为密码模式;否则为显示模式
@@ -82,7 +96,9 @@ RegisterDialog::RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     _return_login_timer = new QTimer(this);
 
     // 连接信号与槽
-    connect(_return_login_timer, &QTimer::timeout, [this]() {
+    connect(_return_login_timer, &QTimer::timeout,
+        /** @brief 更新注册完成倒计时并到时返回登录。 */
+        [this]() {
         if (_return_login_counter == 0) {
             _return_login_timer->stop();
             emit sig_reg_switch_login();
@@ -198,7 +214,9 @@ void RegisterDialog::showTip(QString str, bool isOk) {
 void RegisterDialog::initHttpHandlers()
 {
     // 注册获取验证码回包的逻辑
-    _handlers.insert(ReqId::ID_GET_VERIFY_CODE, [this](const QJsonObject& jsonObj) {
+    _handlers.insert(ReqId::ID_GET_VERIFY_CODE,
+        /** @brief 将验证码回复转换为表单提示。 */
+        [this](const QJsonObject& jsonObj) {
         int error = jsonObj["error"].toInt();
         if (error != ErrorCodes::SUCCESS) {
             showTip(tr("参数错误"), false);
@@ -210,7 +228,9 @@ void RegisterDialog::initHttpHandlers()
     });
 
     // 注册的回包逻辑
-    _handlers.insert(ReqId::ID_REG_USER, [this](const QJsonObject& jsonObj) {
+    _handlers.insert(ReqId::ID_REG_USER,
+        /** @brief 将注册回复转换为成功页或错误提示。 */
+        [this](const QJsonObject& jsonObj) {
         int error = jsonObj["error"].toInt();
 
         if (error != ErrorCodes::SUCCESS) {

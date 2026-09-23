@@ -5,6 +5,7 @@ HttpMgr::HttpMgr() {
     // 连接信号与槽
     connect(this, &HttpMgr::sig_http_finish, this, &HttpMgr::slot_http_finish);
     connect(&_transport, &GateHttpTransport::finished, this,
+            /** @brief 将 HTTP 传输终态转换为旧模块使用的错误码和完成信号。 */
             [this](const GateHttpResult &result) {
         ErrorCodes error = ErrorCodes::ERR_NETWORK;
         if (result.terminal == GateHttpTerminal::Success) {

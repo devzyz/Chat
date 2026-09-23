@@ -21,6 +21,7 @@ ChatUserItem::~ChatUserItem()
 }
 
 // 设置ChatInfo
+/** @brief 绑定会话数据并刷新昵称、头像及最近消息。 */
 void ChatUserItem::SetChatInfo(std::shared_ptr<ChatInfo> chat_info)
 {
     _chat_info = chat_info;
@@ -92,6 +93,7 @@ void ChatUserItem::ShowNewMsgTip()
 }
 
 // 更新新消息数量
+/** @brief 累加新消息数量并刷新提示标签。 */
 void ChatUserItem::UpdateNewMsgCount(int count)
 {
     _new_msg_count += count;

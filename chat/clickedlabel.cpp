@@ -31,6 +31,7 @@ void ClickedLabel::mousePressEvent(QMouseEvent *event) {
 }
 
 // 点击后的释放事件，只需要转换为对应的hover状态即可
+/** @brief 响应鼠标释放，更新选中样式并发出点击信号。 */
 void ClickedLabel::mouseReleaseEvent(QMouseEvent * event)
 {
     if (event->button() == Qt::LeftButton) {
