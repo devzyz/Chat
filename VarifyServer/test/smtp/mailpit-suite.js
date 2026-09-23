@@ -16,7 +16,7 @@ async function poll(probe) {
     throw new Error('SMTP correlation deadline');
 }
 
-async function runSmtpCases(coordinator, record) {
+/** 通过独立 Mailpit 验证发送、重启恢复与消息关联，并只清理本轮邮件。 */ async function runSmtpCases(coordinator, record) {
     const { config } = coordinator;
     assert.equal(config.host, '127.0.0.1');
     assert.match(config.runId, /^[a-f0-9]{32}$/);
@@ -28,12 +28,12 @@ async function runSmtpCases(coordinator, record) {
         `/api/v1/search?query=${encodeURIComponent(`to:${config.recipient}`)}`);
     const baseline = new Set((await search()).messages.map((message) => message.ID));
     let primaryFailure;
-    const send = async (subject, overrides = {}) => {
+    const send = /** 读取最新临时端口发送指定主题，完成后关闭适配器。 */ async (subject, overrides = {}) => {
         // lifecycle(start) may replace ephemeral host ports. Read them at each send.
         const adapter = createSmtpAdapter({ host: config.host, port: config.ports.smtp, secure: false,
             auth: 'none', deadlineMs: 2000, ...overrides });
         try {
-            return await adapter.SendMail({ from: 'adapter@example.invalid', to: config.recipient,
+            return await adapter.sendMail({ from: 'adapter@example.invalid', to: config.recipient,
                 subject, text: coordinator.mailBody });
         } finally { adapter.close(); }
     };

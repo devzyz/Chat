@@ -2,7 +2,7 @@
 
 Production owners are `email.js` (lazy Nodemailer adapter), `smtpConfig.js`
 (strict options), `config.js` and the default handler composition in `server.js`.
-`SendMail` returns only `{status}`: Delivered, Rejected, Unavailable,
+`sendMail` returns only `{status}`: Delivered, Rejected, Unavailable,
 DeadlineExceeded, or InvalidConfig. The public verification RPC maps every
 non-Delivered result to the existing Exception value. No provider response,
 credentials, recipient, or message body is returned or logged by the adapter.

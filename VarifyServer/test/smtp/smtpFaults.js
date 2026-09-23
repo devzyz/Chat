@@ -76,14 +76,14 @@ const faultCases = [
     ['V09-SMTP-09', 'SMTP silent greeting deadline', 'silent', 'DeadlineExceeded'],
     ['V09-SMTP-10', 'SMTP total deadline despite live response', 'slowData', 'DeadlineExceeded'],
     ['V09-SMTP-11', 'SMTP active cancellation closes socket', 'silent', 'Unavailable']
-].map(([id, name, mode, expected]) => ({ id, name, async action() {
-    await withPeer(mode, async (port, sockets) => {
+].map(/** 将故障数据转为独立可执行用例。 */ ([id, name, mode, expected]) => ({ id, name, /** 验证指定 SMTP 故障状态、完成次数和连接清理。 */ async action() {
+    await withPeer(mode, /** 在真实故障对端上发信并验证取消与期限。 */ async (port, sockets) => {
         const adapter = createSmtpAdapter({ host: '127.0.0.1', port, secure: false,
             auth: 'none', deadlineMs: 250 });
         let completions = 0;
         const start = performance.now();
         try {
-            const pending = adapter.SendMail({ from: 'sender@example.invalid', to: 'fault@example.invalid',
+            const pending = adapter.sendMail({ from: 'sender@example.invalid', to: 'fault@example.invalid',
                 subject: id, text: 'synthetic' }).then((result) => { completions += 1; return result; });
             if (id === 'V09-SMTP-11') {
                 // Await a real accepted socket, not a fixed sleep or mocked transport.

@@ -30,16 +30,16 @@ async function cleanup(coordinator) {
     });
 }
 
-async function runRedisCases(coordinator, record) {
+/** 使用独立依赖协调器执行 Redis 故障合同并清理本轮命名空间。 */ async function runRedisCases(coordinator, record) {
     const key = `${coordinator.config.prefix}node:value`;
     let primaryFailure;
     try {
-        await record('V08-REDIS-01', 'production Node atomic TTL and failed expiry has no orphan', async () => {
+        await record('V08-REDIS-01', 'production Node atomic TTL and failed expiry has no orphan', /** 验证原子 TTL 与非法过期参数不遗留键。 */ async () => {
             const adapter = adapterFor(coordinator);
             try {
                 assert.equal(await adapter.setRedisExpire(key, 'synthetic-value', 1), true);
-                assert.equal(await adapter.GetRedis(key), 'synthetic-value');
-                assert.equal(await adapter.QueryRedis(key), 1);
+                assert.equal(await adapter.getRedis(key), 'synthetic-value');
+                assert.equal(await adapter.queryRedis(key), 1);
                 await withAdmin(coordinator, async (client) => {
                     const ttl = await client.pttl(key);
                     assert.ok(ttl >= 0 && ttl <= 1000);
@@ -48,7 +48,7 @@ async function runRedisCases(coordinator, record) {
                 // JavaScript's largest safe integer is still a valid Redis EX
                 // value: seconds * 1000 fits Redis's signed 64-bit timestamp.
                 assert.equal(await adapter.setRedisExpire(key, 'large-ttl', Number.MAX_SAFE_INTEGER), true);
-                assert.equal(await adapter.GetRedis(key), 'large-ttl');
+                assert.equal(await adapter.getRedis(key), 'large-ttl');
                 await withAdmin(coordinator, async (client) => {
                     assert.ok(await client.ttl(key) > 0);
                     assert.equal(await client.del(key), 1);
@@ -64,32 +64,32 @@ async function runRedisCases(coordinator, record) {
                         /invalid expire time/i);
                     assert.equal(await client.exists(key), 0);
                 });
-            } finally { await adapter.Quit(); }
+            } finally { await adapter.close(); }
         });
-        await record('V08-REDIS-02', 'production Node wrong authentication preserves failure mapping', async () => {
+        await record('V08-REDIS-02', 'production Node wrong authentication preserves failure mapping', /** 验证错误密码映射为受限时间内的失败。 */ async () => {
             const adapter = adapterFor(coordinator, { password: `${coordinator.password}-invalid` });
             try {
                 const started = performance.now();
-                assert.equal(await adapter.GetRedis(key), null);
+                assert.equal(await adapter.getRedis(key), null);
                 assert.equal(await adapter.setRedisExpire(key, 'value', 30), false);
                 assert.ok(performance.now() - started < 1500);
-            } finally { await adapter.Quit(); }
+            } finally { await adapter.close(); }
         });
-        await record('V08-REDIS-03', 'real paused Redis bounds commands and replaces bad client', async () => {
+        await record('V08-REDIS-03', 'real paused Redis bounds commands and replaces bad client', /** 验证暂停 Redis 后命令有期限且坏连接被替换。 */ async () => {
             const adapter = adapterFor(coordinator);
             try {
                 assert.equal(await adapter.setRedisExpire(key, 'before-pause', 30), true);
                 await withAdmin(coordinator, (client) => client.call('CLIENT', 'PAUSE', '400', 'ALL'));
                 const started = performance.now();
-                assert.equal(await adapter.GetRedis(key), null);
+                assert.equal(await adapter.getRedis(key), null);
                 assert.ok(performance.now() - started < 500);
                 // A readiness probe is not an adapter command replay. The failed
                 // business call above remains failed and is never retried.
                 await withAdmin(coordinator, async (client) => assert.equal(await client.ping(), 'PONG'));
-                assert.equal(await adapter.GetRedis(key), 'before-pause');
-            } finally { await adapter.Quit(); }
+                assert.equal(await adapter.getRedis(key), 'before-pause');
+            } finally { await adapter.close(); }
         });
-        await record('V08-REDIS-04', 'same production Node adapter recovers after real Redis restart', async () => {
+        await record('V08-REDIS-04', 'same production Node adapter recovers after real Redis restart', /** 验证稳定代理下 Redis 重启后的恢复。 */ async () => {
             const proxy = await stableProxy(coordinator);
             const adapter = adapterFor(coordinator, { port: proxy.port });
             let needsRestore = false;
@@ -99,27 +99,27 @@ async function runRedisCases(coordinator, record) {
                 await restartRedis(coordinator, proxy);
                 needsRestore = false;
                 assert.equal(await adapter.setRedisExpire(key, 'after-restart', 30), true);
-                assert.equal(await adapter.GetRedis(key), 'after-restart');
+                assert.equal(await adapter.getRedis(key), 'after-restart');
             } finally {
-                await adapter.Quit();
+                await adapter.close();
                 await proxy.close();
                 if (needsRestore) await restoreRedis(coordinator);
             }
         });
-        await record('V08-REDIS-05', 'production close cancels pending real commands and rejects future writes', async () => {
+        await record('V08-REDIS-05', 'production close cancels pending real commands and rejects future writes', /** 验证关闭取消在途命令，并拒绝后续写入。 */ async () => {
             const proxy = await stableProxy(coordinator);
             const adapter = adapterFor(coordinator, { port: proxy.port, commandTimeoutMs: 1000 });
             try {
                 assert.equal(await adapter.setRedisExpire(key, 'before-close', 30), true);
                 await withAdmin(coordinator, (client) => client.call('CLIENT', 'PAUSE', '400', 'ALL'));
                 const forwarded = proxy.waitForForward();
-                const pending = adapter.GetRedis(key);
+                const pending = adapter.getRedis(key);
                 await forwarded; // The real command reached the transport before cancellation.
-                await adapter.Quit();
+                await adapter.close();
                 assert.equal(await pending, null);
                 assert.equal(await adapter.setRedisExpire(key, 'after-close', 30), false);
                 await withAdmin(coordinator, async (client) => assert.equal(await client.get(key), 'before-close'));
-            } finally { await adapter.Quit(); await proxy.close(); }
+            } finally { await adapter.close(); await proxy.close(); }
         });
     } catch (error) {
         primaryFailure = error;
