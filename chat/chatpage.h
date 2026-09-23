@@ -84,6 +84,7 @@ private:
     std::shared_ptr<ChatInfo> _chatInfo;
     MessageModelStore _messageStore;
     MessageItemDelegate *_messageDelegate = nullptr;
+    class MessageReadTracker *_readTracker = nullptr;
     QHash<int, ScrollAnchor> _scrollAnchors;
     QHash<QString, QPixmap> _avatarCache;
     QSet<int> _legacySeededChats;

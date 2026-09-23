@@ -63,3 +63,9 @@ updates remain isolated by chat. ClientSession owns production heartbeats;
 the process-driver Integration case observes them on real loopback TCP.
 
 - 不覆盖真实窗口事件、网络管理器、登录/好友/聊天跨页面流程或平台字体的精确像素。
+
+Message state extensions: existing append/ACK and shifted-index cases reject server-ID rebinding
+and preserve Read across late ACK, failure and duplicate-history collapse. The identity case
+checks attempt isolation and exact visible IDs with the 500ms threshold. The delegate component
+case uses a real QListView, delegate and timer: undurable rows, hidden and minimized views do not
+report Read; a durable visible card does. These extend existing CTest cases without new report groups.

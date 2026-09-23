@@ -1,3 +1,4 @@
+#include "../../common/message/MessageReceipts.h"
 #include "../../common/message/MessagePersistence.h"
 #include "MysqlDao.h"
 #include <string>
@@ -765,4 +766,22 @@ bool MysqlDao::GetChatMessageList(int principal_uid, int chat_id, int current_ms
 		SPDLOG_ERROR("mysql GetChatMessageList failed, chat_id={}, current_msg_id={}, page_size={}, error={}", chat_id, current_msg_id, page_size, e.what());
 		return false;
 	}
+}
+
+bool MysqlDao::Receipts(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer) {
+    auto connection = _pool->GetConnection();
+    if (!connection) { response["receipt_error"] = "StorageUnavailable"; return false; }
+    Defer release([this, &connection] { _pool->returnConnection(std::move(connection)); });
+    try {
+        messaging::ReceiptRequest(*connection->_connection, uid, request, report, response, peer);
+        return true;
+    } catch (const messaging::ReceiptError& error) {
+        response["receipt_error"] = error.what();
+    } catch (const std::exception&) {
+        connection->_connection.reset();
+        response["receipt_error"] = "StorageUnavailable";
+    }
+    response.removeMember("items");
+    response.removeMember("latest_revision");
+    return false;
 }

@@ -53,6 +53,8 @@ public:
     AuthFriendRsp NotifyOtherAuthFriend(const std::string& server_name, const AuthFriendReq& request);
     TextChatMsgRsp NotifyOtherReceiveTextChatMsg(const std::string& server_name, const TextChatMsgReq& request);
     KickUserRsp NotifyOtherKickUser(const std::string& server_name, const KickUserReq& request);
+    message::ReceiptChangedRsp NotifyMessageReceiptChanged(const std::string& server_name,
+        const message::ReceiptChangedReq& request);
 
 private:
     ChatGrpcClient();

@@ -116,4 +116,4 @@ ChatServer 负责资源消息的参与者权限、事务提交及现有 TCP/gRPC
 
 ## Local message persistence
 
-`UserMgr` owns `MessageService`; its worker owns the SQLite connection. UI models consume stored value objects; TCP requests and callbacks enter through the service. Server sync uses the existing MySQL pool and locks the same conversation row as text/resource writers. See [MessageStorage](MessageStorage.md).
+`UserMgr` owns `MessageService`; its worker owns the SQLite connection. UI models consume stored value objects; TCP requests and callbacks enter through the service. Server sync uses the existing MySQL pool and locks the same conversation row as text/resource writers. See [MessageStorage](MessageStorage.md) and [message states and receipts](MessageStates.md).

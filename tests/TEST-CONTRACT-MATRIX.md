@@ -848,7 +848,7 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 | S05-RESOURCE-14 | catalog_tests.cpp / CommitRetryMembershipAndDownloadAuthorization | 临时 MySQL 消息幂等与参与者权限 |
 | S05-RESOURCE-15 | 同上 / AvatarPublicationIsOwnedPersistentAndSeparateFromMessages | 头像归属、持久引用与附件授权隔离 |
 | S05-RESOURCE-16 | chat_flow_integration.py | 生产 Resource/双 Chat、真实 MySQL，头像重启恢复、跨实例附件及历史；Status/Redis 为替身 |
-| S05-RESOURCE-17 | schema_upgrade.js | 真实受管 schema 2→3、旧用户/消息保留、重复应用及资源表漂移拒绝 |
+| S05-RESOURCE-17 | schema_upgrade.js | 真实受管 schema 2→4、旧用户/消息保留、重复应用及资源表漂移拒绝 |
 
 ## 8. 矩阵维护规则
 
@@ -865,3 +865,14 @@ Q05-STORE-01..07 are mapped in [message-storage](../chat/tests/message-storage/R
 S06-SYNC-01..05 are opt-in real MySQL / production ChatServer / Qt-SQLite contracts in [message-sync](server/message-sync/README.md), outside that aggregate. Local conflict rollback, original-ID retry, ordered commit/cursor behavior and process restart are covered; production Status/Redis and full GUI workflows are not claimed.
 
 Session FSM adaptation to current develop: the current runner manifest is 13 reports / 371 cases, including 239 Server cases. Historical baselines above remain historical evidence.
+
+## Message state control (2026-09-23)
+
+S07-RECEIPT-01..02 are registered in [message-receipt](server/message-receipt/README.md)
+and the quick Server Unit report; 03..06 are opt-in MySQL/TCP/Qt contracts in
+[message-sync](server/message-sync/README.md). Q05-STORE-08..14 extend the existing single
+SQLite component CTest entry. Existing model, delegate, session-reset and session-driver
+cases additionally cover monotonic facts, real widget observation, original-payload retry,
+pre-retry synchronization and logout/account boundaries. Report totals remain owned by the runner.
+Migration contracts now target schema 4; the managed schema-2 fixture upgrades through 3 and 4,
+preserving prior rows and rejecting schema drift. No personal database or promoted N-1 is implied.

@@ -62,8 +62,8 @@ def tcp_flow(directory, mysql_command, mysql_port):
         def login(index, uid):
             sock = socket.create_connection(("127.0.0.1", tcp_ports[index]), timeout=10)
             sockets.append(sock)
-            send(sock, 1005, dict(uid=uid, token="fixture-token"))
-            receive(sock, 1006)
+            send(sock, 1005, {"uid": uid, "token": "fixture-token", "capabilities": ["message_receipts_v1"]})
+            assert receive(sock, 1006)["capabilities"] == ["message_receipts_v1"]
             return sock
 
         def sync(sock, after):
@@ -74,8 +74,8 @@ def tcp_flow(directory, mysql_command, mysql_port):
             return response
 
         sender = login(0, 7)
-        # Preserve the legacy malformed-history error response.
-        send(sender, 1027, [])
+        # Authenticated object requests with missing history fields get a bounded error.
+        send(sender, 1027, {})
         malformed = receive(sender, 1028, success=False)
         assert malformed["error"] != 0
         payload = dict(from_uid=7, to_uid=8, chat_id=201,
@@ -91,6 +91,35 @@ def tcp_flow(directory, mysql_command, mysql_port):
         assert initial["msgs"][0]["msg_uuid"] == "00000000-0000-4000-8000-000000000201"
         assert initial["msgs"][0]["content"] == "x" * 1850
         assert sync(receiver, first)["msgs"] == []
+
+        def report(level):
+            send(receiver, 1029, dict(version=1, request_id=f"report-{level}", chat_id=201,
+                items=[dict(message_id=first, level=level)]))
+            result = receive(receiver, 1030)
+            hint = receive(sender, 1031)
+            assert hint["chat_id"] == 201 and hint["latest_revision"] == result["latest_revision"]
+            return result
+
+        def receipt_page(sock, after):
+            send(sock, 1032, dict(version=1, request_id="receipt-sync", chat_id=201, after_revision=str(after)))
+            return receive(sock, 1033)
+
+        assert receipt_page(sender, 0)["items"] == []
+        delivered = report("delivered")
+        assert delivered["items"][0]["level"] == "delivered"
+        assert receipt_page(sender, 0)["items"][0]["level"] == "delivered"
+        send(sender, 1029, dict(version=1, request_id="forged", chat_id=201,
+            items=[dict(message_id=first, level="read")]))
+        assert receive(sender, 1030, success=False)["receipt_error"] == "InvalidMessage"
+        read = report("read")
+        assert read["items"][0]["level"] == "read"
+        assert report("delivered")["items"][0]["level"] == "read"
+        assert receipt_page(sender, 1)["items"][0]["message_id"] == first
+        assert receipt_page(sender, 2)["items"] == []
+        sender.close()
+        sender = login(0, 7)
+        assert receipt_page(sender, 0)["items"][0]["level"] == "read"
+        print("Receipts: cross-instance Delivered/Read, forged reader rejection, late downgrade and relogin passed")
         payload["text_array"][0] = dict(msg_uuid="00000000-0000-4000-8000-000000000202", msg_content="only the increment")
         send(sender, 1016, payload)
         second = receive(sender, 1017)["uuid_msgId"][0]["message_id"]
@@ -109,6 +138,15 @@ def tcp_flow(directory, mysql_command, mysql_port):
         third = receive(sender, 1017)["uuid_msgId"][0]["message_id"]
         subprocess.run([str(probe), str(tcp_ports[1]), str(local_account), str(second), "3"], check=True, timeout=18)
         subprocess.run([str(probe), str(tcp_ports[1]), str(local_account), str(third), "3"], check=True, timeout=18)
+        sender.close() # Exercise durable receipt catch-up while the sender is offline.
+        subprocess.run([str(probe), str(tcp_ports[1]), str(local_account), str(third), "3", "receipts"],
+            check=True, timeout=18)
+        sender = login(0, 7)
+        confirmed = receipt_page(sender, 0)["items"]
+        assert len(confirmed) == 3 and all(item["level"] == "read" for item in confirmed)
+        subprocess.run([str(probe), str(tcp_ports[1]), str(local_account), str(third), "3", "receipts"],
+            check=True, timeout=18)
+        print("Qt/SQLite receipts: durable report, Read intent, confirmed state and process restart passed")
         print("TCP: offline commit, UUID retry, cross-instance push, incremental sync and relogin passed")
         print("Qt/SQLite: process restart resumes from persisted cursor; no old history requested")
     finally:

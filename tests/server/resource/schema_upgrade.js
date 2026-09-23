@@ -33,14 +33,14 @@ async function main() {
             "VALUES(1,1,2,'preserve existing message',0,'55555555-5555-4555-8555-555555555555')");
         const before = await session.execute('SELECT message_id,content,client_msg_uuid FROM chat_message');
         const current = new SchemaMigration(session, 'resource_upgrade');
-        assert.deepEqual((await current.Plan()).map(entry => entry.id), [3]);
-        assert.equal((await current.Apply()).version, 3);
-        assert.equal((await current.Apply()).version, 3);
+        assert.deepEqual((await current.Plan()).map(entry => entry.id), [3, 4]);
+        assert.equal((await current.Apply()).version, 4);
+        assert.equal((await current.Apply()).version, 4);
         assert.equal(await session.execute('SELECT message_id,content,client_msg_uuid FROM chat_message'), before);
         assert.equal(await session.execute('SELECT COUNT(*) FROM user'), '1');
         await session.execute('DROP TABLE user_avatar');
         await assert.rejects(current.Verify(), /SchemaContractDrift/);
-        console.log('S05-RESOURCE-17 PASS version 2 to 3 preserves user/message data; repeat and drift checks pass');
+        console.log('S05-RESOURCE-17 PASS version 2 to 4 preserves user/message data; repeat and drift checks pass');
     } finally {
         await session.close();
         await fixture.close();

@@ -43,3 +43,8 @@ initial release baseline. It rejects
 field-number reuse/change, type or cardinality change, removed messages or
 services, renamed/removed RPCs, RPC input/output change, and deletion without
 reserving both the old number and name.
+
+`chat.proto` adds `NotifyMessageReceiptChanged(ReceiptChangedReq) -> ReceiptChangedRsp`.
+The request contains recipient `uid`, `chat_id` and signed-64-bit `revision`; it is a hint,
+not a delivery/read acknowledgement. Existing fields and RPCs are unchanged. See
+[message state protocol](../docs/MessageStates.md#回执与同步).

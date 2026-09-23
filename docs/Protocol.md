@@ -125,3 +125,15 @@ Request 1027 adds `mode: "sync_v1"`, authenticated `uid`, `chat_id`, nonnegative
 Rows are ordered by increasing server ID; only IDs greater than `after_id` are returned. A page contains at most 50 rows and fits the complete encoded response. Only response 1028 permits a body up to 65535 bytes; other messages and client requests retain the 2048-byte bound. Legacy history keeps its existing serializer and fields. Old clients cannot consume large sync responses; update all ChatServer writers before deploying the new client.
 
 The client atomically commits a whole page and its cursor; ACKs/pushes never advance it. Existing committed local history is trusted. Synchronization and deployment details: [MessageStorage](MessageStorage.md).
+
+## Private message receipts v1
+
+The negotiated `message_receipts_v1` capability adds TCP 1029/1030 report, 1031 change hint,
+1032/1033 independent revision synchronization. Complete envelopes, authorization, limits and
+error semantics are defined in [MessageStates](MessageStates.md#回执与同步). All five IDs retain
+the 2048-byte body limit. Revisions are canonical signed-64-bit decimal strings.
+1016 may carry an `attempt_id` string (maximum 20 bytes); 1017 echoes it without changing the
+UUID idempotency identity or the original batch commit semantics. ACK proves Sent, never Read.
+The client reserves framing metadata space by limiting stored business requests to 1950 bytes.
+`NotifyMessageReceiptChanged` is an additive Chat-only unary RPC; its hint is recoverable through
+periodic authoritative synchronization and is sent only to a session that negotiated receipts.

@@ -27,6 +27,8 @@ public:
         TextRole,
         ResourceIdRole,
         LocalResourcePathRole,
+        DurableRole,
+        ReadConfirmedRole,
         ResourcePreviewRole
     };
     Q_ENUM(Role)

@@ -37,3 +37,9 @@ RED evidence was recorded for the missing owning Module/User reset, retained own
 - Retained: theme/style, window policy, and Gate/server configuration because they are application-level rather than account-level.
 - Future local cache must be a separate Module keyed by account and schema version; it must not rely on accidental `UserMgr` retention.
 - Replay is triggered once per successful matching-account login, not an unbounded timer loop. A legacy error response without UUID correlation never removes an arbitrary FIFO batch. Server-ID model deduplication prevents duplicate rows; no network exactly-once guarantee is implied.
+
+Message-state ownership now belongs to MessageService/SQLite. Existing pending-batch cases
+exercise explicit logout pause, crash reopen, exact UUID/attempt correlation and account isolation.
+The authenticated wire retry case still uses a real loopback TCP peer: after login it observes
+`sync_v1` verification, then the same business payload/UUID with incremented `attempt_id`.
+It no longer asserts byte-identical metadata or an in-memory TcpMgr retry queue.

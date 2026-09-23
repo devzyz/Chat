@@ -33,3 +33,18 @@ not production Status/Redis or a full desktop E2E claim.
 
 MySQL results: `build/message-sync/mysql.xml`; TCP failures propagate as nonzero
 exit. These opt-in Integration cases are outside the thirteen-report quick CI lane.
+
+## Receipt extensions
+
+| Test ID | Test | Contract |
+| --- | --- | --- |
+| S07-RECEIPT-03 | ReceiptsAreAuthorizedMonotonicAndDurable | Real MySQL membership/reader checks, atomic rejection, idempotence, first timestamps, reconnect durability |
+| S07-RECEIPT-04 | ReceiptPageCannotSkipAnUpgrade | Byte-bounded revision pages and old-message upgrade after earlier page |
+| S07-RECEIPT-05 | integration.py / tcp_flow | Capability negotiation, two production ChatServers, cross-instance hint, exact authoritative receipts, forged reader rejection, sender offline/relogin |
+| S07-RECEIPT-06 | message_sync_probe receipts mode | Production Qt service, SQLite and TCP report/Read confirmation, independent cursor and process restart |
+
+The shared Redis fixture supports current atomic two-key presence scripts. It remains a fixture,
+not evidence for a production Redis adapter. Non-object requests are dropped by the current
+session dispatcher; malformed object history requests retain their error response.
+The Read probe supplies an observation explicitly; real foreground/geometry behavior is covered
+separately by the Qt message-model component test, not claimed as human GUI end-to-end evidence.

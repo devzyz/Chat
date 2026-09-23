@@ -3,6 +3,7 @@
 #include "clientmessage.h"
 #include "clientrequests.h"
 #include "messagemodelstore.h"
+#include "messageservice.h"
 #include "tcpmgr.h"
 #include "usermgr.h"
 #include <QCoreApplication>
@@ -41,7 +42,10 @@ public:
         connect(&_socket, &QLocalSocket::readyRead, this, [this] { read(); });
         connect(&_login, &ClientLoginFlow::authenticated, this, [this](AuthFlowId) {
             const int uid = UserMgr::GetInstance()->GetUid();
-            if (_lastUid && _lastUid != uid) _messages = MessageModelStore{};
+            if (_lastUid && _lastUid != uid) {
+                _messages = MessageModelStore{};
+                _committedUuids.clear();
+            }
             _lastUid = uid;
             _session.beginSession();
             reply(_pendingId, "authenticated");
@@ -65,6 +69,33 @@ public:
         connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_notify_offline, this,
                 [this] { _session.resetSession(SessionResetReason::Kicked); });
         const auto tcp = TcpMgr::GetInstance();
+        auto *service = UserMgr::GetInstance()->messages();
+        connect(service, &MessageService::messagesChanged, this,
+            [service](int chatId) { service->loadHistory(chatId); });
+        connect(service, &MessageService::historyLoaded, this,
+            [this](int chatId, qint64, const QVector<StoredMessage> &rows, bool) {
+                // Preserve the harness's explicit legacy-history traversal; reconcile existing sends only.
+                auto *model = _messages.find(chatId);
+                if (!model) return;
+                for (const auto &row : rows) {
+                    if (row.senderId != _lastUid || row.messageId <= 0
+                        || model->rowForClientMessageId(row.clientMessageId, row.senderId) < 0) continue;
+                    model->acknowledgeMessage(row.clientMessageId, row.messageId, DeliveryStatus::Sent, row.senderId);
+                    _committedUuids.insert(row.clientMessageId);
+                }
+            });
+        connect(service, &MessageService::sendFailed, this, [this](int, const QVector<QString> &) {
+            if (!_pendingId || _expectedResponse != ID_TEXT_CHAT_MSG_RSP) return;
+            _commandDeadline.stop();
+            send(QJsonObject{{"id", _pendingId}, {"status", "completed"}, {"error", 1}});
+            _pendingId = 0;
+            _expectedResponse = -1;
+        });
+        connect(UserMgr::GetInstance()->messages(), &MessageService::sendRequested, this,
+            [this, tcp](const QJsonObject &request) {
+                if (_pendingId && _expectedResponse == ID_TEXT_CHAT_MSG_RSP && _responsesRemaining == 2)
+                    emit tcp->sig_send_data(ID_TEXT_CHAT_MSG_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
+            });
         connect(tcp.get(), &TcpMgr::sig_tcp_add_friend_apply, this,
                 [](const std::shared_ptr<ApplyInfo> &apply) {
             if (apply) UserMgr::GetInstance()->AddApply(apply->_apply_uid, apply);
@@ -83,7 +114,10 @@ public:
             if (!_messages.applyHistory(chatId, records, more, cursor)) _historyRejected = true;
         });
         connect(tcp.get(), &TcpMgr::sig_text_chat_msg_rsp_finish, this,
-                [this](int chatId, QVector<MessageAcknowledgement> acks) { _messages.acknowledge(chatId, acks, UserMgr::GetInstance()->GetUid()); });
+                [this](int chatId, QVector<MessageAcknowledgement> acks) {
+            _messages.acknowledge(chatId, acks, UserMgr::GetInstance()->GetUid());
+            for (const auto &ack : acks) _committedUuids.insert(ack.clientMessageId);
+        });
         connect(tcp.get(), &TcpMgr::sig_text_chat_msg_failed, this,
                 [this](int chatId, const QVector<QString> &ids) { _messages.markFailed(chatId, ids, UserMgr::GetInstance()->GetUid()); });
         connect(tcp.get(), &TcpMgr::sig_create_private_chat_finish, this,
@@ -216,6 +250,7 @@ private:
                 QByteArray body;
                 ReqId request = ID_CREATE_PRIVATE_CHAT_REQ;
                 int copies = 1;
+                bool replayCommitted = false;
                 const int chatId = object.value("chatId").toInt();
                 if (command == "create" && object.size() == 3 && object.value("toUid").toInt() > 0) {
                     body = clientPrivateChatRequest(UserMgr::GetInstance()->GetUid(), object.value("toUid").toInt());
@@ -235,6 +270,7 @@ private:
                     copies = object.contains("copies") ? 2 : 1;
                     request = ID_TEXT_CHAT_MSG_REQ;
                     const auto uuid = object.value("uuid").toString();
+                    replayCommitted = _committedUuids.contains(uuid);
                     const auto text = object.value("text").toString();
                     if (text.isEmpty() || text.size() > 1024) { finish(2); return; }
                     body = clientTextRequest(UserMgr::GetInstance()->GetUid(), object.value("toUid").toInt(),
@@ -252,7 +288,11 @@ private:
                 _lastChatId = command == "create" ? 0 : chatId;
                 _expectedResponse = static_cast<int>(request) + 1;
                 _commandDeadline.start(10000);
-                for (int copy = 0; copy < copies; ++copy)
+                // Explicit replay/conflict probes must still reach the real server after local commit.
+                // New sends and uncertain reconnect recovery use the production persistent owner.
+                if (request == ID_TEXT_CHAT_MSG_REQ && !replayCommitted)
+                    UserMgr::GetInstance()->messages()->send(QJsonDocument::fromJson(body).object());
+                else for (int copy = 0; copy < copies; ++copy)
                     emit TcpMgr::GetInstance()->sig_send_data(request, body);
             } else if ((command == "verify" || command == "register") && !_pendingId && !_session.isActive()) {
                 const QUrl gate(object.value("gate").toString());
@@ -287,6 +327,7 @@ private:
                     finish(2); return;
                 }
                 _pendingId = _lastId;
+                gate_url_prefix = gate.toString();
                 _login.login(gate, object.value("email").toString(), object.value("password").toString());
             } else if (command == "stop" && object.size() == 2) {
                 _stopping = true;
@@ -311,6 +352,7 @@ private:
     QTimer _commandDeadline;
     GateHttpTransport _accounts;
     MessageModelStore _messages;
+    QSet<QString> _committedUuids;
     int _lastUid = 0;
     int _lastChatId = 0;
     int _expectedResponse = -1;

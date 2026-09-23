@@ -38,8 +38,6 @@ MessageRecord clientMessageRecord(const std::shared_ptr<ChatDataBase> &message)
         record.deliveryStatus = DeliveryStatus::Failed;
     } else if (record.messageId <= 0 && !record.clientMessageId.isEmpty()) {
         record.deliveryStatus = DeliveryStatus::Sending;
-    } else if (message->GetStatus() == ChatStatus::STATUS_READ_ALREADY) {
-        record.deliveryStatus = DeliveryStatus::Read;
     } else {
         record.deliveryStatus = DeliveryStatus::Sent;
     }

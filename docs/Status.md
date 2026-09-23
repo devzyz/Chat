@@ -1,9 +1,26 @@
 # 项目当前状态
 
-更新：2026-09-22。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
+更新：2026-09-23。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
 项目目标：先完成基本聊天功能，后续主要投入可测量的性能优化。
 
-## 当前工作：连接与输入错误修复
+## 当前工作：消息状态控制
+
+- 从最新远端 develop `34caf1e` 同步后创建 `feat/message-state-control`；前序修复 PR #12 已合入。
+- 实现持久化发送批次/attempt/有界重试，区分 Queued、Sending、Uncertain、Failed、Sent、Delivered、Read。
+  ACK 只确认 Sent；接收者落盘确认 Delivered，真实前台气泡连续可见 500ms 才产生 Read 意图。
+- 新增能力协商、1029～1033 回执协议、跨 ChatServer 提示、独立 revision 补拉与单调合并。
+  SQLite schema 2 保留升级快照；MySQL migration 004 与 Gate/Chat/Resource 校验合同同步。
+  方案、兼容性与部署步骤见 [MessageStates](MessageStates.md)。
+- 本地公开 Server runner 250 项、Qt runner 65 项、脚本 runner 13 项通过。
+  Qt 附件组件 5 个业务方法通过；protobuf 兼容和生成漂移检查通过。
+- 独立临时 MySQL 的 12 项迁移合同和 5 项消息/回执持久化合同通过；双生产 ChatServer 的
+  跨实例 Delivered/Read、权限拒绝、重登补拉，以及真实 Qt/SQLite 回执往返与进程恢复通过。
+  日志见 `build/message-state-*.log`、`build/message-sync-integration.log`，报告见 `build/test-results/`。
+- Status/Redis 在上述补充联调中仍为显式替身；未宣称生产 Redis 或人工桌面全流程验收。
+  本轮没有迁移个人数据库、恢复 vcpkg 或重跑未改动的 Varify 回归；注册总数以 runner 为准。
+- 下一步：提交 develop PR 并触发快速 CI，远端结果以当前提交的 Actions 检查为准。
+
+## 前序记录：连接与输入错误修复
 
 - 分支 `fix/storage-input-hardening` 基于 develop `1f7e2fe`。按本轮要求保留依赖版本、
   数据库结构、消息协议和既有状态机设计；本次不做总体优化方案或认证流程改造。

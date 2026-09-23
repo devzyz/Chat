@@ -1,3 +1,4 @@
+#include "../../../common/message/MessageReceipts.h"
 #include "../../../common/message/MessagePersistence.h"
 #include <jdbc/mysql_driver.h>
 #include <jdbc/mysql_connection.h>
@@ -133,4 +134,73 @@ TEST(MessageSync, CursorCannotPassAnUncommittedWriter) {
     EXPECT_TRUE(blocked);
     ASSERT_EQ(page["msgs"].size(), 1);
     EXPECT_EQ(page["msgs"][0]["content"].asString(), "held");
+}
+
+namespace {
+Json::Value Receipt(sql::Connection& connection, int uid, int chat, const std::vector<int>& ids,
+                    const std::string& level, std::int64_t after = 0) {
+    Json::Value request;
+    request["version"] = 1; request["chat_id"] = chat; request["request_id"] = "receipt-integration";
+    const bool report = !ids.empty();
+    if (report) {
+        for (int id : ids) {
+            Json::Value item;
+            item["message_id"] = id; item["level"] = level;
+            request["items"].append(item);
+        }
+    } else request["after_revision"] = std::to_string(after);
+    Json::Value response;
+    response["version"] = 1; response["chat_id"] = chat;
+    response["request_id"] = request["request_id"]; response["error"] = 0;
+    int peer = 0;
+    messaging::ReceiptRequest(connection, uid, request, report, response, peer);
+    return response;
+}
+}
+
+TEST(MessageSync, ReceiptsAreAuthorizedMonotonicAndDurable) {
+    auto connection = Connect();
+    const auto ids = SaveText(*connection, 7, 8, 101, {{"receipt-first", "receipt one"}, {"receipt-second", "receipt two"}});
+    EXPECT_THROW(Receipt(*connection, 7, 101, ids, "read"), messaging::ReceiptError);
+    EXPECT_THROW(Receipt(*connection, 9, 101, ids, "read"), messaging::ReceiptError);
+    EXPECT_THROW(Receipt(*connection, 8, 101, {ids[0], INT_MAX}, "read"), messaging::ReceiptError);
+    EXPECT_TRUE(Receipt(*connection, 7, 101, {}, "")["items"].empty());
+    const auto delivered = Receipt(*connection, 8, 101, ids, "delivered");
+    EXPECT_EQ(delivered["items"].size(), 2);
+    EXPECT_EQ(delivered["latest_revision"].asString(), "2");
+    EXPECT_EQ(Receipt(*connection, 8, 101, ids, "delivered"), delivered);
+    const auto read = Receipt(*connection, 8, 101, {ids[0]}, "read");
+    EXPECT_EQ(read["latest_revision"].asString(), "3");
+    EXPECT_EQ(read["items"][0]["delivered_at"], delivered["items"][0]["delivered_at"]);
+    EXPECT_EQ(Receipt(*connection, 8, 101, {ids[0]}, "delivered")["items"][0]["level"].asString(), "read");
+    auto reopened = Connect();
+    const auto increment = Receipt(*reopened, 7, 101, {}, "", 2);
+    ASSERT_EQ(increment["items"].size(), 1);
+    EXPECT_EQ(increment["items"][0]["message_id"].asInt(), ids[0]);
+    EXPECT_EQ(increment["items"][0]["level"].asString(), "read");
+    EXPECT_EQ(increment["next_revision"].asString(), "3");
+}
+
+TEST(MessageSync, ReceiptPageCannotSkipAnUpgrade) {
+    auto connection = Connect();
+    std::vector<int> ids;
+    for (int i = 0; i < 18; ++i) {
+        auto saved = SaveText(*connection, 7, 9, 102, {{"receipt-page-" + std::to_string(i), "paged"}});
+        ids.push_back(saved[0]);
+        Receipt(*connection, 9, 102, saved, "delivered");
+    }
+    auto page = Receipt(*connection, 7, 102, {}, "");
+    EXPECT_TRUE(page["load_more"].asBool());
+    EXPECT_LE(messaging::CompactJson(page).size(), 2048);
+    Receipt(*connection, 9, 102, {ids[0]}, "read"); // Row moves ahead of the page already fetched.
+    bool saw_upgrade = false;
+    for (int i = 0; i < 10 && page["load_more"].asBool(); ++i) {
+        page = Receipt(*connection, 7, 102, {}, "", messaging::ReceiptRevision(page["next_revision"]));
+        for (const auto& row : page["items"])
+            if (row["message_id"].asInt() == ids[0] && row["level"].asString() == "read") saw_upgrade = true;
+        EXPECT_LE(messaging::CompactJson(page).size(), 2048);
+    }
+    EXPECT_TRUE(saw_upgrade);
+    EXPECT_FALSE(page["load_more"].asBool());
+    EXPECT_EQ(page["next_revision"].asString(), "19");
 }

@@ -83,3 +83,10 @@ or five-service E2E. The fixed dataset and topology configuration live in
 [tests/services](../../../tests/services/README.md). The `3D-00` selector runs
 the five-service scenario separately against real dependencies. Linux preflight builds/runs these five cases and
 preserves `linux_phase3d_client.xml`; this does not replace the planned 3D E2E gate.
+
+New send commands use MessageService and account/environment SQLite before TCP submission.
+The loopback fixture supplies production ACK identity fields and recovery sync pages.
+Explicit commands reusing an already committed UUID remain wire probes for server idempotency
+and conflict rejection; they bypass only the local duplicate-send suppression. Recovery updates
+existing pending model rows from stored facts, while the harness retains explicit legacy history
+traversal for its separate paging contracts. QT_PLUGIN_PATH must include the kit SQL plugins.

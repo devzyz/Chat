@@ -4,6 +4,7 @@ package message;
 
 // Chat-to-Chat service. These messages are not shared with Gate or Status.
 service ChatService {
+  rpc NotifyMessageReceiptChanged(ReceiptChangedReq) returns (ReceiptChangedRsp) {}
   rpc NotifyOtherAddFriend(AddFriendReq) returns (AddFriendRsp) {}
   rpc NotifyOtherAuthFriend(AuthFriendReq) returns (AuthFriendRsp) {}
   rpc NotifyOtherReceiveTextChatMsg(TextChatMsgReq) returns (TextChatMsgRsp) {}
@@ -105,4 +106,14 @@ message KickUserReq {
 message KickUserRsp {
   int32 error = 1;
   int32 uid = 2;
+}
+
+message ReceiptChangedReq {
+  int32 uid = 1;
+  int32 chat_id = 2;
+  int64 revision = 3;
+}
+
+message ReceiptChangedRsp {
+  int32 error = 1;
 }

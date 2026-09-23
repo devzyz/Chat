@@ -26,6 +26,12 @@ recovery descriptions in [`manifest.json`](../schema/manifest.json).
 - The unique constraints reject collisions; migration never silently deduplicates
   existing user records. Missing/multiple/stale UID counter rows fail verification.
 
+- `003_avatar_resources.sql` owns published resources, message references and avatars.
+- `004_message_receipts.sql` adds the per-conversation revision clock and current message receipt rows.
+  Revisions are allocated under the same conversation lock as message commits and receipt page reads.
+  Unique conversation/revision and message/recipient keys prevent duplicate facts. See [MessageStates](MessageStates.md).
+  All schema-verifying Gate/Chat/Resource binaries must be updated together after migration; old binaries reject schema 4.
+
 ## Operational entry
 
 Use Node 22+ and an existing MySQL 8 client. Set `CHAT_MYSQL_HOST`,

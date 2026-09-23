@@ -59,9 +59,26 @@ class RedisHandler(socketserver.StreamRequestHandler):
                 elif command == b"HGET": result = self.bulk(hashes.get(args[0], {}).get(args[1]))
                 elif command == b"HDEL": hashes.get(args[0], {}).pop(args[1], None); result = b":1\r\n"
                 elif command == b"EVAL":
-                    key, owner = args[-2:]
-                    if data.get(key) == owner: data.pop(key); result = b":1\r\n"
-                    else: result = b":0\r\n"
+                    script, count, *parameters = args
+                    keys, argv = parameters[:int(count)], parameters[int(count):]
+                    if len(keys) == 2:
+                        # Production RedisUserPresenceStore uses atomic two-key presence operations.
+                        previous = [data.get(key, b"") for key in keys]
+                        if b"MSET" in script:
+                            data.update(zip(keys, argv))
+                            result = b"*2\r\n" + b"".join(self.bulk(value) for value in previous)
+                        elif b"DEL" in script:
+                            if previous == argv:
+                                for key in keys: data.pop(key, None)
+                            result = b"*0\r\n"
+                        else:
+                            result = b"*2\r\n" + b"".join(self.bulk(value) for value in previous)
+                    elif len(keys) == 1 and len(argv) == 1:
+                        if data.get(keys[0]) == argv[0]:
+                            data.pop(keys[0]); result = b":1\r\n"
+                        else: result = b":0\r\n"
+                    else:
+                        result = b"-ERR unsupported fixture script\r\n"
                 elif command != b"AUTH": result = b"-ERR unsupported fixture command\r\n"
             self.wfile.write(result)
 

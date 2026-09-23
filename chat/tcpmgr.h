@@ -144,14 +144,8 @@ private:
     TcpMgr();
     void initHandlers();
 
-    struct PendingTextBatch {
-        int chatId = 0;
-        int senderUid = 0;
-        QVector<QString> clientMessageIds;
-        QByteArray payload;
-    };
     QMap<ReqId, std::function<void(ReqId id, int len, QByteArray)>> _handlers;
-    QQueue<PendingTextBatch> _pendingTextBatches;
+    bool _authenticated = false;
     ChatTcpTransport _transport;
     QString _host;
     quint16 _port = 0;

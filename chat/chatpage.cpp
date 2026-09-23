@@ -2,6 +2,7 @@
 #include "clientmessage.h"
 #include "clientrequests.h"
 #include "messageservice.h"
+#include "messagereadtracker.h"
 #include "resourcetransfermanager.h"
 
 #include "global.h"
@@ -40,6 +41,8 @@ ChatPage::ChatPage(QWidget *parent)
 
     _messageDelegate = new MessageItemDelegate(ui->chat_detail_data_list);
     ui->chat_detail_data_list->setItemDelegate(_messageDelegate);
+    _readTracker = new MessageReadTracker(ui->chat_detail_data_list);
+    connect(_readTracker, &MessageReadTracker::observed, UserMgr::GetInstance()->messages(), &MessageService::observeRead);
     initResourceTransfers();
     connect(ui->chat_detail_data_list, &ChatDetailList::viewportResized, this, [this]() {
         _messageDelegate->clearSizeCache();
@@ -67,6 +70,7 @@ void ChatPage::SetChatInfo(std::shared_ptr<ChatInfo> chatInfo)
     }
 
     saveCurrentScrollAnchor();
+    if (_currentChatId != chatInfo->GetChatId()) _readTracker->resetExposure();
     _chatInfo = std::move(chatInfo);
     _currentChatId = _chatInfo->GetChatId();
 
@@ -118,6 +122,8 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before,
     QVector<MessageRecord> records;
     for (const auto &stored : messages) {
         MessageRecord record;
+        record.durable = stored.messageId > 0;
+        record.readConfirmed = stored.receipt == ReceiptLevel::Read;
         record.messageId = stored.messageId;
         record.chatId = chatId;
         record.senderId = stored.senderId;
@@ -131,7 +137,11 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before,
         if (sender) { record.senderName = sender->_name; record.avatarKey = sender->_icon; }
         record.avatar = UserMgr::GetInstance()->avatarFor(stored.senderId, record.avatarKey);
         record.deliveryStatus = !record.isSelf ? DeliveryStatus::None :
+            stored.receipt == ReceiptLevel::Read ? DeliveryStatus::Read :
+            stored.receipt == ReceiptLevel::Delivered ? DeliveryStatus::Delivered :
             stored.state == StoredMessage::Confirmed ? DeliveryStatus::Sent :
+            stored.state == StoredMessage::Failed ? DeliveryStatus::Failed :
+            stored.state == StoredMessage::Queued ? DeliveryStatus::Queued :
             stored.state == StoredMessage::Pending ? DeliveryStatus::Sending : DeliveryStatus::Uncertain;
         loadResource(record);
         records.push_back(record);

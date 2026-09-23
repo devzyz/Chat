@@ -55,3 +55,7 @@ bool MysqlMgr::GetChatMessageList(int principal_uid, int chat_id, int current_ms
 bool MysqlMgr::SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response) {
     return _dao.SyncChatMessages(uid, chat_id, after, response);
 }
+
+bool MysqlMgr::Receipts(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer) {
+    return _dao.Receipts(uid, request, report, response, peer);
+}
