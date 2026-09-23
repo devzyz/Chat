@@ -19,9 +19,9 @@ public:
     bool HandlePost(std::string, std::shared_ptr<HttpConnection>);
 
     /** @brief 注册 GET 路径处理器，已有路径保持原处理器。 */
-    void RegGet(std::string, HttpHandler);
+    void RegisterGetHandler(std::string, HttpHandler);
     /** @brief 注册 POST 路径处理器，已有路径保持原处理器。 */
-    void RegPost(std::string, HttpHandler);
+    void RegisterPostHandler(std::string, HttpHandler);
 private:
     gate::GateRequest& _gate_request;
     std::map<std::string, HttpHandler> _post_handlers;

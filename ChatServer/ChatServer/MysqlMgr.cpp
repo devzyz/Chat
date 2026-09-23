@@ -7,7 +7,7 @@ MysqlMgr::MysqlMgr() {
 MysqlMgr::~MysqlMgr() {
 
 }
-std::shared_ptr<UserInfo> MysqlMgr::GetUesr(int uid) {
+std::shared_ptr<UserInfo> MysqlMgr::GetUserByUid(int uid) {
 	return _dao.GetUser(uid);
 }
 
@@ -56,6 +56,6 @@ bool MysqlMgr::SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::
     return _dao.SyncChatMessages(uid, chat_id, after, response);
 }
 
-bool MysqlMgr::Receipts(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer) {
-    return _dao.Receipts(uid, request, report, response, peer);
+bool MysqlMgr::HandleReceiptRequest(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer) {
+    return _dao.HandleReceiptRequest(uid, request, report, response, peer);
 }

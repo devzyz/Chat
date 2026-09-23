@@ -3,16 +3,17 @@
 #include "GateResponse.h"
 #include "HttpConnection.h"
 
-void LogicSystem::RegGet(std::string url, HttpHandler handler) {
+void LogicSystem::RegisterGetHandler(std::string url, HttpHandler handler) {
 	_get_handlers.insert(make_pair(url, handler));
 }
 
-void LogicSystem::RegPost(std::string url, HttpHandler handler) {
+void LogicSystem::RegisterPostHandler(std::string url, HttpHandler handler) {
 	_post_handlers.insert(make_pair(url, handler));
 }
 
 LogicSystem::LogicSystem(gate::GateRequest& gate_request)
 	: _gate_request(gate_request) {
+	// 将请求体交给端点处理器，并写入统一 JSON 响应。
 	const auto write_gate_response = [](
 		const std::shared_ptr<HttpConnection>& connection,
 		gate::Endpoint endpoint,
@@ -23,7 +24,8 @@ LogicSystem::LogicSystem(gate::GateRequest& gate_request)
 			gate::HandleJsonRequest(endpoint, body, handler);
 	};
 
-	RegGet("/get_test", [](std::shared_ptr<HttpConnection> connection) {
+	// 回显测试路径收到的查询参数。
+	RegisterGetHandler("/get_test", [](std::shared_ptr<HttpConnection> connection) {
 		beast::ostream(connection->_response.body()) << "receive get_test req" << std::endl;
 		int i = 0;
 		for (auto& elem : connection->_get_params) {
@@ -33,29 +35,37 @@ LogicSystem::LogicSystem(gate::GateRequest& gate_request)
 		}
 	});
 
-	RegPost("/get_varifycode", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
+	// 分发验证码请求并返回业务结果。
+	RegisterPostHandler("/get_varifycode", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
 		write_gate_response(connection, gate::Endpoint::GetVarifyCode,
+			// 执行验证码业务。
 			[this](const Json::Value& request) {
 				return _gate_request.Handle(gate::Endpoint::GetVarifyCode, request);
 			});
 	});
 
-	RegPost("/user_register", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
+	// 分发注册请求并返回业务结果。
+	RegisterPostHandler("/user_register", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
 		write_gate_response(connection, gate::Endpoint::UserRegister,
+			// 执行用户注册业务。
 			[this](const Json::Value& request) {
 				return _gate_request.Handle(gate::Endpoint::UserRegister, request);
 			});
 	});
 
-	RegPost("/reset_pwd", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
+	// 分发密码重置请求并返回业务结果。
+	RegisterPostHandler("/reset_pwd", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
 		write_gate_response(connection, gate::Endpoint::ResetPassword,
+			// 执行密码重置业务。
 			[this](const Json::Value& request) {
 				return _gate_request.Handle(gate::Endpoint::ResetPassword, request);
 			});
 	});
 
-	RegPost("/user_login", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
+	// 分发登录请求并返回业务结果。
+	RegisterPostHandler("/user_login", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
 		write_gate_response(connection, gate::Endpoint::UserLogin,
+			// 执行登录与选服业务。
 			[this](const Json::Value& request) {
 				return _gate_request.Handle(gate::Endpoint::UserLogin, request);
 			});

@@ -768,7 +768,7 @@ bool MysqlDao::GetChatMessageList(int principal_uid, int chat_id, int current_ms
 	}
 }
 
-bool MysqlDao::Receipts(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer) {
+bool MysqlDao::HandleReceiptRequest(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer) {
     auto connection = _pool->GetConnection();
     if (!connection) { response["receipt_error"] = "StorageUnavailable"; return false; }
     Defer release([this, &connection] { _pool->returnConnection(std::move(connection)); });

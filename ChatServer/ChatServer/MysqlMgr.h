@@ -8,17 +8,18 @@
 #include "Data.h"
 #include <memory>
 
+/** @brief 向聊天业务提供用户、好友和消息持久化操作，具体访问交由 MysqlDao。 */
 class MysqlMgr : public Singleton<MysqlMgr>
 {
 	friend class Singleton<MysqlMgr>;
 public:
 	~MysqlMgr();
-	// 根据uid查询用户详细信息
-	std::shared_ptr<UserInfo> GetUesr(int uid);
+	/** @brief 按 UID 查询用户；不存在或存储不可用时返回 nullptr。 */
+	std::shared_ptr<UserInfo> GetUserByUid(int uid);
 	// 根据name查询用户详细信息
 	std::shared_ptr<UserInfo> GetUserByName(const std::string name);
-	// 往好友申请表中插入数据
-	bool AddFriendApply(const int& from_uid, const int& to_uid, const std::string& description, const std::string& backanme);
+	/** @brief 保存好友申请及备注名，失败返回 false。 */
+	bool AddFriendApply(const int& from_uid, const int& to_uid, const std::string& description, const std::string& backname);
 	// 读取申请添加to_uid为好友的用户信息列表
 	bool GetApplyFriendList(int to_uid, std::vector<std::shared_ptr<ApplyInfo>>& applylist, int start, int limit);
 	// 更新好友申请表和好友表
@@ -38,7 +39,8 @@ public:
 	// 增量加载部分聊天数据
 	bool GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
-    bool Receipts(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer);
+    /** @brief 上报或同步消息回执，输出响应及对端 UID；失败返回 false 并填充 receipt_error。 */
+    bool HandleReceiptRequest(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer);
     bool SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response);
 private:
 	MysqlMgr();

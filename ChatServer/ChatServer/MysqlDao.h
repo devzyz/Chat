@@ -37,6 +37,7 @@ private:
     std::unique_ptr<chat_mysql::ConnectionPool<>> _connections;
 };
 
+/** @brief 使用连接池执行聊天数据查询、消息提交和回执事务。 */
 class MysqlDao
 {
 public:
@@ -65,7 +66,8 @@ public:
 	// 增量加载部分聊天数据
 	bool GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
-    bool Receipts(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer);
+    /** @brief report 为 true 时上报回执，否则同步；输出响应及对端 UID，失败填充 receipt_error。 */
+    bool HandleReceiptRequest(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer);
     bool SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response);
 private:
 	std::unique_ptr<MysqlPool> _pool;

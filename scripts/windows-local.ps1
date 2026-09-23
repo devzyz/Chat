@@ -652,6 +652,10 @@ function Get-RepositoryRelativePath {
     return $resolved.Substring($rootPrefix.Length).Replace('\', '/')
 }
 
+<#
+.SYNOPSIS
+验证测试源码注册、生产模块接线及报告分组，缺项或漂移时终止执行。
+#>
 function Confirm-TestStructure {
     # CI lanes depend on the same-source static job; local aggregate calls validate once.
     if ($SkipTestStructureCheck -or $script:testStructureChecked) { return }
@@ -931,7 +935,7 @@ function Confirm-TestStructure {
         '/user_login' = 'UserLogin'
     }
     foreach ($route in $gateRoutes.GetEnumerator()) {
-        $registration = 'RegPost\("{0}", \[this, write_gate_response\]' -f [regex]::Escape($route.Key)
+        $registration = 'RegisterPostHandler\("{0}", \[this, write_gate_response\]' -f [regex]::Escape($route.Key)
         $shapingCall = 'write_gate_response\(connection, gate::Endpoint::{0}' -f [regex]::Escape($route.Value)
         $requestCall = '_gate_request\.Handle\(gate::Endpoint::{0}, request\)' -f [regex]::Escape($route.Value)
         if ($gateLogic -notmatch $registration -or $gateLogic -notmatch $shapingCall -or $gateLogic -notmatch $requestCall) {

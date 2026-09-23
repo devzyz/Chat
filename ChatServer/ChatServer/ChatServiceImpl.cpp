@@ -211,7 +211,7 @@ bool ChatServiceImpl::GetUserBaseInfo(std::string baseinfo_key, int uid, std::sh
 	else {
 		// 从redis中查询不到，则去mysql中查询
 		std::shared_ptr<UserInfo> userinfo = nullptr;
-		userinfo = MysqlMgr::GetInstance()->GetUesr(uid);
+		userinfo = MysqlMgr::GetInstance()->GetUserByUid(uid);
 		if (userinfo == nullptr) {
 			return false;
 		}

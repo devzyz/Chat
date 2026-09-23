@@ -14,15 +14,17 @@ struct UserInfo {
     std::string _backname; // 某个客户端给的当前uid的备注名
 };
 
-// 申请好友的信息
+/** @brief 保存好友申请人的资料、申请内容及其给接收方的备注名。 */
 class ApplyInfo {
 public:
+    /** @brief 创建待填充的好友申请，标量字段由调用方赋值。 */
     ApplyInfo() {};
+    /** @brief 使用查询到的用户资料和申请记录构造好友申请。 */
     ApplyInfo(int apply_uid, std::string apply_name, std::string apply_description,
-        std::string apply_icon, int apply_sex, int status, int to_uid, std::string description, std::string backanme)
+        std::string apply_icon, int apply_sex, int status, int to_uid, std::string description, std::string backname)
         :_apply_uid(apply_uid), _apply_name(apply_name), _apply_description(apply_description),
         _apply_icon(apply_icon), _apply_sex(apply_sex), _status(status), _to_uid(to_uid),
-        _description(description), _backname(backanme) {
+        _description(description), _backname(backname) {
     }
 
     int _apply_uid; // 申请人id
@@ -36,15 +38,17 @@ public:
     std::string _backname; // 申请人给被申请人的备注名
 };
 
-// 认证好友的信息
+/** @brief 保存好友审批人的资料、审批状态及其给对方的备注名。 */
 class AuthInfo {
 public:
+    /** @brief 创建待填充的好友审批信息，标量字段由调用方赋值。 */
     AuthInfo() {};
+    /** @brief 使用审批人资料和审批记录构造好友确认信息。 */
     AuthInfo(int auth_uid, std::string auth_name, std::string auth_description,
-        std::string auth_icon, int auth_sex, int status, int to_uid, std::string description, std::string backanme)
+        std::string auth_icon, int auth_sex, int status, int to_uid, std::string description, std::string backname)
         :_auth_uid(auth_uid), _auth_name(auth_name), _auth_description(auth_description),
         _auth_icon(auth_icon), _auth_sex(auth_sex), _status(status), _to_uid(to_uid),
-        _description(description), _backname(backanme) {
+        _description(description), _backname(backname) {
     }
 
     int _auth_uid; // 认证人id

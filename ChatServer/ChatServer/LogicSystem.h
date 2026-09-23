@@ -9,7 +9,7 @@
 
 class CSession;
 namespace chat_transport { class CServer; }
-typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> FunCallBack;
+typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> MessageHandler;
 /** @brief 分发聊天业务请求，协调会话身份、用户查询和消息存储。 */
 class LogicSystem : public LogicDispatcher
 {
@@ -22,7 +22,7 @@ private:
     /** @brief 校验会话身份并分发消息；仅未知消息类型返回 false。 */
     bool Dispatch(const LogicMessage& message);
     /** @brief 注册登录、好友、消息、回执和历史查询处理器。 */
-    void RegisterCallBacks();
+    void RegisterCallbacks();
 
     /** @brief 保留的登录处理声明；当前登录由注册回调处理。 */
     void LoginHandler(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data);
@@ -46,7 +46,7 @@ private:
 
     /** @brief 判断所有字符是否均为数字；空字符串也返回 true。 */
     bool IsOnlyDigit(std::string& uid_name);
-    std::map<short, FunCallBack> _fun_callbacks;
+    std::map<short, MessageHandler> _fun_callbacks;
 
     std::shared_ptr<UserSessionDirectory> _directory;
     std::shared_ptr<UserPresenceStore> _presence;

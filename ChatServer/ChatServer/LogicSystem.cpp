@@ -25,7 +25,7 @@ LogicSystem::LogicSystem(std::shared_ptr<UserSessionDirectory> directory,
     std::shared_ptr<UserPresenceStore> presence)
 	: LogicDispatcher([this](const LogicMessage& message) { return Dispatch(message); }),
 	  _directory(std::move(directory)), _presence(std::move(presence)) {
-	RegisterCallBacks();
+	RegisterCallbacks();
 }
 
 LogicSystem::~LogicSystem() {
@@ -55,8 +55,9 @@ bool LogicSystem::Dispatch(const LogicMessage& message) {
 	return true;
 }
 
-void LogicSystem::RegisterCallBacks() {
+void LogicSystem::RegisterCallbacks() {
     for (const auto id : {MSG_MESSAGE_RECEIPT_REPORT_REQ, MSG_MESSAGE_RECEIPT_SYNC_REQ}) {
+        // 处理回执上报或同步，并在成功上报后提示对端补拉。
         _fun_callbacks[id] = [this](std::shared_ptr<CSession> session, const short& request_id,
                                     const std::string& body) {
             const bool report = request_id == MSG_MESSAGE_RECEIPT_REPORT_REQ;
@@ -74,7 +75,7 @@ void LogicSystem::RegisterCallBacks() {
                 response["chat_id"] = request["chat_id"];
                 response["request_id"] = request["request_id"];
                 response["error"] = 0;
-                success = MysqlMgr::GetInstance()->Receipts(session->AuthenticatedUid(), request, report, response, peer);
+                success = MysqlMgr::GetInstance()->HandleReceiptRequest(session->AuthenticatedUid(), request, report, response, peer);
                 if (!success) response["error"] = ErrorCodes::UidInvalid;
             } catch (const messaging::ReceiptError& error) {
                 response["receipt_error"] = error.what();
@@ -238,6 +239,7 @@ void LogicSystem::RegisterCallBacks() {
         session->EnableReceipts(receipts);
         return_value["capabilities"] = Json::Value(Json::arrayValue);
         if (receipts) return_value["capabilities"].append("message_receipts_v1");
+        // 将会话绑定结果合并到登录响应。
         session->BindAuthenticatedUser(uid, [session, response = std::move(return_value)](SessionBindResult result) mutable {
             if (result != SessionBindResult::Bound) response["error"] = ErrorCodes::RPCFailed;
             session->Send(response.toStyledString(), MSG_CHAT_LOGIN_RSP);
@@ -958,7 +960,7 @@ void LogicSystem::GetUserByUid(std::string uid, Json::Value& value) {
 	// redis中不存在，则查询数据库
 	auto uid_int = std::stoi(uid);
 	std::shared_ptr<UserInfo> user_info = nullptr;
-	user_info = MysqlMgr::GetInstance()->GetUesr(uid_int);
+	user_info = MysqlMgr::GetInstance()->GetUserByUid(uid_int);
 	if (user_info == nullptr) {
 		value["error"] = ErrorCodes::UidInvalid;
 		return;
@@ -1082,7 +1084,7 @@ bool LogicSystem::GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared
 	else {
 		// redis中没有，则去mysql中查询
 		std::shared_ptr<UserInfo> user_info = nullptr;
-		user_info = MysqlMgr::GetInstance()->GetUesr(uid);
+		user_info = MysqlMgr::GetInstance()->GetUserByUid(uid);
 		if (user_info == nullptr) {
 			return false;
 		}
