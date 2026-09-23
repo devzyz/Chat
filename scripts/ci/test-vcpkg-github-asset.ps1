@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/vcpkg-github-asset.ps1"
 
 $script:calls = 0
@@ -35,6 +35,10 @@ try {
     $hash = (Get-FileHash -LiteralPath $destination -Algorithm SHA512).Hash
     # vcpkg's sanitized child environment may not auto-load the Utility module.
     # A valid download must still be checked without that optional cmdlet.
+    <#
+    .SYNOPSIS
+    拒绝未预期的哈希路径，验证下载逻辑未绕过测试合同。
+    #>
     function Get-FileHash { throw 'Get-FileHash unavailable in vcpkg child process.' }
     Remove-Item -LiteralPath $destination
     Invoke-GitHubAsset 'https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-win.zip' $hash $destination

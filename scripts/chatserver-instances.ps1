@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('Start', 'Stop', 'Status')]
@@ -24,6 +24,10 @@ $StateDirectory = [System.IO.Path]::GetFullPath($StateDirectory)
 $statePath = Join-Path $StateDirectory 'state'
 $runtimePath = Join-Path $StateDirectory 'runtime'
 
+<#
+.SYNOPSIS
+解析并验证配置文件的绝对路径，缺失时终止操作。
+#>
 function Resolve-ExistingFile {
     param([string]$Path, [string]$Description)
 
@@ -33,6 +37,10 @@ function Resolve-ExistingFile {
     return (Resolve-Path -LiteralPath $Path).Path
 }
 
+<#
+.SYNOPSIS
+收集显式或目录内的实例配置并去重，空集合报错。
+#>
 function Get-ConfigFiles {
     $paths = @()
     if ($Config) {
@@ -50,7 +58,7 @@ function Get-ConfigFiles {
         throw 'Provide -Config and/or -ConfigDirectory when starting instances.'
     }
 
-    $resolved = @($paths | ForEach-Object { Resolve-ExistingFile $_ 'Config file' } | Select-Object -Unique)
+    $resolved = @($paths | ForEach-Object <# 逐个解析配置路径并拒绝不存在的文件。 #> { Resolve-ExistingFile $_ 'Config file' } | Select-Object -Unique)
     $ids = @{}
     foreach ($path in $resolved) {
         $id = [System.IO.Path]::GetFileNameWithoutExtension($path)
@@ -118,6 +126,10 @@ function Get-ConfigFiles {
     return $definitions
 }
 
+<#
+.SYNOPSIS
+查询进程的启动时间和可执行路径，供状态文件身份核对。
+#>
 function Get-ProcessIdentity {
     param([int]$Id)
 
@@ -137,6 +149,10 @@ function Get-ProcessIdentity {
     }
 }
 
+<#
+.SYNOPSIS
+对照状态记录核验进程身份，避免仅凭 PID 操作无关进程。
+#>
 function Test-StateMatchesProcess {
     param($State, $Identity)
 
@@ -147,6 +163,10 @@ function Test-StateMatchesProcess {
         $Identity.StartedUtc -eq [string]$State.StartedUtc
 }
 
+<#
+.SYNOPSIS
+读取实例状态文件，保留状态来源供后续清理与诊断。
+#>
 function Read-StateFiles {
     if (-not (Test-Path -LiteralPath $statePath -PathType Container)) {
         return
@@ -154,6 +174,10 @@ function Read-StateFiles {
     Get-ChildItem -LiteralPath $statePath -Filter '*.json' -File | Sort-Object Name
 }
 
+<#
+.SYNOPSIS
+筛选身份匹配且仍在运行的实例状态。
+#>
 function Get-RunningStates {
     $running = @()
     foreach ($file in @(Read-StateFiles)) {
@@ -166,6 +190,10 @@ function Get-RunningStates {
     return $running
 }
 
+<#
+.SYNOPSIS
+在启动前拒绝与现有运行实例冲突的配置。
+#>
 function Assert-NoRunningInstanceConflicts {
     param($Definitions)
 

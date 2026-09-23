@@ -1,4 +1,4 @@
-param([Parameter(Mandatory = $true)][string]$ToolRoot)
+﻿param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -47,8 +47,8 @@ if ($LASTEXITCODE -eq 0 -or ($diagnostic -join "`n") -notmatch 'context "runner"
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $workflows = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot '.github/workflows') -File |
-    Where-Object { $_.Extension -in @('.yml', '.yaml') } | Sort-Object Name |
-    ForEach-Object { $_.FullName })
+    Where-Object <# 仅选择 YAML 工作流文件。 #> { $_.Extension -in @('.yml', '.yaml') } | Sort-Object Name |
+    ForEach-Object <# 向 actionlint 传入完整文件路径。 #> { $_.FullName })
 if ($workflows.Count -eq 0) { throw 'No workflows found to validate.' }
 # Keep Actions semantic checking independent of optional shellcheck/pyflakes installations.
 & $exe -shellcheck= -pyflakes= @workflows
