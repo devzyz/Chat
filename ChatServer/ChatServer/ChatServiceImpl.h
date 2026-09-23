@@ -26,6 +26,7 @@ using grpc::ClientContext;
 
 class UserSessionDirectory;
 class SessionLifecycleCoordinator;
+/** @brief 接收跨 ChatServer 的好友、消息、回执和替换登录通知并路由到本地会话。 */
 class ChatServiceImpl final : public ChatService::Service
 {
 public:
@@ -37,6 +38,7 @@ public:
 	virtual Status NotifyOtherAuthFriend(ServerContext* context, const AuthFriendReq* request, AuthFriendRsp* response) override;
 	virtual Status NotifyOtherReceiveTextChatMsg(ServerContext* context, const TextChatMsgReq* request, TextChatMsgRsp* response) override;
 	virtual Status NotifyOtherKickUser(ServerContext* context, const KickUserReq* request, KickUserRsp* reponse) override;
+	/** @brief 优先读取 Redis，未命中时回源 MySQL 并回填；查不到用户返回 false。 */
 	bool GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared_ptr<UserInfo>& user_info);
 private:
 	std::shared_ptr<UserSessionDirectory> _directory;

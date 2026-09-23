@@ -14,6 +14,7 @@
 #include <QtTest>
 #include <spdlog/sinks/null_sink.h>
 
+/** @brief 验证账号隔离、会话清理及持久化消息重试边界。 */
 class SessionResetTests : public QObject
 {
     Q_OBJECT
@@ -21,11 +22,13 @@ class SessionResetTests : public QObject
 private slots:
     void initTestCase();
     void cleanupTestCase();
+    /** @brief 验证退出后清空账号数据并保留应用配置。 */
     void accountStateDoesNotCrossLoginSessions();
     void resetDestroysOwnedSessionUiOnceAndPreservesReason();
     void resetDropsPendingTextBatchBeforeAnOldFailureArrives();
     void uncertainBatchSurvivesDisconnectAndMatchesExactUuid();
     void retryDoesNotCrossAuthenticatedAccounts();
+    /** @brief 验证重连认证后沿用原 UUID 和业务载荷，仅递增发送尝试。 */
     void reconnectResendsIdenticalWirePayloadAfterAuthentication();
 };
 
@@ -50,8 +53,8 @@ void SessionResetTests::accountStateDoesNotCrossLoginSessions()
 
     const QString preservedGateEndpoint = QStringLiteral("http://127.0.0.1:18080");
     gate_url_prefix = preservedGateEndpoint;
-    userMgr->SetToken(QStringLiteral("synthetic-session-token"));
-    userMgr->SetInfo(std::make_shared<UserInfo>(101, QStringLiteral("account-a"),
+    userMgr->setToken(QStringLiteral("synthetic-session-token"));
+    userMgr->setUserInfo(std::make_shared<UserInfo>(101, QStringLiteral("account-a"),
                                                 QStringLiteral("description"),
                                                 QStringLiteral("avatar"), 1));
 
@@ -65,7 +68,7 @@ void SessionResetTests::accountStateDoesNotCrossLoginSessions()
     apply["touid"] = 101;
     apply["description"] = QStringLiteral("request");
     apply["backname"] = QStringLiteral("alias");
-    userMgr->AddApplyList(QJsonArray{apply});
+    userMgr->addFriendApplications(QJsonArray{apply});
 
     QJsonObject friendObject;
     friendObject["uid"] = 301;
@@ -74,34 +77,34 @@ void SessionResetTests::accountStateDoesNotCrossLoginSessions()
     friendObject["icon"] = QStringLiteral("avatar");
     friendObject["sex"] = 0;
     friendObject["backname"] = QStringLiteral("alias");
-    userMgr->AddFriendList(QJsonArray{friendObject});
-    userMgr->AddChatInfo(401, std::make_shared<ChatInfo>(301, 401, 777));
-    userMgr->SetUidToChatId(301, 401);
-    userMgr->SetCurrentChatId(401);
-    userMgr->SetIsLoadFinish(true);
-    userMgr->UpdateContactLoadedCount();
+    userMgr->addFriends(QJsonArray{friendObject});
+    userMgr->addChatInfo(401, std::make_shared<ChatInfo>(301, 401, 777));
+    userMgr->addPrivateChatMapping(301, 401);
+    userMgr->setChatListCursor(401);
+    userMgr->setChatListFullyLoaded(true);
+    userMgr->advanceContactPage();
 
-    QCOMPARE(userMgr->GetToken(), QStringLiteral("synthetic-session-token"));
-    QVERIFY(userMgr->GetUserInfo());
-    QVERIFY(userMgr->AlreadyApplyAddFriend(201));
-    QVERIFY(userMgr->CheckIsFriendById(301));
-    QVERIFY(userMgr->GetChatInfo(401));
-    QCOMPARE(userMgr->GetUidToChatId(301), 401);
+    QCOMPARE(userMgr->token(), QStringLiteral("synthetic-session-token"));
+    QVERIFY(userMgr->userInfo());
+    QVERIFY(userMgr->hasFriendApplication(201));
+    QVERIFY(userMgr->isFriend(301));
+    QVERIFY(userMgr->chatInfo(401));
+    QCOMPARE(userMgr->privateChatIdFor(301), 401);
 
     QSignalSpy resetSpy(&session, &ClientSession::sessionReset);
     QVERIFY(session.resetSession(SessionResetReason::Logout));
     QCOMPARE(resetSpy.count(), 1);
 
-    QVERIFY(!userMgr->GetUserInfo());
-    QCOMPARE(userMgr->GetUid(), 0);
-    QVERIFY(userMgr->GetToken().isEmpty());
-    QVERIFY(!userMgr->AlreadyApplyAddFriend(201));
-    QVERIFY(!userMgr->CheckIsFriendById(301));
-    QVERIFY(!userMgr->GetChatInfo(401));
-    QCOMPARE(userMgr->GetUidToChatId(301), -1);
-    QCOMPARE(userMgr->GetCurrentLoadChatId(), 0);
-    QVERIFY(!userMgr->ChatIsLoadFinish());
-    QVERIFY(userMgr->GetSomeContactList().empty());
+    QVERIFY(!userMgr->userInfo());
+    QCOMPARE(userMgr->uid(), 0);
+    QVERIFY(userMgr->token().isEmpty());
+    QVERIFY(!userMgr->hasFriendApplication(201));
+    QVERIFY(!userMgr->isFriend(301));
+    QVERIFY(!userMgr->chatInfo(401));
+    QCOMPARE(userMgr->privateChatIdFor(301), -1);
+    QCOMPARE(userMgr->chatListCursor(), 0);
+    QVERIFY(!userMgr->isChatListFullyLoaded());
+    QVERIFY(userMgr->nextContactPage().empty());
     QCOMPARE(gate_url_prefix, preservedGateEndpoint);
 }
 
@@ -217,14 +220,14 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
     ServerInfo endpoint;
     endpoint.Host = "127.0.0.1";
     endpoint.Port = QString::number(peer.serverPort());
-    QSignalSpy connected(tcp.get(), &TcpMgr::sig_tcp_connect_success);
-    QSignalSpy closed(tcp.get(), &TcpMgr::sig_connection_close);
-    tcp->slot_tcp_connect(endpoint);
+    QSignalSpy connected(tcp.get(), &TcpMgr::connectionAttemptFinished);
+    QSignalSpy closed(tcp.get(), &TcpMgr::connectionClosed);
+    tcp->connectToServer(endpoint);
     QTRY_COMPARE_WITH_TIMEOUT(connected.size(), 1, 2000);
     QTRY_VERIFY_WITH_TIMEOUT(peer.hasPendingConnections(), 2000);
     std::unique_ptr<QTcpSocket> first(peer.nextPendingConnection());
     const QByteArray login = QJsonDocument(QJsonObject{{"error", 0}, {"uid", 101}}).toJson();
-    tcp->handleMsg(ReqId::ID_CHAT_LOGIN_RSP, login.size(), login);
+    tcp->handleMessage(ReqId::ID_CHAT_LOGIN_RSP, login.size(), login);
     const QByteArray request = QJsonDocument(QJsonObject{{"from_uid", 101}, {"to_uid", 102},
         {"chat_id", 501}, {"text_array", QJsonArray{QJsonObject{
         {"msg_uuid", "00000000-0000-4000-8000-000000000004"}, {"msg_content", "retry body"}}}}})
@@ -237,12 +240,12 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
     first->abort();
     QTRY_VERIFY_WITH_TIMEOUT(!closed.isEmpty(), 2000);
     QVERIFY(!closed.last()[0].toBool());
-    tcp->slot_tcp_connect(endpoint);
+    tcp->connectToServer(endpoint);
     QTRY_COMPARE_WITH_TIMEOUT(connected.size(), 2, 2000);
     QTRY_VERIFY_WITH_TIMEOUT(peer.hasPendingConnections(), 2000);
     std::unique_ptr<QTcpSocket> second(peer.nextPendingConnection());
     QCOMPARE(second->bytesAvailable(), 0);
-    tcp->handleMsg(ReqId::ID_CHAT_LOGIN_RSP, login.size(), login);
+    tcp->handleMessage(ReqId::ID_CHAT_LOGIN_RSP, login.size(), login);
     QSignalSpy recovery(service, &MessageService::syncRequested);
     service->start(directory.path(), 101);
     QTRY_COMPARE_WITH_TIMEOUT(recovery.size(), 1, 2000);

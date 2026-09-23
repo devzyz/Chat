@@ -14,8 +14,7 @@ UserMgr::UserMgr()
       _contact_load_count(0), _current_load_chat_id(0), _last_chat_id(0),
       _is_load_chat_finish(false)
 {
-    // The singleton outlives QApplication. Drain storage before Qt tears down
-    // posted-event delivery, otherwise its worker cannot receive the quit task.
+    // 在 Qt 事件投递停止前排空存储，避免工作线程无法收到退出任务。
     qAddPostRoutine([] {
         const auto user = UserMgr::GetInstance();
         if (!user) return; // Normal application exit may already release the singleton.
@@ -23,26 +22,28 @@ UserMgr::UserMgr()
         user->_messages = nullptr;
     });
     _localAvatar->setUploadEnabled(true);
+    // 将本地头像上传请求转交当前资源会话。
     connect(_localAvatar, &LocalAvatar::uploadRequested, this, [this](const QString &path) {
         if (_remoteAvatars) _remoteAvatars->upload(path);
         else _localAvatar->finishUpload(tr("尚未建立资源服务会话"));
     });
+    // 将当前账号的本地头像变化通知界面。
     connect(_localAvatar, &LocalAvatar::imageChanged, this, [this] {
         if (_user_info) emit avatarChanged(_user_info->_uid);
     });
 }
 
-void UserMgr::SetToken(QString token)
+void UserMgr::setToken(QString token)
 {
     _token = token;
 }
 
-QString UserMgr::GetToken() const
+QString UserMgr::token() const
 {
     return _token;
 }
 
-void UserMgr::SetInfo(std::shared_ptr<UserInfo> user_info)
+void UserMgr::setUserInfo(std::shared_ptr<UserInfo> user_info)
 {
     delete _remoteAvatars;
     _remoteAvatars = nullptr;
@@ -58,8 +59,10 @@ void UserMgr::startResourceSession()
         QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
         _remoteAvatars = new AvatarCache(QUrl(settings.value("ResourceServer/Url", "http://127.0.0.1:8090").toString()),
             user_info->_uid, _token, storageRoot(), this);
+        // 远端发布完成后结束本地上传状态。
         connect(_remoteAvatars, &AvatarCache::published, this, [this] { _localAvatar->finishUpload(); });
         connect(_remoteAvatars, &AvatarCache::uploadFailed, _localAvatar, &LocalAvatar::finishUpload);
+        // 更新本人头像或通知其他用户头像变化。
         connect(_remoteAvatars, &AvatarCache::changed, this, [this](int uid, const QImage &image) {
             if (_user_info && uid == _user_info->_uid) _localAvatar->setRemoteImage(image);
             else emit avatarChanged(uid);
@@ -91,6 +94,7 @@ void UserMgr::bindAvatar(QLabel *label, int uid, const QString &fallback)
 {
     label->setProperty("avatarUid", uid);
     label->setProperty("avatarFallback", fallback);
+    // 按标签当前绑定的用户和尺寸刷新头像。
     const auto update = [this, label] {
         label->setPixmap(avatarFor(label->property("avatarUid").toInt(),
             label->property("avatarFallback").toString()).scaled(label->size(),
@@ -98,6 +102,7 @@ void UserMgr::bindAvatar(QLabel *label, int uid, const QString &fallback)
     };
     if (!label->property("avatarBound").toBool()) {
         label->setProperty("avatarBound", true);
+        // 仅刷新与变更 UID 匹配的标签。
         connect(this, &UserMgr::avatarChanged, label, [label, update](int changed) {
             if (label->property("avatarUid").toInt() == changed) update();
         });
@@ -133,24 +138,24 @@ void UserMgr::resetSession()
     _is_load_chat_finish = false;
 }
 
-int UserMgr::GetUid()
+int UserMgr::uid()
 {
     return _user_info ? _user_info->_uid : 0;
 }
 
-bool UserMgr::AlreadyApplyAddFriend(int uid)
+bool UserMgr::hasFriendApplication(int uid)
 {
     auto iter_find = _apply_map.find(uid);
     return iter_find != _apply_map.end();
 }
 
-void UserMgr::AddApply(int uid, std::shared_ptr<ApplyInfo> applyinfo)
+void UserMgr::addFriendApplication(int uid, std::shared_ptr<ApplyInfo> applyinfo)
 {
     _apply_map[uid] = applyinfo;
 }
 
 // 添加申请列表数据
-void UserMgr::AddApplyList(QJsonArray list) {
+void UserMgr::addFriendApplications(QJsonArray list) {
     // 遍历数据，添加数据
     for (const QJsonValue& value : list) {
         auto fromuid = value["fromuid"].toInt();
@@ -169,7 +174,7 @@ void UserMgr::AddApplyList(QJsonArray list) {
 }
 
 // 添加好友列表数据
-void UserMgr::AddFriendList(QJsonArray list)
+void UserMgr::addFriends(QJsonArray list)
 {
     // 遍历数据，添加数据
     for (const QJsonValue& value : list) {
@@ -186,7 +191,7 @@ void UserMgr::AddFriendList(QJsonArray list)
 }
 
 // 获取申请列表
-void UserMgr::GetApplyList(std::vector<std::shared_ptr<ApplyInfo>> &list)
+void UserMgr::appendFriendApplicationsTo(std::vector<std::shared_ptr<ApplyInfo>> &list)
 {
     for(auto &apply : _apply_map) {
         list.push_back(apply);
@@ -194,7 +199,7 @@ void UserMgr::GetApplyList(std::vector<std::shared_ptr<ApplyInfo>> &list)
 }
 
 // 判断是否已经是我的好友了
-bool UserMgr::CheckIsFriendById(int uid)
+bool UserMgr::isFriend(int uid)
 {
     auto iter_find = _friend_map.find(uid);
     if (iter_find == _friend_map.end()) {
@@ -204,7 +209,7 @@ bool UserMgr::CheckIsFriendById(int uid)
 }
 
 // 添加某个好友
-void UserMgr::AddFriend(std::shared_ptr<AuthInfo> auth_info)
+void UserMgr::addFriend(std::shared_ptr<AuthInfo> auth_info)
 {
     auto friend_info = std::make_shared<UserInfo> (auth_info);
     _friend_map.insert(auth_info->_auth_uid, friend_info);
@@ -212,7 +217,7 @@ void UserMgr::AddFriend(std::shared_ptr<AuthInfo> auth_info)
 }
 
 // 获取某个好友的信息
-std::shared_ptr<UserInfo> UserMgr::GetFriendById(int uid)
+std::shared_ptr<UserInfo> UserMgr::friendById(int uid)
 {
     auto iter_find = _friend_map.find(uid);
     if (iter_find == _friend_map.end()) {
@@ -227,7 +232,7 @@ UserMgr::~UserMgr()
 }
 
 // 取一部分联系人
-std::vector<std::shared_ptr<UserInfo>> UserMgr::GetSomeContactList() {
+std::vector<std::shared_ptr<UserInfo>> UserMgr::nextContactPage() {
     std::vector<std::shared_ptr<UserInfo>> friend_list;
     int l = _contact_load_count;
     int r = _contact_load_count + LOADING_STEP_LENGTH;
@@ -250,12 +255,12 @@ std::vector<std::shared_ptr<UserInfo>> UserMgr::GetSomeContactList() {
 }
 
 // 判断联系人是否加载完成
-bool UserMgr::ContactIsLoadFinish() {
+bool UserMgr::isContactListFullyLoaded() {
     return _contact_load_count >= _friend_list.size();
 }
 
 // 添加成功后，更新已添加的数量
-void UserMgr::UpdateContactLoadedCount() {
+void UserMgr::advanceContactPage() {
     int l = _contact_load_count;
     int r = _contact_load_count + LOADING_STEP_LENGTH;
 
@@ -274,22 +279,22 @@ void UserMgr::UpdateContactLoadedCount() {
     _contact_load_count = r;
 }
 
-std::shared_ptr<UserInfo> UserMgr::GetUserInfo()
+std::shared_ptr<UserInfo> UserMgr::userInfo()
 {
     return _user_info;
 }
 
-int UserMgr::GetCurrentLoadChatId()
+int UserMgr::chatListCursor()
 {
     return _current_load_chat_id;
 }
 
-void UserMgr::SetCurrentChatId(int current_chat_id)
+void UserMgr::setChatListCursor(int current_chat_id)
 {
     _current_load_chat_id = current_chat_id;
 }
 
-void UserMgr::SetUidToChatId(int other_id, int chat_id)
+void UserMgr::addPrivateChatMapping(int other_id, int chat_id)
 {
     if (_uid_to_chatId.find(other_id) != _uid_to_chatId.end()) {
         return;
@@ -297,7 +302,7 @@ void UserMgr::SetUidToChatId(int other_id, int chat_id)
     _uid_to_chatId.insert(other_id, chat_id);
 }
 
-int UserMgr::GetUidToChatId(int uid)
+int UserMgr::privateChatIdFor(int uid)
 {
     auto iter_find = _uid_to_chatId.find(uid);
     if (iter_find == _uid_to_chatId.end()) {
@@ -306,17 +311,17 @@ int UserMgr::GetUidToChatId(int uid)
     return iter_find.value();
 }
 
-void UserMgr::SetIsLoadFinish(bool is_load_chat_finish)
+void UserMgr::setChatListFullyLoaded(bool is_load_chat_finish)
 {
     _is_load_chat_finish = is_load_chat_finish;
 }
 
-bool UserMgr::ChatIsLoadFinish()
+bool UserMgr::isChatListFullyLoaded()
 {
     return _is_load_chat_finish;
 }
 
-void UserMgr::AddChatInfo(int chat_id, std::shared_ptr<ChatInfo> chat_info)
+void UserMgr::addChatInfo(int chat_id, std::shared_ptr<ChatInfo> chat_info)
 {
     _messages->registerChat(chat_id);
     if (_chat_map.find(chat_id) != _chat_map.end()) {
@@ -325,7 +330,7 @@ void UserMgr::AddChatInfo(int chat_id, std::shared_ptr<ChatInfo> chat_info)
     _chat_map.insert(chat_id, chat_info);
 }
 
-std::shared_ptr<ChatInfo> UserMgr::GetChatInfo(int chat_id)
+std::shared_ptr<ChatInfo> UserMgr::chatInfo(int chat_id)
 {
     auto find_iter = _chat_map.find(chat_id);
     if (find_iter == _chat_map.end()) {

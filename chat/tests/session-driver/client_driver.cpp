@@ -15,9 +15,11 @@
 #include <cmath>
 
 // The control channel carries commands, never a substitute Chat wire protocol.
+/** @brief 通过本地控制通道驱动真实客户端登录、好友与消息流程。 */
 class ClientDriver final : public QObject
 {
 public:
+    /** @brief 连接控制通道，并将生产客户端事件转换为测试响应。 */
     explicit ClientDriver(const QString &endpoint)
         : _login(_auth), _session(this)
     {
@@ -41,13 +43,14 @@ public:
         });
         connect(&_socket, &QLocalSocket::readyRead, this, [this] { read(); });
         connect(&_login, &ClientLoginFlow::authenticated, this, [this](AuthFlowId) {
-            const int uid = UserMgr::GetInstance()->GetUid();
+            const int uid = UserMgr::GetInstance()->uid();
             if (_lastUid && _lastUid != uid) {
                 _messages = MessageModelStore{};
                 _committedUuids.clear();
             }
             _lastUid = uid;
             _session.beginSession();
+            /** @brief 返回命令状态及当前账号和服务端点快照。 */
             reply(_pendingId, "authenticated");
             _pendingId = 0;
         });
@@ -55,7 +58,7 @@ public:
             send(QJsonObject{{"id", _pendingId}, {"status", "login-failed"}, {"error", static_cast<int>(error)}});
             _pendingId = 0;
         });
-        connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_connection_close, this, [this](bool expected) {
+        connect(TcpMgr::GetInstance().get(), &TcpMgr::connectionClosed, this, [this](bool expected) {
             if (!expected && _session.isActive()) {
                 _session.resetSession(SessionResetReason::UnexpectedDisconnect);
                 if (_pendingId && _expectedResponse >= 0) {
@@ -66,7 +69,7 @@ public:
                 }
             }
         });
-        connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_notify_offline, this,
+        connect(TcpMgr::GetInstance().get(), &TcpMgr::forcedOffline, this,
                 [this] { _session.resetSession(SessionResetReason::Kicked); });
         const auto tcp = TcpMgr::GetInstance();
         auto *service = UserMgr::GetInstance()->messages();
@@ -94,33 +97,33 @@ public:
         connect(UserMgr::GetInstance()->messages(), &MessageService::sendRequested, this,
             [this, tcp](const QJsonObject &request) {
                 if (_pendingId && _expectedResponse == ID_TEXT_CHAT_MSG_RSP && _responsesRemaining == 2)
-                    emit tcp->sig_send_data(ID_TEXT_CHAT_MSG_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
+                    emit tcp->sendRequested(ID_TEXT_CHAT_MSG_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
             });
-        connect(tcp.get(), &TcpMgr::sig_tcp_add_friend_apply, this,
+        connect(tcp.get(), &TcpMgr::friendApplicationReceived, this,
                 [](const std::shared_ptr<ApplyInfo> &apply) {
-            if (apply) UserMgr::GetInstance()->AddApply(apply->_apply_uid, apply);
+            if (apply) UserMgr::GetInstance()->addFriendApplication(apply->_apply_uid, apply);
         });
-        connect(tcp.get(), &TcpMgr::sig_update_text_chat_msg, this,
+        connect(tcp.get(), &TcpMgr::chatMessagesReceived, this,
                 [this](int, int, int, std::vector<std::shared_ptr<ChatDataBase>> &messages) {
             for (const auto &message : messages) {
                 const auto record = clientMessageRecord(message);
                 _messages.getOrCreate(record.chatId)->appendMessage(record);
             }
         });
-        connect(tcp.get(), &TcpMgr::sig_tcp_load_chat_msg_finish, this,
+        connect(tcp.get(), &TcpMgr::chatHistoryLoaded, this,
                 [this](int chatId, std::vector<std::shared_ptr<ChatDataBase>> messages, bool more, qint64 cursor) {
             QVector<MessageRecord> records;
             for (const auto &message : messages) records.push_back(clientMessageRecord(message));
             if (!_messages.applyHistory(chatId, records, more, cursor)) _historyRejected = true;
         });
-        connect(tcp.get(), &TcpMgr::sig_text_chat_msg_rsp_finish, this,
+        connect(tcp.get(), &TcpMgr::messagesAcknowledged, this,
                 [this](int chatId, QVector<MessageAcknowledgement> acks) {
-            _messages.acknowledge(chatId, acks, UserMgr::GetInstance()->GetUid());
+            _messages.acknowledge(chatId, acks, UserMgr::GetInstance()->uid());
             for (const auto &ack : acks) _committedUuids.insert(ack.clientMessageId);
         });
-        connect(tcp.get(), &TcpMgr::sig_text_chat_msg_failed, this,
-                [this](int chatId, const QVector<QString> &ids) { _messages.markFailed(chatId, ids, UserMgr::GetInstance()->GetUid()); });
-        connect(tcp.get(), &TcpMgr::sig_create_private_chat_finish, this,
+        connect(tcp.get(), &TcpMgr::messagesFailed, this,
+                [this](int chatId, const QVector<QString> &ids) { _messages.markFailed(chatId, ids, UserMgr::GetInstance()->uid()); });
+        connect(tcp.get(), &TcpMgr::privateChatCreated, this,
                 [this](const std::shared_ptr<ChatInfo> &chat) { if (chat) _lastChatId = chat->GetChatId(); });
         connect(tcp.get(), &TcpMgr::requestCompleted, this, [this](ReqId id, int error) {
             if (!_pendingId || id != _expectedResponse) return;
@@ -158,16 +161,17 @@ private:
     void reply(qint64 id, const QString &status)
     {
         send(QJsonObject{{"id", id}, {"status", status}, {"active", _session.isActive()},
-                         {"uid", UserMgr::GetInstance()->GetUid()},
+                         {"uid", UserMgr::GetInstance()->uid()},
                          {"host", _session.isActive() ? _login.serverHost() : QString()},
                          {"port", _session.isActive() ? _login.serverPort() : 0}});
     }
+    /** @brief 返回与指定用户的申请、好友和私聊映射快照。 */
     void friendship(qint64 id, int otherUid)
     {
         const auto user = UserMgr::GetInstance();
-        send(QJsonObject{{"id", id}, {"status", "snapshot"}, {"uid", user->GetUid()},
-            {"otherUid", otherUid}, {"applied", user->AlreadyApplyAddFriend(otherUid)},
-            {"friend", user->CheckIsFriendById(otherUid)}, {"chatId", user->GetUidToChatId(otherUid)}});
+        send(QJsonObject{{"id", id}, {"status", "snapshot"}, {"uid", user->uid()},
+            {"otherUid", otherUid}, {"applied", user->hasFriendApplication(otherUid)},
+            {"friend", user->isFriend(otherUid)}, {"chatId", user->privateChatIdFor(otherUid)}});
     }
     void snapshot(qint64 id, int chatId)
     {
@@ -186,6 +190,7 @@ private:
             {"more", model ? model->canLoadMore() : true},
             {"cursor", QString::number(model ? model->historyCursor() : 0)}});
     }
+    /** @brief 解析控制命令并调用真实客户端业务接口。 */
     void read()
     {
         _input += _socket.readAll();
@@ -213,7 +218,7 @@ private:
             } else if ((command == "apply" || command == "accept") && !_pendingId && _session.isActive() &&
                        object.size() == 5 && object.value("toUid").toInt() > 0 &&
                        object.value("description").isString() && object.value("backname").isString()) {
-                const auto self = UserMgr::GetInstance()->GetUserInfo();
+                const auto self = UserMgr::GetInstance()->userInfo();
                 const int otherUid = object.value("toUid").toInt();
                 const auto description = object.value("description").toString();
                 const auto backname = object.value("backname").toString();
@@ -224,7 +229,7 @@ private:
                     body = clientFriendRequest(*self, otherUid, description, backname);
                 } else {
                     std::vector<std::shared_ptr<ApplyInfo>> applications;
-                    UserMgr::GetInstance()->GetApplyList(applications);
+                    UserMgr::GetInstance()->appendFriendApplicationsTo(applications);
                     for (const auto &apply : applications) {
                         if (apply && apply->_apply_uid == otherUid) {
                             body = clientAcceptFriendRequest(*self, *apply, description, backname);
@@ -244,7 +249,7 @@ private:
                 _historyRejected = false;
                 _expectedResponse = static_cast<int>(request) + 1;
                 _commandDeadline.start(10000);
-                emit TcpMgr::GetInstance()->sig_send_data(request, body);
+                emit TcpMgr::GetInstance()->sendRequested(request, body);
             } else if ((command == "create" || command == "history" || command == "send") &&
                        !_pendingId && _session.isActive()) {
                 QByteArray body;
@@ -253,7 +258,7 @@ private:
                 bool replayCommitted = false;
                 const int chatId = object.value("chatId").toInt();
                 if (command == "create" && object.size() == 3 && object.value("toUid").toInt() > 0) {
-                    body = clientPrivateChatRequest(UserMgr::GetInstance()->GetUid(), object.value("toUid").toInt());
+                    body = clientPrivateChatRequest(UserMgr::GetInstance()->uid(), object.value("toUid").toInt());
                 } else if (command == "history" && object.size() == 4 && chatId > 0 &&
                            object.value("cursor").isString()) {
                     bool ok = false;
@@ -273,11 +278,11 @@ private:
                     replayCommitted = _committedUuids.contains(uuid);
                     const auto text = object.value("text").toString();
                     if (text.isEmpty() || text.size() > 1024) { finish(2); return; }
-                    body = clientTextRequest(UserMgr::GetInstance()->GetUid(), object.value("toUid").toInt(),
+                    body = clientTextRequest(UserMgr::GetInstance()->uid(), object.value("toUid").toInt(),
                         chatId, QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"msg_content", text}}});
                     if (body.size() > ChatTcpTransport::MaxBodyBytes()) { finish(2); return; }
                     auto dto = std::make_shared<TextChatData>(uuid, chatId, ChatType::PRIVATE,
-                        ChatMessageType::TEXT_TYPE, text, UserMgr::GetInstance()->GetUid(), QTime::currentTime());
+                        ChatMessageType::TEXT_TYPE, text, UserMgr::GetInstance()->uid(), QTime::currentTime());
                     _messages.getOrCreate(chatId)->appendMessage(clientMessageRecord(dto));
                 } else { finish(2); return; }
                 _pendingId = _lastId;
@@ -293,7 +298,7 @@ private:
                 if (request == ID_TEXT_CHAT_MSG_REQ && !replayCommitted)
                     UserMgr::GetInstance()->messages()->send(QJsonDocument::fromJson(body).object());
                 else for (int copy = 0; copy < copies; ++copy)
-                    emit TcpMgr::GetInstance()->sig_send_data(request, body);
+                    emit TcpMgr::GetInstance()->sendRequested(request, body);
             } else if ((command == "verify" || command == "register") && !_pendingId && !_session.isActive()) {
                 const QUrl gate(object.value("gate").toString());
                 if (gate.scheme() != "http" || gate.host() != "127.0.0.1" || gate.port() <= 0 ||

@@ -6,16 +6,12 @@
 #include "loadingdialog.h"
 #include "userdata.h"
 
-/**
- * @brief The SearchList class
- * 搜索列表自定义的QWidgetList
- *
- */
-
+/** @brief 发起用户搜索并根据结果展示好友资料或申请入口。 */
 class SearchList : public QListWidget
 {
     Q_OBJECT
 public:
+    /** @brief 创建搜索列表并连接用户查询结果。 */
     SearchList(QWidget * parent = nullptr);
     /**
      * @brief CloseFindDialog
@@ -46,11 +42,7 @@ signals:
 
 private slots:
     void slot_item_clicked(QListWidgetItem * item);
-    /**
-     * @brief slot_search_user_finish
-     * @param si
-     * 搜索用户的tcp网络请求结束
-     */
+    /** @brief 展示查询结果；已是好友时允许跳转私聊。 */
     void slot_tcp_search_user_finish(std::shared_ptr<SearchInfo> si);
 };
 

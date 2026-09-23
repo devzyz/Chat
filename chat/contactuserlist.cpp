@@ -26,7 +26,7 @@ ContactUserList::ContactUserList(QWidget *parent) : QListWidget(parent), _loadin
     connect(this, &QListWidget::itemClicked, this, &ContactUserList::slot_item_clicked);
 
     // 连接认证的服务器回包处理发出的更新信号
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_add_auth_contact_list,
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::friendAdded,
             this, &ContactUserList::slot_tcp_add_friend);
 }
 
@@ -86,7 +86,7 @@ bool ContactUserList::eventFilter(QObject *watched, QEvent *event)
             // 滚动到底部，加载新的联系人
             SPDLOG_DEBUG("loading more contacts");
             // 判断联系人是否加载完成
-            auto isLoadingFinish = UserMgr::GetInstance()->ContactIsLoadFinish();
+            auto isLoadingFinish = UserMgr::GetInstance()->isContactListFullyLoaded();
             if (isLoadingFinish) {
                 return true;
             }
@@ -149,7 +149,7 @@ void ContactUserList::LoadContactUserList()
     this->setItemWidget(_contact_item, contactGroupTip);
     _contact_item->setFlags(_contact_item->flags() & ~Qt::ItemIsSelectable); // 设置为不可点击
 
-    auto contact_list = UserMgr::GetInstance()->GetSomeContactList();
+    auto contact_list = UserMgr::GetInstance()->nextContactPage();
     if (!contact_list.empty()) {
         for (auto &info : contact_list) {
             auto _contact_user_item = new ContactUserItem();
@@ -161,7 +161,7 @@ void ContactUserList::LoadContactUserList()
             this->addItem(_friend_item);
             this->setItemWidget(_friend_item, _contact_user_item);
         }
-        UserMgr::GetInstance()->UpdateContactLoadedCount();
+        UserMgr::GetInstance()->advanceContactPage();
     }
 }
 

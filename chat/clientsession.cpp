@@ -9,9 +9,9 @@ ClientSession::ClientSession(QObject *parent)
 {
     _heartbeat.setInterval(10000);
     connect(&_heartbeat, &QTimer::timeout, this, [this] {
-        const int uid = UserMgr::GetInstance()->GetUid();
+        const int uid = UserMgr::GetInstance()->uid();
         if (!_active || uid <= 0) return;
-        emit TcpMgr::GetInstance()->sig_send_data(ID_HEART_BEAT_REQ,
+        emit TcpMgr::GetInstance()->sendRequested(ID_HEART_BEAT_REQ,
             QJsonDocument(QJsonObject{{"uid", uid}}).toJson(QJsonDocument::Compact));
     });
 }

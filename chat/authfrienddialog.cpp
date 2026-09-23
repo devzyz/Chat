@@ -50,7 +50,7 @@ void AuthFriendDialog::slot_auth_apply_sure()
 {
     SPDLOG_DEBUG("friend authentication confirmation submitted");
     // 准备tcp请求，发送认证信息
-    const auto self_info = UserMgr::GetInstance()->GetUserInfo();
+    const auto self_info = UserMgr::GetInstance()->userInfo();
     QString description = ui->send_auth_user_description_edit->text();
     if (description.isEmpty()) {
         description = "你好！";
@@ -63,7 +63,7 @@ void AuthFriendDialog::slot_auth_apply_sure()
 
     const auto jsonData = clientAcceptFriendRequest(*self_info, *_apply_info, description, back_name);
 
-    emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_AUTH_FRIEND_REQ, jsonData);
+    emit TcpMgr::GetInstance()->sendRequested(ReqId::ID_AUTH_FRIEND_REQ, jsonData);
 
     this->hide();
     this->deleteLater();

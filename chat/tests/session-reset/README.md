@@ -4,9 +4,9 @@
 
 `ClientSession::beginSession` and `ClientSession::resetSession` form the owning authenticated-session lifecycle Interface. `MainWindow` registers the real `ChatDialog` as the owned session root; reset delegates connection state to `TcpMgr`, account state to `UserMgr`, and destroys that root so its `ChatPage`, `MessageModelStore`, timers, selection, scroll anchors, avatar cache, and loading flags cannot survive into another account.
 
-`TcpMgr::resetConnection` stops sends, aborts an outstanding connect/socket, clears endpoint state and resets the decoder. Expected logout/kick/account-switch clears pending batches. Unexpected disconnect retains at most 128 original message payloads in memory, bound to their sender UID; the next successful login retries only matching-account batches with unchanged UUIDs. A different authenticated account drops them. Nothing is persisted across application exit. Expected close and unexpected disconnect remain distinct through `SessionResetReason` and `sig_connection_close(bool expectedClose)`.
+`TcpMgr::resetConnection` stops sends and MessageService, then resets the transport and endpoint state. MessageService/SQLite owns account-scoped outgoing batches: explicit logout pauses them; unexpected disconnect preserves uncertain attempts for verification after authentication. Retries keep the original UUID/business payload and increment `attempt_id`. Expected close and unexpected disconnect remain distinct through `SessionResetReason` and `connectionClosed(bool expectedClose)`; see [message states](../../../docs/MessageStates.md).
 
-Domain is Architecture/Business. The five state cases are Component; the authenticated retry case is Integration and uses real ephemeral loopback sockets with the production transport. It compares original/retried frame bytes without implementing another wire parser.
+Domain is Architecture/Business. The five state cases are Component; the authenticated retry case is Integration and uses real ephemeral loopback sockets with the production transport. It compares UUID/business payload and attempt metadata without implementing another wire parser.
 
 ## Contracts
 
@@ -17,7 +17,7 @@ Domain is Architecture/Business. The five state cases are Component; the authent
 | Q02-SESSION-06 | `session_reset.pending_batch` | Reset removes an old pending text batch and rejects a post-reset send; an old failure therefore carries no client IDs into the next session. |
 | Q02-SESSION-07 | `session_reset.uncertainBatchSurvivesDisconnectAndMatchesExactUuid` | Out-of-order replies match exact UUID sets; transient storage errors and malformed success keep pending; valid acknowledgement or terminal conflict removes only the matching batch. |
 | Q02-SESSION-08 | `session_reset.retryDoesNotCrossAuthenticatedAccounts` | Account-bound pending is dropped when a different account authenticates. |
-| Q02-SESSION-09 | `session_reset.authenticated_wire_retry` | Unexpected socket close retains the original bytes; reconnect does not replay before authentication and reuses the exact UUID/body afterwards. |
+| Q02-SESSION-09 | `session_reset.authenticated_wire_retry` | After reconnect and authentication, sync verification precedes retry with the same UUID/business payload and an incremented attempt ID. |
 
 The decoder's old-half-frame isolation is T07-FRM-04 in the adjacent network-state Unit module. Together these contracts cover active logout/switch-account, kicked, and abnormal-disconnect reset semantics without a `clearForTest`, test-only build flag, copied state object, fixed port, public network, or credential.
 
@@ -35,11 +35,5 @@ RED evidence was recorded for the missing owning Module/User reset, retained own
 ## Deliberate retention and remaining gaps
 
 - Retained: theme/style, window policy, and Gate/server configuration because they are application-level rather than account-level.
-- Future local cache must be a separate Module keyed by account and schema version; it must not rely on accidental `UserMgr` retention.
-- Replay is triggered once per successful matching-account login, not an unbounded timer loop. A legacy error response without UUID correlation never removes an arbitrary FIFO batch. Server-ID model deduplication prevents duplicate rows; no network exactly-once guarantee is implied.
-
-Message-state ownership now belongs to MessageService/SQLite. Existing pending-batch cases
-exercise explicit logout pause, crash reopen, exact UUID/attempt correlation and account isolation.
-The authenticated wire retry case still uses a real loopback TCP peer: after login it observes
-`sync_v1` verification, then the same business payload/UUID with incremented `attempt_id`.
-It no longer asserts byte-identical metadata or an in-memory TcpMgr retry queue.
+- Local storage is isolated by account and schema version; it does not rely on `UserMgr` retaining an in-memory queue.
+- Retry follows MessageService's bounded attempt policy. UUID/attempt correlation prevents a late failure from removing another batch; model deduplication does not imply network exactly-once delivery.

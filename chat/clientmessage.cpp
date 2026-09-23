@@ -17,15 +17,15 @@ MessageRecord clientMessageRecord(const std::shared_ptr<ChatDataBase> &message)
     case ChatMessageType::FILE_TYPE: record.messageType = MessageType::File; break;
     }
 
-    const auto selfInfo = UserMgr::GetInstance()->GetUserInfo();
+    const auto selfInfo = UserMgr::GetInstance()->userInfo();
     record.isSelf = selfInfo && record.senderId == selfInfo->_uid;
     if (record.isSelf) {
         record.senderName = selfInfo->_name;
         record.avatarKey = selfInfo->_icon;
     } else {
-        const auto chatInfo = UserMgr::GetInstance()->GetChatInfo(record.chatId);
+        const auto chatInfo = UserMgr::GetInstance()->chatInfo(record.chatId);
         const auto friendInfo = chatInfo
-            ? UserMgr::GetInstance()->GetFriendById(chatInfo->GetUid()) : nullptr;
+            ? UserMgr::GetInstance()->friendById(chatInfo->GetUid()) : nullptr;
         if (friendInfo) {
             record.senderName = friendInfo->_name;
             record.avatarKey = friendInfo->_icon;

@@ -9,139 +9,74 @@
 #include "messagerecord.h"
 #include "chattcptransport.h"
 
-/**
- * @brief The TcpMgr class
- * tcp请求管理单例，tcp网络请求都从这里发出
- */
+/** @brief 管理 TCP 传输与业务回包分发，消息持久化和重试交由 MessageService。 */
 class TcpMgr : public QObject, public Singleton<TcpMgr>,
                public std::enable_shared_from_this<TcpMgr>
 {
     Q_OBJECT
 public:
+    /** @brief 复位底层传输并释放连接资源。 */
     ~TcpMgr();
 
-    // 用于对请求回调后的处理，根据不同的ReqId请求类型，构建不同的回调函数
+    /** @brief 按消息类型处理完整包体，并通知相应业务请求结果。 */
+    void handleMessage(ReqId id, int len, QByteArray data);
 
-    // 处理从粘包中拆分出单个包体后，应该对包体进行怎样的处理
-    void handleMsg(ReqId id, int len, QByteArray data);
-
-    // 关闭连接
-    void CloseConnection();
+    /** @brief 按主动退出语义关闭连接并暂停待发送消息。 */
+    void closeConnection();
+    /** @brief 允许新会话提交发送请求。 */
     void beginSession();
+    /** @brief 停止消息服务并重置连接；expectedClose 为 true 时暂停待发送消息。 */
     void resetConnection(bool expectedClose);
 
-    // 连接的tcp服务器的地址和端口号
-
-    // 与服务器通信的socket
-
-    // tlv存储结构
-
-    // 用于标记当前包的包头是否收全了
 signals:
-    // Safe terminal business status after the production handler updates session state.
+    /** @brief 业务状态更新后通知请求结果，error 为服务端或解析错误码。 */
     void requestCompleted(ReqId id, int error);
-    /**
-     * @brief sig_connected_server
-     * @param bSuccess
-     *
-     * 连接完成信号
-     */
-    void sig_tcp_connect_success(bool bSuccess);
-    /**
-     * @brief sig_send_data
-     *
-     */
-    void sig_send_data(ReqId reqId, QByteArray data);
-    /**
-     * @brief sig_login_failed
-     * @param error
-     * 登录失败信号
-     */
-    void sig_login_failed(int error);
-    /**
-     * @brief sig_login_switch_chat
-     * 发送由登录窗口转换为聊天窗口的信号
-     */
-    void sig_login_switch_chat();
-    /**
-     * @brief sig_tcp_search_user_finish
-     * TCP请求，搜索用户的回包信号
-     */
-    void sig_tcp_search_user_finish(std::shared_ptr<SearchInfo>);
-    /**
-     * @brief sig_tcp_add_friend_apply
-     * 接收到添加好友申请后，发出信号
-     */
-    void sig_tcp_add_friend_apply(std::shared_ptr<ApplyInfo>);
-    /**
-     * @brief sig_update_text_chat_msg
-     * 服务器通知我更新聊天数据，发出信号，通知前端界面更新
-     */
-    void sig_update_text_chat_msg(int, int, int, std::vector<std::shared_ptr<ChatDataBase>>&);
-    /**
-     * @brief sig_notify_offline
-     * 服务器通知客户端下线，接受到回包后，发出此信号
-     */
-    void sig_notify_offline();
-    /**
-     * @brief sig_connection_close
-     * 服务器关闭连接信号
-     */
-    void sig_connection_close(bool expectedClose);
-    /**
-     * @brief sig_tcp_load_chat_finish
-     * 加载聊天会话完成信号
-     */
-    void sig_tcp_load_chat_finish(QJsonArray);
-    /**
-     * @brief sig_create_private_chat_finish
-     * 创建私聊完成
-     */
-    void sig_create_private_chat_finish(std::shared_ptr<ChatInfo>);
-    /**
-     * @brief sig_tcp_load_chat_msg_finish
-     * 增量加载聊天数据完成
-     */
-    void sig_tcp_load_chat_msg_finish(int, std::vector<std::shared_ptr<ChatDataBase>>, bool, qint64);
-    void sig_tcp_load_chat_msg_failed(int);
-    /**
-     * @brief sig_tcp_add_contact_list
-     * 发送在好友列表中添加好友的通知
-     */
-    void sig_tcp_add_auth_contact_list(std::shared_ptr<AuthInfo> );
-    /**
-     * @brief sig_tcp_add_chat_list
-     * 发送在聊天列表中添加聊天的通知
-     */
-    void sig_tcp_add_auth_chat_list(std::shared_ptr<ChatInfo>);
-    /**
-     * @brief sig_text_chat_msg_rsp_finish
-     * 发送聊天文本回包，更新为已读状态
-     */
-    void sig_text_chat_msg_rsp_finish(int, QVector<MessageAcknowledgement>);
-    void sig_text_chat_msg_failed(int, const QVector<QString> &);
+    /** @brief 通知 TCP 连接尝试结果，尚不表示聊天登录成功。 */
+    void connectionAttemptFinished(bool bSuccess);
+    /** @brief 提交待发送包体，由发送槽检查状态后交给传输层。 */
+    void sendRequested(ReqId reqId, QByteArray data);
+    /** @brief 通知聊天登录失败及错误码。 */
+    void loginFailed(int error);
+    /** @brief 聊天登录成功后通知界面进入聊天页。 */
+    void loginSucceeded();
+    /** @brief 通知用户搜索结果。 */
+    void userSearchFinished(std::shared_ptr<SearchInfo>);
+    /** @brief 通知收到的好友申请。 */
+    void friendApplicationReceived(std::shared_ptr<ApplyInfo>);
+    /** @brief 通知会话消息变化，供界面更新消息列表。 */
+    void chatMessagesReceived(int, int, int, std::vector<std::shared_ptr<ChatDataBase>>&);
+    /** @brief 通知当前账号被服务端要求下线。 */
+    void forcedOffline();
+    /** @brief 通知连接结束，expectedClose 区分预期关闭与异常断线。 */
+    void connectionClosed(bool expectedClose);
+    /** @brief 通知已加载的一页会话列表。 */
+    void chatListLoaded(QJsonArray);
+    /** @brief 通知私聊会话创建成功。 */
+    void privateChatCreated(std::shared_ptr<ChatInfo>);
+    /** @brief 通知历史消息页、后续页标记及分页游标。 */
+    void chatHistoryLoaded(int, std::vector<std::shared_ptr<ChatDataBase>>, bool, qint64);
+    /** @brief 通知指定会话的历史消息加载失败。 */
+    void chatHistoryFailed(int);
+    /** @brief 好友申请通过后通知联系人列表更新。 */
+    void friendAdded(std::shared_ptr<AuthInfo> );
+    /** @brief 好友申请通过后通知会话列表更新。 */
+    void friendChatAdded(std::shared_ptr<ChatInfo>);
+    /** @brief 通知服务端已提交消息及 UUID/ID 对应关系，不代表对方已读。 */
+    void messagesAcknowledged(int, QVector<MessageAcknowledgement>);
+    /** @brief 通知指定会话中发送失败的消息 UUID。 */
+    void messagesFailed(int, const QVector<QString> &);
 public slots:
-    /**
-     * @brief slot_tcp_connect
-     * @param si
-     *
-     * logindialog内的http回包逻辑，检查到能够正常连接，则发送sig_tcp_connect连接信号
-     * 在这里实现tcp连接
-     */
-    void slot_tcp_connect(ServerInfo si);
+    /** @brief 使用选服结果发起新的 TCP 连接尝试。 */
+    void connectToServer(ServerInfo si);
 
 private slots:
-    /**
-     * @brief slot_send_data
-     * @param reqId
-     * @param data
-     *
-     * 通过_socket发送数据的槽函数
-     */
-    void slot_send_data(ReqId reqId, QByteArray data);
+    /** @brief 检查发送及认证状态后发送包体；文本请求未发出时标为待核实。 */
+    void sendData(ReqId reqId, QByteArray data);
 private:
     friend class Singleton<TcpMgr>;
+    /** @brief 连接传输及消息服务信号，注册业务回包处理器。 */
     TcpMgr();
+    /** @brief 注册聊天登录、好友、消息与回执的回包处理器。 */
     void initHandlers();
 
     QMap<ReqId, std::function<void(ReqId id, int len, QByteArray)>> _handlers;

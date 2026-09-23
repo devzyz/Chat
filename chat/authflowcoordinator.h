@@ -38,6 +38,7 @@ enum class AuthError {
     ChatLogin
 };
 
+/** @brief 携带认证步骤结果及其请求身份，供流程协调器判断是否接收。 */
 struct AuthOutcome {
     AuthOutcomeKind kind = AuthOutcomeKind::BeginHttp;
     int module = -1;
@@ -46,6 +47,7 @@ struct AuthOutcome {
     std::optional<ServerInfo> server;
 };
 
+/** @brief 返回认证流程动作；accepted 为 false 表示结果被忽略。 */
 struct AuthAction {
     AuthFlowId flowId = 0;
     std::optional<AuthActionKind> kind;
@@ -54,17 +56,21 @@ struct AuthAction {
     std::optional<ServerInfo> server;
 };
 
+/** @brief 推进注册、重置和登录状态，过滤重复或过期结果，不执行网络和界面操作。 */
 class AuthFlowCoordinator
 {
 public:
-    AuthAction Reduce(AuthFlowId flowId, const AuthOutcome &outcome);
+    /** @brief 接收步骤结果并返回后续动作；BeginHttp 创建新流程，其他结果必须匹配当前流程。 */
+    AuthAction reduce(AuthFlowId flowId, const AuthOutcome &outcome);
 
 private:
     enum class FlowKind { None, Register, Reset, Login };
     enum class Stage { None, AwaitingHttp, AwaitingTcp, AwaitingChatLogin, Chat, Complete };
 
-    static FlowKind FlowFor(int module, int requestId);
-    static int OutcomeKey(const AuthOutcome &outcome);
+    /** @brief 根据模块和请求类型确定认证流程，不支持的组合返回 None。 */
+    static FlowKind flowFor(int module, int requestId);
+    /** @brief 提取步骤结果类型作为当前流程内的去重键。 */
+    static int outcomeKey(const AuthOutcome &outcome);
 
     AuthFlowId _nextFlowId = 1;
     AuthFlowId _currentFlowId = 0;

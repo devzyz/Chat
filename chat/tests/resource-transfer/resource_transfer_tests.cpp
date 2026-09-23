@@ -15,6 +15,7 @@
 #include <QRandomGenerator>
 #include <QFile>
 
+/** @brief 验证资源传输、账号隔离和消息页面生命周期。 */
 class ResourceTransferTests : public QObject {
     Q_OBJECT
 private slots:
@@ -78,9 +79,10 @@ private slots:
         QVERIFY(editor.image().isNull());
         host.kill(); QVERIFY(host.waitForFinished(5000));
     }
+    /** @brief 验证附件解析及页面销毁时释放账号资源传输。 */
     void incomingAttachmentAndPageLifetime() {
-        UserMgr::GetInstance()->SetInfo(std::make_shared<UserInfo>(8, "receiver", ""));
-        UserMgr::GetInstance()->SetToken("fixture-token");
+        UserMgr::GetInstance()->setUserInfo(std::make_shared<UserInfo>(8, "receiver", ""));
+        UserMgr::GetInstance()->setToken("fixture-token");
         ChatPage page;
         QCOMPARE(page.findChildren<ResourceTransferManager*>().size(), 1);
         page.resize(600, 400);

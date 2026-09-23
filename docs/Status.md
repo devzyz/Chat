@@ -3,7 +3,18 @@
 更新：2026-09-23。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
 项目目标：先完成基本聊天功能，后续主要投入可测量的性能优化。
 
-## 当前工作：消息状态控制
+## 当前工作：命名与注释规范化
+
+- 分支 `refactor/repo/core-naming` 基于已同步的 develop `2307999`，N0 规范、N1 注释、N2 内部改名、N3 Qt 核心命名分别提交，本轮汇总一个 develop PR。
+- N1：精简 TcpMgr、Gate/Chat LogicSystem 的空模板与失效注释，纠正 ACK/已读和会话绑定说明；核心作用通常一行表达。
+- N2：修正 GetUesr/backanme 标识符，明确回执处理、HTTP 路由注册和消息回调名称；声明、实现、调用及静态接线检查同步更新。
+- N3：统一 UserMgr、TcpMgr、AuthFlowCoordinator 的方法/信号/槽命名，同步 LoginDialog 登录通知、生产调用、测试及当前合同引用；补齐受影响接口的简短职责说明。
+- 本地验证通过：生产 Server/Qt 编译，Server 250 项、Qt 65 项、脚本 13 项回归；附件页面生命周期专项 1 项通过。无失败或跳过，日志见 `build/code-conventions/`，公开报告见 `build/test-results/`。
+- 对比 develop 的 56 个 C++ 文件通过显式改名映射后的 token 序列核对；未改变控制流、常量、协议字段或字符串值。文档链接、编码及 diff 检查通过。
+- Server 验证曾因缺少环境路径及沙箱 SDK 访问失败，指定既有工具路径并取得所需执行权限后通过；附件独立运行补齐 CTest 同等 Qt 插件路径后通过。未恢复依赖或修改业务逻辑。
+- [批次计划](plans/CodeConventions.md) 下一步为 N4 Server 契约注释及 N5 Qt 其余注释；其余旧 UI 命名在后续治理/收口中处理。N7/N8 自动门禁尚未实现，可按依赖另行安排；远端快速 CI 结果以本次 PR 的实际检查为准。
+
+## 前序记录：消息状态控制
 
 - 从最新远端 develop `34caf1e` 同步后创建 `feat/message-state-control`；前序修复 PR #12 已合入。
 - 实现持久化发送批次/attempt/有界重试，区分 Queued、Sending、Uncertain、Failed、Sent、Delivered、Read。

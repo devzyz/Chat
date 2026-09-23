@@ -9,11 +9,13 @@ namespace Ui {
 class LoginDialog;
 }
 
+/** @brief 收集登录凭据，通过 ClientLoginFlow 展示认证结果。 */
 class LoginDialog : public QDialog
 {
     Q_OBJECT
 
 public:
+    /** @brief 创建登录表单并连接认证成功和失败事件。 */
     explicit LoginDialog(AuthFlowCoordinator &authFlow, QWidget *parent = nullptr);
     ~LoginDialog();
 
@@ -40,7 +42,8 @@ private:
 signals:
     void sig_login_switch_reg();
     void sig_login_switch_reset();
-    void sig_login_switch_chat(AuthFlowId flowId);
+    /** @brief 通知认证成功的流程 ID，供主窗口切换到聊天界面。 */
+    void loginSucceeded(AuthFlowId flowId);
 private slots:
     void on_login_btn_clicked();
 };

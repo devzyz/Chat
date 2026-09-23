@@ -12,13 +12,13 @@ TcpMgr::TcpMgr() : _host("") {
             [this](quint64, quint64) {
         _acceptingSends = true;
         SPDLOG_INFO("connected to chat server");
-        emit sig_tcp_connect_success(true);
+        emit connectionAttemptFinished(true);
     });
 
-    // 绑定socket可读取信号到lambda槽函数上
+    // 分发传输层已解码的完整消息帧。
     connect(&_transport, &ChatTcpTransport::frameReceived, this,
             [this](const ChatTcpFrame &frame) {
-        handleMsg(ReqId(frame.messageId), frame.body.size(), frame.body);
+        handleMessage(ReqId(frame.messageId), frame.body.size(), frame.body);
     });
 
     // 处理错误信号
@@ -35,22 +35,22 @@ TcpMgr::TcpMgr() : _host("") {
         UserMgr::GetInstance()->messages()->stop();
         if (outcome.terminal == ChatTcpTerminal::Refused
             || outcome.terminal == ChatTcpTerminal::ConnectDeadlineExceeded) {
-            emit sig_tcp_connect_success(false);
+            emit connectionAttemptFinished(false);
         } else {
-            emit sig_connection_close(expectedClose);
+            emit connectionClosed(expectedClose);
         }
     });
 
-    // 处理断开连接信号
     // 连接发送数据信号与槽函数
-    connect(this, &TcpMgr::sig_send_data, this, &TcpMgr::slot_send_data);
+    connect(this, &TcpMgr::sendRequested, this, &TcpMgr::sendData);
     auto *messages = UserMgr::GetInstance()->messages();
+    // 将已落盘的发送确认同步到兼容缓存并通知界面。
     connect(messages, &MessageService::sendResponseApplied, this, [this](const QJsonObject &response) {
         const int chatId = response["chat_id"].toInt();
         const int error = response["error"].toInt(-1);
         if (error == 0) {
             QVector<MessageAcknowledgement> acknowledgements;
-            const auto chat = UserMgr::GetInstance()->GetChatInfo(chatId);
+            const auto chat = UserMgr::GetInstance()->chatInfo(chatId);
             for (const auto &entry : response["uuid_msgId"].toArray()) {
                 const auto item = entry.toObject();
                 const auto uuid = item["msg_uuid"].toString();
@@ -66,19 +66,22 @@ TcpMgr::TcpMgr() : _host("") {
                     }
                 }
             }
-            emit sig_text_chat_msg_rsp_finish(chatId, acknowledgements);
+            emit messagesAcknowledged(chatId, acknowledgements);
         }
         emit requestCompleted(ID_TEXT_CHAT_MSG_RSP, error);
     });
+    // 发送消息正文增量同步请求。
     connect(messages, &MessageService::syncRequested, this, [this](const QJsonObject &request) {
-        emit sig_send_data(ID_LOAD_CHAT_MESSAGE_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
+        emit sendRequested(ID_LOAD_CHAT_MESSAGE_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
     });
+    // 发送消息服务已调度的持久化批次。
     connect(messages, &MessageService::sendRequested, this, [this](const QJsonObject &request) {
-        emit sig_send_data(ID_TEXT_CHAT_MSG_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
+        emit sendRequested(ID_TEXT_CHAT_MSG_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
     });
 
+    // 转发回执上报或同步请求。
     connect(messages, &MessageService::receiptRequested, this, [this](quint16 id, const QJsonObject &request) {
-        emit sig_send_data(static_cast<ReqId>(id), QJsonDocument(request).toJson(QJsonDocument::Compact));
+        emit sendRequested(static_cast<ReqId>(id), QJsonDocument(request).toJson(QJsonDocument::Compact));
     });
 
     // 注册回调处理逻辑
@@ -100,7 +103,7 @@ void TcpMgr::initHandlers()
         if (jsonDoc.isNull()) {
             SPDLOG_WARN("failed to parse chat login response as JSON, msg_id={}",
                         static_cast<int>(id));
-            emit sig_login_failed(ErrorCodes::ERR_JSON);
+            emit loginFailed(ErrorCodes::ERR_JSON);
             return ;
         }
 
@@ -109,7 +112,7 @@ void TcpMgr::initHandlers()
         if (jsonObj.isEmpty()) {
             SPDLOG_WARN("chat login response contains an empty JSON object, msg_id={}",
                         static_cast<int>(id));
-            emit sig_login_failed(ErrorCodes::ERR_JSON);
+            emit loginFailed(ErrorCodes::ERR_JSON);
             return ;
         }
 
@@ -117,7 +120,7 @@ void TcpMgr::initHandlers()
         if (!jsonObj.contains("error")) {
             SPDLOG_WARN("chat login response is missing error field, msg_id={}, error={}",
                         static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
-            emit sig_login_failed(ErrorCodes::ERR_JSON);
+            emit loginFailed(ErrorCodes::ERR_JSON);
             return ;
         }
 
@@ -126,7 +129,7 @@ void TcpMgr::initHandlers()
         if (err != ErrorCodes::SUCCESS) {
             SPDLOG_WARN("chat login failed, msg_id={}, error={}",
                         static_cast<int>(id), err);
-            emit sig_login_failed(err);
+            emit loginFailed(err);
             return ;
         }
 
@@ -138,8 +141,8 @@ void TcpMgr::initHandlers()
         auto token = jsonObj["token"].toString();
 
         auto user_info = std::make_shared<UserInfo> (uid, name, description, icon, sex);
-        UserMgr::GetInstance()->SetToken(token);
-        UserMgr::GetInstance()->SetInfo(user_info);
+        UserMgr::GetInstance()->setToken(token);
+        UserMgr::GetInstance()->setUserInfo(user_info);
         UserMgr::GetInstance()->startResourceSession();
         _authenticated = true;
         const bool receipts = jsonObj["capabilities"].toArray().contains("message_receipts_v1");
@@ -147,25 +150,25 @@ void TcpMgr::initHandlers()
 
         // 如果包含好友申请列表，则添加上
         if (jsonObj.contains("apply_list")) {
-            UserMgr::GetInstance()->AddApplyList(jsonObj["apply_list"].toArray());
+            UserMgr::GetInstance()->addFriendApplications(jsonObj["apply_list"].toArray());
         }
 
         // 如果包含好友列表，则添加上
         if (jsonObj.contains("friend_list")) {
-            UserMgr::GetInstance()->AddFriendList(jsonObj["friend_list"].toArray());
+            UserMgr::GetInstance()->addFriends(jsonObj["friend_list"].toArray());
         }
 
-        emit sig_login_switch_chat();
+        emit loginSucceeded();
 
         // 加载初始化会话列表
-        auto self_id = UserMgr::GetInstance()->GetUid();
+        auto self_id = UserMgr::GetInstance()->uid();
 
         auto current_chat_id = jsonObj["current_chat_id"].toInt();
         auto load_more = jsonObj["load_more"].toBool();
 
         // 更新状态
-        UserMgr::GetInstance()->SetCurrentChatId(current_chat_id);
-        UserMgr::GetInstance()->SetIsLoadFinish(!load_more);
+        UserMgr::GetInstance()->setChatListCursor(current_chat_id);
+        UserMgr::GetInstance()->setChatListFullyLoaded(!load_more);
 
         if (jsonObj.contains("chat_list")) {
             const auto chat_list = jsonObj["chat_list"].toArray();
@@ -182,23 +185,23 @@ void TcpMgr::initHandlers()
                     // 另一个人的uid
                     auto other_id = (user1_id == self_id) ? user2_id : user1_id;
 
-                    UserMgr::GetInstance()->SetUidToChatId(other_id, chat_id);
+                    UserMgr::GetInstance()->addPrivateChatMapping(other_id, chat_id);
                     // 获取到另一个人的uid
-                    auto other_info = UserMgr::GetInstance()->GetFriendById(other_id);
+                    auto other_info = UserMgr::GetInstance()->friendById(other_id);
                     // 通过对方的uid, 会话id, 当前消息的id来构造ChatInfo
                     auto chat_info = std::make_shared<ChatInfo>(other_id,
                         other_info ? other_info->_name : QString::number(other_id),
                         other_info ? other_info->_icon : QString(),
                         other_info ? other_info->_backname : QString(), chat_id, ChatType::PRIVATE);
-                    UserMgr::GetInstance()->AddChatInfo(chat_id, chat_info);
+                    UserMgr::GetInstance()->addChatInfo(chat_id, chat_info);
                 }else if (type == "group") {
                     // todo 群聊
                 }
             }
-            emit sig_tcp_load_chat_finish(chat_list);
+            emit chatListLoaded(chat_list);
             if (load_more && current_chat_id > 0) {
                 QJsonObject next{{"uid", self_id}, {"current_chat_id", current_chat_id}};
-                emit sig_send_data(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(next).toJson(QJsonDocument::Compact));
+                emit sendRequested(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(next).toJson(QJsonDocument::Compact));
             }
         }
     });
@@ -216,7 +219,7 @@ void TcpMgr::initHandlers()
         if (jsonDoc.isNull()) {
             SPDLOG_WARN("failed to parse search user response as JSON, msg_id={}",
                         static_cast<int>(id));
-            emit sig_tcp_search_user_finish(nullptr);
+            emit userSearchFinished(nullptr);
             return ;
         }
 
@@ -225,7 +228,7 @@ void TcpMgr::initHandlers()
         if (jsonObj.isEmpty()) {
             SPDLOG_WARN("search user response contains an empty JSON object, msg_id={}",
                         static_cast<int>(id));
-            emit sig_tcp_search_user_finish(nullptr);
+            emit userSearchFinished(nullptr);
             return ;
         }
 
@@ -233,7 +236,7 @@ void TcpMgr::initHandlers()
         if (!jsonObj.contains("error")) {
             SPDLOG_WARN("search user response is missing error field, msg_id={}, error={}",
                         static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
-            emit sig_tcp_search_user_finish(nullptr);
+            emit userSearchFinished(nullptr);
             return ;
         }
 
@@ -242,7 +245,7 @@ void TcpMgr::initHandlers()
         if (err != ErrorCodes::SUCCESS) {
             SPDLOG_WARN("search user failed, msg_id={}, error={}",
                         static_cast<int>(id), err);
-            emit sig_tcp_search_user_finish(nullptr);
+            emit userSearchFinished(nullptr);
             return ;
         }
 
@@ -254,7 +257,7 @@ void TcpMgr::initHandlers()
 
         auto search_info = std::make_shared<SearchInfo> (uid, name, description, icon, sex);
 
-        emit sig_tcp_search_user_finish(search_info);
+        emit userSearchFinished(search_info);
     });
 
     // 申请添加好友的回包处理逻辑
@@ -349,7 +352,7 @@ void TcpMgr::initHandlers()
         auto apply_info = std::make_shared<ApplyInfo> (from_uid, from_name, from_description, from_icon,
                                                       from_sex, 0, touid, description, backname);
 
-        emit sig_tcp_add_friend_apply(apply_info);
+        emit friendApplicationReceived(apply_info);
     });
 
     // 服务器认证添加好友逻辑
@@ -408,8 +411,8 @@ void TcpMgr::initHandlers()
         auto chat_info = std::make_shared<ChatInfo> (authuid, authname, authicon, backname, chat_id, ChatType::PRIVATE);
 
         // 更新usermgr
-        UserMgr::GetInstance()->SetUidToChatId(authuid, chat_id);
-        UserMgr::GetInstance()->AddChatInfo(chat_id, chat_info);
+        UserMgr::GetInstance()->addPrivateChatMapping(authuid, chat_id);
+        UserMgr::GetInstance()->addChatInfo(chat_id, chat_info);
         // 更新消息记录
         for (const auto & msg : jsonObj["chat_msgs"].toArray()) {
             const auto msg_info = msg.toObject();
@@ -428,10 +431,10 @@ void TcpMgr::initHandlers()
         auto auth_info = std::make_shared<AuthInfo> (authuid, authname, authdescription, authicon, authsex, backname);
 
         // 将好友添加上
-        UserMgr::GetInstance()->AddFriend(auth_info);
+        UserMgr::GetInstance()->addFriend(auth_info);
 
-        emit sig_tcp_add_auth_contact_list(auth_info);
-        emit sig_tcp_add_auth_chat_list(chat_info);
+        emit friendAdded(auth_info);
+        emit friendChatAdded(chat_info);
     });
 
     // 服务器通知我认证添加好友
@@ -490,8 +493,8 @@ void TcpMgr::initHandlers()
         auto chat_info = std::make_shared<ChatInfo> (authuid, authname, authicon, backname, chat_id, ChatType::PRIVATE);
 
         // 更新usermgr
-        UserMgr::GetInstance()->SetUidToChatId(authuid, chat_id);
-        UserMgr::GetInstance()->AddChatInfo(chat_id, chat_info);
+        UserMgr::GetInstance()->addPrivateChatMapping(authuid, chat_id);
+        UserMgr::GetInstance()->addChatInfo(chat_id, chat_info);
         // 更新消息记录
         for (const auto & msg : jsonObj["chat_msgs"].toArray()) {
             const auto msg_info = msg.toObject();
@@ -511,20 +514,23 @@ void TcpMgr::initHandlers()
         auto auth_info = std::make_shared<AuthInfo> (authuid, authname, authdescription, authicon, authsex, backname);
 
         // 将好友添加上
-        UserMgr::GetInstance()->AddFriend(auth_info);
+        UserMgr::GetInstance()->addFriend(auth_info);
 
-        emit sig_tcp_add_auth_contact_list(auth_info);
-        emit sig_tcp_add_auth_chat_list(chat_info);
+        emit friendAdded(auth_info);
+        emit friendChatAdded(chat_info);
     });
 
+    // 将发送回包交给消息服务校验并落盘。
     _handlers.insert(ID_TEXT_CHAT_MSG_RSP, [](ReqId, int, QByteArray data) {
         UserMgr::GetInstance()->messages()->acceptSendResponse(QJsonDocument::fromJson(data).object());
     });
     for (const auto id : {ID_MESSAGE_RECEIPT_REPORT_RSP, ID_MESSAGE_RECEIPT_SYNC_RSP}) {
+        // 将回执结果交给消息服务合并。
         _handlers.insert(id, [](ReqId, int, QByteArray data) {
             UserMgr::GetInstance()->messages()->acceptReceiptResponse(QJsonDocument::fromJson(data).object());
         });
     }
+    // 收到回执变化提示后主动补拉权威状态。
     _handlers.insert(ID_MESSAGE_RECEIPT_CHANGED_NOTIFY, [](ReqId, int, QByteArray data) {
         auto *messages = UserMgr::GetInstance()->messages();
         const int chatId = QJsonDocument::fromJson(data).object()["chat_id"].toInt();
@@ -576,7 +582,7 @@ void TcpMgr::initHandlers()
         auto chat_id = jsonObj["chat_id"].toInt();
 
         const auto json = jsonObj["notify_msgs"].toArray();
-        auto chat_info = UserMgr::GetInstance()->GetChatInfo(chat_id);
+        auto chat_info = UserMgr::GetInstance()->chatInfo(chat_id);
         std::vector<std::shared_ptr<ChatDataBase>> msgs;
         for (const auto& msg : json) {
             const auto info = msg.toObject();
@@ -592,7 +598,7 @@ void TcpMgr::initHandlers()
             msgs.push_back(text_msg);
         }
 
-        emit sig_update_text_chat_msg(from_uid, to_uid, chat_id, msgs);
+        emit chatMessagesReceived(from_uid, to_uid, chat_id, msgs);
         UserMgr::GetInstance()->messages()->registerChat(chat_id);
         UserMgr::GetInstance()->messages()->synchronize(chat_id);
     });
@@ -636,7 +642,7 @@ void TcpMgr::initHandlers()
             return ;
         }
 
-        emit sig_notify_offline();
+        emit forcedOffline();
     });
 
     // 心跳检测回包
@@ -718,15 +724,15 @@ void TcpMgr::initHandlers()
             return ;
         }
 
-        auto self_id = UserMgr::GetInstance()->GetUid();
+        auto self_id = UserMgr::GetInstance()->uid();
 
         auto current_chat_id = jsonObj["current_chat_id"].toInt();
         auto load_more = jsonObj["load_more"].toBool();
 
         // 更新状态
-        UserMgr::GetInstance()->SetCurrentChatId(current_chat_id);
+        UserMgr::GetInstance()->setChatListCursor(current_chat_id);
         // 传过来的是否还能够加载，因此这里应该取非
-        UserMgr::GetInstance()->SetIsLoadFinish(!load_more);
+        UserMgr::GetInstance()->setChatListFullyLoaded(!load_more);
 
         const auto chat_list = jsonObj["chat_list"].toArray();
         for (const auto & chat : chat_list) {
@@ -742,22 +748,22 @@ void TcpMgr::initHandlers()
                 // 另一个人的uid
                 auto other_id = (user1_id == self_id) ? user2_id : user1_id;
 
-                UserMgr::GetInstance()->SetUidToChatId(other_id, chat_id);
+                UserMgr::GetInstance()->addPrivateChatMapping(other_id, chat_id);
                 // 获取到另一个人的uid
-                auto other_info = UserMgr::GetInstance()->GetFriendById(other_id);
+                auto other_info = UserMgr::GetInstance()->friendById(other_id);
                 // 通过对方的uid, 会话id, 当前消息的id来构造ChatInfo
                 auto chat_info = std::make_shared<ChatInfo> (other_id, other_info->_name, other_info->_icon,
                                                             other_info->_backname, chat_id, ChatType::PRIVATE);
-                UserMgr::GetInstance()->AddChatInfo(chat_id, chat_info);
+                UserMgr::GetInstance()->addChatInfo(chat_id, chat_info);
             }else if (type == "group") {
                 // todo 群聊
             }
         }
 
-        emit sig_tcp_load_chat_finish(chat_list);
+        emit chatListLoaded(chat_list);
         if (load_more && current_chat_id > 0) {
             QJsonObject next{{"uid", self_id}, {"current_chat_id", current_chat_id}};
-            emit sig_send_data(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(next).toJson(QJsonDocument::Compact));
+            emit sendRequested(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(next).toJson(QJsonDocument::Compact));
         }
     });
 
@@ -806,13 +812,13 @@ void TcpMgr::initHandlers()
         auto chat_id = jsonObj["chat_id"].toInt();
         auto other_info = jsonObj["other_info"].toObject();
 
-        UserMgr::GetInstance()->SetUidToChatId(other_uid, chat_id);
+        UserMgr::GetInstance()->addPrivateChatMapping(other_uid, chat_id);
         auto chat_info = std::make_shared<ChatInfo> (other_uid, other_info["other_name"].toString(),
                                                     other_info["other_icon"].toString(), "", chat_id, ChatType::PRIVATE);
 
-        UserMgr::GetInstance()->AddChatInfo(chat_id, chat_info);
+        UserMgr::GetInstance()->addChatInfo(chat_id, chat_info);
 
-        emit sig_create_private_chat_finish(chat_info);
+        emit privateChatCreated(chat_info);
     });
 
     // 增量拉取聊天记录回包
@@ -839,7 +845,7 @@ void TcpMgr::initHandlers()
         }
         if (UserMgr::GetInstance()->messages()->isActive()) {
             // An old server response cannot establish the incremental sync contract.
-            emit sig_tcp_load_chat_msg_failed(jsonObj["chat_id"].toInt());
+            emit chatHistoryFailed(jsonObj["chat_id"].toInt());
             return;
         }
 
@@ -861,7 +867,7 @@ void TcpMgr::initHandlers()
         if (err != ErrorCodes::SUCCESS) {
             SPDLOG_WARN("load chat message response failed, msg_id={}, error={}",
                         static_cast<int>(id), err);
-            emit sig_tcp_load_chat_msg_failed(jsonObj["chat_id"].toInt());
+            emit chatHistoryFailed(jsonObj["chat_id"].toInt());
             return ;
         }
 
@@ -892,12 +898,12 @@ void TcpMgr::initHandlers()
             chat_msgs.push_back(msg_info);
         }
 
-        emit sig_tcp_load_chat_msg_finish(chat_id, chat_msgs, load_more, current_msg_id);
+        emit chatHistoryLoaded(chat_id, chat_msgs, load_more, current_msg_id);
     });
 }
 
 // 回包处理函数，根据id调用不同的回调函数
-void TcpMgr::handleMsg(ReqId id, int len, QByteArray data)
+void TcpMgr::handleMessage(ReqId id, int len, QByteArray data)
 {
     if (_handlers.find(id) == _handlers.end()) {
         SPDLOG_WARN("no TCP handler registered for msg_id={}", static_cast<int>(id));
@@ -912,7 +918,7 @@ void TcpMgr::handleMsg(ReqId id, int len, QByteArray data)
 }
 
 // 关闭tcp连接
-void TcpMgr::CloseConnection()
+void TcpMgr::closeConnection()
 {
     resetConnection(true);
 }
@@ -938,14 +944,9 @@ void TcpMgr::resetConnection(bool expectedClose)
     _retainingPending = false;
 }
 
-/**
- * @brief TcpMgr::slot_send_data
- * @param reqId
- * @param data
- * 通过_socket发送数据
- */
-void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
+void TcpMgr::sendData(ReqId reqId, QByteArray dataBytes)
 {
+    // 无法提交传输时保留文本批次的待核实状态。
     const auto rejected = [&] {
         if (reqId != ID_TEXT_CHAT_MSG_REQ) return;
         const auto request = QJsonDocument::fromJson(dataBytes).object();
@@ -966,12 +967,7 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
     if (!_transport.send(static_cast<quint16>(reqId), dataBytes)) rejected();
 }
 
-/**
- * @brief TcpMgr::slot_tcp_connect
- * @param si
- * 开始进行tcp连接
- */
-void TcpMgr::slot_tcp_connect(ServerInfo si)
+void TcpMgr::connectToServer(ServerInfo si)
 {
     SPDLOG_DEBUG("received TCP connect signal");
     resetConnection(false);

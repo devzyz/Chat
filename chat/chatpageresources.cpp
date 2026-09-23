@@ -17,7 +17,7 @@ void ChatPage::initResourceTransfers()
 {
     QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
     _transfer = new ResourceTransferManager(QUrl(settings.value("ResourceServer/Url", "http://127.0.0.1:8090").toString()),
-        UserMgr::GetInstance()->GetUid(), UserMgr::GetInstance()->GetToken(),
+        UserMgr::GetInstance()->uid(), UserMgr::GetInstance()->token(),
         UserMgr::GetInstance()->storageRoot(), this);
     connect(ui->file_label, &ClickedLabel::clicked, this, &ChatPage::selectResource);
     connect(_transfer, &ResourceTransferManager::failed, this, [this](const QString& reason) {
@@ -30,9 +30,9 @@ void ChatPage::initResourceTransfers()
     connect(_transfer, &ResourceTransferManager::uploaded, this, [this](QJsonObject descriptor) {
         const QString content = "@resource:v1:" + QString::fromUtf8(QJsonDocument(descriptor).toJson(QJsonDocument::Compact));
         auto message = std::make_shared<TextChatData>(_uploadUuid, _uploadChat, ChatType::PRIVATE,
-            ChatMessageType::TEXT_TYPE, content, UserMgr::GetInstance()->GetUid(), QTime::currentTime());
+            ChatMessageType::TEXT_TYPE, content, UserMgr::GetInstance()->uid(), QTime::currentTime());
         AppendChatMsg(message);
-        QJsonObject payload{{"from_uid", UserMgr::GetInstance()->GetUid()}, {"to_uid", _uploadRecipient},
+        QJsonObject payload{{"from_uid", UserMgr::GetInstance()->uid()}, {"to_uid", _uploadRecipient},
             {"chat_id", _uploadChat}, {"resource_id", descriptor["resource_id"]},
             {"text_array", QJsonArray{QJsonObject{{"msg_uuid", _uploadUuid}, {"msg_content", content}}}}};
         UserMgr::GetInstance()->messages()->send(payload);

@@ -6,14 +6,12 @@
 
 class ContactUserItem;
 
-/**
- * @brief The ContactUserList class
- * 这个是联系人列表，自定义的QListWidget组件
- */
+/** @brief 展示新朋友入口与联系人列表，管理分页和选择通知。 */
 class ContactUserList : public QListWidget
 {
     Q_OBJECT
 public:
+    /** @brief 创建联系人列表并连接好友审批及分页事件。 */
     ContactUserList(QWidget * parent = nullptr);
     /**
      * @brief ShowRedPoint
@@ -24,23 +22,14 @@ public:
     void ShowRedPoint(bool bshow = true);
 
 protected:
-    /**
-     * @brief eventFilter
-     * @param watched
-     * @param event
-     * @return
-     *
-     */
+    /** @brief 处理滚动事件，在联系人未全部加载时请求下一页。 */
     bool eventFilter(QObject * watched, QEvent * event);
 
 private:
-    /**
-     * @brief addContactUserList
-     * 模拟添加新的已有联系人列表
-     */
+    /** @brief 从账号缓存加载一页联系人并推进游标。 */
     void LoadContactUserList();
     bool _loading_contact;
-    // 添加联系人，参数为AuthInfo
+    /** @brief 为通过审批的好友创建联系人列表项。 */
     void AddNewContact(std::shared_ptr<AuthInfo>);
 
 public slots:

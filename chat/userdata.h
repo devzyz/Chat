@@ -24,16 +24,14 @@ struct SearchInfo {
     int _sex;
 };
 
-/**
- * @brief The ApplyInfo class
- * 这是ApplyFriendPage显示的新朋友申请列表的item的信息
- */
+/** @brief 保存新朋友申请列表展示所需的申请人资料和申请内容。 */
 struct ApplyInfo {
+    /** @brief 使用好友申请回包构造列表项，backname 为申请人给接收方的备注名。 */
     ApplyInfo(int apply_uid, QString apply_name, QString apply_description,
-              QString apply_icon, int apply_sex, int status, int to_uid, QString description, QString backanme)
+              QString apply_icon, int apply_sex, int status, int to_uid, QString description, QString backname)
         :_apply_uid(apply_uid),_apply_name(apply_name),_apply_description(apply_description),
         _apply_icon(apply_icon),_apply_sex(apply_sex),_status(status), _to_uid(to_uid),
-        _description(description), _backname(backanme) {}
+        _description(description), _backname(backname) {}
 
     int _apply_uid; // 申请人id
     QString _apply_name; // 申请人用户名
@@ -46,15 +44,13 @@ struct ApplyInfo {
     QString _backname; // 申请人给被申请人的备注名
 };
 
-/**
- * @brief The AuthInfo class
- * 认证好友的信息
- */
+/** @brief 保存好友审批后展示的对方资料和本账号设置的备注名。 */
 struct AuthInfo {
+    /** @brief 使用好友确认回包构造联系人资料。 */
     AuthInfo(int auth_uid, QString auth_name, QString auth_description,
-              QString auth_icon, int auth_sex, QString backanme)
+              QString auth_icon, int auth_sex, QString backname)
         :_auth_uid(auth_uid),_auth_name(auth_name),_auth_description(auth_description),
-        _auth_icon(auth_icon),_auth_sex(auth_sex), _backname(backanme) {}
+        _auth_icon(auth_icon),_auth_sex(auth_sex), _backname(backname) {}
 
     int _auth_uid; // 对方的uid
     QString _auth_name; // 对方的用户名

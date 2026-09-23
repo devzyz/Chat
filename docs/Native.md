@@ -15,7 +15,7 @@ Server C++ 新代码遵循：
 | 元素 | 规则 | 示例 |
 | --- | --- | --- |
 | 类型、类、结构体 | PascalCase | `ConnectionPool`, `SessionState` |
-| 公共成员函数 | PascalCase，保持现有 Server API 一致 | `GetSession`, `Close` |
+| 成员函数（含私有）、自由函数 | PascalCase | `FindCurrentSession`, `Close` |
 | 局部变量、参数 | snake_case | `server_address`, `message_id` |
 | 私有成员 | 前导下划线 + snake_case | `_worker_thread`, `_is_stopped` |
 | 常量、枚举值、宏 | UPPER_SNAKE_CASE | `MAX_LENGTH`, `LOGIN_COUNT` |
@@ -25,6 +25,28 @@ Server C++ 新代码遵循：
 - 布尔成员 SHOULD 使用 `_is_`、`_has_`、`_should_` 等判断式名称；修改既有字段时可逐步迁移。
 - 新类型的 `.h` 和 `.cpp` SHOULD 与类型名保持一致，并确保大小写完全匹配。
 - Qt 的函数和信号槽命名例外见 [Languages.md](Languages.md)。
+
+## 接口注释
+
+Server 与 Qt 使用 Doxygen `/** ... */`，覆盖要求见 [总则](Standards.md#类与函数注释)。
+简单声明使用 `/** @brief 判断会话是否仍为用户的当前会话。 */`；复杂接口按需使用
+`@param`、`@return`、`@throws`、`@note`，不生成空标签。例如：
+
+```cpp
+/** @brief 管理用户与当前在线会话的映射，内部加锁并仅保存会话弱引用。 */
+class UserSessionDirectory {
+public:
+    /**
+     * @brief 将会话登记为用户的当前会话，替换已有映射。
+     * @param uid 用户标识。
+     * @param id 新会话标识。
+     * @param session 新会话的弱引用，不转移所有权。
+     * @return 被替换且仍存活的旧会话；不存在时返回 nullptr。
+     * @note 本函数不关闭旧会话，由调用方处理后续替换。
+     */
+    std::shared_ptr<CSession> Register(int uid, const SessionId& id, std::weak_ptr<CSession> session);
+};
+```
 
 ## 头文件与包含
 

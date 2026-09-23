@@ -20,9 +20,10 @@
 
 ### 命名和格式
 
-- Qt 类型使用 PascalCase；方法、信号、槽和属性使用 lowerCamelCase，与 Qt API 一致。
+- Qt 类型 MUST 使用 PascalCase；方法（含私有）、自由函数、信号、槽和属性 MUST 使用 lowerCamelCase，与 Qt API 一致。
 - 既有 Qt 文件名以小写为主；新增成对 `.h/.cpp/.ui` SHOULD 继续使用小写且名称一致。
 - Qt 信号命名描述已发生事件，槽命名描述处理动作。
+- 类与函数使用 [C++ 接口注释](Native.md#接口注释)；信号说明事件及必要的触发条件，槽说明处理动作。
 - UI 文案使用 `QString` 和 UTF-8 源文件；跨 `std::string` 转换必须明确编码。
 
 ### 测试
@@ -38,7 +39,8 @@
 - 当前使用 CommonJS；新文件 MUST 使用 `require`/`module.exports`，除非进行一次明确的整体模块迁移。
 - 新代码 MUST 使用 `const` 和 `let`，MUST NOT 新增 `var`。
 - 每条语句使用分号，字符串引号在同一文件中保持一致。
-- 文件、函数和变量使用 lowerCamelCase；常量对象或错误枚举使用清晰稳定名称。
+- 文件、函数和变量 MUST 使用 lowerCamelCase；类使用 PascalCase，常量对象或错误枚举使用清晰稳定名称。
+- 类、函数和匿名回调使用 JSDoc `/** 中文作用说明 */`；异步接口按需说明 Promise 结果、拒绝条件与 callback 时机，覆盖要求见 [总则](Standards.md#类与函数注释)。
 - 模块加载 SHOULD 无副作用；服务只应在作为主入口执行时启动监听。
 
 ### 异步与依赖
@@ -64,7 +66,8 @@
 - 路径参数使用 `-LiteralPath`，组合路径使用 `Join-Path`，不得依赖当前盘符。
 - 删除或移动前 MUST 解析并验证绝对目标位于预期目录，禁止对工作区根、用户目录或未解析变量执行递归破坏操作。
 - 复杂脚本使用带类型和 Validate 属性的 param block。
-- 函数使用 `Verb-Noun` 命名；变量使用清晰 PascalCase/camelCase 并保持文件内一致。
+- 函数 MUST 使用 `Verb-Noun` 命名；变量使用清晰 PascalCase/camelCase 并保持文件内一致。
+- 函数正上方使用 `<# ... #>` 注释帮助，必填 `.SYNOPSIS` 中文作用说明，按需补 `.PARAMETER`、`.OUTPUTS`、`.NOTES`；脚本块回调前简述作用。
 - 启动后台进程默认使用隐藏窗口，记录 PID、可执行文件和启动时间；停止前必须验证进程身份。
 - 所有轮询和等待 MUST 有有限 timeout。
 - `finally` 负责恢复目录和清理本次创建的临时资源。

@@ -25,7 +25,7 @@ LogicSystem::LogicSystem(std::shared_ptr<UserSessionDirectory> directory,
     std::shared_ptr<UserPresenceStore> presence)
 	: LogicDispatcher([this](const LogicMessage& message) { return Dispatch(message); }),
 	  _directory(std::move(directory)), _presence(std::move(presence)) {
-	RegisterCallBacks();
+	RegisterCallbacks();
 }
 
 LogicSystem::~LogicSystem() {
@@ -55,12 +55,9 @@ bool LogicSystem::Dispatch(const LogicMessage& message) {
 	return true;
 }
 
-/**
- * @brief 
- * 回调函数注册位置
- */
-void LogicSystem::RegisterCallBacks() {
+void LogicSystem::RegisterCallbacks() {
     for (const auto id : {MSG_MESSAGE_RECEIPT_REPORT_REQ, MSG_MESSAGE_RECEIPT_SYNC_REQ}) {
+        // 处理回执上报或同步，并在成功上报后提示对端补拉。
         _fun_callbacks[id] = [this](std::shared_ptr<CSession> session, const short& request_id,
                                     const std::string& body) {
             const bool report = request_id == MSG_MESSAGE_RECEIPT_REPORT_REQ;
@@ -78,7 +75,7 @@ void LogicSystem::RegisterCallBacks() {
                 response["chat_id"] = request["chat_id"];
                 response["request_id"] = request["request_id"];
                 response["error"] = 0;
-                success = MysqlMgr::GetInstance()->Receipts(session->AuthenticatedUid(), request, report, response, peer);
+                success = MysqlMgr::GetInstance()->HandleReceiptRequest(session->AuthenticatedUid(), request, report, response, peer);
                 if (!success) response["error"] = ErrorCodes::UidInvalid;
             } catch (const messaging::ReceiptError& error) {
                 response["receipt_error"] = error.what();
@@ -232,7 +229,7 @@ void LogicSystem::RegisterCallBacks() {
 			}
 		}
 
-		// 添加分布式锁
+		// 登录回包交由异步会话绑定完成后发送。
         binding_started = true;
         bool receipts = false;
         if (root["capabilities"].isArray()) {
@@ -242,6 +239,7 @@ void LogicSystem::RegisterCallBacks() {
         session->EnableReceipts(receipts);
         return_value["capabilities"] = Json::Value(Json::arrayValue);
         if (receipts) return_value["capabilities"].append("message_receipts_v1");
+        // 将会话绑定结果合并到登录响应。
         session->BindAuthenticatedUser(uid, [session, response = std::move(return_value)](SessionBindResult result) mutable {
             if (result != SessionBindResult::Bound) response["error"] = ErrorCodes::RPCFailed;
             session->Send(response.toStyledString(), MSG_CHAT_LOGIN_RSP);
@@ -928,12 +926,6 @@ void LogicSystem::RegisterCallBacks() {
 	};
 }
 
-/**
- * @brief 
- * @param uid 
- * @param value 
- * 先从redis中查询用户信息，如果未查询到，则去mysql中查询，并进行更新
- */
 void LogicSystem::GetUserByUid(std::string uid, Json::Value& value) {
 	std::string key = USER_BASE_INFO + uid;
 	// 从redis中查询用户信息
@@ -968,7 +960,7 @@ void LogicSystem::GetUserByUid(std::string uid, Json::Value& value) {
 	// redis中不存在，则查询数据库
 	auto uid_int = std::stoi(uid);
 	std::shared_ptr<UserInfo> user_info = nullptr;
-	user_info = MysqlMgr::GetInstance()->GetUesr(uid_int);
+	user_info = MysqlMgr::GetInstance()->GetUserByUid(uid_int);
 	if (user_info == nullptr) {
 		value["error"] = ErrorCodes::UidInvalid;
 		return;
@@ -998,12 +990,6 @@ void LogicSystem::GetUserByUid(std::string uid, Json::Value& value) {
 	return;
 }
 
-/**
- * @brief 
- * @param name 
- * @param value 
- * 根据name查询用户信息
- */
 void LogicSystem::GetUserByName(std::string name, Json::Value& value) {
 	std::string key = USER_NAME_INFO + name;
 	// 从redis中查询用户信息
@@ -1067,12 +1053,6 @@ void LogicSystem::GetUserByName(std::string name, Json::Value& value) {
 	return;
 }
 
-/**
- * @brief 
- * @param uid_name 
- * @return 
- * 判断字符串uid_name是不是只包含数字
- */
 bool LogicSystem::IsOnlyDigit(std::string& uid_name) {
 	for (char ch : uid_name) {
 		if (!std::isdigit(ch)) {
@@ -1082,14 +1062,6 @@ bool LogicSystem::IsOnlyDigit(std::string& uid_name) {
 	return true;
 }
 
-/**
- * @brief 
- * @param key 
- * @param uid 
- * @param userinfo 
- * @return 
- * 从redis中查询某个用户的信息，如果redis不存在，则去mysql中查询，并更新到redis中
- */
 bool LogicSystem::GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared_ptr<UserInfo>& userinfo) {
 	// 先在redis中查询
 	std::string info_str = "";
@@ -1112,7 +1084,7 @@ bool LogicSystem::GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared
 	else {
 		// redis中没有，则去mysql中查询
 		std::shared_ptr<UserInfo> user_info = nullptr;
-		user_info = MysqlMgr::GetInstance()->GetUesr(uid);
+		user_info = MysqlMgr::GetInstance()->GetUserByUid(uid);
 		if (user_info == nullptr) {
 			return false;
 		}
@@ -1134,50 +1106,19 @@ bool LogicSystem::GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared
 	return true;
 }
 
-/**
- * @brief 
- * @param uid 
- * @param applylist 
- * 从数据库中，获取到申请添加uid为好友的请求列表
- */
 bool LogicSystem::GetApplyFriendList(int uid, std::vector<std::shared_ptr<ApplyInfo>>& applylist) {
 	return MysqlMgr::GetInstance()->GetApplyFriendList(uid, applylist, 0, 10);
 }
 
-/**
- * @brief 
- * @param uid 
- * @param friend_list 
- * @return 
- * 获取用户好友列表，从Mysql中查询
- */
 bool LogicSystem::GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& friend_list) {
 	return MysqlMgr::GetInstance()->GetFriendList(uid, friend_list);
 }
 
-/**
- * @brief
- * @param uid
- * @param friend_list
- * @return
- * 获取一页的会话列表
- */
 bool LogicSystem::GetUserChatList(int uid, int current_chat_id, int page_size,
 	std::vector<std::shared_ptr<ChatInfoBase>>& chat_list, bool& load_more, int& last_chat_id) {
 	return MysqlMgr::GetInstance()->GetUserChatList(uid, current_chat_id, page_size, chat_list, load_more, last_chat_id);
 }
 
-/**
- * @brief 
- * @param chat_id 
- * @param current_load_id 
- * @param page_size 
- * @param chat_list 
- * @param load_more 
- * @param last_load_id 
- * @return 
- * 增量加载部分聊天数据
- */
 bool LogicSystem::GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 	std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id) {
 	return MysqlMgr::GetInstance()->GetChatMessageList(principal_uid, chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);

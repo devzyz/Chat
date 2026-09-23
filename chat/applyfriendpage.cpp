@@ -18,7 +18,7 @@ ApplyFriendPage::ApplyFriendPage(QWidget *parent)
     loadApplyList();
 
     // 当本客户端同意认证后，将添加按钮消除
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_add_auth_contact_list,
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::friendAdded,
             this, &ApplyFriendPage::slot_auth_finish);
 }
 
@@ -72,7 +72,7 @@ void ApplyFriendPage::paintEvent(QPaintEvent *event)
 void ApplyFriendPage::loadApplyList()
 {
     std::vector<std::shared_ptr<ApplyInfo>> apply_list;
-    UserMgr::GetInstance()->GetApplyList(apply_list);
+    UserMgr::GetInstance()->appendFriendApplicationsTo(apply_list);
 
     // 将申请添加好友的信息显示
     for (int i = 0; i < apply_list.size(); i ++ ) {
