@@ -3,7 +3,34 @@
 更新：2026-09-23。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
 项目目标：先完成基本聊天功能，后续主要投入可测量的性能优化。
 
-## 当前工作：N4 Server 契约注释
+## 当前工作：N5～N9 规范实施与目录审计
+
+- 按最新要求在 N4 工作分支继续完成 [N5～N9 本轮范围](plans/CodeConventions.md#n5n8-核查范围)，
+  初次完成时按要求保留为本地修改。用户现已授权提交 PR；原 PR #15 已合并，
+  新分支 `chore/repo/incremental-conventions` 基于最新 develop `ac282b4`，其文件树与既有 `00bea3d` 一致。
+- N5：补齐 Qt 顶层生产类、声明及无独立声明的辅助函数/回调，核实 `recordAt` 借用有效期、
+  账号代失效、SQLite 工作线程退出顺序等；修正旧参数注释及 `appendMessage` 返回值说明。
+  生产范围注释诊断为 0，旧 UI 命名和测试欠账单列 N9，不改 Qt 行为。
+- N6：JS 内部接口改为 `getRedis`、`queryRedis`、`close`、`sendMail`，调用及测试同步，
+  外部 `GetVarifyCode` 不变；补生产 JSDoc 和 `scripts/` PowerShell 帮助/回调说明。
+- N7/N8：实现本地与 CI 共用 Git/源码增量检查，接入 Windows static-check 及既有汇总，
+  PR 标题编辑触发复查。固定历史祖先、真实 merge、revert、squash、发布版本及错误退出均有回归。
+  支持与不支持的语法、人工评审责任见 [CI 治理](../tests/CI-GOVERNANCE.md#12-规范检查合同)。
+- N9：覆盖全部自有适用目录，逐目录归回原工作包，清单见 [审计表](plans/CodeConventions.md#n9-全目录审计与余项归属)。
+  记录 2599 条历史诊断、48 个解析失败文件及 267 个非支持语言/非代码文件；它们尚未逐项整改，
+  不把清单生成成功称为全仓零欠账。明细可由 `AuditConventions` 重建至 `build/conventions/audit.json`。
+- 本地执行通过：规范检查器 23 项（含公开 CLI/PowerShell 失败传播），Varify 33 Unit + 21 Integration，
+  脚本 9 Component + 4 Integration，CI/工具链/缓存治理 19 项，GitHub 下载器合同及 4 份工作流 actionlint。
+  验证码测试首次发现注释插入造成的 JS return 换行问题，修复后 54 项重跑通过；没有弱化断言。
+- 相对 `origin/develop` 的本地增量规范入口通过（0 违规）；UTF-8、39 个本地文档链接/锚点和
+  `git diff --check` 通过。完整审计曾把类外 operator 当成普通函数，补回归修正后得到上列最终计数。
+- 103 个 C++ 文件相对 HEAD 的非注释 token 完全一致；12 个 JS 文件的 AST 除四个明确改名外保持一致，
+  7 个 PowerShell 脚本非注释 token 未变，统一入口新增规范任务另由回归验证。
+  只在 `build/conventions/python` 准备检查工具，在 `build/conventions/actionlint` 准备校验器；未恢复 vcpkg。
+  本轮未重新编译 Qt/Server，未重跑真实 Redis/Mailpit/Docker/E2E，也未声称未提交代码已有远端 CI 结果。
+- 下一步：提交独立 develop PR 并等待远端 CI；本地结果不代替远端检查。N9 回挂历史项按所属模块继续拆批治理。
+
+## 前序记录：N4 Server 契约注释
 
 - 本轮基于最新远端 develop `aa154435af656985a885971b70e54e1ee9f8f546`，工作区原先干净；
   已快进核对后创建 `docs/repo/server-contracts`，按计划每批独立提交 PR。
