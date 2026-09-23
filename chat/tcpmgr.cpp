@@ -15,7 +15,7 @@ TcpMgr::TcpMgr() : _host("") {
         emit sig_tcp_connect_success(true);
     });
 
-    // 绑定socket可读取信号到lambda槽函数上
+    // 分发传输层已解码的完整消息帧。
     connect(&_transport, &ChatTcpTransport::frameReceived, this,
             [this](const ChatTcpFrame &frame) {
         handleMsg(ReqId(frame.messageId), frame.body.size(), frame.body);
@@ -41,7 +41,6 @@ TcpMgr::TcpMgr() : _host("") {
         }
     });
 
-    // 处理断开连接信号
     // 连接发送数据信号与槽函数
     connect(this, &TcpMgr::sig_send_data, this, &TcpMgr::slot_send_data);
     auto *messages = UserMgr::GetInstance()->messages();
@@ -938,12 +937,6 @@ void TcpMgr::resetConnection(bool expectedClose)
     _retainingPending = false;
 }
 
-/**
- * @brief TcpMgr::slot_send_data
- * @param reqId
- * @param data
- * 通过_socket发送数据
- */
 void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
 {
     const auto rejected = [&] {
@@ -966,11 +959,6 @@ void TcpMgr::slot_send_data(ReqId reqId, QByteArray dataBytes)
     if (!_transport.send(static_cast<quint16>(reqId), dataBytes)) rejected();
 }
 
-/**
- * @brief TcpMgr::slot_tcp_connect
- * @param si
- * 开始进行tcp连接
- */
 void TcpMgr::slot_tcp_connect(ServerInfo si)
 {
     SPDLOG_DEBUG("received TCP connect signal");
