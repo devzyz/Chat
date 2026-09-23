@@ -1,6 +1,6 @@
 ﻿[CmdletBinding()]
 param(
-    [ValidateSet('Check', 'CheckTestStructure', 'CheckTestReports', 'GenerateProtocols', 'CheckProtocols', 'RestoreServers', 'BuildServers', 'BuildClient', 'RestoreVarify', 'RunServerTests', 'RunClientTests', 'RunScriptTests', 'RunVarifyTests', 'RunAllTests', 'TestPhase1', 'BuildAll')]
+    [ValidateSet('Check', 'CheckConventions', 'RunConventionTests', 'AuditConventions', 'CheckTestStructure', 'CheckTestReports', 'GenerateProtocols', 'CheckProtocols', 'RestoreServers', 'BuildServers', 'BuildClient', 'RestoreVarify', 'RunServerTests', 'RunClientTests', 'RunScriptTests', 'RunVarifyTests', 'RunAllTests', 'TestPhase1', 'BuildAll')]
     [string]$Task = 'Check',
 
     [ValidateSet('Debug', 'Release')]
@@ -15,7 +15,8 @@ param(
     [string]$ServerHostTriplet = 'x64-windows',
     [string]$QtRoot = $env:QT_ROOT,
     [string]$MinGwRoot = $env:MINGW_ROOT,
-    [switch]$SkipTestStructureCheck
+    [switch]$SkipTestStructureCheck,
+    [string]$ConventionBase = 'HEAD'
 )
 
 Set-StrictMode -Version Latest
@@ -125,6 +126,10 @@ if ([string]::IsNullOrWhiteSpace($ServerIntermediateRoot)) {
     $ServerIntermediateRoot = Join-Path $repoRoot 'build\windows-msbuild-obj'
 }
 
+<#
+.SYNOPSIS
+验证必需文件存在，失败时给出路径和补齐提示。
+#>
 function Require-File {
     param([string]$Path, [string]$Hint)
 
@@ -134,6 +139,10 @@ function Require-File {
     return (Resolve-Path -LiteralPath $Path).Path
 }
 
+<#
+.SYNOPSIS
+定位必需命令，缺失时报告安装或环境配置提示。
+#>
 function Require-Command {
     param([string]$Name, [string]$Hint)
 
@@ -144,6 +153,10 @@ function Require-Command {
     return $command.Source
 }
 
+<#
+.SYNOPSIS
+从已安装环境定位 CMake，缺失时终止。
+#>
 function Resolve-CMake {
     $cmake = Require-Command 'cmake.exe' 'Install CMake 3.24 or newer and add it to PATH.'
     $versionText = (& $cmake --version 2>&1 | Select-Object -First 1)
@@ -158,6 +171,10 @@ function Resolve-CMake {
     return $cmake
 }
 
+<#
+.SYNOPSIS
+解析本机 vcpkg 路径，仅定位而不恢复依赖。
+#>
 function Resolve-Vcpkg {
     if ([string]::IsNullOrWhiteSpace($VcpkgRoot)) {
         throw 'Set VCPKG_ROOT, or pass -VcpkgRoot, to a pinned vcpkg checkout.'
@@ -179,6 +196,10 @@ function Resolve-Vcpkg {
     }
 }
 
+<#
+.SYNOPSIS
+从既有 Visual Studio 安装定位 MSBuild，缺失时终止。
+#>
 function Resolve-MSBuild {
     $programFilesX86 = [Environment]::GetFolderPath('ProgramFilesX86')
     $vswhere = Join-Path $programFilesX86 'Microsoft Visual Studio\Installer\vswhere.exe'
@@ -190,6 +211,10 @@ function Resolve-MSBuild {
     return Require-File (Join-Path $installPath 'MSBuild\Current\Bin\MSBuild.exe') 'MSBuild was not found in the Visual Studio installation.'
 }
 
+<#
+.SYNOPSIS
+核对 Qt 与 MinGW 工具路径，缺项时报告而不安装。
+#>
 function Resolve-QtToolchain {
     if ([string]::IsNullOrWhiteSpace($QtRoot)) {
         $qmakeOnPath = Get-Command qmake.exe -ErrorAction SilentlyContinue
@@ -212,7 +237,7 @@ function Resolve-QtToolchain {
     if ([string]::IsNullOrWhiteSpace($MinGwRoot)) {
         $qtInstallRoot = Split-Path -Parent (Split-Path -Parent $resolvedQt)
         $candidates = @(Get-ChildItem -LiteralPath (Join-Path $qtInstallRoot 'Tools') -Directory -Filter 'mingw*_64' -ErrorAction SilentlyContinue |
-            Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'bin\g++.exe') })
+            Where-Object <# 筛选含 g++ 的 MinGW 安装目录。 #> { Test-Path -LiteralPath (Join-Path $_.FullName 'bin\g++.exe') })
         if ($candidates.Count -eq 1) {
             $script:MinGwRoot = $candidates[0].FullName
         } elseif ($candidates.Count -gt 1) {
@@ -252,6 +277,10 @@ function Resolve-QtToolchain {
     }
 }
 
+<#
+.SYNOPSIS
+显式恢复 Server 依赖；该操作会修改依赖树，普通构建不得隐式调用。
+#>
 function Restore-Servers {
     $vcpkg = Resolve-Vcpkg
     $shallowMarker = Join-Path $vcpkg.Root '.git\shallow'
@@ -280,6 +309,10 @@ function Restore-Servers {
     }
 }
 
+<#
+.SYNOPSIS
+为构建提供工具链约束参数，保持本地与 CI 配置一致。
+#>
 function Get-CiToolchainArguments {
     if ($env:GITHUB_ACTIONS -ne 'true' -or [string]::IsNullOrWhiteSpace($env:CHAT_WINDOWS_TOOLCHAIN)) { return }
     $lock = Get-Content -LiteralPath $env:CHAT_WINDOWS_TOOLCHAIN -Raw | ConvertFrom-Json
@@ -290,6 +323,10 @@ function Get-CiToolchainArguments {
     "/p:WindowsTargetPlatformVersion=$($lock.msvc.sdk)"
 }
 
+<#
+.SYNOPSIS
+使用既有依赖编译生产 Server，禁止隐式依赖恢复。
+#>
 function Build-Servers {
     $vcpkg = Resolve-Vcpkg
     $msbuild = Resolve-MSBuild
@@ -313,6 +350,10 @@ function Build-Servers {
     }
 }
 
+<#
+.SYNOPSIS
+配置并运行注册的 Server 回归，命令或报告不满足要求时失败。
+#>
 function Run-ServerTests {
     Confirm-TestStructure
     [void](Require-File (Join-Path $varifySource 'node_modules\@grpc\grpc-js\package.json') `
@@ -435,6 +476,10 @@ function Run-ServerTests {
     Assert-NoNewRegressionResidue -Before $residueBefore -Prefixes $residuePrefixes -Lane 'Server'
 }
 
+<#
+.SYNOPSIS
+使用既有 Qt 工具链编译客户端，构建失败终止。
+#>
 function Build-Client {
     $cmake = Resolve-CMake
     $qt = Resolve-QtToolchain
@@ -483,6 +528,10 @@ function Build-Client {
     }
 }
 
+<#
+.SYNOPSIS
+构建并运行 Qt 回归，收集 JUnit 报告并传播失败。
+#>
 function Run-ClientTests {
     Confirm-TestStructure
     Build-Client
@@ -508,6 +557,10 @@ function Run-ClientTests {
     }
 }
 
+<#
+.SYNOPSIS
+校验测试报告的用例数及失败或跳过状态，拒绝缺失与空报告。
+#>
 function Assert-RegressionReport {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -528,7 +581,7 @@ function Assert-RegressionReport {
     $errors = @($reportXml.SelectNodes('//error'))
     $skipped = @($reportXml.SelectNodes('//skipped'))
     $unavailable = @(
-        $testcases | Where-Object {
+        $testcases | Where-Object <# 识别未运行、禁用、跳过或超时的用例。 #> {
             $_.GetAttribute('status') -match '^(?i:notrun|disabled|skipped|unavailable|timeout)$' -or
             $_.GetAttribute('result') -match '^(?i:notrun|disabled|skipped|unavailable|timeout|suppressed)$'
         }
@@ -548,6 +601,10 @@ function Assert-RegressionReport {
     return $testcases.Count
 }
 
+<#
+.SYNOPSIS
+验证报告中的清理证据包含要求的测试标识。
+#>
 function Assert-RegressionCleanupEvidence {
     $requiredEvidence = @(
         [pscustomobject]@{ Report = 'server_integration.xml'; Name = 'TeardownIsReverseOrderedAndPreservesPrimaryAndCleanupFailures' }
@@ -560,13 +617,17 @@ function Assert-RegressionCleanupEvidence {
     foreach ($evidence in $requiredEvidence) {
         $reportPath = Join-Path $testResults $evidence.Report
         [xml]$reportXml = Get-Content -LiteralPath $reportPath -Raw
-        $matchingCase = @($reportXml.SelectNodes('//testcase') | Where-Object { $_.name -eq $evidence.Name })
+        $matchingCase = @($reportXml.SelectNodes('//testcase') | Where-Object <# 按名称匹配需要的清理证据。 #> { $_.name -eq $evidence.Name })
         if ($matchingCase.Count -ne 1) {
             throw "Regression cleanup evidence is missing or duplicated in $($evidence.Report): $($evidence.Name)."
         }
     }
 }
 
+<#
+.SYNOPSIS
+逐组检查所有公开回归报告及清理证据。
+#>
 function Confirm-RegressionReports {
     $total = 0
     foreach ($group in $regressionReportGroups) {
@@ -579,7 +640,7 @@ function Confirm-RegressionReports {
     }
     $legacyTotal = 0
     foreach ($legacyGroup in $legacyRegressionReportGroups) {
-        $registeredGroup = @($regressionReportGroups | Where-Object { $_.Name -eq $legacyGroup.Name })
+        $registeredGroup = @($regressionReportGroups | Where-Object <# 按名称匹配旧报告组。 #> { $_.Name -eq $legacyGroup.Name })
         if ($registeredGroup.Count -ne 1 -or $registeredGroup[0].ExpectedCount -lt $legacyGroup.MinimumCount) {
             throw "Legacy regression floor is not preserved for $($legacyGroup.Name)."
         }
@@ -592,6 +653,10 @@ function Confirm-RegressionReports {
     Write-Host "Regression report audit passed: $total testcases across $($regressionReportGroups.Count) reports."
 }
 
+<#
+.SYNOPSIS
+采集当前测试残留路径快照，不删除文件。
+#>
 function Get-RegressionResidueSnapshot {
     param([Parameter(Mandatory = $true)][string[]]$Prefixes)
 
@@ -599,11 +664,15 @@ function Get-RegressionResidueSnapshot {
     return @(
         foreach ($prefix in $Prefixes) {
             Get-ChildItem -LiteralPath $temporaryRoot -Filter "$prefix*" -Force -ErrorAction SilentlyContinue |
-                ForEach-Object { $_.FullName }
+                ForEach-Object <# 提取残留文件的绝对路径。 #> { $_.FullName }
         }
     )
 }
 
+<#
+.SYNOPSIS
+比较前后快照，发现新增测试残留即失败。
+#>
 function Assert-NoNewRegressionResidue {
     param(
         [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Before,
@@ -612,12 +681,16 @@ function Assert-NoNewRegressionResidue {
     )
 
     $after = @(Get-RegressionResidueSnapshot -Prefixes $Prefixes)
-    $newResidue = @($after | Where-Object { $_ -notin $Before })
+    $newResidue = @($after | Where-Object <# 筛选本轮新增的残留路径。 #> { $_ -notin $Before })
     if ($newResidue.Count -gt 0) {
         throw "$Lane test cleanup left owned temporary state: $($newResidue -join '; ')"
     }
 }
 
+<#
+.SYNOPSIS
+执行协议兼容与生成校验入口，传播外部命令失败。
+#>
 function Invoke-ProtocolCompatibility {
     param([ValidateSet('generate', 'check')][string]$Mode)
 
@@ -641,6 +714,10 @@ function Invoke-ProtocolCompatibility {
     }
 }
 
+<#
+.SYNOPSIS
+将文件路径转换为统一斜杠的仓库相对路径。
+#>
 function Get-RepositoryRelativePath {
     param([string]$Path)
 
@@ -659,10 +736,14 @@ function Get-RepositoryRelativePath {
 function Confirm-TestStructure {
     # CI lanes depend on the same-source static job; local aggregate calls validate once.
     if ($SkipTestStructureCheck -or $script:testStructureChecked) { return }
+    <#
+    .SYNOPSIS
+    验证所属测试模块的 README 存在并包含必需说明。
+    #>
     function Assert-ModuleReadme {
         param([System.IO.FileInfo[]]$TestFiles, [string]$Toolchain)
 
-        foreach ($directory in @($TestFiles | ForEach-Object { $_.DirectoryName } | Sort-Object -Unique)) {
+        foreach ($directory in @($TestFiles | ForEach-Object <# 提取测试文件所属目录。 #> { $_.DirectoryName } | Sort-Object -Unique)) {
             $readme = Join-Path $directory 'README.md'
             if (-not (Test-Path -LiteralPath $readme -PathType Leaf)) {
                 throw "$Toolchain test Module is missing README.md: $(Get-RepositoryRelativePath $directory)"
@@ -717,7 +798,7 @@ function Confirm-TestStructure {
         }
     }
     Assert-ModuleReadme -TestFiles $serverTests -Toolchain 'Server'
-    $asioContracts = @($serverTests | Where-Object { $_.Name -eq 'asio_pool_contract_tests.cpp' })
+    $asioContracts = @($serverTests | Where-Object <# 识别共享 Asio 池合同测试来源。 #> { $_.Name -eq 'asio_pool_contract_tests.cpp' })
     if ($asioContracts.Count -ne 1 -or $asioContracts[0].Directory.Name -ne 'lifecycle') {
         throw 'The shared Asio pool contract source must have one owner: tests/server/lifecycle.'
     }
@@ -1071,7 +1152,7 @@ function Confirm-TestStructure {
         $clientCMake,
         'add_test\s*\(\s*NAME\s+([A-Za-z0-9_.-]+)',
         [Text.RegularExpressions.RegexOptions]::IgnoreCase
-    ) | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -notin @('http_transport.', 'tcp_transport.', 'session_driver.') })
+    ) | ForEach-Object <# 提取 CTest 注册用例名。 #> { $_.Groups[1].Value } | Where-Object <# 排除由独立入口注册的传输与驱动前缀。 #> { $_ -notin @('http_transport.', 'tcp_transport.', 'session_driver.') })
     $expectedHttpTransportCases = @(
         'successPreservesRequestAndFlowIdentity'
         'refusedConnectionHasOneBoundedOutcome'
@@ -1090,7 +1171,7 @@ function Confirm-TestStructure {
     )
     $registeredHttpTransportCases = @(
         [regex]::Matches($httpTransportBlock.Groups['cases'].Value, '(?m)^\s*(?<case>[A-Za-z][A-Za-z0-9]+)\s*$') |
-            ForEach-Object { $_.Groups['case'].Value }
+            ForEach-Object <# 提取注册表达式中的用例名。 #> { $_.Groups['case'].Value }
     )
     if (-not $httpTransportBlock.Success -or
         ($registeredHttpTransportCases -join ',') -ne ($expectedHttpTransportCases -join ',') -or
@@ -1117,7 +1198,7 @@ function Confirm-TestStructure {
     )
     $registeredTcpTransportCases = @(
         [regex]::Matches($tcpTransportBlock.Groups['cases'].Value, '(?m)^\s*(?<case>[A-Za-z][A-Za-z0-9]+)\s*$') |
-            ForEach-Object { $_.Groups['case'].Value }
+            ForEach-Object <# 提取注册表达式中的用例名。 #> { $_.Groups['case'].Value }
     )
     if (-not $tcpTransportBlock.Success -or
         ($registeredTcpTransportCases -join ',') -ne ($expectedTcpTransportCases -join ',') -or
@@ -1130,7 +1211,7 @@ function Confirm-TestStructure {
     $driverBlock = [regex]::Match($clientCMake,
         '(?ms)foreach\s*\(\s*SESSION_DRIVER_CASE\s+IN\s+ITEMS(?<cases>.*?)\)\s*add_test.*?set_tests_properties\s*\(\s*session_driver\.\$\{SESSION_DRIVER_CASE\}\s+PROPERTIES(?<properties>.*?)\)\s*endforeach')
     $registeredDriverCases = @([regex]::Matches($driverBlock.Groups['cases'].Value,
-        '(?m)^\s*(?<case>[A-Za-z][A-Za-z0-9]+)\s*$') | ForEach-Object { $_.Groups['case'].Value })
+        '(?m)^\s*(?<case>[A-Za-z][A-Za-z0-9]+)\s*$') | ForEach-Object <# 提取注册表达式中的用例名。 #> { $_.Groups['case'].Value })
     if (-not $driverBlock.Success -or ($registeredDriverCases -join ',') -ne ($driverCases -join ',') -or
         $driverBlock.Groups['properties'].Value -notmatch 'LABELS\s+"integration"' -or
         $clientCMake -notmatch 'target_link_libraries\(chat_e2e_client\s+PRIVATE\s+chat_client_login' -or
@@ -1370,7 +1451,7 @@ function Confirm-TestStructure {
         $runnerRegistration -notmatch '(?ms)^function\s+Assert-RegressionReport\b.*?credential-shaped assignment') {
         throw 'RunAllTests must enforce aggregate residue, cleanup-evidence, and secret/report-integrity gates.'
     }
-    $addedDiff = (& git -C $repoRoot diff --unified=0 --no-ext-diff 2>$null | Where-Object { $_ -match '^\+(?!\+\+)' }) -join "`n"
+    $addedDiff = (& git -C $repoRoot diff --unified=0 --no-ext-diff 2>$null | Where-Object <# 筛选 diff 新增源码行并排除文件头。 #> { $_ -match '^\+(?!\+\+)' }) -join "`n"
     if ($LASTEXITCODE -ne 0) {
         throw 'Unable to scan the working diff for credential-shaped assignments.'
     }
@@ -1430,18 +1511,18 @@ function Confirm-TestStructure {
     }
     $npmRegisteredFiles = @(
         @($varifyPackage.scripts.'test:unit', $varifyPackage.scripts.'test:integration') |
-            ForEach-Object {
+            ForEach-Object <# 从 npm 测试脚本提取来源文件路径。 #> {
                 [regex]::Matches([string]$_, 'test/[A-Za-z0-9_./-]+\.test\.js') |
-                    ForEach-Object { $_.Value }
+                    ForEach-Object <# 读取本轮正则匹配的路径。 #> { $_.Value }
             }
     )
     $runnerRegisteredFiles = @(
         [regex]::Matches($normalizedRunnerRegistration, 'test/[A-Za-z0-9_./-]+\.test\.js') |
-            ForEach-Object { $_.Value } | Sort-Object -Unique
+            ForEach-Object <# 读取测试命令中的路径匹配。 #> { $_.Value } | Sort-Object -Unique
     )
     foreach ($test in $varifyTests) {
         $relative = (Get-RepositoryRelativePath $test.FullName).Substring('VarifyServer/'.Length)
-        if (@($npmRegisteredFiles | Where-Object { $_ -eq $relative }).Count -ne 1) {
+        if (@($npmRegisteredFiles | Where-Object <# 确认当前相对路径已经注册。 #> { $_ -eq $relative }).Count -ne 1) {
             throw "VarifyServer test is missing from an npm level script: $relative"
         }
         if ($runnerRegisteredFiles -notcontains $relative) {
@@ -1477,7 +1558,7 @@ function Confirm-TestStructure {
             [regex]::Matches(
                 $scriptText,
                 "Invoke-(?:ExpectedValidationFailure|TestCase)\s+'(?<id>A02-(?:VAL|LIFE)-\d{2})'"
-            ) | ForEach-Object { $_.Groups['id'].Value }
+            ) | ForEach-Object <# 提取 PowerShell 用例的合同标识。 #> { $_.Groups['id'].Value }
         )
         if ($ids.Count -ne $group.ExpectedCount -or @($ids | Sort-Object -Unique).Count -ne $ids.Count) {
             throw "PowerShell test registration count mismatch for $($group.Script): expected $($group.ExpectedCount), found $($ids.Count)."
@@ -1493,6 +1574,10 @@ function Confirm-TestStructure {
     Write-Host "Test registration and report grouping verified: $($serverTests.Count) Server, $($clientTests.Count) Qt, $($varifyTests.Count) VarifyServer, $($scriptTests.Count) PowerShell source files."
 }
 
+<#
+.SYNOPSIS
+运行注册的 PowerShell 组件及集成测试并核验报告。
+#>
 function Run-ScriptTests {
     Confirm-TestStructure
     $residuePrefixes = @('chat-instance-validation-', 'chat-instance-lifecycle-')
@@ -1531,6 +1616,10 @@ function Run-ScriptTests {
     Assert-NoNewRegressionResidue -Before $residueBefore -Prefixes $residuePrefixes -Lane 'PowerShell'
 }
 
+<#
+.SYNOPSIS
+运行 Varify 单元与集成测试，保留报告并传播 npm 失败。
+#>
 function Run-VarifyTests {
     Confirm-TestStructure
     $residuePrefixes = @('varify-config-', 'varify-startup-', 'chat-proto-mutation-')
@@ -1602,6 +1691,10 @@ function Run-VarifyTests {
     Assert-NoNewRegressionResidue -Before $residueBefore -Prefixes $residuePrefixes -Lane 'VarifyServer'
 }
 
+<#
+.SYNOPSIS
+按锁文件显式安装 Varify 依赖，属于依赖恢复操作。
+#>
 function Restore-Varify {
     [void](Require-Command 'node.exe' 'Install Node.js before restoring VarifyServer.')
     $npm = Require-Command 'npm.cmd' 'Install npm before restoring VarifyServer.'
@@ -1616,6 +1709,10 @@ function Restore-Varify {
     }
 }
 
+<#
+.SYNOPSIS
+顺序执行各模块公开回归并校验汇总报告及残留。
+#>
 function Run-AllTests {
     $residueBefore = @(Get-RegressionResidueSnapshot -Prefixes $regressionResiduePrefixes)
     Run-ScriptTests
@@ -1626,6 +1723,10 @@ function Run-AllTests {
     Assert-NoNewRegressionResidue -Before $residueBefore -Prefixes $regressionResiduePrefixes -Lane 'Aggregate'
 }
 
+<#
+.SYNOPSIS
+显示并验证现有构建工具链，不恢复依赖。
+#>
 function Check-Toolchains {
     $vcpkg = Resolve-Vcpkg
     $msbuild = Resolve-MSBuild
@@ -1647,7 +1748,34 @@ function Check-Toolchains {
     Write-Host "Triplet:  $serverTriplet ($overlayTriplets)"
 }
 
+<#
+.SYNOPSIS
+执行共用规范检查、回归或目录审计；检查器依赖必须事先显式安装，不隐式恢复依赖。
+#>
+function Invoke-ConventionTask {
+    param([string]$Mode)
+    $python = Require-Command 'python' 'Install Python 3.11 or newer for convention checks.'
+    Push-Location $repoRoot
+    try {
+        if ($Mode -eq 'RunConventionTests') {
+            & $python -m unittest discover -s tests/build/conventions -p test_conventions.py
+        } elseif ($Mode -eq 'AuditConventions') {
+            & $python scripts/conventions/check.py --audit build/conventions/audit.json
+        } elseif ($env:GITHUB_ACTIONS -eq 'true') {
+            & $python scripts/conventions/check.py --event $env:GITHUB_EVENT_PATH --event-name $env:GITHUB_EVENT_NAME
+        } else {
+            & $python scripts/conventions/check.py --base $ConventionBase
+        }
+        if ($LASTEXITCODE -ne 0) { throw "Convention task $Mode failed with exit code $LASTEXITCODE." }
+    } finally {
+        Pop-Location
+    }
+}
+
 switch ($Task) {
+    'CheckConventions' { Invoke-ConventionTask $Task }
+    'RunConventionTests' { Invoke-ConventionTask $Task }
+    'AuditConventions' { Invoke-ConventionTask $Task }
     'Check' { Check-Toolchains }
     'CheckTestStructure' { Confirm-TestStructure }
     'CheckTestReports' { Confirm-RegressionReports }

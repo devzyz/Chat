@@ -5,6 +5,7 @@ on:
     branches: [develop, master]
   pull_request:
     branches: [develop, master]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
   schedule:
     # Monday 03:17 Asia/Shanghai (Sunday UTC).
     - cron: '17 19 * * 0'

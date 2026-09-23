@@ -34,7 +34,9 @@ develop Required Check 为 `Regression checks`；master 为 `Regression checks` 
 ### 1.2 规范检查合同
 
 命名和注释标准见 [Standards](../docs/Standards.md#类与函数注释)，Git 格式见
-[Quality](../docs/Quality.md#git-规范)。以下为待实现的门禁合同，规则先由评审执行；本次文档落地不代表 CI 已启用。
+[Quality](../docs/Quality.md#git-规范)。实现位于 `scripts/conventions/`；Windows static-check
+通过统一入口先运行检查器回归再检查增量，失败传递到既有汇总。命令与工具准备见
+[规范测试入口](build/conventions/README.md)。本地通过不代表尚未提交的远端 CI 已执行。
 
 - Git 检查覆盖 PR 来源分支、标题及目标分支尚未包含的新增普通提交；标题编辑后重跑。
   push 检查本次新增提交，不扫描全部历史。历史豁免以门禁启用时固定的 SHA/分支清单为界，范围不得自动扩大。
@@ -42,6 +44,24 @@ develop Required Check 为 `Regression checks`；master 为 `Regression checks` 
 - 自动检查负责格式、非空注释和参数匹配；业务命名、注释真实性、所有权与线程语义由评审确认。
 - 违规 MUST 返回非零并定位对象；读取失败不能当作无违规。PR 元数据作为数据传入，不拼接为可执行 shell。
 - 检查器先用有效/无效样例验证，再接入现有汇总检查；按 [治理计划](../docs/plans/CodeConventions.md) 分批启用，未实现前不增加悬空 Required Check。
+
+历史豁免固定为已在 develop 的 `aa154435af656985a885971b70e54e1ee9f8f546` 及其祖先，
+不会随着每次运行自动前移。真实多父 merge 可使用 Git 默认标题；普通提交不能靠 `Merge` 前缀绕过。
+PR 来源分支仍校验当前名称；squash 标题使用普通规则；revert 正文须含回退 SHA；
+breaking 正文须有迁移说明；`develop → master` 标题版本须与 head 的 `VERSION` 精确一致。
+动词格式以 `git_rules.py` 的 `VERBS` 集合为机器支持边界，新增词应连同正反例评审；业务语义不能靠词表确认。
+PR 元数据仅作为 JSON 数据读取，不插入 shell。源码以 merge-base 比较，避免目标分支前进造成无关反向差异。
+
+支持边界：Tree-sitter 定位 C++/Qt 与 JS 类、函数声明/定义及回调；PowerShell 使用原生 AST。
+去除注释/空白后的 token 变化决定增量，纯注释不触发未修改的旧函数。头文件为权威说明；
+C++ 定义可引用同名或直接本地 include 中唯一匹配的声明，歧义重载需在定义处说明。
+类外成员变化同时检查已解析头文件中的所属类。不是编译器级符号解析：跨间接 include、别名、
+条件编译可达性及复杂模板归属仍需评审；局部 direct-init 与函数原型的歧义交由编译校验。
+已支持 Qt 元对象/信号槽宏、emit、foreach；固定 grammar 的默认空列表表示差异有窄范围兼容。
+未知声明宏、GTest `TEST*`、QTest 主入口宏及 Windows 调用约定未自动展开，触及文件时解析失败会阻断，
+需要补解析支持及反例，不能按“无对象”通过。Python、CMake、YAML、SQL、protobuf 等由所属校验器与评审负责。
+自动检查只检查函数/类命名形状、中文说明存在与显式 `@param` 名称，不检查变量命名、参数类型语义、
+无 `@param` 时的完整性或说明是否真实；框架 override、构造/析构、operator、main、外部 GetVarifyCode 保留名称。
 
 ## 2. 回归测试
 

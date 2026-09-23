@@ -71,6 +71,10 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 
 ## 本地与 CI 一致性
 
+规范检查另需 Python 3.11+、固定 Tree-sitter wheels 及 PowerShell 原生解析器，
+准备与执行命令见 [规范测试入口](../tests/build/conventions/README.md)。工具仅进入
+`build/conventions/python`；不属于应用运行依赖，不改变 vcpkg 清单或安装树。
+
 - 本地和 CI MUST 调用相同的 `scripts/windows-local.ps1` 任务，不得在 workflow 中维护第二套编译逻辑。
 - CI MAY 通过参数覆盖临时目录、triplet 和工具根，但不得改变编译语义。
 - 构建脚本 MUST 对缺失工具、版本不匹配和依赖恢复失败返回非零状态。

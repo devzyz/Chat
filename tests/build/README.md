@@ -1,5 +1,8 @@
 # Linux preflight contract
 
+Git, C++/Qt, JavaScript and PowerShell convention checks and their explicit regression
+registration are documented in [conventions/README.md](conventions/README.md).
+
 ## CI routing and budgets
 
 `node --test tests/build/ciBudget.test.js` checks develop quick regression, master/weekly/manual full regression,
