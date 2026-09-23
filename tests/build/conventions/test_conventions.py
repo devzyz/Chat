@@ -28,6 +28,7 @@ class GitRulesTests(unittest.TestCase):
     def test_subjects_and_squash(self):
         """普通与 squash 共用规则，语义空泛及非英文标题拒绝。"""
         self.assertEqual([], validate_message("docs(repo): document shutdown contracts"))
+        self.assertEqual([], validate_message("refactor(verify): standardize adapter names and contracts"))
         self.assertEqual([], validate_message("fix(scripts): authenticate GitHub release asset requests"))
         for message in ["fix(client): fix bugs", "chore(repo): update code", "docs(repo): update docs.",
                         "fix(other): add tests", "fix(chat): 修复错误", "fix(chat): add " + "x" * 100]:
