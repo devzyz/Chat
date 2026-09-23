@@ -29,3 +29,17 @@
 建议顺序：N0 → N1 → N2 → N3/N4/N5；N6、N7 可独立安排，N8 在 N7 后，最后 N9。
 “可独立”只表示依赖关系，不要求并行代理或增加重复报告。
 `Varify` 等外部协议拼写迁移不属于内部规范化批次；需要独立兼容方案与用户任务后再实施。
+
+## N4 接口链与核查边界
+
+| 子批 | 权威声明与实现核查范围 | 重点契约 |
+| --- | --- | --- |
+| 会话与生命周期 | ChatServer 的 `CServer`、`CSession`、`SessionLifecycleCoordinator`、`UserSessionDirectory`、`SessionTypes`、`UserPresenceStore`、`RedisUserPresenceStore`、`LogicDispatcher` | 弱引用和快照有效期、旧会话返回、入队与送达区别、绑定回调线程、停止与存储排空的区别 |
+| 文本提交与存储 | `MessageCommit`、`MySqlMessageCommitAdapter`；`MysqlDao`/`MysqlMgr` 的批次提交、历史分页及增量同步接口 | 认证身份、UUID 幂等冲突、批次事务、连接借用、期限与未知提交结果、输出参数的失败边界 |
+| Gate/Status 路由 | `GateRequest`、`GateRequestInternal`、`GateRequestProduction`、`StatusRouting`、`StatusRoutingInternal`、`StatusRoutingProduction` 及对应实现 | 同步端口、依赖持有、错误映射、选服排序、Token 写入和校验 |
+| Resource 存储 | `ResourceStore` 及 `Error`、`Metadata` | 单执行器调用、字节偏移、部分写失败、摘要与媒体校验、下载授权由上层负责 |
+
+该边界不代表整个 Server 目录已无历史缺项。HTTP 传输、其他 DAO/连接池、共享资源目录、
+其余业务处理及测试注释仍由 N9 按目录审计，并归回相应工作包；不把这些接口的说明推断成全仓覆盖。
+纯注释子批对照实现与所属测试合同检查，并比较去除注释后的源码 token；涉及改名或行为变更时，
+恢复表中对应的编译和模块回归要求。当前完成情况与实际证据只见 [Status](../Status.md)。

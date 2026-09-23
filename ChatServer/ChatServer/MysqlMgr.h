@@ -32,15 +32,16 @@ public:
 		std::vector<std::shared_ptr<ChatInfoBase>>& chat_list, bool& load_more, int& new_next_chat_id);
 	// 创建私聊会话
 	bool CreatePrivateChat(int user1_id, int user2_id, int& chat_id);
-	// 插入from_uid发给to_uid的对话
+    /** @brief 转交已认证文本批次提交；DAO 先清空 chat_msgs，成功按输入顺序填充，错误不代表可换 UUID 重试。 */
 	message_commit::Result AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
         int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
         std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline);
-	// 增量加载部分聊天数据
+    /** @brief 转交带成员校验的 ID 升序分页，输出消息、后续页标志和末尾 ID；false 时不得消费输出。 */
 	bool GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
     /** @brief 上报或同步消息回执，输出响应及对端 UID；失败返回 false 并填充 receipt_error。 */
     bool HandleReceiptRequest(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer);
+    /** @brief 转交持久化消息增量同步；成功填充 response，false 表示存储或请求处理失败。 */
     bool SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response);
 private:
 	MysqlMgr();
