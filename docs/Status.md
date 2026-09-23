@@ -3,7 +3,14 @@
 更新：2026-09-23。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
 项目目标：先完成基本聊天功能，后续主要投入可测量的性能优化。
 
-## 当前工作：消息状态控制
+## 当前工作：命名与注释规范化
+
+- N0 文档规则已落地，任务分支 `docs/repo/code-conventions` 基于已同步的 develop `2307999`。
+- [批次计划](plans/CodeConventions.md) 按问题类型和验证边界组织；下一步 N1 修正错误/失效注释，N7 Git 门禁可独立安排。
+- 本次仅修改规范与计划；未执行历史代码改名/补注释，自动检查尚未实现。验证范围为文档事实、链接和 diff，不代表业务回归或远端 CI 通过。
+- 文档检查通过：7 个版本管理范围内的变更文件、44 个内部链接及锚点、UTF-8/LF、代码块配对和 `git diff --check`；本机忽略的 AGENTS 仅精简 Git 规范读取入口。
+
+## 前序记录：消息状态控制
 
 - 从最新远端 develop `34caf1e` 同步后创建 `feat/message-state-control`；前序修复 PR #12 已合入。
 - 实现持久化发送批次/attempt/有界重试，区分 Queued、Sending、Uncertain、Failed、Sent、Delivered、Read。

@@ -101,14 +101,41 @@ Required Checks、运行时机和失败规则统一见 [CI 治理](../tests/CI-G
 5. 是否增加个人路径、重复实现或无必要依赖。
 6. 测试是否验证行为而非实现细节，是否真实执行。
 7. 发布目录和未来 Linux Server 是否受影响。
+8. 类和函数注释是否齐全且符合实现，名称是否准确；按 [总则](Standards.md#类与函数注释) 检查本次新增/修改范围。
 
 ## Git 规范
 
-- 一个提交 SHOULD 对应一个可说明的逻辑目标。
-- 提交信息 SHOULD 使用简洁英文前缀，例如 `feat:`, `fix:`, `test:`, `build:`, `docs:`。
+### 分支与命名
+
+新任务 MUST 先获取远端更新，将本地 `develop` 快进同步到 `origin/develop`，再创建任务分支。
+已有修改先保留，分叉时先查明原因，不用 reset 覆盖。任务分支经 PR 合入 `develop`，再由发布 PR 合入 `master`。
+
+| 对象 | 必须格式 | 示例 |
+| --- | --- | --- |
+| 任务分支 | `<type>/<scope>/<description>` | `fix/client/message-read-state` |
+| PR 标题 | `<type>(<scope>): <summary>` | `fix(client): preserve read state after late acknowledgements` |
+| Commit 首行 | `<type>(<scope>): <summary>` | `fix(client): prevent late acknowledgements from downgrading read state` |
+
+- `type` 限定为 `feat`、`fix`、`refactor`、`perf`、`docs`、`test`、`build`、`ci`、`style`、`chore`、`revert`。
+  `style` 仅表示格式调整，重命名用 `refactor`，纯注释维护用 `docs`；功能连同必要测试/文档按主要目标分类。
+- `scope` 限定为 `client`、`gate`、`status`、`chat`、`resource`、`verify`、`proto`、`shared`、`scripts`、`deps`、`repo`。
+  `client` 表示 Qt，`chat` 表示 ChatServer，`verify` 表示现有 VarifyServer，跨多个独立模块的整体变更用 `repo`。
+- 分支描述为小写英文/数字组成的 kebab-case；分支中仅允许小写英文、数字、连字符及格式中的两个斜杠。
+- PR/commit 摘要 MUST 为简洁英文、动词开头、不加句号，完整首行不超过 100 字符；描述具体结果，不使用 `update code` 或 `fix bugs`。
+- 不兼容变更在 scope 后加 `!`，例如 `feat(proto)!: ...`，正文提供 `BREAKING CHANGE:` 及迁移说明；分支名不加 `!`。
+- 长期分支 `develop`、`master` 保留原名；`develop → master` 的 PR 标题为 `chore(repo): release <version>`，版本与 `VERSION` 一致。
+- 自动生成的 merge commit 可保留默认信息；普通提交（含 squash 结果）遵守上述格式。Revert 使用 `revert(scope): ...` 并在正文记录回退 SHA。
+- 新建分支、新 PR 和新提交立即执行；已有分支/提交不因本规范重写历史，自动门禁的增量边界见 [CI 治理](../tests/CI-GOVERNANCE.md#12-规范检查合同)。
+
+### 提交与 PR 内容
+
+- 一个提交 MUST 对应一个可说明的逻辑目标；PR 标题概括最终整体结果，commit 描述各自变更，不必与 PR 同名。
+- PR 正文说明问题、最终行为、实际验证和剩余限制；按复杂度控制篇幅。复杂 commit 的正文解释原因和兼容影响，简单修改无需套空模板。
 - 测试、文档和必要构建配置可与对应行为变更同提交；大规模格式化和无关重构必须拆分。
 - 提交前 MUST 检查 `git diff --check` 和 staged 文件范围。
 - 禁止提交缓存、构建产物、测试秘密、临时状态和意外生成文件。
+
+规范历史治理按 [批次计划](plans/CodeConventions.md) 执行，日常局部任务无需加载该计划。
 
 ## 合并完成定义
 
