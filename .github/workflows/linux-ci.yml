@@ -19,6 +19,8 @@ jobs:
       - name: Check out candidate source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Acquire locked CMake
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/install-linux-tools.sh
       - name: Run real child lifecycle without service dependencies
         run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-01-posix
@@ -50,6 +52,8 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Acquire locked CMake
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/install-linux-tools.sh
 
       - name: Select locked Node runtime
@@ -260,6 +264,8 @@ jobs:
           cache: npm
           cache-dependency-path: VarifyServer/package-lock.json
       - name: Acquire locked CMake
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/install-linux-tools.sh
       - name: Download launcher from this workflow run
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -348,6 +354,8 @@ jobs:
           cache: npm
           cache-dependency-path: VarifyServer/package-lock.json
       - name: Acquire locked CMake
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/install-linux-tools.sh
       - name: Download launcher from this workflow run
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0

@@ -3,9 +3,11 @@
 #include "Const.h"
 
 namespace {
+/** @brief 按固定顺序构造实例键和会话键，与 Lua 的 KEYS 索引对应。 */
 std::vector<std::string> Keys(int uid) {
     return {USER_IP_PREFIX + std::to_string(uid), USER_SESSION_KEY + std::to_string(uid)};
 }
+/** @brief 将双键响应映射为位置结果；读取失败或元素数异常为不可用，空字段为不存在。 */
 PresenceResult Decode(const std::optional<std::vector<std::string>>& result) {
     if (!result || result->size() != 2) return {};
     if ((*result)[0].empty() || (*result)[1].empty()) return {PresenceStatus::NotFound, {}};

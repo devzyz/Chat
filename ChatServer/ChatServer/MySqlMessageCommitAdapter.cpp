@@ -14,10 +14,12 @@
 namespace message_commit {
 namespace {
 
+/** @brief 检查单调时钟截止时间，超时抛提交错误供事务层映射。 */
 void CheckDeadline(Deadline deadline) {
     if (std::chrono::steady_clock::now() >= deadline) { throw Error::DEADLINE_EXCEEDED; }
 }
 
+/** @brief 在当前事务锁定双方所属私聊行；无匹配返回 false，SQL 失败抛异常。 */
 bool IsMember(sql::Connection& connection, int sender, int recipient, int chat) {
     // Serialize ID allocation/commit with resource writers and incremental sync
     // on the private_chat row, so a sync cursor cannot pass an uncommitted ID.
@@ -33,6 +35,7 @@ bool IsMember(sql::Connection& connection, int sender, int recipient, int chat) 
     return result->next();
 }
 
+/** @brief 锁定发送者 UUID 对应记录并核对会话、接收者及正文；不一致抛 CONFLICT。 */
 Item ReadIdentity(sql::Connection& connection, int sender, int recipient, int chat,
     const std::pair<std::string, std::string>& message, Disposition disposition) {
     std::unique_ptr<sql::PreparedStatement> query(connection.prepareStatement(

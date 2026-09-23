@@ -10,8 +10,10 @@
 namespace status_routing_internal {
 namespace {
 
+/** @brief 持有不可变候选表，通过注入端口同步完成确定性选服和 Token 校验。 */
 class StatusRoutingImpl final : public StatusRouting {
 public:
+    /** @brief 接管候选表并共享持有有效的存储和 Token 源。 */
 	StatusRoutingImpl(
 		std::vector<RoutingServer> servers,
 		std::shared_ptr<StatusStore> store,
@@ -21,6 +23,7 @@ public:
 		  token_source_(std::move(token_source)) {
 	}
 
+    /** @brief 按有效计数和名称选服，Token 持久化成功才返回地址；所有异常返回空失败结果。 */
 	AssignmentResult Assign(int uid) override {
 		try {
 			const RoutingServer* selected = nullptr;
@@ -63,6 +66,7 @@ public:
 		}
 	}
 
+    /** @brief 对照存储 Token 校验，区分 UID 缺失、Token 不匹配和依赖异常。 */
 	LoginResult Validate(int uid, const std::string& token) override {
 		try {
 			const auto stored_token = store_->GetToken(uid);

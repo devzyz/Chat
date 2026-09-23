@@ -7,8 +7,10 @@
 namespace gate::internal {
 namespace {
 
+/** @brief 共享持有四个业务端口，按端点顺序调用并统一映射异常。 */
 class GateRequestImpl final : public GateRequest {
 public:
+    /** @brief 保存四个非空依赖，供后续同步请求复用。 */
 	GateRequestImpl(
 		std::shared_ptr<VerificationPort> verification,
 		std::shared_ptr<CodeStore> code_store,
@@ -20,6 +22,7 @@ public:
 		  status_(std::move(status)) {
 	}
 
+    /** @brief 执行业务校验及依赖调用；首个失败立即返回，异常统一映射为 RPCFailed。 */
 	Result Handle(Endpoint endpoint, const Json::Value& request) override {
 		try {
 			if (endpoint == Endpoint::GetVarifyCode) {
