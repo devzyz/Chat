@@ -30,7 +30,8 @@ public:
      * 因此只有当它为公有析构的时候，才能够通过智能指针析构掉
      */
     ~HttpMgr();
-    void PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod,
+    /** @brief 提交指定模块的 JSON HTTP 请求，完成结果通过请求标识和模块信号分发。 */
+    void postHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod,
                      AuthFlowId flowId);
 
 private:
@@ -42,19 +43,25 @@ private:
      * 因此，通过添加友元的方式，实现对私有构造函数的访问
      */
     friend class Singleton<HttpMgr>;
+    /** @brief 初始化对象，用于分发 Gate HTTP 操作的完成结果和模块通知。 */
     HttpMgr();
     GateHttpTransport _transport;
 
 private slots:
-    void slot_http_finish(AuthFlowId flowId, ReqId id, Modules mod,
+    /** @brief 按模块将 HTTP 终态分发给注册、登录或重置密码页面。 */
+    void httpFinish(AuthFlowId flowId, ReqId id, Modules mod,
                           QString res, ErrorCodes err);
 
 signals:
-    void sig_http_finish(AuthFlowId flowId, ReqId id, Modules mod,
+    /** @brief 通知请求 ID、响应体、错误及模块关联的 HTTP 完成结果。 */
+    void httpFinished(AuthFlowId flowId, ReqId id, Modules mod,
                          QString res, ErrorCodes err);
-    void sig_reg_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
-    void sig_reset_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
-    void sig_login_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
+    /** @brief 通知注册模块的 HTTP 请求结果。 */
+    void registrationHttpFinished(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
+    /** @brief 通知重置密码模块的 HTTP 请求结果。 */
+    void passwordResetHttpFinished(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
+    /** @brief 通知登录模块的 HTTP 请求结果。 */
+    void loginHttpFinished(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
 };
 
 #endif // HTTPMGR_H

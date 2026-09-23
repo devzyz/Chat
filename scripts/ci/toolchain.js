@@ -5,6 +5,7 @@ const { execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 
 const repositories = { cmake: 'Kitware/CMake', ninja: 'ninja-build/ninja', 'powershell-core': 'PowerShell/PowerShell' };
+/** 校验编译器与三项工具的锁定格式、来源和摘要；不合法时拒绝使用。 */
 function validate(lock) {
     if (lock.schema !== 1 || !/^14\.\d+\.\d+$/.test(lock.msvc?.toolset) ||
         !/^19\.\d+\.\d+\.\d+$/.test(lock.msvc?.compilerVersion) ||
@@ -12,7 +13,7 @@ function validate(lock) {
     if (lock.msvc.compilerSha256 && !/^[a-f0-9]{64}$/.test(lock.msvc.compilerSha256)) throw new Error('Invalid compiler digest');
     if (!Array.isArray(lock.tools) || lock.tools.length !== 3) throw new Error('Expected three locked tools');
     for (const name of Object.keys(repositories)) {
-        const tools = lock.tools.filter(tool => tool.name === name);
+        const tools = lock.tools.filter(/** 按工具名称筛出对应锁定项以核对唯一性。 */ tool => tool.name === name);
         const tool = tools[0];
         if (tools.length !== 1 || tool.os !== 'windows' || tool.arch !== (name === 'cmake' ? 'amd64' : 'x64') ||
             !/^\d+\.\d+\.\d+$/.test(tool.version) || !/^[a-f0-9]{128}$/.test(tool.sha512) ||
@@ -24,27 +25,34 @@ function validate(lock) {
     }
     return lock;
 }
+/** 对校验后的锁文件生成确定性 SHA-256 身份。 */
 function identity(lock) { return createHash('sha256').update(JSON.stringify(validate(lock))).digest('hex'); }
+/** 只允许默认分支的定时任务或明确请求的手动任务刷新工具。 */
 function canRefresh(event, ref, defaultBranch, requested) {
     return ref === `refs/heads/${defaultBranch}` &&
         (event === 'schedule' || (event === 'workflow_dispatch' && requested === 'true'));
 }
+/** 核对工具工件来自指定工作流、分支及成功的受信事件。 */
 function trustedRun(run, workflowId, branch) {
     return run.workflow_id === workflowId && run.head_branch === branch && run.conclusion === 'success' &&
         ['schedule', 'workflow_dispatch'].includes(run.event);
 }
+/** 通过有界 gh API 请求读取 JSON，失败直接传播。 */
 function api(endpoint) {
     return JSON.parse(execFileSync('gh', ['api', endpoint], { encoding: 'utf8', timeout: 60000, maxBuffer: 8 * 1024 * 1024 }));
 }
+/** 把工具选择结果发布到 GitHub 输出文件及标准输出。 */
 function output(values) {
-    const text = Object.entries(values).map(([key, value]) => `${key}=${value}\n`).join('');
+    const text = Object.entries(values).map(/** 把一个输出键值转换为工作流输出行。 */ ([key, value]) => `${key}=${value}\n`).join('');
     if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, text);
     process.stdout.write(text);
 }
+/** 下载指定运行中的已批准工具链工件，限制等待时间。 */
 function download(repo, runId, directory) {
     execFileSync('gh', ['run', 'download', String(runId), '--repo', repo,
         '--name', 'ci-toolchain-approved', '--dir', directory], { timeout: 120000, stdio: 'inherit' });
 }
+/** 选择受信工具链锁，验证工件身份后发布路径与来源；刷新只在授权事件执行。 */
 function select(directory, { request = api, acquire = download, env = process.env, publish = output } = {}) {
     const repo = env.GITHUB_REPOSITORY;
     if (!/^[\w.-]+\/[\w.-]+$/.test(repo || '')) throw new Error('Invalid repository');

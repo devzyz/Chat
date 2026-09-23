@@ -7,6 +7,7 @@
 
 namespace {
 
+/** 按网络协议组合消息编号、正文长度及正文，供分片与粘包测试。 */
 QByteArray frame(quint16 messageId, const QByteArray &body)
 {
     QByteArray bytes;
@@ -17,6 +18,7 @@ QByteArray frame(quint16 messageId, const QByteArray &body)
     return bytes;
 }
 
+/** 断言失败时输出定位信息并返回条件值，供累积测试结果。 */
 bool expect(bool condition, const char *message)
 {
     if (!condition) {
@@ -27,6 +29,7 @@ bool expect(bool condition, const char *message)
 
 } // namespace
 
+/** 验证帧头及正文分片、粘包、非法长度和重置后的缓冲状态。 */
 int main(int argc, char *argv[])
 {
     QCoreApplication application(argc, argv);

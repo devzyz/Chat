@@ -2,7 +2,9 @@
 #include <string>
 
 // 用户基本信息
+/** @brief 保存查询得到的用户资料；仅作为进程内数据对象，不控制会话生命周期。 */
 struct UserInfo {
+	/** @brief 初始化UserInfo，保存查询得到的用户资料；仅作为进程内数据对象，不控制会话生命周期。 */
 	UserInfo() : _uid(0), _name(""), _password(""), _email(""), _description(""), _icon(""), _sex(0) {}
 	int _uid; // id
 	std::string _name; // 昵称
@@ -62,14 +64,18 @@ public:
     std::string _backname; // 认证人给被认证人的备注名
 };
 
+/** @brief 保存消息身份、参与者、内容和时间，供数据库结果与协议响应之间传递。 */
 class ChatMessage {
 public:
+    /** @brief 保存普通消息身份、参与者、正文与状态；创建时间尚未赋值，读取前须由调用方补齐。 */
     ChatMessage(int message_id, int chat_id, int send_id, int recv_id, std::string content, int status) : 
         _message_id(message_id), _chat_id(chat_id), _send_id(send_id), _recv_id(recv_id), _content(content), _status(status) {}
+    /** @brief 额外保存客户端 UUID；创建时间尚未赋值，读取前须由调用方补齐。 */
     ChatMessage(int message_id, std::string client_msg_id, int chat_id, int send_id, int recv_id, std::string content, int status) :
         _message_id(message_id), _client_msg_id(client_msg_id), _chat_id(chat_id), _send_id(send_id), 
         _recv_id(recv_id), _content(content), _status(status) {
     }
+    /** @brief 保存包含持久化创建时间的消息；客户端 UUID 保持空字符串。 */
     ChatMessage(int message_id, int chat_id, int send_id, int recv_id, std::string content, int status, int64_t created_at) :
         _message_id(message_id), _chat_id(chat_id), _send_id(send_id), _recv_id(recv_id), _content(content), _status(status), _created_at(created_at){
     }
@@ -83,10 +89,14 @@ public:
     int64_t _created_at;
 };
 
+/** @brief 保存聊天会话共有字段，派生类型补充私聊或群聊资料。 */
 class ChatInfoBase {
 public:
+    /** @brief 创建待填充的会话基类，会话编号读取前须由调用方赋值。 */
     ChatInfoBase(){}
+    /** @brief 以类型和会话编号初始化共有字段。 */
     ChatInfoBase(std::string type, int chat_id) : _type(type), _chat_id(chat_id) {}
+    /** @brief 提供虚析构，允许经基类指针销毁派生会话资料。 */
     virtual ~ChatInfoBase() = default;
     // 当前会话的类型，私聊或群聊
     std::string _type;
@@ -94,18 +104,24 @@ public:
     int _chat_id;
 };
 
+/** @brief 保存私聊会话及对方用户资料。 */
 class PrivateChatInfo : public ChatInfoBase{
 public:
+    /** @brief 创建待填充的私聊资料，会话及参与者编号读取前须赋值。 */
     PrivateChatInfo() {}
+    /** @brief 以会话类型、编号和双方用户编号构造私聊资料。 */
     PrivateChatInfo(std::string type, int chat_id, int user1_id, int user2_id) : 
         ChatInfoBase(type, chat_id), _user1_id(user1_id), _user2_id(user2_id) {}
     int _user1_id;
     int _user2_id;
 };
 
+/** @brief 保存群聊会话及群组展示资料。 */
 class GroupChatInfo : public ChatInfoBase{
 public:
+    /** @brief 创建待填充的群聊资料，会话编号读取前须赋值。 */
     GroupChatInfo() {}
+    /** @brief 以会话类型、编号及群名称构造群聊资料。 */
     GroupChatInfo(std::string type, int chat_id, std::string group_name) : 
         ChatInfoBase(type, chat_id), _group_name(group_name) {}
     // 群聊的名称

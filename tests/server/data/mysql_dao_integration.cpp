@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <cstdlib>
 
+/** 在显式隔离 MySQL 中验证私聊双方顺序对称，插入失败不会提交孤立会话。 */
 TEST(MysqlDaoIntegration, PrivateChatIsSymmetricAndFailedInsertDoesNotCommitAnOrphan) {
     const auto* endpoint = std::getenv("RESOURCE_TEST_MYSQL");
     const auto* config = std::getenv("MYSQL_DAO_TEST_CONFIG");
@@ -18,7 +19,7 @@ TEST(MysqlDaoIntegration, PrivateChatIsSymmetricAndFailedInsertDoesNotCommitAnOr
     ASSERT_TRUE(dao.CreatePrivateChat(7002, 7001, reverse));
     EXPECT_EQ(forward, reverse);
 
-    const auto count_chats = [&] {
+    const auto count_chats = /** 读取聊天表记录数供失败回滚断言。 */ [&] {
         std::unique_ptr<sql::ResultSet> rows(statement->executeQuery("SELECT COUNT(*) FROM chat"));
         if (!rows->next()) throw std::runtime_error("missing count");
         return rows->getInt(1);
@@ -27,8 +28,10 @@ TEST(MysqlDaoIntegration, PrivateChatIsSymmetricAndFailedInsertDoesNotCommitAnOr
     // Only this disposable schema: force an error after the chat row was written.
     statement->execute("CREATE TRIGGER reject_test_private BEFORE INSERT ON private_chat "
         "FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture rejection'");
+    /** 作用域内持有故障触发器清理责任，数据库语句对象必须仍存活。 */
     struct Cleanup {
         sql::Statement& statement;
+        /** 删除本测试注入的触发器，清理失败记录测试失败。 */
         ~Cleanup() {
             try { statement.execute("DROP TRIGGER IF EXISTS reject_test_private"); }
             catch (...) { ADD_FAILURE() << "fixture trigger cleanup failed"; }

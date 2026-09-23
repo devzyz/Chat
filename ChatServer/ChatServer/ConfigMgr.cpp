@@ -12,6 +12,7 @@
 #include <stdexcept>
 
 namespace {
+/** @brief 验证端口为完整十进制整数且处于 TCP 端口范围。 */
 void ValidatePort(const std::string& value, const char* key) {
 	std::size_t parsed = 0;
 	int port = 0;
@@ -26,6 +27,7 @@ void ValidatePort(const std::string& value, const char* key) {
 	}
 }
 
+/** @brief 读取必需配置值，缺失时抛出带配置键的错误。 */
 void RequireValue(const SectionInfo& section, const char* section_name, const char* key) {
 	auto copy = section;
 	if (copy[key].empty()) {
@@ -33,6 +35,7 @@ void RequireValue(const SectionInfo& section, const char* section_name, const ch
 	}
 }
 
+/** @brief 核验配置中的服务地址及端口，非法值阻止启动。 */
 void ValidateEndpoint(const SectionInfo& section, const char* section_name) {
 	auto copy = section;
 	RequireValue(copy, section_name, "Host");
@@ -74,7 +77,7 @@ std::string SectionInfo::operator [] (const std::string key) {
 }
 
 /**
- * @brief 
+ *
  * 从config.ini中读取到配置信息
  */
 ConfigMgr::ConfigMgr() {

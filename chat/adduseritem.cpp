@@ -7,7 +7,7 @@ AddUserItem::AddUserItem(QWidget *parent)
 {
     ui->setupUi(this);
     // 设置类型
-    SetItemType(ListItemType::ADD_USER_TIP_ITEM);
+    setItemType(ListItemType::ADD_USER_TIP_ITEM);
 }
 
 AddUserItem::~AddUserItem()

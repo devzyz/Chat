@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const assert = require('node:assert/strict');
 const { startLocalMysql } = require('./localMysql');
 
+/** 仅在自建 MySQL 实例载入显式给定导出文件并复现注册失败，结束后清理实例。 */
 async function main() {
     const fixture = await startLocalMysql(process.env.CHAT_MYSQL_BIN);
     try {
@@ -36,4 +37,4 @@ async function main() {
     await fixture.close();
 }
 
-main().catch(error => { console.error(error.message); process.exitCode = 1; });
+main().catch(/** 输出复现失败原因并设置非零退出状态。 */ error => { console.error(error.message); process.exitCode = 1; });

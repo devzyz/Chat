@@ -13,13 +13,13 @@ ApplyFriendPage::ApplyFriendPage(QWidget *parent)
 {
     ui->setupUi(this);
 
-    // connect(ui->apply_friend_list, &ApplyFriendList::sig_show_search, this, &ApplyFriendPage::sig_show_search);
+    // connect(ui->apply_friend_list, &ApplyFriendList::searchRequested, this, &ApplyFriendPage::searchRequested);
 
     loadApplyList();
 
     // 当本客户端同意认证后，将添加按钮消除
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::friendAdded,
-            this, &ApplyFriendPage::slot_auth_finish);
+    connect(TcpMgr::instance().get(), &TcpMgr::friendAdded,
+            this, &ApplyFriendPage::authFinish);
 }
 
 ApplyFriendPage::~ApplyFriendPage()
@@ -28,26 +28,29 @@ ApplyFriendPage::~ApplyFriendPage()
 }
 
 // 添加一条申请信息
-void ApplyFriendPage::AddNewApply(std::shared_ptr<ApplyInfo> applyInfo)
+/** @brief 添加好友申请展示项并更新申请列表。 */
+void ApplyFriendPage::addNewApply(std::shared_ptr<ApplyInfo> applyInfo)
 {
     auto * apply_item = new ApplyFriendItem();
-    apply_item->SetInfo(applyInfo);
+    apply_item->setInfo(applyInfo);
 
     QListWidgetItem * item = new QListWidgetItem();
     item->setSizeHint(apply_item->sizeHint());
     item->setFlags(item->flags() & ~Qt::ItemIsEnabled & ~Qt::ItemIsSelectable);
     ui->apply_friend_list->insertItem(0, item);
     ui->apply_friend_list->setItemWidget(item, apply_item);
-    apply_item->ShowAddBtn(true);
+    apply_item->showAddBtn(true);
 
     // 将item添加上apply_list上去
     _apply_items_map.insert(applyInfo->_apply_uid, apply_item);
 
     // 收到审核好友信号
-    connect(apply_item, &ApplyFriendItem::sig_auth_friend, this, [this](std::shared_ptr<ApplyInfo> apply_info) {
+    connect(apply_item, &ApplyFriendItem::friendApprovalRequested, this,
+        /** @brief 为选中申请创建有父对象的审批对话框。 */
+        [this](std::shared_ptr<ApplyInfo> apply_info) {
         auto *authFriendDialog =  new AuthFriendDialog(this);
         authFriendDialog->setModal(true);
-        authFriendDialog->SetApplyInfo(apply_info);
+        authFriendDialog->setApplyInfo(apply_info);
         authFriendDialog->show();
     });
 }
@@ -72,12 +75,12 @@ void ApplyFriendPage::paintEvent(QPaintEvent *event)
 void ApplyFriendPage::loadApplyList()
 {
     std::vector<std::shared_ptr<ApplyInfo>> apply_list;
-    UserMgr::GetInstance()->appendFriendApplicationsTo(apply_list);
+    UserMgr::instance()->appendFriendApplicationsTo(apply_list);
 
     // 将申请添加好友的信息显示
     for (int i = 0; i < apply_list.size(); i ++ ) {
         auto *apply_item = new ApplyFriendItem();
-        apply_item->SetInfo(apply_list[i]);
+        apply_item->setInfo(apply_list[i]);
 
         QListWidgetItem *item = new QListWidgetItem;
         item->setSizeHint(apply_item->sizeHint());
@@ -89,22 +92,25 @@ void ApplyFriendPage::loadApplyList()
         _apply_items_map.insert(apply_list[i]->_apply_uid, apply_item);
 
         // 给每一个item绑定一个槽函数，收到好友验证好友信号后，弹出验证对话框
-        connect(apply_item, &ApplyFriendItem::sig_auth_friend, [this](std::shared_ptr<ApplyInfo> apply_info){
+        connect(apply_item, &ApplyFriendItem::friendApprovalRequested,
+            /** @brief 为追加申请条目打开审批对话框。 */
+            [this](std::shared_ptr<ApplyInfo> apply_info){
             auto *authFriendDialog =  new AuthFriendDialog(this);
             authFriendDialog->setModal(true);
-            authFriendDialog->SetApplyInfo(apply_info);
+            authFriendDialog->setApplyInfo(apply_info);
             authFriendDialog->show();
         });
     }
 }
 
 // 当本客户端同意认证后，在服务器回包后，将添加按钮，变为已添加
-void ApplyFriendPage::slot_auth_finish(std::shared_ptr<AuthInfo> auth_info)
+/** @brief 按认证结果更新对应的申请项。 */
+void ApplyFriendPage::authFinish(std::shared_ptr<AuthInfo> auth_info)
 {
     auto uid = auth_info->_auth_uid;
     auto find_iter = _apply_items_map.find(uid);
     if (find_iter == _apply_items_map.end()) {
         return ;
     }
-    (*find_iter)->ShowAddBtn(false);
+    (*find_iter)->showAddBtn(false);
 }

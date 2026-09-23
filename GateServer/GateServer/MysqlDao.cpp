@@ -3,6 +3,7 @@
 #include "../../schema/SchemaContract.h"
 
 namespace {
+/** @brief 使用有限连接和读写期限建立 JDBC 连接，禁止自动重连重放写操作。 */
 std::unique_ptr<sql::Connection> ConnectGateMysql(const std::string& url, const std::string& user,
     const std::string& password, const std::string& schema) {
     sql::ConnectOptionsMap options;
@@ -21,7 +22,7 @@ std::unique_ptr<sql::Connection> ConnectGateMysql(const std::string& url, const 
 
 MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::string& user,
     const std::string& pass, const std::string& schema, int poolsize)
-    try : _connections(std::make_unique<chat_mysql::ConnectionPool<>>(poolsize, [=] {
+    try : _connections(std::make_unique<chat_mysql::ConnectionPool<>>(poolsize, /** @brief 用有限连接及读写期限创建 Gate 数据库连接。 */ [=] {
         return ConnectGateMysql(url, user, pass, schema);
     })) {
     if (poolsize > 0) {
@@ -32,17 +33,17 @@ MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::stri
     throw std::runtime_error("mysql_initialization_failed");
 }
 
-std::unique_ptr<SqlConnection> MysqlConnectionPool::getConnection() {
+std::unique_ptr<SqlConnection> MysqlConnectionPool::GetConnection() {
     auto result = std::make_unique<SqlConnection>();
     result->_con = _connections->Borrow();
     return result->_con ? std::move(result) : nullptr;
 }
 
-void MysqlConnectionPool::returnConnection(std::unique_ptr<SqlConnection> connection) noexcept {
+void MysqlConnectionPool::ReturnConnection(std::unique_ptr<SqlConnection> connection) noexcept {
     if (connection) _connections->Return(std::move(connection->_con));
 }
 
-void MysqlConnectionPool::close() { _connections->Close(); }
+void MysqlConnectionPool::Close() { _connections->Close(); }
 
 MysqlDao::MysqlDao() {
 	auto& configmgr  = ConfigMgr::GetInstance();
@@ -55,12 +56,12 @@ MysqlDao::MysqlDao() {
 }
 
 MysqlDao::~MysqlDao() {
-	_pool->close();
+	_pool->Close();
 }
 
 int MysqlDao::RegUser(const std::string& name, const std::string& email, const std::string& pwd) {
-	auto con = _pool->getConnection();
-    Defer release([this, &con] { _pool->returnConnection(std::move(con)); });
+	auto con = _pool->GetConnection();
+    Defer release(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &con] { _pool->ReturnConnection(std::move(con)); });
 
 	try {
 		if (con == nullptr) {
@@ -97,14 +98,14 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
 }
 
 bool MysqlDao::CheckEmail(const std::string& username, const std::string& email) {
-	auto con = _pool->getConnection();
+	auto con = _pool->GetConnection();
 
 	if (con == nullptr) {
 		return false;
 	}
 
-	Defer defer([this, &con]() {
-		_pool->returnConnection(std::move(con));
+	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &con]() {
+		_pool->ReturnConnection(std::move(con));
 		});
 
 	try {
@@ -135,12 +136,12 @@ bool MysqlDao::CheckEmail(const std::string& username, const std::string& email)
 }
 
 bool MysqlDao::UpdatePassword(const std::string& username, const std::string& password) {
-	auto con = _pool->getConnection();
+	auto con = _pool->GetConnection();
 	if (con == nullptr) {
 		return false;
 	}
-	Defer defer([this, &con]() {
-		_pool->returnConnection(std::move(con));
+	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &con]() {
+		_pool->ReturnConnection(std::move(con));
 		});
 
 	try {
@@ -164,14 +165,14 @@ bool MysqlDao::UpdatePassword(const std::string& username, const std::string& pa
 }
 
 bool MysqlDao::CheckPassword(const std::string& email, const std::string& password, UserInfo& userinfo) {
-	auto con = _pool->getConnection();
+	auto con = _pool->GetConnection();
 
 	if (con == nullptr) {
 		return false;
 	}
 
-	Defer defer([this, &con] {
-		_pool->returnConnection(std::move(con));
+	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &con] {
+		_pool->ReturnConnection(std::move(con));
 		});
 
 	try {

@@ -10,6 +10,7 @@
 
 namespace {
 
+/** 验证文本请求往返保留路由身份、UUID、零字节及中文正文。 */
 TEST(ProtobufContractTests, TextChatRequestRoundTripsAllRoutingAndMessageFields) {
     message::TextChatMsgReq request;
     request.set_fromuid(101);
@@ -44,6 +45,7 @@ TEST(ProtobufContractTests, TextChatRequestRoundTripsAllRoutingAndMessageFields)
     EXPECT_EQ(parsed.textmsgs(1).msgid(), 1002);
 }
 
+/** 验证验证码响应往返保留错误码、邮箱及验证码。 */
 TEST(ProtobufContractTests, VerifyResponsePreservesErrorEmailAndCode) {
     message::GetVarifyRsp response;
     response.set_error(2);
@@ -59,6 +61,7 @@ TEST(ProtobufContractTests, VerifyResponsePreservesErrorEmailAndCode) {
     EXPECT_EQ(parsed.code(), "042731");
 }
 
+/** 验证当前 C++ 消费者能解析初始版本及携带未知字段的二进制夹具。 */
 TEST(ProtobufContractTests, CurrentCppConsumerParsesInitialWireFixtureWithUnknownFields) {
     const auto fixture_root = std::filesystem::path(__FILE__).parent_path() / "fixtures";
     for (const char* fixture_name : {"varify-request-v1.bin", "varify-request-v1-unknown.bin"}) {

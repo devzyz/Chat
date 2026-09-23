@@ -9,7 +9,7 @@ FindFailDialog::FindFailDialog(QWidget *parent)
     ui->setupUi(this);
     setWindowTitle("添加");
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
-    ui->find_fail_sure_btn->SetState("normal", "hover", "press");
+    ui->find_fail_sure_btn->setState("normal", "hover", "press");
     this->setModal(true);
 }
 

@@ -112,7 +112,9 @@ void MessageTextEdit::keyPressEvent(QKeyEvent * e)
             QString deletedName = imgFmt.name();
 
             // 从_mMsgList内删除
-            auto it = std::find_if(_mMsgList.begin(), _mMsgList.end(), [&](const MsgInfo& info) {
+            auto it = std::find_if(_mMsgList.begin(), _mMsgList.end(),
+                /** @brief 从消息缓存中定位已从编辑器删除的图片资源。 */
+                [&](const MsgInfo& info) {
                 return info.content == deletedName;
             });
 

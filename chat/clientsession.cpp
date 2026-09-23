@@ -8,10 +8,12 @@ ClientSession::ClientSession(QObject *parent)
     : QObject(parent)
 {
     _heartbeat.setInterval(10000);
-    connect(&_heartbeat, &QTimer::timeout, this, [this] {
-        const int uid = UserMgr::GetInstance()->uid();
+    connect(&_heartbeat, &QTimer::timeout, this,
+        /** @brief 只为仍活跃且有效的账号发送心跳。 */
+        [this] {
+        const int uid = UserMgr::instance()->uid();
         if (!_active || uid <= 0) return;
-        emit TcpMgr::GetInstance()->sendRequested(ID_HEART_BEAT_REQ,
+        emit TcpMgr::instance()->sendRequested(ID_HEART_BEAT_REQ,
             QJsonDocument(QJsonObject{{"uid", uid}}).toJson(QJsonDocument::Compact));
     });
 }
@@ -21,7 +23,7 @@ void ClientSession::beginSession(QObject *ownedSessionRoot)
     _ownedSessionRoot = ownedSessionRoot;
     _active = true;
     _heartbeat.start();
-    TcpMgr::GetInstance()->beginSession();
+    TcpMgr::instance()->beginSession();
 }
 
 bool ClientSession::resetSession(SessionResetReason reason)
@@ -32,9 +34,9 @@ bool ClientSession::resetSession(SessionResetReason reason)
 
     _active = false;
     _heartbeat.stop();
-    TcpMgr::GetInstance()->resetConnection(
+    TcpMgr::instance()->resetConnection(
         reason != SessionResetReason::UnexpectedDisconnect);
-    UserMgr::GetInstance()->resetSession();
+    UserMgr::instance()->resetSession();
     if (_ownedSessionRoot) {
         QObject *ownedSessionRoot = _ownedSessionRoot.data();
         _ownedSessionRoot.clear();

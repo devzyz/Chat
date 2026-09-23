@@ -6,11 +6,14 @@
 #include <set>
 
 namespace messaging {
+/** @brief 携带可映射为协议错误的回执校验失败，不承载底层凭据。 */
 class ReceiptError final : public std::runtime_error {
 public:
+    /** @brief 初始化ReceiptError，携带可映射为协议错误的回执校验失败，不承载底层凭据。 */
     explicit ReceiptError(const char* code) : std::runtime_error(code) {}
 };
 
+/** @brief 解析回执 revision，拒绝非规范或越界数值。 */
 inline std::int64_t ReceiptRevision(const Json::Value& value) {
     if (!value.isString()) throw ReceiptError("InvalidRequest");
     const auto text = value.asString();
@@ -25,6 +28,7 @@ inline std::int64_t ReceiptRevision(const Json::Value& value) {
     return result;
 }
 
+/** @brief 验证回执请求对象及协议字段，非法输入抛出带业务码的错误。 */
 inline void ValidateReceiptRequest(const Json::Value& request, bool report) {
     if (!request.isObject() || !request["version"].isInt() || request["version"].asInt() != 1
         || !request["chat_id"].isInt() || request["chat_id"].asInt() <= 0
@@ -43,6 +47,7 @@ inline void ValidateReceiptRequest(const Json::Value& request, bool report) {
     }
 }
 
+/** @brief 将当前数据库行序列化为协议回执；要求调用方已定位有效行，数据库读取异常向上传播。 */
 inline Json::Value ReadReceipt(sql::ResultSet& row) {
     Json::Value item;
     item["message_id"] = row.getInt("message_id");
@@ -55,11 +60,17 @@ inline Json::Value ReadReceipt(sql::ResultSet& row) {
 }
 
 // The conversation lock serializes both version allocation and page reads with commit.
+/**
+ * @brief 在事务内锁定会话并核对成员；report 为真时单调更新回执及版本，否则按版本分页读取。
+ * response 填入回执项与游标，peer 写入另一成员编号；仅正常返回时可使用这些输出。
+ * 非法输入、权限或期限失败抛 ReceiptError，数据库异常向上传播，未提交事务由守卫回滚。
+ * 五秒期限在事务阶段间检查，不能取消已开始的同步数据库调用。
+ */
 inline void ReceiptRequest(sql::Connection& connection, int uid, const Json::Value& request,
                            bool report, Json::Value& response, int& peer) {
     ValidateReceiptRequest(request, report);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    const auto check_deadline = [&] {
+    const auto check_deadline = /** @brief 在事务关键阶段检查截止时间，超时抛回执期限错误。 */ [&] {
         if (std::chrono::steady_clock::now() >= deadline) throw ReceiptError("DeadlineExceeded");
     };
     const int chat = request["chat_id"].asInt();

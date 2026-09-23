@@ -38,8 +38,7 @@ TextChatBubble::TextChatBubble(ChatRole role, const QString &text, const QString
 
 /**
  * @brief TextChatBubble::setPlainText
- * @param text
- * @param wrapper
+ * @param text 要显示的纯文本。
  * 将文本信息填充进去，同时设置高度等信息
  */
 void TextChatBubble::setPlainText(const QString &text)

@@ -51,11 +51,11 @@ void CServer::AcceptNext() {
 		std::lock_guard<std::mutex> lock(connections_mutex_);
 		connections_.erase(
 			std::remove_if(connections_.begin(), connections_.end(),
-				[](const auto& connection) { return connection.expired(); }),
+				/** @brief 筛选已失效的 HTTP 会话弱引用。 */ [](const auto& connection) { return connection.expired(); }),
 			connections_.end());
 		connections_.push_back(new_con);
 	}
-	_acceptor.async_accept(new_con->GetSocket(), [self, new_con](beast::error_code ec) {
+	_acceptor.async_accept(new_con->GetSocket(), /** @brief 接收完成后启动新 HTTP 会话，失败时按停服状态决定是否继续监听。 */ [self, new_con](beast::error_code ec) {
 		try {
 			// 出错放弃这个链接，继续监听其他链接
 			if (ec) {

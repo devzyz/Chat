@@ -9,8 +9,9 @@
 
 using namespace std::chrono_literals;
 
+/** 验证池耗尽在配置借用期限内返回明确失败。 */
 TEST(BoundedGrpcPoolTests, ExhaustedPoolReturnsWithinConfiguredAcquireTimeout) {
-    rpc::BoundedPool<int> pool(1, 50ms, [] {
+    rpc::BoundedPool<int> pool(1, 50ms, /** 创建固定值的独占池资源。 */ [] {
         return std::make_unique<int>(7);
     });
 
@@ -27,8 +28,9 @@ TEST(BoundedGrpcPoolTests, ExhaustedPoolReturnsWithinConfiguredAcquireTimeout) {
     EXPECT_LT(elapsed, 500ms);
 }
 
+/** 验证租约析构归还后可再次借用。 */
 TEST(BoundedGrpcPoolTests, ReturnedLeaseCanBeBorrowedAgain) {
-    rpc::BoundedPool<int> pool(1, 50ms, [] { return std::make_unique<int>(7); });
+    rpc::BoundedPool<int> pool(1, 50ms, /** 创建固定值的独占池资源。 */ [] { return std::make_unique<int>(7); });
     {
         auto borrowed = pool.Acquire();
         ASSERT_TRUE(borrowed);
@@ -37,14 +39,15 @@ TEST(BoundedGrpcPoolTests, ReturnedLeaseCanBeBorrowedAgain) {
     EXPECT_TRUE(pool.Acquire());
 }
 
+/** 验证关闭立即唤醒借用者，无需等待原借用期限。 */
 TEST(BoundedGrpcPoolTests, CloseWakesWaitingBorrowerWithoutWaitingForAcquireTimeout) {
-    rpc::BoundedPool<int> pool(1, 5s, [] { return std::make_unique<int>(7); });
+    rpc::BoundedPool<int> pool(1, 5s, /** 创建固定值的独占池资源。 */ [] { return std::make_unique<int>(7); });
     auto held = pool.Acquire();
     ASSERT_TRUE(held);
 
     std::promise<void> entering_acquire;
     auto entered = entering_acquire.get_future();
-    auto waiter = std::async(std::launch::async, [&] {
+    auto waiter = std::async(std::launch::async, /** 通知借用即将开始并返回等待后的失败分类。 */ [&] {
         entering_acquire.set_value();
         return pool.Acquire().failure;
     });
@@ -56,8 +59,9 @@ TEST(BoundedGrpcPoolTests, CloseWakesWaitingBorrowerWithoutWaitingForAcquireTime
     EXPECT_EQ(waiter.get(), rpc::Failure::Closed);
 }
 
+/** 验证重复关闭及关闭后归还不会重新开放池。 */
 TEST(BoundedGrpcPoolTests, RepeatedCloseAndReturnAfterCloseRemainClosed) {
-    rpc::BoundedPool<int> pool(1, 50ms, [] { return std::make_unique<int>(7); });
+    rpc::BoundedPool<int> pool(1, 50ms, /** 创建固定值的独占池资源。 */ [] { return std::make_unique<int>(7); });
     auto held = pool.Acquire();
     ASSERT_TRUE(held);
 
@@ -70,6 +74,7 @@ TEST(BoundedGrpcPoolTests, RepeatedCloseAndReturnAfterCloseRemainClosed) {
     EXPECT_EQ(after_close.failure, rpc::Failure::Closed);
 }
 
+/** 验证 gRPC 状态映射为稳定的失败类别。 */
 TEST(GrpcClientRuntimeTests, ClassifiesStableGrpcFailureCategories) {
     EXPECT_EQ(rpc::ClassifyStatus(grpc::Status::OK), rpc::Failure::None);
     EXPECT_EQ(rpc::ClassifyStatus({ grpc::StatusCode::DEADLINE_EXCEEDED, "test" }), rpc::Failure::DeadlineExceeded);
@@ -78,6 +83,7 @@ TEST(GrpcClientRuntimeTests, ClassifiesStableGrpcFailureCategories) {
     EXPECT_EQ(rpc::ClassifyStatus({ grpc::StatusCode::INTERNAL, "test" }), rpc::Failure::Other);
 }
 
+/** 验证默认期限、合法边界及非法配置拒绝。 */
 TEST(GrpcClientRuntimeTests, DurationUsesDefaultOrValidatesConfiguredRange) {
     EXPECT_EQ(rpc::ParseDurationMs("", "deadline", 3s), 3s);
     EXPECT_EQ(rpc::ParseDurationMs("100", "deadline", 3s), 100ms);

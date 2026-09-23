@@ -15,6 +15,7 @@
 using namespace std::chrono_literals;
 
 namespace {
+/** 短暂绑定并释放随机回环端口，提供预期不可用的测试端点。 */
 unsigned short FindUnavailableLoopbackPort() {
     boost::asio::io_context context;
     boost::asio::ip::tcp::acceptor acceptor(
@@ -25,8 +26,10 @@ unsigned short FindUnavailableLoopbackPort() {
     return port;
 }
 
+/** 提供可延时的验证码 RPC 对端，供生产客户端期限测试。 */
 class ControlledVarifyService final : public message::VarifyService::Service {
 public:
+    /** 按故障开关延时后回显邮箱并返回成功。 */
     grpc::Status GetVarifyCode(
         grpc::ServerContext*,
         const message::GetVarifyReq* request,
@@ -42,8 +45,10 @@ public:
     std::atomic<bool> delay{ false };
 };
 
+/** 提供固定聊天端点的 Status 选服测试服务。 */
 class ControlledStatusService final : public message::StatusService::Service {
 public:
+    /** 返回固定测试聊天地址与端口。 */
     grpc::Status GetChatServer(
         grpc::ServerContext*,
         const message::GetChatServerReq*,
@@ -55,8 +60,10 @@ public:
     }
 };
 
+/** 拥有同一随机回环监听器上的验证码与 Status 服务。 */
 class GateLoopbackServer {
 public:
+    /** 注册测试服务并启动监听，失败抛异常。 */
     GateLoopbackServer() {
         grpc::ServerBuilder builder;
         builder.AddListeningPort("127.0.0.1:0", grpc::InsecureServerCredentials(), &_port);
@@ -68,8 +75,10 @@ public:
         }
     }
 
+    /** 停止所属回环 gRPC 服务。 */
     ~GateLoopbackServer() { Shutdown(); }
 
+    /** 以两秒截止时间关闭服务并释放实例。 */
     void Shutdown() {
         if (_server) {
             _server->Shutdown(std::chrono::system_clock::now() + 2s);
@@ -77,7 +86,9 @@ public:
         }
     }
 
+    /** 返回实际绑定端口字符串。 */
     std::string Port() const { return std::to_string(_port); }
+    /** 借用验证码服务以控制测试延迟。 */
     ControlledVarifyService& Varify() { return _varify; }
 
 private:
@@ -88,6 +99,7 @@ private:
 };
 }
 
+/** 验证生产验证码与 Status 客户端可调用真实动态回环服务。 */
 TEST(GateGrpcClientIntegrationTests, VarifyAndStatusClientsCallDynamicLoopbackServices) {
     GateLoopbackServer server;
     const rpc::ClientPolicy policy{ 50ms, 200ms };
@@ -98,6 +110,7 @@ TEST(GateGrpcClientIntegrationTests, VarifyAndStatusClientsCallDynamicLoopbackSe
     EXPECT_EQ(status.GetChatServer(42).error(), ErrorCodes::Success);
 }
 
+/** 验证验证码 RPC 延时在配置期限内映射为 RPCFailed。 */
 TEST(GateGrpcClientIntegrationTests, DeadlineExceededMapsToRpcFailedWithinConfiguredDeadline) {
     GateLoopbackServer server;
     server.Varify().delay = true;
@@ -116,6 +129,7 @@ TEST(GateGrpcClientIntegrationTests, DeadlineExceededMapsToRpcFailedWithinConfig
     EXPECT_LT(elapsed, 1s);
 }
 
+/** 验证不可用验证码端点有界返回 RPCFailed。 */
 TEST(GateGrpcClientIntegrationTests, UnavailableVarifyEndpointReturnsRpcFailedWithinDeadline) {
     const auto port = FindUnavailableLoopbackPort();
     VerifyGrpcClient client(
@@ -132,6 +146,7 @@ TEST(GateGrpcClientIntegrationTests, UnavailableVarifyEndpointReturnsRpcFailedWi
     EXPECT_LT(elapsed, 1s);
 }
 
+/** 验证对端关闭后有界返回 RPCFailed。 */
 TEST(GateGrpcClientIntegrationTests, PeerShutdownMapsToRpcFailedWithinDeadline) {
     GateLoopbackServer server;
     VerifyGrpcClient client(

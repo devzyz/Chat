@@ -48,7 +48,9 @@ void LocalAvatar::setAccount(const QString &environment, int uid)
     const auto generation = _generation;
     const auto imageRevision = _imageRevision;
     auto *watcher = new QFutureWatcher<AvatarResult>(this);
-    connect(watcher, &QFutureWatcher<AvatarResult>::finished, this, [this, watcher, generation, imageRevision]() {
+    connect(watcher, &QFutureWatcher<AvatarResult>::finished, this,
+        /** @brief 仅将当前账号且未被新图片覆盖的加载结果应用到界面。 */
+        [this, watcher, generation, imageRevision]() {
         const auto result = watcher->result();
         watcher->deleteLater();
         if (generation != _generation) {
@@ -61,7 +63,9 @@ void LocalAvatar::setAccount(const QString &environment, int uid)
             emit errorOccurred(result.error);
         }
     });
-    watcher->setFuture(QtConcurrent::run(&_worker, [store = _store, environment, uid]() {
+    watcher->setFuture(QtConcurrent::run(&_worker,
+        /** @brief 在工作线程读取指定环境和账号的头像。 */
+        [store = _store, environment, uid]() {
         return store.load(environment, uid);
     }));
 }
@@ -77,7 +81,9 @@ void LocalAvatar::selectFile(const QString &fileName)
     const auto generation = _generation;
     const auto revision = _selectionRevision;
     auto *watcher = new QFutureWatcher<AvatarResult>(this);
-    connect(watcher, &QFutureWatcher<AvatarResult>::finished, this, [this, watcher, generation, revision]() {
+    connect(watcher, &QFutureWatcher<AvatarResult>::finished, this,
+        /** @brief 仅应用当前账号与选图版本的候选图片。 */
+        [this, watcher, generation, revision]() {
         const auto result = watcher->result();
         watcher->deleteLater();
         if (generation != _generation || revision != _selectionRevision) {
@@ -91,7 +97,9 @@ void LocalAvatar::selectFile(const QString &fileName)
             emit errorOccurred(result.error);
         }
     });
-    watcher->setFuture(QtConcurrent::run(&_worker, [fileName]() { return LocalAvatarStore::readImage(fileName); }));
+    watcher->setFuture(QtConcurrent::run(&_worker,
+        /** @brief 在工作线程解码用户选择的图片文件。 */
+        [fileName]() { return LocalAvatarStore::readImage(fileName); }));
 }
 
 void LocalAvatar::discardSelection()
@@ -119,7 +127,9 @@ void LocalAvatar::saveSelection(const QRectF &sourceRect)
     _saving = true;
     setBusy(true);
     auto *watcher = new QFutureWatcher<AvatarResult>(this);
-    connect(watcher, &QFutureWatcher<AvatarResult>::finished, this, [this, watcher, generation, upload, staged]() {
+    connect(watcher, &QFutureWatcher<AvatarResult>::finished, this,
+        /** @brief 仅为当前账号处理保存结果并决定是否请求上传。 */
+        [this, watcher, generation, upload, staged]() {
         const AvatarResult result = watcher->result();
         watcher->deleteLater();
         if (generation != _generation) {
@@ -143,6 +153,7 @@ void LocalAvatar::saveSelection(const QRectF &sourceRect)
         emit saved();
     });
     watcher->setFuture(QtConcurrent::run(&_worker,
+        /** @brief 在工作线程裁剪图片并原子保存本地或待上传文件。 */
         [store = _store, environment = _environment, uid = _uid, source, sourceRect, upload, staged]() -> AvatarResult {
             const QImage cropped = AvatarCrop::render(source, sourceRect);
             if (upload) {

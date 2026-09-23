@@ -87,6 +87,7 @@ void ChatBubble::setUserIcon(const QPixmap &icon)
         ui->left_head_label->setPixmap(icon);
 }
 
+/** @brief 按发送状态刷新气泡状态图标与提示。 */
 void ChatBubble::setChatStatus(ChatStatus status)
 {
     // 为STATUS_EMPTY表示不需要设置

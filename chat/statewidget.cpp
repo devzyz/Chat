@@ -8,17 +8,17 @@ StateWidget::StateWidget(QWidget *parent) : QWidget(parent), _curState(ClickLabe
 {
     setCursor(Qt::PointingHandCursor);
     // 添加红点
-    AddRedPoint();
+    addRedPoint();
 }
 
 /**
- * @brief StateWidget::SetState
+ * @brief StateWidget::setState
  * @param leave
  * @param hover
  * @param select
  * 初始化不同状态名称，通过其控制qss样式表
  */
-void StateWidget::SetState(QString leave, QString hover, QString select)
+void StateWidget::setState(QString leave, QString hover, QString select)
 {
     _leave = leave;
     _hover = hover;
@@ -28,20 +28,20 @@ void StateWidget::SetState(QString leave, QString hover, QString select)
 }
 
 /**
- * @brief StateWidget::GetCurState
+ * @brief StateWidget::getCurState
  * @return
  * 获取当前的statewidget状态
  */
-ClickLabelState StateWidget::GetCurState()
+ClickLabelState StateWidget::getCurState()
 {
     return _curState;
 }
 
 /**
- * @brief StateWidget::ClearState
+ * @brief StateWidget::clearState
  * 清空当前的状态为关闭状态
  */
-void StateWidget::ClearState()
+void StateWidget::clearState()
 {
     _curState = ClickLabelState::Normal;
     setProperty("state", _leave);
@@ -50,11 +50,11 @@ void StateWidget::ClearState()
 }
 
 /**
- * @brief StateWidget::SetSelected
+ * @brief StateWidget::setSelected
  * @param bselected
  * 设置StateWidget是否是选中状态
  */
-void StateWidget::SetSelected(bool bselected)
+void StateWidget::setSelected(bool bselected)
 {
     if (bselected) {
         _curState = ClickLabelState::Selected;
@@ -71,10 +71,10 @@ void StateWidget::SetSelected(bool bselected)
 }
 
 /**
- * @brief StateWidget::AddRedPoint
+ * @brief StateWidget::addRedPoint
  * 给StateWidget添加一个红点
  */
-void StateWidget::AddRedPoint() {
+void StateWidget::addRedPoint() {
     // 添加红点
     _red_point = new QLabel();
     _red_point->setObjectName("red_point");
@@ -88,7 +88,7 @@ void StateWidget::AddRedPoint() {
 }
 
 // 显示红点
-void StateWidget::ShowRedPoint(bool show)
+void StateWidget::showRedPoint(bool show)
 {
     _red_point->setVisible(show);
 }

@@ -8,11 +8,11 @@ ChatUserItem::ChatUserItem(QWidget *parent)
 {
     ui->setupUi(this);
     // 设置当前ListItemType的类型
-    SetItemType(ListItemType::CHAT_USER_ITEM);
+    setItemType(ListItemType::CHAT_USER_ITEM);
     ui->new_msg_count_label->setAlignment(Qt::AlignCenter); // 设置文字居中
 
     // 展示新消息提醒
-    ShowNewMsgTip();
+    showNewMsgTip();
 }
 
 ChatUserItem::~ChatUserItem()
@@ -21,35 +21,36 @@ ChatUserItem::~ChatUserItem()
 }
 
 // 设置ChatInfo
-void ChatUserItem::SetChatInfo(std::shared_ptr<ChatInfo> chat_info)
+/** @brief 绑定会话数据并刷新昵称、头像及最近消息。 */
+void ChatUserItem::setChatInfo(std::shared_ptr<ChatInfo> chat_info)
 {
     _chat_info = chat_info;
 
-    if (chat_info->GetChatType() == ChatType::PRIVATE) {
+    if (chat_info->getChatType() == ChatType::PRIVATE) {
         // 获取到当前用户的信息
-        auto info = UserMgr::GetInstance()->friendById(chat_info->GetUid());
+        auto info = UserMgr::instance()->friendById(chat_info->getUid());
 
         // 加载head路径下的头像图片
 
 
         // 将图片缩放为icon_label的大小，并显示
-        UserMgr::GetInstance()->bindAvatar(ui->icon_label, info->_uid, info->_icon);
+        UserMgr::instance()->bindAvatar(ui->icon_label, info->_uid, info->_icon);
         ui->icon_label->setScaledContents(true);
         // 更新用户名和上次聊天记录
         ui->user_name_label->setText(info->_name);
 
-        auto last_msg_id = chat_info->GetLastMsgId();
+        auto last_msg_id = chat_info->getLastMsgId();
 
         // 最后一条数据
-        auto last_msg = chat_info->GetChatDataByMsgId(last_msg_id);
+        auto last_msg = chat_info->getChatDataByMsgId(last_msg_id);
         if (last_msg != nullptr) {
             // 设置最后一条数据的发送时间和发送内容
-            ui->time_label->setText(last_msg->GetSendTime().toString("HH:mm"));
-            ui->user_chat_label->setText(last_msg->GetContent());
+            ui->time_label->setText(last_msg->getSendTime().toString("HH:mm"));
+            ui->user_chat_label->setText(last_msg->getContent());
         }else {
             ui->user_chat_label->setText("");
         }
-    }else if (chat_info->GetChatType() == ChatType::GROUP) {
+    }else if (chat_info->getChatType() == ChatType::GROUP) {
         // todo...
     }
 }
@@ -65,23 +66,23 @@ QSize ChatUserItem::sizeHint() const {
 }
 
 /**
- * @brief ChatUserItem::GetChatInfo
+ * @brief ChatUserItem::getChatInfo
  * @return
  * 获取当前item对应的ChatInfo信息
  */
-std::shared_ptr<ChatInfo> ChatUserItem::GetChatInfo()
+std::shared_ptr<ChatInfo> ChatUserItem::getChatInfo()
 {
     return _chat_info;
 }
 
 // 设置最后一次聊天记录
-void ChatUserItem::SetLastTextChatMsg(QString last_text_msg)
+void ChatUserItem::setLastTextChatMsg(QString last_text_msg)
 {
     ui->user_chat_label->setText(last_text_msg);
 }
 
 // 根据_new_msg_count来判断是否显示新消息提醒
-void ChatUserItem::ShowNewMsgTip()
+void ChatUserItem::showNewMsgTip()
 {
     ui->new_msg_count_label->setText(QString::number(_new_msg_count));
     if (_new_msg_count > 0) {
@@ -92,14 +93,15 @@ void ChatUserItem::ShowNewMsgTip()
 }
 
 // 更新新消息数量
-void ChatUserItem::UpdateNewMsgCount(int count)
+/** @brief 累加新消息数量并刷新提示标签。 */
+void ChatUserItem::updateNewMsgCount(int count)
 {
     _new_msg_count += count;
-    ShowNewMsgTip();
+    showNewMsgTip();
 }
 
 // 重置新消息
-void ChatUserItem::ResetNewMsgCount() {
+void ChatUserItem::resetNewMsgCount() {
     _new_msg_count = 0;
-    ShowNewMsgTip();
+    showNewMsgTip();
 }

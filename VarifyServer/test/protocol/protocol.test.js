@@ -8,14 +8,14 @@ const test = require('node:test');
 
 const repositoryRoot = path.resolve(__dirname, '..', '..', '..');
 
-test('shared verification constants keep their wire-visible values', () => {
+test('shared verification constants keep their wire-visible values', /** 验证验证码键前缀及业务错误码的公开取值稳定。 */ () => {
     const { code_prefix, Errors } = require('../../const');
 
     assert.equal(code_prefix, 'code_');
     assert.deepEqual(Errors, { Success: 0, RedisErr: 1, Exception: 2 });
 });
 
-test('loaded protobuf exposes the verification RPC request and response types', () => {
+test('loaded protobuf exposes the verification RPC request and response types', /** 验证生成的验证码服务、方法路径及请求响应类型存在。 */ () => {
     const messageProto = require('../../proto');
 
     assert.equal(typeof messageProto.VarifyService, 'function');
@@ -26,7 +26,7 @@ test('loaded protobuf exposes the verification RPC request and response types', 
 });
 
 // V02-PROTO-03
-test('repository canonical proto module is the sole editable wire authority', () => {
+test('repository canonical proto module is the sole editable wire authority', /** 验证协议源集中在 proto 目录且没有遗留可编辑副本。 */ () => {
     const canonicalFiles = ['varify.proto', 'status.proto', 'chat.proto'];
     for (const file of canonicalFiles) {
         assert.equal(
@@ -43,14 +43,14 @@ test('repository canonical proto module is the sole editable wire authority', ()
         path.join('VarifyServer', 'message.proto')
     ];
     assert.deepEqual(
-        legacyEditableCopies.filter((relative) => fs.existsSync(path.join(repositoryRoot, relative))),
+        legacyEditableCopies.filter(/** 筛出仍存在的旧协议副本路径。 */ (relative) => fs.existsSync(path.join(repositoryRoot, relative))),
         [],
         'service-local message.proto files must not remain editable authorities'
     );
 });
 
 // V02-PROTO-04
-test('protocol compatibility command accepts the canonical contract and generated consumers', () => {
+test('protocol compatibility command accepts the canonical contract and generated consumers', /** 验证独立协议合同检查命令成功并输出完成标记。 */ () => {
     const command = spawnSync(
         process.execPath,
         [path.join(repositoryRoot, 'scripts', 'protocol-compatibility.js'), 'check-contract'],
@@ -62,9 +62,9 @@ test('protocol compatibility command accepts the canonical contract and generate
 });
 
 // V02-PROTO-05
-test('compatibility command rejects isolated descriptor drift and unregistered authorities', (t) => {
+test('compatibility command rejects isolated descriptor drift and unregistered authorities', /** 通过临时协议变异验证不兼容更改被拒绝。 */ (t) => {
     const temporaryRoot = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'chat-proto-mutation-'));
-    t.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
+    t.after(/** 清理本用例创建的临时协议目录。 */ () => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
 
     for (const file of ['varify.proto', 'status.proto', 'chat.proto']) {
         fs.copyFileSync(
@@ -73,7 +73,7 @@ test('compatibility command rejects isolated descriptor drift and unregistered a
         );
     }
 
-    const runCompatibility = () => spawnSync(
+    const runCompatibility = /** 对临时协议副本执行有界兼容性检查并返回子进程结果。 */ () => spawnSync(
         process.execPath,
         [
             path.join(repositoryRoot, 'scripts', 'protocol-compatibility.js'),
@@ -109,7 +109,7 @@ test('compatibility command rejects isolated descriptor drift and unregistered a
 });
 
 // V02-PROTO-06
-test('current Node consumer parses the initial wire fixture with unknown fields', () => {
+test('current Node consumer parses the initial wire fixture with unknown fields', /** 验证固定二进制请求及附带未知字段的请求均可反序列化。 */ () => {
     const fixtureRoot = path.join(
         repositoryRoot,
         'tests',

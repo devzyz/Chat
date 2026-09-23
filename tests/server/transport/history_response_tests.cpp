@@ -3,11 +3,13 @@
 #include "HistoryResponse.h"
 #include "ChatFrameCodec.h"
 
+/** 条件不满足时抛出带定位信息的测试异常。 */
 static void Require(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
 }
 
 // E03-RECOVER-CONTRACT-01
+/** 验证历史响应按字节预算截断并保持合法 JSON、分页游标及消息身份。 */
 int main() {
     try {
         Json::Value page;

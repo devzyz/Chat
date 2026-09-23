@@ -8,6 +8,7 @@ const { execFileSync } = require('node:child_process');
 const systemLibrary = /^\/(?:usr\/)?lib(?:64|\/x86_64-linux-gnu)\/(?:lib(?:stdc\+\+|gcc_s|c|m|pthread|dl|rt)\.so\.[0-9]+|ld-linux-x86-64\.so\.2)$/;
 const libraryName = /^lib[A-Za-z0-9_+.-]+\.so(?:\.[0-9]+)*$/;
 
+/** 解析 ldd 输出，过滤系统库并拒绝缺失、非法或同名冲突的动态依赖。 */
 function dependencies(output) {
     const libraries = new Map();
     for (const line of output.trim().split('\n')) {
@@ -23,8 +24,9 @@ function dependencies(output) {
     return libraries;
 }
 
+/** 核对包内依赖清单与实际解析结果一致，且所有非系统库留在所属目录。 */
 function validateRelocated(output, bundle, names) {
-    assert.ok(Array.isArray(names) && names.every((name) => libraryName.test(name)),
+    assert.ok(Array.isArray(names) && names.every(/** 校验清单中的动态库名称格式。 */ (name) => libraryName.test(name)),
         'invalid runtime manifest');
     assert.equal(new Set(names).size, names.length, 'duplicate runtime manifest entry');
     const actual = dependencies(output);
@@ -34,6 +36,7 @@ function validateRelocated(output, bundle, names) {
     }
 }
 
+/** 在显式库搜索路径下有界运行 ldd，不继承外部预加载设置。 */
 function inspect(binary, bundle) {
     // The explicit app-local search directory applies to indirect dependencies
     // too; never inherit the build runner's or user's library search path.
@@ -41,6 +44,7 @@ function inspect(binary, bundle) {
         env: { ...process.env, LD_LIBRARY_PATH: bundle || '', LD_PRELOAD: '' } });
 }
 
+/** 只从指定安装树复制运行依赖到新包目录，记录清单并执行迁移后探针。 */
 function pack(binary, bundle, installedRoot, name = 'message_commit_integration', probe = ['validation']) {
     assert.match(name, /^[A-Za-z][A-Za-z0-9_]*$/);
     binary = fs.realpathSync(binary);
@@ -61,6 +65,7 @@ function pack(binary, bundle, installedRoot, name = 'message_commit_integration'
     verify(bundle, name, probe);
 }
 
+/** 校验已有包的依赖位置与清单，并按需有界运行产物探针。 */
 function verify(bundle, name = 'message_commit_integration', probe = ['validation']) {
     assert.match(name, /^[A-Za-z][A-Za-z0-9_]*$/);
     bundle = path.resolve(bundle);

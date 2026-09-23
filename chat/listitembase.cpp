@@ -6,12 +6,12 @@ ListItemBase::ListItemBase(QWidget* parent) : QWidget(parent){
 
 }
 
-void ListItemBase::SetItemType(ListItemType itemType)
+void ListItemBase::setItemType(ListItemType itemType)
 {
     _itemType = itemType;
 }
 
-ListItemType ListItemBase::GetItemType()
+ListItemType ListItemBase::getItemType()
 {
     return _itemType;
 }

@@ -4,6 +4,7 @@
 #include <json/json.h>
 #include "Const.h"
 
+/** @brief 将历史查询结果编码为响应，保留错误、分页游标与是否还有记录。 */
 inline std::string SerializeHistoryResponse(Json::Value response, int request_cursor) {
     Json::StreamWriterBuilder writer;
     writer["indentation"] = "";

@@ -16,7 +16,8 @@ constexpr int kDefaultMaxSizeMb = 10;
 constexpr int kDefaultMaxTotalFiles = 10;
 constexpr int kDefaultFlushIntervalSeconds = 3;
 
-spdlog::level::level_enum ToSpdlogLevel(QtMsgType type)
+/** @brief 将 Qt 消息类别转换为日志库级别。 */
+spdlog::level::level_enum toSpdlogLevel(QtMsgType type)
 {
     switch (type) {
     case QtDebugMsg:
@@ -45,10 +46,10 @@ LogMgr::LogMgr()
 
 LogMgr::~LogMgr()
 {
-    Close();
+    close();
 }
 
-bool LogMgr::InitLogMgr()
+bool LogMgr::initLogMgr()
 {
     if (_initialized.load()) {
         return true;
@@ -106,14 +107,14 @@ bool LogMgr::InitLogMgr()
             static_cast<std::size_t>(maxTotalFiles - 1);
 
         _logger = spdlog::rotating_logger_mt(
-            ToUtf8(logName),
+            toUtf8(logName),
             logFilePath,
             maxSize,
             rotatedFiles);
         _logger->set_level(
-            GetLevel(configuredLevel, spdlog::level::info));
+            getLevel(configuredLevel, spdlog::level::info));
         _logger->flush_on(
-            GetLevel(flushLevel, spdlog::level::warn));
+            getLevel(flushLevel, spdlog::level::warn));
         _logger->set_pattern(
             "[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] "
             "[tid:%t] [%s:%#] %v");
@@ -123,7 +124,7 @@ bool LogMgr::InitLogMgr()
             std::chrono::seconds(flushIntervalSeconds));
 
         _previousQtMessageHandler =
-            qInstallMessageHandler(&LogMgr::HandleQtMessage);
+            qInstallMessageHandler(&LogMgr::handleQtMessage);
         _closed.store(false);
         _initialized.store(true);
 
@@ -134,8 +135,8 @@ bool LogMgr::InitLogMgr()
             logFilePath,
             maxSizeMb,
             maxTotalFiles,
-            ToUtf8(configuredLevel),
-            ToUtf8(flushLevel),
+            toUtf8(configuredLevel),
+            toUtf8(flushLevel),
             flushIntervalSeconds);
         return true;
     }
@@ -150,7 +151,7 @@ bool LogMgr::InitLogMgr()
     }
 }
 
-void LogMgr::Close()
+void LogMgr::close()
 {
     if (_closed.exchange(true)) {
         return;
@@ -167,18 +168,18 @@ void LogMgr::Close()
     _logger.reset();
 }
 
-bool LogMgr::IsInitialized() const
+bool LogMgr::isInitialized() const
 {
     return _initialized.load();
 }
 
-std::string LogMgr::ToUtf8(const QString& value)
+std::string LogMgr::toUtf8(const QString& value)
 {
     const QByteArray utf8 = value.toUtf8();
     return std::string(utf8.constData(), static_cast<std::size_t>(utf8.size()));
 }
 
-spdlog::level::level_enum LogMgr::GetLevel(
+spdlog::level::level_enum LogMgr::getLevel(
     const QString& level,
     spdlog::level::level_enum defaultLevel) const
 {
@@ -203,7 +204,7 @@ spdlog::level::level_enum LogMgr::GetLevel(
     return defaultLevel;
 }
 
-void LogMgr::HandleQtMessage(
+void LogMgr::handleQtMessage(
     QtMsgType type,
     const QMessageLogContext& context,
     const QString& message)
@@ -213,14 +214,14 @@ void LogMgr::HandleQtMessage(
         return;
     }
 
-    const std::string formattedMessage = ToUtf8(message);
+    const std::string formattedMessage = toUtf8(message);
     const spdlog::source_loc sourceLocation(
         context.file ? context.file : "",
         context.line,
         context.function ? context.function : "");
     logger->log(
         sourceLocation,
-        ToSpdlogLevel(type),
+        toSpdlogLevel(type),
         "{}",
         formattedMessage);
     if (type == QtFatalMsg) {

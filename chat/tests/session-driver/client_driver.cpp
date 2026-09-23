@@ -26,39 +26,38 @@ public:
         _socket.setReadBufferSize(8193);
         _watchdog.setSingleShot(true);
         _commandDeadline.setSingleShot(true);
-        connect(&_commandDeadline, &QTimer::timeout, this, [this] { finish(2); });
-        connect(&_accounts, &GateHttpTransport::finished, this, [this](const GateHttpResult &result) {
+        connect(&_commandDeadline, &QTimer::timeout, this, /** 看门狗到期后终止失去进展的驱动进程。 */ [this] { finish(2); });
+        connect(&_accounts, &GateHttpTransport::finished, this, /** 只结算当前控制命令对应的 HTTP 流程，并返回安全业务状态。 */ [this](const GateHttpResult &result) {
             if (!_pendingId || static_cast<quint64>(_pendingId) != result.flowId) return;
             const auto object = QJsonDocument::fromJson(result.body).object();
             send(QJsonObject{{"id", _pendingId}, {"status", "completed"},
                 {"error", result.terminal == GateHttpTerminal::Success ? object.value("error").toInt(-1) : -1}});
             _pendingId = 0;
         });
-        connect(&_watchdog, &QTimer::timeout, this, [this] { finish(2); });
-        connect(&_socket, &QLocalSocket::errorOccurred, this, [this] { finish(2); });
-        connect(&_socket, &QLocalSocket::disconnected, this, [this] { finish(_stopping ? 0 : 2); });
-        connect(&_socket, &QLocalSocket::connected, this, [this] {
+        connect(&_watchdog, &QTimer::timeout, this, /** 控制连接或命令发生不可恢复错误时退出。 */ [this] { finish(2); });
+        connect(&_socket, &QLocalSocket::errorOccurred, this, /** 控制连接或命令发生不可恢复错误时退出。 */ [this] { finish(2); });
+        connect(&_socket, &QLocalSocket::disconnected, this, /** 控制通道断开时按是否正常停机选择退出码。 */ [this] { finish(_stopping ? 0 : 2); });
+        connect(&_socket, &QLocalSocket::connected, this, /** 控制连接建立后启动看门狗并发布就绪事件。 */ [this] {
             _watchdog.start(60000);
             send(QJsonObject{{"event", "ready"}, {"pid", QCoreApplication::applicationPid()}, {"format", 1}});
         });
-        connect(&_socket, &QLocalSocket::readyRead, this, [this] { read(); });
-        connect(&_login, &ClientLoginFlow::authenticated, this, [this](AuthFlowId) {
-            const int uid = UserMgr::GetInstance()->uid();
+        connect(&_socket, &QLocalSocket::readyRead, this, /** 控制管道有数据时读取并处理命令。 */ [this] { read(); });
+        connect(&_login, &ClientLoginFlow::authenticated, this, /** 登录成功后隔离账号模型，开始会话并回复已认证状态。 */ [this](AuthFlowId) {
+            const int uid = UserMgr::instance()->uid();
             if (_lastUid && _lastUid != uid) {
                 _messages = MessageModelStore{};
                 _committedUuids.clear();
             }
             _lastUid = uid;
             _session.beginSession();
-            /** @brief 返回命令状态及当前账号和服务端点快照。 */
             reply(_pendingId, "authenticated");
             _pendingId = 0;
         });
-        connect(&_login, &ClientLoginFlow::failed, this, [this](AuthFlowId, AuthError error) {
+        connect(&_login, &ClientLoginFlow::failed, this, /** 登录失败后返回结构化错误并清除待处理命令。 */ [this](AuthFlowId, AuthError error) {
             send(QJsonObject{{"id", _pendingId}, {"status", "login-failed"}, {"error", static_cast<int>(error)}});
             _pendingId = 0;
         });
-        connect(TcpMgr::GetInstance().get(), &TcpMgr::connectionClosed, this, [this](bool expected) {
+        connect(TcpMgr::instance().get(), &TcpMgr::connectionClosed, this, /** 非预期断连时重置会话并终止正在等待响应的控制命令。 */ [this](bool expected) {
             if (!expected && _session.isActive()) {
                 _session.resetSession(SessionResetReason::UnexpectedDisconnect);
                 if (_pendingId && _expectedResponse >= 0) {
@@ -69,14 +68,14 @@ public:
                 }
             }
         });
-        connect(TcpMgr::GetInstance().get(), &TcpMgr::forcedOffline, this,
-                [this] { _session.resetSession(SessionResetReason::Kicked); });
-        const auto tcp = TcpMgr::GetInstance();
-        auto *service = UserMgr::GetInstance()->messages();
+        connect(TcpMgr::instance().get(), &TcpMgr::forcedOffline, this,
+                /** 被踢出登录时以对应原因重置会话。 */ [this] { _session.resetSession(SessionResetReason::Kicked); });
+        const auto tcp = TcpMgr::instance();
+        auto *service = UserMgr::instance()->messages();
         connect(service, &MessageService::messagesChanged, this,
-            [service](int chatId) { service->loadHistory(chatId); });
+            /** 回执变化后从持久存储刷新所属会话历史。 */ [service](int chatId) { service->loadHistory(chatId); });
         connect(service, &MessageService::historyLoaded, this,
-            [this](int chatId, qint64, const QVector<StoredMessage> &rows, bool) {
+            /** 只用本账号已确认历史对已有本地发送进行确认，保留驱动的显式分页流程。 */ [this](int chatId, qint64, const QVector<StoredMessage> &rows, bool) {
                 // Preserve the harness's explicit legacy-history traversal; reconcile existing sends only.
                 auto *model = _messages.find(chatId);
                 if (!model) return;
@@ -87,45 +86,45 @@ public:
                     _committedUuids.insert(row.clientMessageId);
                 }
             });
-        connect(service, &MessageService::sendFailed, this, [this](int, const QVector<QString> &) {
+        connect(service, &MessageService::sendFailed, this, /** 文本发送失败时终止对应控制命令并返回业务失败。 */ [this](int, const QVector<QString> &) {
             if (!_pendingId || _expectedResponse != ID_TEXT_CHAT_MSG_RSP) return;
             _commandDeadline.stop();
             send(QJsonObject{{"id", _pendingId}, {"status", "completed"}, {"error", 1}});
             _pendingId = 0;
             _expectedResponse = -1;
         });
-        connect(UserMgr::GetInstance()->messages(), &MessageService::sendRequested, this,
-            [this, tcp](const QJsonObject &request) {
+        connect(UserMgr::instance()->messages(), &MessageService::sendRequested, this,
+            /** 在重复提交场景重新发送相同生产文本请求。 */ [this, tcp](const QJsonObject &request) {
                 if (_pendingId && _expectedResponse == ID_TEXT_CHAT_MSG_RSP && _responsesRemaining == 2)
                     emit tcp->sendRequested(ID_TEXT_CHAT_MSG_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
             });
         connect(tcp.get(), &TcpMgr::friendApplicationReceived, this,
-                [](const std::shared_ptr<ApplyInfo> &apply) {
-            if (apply) UserMgr::GetInstance()->addFriendApplication(apply->_apply_uid, apply);
+                /** 将收到的好友申请登记到用户状态。 */ [](const std::shared_ptr<ApplyInfo> &apply) {
+            if (apply) UserMgr::instance()->addFriendApplication(apply->_apply_uid, apply);
         });
         connect(tcp.get(), &TcpMgr::chatMessagesReceived, this,
-                [this](int, int, int, std::vector<std::shared_ptr<ChatDataBase>> &messages) {
+                /** 把实时消息转换并追加到所属会话模型。 */ [this](int, int, int, std::vector<std::shared_ptr<ChatDataBase>> &messages) {
             for (const auto &message : messages) {
                 const auto record = clientMessageRecord(message);
                 _messages.getOrCreate(record.chatId)->appendMessage(record);
             }
         });
         connect(tcp.get(), &TcpMgr::chatHistoryLoaded, this,
-                [this](int chatId, std::vector<std::shared_ptr<ChatDataBase>> messages, bool more, qint64 cursor) {
+                /** 将历史页转换后应用模型，记录拒绝结果供控制响应。 */ [this](int chatId, std::vector<std::shared_ptr<ChatDataBase>> messages, bool more, qint64 cursor) {
             QVector<MessageRecord> records;
             for (const auto &message : messages) records.push_back(clientMessageRecord(message));
             if (!_messages.applyHistory(chatId, records, more, cursor)) _historyRejected = true;
         });
         connect(tcp.get(), &TcpMgr::messagesAcknowledged, this,
-                [this](int chatId, QVector<MessageAcknowledgement> acks) {
-            _messages.acknowledge(chatId, acks, UserMgr::GetInstance()->uid());
+                /** 按当前发送者身份应用 ACK 并记录已提交 UUID。 */ [this](int chatId, QVector<MessageAcknowledgement> acks) {
+            _messages.acknowledge(chatId, acks, UserMgr::instance()->uid());
             for (const auto &ack : acks) _committedUuids.insert(ack.clientMessageId);
         });
         connect(tcp.get(), &TcpMgr::messagesFailed, this,
-                [this](int chatId, const QVector<QString> &ids) { _messages.markFailed(chatId, ids, UserMgr::GetInstance()->uid()); });
+                /** 按当前发送者标记指定批次消息失败。 */ [this](int chatId, const QVector<QString> &ids) { _messages.markFailed(chatId, ids, UserMgr::instance()->uid()); });
         connect(tcp.get(), &TcpMgr::privateChatCreated, this,
-                [this](const std::shared_ptr<ChatInfo> &chat) { if (chat) _lastChatId = chat->GetChatId(); });
-        connect(tcp.get(), &TcpMgr::requestCompleted, this, [this](ReqId id, int error) {
+                /** 保存最近创建或获取的聊天编号。 */ [this](const std::shared_ptr<ChatInfo> &chat) { if (chat) _lastChatId = chat->getChatId(); });
+        connect(tcp.get(), &TcpMgr::requestCompleted, this, /** 累计预期业务响应，全部到达后结算控制命令并清除期限。 */ [this](ReqId id, int error) {
             if (!_pendingId || id != _expectedResponse) return;
             if (error != 0) _commandError = error;
             if (--_responsesRemaining > 0) return;
@@ -140,6 +139,7 @@ public:
     }
 
 private:
+    /** 幂等取消认证、重置账号和会话、关闭控制管道并退出事件循环。 */
     void finish(int code)
     {
         if (_finished) return;
@@ -148,31 +148,34 @@ private:
         _login.cancel();
         _accounts.reset();
         _session.resetSession(SessionResetReason::Logout);
-        TcpMgr::GetInstance()->resetConnection(true);
-        UserMgr::GetInstance()->resetSession();
+        TcpMgr::instance()->resetConnection(true);
+        UserMgr::instance()->resetSession();
         _socket.abort();
         QCoreApplication::exit(code);
     }
+    /** 发送一行 JSON 控制消息，写缓冲超限或写入失败时终止驱动。 */
     void send(const QJsonObject &object)
     {
         if (_socket.bytesToWrite() > 65536) { finish(2); return; }
         if (_socket.write(QJsonDocument(object).toJson(QJsonDocument::Compact) + '\n') < 0) finish(2);
     }
+    /** 返回命令状态及当前账号、会话活跃状态和服务端点快照。 */
     void reply(qint64 id, const QString &status)
     {
         send(QJsonObject{{"id", id}, {"status", status}, {"active", _session.isActive()},
-                         {"uid", UserMgr::GetInstance()->uid()},
+                         {"uid", UserMgr::instance()->uid()},
                          {"host", _session.isActive() ? _login.serverHost() : QString()},
                          {"port", _session.isActive() ? _login.serverPort() : 0}});
     }
     /** @brief 返回与指定用户的申请、好友和私聊映射快照。 */
     void friendship(qint64 id, int otherUid)
     {
-        const auto user = UserMgr::GetInstance();
+        const auto user = UserMgr::instance();
         send(QJsonObject{{"id", id}, {"status", "snapshot"}, {"uid", user->uid()},
             {"otherUid", otherUid}, {"applied", user->hasFriendApplication(otherUid)},
             {"friend", user->isFriend(otherUid)}, {"chatId", user->privateChatIdFor(otherUid)}});
     }
+    /** 输出有界消息身份、状态及正文摘要快照，不输出正文。 */
     void snapshot(qint64 id, int chatId)
     {
         QJsonArray rows;
@@ -218,7 +221,7 @@ private:
             } else if ((command == "apply" || command == "accept") && !_pendingId && _session.isActive() &&
                        object.size() == 5 && object.value("toUid").toInt() > 0 &&
                        object.value("description").isString() && object.value("backname").isString()) {
-                const auto self = UserMgr::GetInstance()->userInfo();
+                const auto self = UserMgr::instance()->userInfo();
                 const int otherUid = object.value("toUid").toInt();
                 const auto description = object.value("description").toString();
                 const auto backname = object.value("backname").toString();
@@ -229,7 +232,7 @@ private:
                     body = clientFriendRequest(*self, otherUid, description, backname);
                 } else {
                     std::vector<std::shared_ptr<ApplyInfo>> applications;
-                    UserMgr::GetInstance()->appendFriendApplicationsTo(applications);
+                    UserMgr::instance()->appendFriendApplicationsTo(applications);
                     for (const auto &apply : applications) {
                         if (apply && apply->_apply_uid == otherUid) {
                             body = clientAcceptFriendRequest(*self, *apply, description, backname);
@@ -242,14 +245,14 @@ private:
                     }
                     request = ID_AUTH_FRIEND_REQ;
                 }
-                if (body.size() > ChatTcpTransport::MaxBodyBytes()) { finish(2); return; }
+                if (body.size() > ChatTcpTransport::maxBodyBytes()) { finish(2); return; }
                 _pendingId = _lastId;
                 _commandError = 0;
                 _responsesRemaining = 1;
                 _historyRejected = false;
                 _expectedResponse = static_cast<int>(request) + 1;
                 _commandDeadline.start(10000);
-                emit TcpMgr::GetInstance()->sendRequested(request, body);
+                emit TcpMgr::instance()->sendRequested(request, body);
             } else if ((command == "create" || command == "history" || command == "send") &&
                        !_pendingId && _session.isActive()) {
                 QByteArray body;
@@ -258,7 +261,7 @@ private:
                 bool replayCommitted = false;
                 const int chatId = object.value("chatId").toInt();
                 if (command == "create" && object.size() == 3 && object.value("toUid").toInt() > 0) {
-                    body = clientPrivateChatRequest(UserMgr::GetInstance()->uid(), object.value("toUid").toInt());
+                    body = clientPrivateChatRequest(UserMgr::instance()->uid(), object.value("toUid").toInt());
                 } else if (command == "history" && object.size() == 4 && chatId > 0 &&
                            object.value("cursor").isString()) {
                     bool ok = false;
@@ -278,11 +281,11 @@ private:
                     replayCommitted = _committedUuids.contains(uuid);
                     const auto text = object.value("text").toString();
                     if (text.isEmpty() || text.size() > 1024) { finish(2); return; }
-                    body = clientTextRequest(UserMgr::GetInstance()->uid(), object.value("toUid").toInt(),
+                    body = clientTextRequest(UserMgr::instance()->uid(), object.value("toUid").toInt(),
                         chatId, QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"msg_content", text}}});
-                    if (body.size() > ChatTcpTransport::MaxBodyBytes()) { finish(2); return; }
+                    if (body.size() > ChatTcpTransport::maxBodyBytes()) { finish(2); return; }
                     auto dto = std::make_shared<TextChatData>(uuid, chatId, ChatType::PRIVATE,
-                        ChatMessageType::TEXT_TYPE, text, UserMgr::GetInstance()->uid(), QTime::currentTime());
+                        ChatMessageType::TEXT_TYPE, text, UserMgr::instance()->uid(), QTime::currentTime());
                     _messages.getOrCreate(chatId)->appendMessage(clientMessageRecord(dto));
                 } else { finish(2); return; }
                 _pendingId = _lastId;
@@ -296,9 +299,9 @@ private:
                 // Explicit replay/conflict probes must still reach the real server after local commit.
                 // New sends and uncertain reconnect recovery use the production persistent owner.
                 if (request == ID_TEXT_CHAT_MSG_REQ && !replayCommitted)
-                    UserMgr::GetInstance()->messages()->send(QJsonDocument::fromJson(body).object());
+                    UserMgr::instance()->messages()->send(QJsonDocument::fromJson(body).object());
                 else for (int copy = 0; copy < copies; ++copy)
-                    emit TcpMgr::GetInstance()->sendRequested(request, body);
+                    emit TcpMgr::instance()->sendRequested(request, body);
             } else if ((command == "verify" || command == "register") && !_pendingId && !_session.isActive()) {
                 const QUrl gate(object.value("gate").toString());
                 if (gate.scheme() != "http" || gate.host() != "127.0.0.1" || gate.port() <= 0 ||
@@ -340,7 +343,7 @@ private:
                 _login.cancel();
                 _accounts.reset();
                 _session.resetSession(SessionResetReason::Logout);
-                TcpMgr::GetInstance()->resetConnection(true);
+                TcpMgr::instance()->resetConnection(true);
                 reply(_lastId, "stopped");
                 _watchdog.start(1000);
                 _socket.disconnectFromServer();
@@ -371,6 +374,7 @@ private:
     bool _finished = false;
 };
 
+/** 校验控制管道参数，运行驱动并在 Qt 退出前释放单例。 */
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -382,7 +386,7 @@ int main(int argc, char **argv)
         result = app.exec();
     }
     // Match the GUI entry point: destroy QObject singletons before Qt and logging.
-    TcpMgr::ReleaseInstance();
-    UserMgr::ReleaseInstance();
+    TcpMgr::releaseInstance();
+    UserMgr::releaseInstance();
     return result;
 }

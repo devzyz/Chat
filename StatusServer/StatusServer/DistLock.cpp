@@ -6,7 +6,8 @@ DistLock::~DistLock() {
 
 }
 
-std::string generateUUID() {
+/** @brief 生成本次锁操作的随机所有者标识，供比较删除防止误解锁。 */
+std::string GenerateUuid() {
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
 	return to_string(uuid);
 }
@@ -14,8 +15,8 @@ std::string generateUUID() {
 // 尝试获取锁，返回锁的唯一标识符，如果获取失败，则返回空字符串
 // lockTimeout 是锁的持有时间
 // acquireTimeout 是尝试获取锁的时间
-std::string DistLock::acquireLock(redisContext* context, const std::string& lockName, int lockTimeout, int acquireTimeout) {
-	std::string identifier = generateUUID();
+std::string DistLock::AcquireLock(redisContext* context, const std::string& lockName, int lockTimeout, int acquireTimeout) {
+	std::string identifier = GenerateUuid();
 	std::string lockKey = "lock:" + lockName;
 	// 尝试的结束时间
 	auto endTime = std::chrono::steady_clock::now() + std::chrono::seconds(acquireTimeout);
@@ -46,7 +47,7 @@ std::string DistLock::acquireLock(redisContext* context, const std::string& lock
 }
 
 // 释放锁
-bool DistLock::releaseLock(redisContext* context, const std::string& lockName, const std::string& identifier) {
+bool DistLock::ReleaseLock(redisContext* context, const std::string& lockName, const std::string& identifier) {
 	std::string lockKey = "lock:" + lockName;
 
 	// 接下来需要执行锁的删除

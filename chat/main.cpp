@@ -7,12 +7,13 @@
 #include <QFile>
 #include <QMessageBox>
 
+/** @brief 加载客户端配置和日志，创建主窗口并运行 Qt 事件循环。 */
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
 
-    auto logger = LogMgr::GetInstance();
-    if (!logger->InitLogMgr()) {
+    auto logger = LogMgr::instance();
+    if (!logger->initLogMgr()) {
         QMessageBox::critical(
             nullptr,
             QObject::tr("日志初始化失败"),
@@ -47,10 +48,10 @@ int main(int argc, char *argv[])
         exitCode = a.exec();
     }
 
-    TcpMgr::ReleaseInstance();
-    UserMgr::ReleaseInstance();
-    logger->Close();
+    TcpMgr::releaseInstance();
+    UserMgr::releaseInstance();
+    logger->close();
     logger.reset();
-    LogMgr::ReleaseInstance();
+    LogMgr::releaseInstance();
     return exitCode;
 }

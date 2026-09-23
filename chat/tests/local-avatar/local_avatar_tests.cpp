@@ -17,6 +17,7 @@
 #include <QtTest>
 
 namespace {
+/** 生成指定颜色与尺寸的图像作为可精确比对的夹具。 */
 QImage solidImage(Qt::GlobalColor color, QSize size = QSize(256, 256))
 {
     QImage image(size, QImage::Format_RGB32);
@@ -25,19 +26,30 @@ QImage solidImage(Qt::GlobalColor color, QSize size = QSize(256, 256))
 }
 }
 
+/** 验证本地头像读取、持久化、隔离及编辑交互。 */
 class LocalAvatarTests : public QObject
 {
     Q_OBJECT
 private slots:
+    /** 验证 PNG 与 JPEG 完整读取并保持原图尺寸及颜色。 */
     void readsFullPngAndJpeg();
+    /** 验证缺失、非法格式和超大尺寸图像被拒绝。 */
     void rejectsInvalidAndOversizedImages();
+    /** 验证头像持久化且按服务端和账号隔离。 */
     void persistsAndIsolatesAccounts();
+    /** 验证无效图像及写入失败不会覆盖旧头像。 */
     void saveFailurePreservesPreviousImage();
+    /** 验证头像刷新只通知并修改匹配的发送者。 */
     void refreshesOnlyMatchingSender();
+    /** 验证控制器保存裁剪结果并可重建恢复，重复保存被合并。 */
     void savesAndRestoresThroughController();
+    /** 验证取消选择及账号重置丢弃旧异步结果。 */
     void cancellationAndResetDiscardPendingResults();
+    /** 验证头像对话框的确认和取消流程。 */
     void dialogConfirmsAndCancels();
+    /** 验证裁剪区域、缩放边界及正方形输出。 */
     void cropGeometryAndSquareOutput();
+    /** 验证裁剪组件的拖动、缩放及变化通知。 */
     void cropWidgetDragsAndZooms();
 };
 

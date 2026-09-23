@@ -12,8 +12,10 @@
 
 namespace {
 
+/** 拥有 Node 回环服务进程及控制管道，负责有界停机和句柄释放。 */
 class OwnedProcess {
 public:
+    /** 停止所属进程并关闭残留管道、进程及线程句柄。 */
     ~OwnedProcess() {
         Stop();
         CloseHandleIfValid(stdout_read_);
@@ -22,6 +24,7 @@ public:
         CloseHandleIfValid(thread_);
     }
 
+    /** 以受控标准输入输出启动指定 Node 服务脚本，返回启动是否成功。 */
     bool Start(const std::filesystem::path& script) {
         SECURITY_ATTRIBUTES security{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
         HANDLE stdout_write = nullptr;
@@ -67,6 +70,7 @@ public:
         return true;
     }
 
+    /** 在给定期限内读取就绪行并输出实际监听端口。 */
     bool ReadReadyPort(int* port, std::chrono::milliseconds timeout) {
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         std::string output;
@@ -103,6 +107,7 @@ public:
         return false;
     }
 
+    /** 发送停止命令并有限等待，超时只终止本对象拥有的进程。 */
     void Stop() {
         if (!process_) {
             return;
@@ -120,6 +125,7 @@ public:
     }
 
 private:
+    /** 关闭有效句柄并清空引用，允许重复清理。 */
     static void CloseHandleIfValid(HANDLE& handle) {
         if (handle) {
             CloseHandle(handle);
@@ -133,6 +139,7 @@ private:
     HANDLE stdin_write_ = nullptr;
 };
 
+/** 从测试可执行文件目录推导仓库根路径，定位失败返回空。 */
 std::filesystem::path RepositoryRoot() {
     std::vector<wchar_t> path(MAX_PATH);
     const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
@@ -146,6 +153,7 @@ std::filesystem::path RepositoryRoot() {
         .parent_path();
 }
 
+/** 验证真实 C++ gRPC 客户端可调用随机回环端口上的 Node 验证码服务。 */
 TEST(CrossLanguageProtocolTests, CppClientCallsNodeVarifyOnDynamicLoopbackPort) {
     const auto script = RepositoryRoot() /
         "VarifyServer" / "test" / "protocol" / "node-varify-loopback-server.js";

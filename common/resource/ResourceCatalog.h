@@ -10,11 +10,13 @@
 namespace resource {
 // Shared data contract for ready resources and committed resource-message references.
 // Upload offsets remain local to the single ResourceServer filesystem.
+/** @brief 管理已发布资源、头像与资源消息引用的共享数据库合同；上传偏移仍由本机文件存储维护。 */
 class ResourceCatalog {
 public:
+    /** @brief 建立目录数据库连接池，配置有限连接/读写期限并禁止自动重连。 */
     ResourceCatalog(const std::string& host, const std::string& user,
                     const std::string& password, const std::string& schema)
-        : _pool(2, [=] {
+        : _pool(2, /** @brief 以固定连接和 I/O 期限建立目录数据库连接，并禁止自动重连。 */ [=] {
             sql::ConnectOptionsMap options;
             options["hostName"] = host; options["userName"] = user; options["password"] = password;
             options["OPT_CONNECT_TIMEOUT"] = 3; options["OPT_READ_TIMEOUT"] = 5; options["OPT_WRITE_TIMEOUT"] = 5;
@@ -22,6 +24,7 @@ public:
             std::unique_ptr<sql::Connection> connection(sql::mysql::get_mysql_driver_instance()->connect(options));
             connection->setSchema(schema); return connection;
         }) {}
+    /** @brief 把已就绪资源元数据登记到共享目录，重复资源 ID 不覆盖既有元数据。 */
     void Publish(const std::string& id, int owner, const std::string& name,
                  const std::string& type, std::uint64_t size, const std::string& digest) {
         auto lease = Acquire();
@@ -32,6 +35,7 @@ public:
         statement->setString(4, type); statement->setUInt64(5, size); statement->setString(6, digest);
         statement->executeUpdate();
     }
+    /** @brief 检查认证用户能否读取公开头像或其参与私聊引用的资源。 */
     bool CanRead(int uid, const std::string& id) {
         auto lease = Acquire();
         std::unique_ptr<sql::PreparedStatement> avatar(lease->prepareStatement(
@@ -48,7 +52,9 @@ public:
         for (int index = 2; index <= 5; ++index) statement->setInt(index, uid);
         std::unique_ptr<sql::ResultSet> rows(statement->executeQuery()); return rows->next();
     }
+    /** @brief 保存已提交资源消息的服务器 ID 与序列化内容。 */
     struct Message { int id; std::string content; };
+    /** @brief 查询用户当前已发布头像的资源 ID，不存在时返回空字符串。 */
     std::string GetAvatar(int uid) {
         auto lease = Acquire();
         std::unique_ptr<sql::PreparedStatement> statement(lease->prepareStatement(
@@ -57,6 +63,7 @@ public:
         std::unique_ptr<sql::ResultSet> row(statement->executeQuery());
         return row->next() ? std::string(row->getString(1)) : std::string();
     }
+    /** @brief 在 SQL 中核验资源归属及头像限制后更新用户头像；验证不通过抛异常。 */
     void SetAvatar(int uid, const std::string& id) {
         auto lease = Acquire();
         // Published immutable resource metadata is rechecked in the same SQL statement.
@@ -73,6 +80,7 @@ public:
         if (!row->next() || row->getString(1) != id)
             throw std::runtime_error("avatar resource unavailable or not owned");
     }
+    /** @brief 在会话行锁事务中校验资源归属并提交消息引用；同 UUID 幂等复用，身份冲突抛异常。 */
     Message CommitMessage(int sender, int recipient, int chat, const std::string& uuid, const std::string& id) {
         if (uuid.empty() || uuid.size() > 64) throw std::invalid_argument("invalid message UUID");
         auto lease = Acquire();
@@ -125,6 +133,7 @@ public:
         }
     }
 private:
+    /** @brief 借用目录数据库连接并以 RAII 租约保证归还，失败抛异常。 */
     chat_mysql::ConnectionPool<>::Lease Acquire() { return _pool.Acquire(); }
     chat_mysql::ConnectionPool<> _pool;
 };

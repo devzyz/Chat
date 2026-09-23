@@ -1,4 +1,4 @@
-param([string]$Url, [string]$Sha512, [string]$Destination)
+﻿param([string]$Url, [string]$Sha512, [string]$Destination)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -25,7 +25,7 @@ function Invoke-GitHubAsset([string]$Url, [string]$Sha512, [string]$Destination)
         }
         $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/releases/tags/$tag" `
             -Headers $apiHeaders -TimeoutSec 60 -ErrorAction Stop
-        $assets = @($release.assets | Where-Object { $_.name -ceq $name -and $_.browser_download_url -ceq $Url })
+        $assets = @($release.assets | Where-Object <# 按资源名及下载地址匹配 GitHub release 资源。 #> { $_.name -ceq $name -and $_.browser_download_url -ceq $Url })
         if ($assets.Count -ne 1 -or [string]$assets[0].id -notmatch '^[1-9][0-9]*$') {
             throw 'Release asset identity missing or ambiguous.'
         }

@@ -19,6 +19,7 @@
 class ResourceTransferTests : public QObject {
     Q_OBJECT
 private slots:
+    /** 验证头像发布、账号路径隔离与重新加载，并覆盖编辑器成功及拒绝状态。 */
     void avatarPublicationIsolationAndRestore() {
         QTemporaryDir directory;
         QProcess host;
@@ -37,7 +38,7 @@ private slots:
         editor.setAccount(endpoint.toString(), 7);
         editor.setUploadEnabled(true);
         connect(&editor, &LocalAvatar::uploadRequested, &sender, &AvatarCache::upload);
-        connect(&sender, &AvatarCache::published, &editor, [&editor] { editor.finishUpload(); });
+        connect(&sender, &AvatarCache::published, &editor, /** 头像发布成功后结束编辑器上传状态。 */ [&editor] { editor.finishUpload(); });
         connect(&sender, &AvatarCache::uploadFailed, &editor, &LocalAvatar::finishUpload);
         QSignalSpy saved(&editor, &LocalAvatar::saved);
         QSignalSpy errors(&editor, &LocalAvatar::errorOccurred);
@@ -65,7 +66,7 @@ private slots:
         // A failed remote publication must never replace the confirmed image.
         disconnect(&sender, nullptr, &editor, nullptr);
         disconnect(&editor, &LocalAvatar::uploadRequested, &sender, &AvatarCache::upload);
-        connect(&editor, &LocalAvatar::uploadRequested, &editor, [&editor](const QString &) {
+        connect(&editor, &LocalAvatar::uploadRequested, &editor, /** 头像发布失败后向编辑器提供固定拒绝原因。 */ [&editor](const QString &) {
             editor.finishUpload("publication rejected");
         });
         sourceImage.fill(Qt::blue); QVERIFY(sourceImage.save(source));
@@ -81,8 +82,8 @@ private slots:
     }
     /** @brief 验证附件解析及页面销毁时释放账号资源传输。 */
     void incomingAttachmentAndPageLifetime() {
-        UserMgr::GetInstance()->setUserInfo(std::make_shared<UserInfo>(8, "receiver", ""));
-        UserMgr::GetInstance()->setToken("fixture-token");
+        UserMgr::instance()->setUserInfo(std::make_shared<UserInfo>(8, "receiver", ""));
+        UserMgr::instance()->setToken("fixture-token");
         ChatPage page;
         QCOMPARE(page.findChildren<ResourceTransferManager*>().size(), 1);
         page.resize(600, 400);
@@ -91,19 +92,20 @@ private slots:
         page.resize(700, 500);
         QCoreApplication::processEvents();
         QCOMPARE(page.findChildren<ResourceTransferManager*>().size(), 1);
-        page.SetChatInfo(std::make_shared<ChatInfo>(7, 1, 0));
+        page.setChatInfo(std::make_shared<ChatInfo>(7, 1, 0));
         QJsonObject descriptor{{"resource_id", "incoming-resource"}, {"media_type", "image/png"}, {"name", "image.png"}};
         auto message = std::make_shared<TextChatData>("incoming-uuid", 1, ChatType::PRIVATE,
             ChatMessageType::TEXT_TYPE,
             "@resource:v1:" + QString::fromUtf8(QJsonDocument(descriptor).toJson(QJsonDocument::Compact)),
             7, QTime::currentTime());
-        page.AppendChatMsg(message);
+        page.appendChatMsg(message);
         auto* model = page.findChild<ChatDetailList*>()->model();
         QCOMPARE(model->rowCount(), 1);
         QCOMPARE(model->index(0, 0).data(MessageListModel::ResourceIdRole).toString(), QString("incoming-resource"));
         QCOMPARE(model->index(0, 0).data(MessageListModel::MessageTypeRole).toInt(), int(MessageType::Image));
         // Destruction cancels pending attachment work before its widgets are released.
     }
+    /** 验证设置附件缓存不会改变普通文本消息的展示角色。 */
     void resourceModelKeepsTextAndAttachmentsSeparate() {
         MessageListModel model(1);
         MessageRecord text;
@@ -118,6 +120,7 @@ private slots:
         QCOMPARE(model.data(model.index(1), MessageListModel::LocalResourcePathRole).toString(), QString("cached.png"));
         QCOMPARE(model.data(model.index(1), MessageListModel::MessageTypeRole).toInt(), int(MessageType::Image));
     }
+    /** 验证上传中断后从持久偏移恢复，并下载校验内容一致。 */
     void resumeUploadAndDownload() {
         QTemporaryDir directory;
         QVERIFY(directory.isValid());
@@ -137,7 +140,7 @@ private slots:
         {
             ResourceTransferManager first(endpoint, 7, "fixture-token", directory.path() + "/cache");
             QSignalSpy progress(&first, &ResourceTransferManager::progress);
-            connect(&first, &ResourceTransferManager::progress, &first, [&first](qint64 offset, qint64) {
+            connect(&first, &ResourceTransferManager::progress, &first, /** 上传至少一个块后取消，以保存可恢复的已确认偏移。 */ [&first](qint64 offset, qint64) {
                 if (offset >= 65536) first.cancel();
             });
             first.upload(source);
@@ -168,6 +171,7 @@ private slots:
         QCOMPARE(actual.readAll(), expected.readAll());
         host.kill(); QVERIFY(host.waitForFinished(5000));
     }
+    /** 验证空文件被同步拒绝且传输器不进入忙状态。 */
     void rejectsEmptyFile() {
         QTemporaryDir directory;
         QFile file(directory.path() + "/data.txt"); QVERIFY(file.open(QIODevice::WriteOnly)); file.close();

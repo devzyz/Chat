@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('Build', 'Test')][string]$Task = 'Build',
     [string]$VcpkgRoot = $env:VCPKG_ROOT,
@@ -19,6 +19,10 @@ $visualStudio = & $vswhere -latest -requires Microsoft.Component.MSBuild -proper
 $msbuild = Join-Path $visualStudio 'MSBuild/Current/Bin/MSBuild.exe'
 $output = Join-Path $repo 'build/resource'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
+<#
+.SYNOPSIS
+使用既有 MSBuild 和依赖构建指定项目，命令失败终止。
+#>
 function Build-ResourceProject([string]$Project) {
     $name = [IO.Path]::GetFileNameWithoutExtension($Project)
     & $msbuild (Join-Path $repo $Project) /p:Configuration=Release /p:Platform=x64 `

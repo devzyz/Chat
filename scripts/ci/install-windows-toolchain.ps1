@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([Parameter(Mandatory = $true)][string]$VcpkgRoot, [switch]$Refresh)
 
 Set-StrictMode -Version Latest
@@ -22,9 +22,9 @@ if ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'Visual Studio 2022 C++ tools are 
 $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/Include'
 if ($Refresh) {
     $lock.msvc.toolset = (Get-ChildItem -LiteralPath (Join-Path $vs 'VC/Tools/MSVC') -Directory |
-        Where-Object { $_.Name -match '^14\.\d+\.\d+$' } | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1).Name
+        Where-Object <# 筛选 MSVC 版本目录。 #> { $_.Name -match '^14\.\d+\.\d+$' } | Sort-Object <# 按 MSVC 版本数值排序。 #> { [version]$_.Name } -Descending | Select-Object -First 1).Name
     $lock.msvc.sdk = (Get-ChildItem -LiteralPath $sdkRoot -Directory |
-        Where-Object { $_.Name -match '^10\.0\.\d+\.0$' } | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1).Name
+        Where-Object <# 筛选 Windows SDK 版本目录。 #> { $_.Name -match '^10\.0\.\d+\.0$' } | Sort-Object <# 按 SDK 版本数值排序。 #> { [version]$_.Name } -Descending | Select-Object -First 1).Name
 }
 $compiler = Join-Path $vs "VC/Tools/MSVC/$($lock.msvc.toolset)/bin/Hostx64/x64/cl.exe"
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf) -or
@@ -60,7 +60,7 @@ if ($Refresh) {
             'ninja' { 'ninja-win.zip' }
             'powershell-core' { "PowerShell-$version-win-x64.zip" }
         }
-        $assets = @($release.assets | Where-Object { $_.name -ceq $assetName })
+        $assets = @($release.assets | Where-Object <# 匹配所需下载资源名称。 #> { $_.name -ceq $assetName })
         if ($assets.Count -ne 1 -or $assets[0].digest -notmatch '^sha256:[a-f0-9]{64}$') {
             throw "Latest $($tool.name) has no unique SHA256-verified asset."
         }
@@ -87,7 +87,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Invalid resolved toolchain.' }
 $catalogPath = Join-Path $VcpkgRoot 'scripts/vcpkg-tools.json'
 $catalog = Get-Content -LiteralPath $catalogPath -Raw | ConvertFrom-Json
 foreach ($tool in $lock.tools) {
-    $catalog.tools = @($catalog.tools | Where-Object {
+    $catalog.tools = @($catalog.tools | Where-Object <# 筛除将被替换的相同 Windows 工具条目。 #> {
         -not ($_.name -eq $tool.name -and $_.os -eq 'windows' -and
             $_.PSObject.Properties.Name -contains 'arch' -and $_.arch -eq $tool.arch)
     }) + @($tool)

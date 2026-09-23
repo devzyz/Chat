@@ -15,6 +15,7 @@
 namespace integration::internal {
 namespace {
 
+/** 按 Windows 命令行规则引用参数，转义引号及结尾反斜线。 */
 std::wstring QuoteArgument(const std::wstring& value) {
 	std::wstring quoted = L"\"";
 	std::size_t slashes = 0;
@@ -37,6 +38,7 @@ std::wstring QuoteArgument(const std::wstring& value) {
 	return quoted;
 }
 
+/** 把剩余期限向上换算为有限 DWORD 毫秒值，过期返回零。 */
 DWORD RemainingMilliseconds(RunDeadline deadline) {
 	const auto now = std::chrono::steady_clock::now();
 	if (deadline <= now) {
@@ -46,6 +48,7 @@ DWORD RemainingMilliseconds(RunDeadline deadline) {
 	return static_cast<DWORD>((std::min)(remaining, static_cast<std::int64_t>((std::numeric_limits<DWORD>::max)() - 1)));
 }
 
+/** 把 FILETIME 高低位合并为可比较的创建时间。 */
 std::uint64_t FileTimeValue(const FILETIME& value) {
 	ULARGE_INTEGER converted{};
 	converted.LowPart = value.dwLowDateTime;
@@ -55,8 +58,10 @@ std::uint64_t FileTimeValue(const FILETIME& value) {
 
 } // namespace
 
+/** 拥有 Windows 进程、作业和管道读取线程，保存有界输出及原始进程身份。 */
 class Win32ProcessAdapter::Impl {
 public:
+	/** 兜底终止仍匹配的所属进程，再结束读取并关闭线程、进程及作业句柄。 */
 	~Impl() {
 		if (process != nullptr) {
 			const auto expected = identity;
@@ -77,6 +82,7 @@ public:
 		}
 	}
 
+	/** 核对句柄的 PID 与真实创建时间是否匹配预期身份。 */
 	bool Matches(ProcessIdentity expected) const {
 		if (process == nullptr || expected.pid == 0 || expected.creation_time == 0 ||
 			GetProcessId(process) != expected.pid) {
@@ -87,6 +93,7 @@ public:
 			FileTimeValue(creation) == expected.creation_time;
 	}
 
+	/** 持续排空管道，仅保留输出上限内的字节并在锁内追加。 */
 	void ReadPipe(HANDLE pipe, std::string& output) {
 		std::array<char, 4096> buffer{};
 		for (;;) {
@@ -100,6 +107,7 @@ public:
 		}
 	}
 
+	/** 有限等待读取线程，必要时取消同步 I/O；只对已结束线程执行 join。 */
 	bool JoinReader(std::thread& reader, RunDeadline deadline) {
 		if (!reader.joinable()) {
 			return true;
@@ -115,6 +123,7 @@ public:
 		return true;
 	}
 
+	/** 分别结束标准输出及错误读取，完成后关闭对应句柄并保存状态。 */
 	bool ClosePipeReaders(RunDeadline deadline) {
 		if (pipes_closed) {
 			return true;
@@ -148,6 +157,7 @@ public:
 	bool pipes_closed = false;
 };
 
+/** 创建空的 Windows 进程实现。 */
 Win32ProcessAdapter::Win32ProcessAdapter() : impl_(std::make_unique<Impl>()) {
 }
 
@@ -221,8 +231,8 @@ ProcessIdentity Win32ProcessAdapter::Start(const ProcessSpec& spec) {
 	}
 	impl_->identity = {process.dwProcessId, FileTimeValue(creation)};
 	impl_->output_limit = spec.evidence_limit;
-	impl_->stdout_reader = std::thread([impl = impl_.get()] { impl->ReadPipe(impl->stdout_read, impl->stdout_text); });
-	impl_->stderr_reader = std::thread([impl = impl_.get()] { impl->ReadPipe(impl->stderr_read, impl->stderr_text); });
+	impl_->stdout_reader = std::thread(/** 在独立线程排空标准输出并保存有界证据。 */ [impl = impl_.get()] { impl->ReadPipe(impl->stdout_read, impl->stdout_text); });
+	impl_->stderr_reader = std::thread(/** 在独立线程排空标准错误并保存有界证据。 */ [impl = impl_.get()] { impl->ReadPipe(impl->stderr_read, impl->stderr_text); });
 	if (ResumeThread(impl_->process_thread) == static_cast<DWORD>(-1)) {
 		TerminateProcess(impl_->process, 96);
 		WaitForSingleObject(impl_->process, 1000);

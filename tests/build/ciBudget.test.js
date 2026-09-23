@@ -4,11 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
-const workflow = name => fs.readFileSync(path.join(__dirname, '../../.github/workflows', name), 'utf8');
+const workflow = /** 读取指定工作流的 UTF-8 文本。 */ name => fs.readFileSync(path.join(__dirname, '../../.github/workflows', name), 'utf8');
 const ci = workflow('ci.yml');
-const job = (text, name) => text.split(`  ${name}:`)[1]?.split(/\r?\n  [\w-]+:/)[0];
+const job = /** 提取指定作业块用于路由与依赖合同断言。 */ (text, name) => text.split(`  ${name}:`)[1]?.split(/\r?\n  [\w-]+:/)[0];
 
-test('develop uses quick regression; master, weekly and manual runs use full regression', () => {
+test('develop uses quick regression; master, weekly and manual runs use full regression', /** 验证 develop 使用快速回归，master、每周及手动任务执行完整回归。 */ () => {
     const condition = job(ci, 'linux').match(/^    if: (.+)$/m)[1];
     const full = new Function('github', `return ${condition};`);
     for (const [event_name, ref, base_ref, expected] of [
@@ -24,7 +24,7 @@ test('develop uses quick regression; master, weekly and manual runs use full reg
     assert.match(ci, /pull_request:\s+branches: \[develop, master\]/);
 });
 
-test('publication requires master push and all full checks; failed smoke cannot publish', () => {
+test('publication requires master push and all full checks; failed smoke cannot publish', /** 验证仅 master 推送且完整检查成功后可发布，冒烟失败不能绕过。 */ () => {
     const release = job(ci, 'release');
     const condition = release.match(/^    if: (.+)$/m)[1];
     const publish = new Function('github', `return ${condition};`);
@@ -42,7 +42,7 @@ test('publication requires master push and all full checks; failed smoke cannot 
     assert.doesNotMatch(releaseWorkflow, /BuildCandidate|RestoreServers|settings_receipt/);
 });
 
-test('cold Windows restore and Linux business steps retain setup and cleanup time', () => {
+test('cold Windows restore and Linux business steps retain setup and cleanup time', /** 验证冷恢复和业务步骤保留足够的启动、执行与清理时间。 */ () => {
     const windows = job(workflow('windows-ci.yml'), 'servers-release');
     assert.ok(Number(windows.match(/timeout-minutes: (\d+)/)[1]) >= 174 + 30);
     for (const name of ['disposable-services', 'two-server-contract']) {
@@ -52,7 +52,7 @@ test('cold Windows restore and Linux business steps retain setup and cleanup tim
     assert.doesNotMatch(workflow('linux-ci.yml'), /phase3dChecks|checks: read/);
 });
 
-test('Windows builds production servers once and validates registration before all lanes', () => {
+test('Windows builds production servers once and validates registration before all lanes', /** 验证生产 Server 只构建一次，所有测试路线先核对注册。 */ () => {
     const windows = workflow('windows-ci.yml');
     assert.doesNotMatch(job(windows, 'servers-release'), /-Task BuildServers/);
     assert.equal((windows.match(/-Task CheckTestStructure/g) || []).length, 1);
@@ -68,7 +68,7 @@ test('Windows builds production servers once and validates registration before a
     assert.match(server, /Assert-RegressionReport/);
 });
 
-test('structure-check bypass is rejected outside the prerequisite CI lanes', { skip: process.platform !== 'win32' }, () => {
+test('structure-check bypass is rejected outside the prerequisite CI lanes', { skip: process.platform !== 'win32' }, /** 验证注册检查跳过参数只允许受前置门禁约束的 CI 测试路线。 */ () => {
     for (const [task, githubActions] of [['RunVarifyTests', 'false'], ['CheckTestStructure', 'true']]) {
         const result = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
             path.join(__dirname, '../../scripts/windows-local.ps1'), '-Task', task, '-SkipTestStructureCheck'],
@@ -78,7 +78,7 @@ test('structure-check bypass is rejected outside the prerequisite CI lanes', { s
     }
 });
 
-test('quick regression omits packages while every full lane retains all release inputs', () => {
+test('quick regression omits packages while every full lane retains all release inputs', /** 验证候选打包仅在规定事件启用，快速回归不重复打包。 */ () => {
     const windows = workflow('windows-ci.yml');
     const expression = windows.match(/BUILD_PACKAGES: \$\{\{ (.+) \}\}/)[1];
     const packageEnabled = new Function('github', `return ${expression};`);
@@ -99,7 +99,7 @@ test('quick regression omits packages while every full lane retains all release 
     assert.equal((workflow('linux-ci.yml').match(/tests\/services\/phase3dEvidence\.test\.js/g) || []).length, 1);
 });
 
-test('Linux retains PASS validation without the retired compatibility selector or unused output', () => {
+test('Linux retains PASS validation without the retired compatibility selector or unused output', /** 验证 Linux 预检真实结果及下游服务报告汇入发布依赖。 */ () => {
     const linux = workflow('linux-ci.yml');
     const runner = fs.readFileSync(path.join(__dirname, '../../scripts/linux-ci.sh'), 'utf8');
     assert.doesNotMatch(runner, /3C-08|CHAT_RELEASE_INVENTORY|compatibility\/bootstrap/);

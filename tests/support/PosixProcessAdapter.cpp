@@ -19,13 +19,20 @@
 namespace integration::internal {
 namespace {
 
+/** 独占持有一个 POSIX 文件描述符，重置和析构负责关闭。 */
 class FileDescriptor {
 public:
+    /** 关闭仍持有的描述符。 */
     ~FileDescriptor() { Reset(); }
+    /** 初始化为无效描述符。 */
     FileDescriptor() = default;
+    /** 禁止复制文件描述符所有权。 */
     FileDescriptor(const FileDescriptor&) = delete;
+    /** 禁止复制赋值文件描述符所有权。 */
     FileDescriptor& operator=(const FileDescriptor&) = delete;
+    /** 借用原始描述符，未持有时返回负值。 */
     int Get() const { return _value; }
+    /** 关闭旧描述符并接管新值。 */
     void Reset(int value = -1) {
         if (_value >= 0) close(_value);
         _value = value;
@@ -34,6 +41,7 @@ private:
     int _value = -1;
 };
 
+/** 创建执行时关闭的管道并把读端设为非阻塞，失败抛异常。 */
 void MakePipe(FileDescriptor& reader, FileDescriptor& writer) {
     int descriptors[2] = {-1, -1};
     if (pipe2(descriptors, O_CLOEXEC) != 0) throw std::runtime_error("unable to create child pipe");
@@ -44,6 +52,7 @@ void MakePipe(FileDescriptor& reader, FileDescriptor& writer) {
     }
 }
 
+/** 从 Linux proc 状态读取进程启动 tick，读取或格式失败返回零。 */
 std::uint64_t StartTicks(pid_t pid) {
     std::ifstream input("/proc/" + std::to_string(pid) + "/stat");
     std::string line;
@@ -62,8 +71,10 @@ std::uint64_t StartTicks(pid_t pid) {
 
 } // namespace
 
+/** 拥有 POSIX 子进程组、非阻塞管道及回收状态，防止误接管复用 PID。 */
 class PosixProcessAdapter::Impl {
 public:
+    /** 兜底终止尚未回收的直属子进程，有限观察退出并回收已退出子进程。 */
     ~Impl() {
         // No PID adoption: even exceptional startup/cleanup owns only this child.
         if (pid > 0 && !reaped) {
@@ -78,12 +89,14 @@ public:
         }
     }
 
+    /** 核对未回收子进程的 PID、启动时间及进程组身份。 */
     bool Matches(ProcessIdentity expected) const {
         return !reaped && pid > 0 && expected.pid == static_cast<std::uint32_t>(pid) &&
             expected.creation_time != 0 && expected.creation_time == identity.creation_time &&
             StartTicks(pid) == expected.creation_time && getpgid(pid) == pid;
     }
 
+    /** 非阻塞观察所属子进程退出而暂不回收，记录退出码或信号状态。 */
     bool ObserveExit() {
         if (exited) return true;
         if (pid <= 0) return false;
@@ -98,6 +111,7 @@ public:
         return exited;
     }
 
+    /** 有界排空一个管道并截断保存内容，EOF 关闭描述符，实际读取错误记为失败。 */
     void Drain(FileDescriptor& descriptor, std::string& output) {
         std::array<char, 4096> buffer{};
         // Bound each iteration even if a child writes continuously.
@@ -114,6 +128,7 @@ public:
         }
     }
 
+    /** 排空输出后短时 poll，不越过调用方期限。 */
     void Pump(RunDeadline deadline) {
         Drain(stdout_read, stdout_text);
         Drain(stderr_read, stderr_text);
@@ -137,6 +152,7 @@ public:
     mutable std::mutex mutex;
 };
 
+/** 创建空的 POSIX 进程实现。 */
 PosixProcessAdapter::PosixProcessAdapter() : _impl(std::make_unique<Impl>()) {}
 PosixProcessAdapter::~PosixProcessAdapter() = default;
 

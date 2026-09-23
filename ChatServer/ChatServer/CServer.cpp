@@ -28,7 +28,7 @@ CServer::CServer(boost::asio::io_context& io, std::string address, unsigned shor
 bool CServer::Start() {
     if (_stop_requested.load()) return false;
     _ready.store(true);
-    boost::asio::post(_strand, [self = shared_from_this()] {
+    boost::asio::post(_strand, /** @brief 在监听执行器幂等启动接收。 */ [self = shared_from_this()] {
         if (self->_started || self->_stopping) return;
         self->_started = true;
         self->Accept();
@@ -41,7 +41,7 @@ void CServer::Accept() {
     auto session = std::make_shared<CSession>(io, _lifecycle, _directory, _submit);
     _accept_pending = true;
     _acceptor.async_accept(session->Socket(), boost::asio::bind_executor(_strand,
-        [self = shared_from_this(), session](boost::system::error_code error) {
+        /** @brief 接收完成后登记有效会话并继续接受连接。 */ [self = shared_from_this(), session](boost::system::error_code error) {
             self->_accept_pending = false;
             if (!error && !self->_stopping) {
                 self->_sessions.emplace(session->Id(), session);
@@ -54,7 +54,7 @@ void CServer::Accept() {
 }
 void CServer::Stop(std::function<void()> completion) {
     _stop_requested.store(true);
-    boost::asio::post(_strand, [self = shared_from_this(), completion = std::move(completion)]() mutable {
+    boost::asio::post(_strand, /** @brief 汇总停服回调并取消监听及现有会话。 */ [self = shared_from_this(), completion = std::move(completion)]() mutable {
         if (completion) self->_stop_completions.push_back(std::move(completion));
         if (!self->_stopping) {
             self->_stopping = true;
@@ -67,7 +67,7 @@ void CServer::Stop(std::function<void()> completion) {
     });
 }
 void CServer::RemoveSession(const SessionId& id) {
-    boost::asio::post(_strand, [self = shared_from_this(), id] {
+    boost::asio::post(_strand, /** @brief 在所属执行器移除已关闭会话并尝试完成停服。 */ [self = shared_from_this(), id] {
         self->_sessions.erase(id);
         self->_connection_count.store(self->_sessions.size());
         self->CompleteStop();

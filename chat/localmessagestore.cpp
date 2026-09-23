@@ -15,11 +15,13 @@
 #include <stdexcept>
 
 namespace {
+/** @brief 检查存储操作返回值，失败时抛带操作说明的运行时异常。 */
 void require(bool success, const char *operation)
 {
     if (!success) throw std::runtime_error(operation);
 }
 
+/** @brief 比较文本或资源 JSON 的规范内容，资源需具有非空资源 ID。 */
 bool sameMessageContent(const QString &original, const QString &canonical)
 {
     if (original == canonical) return true;
@@ -30,6 +32,7 @@ bool sameMessageContent(const QString &original, const QString &canonical)
         && left.object() == right.object();
 }
 
+/** @brief 准备并绑定 SQL 参数后同步执行，失败抛异常，返回可读取结果的查询对象。 */
 QSqlQuery query(QSqlDatabase &db, const QString &sql, const QVariantList &values = {})
 {
     QSqlQuery result(db);
@@ -39,13 +42,20 @@ QSqlQuery query(QSqlDatabase &db, const QString &sql, const QVariantList &values
     return result;
 }
 
+/** @brief 借用 SQLite 连接管理一次事务；未提交时析构回滚，回滚失败则关闭连接。 */
 class Transaction {
 public:
+    /** @brief 借用连接并立即开启事务，开启失败抛异常。 */
     explicit Transaction(QSqlDatabase &db) : _db(db) { require(_db.transaction(), "Cannot start transaction"); }
+    /** @brief 禁止复制或移动事务，避免多个对象提交或回滚同一连接。 */
     Transaction(const Transaction&) = delete;
+    /** @brief 禁止事务赋值，避免改变正在管理的连接及提交状态。 */
     Transaction& operator=(const Transaction&) = delete;
+    /** @brief 禁止复制或移动事务，避免多个对象提交或回滚同一连接。 */
     Transaction(Transaction&&) = delete;
+    /** @brief 禁止事务赋值，避免改变正在管理的连接及提交状态。 */
     Transaction& operator=(Transaction&&) = delete;
+    /** @brief 未提交时回滚；回滚失败关闭连接，防止再次使用未知事务状态。 */
     ~Transaction() {
         if (!_committed && !_db.rollback()) {
             // Never reuse a connection whose transaction outcome is unknown.
@@ -53,12 +63,14 @@ public:
             _db.close();
         }
     }
+    /** @brief 提交当前 SQLite 事务，成功才禁止析构回滚；失败抛异常。 */
     void commit() { require(_db.commit(), "Cannot commit local messages"); _committed = true; }
 private:
     QSqlDatabase &_db;
     bool _committed = false;
 };
 
+/** @brief 按固定查询列顺序构造持久化消息值。 */
 StoredMessage readMessage(const QSqlQuery &row)
 {
     StoredMessage message;
@@ -74,6 +86,7 @@ StoredMessage readMessage(const QSqlQuery &row)
     return message;
 }
 const QString columns = "local_id,message_id,client_uuid,chat_id,sender_id,recipient_id,content,sent_at,state";
+/** @brief 将 JSON 字符串解析为非负 qint64 revision，非规范十进制或越界时抛异常。 */
 qint64 revisionValue(const QJsonValue &value) {
     const auto text = value.toString();
     bool valid = false;

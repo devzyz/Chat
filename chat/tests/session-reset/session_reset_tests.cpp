@@ -20,13 +20,19 @@ class SessionResetTests : public QObject
     Q_OBJECT
 
 private slots:
+    /** 注册重置原因元类型并安装静默测试日志器。 */
     void initTestCase();
+    /** 释放测试使用的 TCP 和用户管理单例。 */
     void cleanupTestCase();
     /** @brief 验证退出后清空账号数据并保留应用配置。 */
     void accountStateDoesNotCrossLoginSessions();
+    /** 验证重置只销毁一次所属会话界面并保留重置原因。 */
     void resetDestroysOwnedSessionUiOnceAndPreservesReason();
+    /** 验证停止会话后忽略旧批次失败响应。 */
     void resetDropsPendingTextBatchBeforeAnOldFailureArrives();
+    /** 验证未确认批次断连重开后恢复，ACK 仅匹配精确 UUID。 */
     void uncertainBatchSurvivesDisconnectAndMatchesExactUuid();
+    /** 验证切换账号后旧发送结果和重试不会污染当前账号。 */
     void retryDoesNotCrossAuthenticatedAccounts();
     /** @brief 验证重连认证后沿用原 UUID 和业务载荷，仅递增发送尝试。 */
     void reconnectResendsIdenticalWirePayloadAfterAuthentication();
@@ -41,14 +47,14 @@ void SessionResetTests::initTestCase()
 
 void SessionResetTests::cleanupTestCase()
 {
-    TcpMgr::ReleaseInstance();
-    UserMgr::ReleaseInstance();
+    TcpMgr::releaseInstance();
+    UserMgr::releaseInstance();
 }
 
 void SessionResetTests::accountStateDoesNotCrossLoginSessions()
 {
     ClientSession session;
-    auto userMgr = UserMgr::GetInstance();
+    auto userMgr = UserMgr::instance();
     session.beginSession();
 
     const QString preservedGateEndpoint = QStringLiteral("http://127.0.0.1:18080");
@@ -131,6 +137,7 @@ void SessionResetTests::resetDestroysOwnedSessionUiOnceAndPreservesReason()
     QCOMPARE(destroyedSpy.count(), 1);
 }
 
+/** 生成指定发送者与 UUID 的固定文本请求。 */
 static QJsonObject outgoing(const QString &uuid, int uid = 101)
 {
     return {{"from_uid", uid}, {"to_uid", 102}, {"chat_id", 501},
@@ -174,7 +181,7 @@ void SessionResetTests::uncertainBatchSurvivesDisconnectAndMatchesExactUuid()
     store.open(directory.path(), 101);
     store.resumeOutgoing();
     QCOMPARE(store.dispatchDue(1).size(), 2);
-    const auto ack = [](QString uuid, int id) { return QJsonObject{{"error", 0}, {"chat_id", 501},
+    const auto ack = /** 构造精确关联 UUID 与服务端消息编号的成功 ACK。 */ [](QString uuid, int id) { return QJsonObject{{"error", 0}, {"chat_id", 501},
         {"from_uid", 101}, {"to_uid", 102}, {"client_msg_uuids", QJsonArray{uuid}},
         {"uuid_msgId", QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"message_id", id}}}}}; };
     store.acceptSendResponse(ack("second", 902));
@@ -213,7 +220,7 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
 {
     QTemporaryDir directory;
     gate_url_prefix.clear();
-    auto tcp = TcpMgr::GetInstance();
+    auto tcp = TcpMgr::instance();
     tcp->resetConnection(true);
     QTcpServer peer;
     QVERIFY(peer.listen(QHostAddress::LocalHost, 0));
@@ -232,7 +239,7 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
         {"chat_id", 501}, {"text_array", QJsonArray{QJsonObject{
         {"msg_uuid", "00000000-0000-4000-8000-000000000004"}, {"msg_content", "retry body"}}}}})
         .toJson(QJsonDocument::Compact);
-    auto *service = UserMgr::GetInstance()->messages();
+    auto *service = UserMgr::instance()->messages();
     service->start(directory.path(), 101);
     service->send(QJsonDocument::fromJson(request).object());
     QTRY_VERIFY_WITH_TIMEOUT(first->bytesAvailable() > 4, 2000);

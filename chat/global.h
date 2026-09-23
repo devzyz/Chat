@@ -85,6 +85,7 @@ enum ClickLabelState {
     Selected = 1,
 };
 
+/** @brief 携带 Gate 返回的聊天服务地址、端口及登录凭据。 */
 struct ServerInfo {
     int Uid;
     QString Host;
@@ -120,6 +121,7 @@ enum class ChatRole {
 };
 
 // 发送信息
+/** @brief 保存编辑器拆分的文本或图片消息内容。 */
 struct MsgInfo {
     QString msgFlag; // 哪一种文件，test, image, file
     QString content; // 文本或者图片的url

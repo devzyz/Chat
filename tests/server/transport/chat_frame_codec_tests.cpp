@@ -5,6 +5,7 @@
 namespace {
 
 // T02-FRM-01
+/** 验证帧头按网络字节序保留消息编号高位及正文长度。 */
 TEST(ChatFrameCodecTests, ValidatedHeaderPreservesHighBitMessageIdInNetworkOrder) {
     const auto bytes = ChatFrameCodec::EncodeHeader(0x9234, 0x0201);
 
@@ -16,6 +17,7 @@ TEST(ChatFrameCodecTests, ValidatedHeaderPreservesHighBitMessageIdInNetworkOrder
 }
 
 // T02-FRM-02
+/** 验证未知消息编号在正文长度合法时仍可解码。 */
 TEST(ChatFrameCodecTests, MaximumBodyLengthAcceptsAnUnknownMessageId) {
     const auto bytes = ChatFrameCodec::EncodeHeader(0xffff, MAX_LENGTH);
 
@@ -27,6 +29,7 @@ TEST(ChatFrameCodecTests, MaximumBodyLengthAcceptsAnUnknownMessageId) {
 }
 
 // T02-FRM-03
+/** 验证超出接收缓冲上限的正文长度被拒绝。 */
 TEST(ChatFrameCodecTests, BodyLengthAboveTheReceiveBufferLimitIsRejected) {
     const auto bytes = ChatFrameCodec::EncodeHeader(1, 0x8000);
 

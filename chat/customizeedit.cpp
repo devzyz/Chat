@@ -4,14 +4,14 @@ CustomizeEdit::CustomizeEdit(QWidget *parent) : QLineEdit(parent), _max_len(0) {
     connect(this, &QLineEdit::textChanged, this, &CustomizeEdit::limitTextLength);
 }
 
-void CustomizeEdit::SetMaxLength(int maxLen) {
+void CustomizeEdit::setMaxLength(int maxLen) {
     _max_len = maxLen;
 }
 
 void CustomizeEdit::focusOutEvent(QFocusEvent * event) {
     // 发出失去焦点信号，调用基类的失去焦点
     QLineEdit::focusOutEvent(event);
-    emit sig_focus_out();
+    emit focusLost();
 }
 
 // 最大长度限制

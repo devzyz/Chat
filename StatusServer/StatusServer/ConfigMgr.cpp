@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 namespace {
+/** @brief 验证端口为完整十进制整数且处于 TCP 端口范围。 */
 void ValidatePort(const std::string& value, const std::string& key) {
 	std::size_t parsed = 0;
 	int port = 0;
@@ -21,17 +22,20 @@ void ValidatePort(const std::string& value, const std::string& key) {
 	}
 }
 
+/** @brief 读取必需配置值，缺失时抛出带配置键的错误。 */
 void RequireValue(SectionInfo section, const char* section_name, const char* key) {
 	if (section[key].empty()) {
 		throw std::invalid_argument(std::string("[") + section_name + "]." + key + " must not be empty");
 	}
 }
 
+/** @brief 核验配置中的服务地址及端口，非法值阻止启动。 */
 void ValidateEndpoint(SectionInfo section, const char* section_name) {
 	RequireValue(section, section_name, "Host");
 	ValidatePort(section["Port"], std::string("[") + section_name + "].Port");
 }
 
+/** @brief 验证配置值为允许范围内的正整数，非法时抛异常。 */
 void ValidatePositiveInteger(SectionInfo section, const char* section_name, const char* key) {
 	RequireValue(section, section_name, key);
 	std::size_t parsed = 0;

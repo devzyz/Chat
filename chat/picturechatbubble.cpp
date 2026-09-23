@@ -4,6 +4,7 @@
 #define PIC_MAX_WIDTH 160
 #define PIC_MAX_HEIGHT 90
 
+/** @brief 创建图片气泡并设置用户信息、图片及布局，子控件由气泡层级持有。 */
 PictureChatBubble::PictureChatBubble(ChatRole role, QPixmap picture, const QString& userName,
                                      const QString& userIcon, QWidget *parent) :  ChatBubble(role, parent){
     // 设置用户的头像和昵称
@@ -21,6 +22,7 @@ PictureChatBubble::PictureChatBubble(ChatRole role, QPixmap picture, const QStri
     setWidget(_wrapper); // 将当前wrapper放到最外层的
 }
 
+/** @brief 等比缩放图片到展示上限并更新气泡尺寸。 */
 void PictureChatBubble::setPixmapLabel(QPixmap picture)
 {
     // 将图片缩放一下

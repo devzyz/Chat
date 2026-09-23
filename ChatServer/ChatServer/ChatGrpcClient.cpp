@@ -10,7 +10,7 @@ message::ReceiptChangedRsp ChatGrpcClient::NotifyMessageReceiptChanged(
     }
     auto result = rpc::InvokeUnary<ChatConnectionPool, message::ReceiptChangedReq, message::ReceiptChangedRsp>(
         *found->second, request, _policy.rpc_deadline,
-        [](ChatService::Stub& stub, ClientContext& context, const message::ReceiptChangedReq& req,
+        /** @brief 在既定截止时间内转发回执变化 RPC。 */ [](ChatService::Stub& stub, ClientContext& context, const message::ReceiptChangedReq& req,
            message::ReceiptChangedRsp& rsp) { return stub.NotifyMessageReceiptChanged(&context, req, &rsp); });
     if (!result) result.response.set_error(ErrorCodes::RPCFailed);
     return result.response;
@@ -35,7 +35,7 @@ ChatGrpcClient::ChatGrpcClient() {
 
     const auto endpoints = ResolvePeerServerEndpoints(
         config["PeerServer"]["Servers"],
-        [&config](const std::string& section, const std::string& key) {
+        /** @brief 按节及键读取对端路由配置。 */ [&config](const std::string& section, const std::string& key) {
             return config[section][key];
         });
     for (const auto& endpoint : endpoints) {
@@ -74,7 +74,7 @@ AddFriendRsp ChatGrpcClient::NotifyOtherAddFriend(
         *found->second,
         request,
         _policy.rpc_deadline,
-        [](ChatService::Stub& stub,
+        /** @brief 执行好友申请通知 RPC。 */ [](ChatService::Stub& stub,
            ClientContext& context,
            const AddFriendReq& req,
            AddFriendRsp& rsp) {
@@ -99,7 +99,7 @@ AuthFriendRsp ChatGrpcClient::NotifyOtherAuthFriend(
         *found->second,
         request,
         _policy.rpc_deadline,
-        [](ChatService::Stub& stub,
+        /** @brief 执行好友认证通知 RPC。 */ [](ChatService::Stub& stub,
            ClientContext& context,
            const AuthFriendReq& req,
            AuthFriendRsp& rsp) {
@@ -124,7 +124,7 @@ TextChatMsgRsp ChatGrpcClient::NotifyOtherReceiveTextChatMsg(
         *found->second,
         request,
         _policy.rpc_deadline,
-        [](ChatService::Stub& stub,
+        /** @brief 执行文本消息通知 RPC。 */ [](ChatService::Stub& stub,
            ClientContext& context,
            const TextChatMsgReq& req,
            TextChatMsgRsp& rsp) {
@@ -149,7 +149,7 @@ KickUserRsp ChatGrpcClient::NotifyOtherKickUser(
         *found->second,
         request,
         _policy.rpc_deadline,
-        [](ChatService::Stub& stub,
+        /** @brief 执行旧登录踢出通知 RPC。 */ [](ChatService::Stub& stub,
            ClientContext& context,
            const KickUserReq& req,
            KickUserRsp& rsp) {

@@ -15,20 +15,26 @@ UserMgr::UserMgr()
       _is_load_chat_finish(false)
 {
     // 在 Qt 事件投递停止前排空存储，避免工作线程无法收到退出任务。
-    qAddPostRoutine([] {
-        const auto user = UserMgr::GetInstance();
+    qAddPostRoutine(
+        /** @brief 应用退出时释放消息服务，兼容单例已释放的关闭顺序。 */
+        [] {
+        const auto user = UserMgr::instance();
         if (!user) return; // Normal application exit may already release the singleton.
         delete user->_messages;
         user->_messages = nullptr;
     });
     _localAvatar->setUploadEnabled(true);
     // 将本地头像上传请求转交当前资源会话。
-    connect(_localAvatar, &LocalAvatar::uploadRequested, this, [this](const QString &path) {
+    connect(_localAvatar, &LocalAvatar::uploadRequested, this,
+        /** @brief 有远端头像服务时上传，否则结束本地等待并报告错误。 */
+        [this](const QString &path) {
         if (_remoteAvatars) _remoteAvatars->upload(path);
         else _localAvatar->finishUpload(tr("尚未建立资源服务会话"));
     });
     // 将当前账号的本地头像变化通知界面。
-    connect(_localAvatar, &LocalAvatar::imageChanged, this, [this] {
+    connect(_localAvatar, &LocalAvatar::imageChanged, this,
+        /** @brief 本人头像变化时通知引用该 UID 的界面。 */
+        [this] {
         if (_user_info) emit avatarChanged(_user_info->_uid);
     });
 }
@@ -60,10 +66,14 @@ void UserMgr::startResourceSession()
         _remoteAvatars = new AvatarCache(QUrl(settings.value("ResourceServer/Url", "http://127.0.0.1:8090").toString()),
             user_info->_uid, _token, storageRoot(), this);
         // 远端发布完成后结束本地上传状态。
-        connect(_remoteAvatars, &AvatarCache::published, this, [this] { _localAvatar->finishUpload(); });
+        connect(_remoteAvatars, &AvatarCache::published, this,
+            /** @brief 远端发布成功后完成本地头像保存流程。 */
+            [this] { _localAvatar->finishUpload(); });
         connect(_remoteAvatars, &AvatarCache::uploadFailed, _localAvatar, &LocalAvatar::finishUpload);
         // 更新本人头像或通知其他用户头像变化。
-        connect(_remoteAvatars, &AvatarCache::changed, this, [this](int uid, const QImage &image) {
+        connect(_remoteAvatars, &AvatarCache::changed, this,
+            /** @brief 将本人远端头像写回本地模型，其他用户仅通知刷新。 */
+            [this](int uid, const QImage &image) {
             if (_user_info && uid == _user_info->_uid) _localAvatar->setRemoteImage(image);
             else emit avatarChanged(uid);
         });
@@ -95,7 +105,9 @@ void UserMgr::bindAvatar(QLabel *label, int uid, const QString &fallback)
     label->setProperty("avatarUid", uid);
     label->setProperty("avatarFallback", fallback);
     // 按标签当前绑定的用户和尺寸刷新头像。
-    const auto update = [this, label] {
+    const auto update =
+        /** @brief 按标签绑定的 UID 和默认资源刷新头像。 */
+        [this, label] {
         label->setPixmap(avatarFor(label->property("avatarUid").toInt(),
             label->property("avatarFallback").toString()).scaled(label->size(),
                 Qt::KeepAspectRatio, Qt::SmoothTransformation));
@@ -103,7 +115,9 @@ void UserMgr::bindAvatar(QLabel *label, int uid, const QString &fallback)
     if (!label->property("avatarBound").toBool()) {
         label->setProperty("avatarBound", true);
         // 仅刷新与变更 UID 匹配的标签。
-        connect(this, &UserMgr::avatarChanged, label, [label, update](int changed) {
+        connect(this, &UserMgr::avatarChanged, label,
+            /** @brief 只更新引用发生变化 UID 的头像标签。 */
+            [label, update](int changed) {
             if (label->property("avatarUid").toInt() == changed) update();
         });
     }
@@ -209,6 +223,7 @@ bool UserMgr::isFriend(int uid)
 }
 
 // 添加某个好友
+/** @brief 保存好友资料并更新联系人状态。 */
 void UserMgr::addFriend(std::shared_ptr<AuthInfo> auth_info)
 {
     auto friend_info = std::make_shared<UserInfo> (auth_info);

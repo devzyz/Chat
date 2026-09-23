@@ -25,6 +25,24 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Install pinned convention parsers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          python -m pip install --disable-pip-version-check --no-deps --only-binary=:all: --target build/conventions/python -r scripts/conventions/requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Convention parser installation failed.' }
+
+      - name: Test incremental convention contracts
+        shell: pwsh
+        run: ./scripts/windows-local.ps1 -Task RunConventionTests
+
+      - name: Check introduced Git and source conventions
+        shell: pwsh
+        run: ./scripts/windows-local.ps1 -Task CheckConventions
 
       - name: Validate GitHub Actions workflows
         shell: pwsh

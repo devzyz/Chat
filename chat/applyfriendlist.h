@@ -11,13 +11,16 @@ class ApplyFriendList : public QListWidget
 {
     Q_OBJECT
 public:
+    /** @brief 初始化对象，用于展示好友申请列表并观察列表交互。 */
     ApplyFriendList(QWidget * parent = nullptr);
 
 protected:
+    /** @brief 观察关联对象事件并处理本控件负责的交互，其余事件交回 Qt。 */
     bool eventFilter(QObject * watched, QEvent * event) override;
 
 signals:
-    void sig_show_search(bool);
+    /** @brief 通知上层切换到用户搜索入口。 */
+    void searchRequested(bool);
 };
 
 #endif // APPLYFRIENDLIST_H

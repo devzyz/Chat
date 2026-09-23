@@ -19,17 +19,16 @@ public:
      * @param text 聊天内容
      * @param userName 用户昵称
      * @param userIcon 头像
-     * @param parent
      */
     TextChatBubble(ChatRole role, const QString &text, const QString& userName, const QString& userIcon, const ChatStatus& status, QWidget *parent = nullptr);
 
     /**
      * @brief setPlainText
-     * @param text
-     * @param wrappper
+     * @param text 要显示的纯文本。
      * 设置文本，并设置宽高等
      */
     void setPlainText(const QString &text);
+    /** @brief 返回气泡内部文本编辑控件的借用指针，有效期不超过气泡生命周期。 */
     QTextEdit *textEdit() const { return _text_edit;}
 protected:
 

@@ -7,12 +7,13 @@
 namespace resource {
 // The editor emits non-interlaced 8-bit RGB/RGBA PNG. Bound decompression before
 // accepting a public profile image, rather than trusting its extension or IHDR.
+/** @brief 核验 PNG 格式、图片尺寸和头像大小限制，非法内容抛出资源错误。 */
 inline void ValidateAvatarPng(const std::vector<char>& bytes)
 {
-    auto reject = [] { throw Error(415, "avatar must be a valid 256x256 RGB/RGBA PNG"); };
+    auto reject = /** @brief 统一拒绝格式或尺寸不合法的头像 PNG。 */ [] { throw Error(415, "avatar must be a valid 256x256 RGB/RGBA PNG"); };
     if (bytes.size() < 57 || bytes.size() > 1024 * 1024 ||
         std::memcmp(bytes.data(), "\x89PNG\r\n\x1a\n", 8) != 0) reject();
-    auto number = [&bytes](std::size_t at) {
+    auto number = /** @brief 按网络字节序读取 PNG 区块的四字节长度。 */ [&bytes](std::size_t at) {
         std::uint32_t result = 0;
         for (int i = 0; i < 4; ++i) result = (result << 8) | static_cast<unsigned char>(bytes[at + i]);
         return result;

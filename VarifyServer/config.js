@@ -2,6 +2,7 @@ const fs = require('fs'); // js内的文件读写库
 const { normalizeSmtpConfig } = require('./smtpConfig');
 const { normalizeRedisConfig } = require('./redis');
 
+/** 读取必需环境变量，缺失或空白时抛异常；错误仅包含变量名。 */
 function requireEnvironment(name) {
     const value = process.env[name];
     if (typeof value !== 'string' || value.trim() === '') {
@@ -10,6 +11,7 @@ function requireEnvironment(name) {
     return value;
 }
 
+/** 拒绝配置文件中的明文凭据字段，要求由环境注入。 */
 function rejectPlaintextCredentials(config) {
     const forbiddenFields = [
         ['email', 'user'],
@@ -17,7 +19,9 @@ function rejectPlaintextCredentials(config) {
         ['mysql', 'passwd'],
         ['redis', 'passwd']
     ];
-    const hasCredentialField = forbiddenFields.some(([section, field]) =>
+    const hasCredentialField = forbiddenFields.some(
+        /** 判断当前配置是否包含禁止落盘的凭据字段。 */
+        ([section, field]) =>
         config[section] && Object.prototype.hasOwnProperty.call(config[section], field));
     if (hasCredentialField) {
         throw new Error('Credential fields are not allowed in config.json; use environment variables.');

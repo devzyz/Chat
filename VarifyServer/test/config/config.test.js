@@ -16,7 +16,7 @@ const credentialEnvironment = Object.freeze({
     CHAT_VARIFY_REDIS_PASSWORD: 'fixture-redis-secret'
 });
 
-function writeConfig(directory, marker) {
+/** 在临时目录写入带标记的非敏感连接配置并返回文件路径。 */ function writeConfig(directory, marker) {
     fs.mkdirSync(directory, { recursive: true });
     const file = path.join(directory, 'config.json');
     fs.writeFileSync(file, JSON.stringify({
@@ -27,7 +27,7 @@ function writeConfig(directory, marker) {
     return file;
 }
 
-function loadConfigInChild({ cwd, envConfig, argumentConfig, credentials = credentialEnvironment }) {
+/** 在子进程隔离环境凭据并加载指定配置，返回退出状态和输出。 */ function loadConfigInChild({ cwd, envConfig, argumentConfig, credentials = credentialEnvironment }) {
     const args = [
         '-e',
         `const config = require(${JSON.stringify(configModule)}); process.stdout.write(JSON.stringify(config));`
@@ -48,9 +48,9 @@ function loadConfigInChild({ cwd, envConfig, argumentConfig, credentials = crede
     return spawnSync(process.execPath, args, { cwd, env, encoding: 'utf8' });
 }
 
-test('explicit --config takes precedence over CHAT_CONFIG', (t) => {
+test('explicit --config takes precedence over CHAT_CONFIG', /** 验证命令行配置优先于环境配置且敏感字段取自环境变量。 */ (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
-    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    t.after(/** 删除本用例创建的临时配置目录。 */ () => fs.rmSync(root, { recursive: true, force: true }));
     const environmentConfig = writeConfig(path.join(root, 'environment'), 'environment');
     const argumentConfig = writeConfig(path.join(root, 'argument'), 'argument');
 
@@ -66,9 +66,9 @@ test('explicit --config takes precedence over CHAT_CONFIG', (t) => {
     assert.equal(config.redis_host, 'argument-redis');
 });
 
-test('CHAT_CONFIG takes precedence over the working-directory default', (t) => {
+test('CHAT_CONFIG takes precedence over the working-directory default', /** 验证环境指定配置优先于工作目录默认文件。 */ (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
-    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    t.after(/** 删除本用例创建的临时配置目录。 */ () => fs.rmSync(root, { recursive: true, force: true }));
     writeConfig(root, 'default');
     const environmentConfig = writeConfig(path.join(root, 'environment'), 'environment');
 
@@ -78,9 +78,9 @@ test('CHAT_CONFIG takes precedence over the working-directory default', (t) => {
     assert.equal(JSON.parse(result.stdout).mysql_host, 'environment-mysql');
 });
 
-test('config.json is loaded from the working directory by default', (t) => {
+test('config.json is loaded from the working directory by default', /** 验证默认配置路径及验证码键前缀。 */ (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
-    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    t.after(/** 删除本用例创建的临时配置目录。 */ () => fs.rmSync(root, { recursive: true, force: true }));
     writeConfig(root, 'default');
 
     const result = loadConfigInChild({ cwd: root });
@@ -91,9 +91,9 @@ test('config.json is loaded from the working directory by default', (t) => {
     assert.equal(config.code_prefix, 'code_');
 });
 
-test('malformed configuration exits with a failure status', (t) => {
+test('malformed configuration exits with a failure status', /** 验证损坏的 JSON 配置导致加载失败。 */ (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
-    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    t.after(/** 删除本用例创建的临时配置目录。 */ () => fs.rmSync(root, { recursive: true, force: true }));
     const malformed = path.join(root, 'broken.json');
     fs.writeFileSync(malformed, '{"broken":');
 
@@ -103,9 +103,9 @@ test('malformed configuration exits with a failure status', (t) => {
 });
 
 for (const missingName of Object.keys(credentialEnvironment)) {
-    test(`missing ${missingName} is rejected without exposing credentials`, (t) => {
+    test(`missing ${missingName} is rejected without exposing credentials`, /** 逐项验证必需凭据缺失时失败且诊断不泄露其他凭据。 */ (t) => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
-        t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+        t.after(/** 删除本用例创建的临时配置目录。 */ () => fs.rmSync(root, { recursive: true, force: true }));
         writeConfig(root, 'default');
         const credentials = { ...credentialEnvironment };
         delete credentials[missingName];
@@ -120,9 +120,9 @@ for (const missingName of Object.keys(credentialEnvironment)) {
     });
 }
 
-test('plaintext credential fields in config.json are rejected', (t) => {
+test('plaintext credential fields in config.json are rejected', /** 验证旧配置文件中的明文密码被拒绝且不出现在诊断中。 */ (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
-    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    t.after(/** 删除本用例创建的临时配置目录。 */ () => fs.rmSync(root, { recursive: true, force: true }));
     const configPath = path.join(root, 'config.json');
     const legacySecret = 'legacy-fixture-secret';
     fs.writeFileSync(configPath, JSON.stringify({
@@ -138,9 +138,9 @@ test('plaintext credential fields in config.json are rejected', (t) => {
     assert.equal(result.stderr.includes(legacySecret), false);
 });
 
-test('SMTP no-auth configuration needs no SMTP password and retains sender identity', (t) => {
+test('SMTP no-auth configuration needs no SMTP password and retains sender identity', /** 验证显式无认证 SMTP 配置可不提供邮件密码。 */ (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
-    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    t.after(/** 删除本用例创建的临时配置目录。 */ () => fs.rmSync(root, { recursive: true, force: true }));
     const file = writeConfig(root, 'smtp');
     const config = JSON.parse(fs.readFileSync(file, 'utf8'));
     config.email = { host: '127.0.0.1', port: 1025, secure: false, auth: 'none', deadlineMs: 1500 };

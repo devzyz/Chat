@@ -23,6 +23,7 @@ using namespace std::chrono_literals;
 
 enum class FormalService { Gate, Status, Chat };
 
+/** 将正式服务枚举映射为产物名称，未知值返回诊断名称。 */
 const char* ServiceName(FormalService service) {
     switch (service) {
     case FormalService::Gate: return "GateServer";
@@ -32,8 +33,10 @@ const char* ServiceName(FormalService service) {
     return "UnknownServer";
 }
 
+/** 暂存并恢复进程环境变量；使用者须避免并发修改同一变量。 */
 class ScopedEnvironmentValue {
 public:
+    /** 保存原环境值并设置作用域覆盖，设置失败时抛异常。 */
     ScopedEnvironmentValue(const wchar_t* name, const std::optional<std::wstring>& value) : name_(name) {
         const DWORD required = GetEnvironmentVariableW(name, nullptr, 0);
         if (required > 0) {
@@ -47,6 +50,7 @@ public:
         }
     }
 
+    /** 恢复进入作用域前的环境值或未设置状态。 */
     ~ScopedEnvironmentValue() {
         SetEnvironmentVariableW(name_.c_str(), original_ ? original_->c_str() : nullptr);
     }
@@ -56,6 +60,7 @@ private:
     std::optional<std::wstring> original_;
 };
 
+/** 根据测试可执行文件布局定位仓库根目录，路径查询失败时拒绝继续。 */
 std::filesystem::path RepositoryRoot() {
     std::vector<wchar_t> module_path(32768, L'\0');
     const DWORD length = GetModuleFileNameW(nullptr, module_path.data(), static_cast<DWORD>(module_path.size()));
@@ -67,6 +72,7 @@ std::filesystem::path RepositoryRoot() {
     return test_executable.parent_path().parent_path().parent_path().parent_path();
 }
 
+/** 按当前构建配置解析正式服务可执行文件路径。 */
 std::filesystem::path FindExecutable(FormalService service) {
     std::vector<wchar_t> module_path(32768, L'\0');
     const DWORD length = GetModuleFileNameW(nullptr, module_path.data(), static_cast<DWORD>(module_path.size()));
@@ -80,6 +86,7 @@ std::filesystem::path FindExecutable(FormalService service) {
         (std::string(name) + ".exe");
 }
 
+/** 写入本用例拥有的文本文件，写入失败时抛异常。 */
 void WriteText(const std::filesystem::path& path, const std::string& content) {
     std::ofstream output(path, std::ios::binary);
     output << content;
@@ -88,6 +95,7 @@ void WriteText(const std::filesystem::path& path, const std::string& content) {
     }
 }
 
+/** 生成 Gate 或 Status 的隔离配置，以本次身份填充合成凭据。 */
 void WriteGateStatusConfig(
     FormalService service,
     const std::filesystem::path& path,
@@ -109,6 +117,7 @@ void WriteGateStatusConfig(
     WriteText(path, config.str());
 }
 
+/** 生成 Chat 隔离配置，使用本次监听端口和不可用的本地依赖端点。 */
 void WriteChatConfig(
     const std::filesystem::path& path,
     std::uint16_t tcp_port,
@@ -127,6 +136,7 @@ void WriteChatConfig(
     WriteText(path, config.str());
 }
 
+/** 从正式产物启动服务，显式选择配置并由运行上下文管理进程。 */
 std::unique_ptr<integration::ProcessHarness> StartFormal(
     integration::RunContext& context,
     FormalService service,
@@ -143,6 +153,7 @@ std::unique_ptr<integration::ProcessHarness> StartFormal(
     return integration::ProcessHarness::Start(context, std::move(spec));
 }
 
+/** 通过有界 HTTP 请求检查 Gate 协议就绪。 */
 bool ProbeGate(std::uint16_t port) {
     boost::asio::io_context context;
     boost::asio::ip::tcp::socket socket(context);
@@ -175,12 +186,14 @@ bool ProbeGate(std::uint16_t port) {
     return false;
 }
 
+/** 在限定时间内检查 Status gRPC 通道建立。 */
 bool ProbeStatus(std::uint16_t port) {
     auto channel = grpc::CreateChannel(
         "127.0.0.1:" + std::to_string(port), grpc::InsecureChannelCredentials());
     return channel->WaitForConnected(std::chrono::system_clock::now() + 300ms);
 }
 
+/** 通过独占重新绑定验证正式服务已释放监听端口。 */
 void ExpectPortReleased(std::uint16_t port, bool wildcard) {
     boost::asio::io_context context;
     boost::asio::ip::tcp::acceptor acceptor(context);
@@ -197,6 +210,7 @@ void ExpectPortReleased(std::uint16_t port, bool wildcard) {
     EXPECT_FALSE(error) << "formal process retained port " << port << ": " << error.message();
 }
 
+/** 验证显式错误配置优先于环境配置，并导致启动失败。 */
 void ExpectSelectedInvalidConfig(FormalService service) {
     auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 10s);
     const auto working = context->CreateOwnedDirectory("formal-config");
@@ -207,7 +221,7 @@ void ExpectSelectedInvalidConfig(FormalService service) {
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", ignored.wstring());
     auto process = StartFormal(*context, service, selected, working);
 
-    EXPECT_FALSE(process->WaitReady([] { return false; }, std::chrono::steady_clock::now() + 5s));
+    EXPECT_FALSE(process->WaitReady(/** 保持探针未就绪，让无效配置的启动结果决定断言。 */ [] { return false; }, std::chrono::steady_clock::now() + 5s));
     const auto stop = process->Stop(std::chrono::steady_clock::now() + 2s);
     const auto evidence = process->CollectEvidence();
     EXPECT_TRUE(stop.Complete()) << stop.Detail();
@@ -222,6 +236,7 @@ void ExpectSelectedInvalidConfig(FormalService service) {
     EXPECT_TRUE(context->Teardown().complete);
 }
 
+/** 验证正式 Gate 或 Status 就绪、温和关闭及端口释放均有界完成。 */
 void ExpectReadyAndGracefulStop(FormalService service) {
     auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 20s);
     const auto working = context->CreateOwnedDirectory("formal-ready");
@@ -233,7 +248,7 @@ void ExpectReadyAndGracefulStop(FormalService service) {
     auto process = StartFormal(*context, service, config, working);
 
     const auto ready = process->WaitReady(
-        [service, port = reservation.port] {
+        /** 按正式服务类型执行对应的协议就绪探针。 */ [service, port = reservation.port] {
             return service == FormalService::Gate ? ProbeGate(port) : ProbeStatus(port);
         },
         std::chrono::steady_clock::now() + 10s);
@@ -252,6 +267,7 @@ void ExpectReadyAndGracefulStop(FormalService service) {
     EXPECT_TRUE(context->Teardown().complete);
 }
 
+/** 保存正式 Chat 依赖拒绝场景的退出、关闭和脱敏输出证据。 */
 struct RefusalEvidence {
     std::optional<std::uint32_t> exit_code;
     bool graceful_stop_attempted = false;
@@ -262,12 +278,13 @@ struct RefusalEvidence {
     std::string stderr_text;
 };
 
+/** 观察正式 Chat 在真实依赖缺失时的有界启动与关闭，收集独立证据。 */
 RefusalEvidence ObserveChatRealDependencyBoundary(
     integration::RunContext& context,
     const std::filesystem::path& working,
     const std::filesystem::path& config) {
     auto process = StartFormal(context, FormalService::Chat, config, working);
-    EXPECT_FALSE(process->WaitReady([] { return false; }, std::chrono::steady_clock::now() + 7s));
+    EXPECT_FALSE(process->WaitReady(/** 不把依赖拒绝中的进程存活视为服务就绪。 */ [] { return false; }, std::chrono::steady_clock::now() + 7s));
     const auto stop = process->Stop(std::chrono::steady_clock::now() + 2s);
     const auto evidence = process->CollectEvidence();
     EXPECT_TRUE(stop.Complete()) << stop.Detail();
@@ -285,31 +302,37 @@ RefusalEvidence ObserveChatRealDependencyBoundary(
 } // namespace
 
 // T09-COMP-01
+/** 验证正式 Gate 显式配置优先，错误选项关闭启动路径。 */
 TEST(T09_COMP_Formal, GateExplicitConfigWinsAndInvalidSelectionFailsClosed) {
     ExpectSelectedInvalidConfig(FormalService::Gate);
 }
 
 // T09-COMP-02
+/** 验证正式 Gate 协议就绪、温和信号停止及端口释放。 */
 TEST(T09_COMP_Formal, GateProtocolReadyGracefulSignalAndPortReleaseAreBounded) {
     ExpectReadyAndGracefulStop(FormalService::Gate);
 }
 
 // T09-COMP-03
+/** 验证正式 Status 显式配置优先，错误选项关闭启动路径。 */
 TEST(T09_COMP_Formal, StatusExplicitConfigWinsAndInvalidSelectionFailsClosed) {
     ExpectSelectedInvalidConfig(FormalService::Status);
 }
 
 // T09-COMP-04
+/** 验证正式 Status 协议就绪、温和信号停止及端口释放。 */
 TEST(T09_COMP_Formal, StatusProtocolReadyGracefulSignalAndPortReleaseAreBounded) {
     ExpectReadyAndGracefulStop(FormalService::Status);
 }
 
 // T09-COMP-05
+/** 验证正式 Chat 显式配置优先，错误选项关闭启动路径。 */
 TEST(T09_COMP_Formal, ChatExplicitConfigWinsAndInvalidSelectionFailsClosed) {
     ExpectSelectedInvalidConfig(FormalService::Chat);
 }
 
 // T09-COMP-06
+/** 验证正式 Chat 缺失依赖的失败边界明确、有界且无资源残留。 */
 TEST(T09_COMP_Formal, ChatRealDependencyBoundaryIsExplicitBoundedAndResidueFree) {
     auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 25s);
     const auto working = context->CreateOwnedDirectory("chat-refusal");

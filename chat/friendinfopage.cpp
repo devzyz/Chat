@@ -15,7 +15,8 @@ FriendInfoPage::~FriendInfoPage()
     delete ui;
 }
 
-void FriendInfoPage::SetInfo(std::shared_ptr<UserInfo> friend_info)
+/** @brief 保存好友信息并刷新详情页面。 */
+void FriendInfoPage::setInfo(std::shared_ptr<UserInfo> friend_info)
 {
     _friend_info = friend_info;
 
@@ -23,12 +24,12 @@ void FriendInfoPage::SetInfo(std::shared_ptr<UserInfo> friend_info)
 
     // 设置头像
 
-    UserMgr::GetInstance()->bindAvatar(ui->info_icon_label, _friend_info->_uid, _friend_info->_icon);
+    UserMgr::instance()->bindAvatar(ui->info_icon_label, _friend_info->_uid, _friend_info->_icon);
     ui->info_icon_label->setScaledContents(true);
 }
 
 void FriendInfoPage::on_info_chat_label_clicked()
 {
     SPDLOG_DEBUG("chat action selected from friend information page");
-    emit sig_jump_chat_item(_friend_info);
+    emit chatRequested(_friend_info);
 }

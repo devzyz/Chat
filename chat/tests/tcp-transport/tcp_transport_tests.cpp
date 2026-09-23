@@ -12,6 +12,7 @@
 
 namespace {
 
+/** 按大端协议编码消息编号、正文长度及正文。 */
 QByteArray frame(quint16 messageId, const QByteArray &body)
 {
     QByteArray bytes;
@@ -23,36 +24,42 @@ QByteArray frame(quint16 messageId, const QByteArray &body)
     return bytes;
 }
 
+/** 持有真实回环 TCP 监听器与连接，提供限速及断连测试控制。 */
 class LoopbackTcpPeer final : public QObject
 {
 public:
+    /** 安装新连接接收和销毁清理回调。 */
     explicit LoopbackTcpPeer(QObject *parent = nullptr)
         : QObject(parent)
     {
-        connect(&_server, &QTcpServer::newConnection, this, [this] {
+        connect(&_server, &QTcpServer::newConnection, this, /** 接收并跟踪所有待处理连接。 */ [this] {
             while (QTcpSocket *socket = _server.nextPendingConnection()) {
                 _sockets.append(socket);
                 connect(socket, &QObject::destroyed, this,
-                        [this, socket] { _sockets.removeAll(socket); });
+                        /** 套接字销毁时移除跟踪引用。 */ [this, socket] { _sockets.removeAll(socket); });
             }
         });
     }
 
+    /** 在随机回环端口监听并返回绑定结果。 */
     bool listen()
     {
         return _server.listen(QHostAddress::LocalHost, 0);
     }
 
+    /** 返回实际监听端口。 */
     quint16 port() const
     {
         return _server.serverPort();
     }
 
+    /** 返回当前跟踪的连接条数。 */
     int connectionCount() const
     {
         return _sockets.size();
     }
 
+    /** 统计仍未断开的连接。 */
     int activeConnections() const
     {
         int count = 0;
@@ -64,11 +71,13 @@ public:
         return count;
     }
 
+    /** 按索引借用被跟踪套接字，越界或已销毁时返回空。 */
     QTcpSocket *socket(int index) const
     {
         return index >= 0 && index < _sockets.size() ? _sockets[index].data() : nullptr;
     }
 
+    /** 限制接收缓冲为一个字节以制造写入背压。 */
     void throttleReads(int index)
     {
         if (QTcpSocket *peerSocket = socket(index)) {
@@ -81,6 +90,7 @@ private:
     QList<QPointer<QTcpSocket>> _sockets;
 };
 
+/** 构建带连接及写入期限的回环端点与流程标识。 */
 ChatTcpEndpoint endpoint(quint16 port, quint64 flowId,
                          int connectDeadlineMs = 500,
                          int writeDeadlineMs = 500)
@@ -94,6 +104,7 @@ ChatTcpEndpoint endpoint(quint16 port, quint64 flowId,
     return value;
 }
 
+/** 临时绑定随机回环端口再释放，提供预期无人监听的测试端口。 */
 quint16 unusedLoopbackPort()
 {
     QTcpServer reservation;
@@ -105,22 +116,35 @@ quint16 unusedLoopbackPort()
 
 } // namespace
 
+/** 验证真实 TCP 的编解码、代次隔离、有界失败及资源释放。 */
 class TcpTransportTests final : public QObject
 {
     Q_OBJECT
 
 private slots:
+    /** 验证 TCP 连接成功保持连接代次及认证流程标识。 */
     void connectPreservesGenerationAndFlowIdentity();
+    /** 验证发送字节与生产帧格式一致。 */
     void sendWritesProductionFrame();
+    /** 验证分片帧只在完整到达后解码一次。 */
     void fragmentedFrameDecodedOnce();
+    /** 验证多个粘连帧按顺序解码。 */
     void coalescedFramesStayOrdered();
+    /** 验证正文达到最大长度时仍可接收。 */
     void maximumFrameIsAccepted();
+    /** 验证超长帧终止连接并报告协议错误。 */
     void malformedOversizedFrameTerminates();
+    /** 验证连接拒绝在期限内只产生一个终态。 */
     void refusedConnectHasOneBoundedOutcome();
+    /** 验证不消费数据的对端触发写期限并关闭连接。 */
     void writeDeadlineAbortsSilentPeer();
+    /** 验证写入中对端关闭只产生一个终态。 */
     void peerCloseMidWriteHasOneTerminalOutcome();
+    /** 验证重置丢弃半帧，新连接数据不与旧缓冲拼接。 */
     void resetDiscardsHalfFrame();
+    /** 验证旧连接代次的迟到结果不完成新连接尝试。 */
     void lateOldGenerationCannotCompleteRetry();
+    /** 验证主动关闭及销毁释放所有传输资源。 */
     void closeAndDeleteReleaseOwnedResources();
 };
 
@@ -132,7 +156,7 @@ void TcpTransportTests::connectPreservesGenerationAndFlowIdentity()
     ChatTcpTransport transport;
     QList<QPair<quint64, quint64>> connections;
     connect(&transport, &ChatTcpTransport::connected, this,
-            [&connections](quint64 generation, quint64 flowId) {
+            /** 记录成功连接的代次及流程标识。 */ [&connections](quint64 generation, quint64 flowId) {
                 connections.append({generation, flowId});
             });
 
@@ -166,7 +190,7 @@ void TcpTransportTests::fragmentedFrameDecodedOnce()
     ChatTcpTransport transport;
     QList<ChatTcpFrame> frames;
     connect(&transport, &ChatTcpTransport::frameReceived, this,
-            [&frames](const ChatTcpFrame &value) { frames.append(value); });
+            /** 收集完整解码帧以断言内容、顺序及代次。 */ [&frames](const ChatTcpFrame &value) { frames.append(value); });
     const quint64 generation = transport.connectTo(endpoint(peer.port(), 403));
     QTRY_COMPARE_WITH_TIMEOUT(peer.connectionCount(), 1, 1000);
     const QByteArray bytes = frame(1007, QByteArrayLiteral("fragmented"));
@@ -188,7 +212,7 @@ void TcpTransportTests::coalescedFramesStayOrdered()
     ChatTcpTransport transport;
     QList<ChatTcpFrame> frames;
     connect(&transport, &ChatTcpTransport::frameReceived, this,
-            [&frames](const ChatTcpFrame &value) { frames.append(value); });
+            /** 收集完整解码帧以断言内容、顺序及代次。 */ [&frames](const ChatTcpFrame &value) { frames.append(value); });
     transport.connectTo(endpoint(peer.port(), 404));
     QTRY_COMPARE_WITH_TIMEOUT(peer.connectionCount(), 1, 1000);
     peer.socket(0)->write(frame(1008, QByteArrayLiteral("one"))
@@ -206,12 +230,12 @@ void TcpTransportTests::maximumFrameIsAccepted()
     ChatTcpTransport transport;
     QList<ChatTcpFrame> frames;
     connect(&transport, &ChatTcpTransport::frameReceived, this,
-            [&frames](const ChatTcpFrame &value) { frames.append(value); });
+            /** 收集完整解码帧以断言内容、顺序及代次。 */ [&frames](const ChatTcpFrame &value) { frames.append(value); });
     transport.connectTo(endpoint(peer.port(), 405));
     QTRY_COMPARE_WITH_TIMEOUT(peer.connectionCount(), 1, 1000);
-    peer.socket(0)->write(frame(1010, QByteArray(ChatTcpTransport::MaxBodyBytes(), 'x')));
+    peer.socket(0)->write(frame(1010, QByteArray(ChatTcpTransport::maxBodyBytes(), 'x')));
     QTRY_COMPARE_WITH_TIMEOUT(frames.size(), 1, 1000);
-    QCOMPARE(frames[0].body.size(), ChatTcpTransport::MaxBodyBytes());
+    QCOMPARE(frames[0].body.size(), ChatTcpTransport::maxBodyBytes());
 }
 
 void TcpTransportTests::malformedOversizedFrameTerminates()
@@ -222,10 +246,10 @@ void TcpTransportTests::malformedOversizedFrameTerminates()
     ChatTcpTransport transport;
     QList<ChatTcpOutcome> outcomes;
     connect(&transport, &ChatTcpTransport::finished, this,
-            [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
+            /** 收集传输终态以断言错误分类和完成次数。 */ [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
     transport.connectTo(endpoint(peer.port(), 406));
     QTRY_COMPARE_WITH_TIMEOUT(peer.connectionCount(), 1, 1000);
-    peer.socket(0)->write(frame(1011, QByteArray(ChatTcpTransport::MaxBodyBytes() + 1, 'x')));
+    peer.socket(0)->write(frame(1011, QByteArray(ChatTcpTransport::maxBodyBytes() + 1, 'x')));
     QTRY_COMPARE_WITH_TIMEOUT(outcomes.size(), 1, 1000);
     QCOMPARE(outcomes[0].terminal, ChatTcpTerminal::ProtocolError);
     QCOMPARE(outcomes[0].flowId, quint64(406));
@@ -239,7 +263,7 @@ void TcpTransportTests::refusedConnectHasOneBoundedOutcome()
     ChatTcpTransport transport;
     QList<ChatTcpOutcome> outcomes;
     connect(&transport, &ChatTcpTransport::finished, this,
-            [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
+            /** 收集传输终态以断言错误分类和完成次数。 */ [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
     const quint64 generation = transport.connectTo(endpoint(port, 407, 1000));
     QTRY_COMPARE_WITH_TIMEOUT(outcomes.size(), 1, 2000);
     QCOMPARE(outcomes[0].generation, generation);
@@ -258,11 +282,11 @@ void TcpTransportTests::writeDeadlineAbortsSilentPeer()
     ChatTcpTransport transport;
     QList<ChatTcpOutcome> outcomes;
     connect(&transport, &ChatTcpTransport::finished, this,
-            [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
+            /** 收集传输终态以断言错误分类和完成次数。 */ [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
     transport.connectTo(endpoint(peer.port(), 408, 500, 20));
     QTRY_COMPARE_WITH_TIMEOUT(peer.connectionCount(), 1, 1000);
     peer.throttleReads(0);
-    const QByteArray body(ChatTcpTransport::MaxBodyBytes(), 'x');
+    const QByteArray body(ChatTcpTransport::maxBodyBytes(), 'x');
     for (int index = 0; index < 8192; ++index) {
         QVERIFY(transport.send(1012, body));
     }
@@ -278,10 +302,10 @@ void TcpTransportTests::peerCloseMidWriteHasOneTerminalOutcome()
     ChatTcpTransport transport;
     QList<ChatTcpOutcome> outcomes;
     connect(&transport, &ChatTcpTransport::finished, this,
-            [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
+            /** 收集传输终态以断言错误分类和完成次数。 */ [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
     transport.connectTo(endpoint(peer.port(), 409, 500, 500));
     QTRY_COMPARE_WITH_TIMEOUT(peer.connectionCount(), 1, 1000);
-    const QByteArray body(ChatTcpTransport::MaxBodyBytes(), 'x');
+    const QByteArray body(ChatTcpTransport::maxBodyBytes(), 'x');
     for (int index = 0; index < 2048; ++index) {
         QVERIFY(transport.send(1013, body));
     }
@@ -300,7 +324,7 @@ void TcpTransportTests::resetDiscardsHalfFrame()
     ChatTcpTransport transport;
     QList<ChatTcpFrame> frames;
     connect(&transport, &ChatTcpTransport::frameReceived, this,
-            [&frames](const ChatTcpFrame &value) { frames.append(value); });
+            /** 收集完整解码帧以断言内容、顺序及代次。 */ [&frames](const ChatTcpFrame &value) { frames.append(value); });
     transport.connectTo(endpoint(peer.port(), 410));
     QTRY_COMPARE_WITH_TIMEOUT(peer.connectionCount(), 1, 1000);
     const QByteArray stale = frame(1014, QByteArrayLiteral("stale"));
@@ -326,9 +350,9 @@ void TcpTransportTests::lateOldGenerationCannotCompleteRetry()
     QList<ChatTcpOutcome> outcomes;
     QList<QPair<quint64, quint64>> connections;
     connect(&transport, &ChatTcpTransport::finished, this,
-            [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
+            /** 收集旧代与新代的终态，供隔离断言。 */ [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
     connect(&transport, &ChatTcpTransport::connected, this,
-            [&connections](quint64 generation, quint64 flowId) {
+            /** 记录成功连接的代次及流程标识。 */ [&connections](quint64 generation, quint64 flowId) {
                 connections.append({generation, flowId});
             });
     const quint64 oldGeneration = transport.connectTo(endpoint(refusedPort, 412));
@@ -351,7 +375,7 @@ void TcpTransportTests::closeAndDeleteReleaseOwnedResources()
     auto transport = std::make_unique<ChatTcpTransport>();
     QList<ChatTcpOutcome> outcomes;
     connect(transport.get(), &ChatTcpTransport::finished, this,
-            [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
+            /** 收集传输终态以断言错误分类和完成次数。 */ [&outcomes](const ChatTcpOutcome &value) { outcomes.append(value); });
     transport->connectTo(endpoint(peer.port(), 414));
     QTRY_COMPARE_WITH_TIMEOUT(peer.activeConnections(), 1, 1000);
     transport->close();

@@ -16,24 +16,33 @@ class ChatUserItem : public ListItemBase
     Q_OBJECT
 
 public:
+    /** @brief 初始化对象，用于展示会话资料、最新消息和未读数。 */
     explicit ChatUserItem(QWidget *parent = nullptr);
+    /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ChatUserItem();
     // 目的是为了设置外面的QListItem，因为QListWidget内部只能放这个类，所以要先放这个类，再在这个类内部放自己自定义的
+    /** @brief 返回当前条目建议尺寸，供列表布局使用。 */
     QSize sizeHint() const override;
 
     /** @brief 绑定会话资料并刷新联系人信息。 */
-    void SetChatInfo(std::shared_ptr<ChatInfo>);
-    std::shared_ptr<ChatInfo> GetChatInfo();
+    void setChatInfo(std::shared_ptr<ChatInfo>);
+    /** @brief 返回条目持有的会话共享引用，调用方可延长数据对象生命周期。 */
+    std::shared_ptr<ChatInfo> getChatInfo();
     // 设置上一次聊天信息
-    void SetLastChatInfo();
+    /** @brief 设置上一次聊天信息。 */
+    void setLastChatInfo();
     // 设置上一次聊天数据
-    void SetLastTextChatMsg(QString last_text_msg);
+    /** @brief 设置上一次聊天数据。 */
+    void setLastTextChatMsg(QString last_text_msg);
     // 通过判断_new_msg_count来决定是否显示新消息提醒
-    void ShowNewMsgTip();
+    /** @brief 通过判断_new_msg_count来决定是否显示新消息提醒。 */
+    void showNewMsgTip();
     // 更新_new_msg_count的数量
-    void UpdateNewMsgCount(int);
+    /** @brief 更新_new_msg_count的数量。 */
+    void updateNewMsgCount(int);
     // 重置新消息数量
-    void ResetNewMsgCount();
+    /** @brief 重置新消息数量。 */
+    void resetNewMsgCount();
 private:
     Ui::ChatUserItem *ui;
     std::shared_ptr<ChatInfo> _chat_info;

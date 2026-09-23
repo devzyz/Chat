@@ -14,6 +14,11 @@ they are Component tests, while ChatServer process startup tests stay in
 
 ## CI and local validation
 
+Git and incremental naming/comment checks use `CheckConventions`; their dedicated
+`RunConventionTests` and inventory-only `AuditConventions` entries are documented in
+[build/conventions/README.md](build/conventions/README.md). These infrastructure checks run
+in Windows static-check and do not change the business report counts below.
+
 [CI-GOVERNANCE.md](CI-GOVERNANCE.md) defines quick/full regression and automatic master release.
 Develop PR/push runs existing Windows unit, component and deterministic loopback/process tests.
 Master PR/push, weekly develop and manual runs add Linux real-dependency and full business E2E.

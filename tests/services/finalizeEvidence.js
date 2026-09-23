@@ -10,17 +10,19 @@ const { reportGroups } = require('./serviceReports');
 // Missing evidence is a failure, never a synthetic successful test run.
 const root = process.argv[2];
 fs.mkdirSync(root, { recursive: true });
+/** 读取所属证据目录中的 JSON，缺失或损坏时返回未完成状态。 */
 function read(name) {
     try { return JSON.parse(fs.readFileSync(path.join(root, name), 'utf8')); }
     catch { return { complete: false }; }
 }
+/** 检查所选服务报告与内外清理证据，写最终合同并传播失败。 */
 async function finalize() {
     const phase3d = ['3D-00', '3D-01', '3D-02', '3D-03-history', '3D-03', '3D'].includes(process.env.CHAT_SERVICE_SELECTOR);
     const teardown = read('teardown.json');
     const processTeardown = read('process-teardown.json');
     const junit = path.join(root, phase3d ? 'linux_phase3d_contract.xml' : 'linux_services.xml');
     const reports = phase3d ? require('./phase3dEvidence').reportGroups(process.env.CHAT_SERVICE_SELECTOR) : reportGroups(process.env.CHAT_SERVICE_SELECTOR || '3C-02');
-    let reportsComplete = reports.every((group) => {
+    let reportsComplete = reports.every(/** 确认报告存在测试套件且没有失败或错误标记。 */ (group) => {
         try {
             const report = fs.readFileSync(path.join(root, group.file), 'utf8');
             return report.includes('<testsuite ') && !/<(?:failure|error)\b/.test(report) &&
@@ -70,4 +72,4 @@ async function finalize() {
     }
     if (!teardown.complete) process.exitCode = 1;
 }
-finalize().catch(() => { process.stderr.write('outer service cleanup failed\n'); process.exitCode = 1; });
+finalize().catch(/** 最终证据处理异常时输出脱敏提示并设置非零退出码。 */ () => { process.stderr.write('outer service cleanup failed\n'); process.exitCode = 1; });

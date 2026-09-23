@@ -1,5 +1,6 @@
 'use strict';
 
+/** 规范 SMTP 主机、端口、TLS、认证与毫秒期限；非法配置或缺失凭据抛异常。 */
 function normalizeSmtpConfig(input = {}, credentials = {}) {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
         throw new Error('Invalid email SMTP configuration');

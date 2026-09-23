@@ -6,7 +6,7 @@ SqlConnection::SqlConnection(sql::Connection* con, int64_t lasttime) : _con(con)
 };
 
 /**
- * @brief
+ *
  * @param url ip地址
  * @param user 用户名
  * @param pass 密码
@@ -29,9 +29,9 @@ MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::stri
 			_pool.push(std::make_unique<SqlConnection>(con, timestamp));
 		}
 
-		_check_thread = std::thread([this] {
+		_check_thread = std::thread(/** @brief 在保活线程周期核验连接，观察停止标志后退出。 */ [this] {
 			while (!_b_stop) {
-				checkConnection();
+				CheckConnection();
 				std::this_thread::sleep_for(std::chrono::seconds(60));
 			}
 			});
@@ -42,7 +42,7 @@ MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::stri
 }
 
 // 用于保证每个sql连接的活性
-void MysqlConnectionPool::checkConnection() {
+void MysqlConnectionPool::CheckConnection() {
 	std::lock_guard<std::mutex> lock(_mutex);
 	int poolsize = _pool.size();
 	// 获取当前时间戳
@@ -55,7 +55,7 @@ void MysqlConnectionPool::checkConnection() {
 		_pool.pop();
 
 		// 每次循环结束，都会自动执行这个函数
-		Defer defer([this, &con]() {
+		Defer defer(/** @brief 检查结束时把当前连接重新放回空闲队列。 */ [this, &con]() {
 			_pool.push(std::move(con));
 			});
 
@@ -88,9 +88,9 @@ MysqlConnectionPool::~MysqlConnectionPool() {
 	}
 }
 
-std::unique_ptr<SqlConnection> MysqlConnectionPool::getConnection() {
+std::unique_ptr<SqlConnection> MysqlConnectionPool::GetConnection() {
 	std::unique_lock<std::mutex> lock(_mutex);
-	_cond.wait(lock, [this] {
+	_cond.wait(lock, /** @brief 关闭或池中出现空闲连接时结束借用等待。 */ [this] {
 		if (_b_stop) {
 			return true;
 		}
@@ -106,7 +106,7 @@ std::unique_ptr<SqlConnection> MysqlConnectionPool::getConnection() {
 	return con;
 }
 
-void MysqlConnectionPool::returnConnection(std::unique_ptr<SqlConnection> con) {
+void MysqlConnectionPool::ReturnConnection(std::unique_ptr<SqlConnection> con) {
 	std::unique_lock<std::mutex> lock(_mutex);
 	if (_b_stop) {
 		return;
@@ -115,7 +115,7 @@ void MysqlConnectionPool::returnConnection(std::unique_ptr<SqlConnection> con) {
 	_cond.notify_one();
 }
 
-void MysqlConnectionPool::close() {
+void MysqlConnectionPool::Close() {
 	_b_stop = true;
 	_cond.notify_all();
 }
@@ -131,11 +131,11 @@ MysqlDao::MysqlDao() {
 }
 
 MysqlDao::~MysqlDao() {
-	_pool->close();
+	_pool->Close();
 }
 
 int MysqlDao::RegUser(const std::string& name, const std::string& email, const std::string& pwd) {
-	auto con = _pool->getConnection();
+	auto con = _pool->GetConnection();
 
 	try {
 		if (con == nullptr) {
@@ -161,28 +161,28 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
 		if (res->next()) {
 			int result = res->getInt("result");
 			SPDLOG_DEBUG("mysql user registration completed, uid={}", result);
-			_pool->returnConnection(std::move(con));
+			_pool->ReturnConnection(std::move(con));
 			return result;
 		}
-		_pool->returnConnection(std::move(con));
+		_pool->ReturnConnection(std::move(con));
 		return -1;
 	}
 	catch (sql::SQLException& e) {
-		_pool->returnConnection(std::move(con));
+		_pool->ReturnConnection(std::move(con));
 		SPDLOG_ERROR("mysql RegUser failed, name={}, error={}, code={}, state={}", name, e.what(), e.getErrorCode(), e.getSQLState().c_str());
 		return -1;
 	}
 }
 
 bool MysqlDao::CheckEmail(const std::string& username, const std::string& email) {
-	auto con = _pool->getConnection();
+	auto con = _pool->GetConnection();
 
 	if (con == nullptr) {
 		return false;
 	}
 
-	Defer defer([this, &con]() {
-		_pool->returnConnection(std::move(con));
+	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &con]() {
+		_pool->ReturnConnection(std::move(con));
 		});
 
 	try {
@@ -213,12 +213,12 @@ bool MysqlDao::CheckEmail(const std::string& username, const std::string& email)
 }
 
 bool MysqlDao::UpdatePassword(const std::string& username, const std::string& password) {
-	auto con = _pool->getConnection();
+	auto con = _pool->GetConnection();
 	if (con == nullptr) {
 		return false;
 	}
-	Defer defer([this, &con]() {
-		_pool->returnConnection(std::move(con));
+	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &con]() {
+		_pool->ReturnConnection(std::move(con));
 		});
 
 	try {
@@ -242,14 +242,14 @@ bool MysqlDao::UpdatePassword(const std::string& username, const std::string& pa
 }
 
 bool MysqlDao::CheckPassword(const std::string& email, const std::string& password, UserInfo& userinfo) {
-	auto con = _pool->getConnection();
+	auto con = _pool->GetConnection();
 
 	if (con == nullptr) {
 		return false;
 	}
 
-	Defer defer([this, &con] {
-		_pool->returnConnection(std::move(con));
+	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &con] {
+		_pool->ReturnConnection(std::move(con));
 		});
 
 	try {

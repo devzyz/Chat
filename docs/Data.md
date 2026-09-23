@@ -48,11 +48,11 @@ node schema/migrate.js apply
 node schema/migrate.js verify
 ```
 
-`Inspect` reports schema/history; `Plan` refuses unknown versions, checksum drift,
-partial history, and unversioned nonempty databases. `Apply` uses a bounded advisory
+`inspect` reports schema/history; `plan` refuses unknown versions, checksum drift,
+partial history, and unversioned nonempty databases. `apply` uses a bounded advisory
 lock on a single real session, records applying/applied/failed states in
 `schema_version`, then verifies semantic table/column/index/routine/trigger metadata.
-`Verify` is read-only apart from session settings and fails on missing or altered
+`verify` is read-only apart from session settings and fails on missing or altered
 objects. Native Gate/Chat startup calls `chat_schema::Verify` from the same metadata
 contract; it does not run DDL or require Node in the server runtime. Failure must
 propagate before accepting application traffic.

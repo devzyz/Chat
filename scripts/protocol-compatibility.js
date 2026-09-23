@@ -20,6 +20,7 @@ const baselinePath = path.join(
     'fixtures',
     'initial-release-descriptor.pb'
 );
+/** 在已安装的固定 triplet 中定位协议工具，缺失时返回默认路径供明确报错。 */
 function resolvePinnedTool(relativePath) {
     const triplets = [
         process.env.VCPKG_HOST_TRIPLET,
@@ -40,7 +41,7 @@ const protoc = resolvePinnedTool(path.join('tools', 'protobuf', 'protoc.exe'));
 const grpcCppPlugin = resolvePinnedTool(path.join('tools', 'grpc', 'grpc_cpp_plugin.exe'));
 const canonicalFiles = ['varify.proto', 'status.proto', 'chat.proto'];
 const initialReleaseProtoBlob = 'a8a34ebd17d5378376cf611762e5943a4c1bff45';
-const generatedFiles = canonicalFiles.flatMap((file) => {
+const generatedFiles = canonicalFiles.flatMap(/** 从权威协议源名生成应有的 C++ 消息与 gRPC 文件名。 */ (file) => {
     const stem = path.basename(file, '.proto');
     return [`${stem}.pb.h`, `${stem}.pb.cc`, `${stem}.grpc.pb.h`, `${stem}.grpc.pb.cc`];
 });
@@ -51,10 +52,12 @@ const legacyEditableProtoFiles = [
     path.join('VarifyServer', 'message.proto')
 ];
 
+/** 以给定诊断中止协议检查。 */
 function fail(message) {
     throw new Error(message);
 }
 
+/** 在仓库根运行工具并收集输出，启动或非零退出时传播失败。 */
 function run(command, args, options = {}) {
     const result = spawnSync(command, args, {
         cwd: repositoryRoot,
@@ -71,18 +74,20 @@ function run(command, args, options = {}) {
     return result.stdout;
 }
 
+/** 要求路径存在且是普通文件，否则报告仓库相对路径。 */
 function requireFile(file) {
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
         fail(`Required file is missing: ${path.relative(repositoryRoot, file)}`);
     }
 }
 
+/** 核对权威协议源集合；按需拒绝服务目录中的旧可编辑副本。 */
 function verifyCanonicalSources(sourceRoot = protoRoot, checkLegacyCopies = false) {
     const actualProtoFiles = fs.readdirSync(sourceRoot)
-        .filter((file) => file.endsWith('.proto'))
+        .filter(/** 筛选 proto 源文件。 */ (file) => file.endsWith('.proto'))
         .sort();
     const expectedProtoFiles = [...canonicalFiles].sort();
-    const unexpected = actualProtoFiles.filter((file) => !expectedProtoFiles.includes(file));
+    const unexpected = actualProtoFiles.filter(/** 筛出未登记的协议源文件。 */ (file) => !expectedProtoFiles.includes(file));
     if (unexpected.length > 0) {
         fail(`unregistered canonical proto source: ${unexpected.join(', ')}`);
     }
@@ -90,7 +95,7 @@ function verifyCanonicalSources(sourceRoot = protoRoot, checkLegacyCopies = fals
         requireFile(path.join(sourceRoot, file));
     }
     if (checkLegacyCopies) {
-        const legacyCopies = legacyEditableProtoFiles.filter((file) =>
+        const legacyCopies = legacyEditableProtoFiles.filter(/** 筛出仍存在的旧协议副本。 */ (file) =>
             fs.existsSync(path.join(repositoryRoot, file))
         );
         if (legacyCopies.length > 0) {
@@ -99,6 +104,7 @@ function verifyCanonicalSources(sourceRoot = protoRoot, checkLegacyCopies = fals
     }
 }
 
+/** 读取 package-lock 中指定 Node 包的固定版本，未锁定时失败。 */
 function lockedPackageVersion(packageName) {
     const lock = JSON.parse(fs.readFileSync(
         path.join(repositoryRoot, 'VarifyServer', 'package-lock.json'),
@@ -111,6 +117,7 @@ function lockedPackageVersion(packageName) {
     return entry.version;
 }
 
+/** 核对 protoc、gRPC 插件、vcpkg 状态及 Node 协议依赖的固定版本。 */
 function verifyToolchain() {
     requireFile(protoc);
     requireFile(grpcCppPlugin);
@@ -128,6 +135,7 @@ function verifyToolchain() {
     assert.equal(lockedPackageVersion('protobufjs'), '7.5.5');
 }
 
+/** 核对 Node 协议工具存在及锁定版本，返回 protobufjs 模块目录。 */
 function verifyNodeProtocolToolchain() {
     const protobufRoot = path.join(repositoryRoot, 'VarifyServer', 'node_modules', 'protobufjs');
     requireFile(path.join(protobufRoot, 'package.json'));
@@ -137,6 +145,7 @@ function verifyNodeProtocolToolchain() {
     return protobufRoot;
 }
 
+/** 使用固定 protoc 和插件从权威协议源生成 C++ 文件。 */
 function generateCpp(outputRoot) {
     fs.mkdirSync(outputRoot, { recursive: true });
     run(protoc, [
@@ -144,19 +153,21 @@ function generateCpp(outputRoot) {
         `--cpp_out=${outputRoot}`,
         `--grpc_out=${outputRoot}`,
         `--plugin=protoc-gen-grpc=${grpcCppPlugin}`,
-        ...canonicalFiles.map((file) => path.join(protoRoot, file))
+        ...canonicalFiles.map(/** 将权威协议文件名解析为源路径。 */ (file) => path.join(protoRoot, file))
     ]);
 }
 
+/** 为指定源集生成 protobuf 描述符文件。 */
 function generateDescriptor(outputPath, sourceRoot = protoRoot, sources = canonicalFiles) {
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     run(protoc, [
         `--proto_path=${sourceRoot}`,
         `--descriptor_set_out=${outputPath}`,
-        ...sources.map((file) => path.join(sourceRoot, file))
+        ...sources.map(/** 将协议源名解析为当前源目录下的路径。 */ (file) => path.join(sourceRoot, file))
     ]);
 }
 
+/** 从指定偏移解析有界 varint，返回值及新偏移；截断或超限失败。 */
 function readVarint(buffer, offset) {
     let value = 0;
     let shift = 0;
@@ -171,6 +182,7 @@ function readVarint(buffer, offset) {
     fail('invalid descriptor varint');
 }
 
+/** 解析描述符中的支持字段类型，拒绝截断或不支持的线路编码。 */
 function wireFields(buffer) {
     const result = [];
     let offset = 0;
@@ -203,15 +215,18 @@ function wireFields(buffer) {
     return result;
 }
 
+/** 将描述符字段字节解码为 UTF-8 文本。 */
 function text(field) {
     return field.value.toString('utf8');
 }
 
+/** 读取首个匹配编号的字段值，缺失时返回指定回退值。 */
 function first(fields, number, fallback = undefined) {
-    const field = fields.find((candidate) => candidate.number === number);
+    const field = fields.find(/** 按字段编号匹配目标字段。 */ (candidate) => candidate.number === number);
     return field ? field.value : fallback;
 }
 
+/** 提取字段名称、编号、标签、类型及类型引用。 */
 function parseField(buffer) {
     const fields = wireFields(buffer);
     return {
@@ -223,19 +238,21 @@ function parseField(buffer) {
     };
 }
 
+/** 解析消息字段及保留编号区间和名称。 */
 function parseMessage(buffer) {
     const fields = wireFields(buffer);
     return {
         name: first(fields, 1, Buffer.alloc(0)).toString('utf8'),
-        field: fields.filter((field) => field.number === 2).map((field) => parseField(field.value)),
-        reservedRange: fields.filter((field) => field.number === 9).map((field) => {
+        field: fields.filter(/** 筛选消息的字段描述符。 */ (field) => field.number === 2).map(/** 解析单个消息字段描述符。 */ (field) => parseField(field.value)),
+        reservedRange: fields.filter(/** 筛选保留编号区间。 */ (field) => field.number === 9).map(/** 解析保留区间的起止边界。 */ (field) => {
             const range = wireFields(field.value);
             return { start: first(range, 1, 0), end: first(range, 2, 0) };
         }),
-        reservedName: fields.filter((field) => field.number === 10).map(text)
+        reservedName: fields.filter(/** 筛选保留字段名称。 */ (field) => field.number === 10).map(text)
     };
 }
 
+/** 提取 RPC 名称、请求响应类型及流式标志。 */
 function parseMethod(buffer) {
     const fields = wireFields(buffer);
     return {
@@ -247,25 +264,28 @@ function parseMethod(buffer) {
     };
 }
 
+/** 提取服务名称及方法列表。 */
 function parseService(buffer) {
     const fields = wireFields(buffer);
     return {
         name: first(fields, 1, Buffer.alloc(0)).toString('utf8'),
-        method: fields.filter((field) => field.number === 2).map((field) => parseMethod(field.value))
+        method: fields.filter(/** 筛选服务内的方法描述符。 */ (field) => field.number === 2).map(/** 解析单个 RPC 方法描述符。 */ (field) => parseMethod(field.value))
     };
 }
 
+/** 解析文件描述符集合中的包、消息及服务定义。 */
 function parseDescriptorSet(buffer) {
-    return wireFields(buffer).filter((field) => field.number === 1).map((file) => {
+    return wireFields(buffer).filter(/** 筛选文件描述符。 */ (field) => field.number === 1).map(/** 解析单个文件的包名、消息及服务。 */ (file) => {
         const fields = wireFields(file.value);
         return {
             package: first(fields, 2, Buffer.alloc(0)).toString('utf8'),
-            messageType: fields.filter((field) => field.number === 4).map((field) => parseMessage(field.value)),
-            service: fields.filter((field) => field.number === 6).map((field) => parseService(field.value))
+            messageType: fields.filter(/** 筛选文件中的消息类型。 */ (field) => field.number === 4).map(/** 解析单个消息类型。 */ (field) => parseMessage(field.value)),
+            service: fields.filter(/** 筛选文件中的服务定义。 */ (field) => field.number === 6).map(/** 解析单个服务定义。 */ (field) => parseService(field.value))
         };
     });
 }
 
+/** 将描述符字节建立为按完整名称、字段身份及 RPC 索引的兼容性模型。 */
 function descriptorModelFromBuffer(buffer) {
     const set = { file: parseDescriptorSet(buffer) };
     const messages = new Map();
@@ -276,30 +296,32 @@ function descriptorModelFromBuffer(buffer) {
         for (const message of descriptorFile.messageType) {
             const fullName = `${prefix}.${message.name}`;
             messages.set(fullName, {
-                fields: new Map(message.field.map((field) => [field.number, field])),
-                fieldsByName: new Map(message.field.map((field) => [field.name, field])),
+                fields: new Map(message.field.map(/** 按字段编号建立索引条目。 */ (field) => [field.number, field])),
+                fieldsByName: new Map(message.field.map(/** 按字段名称建立索引条目。 */ (field) => [field.name, field])),
                 reservedNames: new Set(message.reservedName),
                 reservedRanges: message.reservedRange
             });
         }
         for (const service of descriptorFile.service) {
             const fullName = `${prefix}.${service.name}`;
-            services.set(fullName, new Map(service.method.map((method) => [method.name, method])));
+            services.set(fullName, new Map(service.method.map(/** 按 RPC 名称建立索引条目。 */ (method) => [method.name, method])));
         }
     }
     return { messages, services };
 }
 
+/** 读取描述符文件并构造兼容性模型。 */
 function descriptorModel(file) {
     return descriptorModelFromBuffer(fs.readFileSync(file));
 }
 
+/** 使用固定 Node 工具解析协议并规范化类型全名，返回描述符字节。 */
 function nodeDescriptor(sourceRoot) {
     const protobufRoot = verifyNodeProtocolToolchain();
     const protobuf = require(protobufRoot);
     require(path.join(protobufRoot, 'ext', 'descriptor'));
     const root = new protobuf.Root();
-    root.loadSync(canonicalFiles.map((file) => path.join(sourceRoot, file)), { keepCase: true });
+    root.loadSync(canonicalFiles.map(/** 定位 Node 工具需要读取的权威协议源。 */ (file) => path.join(sourceRoot, file)), { keepCase: true });
     root.resolveAll();
     const descriptor = root.toDescriptor('proto3');
     for (const file of descriptor.file) {
@@ -325,10 +347,12 @@ function nodeDescriptor(sourceRoot) {
     return Buffer.from(descriptor.$type.encode(descriptor).finish());
 }
 
+/** 判断字段编号是否处于某个保留区间。 */
 function numberIsReserved(message, number) {
-    return message.reservedRanges.some((range) => number >= range.start && number < range.end);
+    return message.reservedRanges.some(/** 按左闭右开区间判断保留编号。 */ (range) => number >= range.start && number < range.end);
 }
 
+/** 比较旧新协议模型，拒绝删除、重用或改变既有线路与 RPC 合同。 */
 function compareCompatibilityModels(baseline, current) {
     for (const [messageName, oldMessage] of baseline.messages) {
         const newMessage = current.messages.get(messageName);
@@ -376,10 +400,12 @@ function compareCompatibilityModels(baseline, current) {
     }
 }
 
+/** 从两个描述符文件加载模型并检查向后兼容。 */
 function compareCompatibility(baselineFile, currentFile) {
     compareCompatibilityModels(descriptorModel(baselineFile), descriptorModel(currentFile));
 }
 
+/** 将基线文件与当前描述符字节比较兼容性。 */
 function compareCompatibilityBuffer(baselineFile, currentBuffer) {
     compareCompatibilityModels(
         descriptorModel(baselineFile),
@@ -387,12 +413,13 @@ function compareCompatibilityBuffer(baselineFile, currentBuffer) {
     );
 }
 
+/** 核对生成文件集合及逐文件字节，拒绝多余或漂移产物。 */
 function compareGenerated(expectedRoot, actualRoot) {
     const actualGeneratedFiles = fs.readdirSync(actualRoot)
-        .filter((file) => /(?:\.grpc)?\.pb\.(?:cc|h)$/.test(file))
+        .filter(/** 筛选 C++ 消息及 gRPC 生成文件。 */ (file) => /(?:\.grpc)?\.pb\.(?:cc|h)$/.test(file))
         .sort();
     const expectedGeneratedFiles = [...generatedFiles].sort();
-    const unexpected = actualGeneratedFiles.filter((file) => !expectedGeneratedFiles.includes(file));
+    const unexpected = actualGeneratedFiles.filter(/** 筛出未登记的生成文件。 */ (file) => !expectedGeneratedFiles.includes(file));
     if (unexpected.length > 0) {
         fail(`unexpected generated protocol output: ${unexpected.join(', ')}; remove stale generated files`);
     }
@@ -407,9 +434,10 @@ function compareGenerated(expectedRoot, actualRoot) {
     }
 }
 
+/** 核对生成目录精确包含全部已登记的权威协议消费者。 */
 function verifyGeneratedConsumers() {
     const actualGeneratedFiles = fs.readdirSync(generatedRoot)
-        .filter((file) => /(?:\.grpc)?\.pb\.(?:cc|h)$/.test(file))
+        .filter(/** 筛选应纳入注册检查的生成文件。 */ (file) => /(?:\.grpc)?\.pb\.(?:cc|h)$/.test(file))
         .sort();
     const expectedGeneratedFiles = [...generatedFiles].sort();
     assert.deepEqual(
@@ -422,6 +450,7 @@ function verifyGeneratedConsumers() {
     }
 }
 
+/** 从指定历史 Git blob 在临时目录生成初始发布基线，并保证清理。 */
 function createInitialBaseline(blob = initialReleaseProtoBlob) {
     const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-proto-baseline-'));
     try {
@@ -436,6 +465,7 @@ function createInitialBaseline(blob = initialReleaseProtoBlob) {
     }
 }
 
+/** 核对固定工具链、生成漂移和初始版本兼容性，结束后清理临时文件。 */
 function check() {
     verifyToolchain();
     verifyCanonicalSources(protoRoot, true);
@@ -454,6 +484,7 @@ function check() {
     process.stdout.write('Protocol compatibility and generated-source drift checks passed.\n');
 }
 
+/** 无需原生生成工具地核对源注册、消费者集合与 Node 描述符兼容性。 */
 function checkContract() {
     verifyCanonicalSources(protoRoot, true);
     requireFile(baselinePath);
@@ -462,6 +493,7 @@ function checkContract() {
     process.stdout.write('Protocol contract and generated consumer registration checks passed.\n');
 }
 
+/** 对指定协议源目录生成 Node 描述符并核对初始发布兼容性。 */
 function checkCompatibilitySource(sourceRoot) {
     if (!sourceRoot) {
         fail('check-compatibility requires a proto source directory');

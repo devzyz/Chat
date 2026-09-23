@@ -9,17 +9,20 @@
 #include <thread>
 #include <utility>
 
+/** @brief 拥有外层服务的运行状态和异步操作所需资源，生命周期由外层实现约束。 */
 struct LogicDispatcher::Impl {
+	/** @brief 初始化Impl，拥有外层服务的运行状态和异步操作所需资源，生命周期由外层实现约束。 */
 	explicit Impl(Handler callback)
-		: handler(std::move(callback)), worker([this]() { Run(); }) {
+		: handler(std::move(callback)), worker(/** @brief 在独立业务线程消费消息队列。 */ [this]() { Run(); }) {
 	}
 
+	/** @brief 执行队列中的工作并把结果交回所属执行器，遵守停止状态与错误映射。 */
 	void Run() {
 		for (;;) {
 			LogicMessage message;
 			{
 				std::unique_lock<std::mutex> lock(mutex);
-				condition.wait(lock, [this]() { return stopping || !messages.empty(); });
+				condition.wait(lock, /** @brief 仅在停服或队列非空时唤醒消费者。 */ [this]() { return stopping || !messages.empty(); });
 				if (stopping && messages.empty()) {
 					return;
 				}
@@ -71,7 +74,7 @@ LogicSubmitResult LogicDispatcher::Submit(LogicMessage message) {
 }
 
 void LogicDispatcher::Stop() {
-	std::call_once(_impl->stop_once, [this]() {
+	std::call_once(_impl->stop_once, /** @brief 一次性标记停止、唤醒消费者并等待工作线程结束。 */ [this]() {
 		{
 			std::lock_guard<std::mutex> lock(_impl->mutex);
 			_impl->stopping = true;

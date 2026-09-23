@@ -14,6 +14,7 @@ std::atomic<bool> stop_requested{false};
 std::atomic<bool> ignore_graceful{false};
 HANDLE stop_event = nullptr;
 
+/** 响应控制台关闭信号并唤醒测试服务器；忽略模式用于验证强制终止。 */
 BOOL WINAPI HandleConsoleSignal(DWORD signal) {
 	if (signal != CTRL_BREAK_EVENT && signal != CTRL_CLOSE_EVENT) {
 		return FALSE;
@@ -27,6 +28,7 @@ BOOL WINAPI HandleConsoleSignal(DWORD signal) {
 	return TRUE;
 }
 
+/** 提取指定前缀的 ASCII 参数值，拒绝非 ASCII 内容。 */
 std::string ArgumentValue(int argc, wchar_t** argv, const std::wstring& prefix) {
 	for (int index = 1; index < argc; ++index) {
 		const std::wstring argument(argv[index]);
@@ -46,6 +48,7 @@ std::string ArgumentValue(int argc, wchar_t** argv, const std::wstring& prefix) 
 	return {};
 }
 
+/** 判断启动参数中是否包含指定完整开关。 */
 bool HasArgument(int argc, wchar_t** argv, const std::wstring& expected) {
 	for (int index = 1; index < argc; ++index) {
 		if (std::wstring(argv[index]) == expected) {
@@ -55,6 +58,7 @@ bool HasArgument(int argc, wchar_t** argv, const std::wstring& expected) {
 	return false;
 }
 
+/** 启动 loopback 测试端点，通过 PING 探针报告就绪并响应停止事件。 */
 int RunServer(std::uint16_t port, bool late_output, bool emit_secret) {
 	WSADATA data{};
 	if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
@@ -125,6 +129,7 @@ int RunServer(std::uint16_t port, bool late_output, bool emit_secret) {
 
 } // namespace
 
+/** 解析故障模式和端口，注册控制台信号处理并运行指定测试子进程。 */
 int wmain(int argc, wchar_t** argv) {
 	SetConsoleCtrlHandler(HandleConsoleSignal, TRUE);
 	ignore_graceful.store(HasArgument(argc, argv, L"--ignore-graceful"));

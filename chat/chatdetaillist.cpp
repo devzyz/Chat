@@ -15,7 +15,9 @@ ChatDetailList::ChatDetailList(QWidget *parent) : QListView(parent)
     setMouseTracking(true);
     viewport()->installEventFilter(this);
 
-    connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
+    connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
+        /** @brief 滚动接近顶部时通知页面加载历史。 */
+        [this](int value) {
         if (value <= 36) {
             emit nearTopReached();
         }

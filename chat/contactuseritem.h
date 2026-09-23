@@ -17,7 +17,9 @@ class ContactUserItem : public ListItemBase
 {
     Q_OBJECT
 public:
+    /** @brief 初始化对象，用于展示好友或联系人条目的资料。 */
     explicit ContactUserItem(QWidget *parent = nullptr);
+    /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ContactUserItem();
     /**
      * @brief sizeHint
@@ -26,25 +28,24 @@ public:
      */
     QSize sizeHint() const override;
     // 添加好友后，设置好友信息
-    void SetInfo(std::shared_ptr<AuthInfo> auth_info);
+    /** @brief 添加好友后，设置好友信息。 */
+    void setInfo(std::shared_ptr<AuthInfo> auth_info);
     /**
-     * @brief SetInfo
-     * @param uid
-     * @param name
-     * @param icon
+     * @brief setInfo
      * 设置当前item的信息
      */
-    void SetInfo(int uid, QString name, QString icon);
+    void setInfo(int uid, QString name, QString icon);
     // 设置当前item的信息
-    void SetInfo(std::shared_ptr<UserInfo>);
+    /** @brief 设置当前item的信息。 */
+    void setInfo(std::shared_ptr<UserInfo>);
     /**
-     * @brief ShowRedPoint
-     * @param show
+     * @brief showRedPoint
      * 显示当前item的红点
      */
-    void ShowRedPoint(bool show = false);
+    void showRedPoint(bool show = false);
     // 获取当前item的信息
-    std::shared_ptr<UserInfo> GetFriendInfo();
+    /** @brief 获取当前item的信息。 */
+    std::shared_ptr<UserInfo> getFriendInfo();
 
 private:
     Ui::ContactUserItem *ui;

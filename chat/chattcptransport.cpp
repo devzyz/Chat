@@ -9,26 +9,34 @@
 #include <QTcpSocket>
 #include <QTimer>
 
+/** @brief 独占 TCP socket、读写缓冲和期限计时器；由外层 QObject 线程调用并通过连接代隔离回调。 */
 struct ChatTcpTransport::Impl
 {
+    /** @brief 保存借用的拥有者并初始化本次传输运行状态。 */
     explicit Impl(ChatTcpTransport *owner)
         : owner(owner)
     {
         connectDeadline.setSingleShot(true);
         writeDeadline.setSingleShot(true);
-        QObject::connect(&connectDeadline, &QTimer::timeout, owner, [this] {
+        QObject::connect(&connectDeadline, &QTimer::timeout, owner,
+            /** @brief 将当前连接的建连超时转为唯一终态。 */
+            [this] {
             finish(generation, ChatTcpTerminal::ConnectDeadlineExceeded, true);
         });
-        QObject::connect(&writeDeadline, &QTimer::timeout, owner, [this] {
+        QObject::connect(&writeDeadline, &QTimer::timeout, owner,
+            /** @brief 将当前写入超时转为唯一终态。 */
+            [this] {
             finish(generation, ChatTcpTerminal::WriteDeadlineExceeded, true);
         });
     }
 
+    /** @brief 取消内部网络操作并释放连接，外层对象不能再收到旧回调。 */
     ~Impl()
     {
         abandon();
     }
 
+    /** @brief 结束被替换连接，增加连接代并启动新 socket 的连接与期限。 */
     quint64 connectTo(const ChatTcpEndpoint &next)
     {
         if (active) {
@@ -55,6 +63,7 @@ struct ChatTcpTransport::Impl
         const quint64 currentGeneration = generation;
 
         QObject::connect(nextSocket, &QTcpSocket::connected, owner,
+                         /** @brief 仅接受当前 socket 和连接代的连接成功事件。 */
                          [this, nextSocket, currentGeneration] {
             if (!isCurrent(nextSocket, currentGeneration)) {
                 return;
@@ -64,6 +73,7 @@ struct ChatTcpTransport::Impl
             emit owner->connected(currentGeneration, endpoint.flowId);
         });
         QObject::connect(nextSocket, &QTcpSocket::readyRead, owner,
+                         /** @brief 仅解析当前连接收到的字节，协议错误结束连接。 */
                          [this, nextSocket, currentGeneration] {
             if (!isCurrent(nextSocket, currentGeneration)) {
                 return;
@@ -83,6 +93,7 @@ struct ChatTcpTransport::Impl
             }
         });
         QObject::connect(nextSocket, &QTcpSocket::bytesWritten, owner,
+                         /** @brief 累计当前帧写入字节，完成后继续下一帧。 */
                          [this, nextSocket, currentGeneration](qint64 count) {
             if (!isCurrent(nextSocket, currentGeneration) || currentWriteBytes <= 0) {
                 return;
@@ -97,6 +108,7 @@ struct ChatTcpTransport::Impl
             startNextWrite();
         });
         QObject::connect(nextSocket, &QTcpSocket::errorOccurred, owner,
+                         /** @brief 仅将当前 socket 错误转换为对应终止原因。 */
                          [this, nextSocket, currentGeneration](QAbstractSocket::SocketError error) {
             if (!isCurrent(nextSocket, currentGeneration)) {
                 return;
@@ -108,6 +120,7 @@ struct ChatTcpTransport::Impl
             finish(currentGeneration, terminal, false);
         });
         QObject::connect(nextSocket, &QTcpSocket::disconnected, owner,
+                         /** @brief 仅为当前连接处理对端断开。 */
                          [this, nextSocket, currentGeneration] {
             if (isCurrent(nextSocket, currentGeneration)) {
                 finish(currentGeneration, ChatTcpTerminal::PeerClosed, false);
@@ -119,9 +132,10 @@ struct ChatTcpTransport::Impl
         return generation;
     }
 
+    /** @brief 校验当前连接及帧长度后复制入写队列，拒绝时返回 false。 */
     bool send(quint16 messageId, const QByteArray &body)
     {
-        if (!active || !connected || !socket || body.size() > ChatTcpTransport::MaxBodyBytes()) {
+        if (!active || !connected || !socket || body.size() > ChatTcpTransport::maxBodyBytes()) {
             return false;
         }
 
@@ -136,6 +150,7 @@ struct ChatTcpTransport::Impl
         return true;
     }
 
+    /** @brief 将当前 TCP 连接以主动关闭原因结束。 */
     void close()
     {
         if (active) {
@@ -143,6 +158,7 @@ struct ChatTcpTransport::Impl
         }
     }
 
+    /** @brief 结束当前操作并清空缓存，使迟到回调不再属于下一次请求。 */
     void reset()
     {
         if (active) {
@@ -154,11 +170,13 @@ struct ChatTcpTransport::Impl
         }
     }
 
+    /** @brief 判断回调的网络对象和代号是否仍对应当前未结束操作。 */
     bool isCurrent(QTcpSocket *candidate, quint64 candidateGeneration) const
     {
         return active && candidateGeneration == generation && socket == candidate;
     }
 
+    /** @brief 在没有在途写入时提交队首完整帧并启动写入期限。 */
     void startNextWrite()
     {
         if (!active || !connected || !socket || currentWriteBytes > 0) {
@@ -181,6 +199,7 @@ struct ChatTcpTransport::Impl
         writeDeadline.start(endpoint.writeDeadlineMs);
     }
 
+    /** @brief 只完成匹配代号的当前操作，停止期限并根据调用参数取消网络 I/O。 */
     void finish(quint64 candidateGeneration, ChatTcpTerminal terminal, bool abort)
     {
         if (!active || candidateGeneration != generation) {
@@ -208,6 +227,7 @@ struct ChatTcpTransport::Impl
         emit owner->finished(outcome);
     }
 
+    /** @brief 解除网络对象与拥有者的连接，清空状态并安排网络对象销毁。 */
     void abandon()
     {
         active = false;

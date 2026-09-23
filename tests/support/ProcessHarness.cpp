@@ -22,10 +22,12 @@ using PlatformProcessAdapter = internal::Win32ProcessAdapter;
 using PlatformProcessAdapter = internal::PosixProcessAdapter;
 #endif
 
+/** 判断期限不是空值或无限值。 */
 bool IsBoundedDeadline(RunDeadline deadline) {
 	return deadline != RunDeadline{} && deadline != RunDeadline::max();
 }
 
+/** 规范化路径后逐组成分判断工作目录是否位于所属根内。 */
 bool IsWithin(const std::filesystem::path& child, const std::filesystem::path& root) {
 	const auto normalized_child = std::filesystem::weakly_canonical(child);
 	const auto normalized_root = std::filesystem::weakly_canonical(root);
@@ -40,12 +42,15 @@ bool IsWithin(const std::filesystem::path& child, const std::filesystem::path& r
 
 } // namespace
 
+/** 共享保存所属运行引用、进程适配器及同步的就绪停机证据。 */
 class ProcessHarness::Impl {
 public:
+	/** 借用生命周期更长的运行上下文并共享持有已启动进程适配器。 */
 	Impl(RunContext& owner, ProcessIdentity process_identity, std::shared_ptr<PlatformProcessAdapter> process_adapter)
 		: context(owner), identity(process_identity), adapter(std::move(process_adapter)) {
 	}
 
+	/** 幂等执行正常停机、身份核验后的强制终止及管道清理，并保存首次结果。 */
 	CleanupStatus StopOwned(RunDeadline graceful_deadline) {
 		std::lock_guard<std::mutex> lock(mutex);
 		if (stop_result.has_value()) {
@@ -108,7 +113,7 @@ std::unique_ptr<ProcessHarness> ProcessHarness::Start(RunContext& context, Proce
 	const auto identity = adapter->Start(spec);
 	auto impl = std::make_shared<Impl>(context, identity, adapter);
 	try {
-		context.CommitProcess(slot, identity, [impl] { return impl->StopOwned(impl->context.Deadline()); });
+		context.CommitProcess(slot, identity, /** 运行清理时按所属硬期限停止此进程。 */ [impl] { return impl->StopOwned(impl->context.Deadline()); });
 	} catch (...) {
 		adapter->Terminate(identity, context.Deadline());
 		adapter->ClosePipes(context.Deadline());

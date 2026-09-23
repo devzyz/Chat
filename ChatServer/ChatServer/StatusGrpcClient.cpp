@@ -42,7 +42,7 @@ LoginRsp StatusGrpcClient::Login(int uid, std::string token) {
         *_pool,
         request,
         _policy.rpc_deadline,
-        [](StatusService::Stub& stub,
+        /** @brief 执行 Status 登录校验 RPC 并返回传输状态。 */ [](StatusService::Stub& stub,
            ClientContext& context,
            const LoginReq& req,
            LoginRsp& rsp) {

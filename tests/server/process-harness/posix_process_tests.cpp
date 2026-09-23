@@ -12,10 +12,12 @@
 namespace {
 using namespace std::chrono_literals;
 
+/** 条件不满足时抛出诊断，交由测试入口报告失败。 */
 void Require(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
 }
 
+/** 建立运行 shell 命令的子进程规格，限定工作目录和证据大小。 */
 integration::ProcessSpec Spec(std::wstring command) {
     integration::ProcessSpec spec;
     spec.executable = "/bin/sh";
@@ -25,6 +27,7 @@ integration::ProcessSpec Spec(std::wstring command) {
     return spec;
 }
 
+/** 确认子进程已被回收，不能再次通过 waitpid 取得退出状态。 */
 void Reaped(std::uint32_t pid) {
     int status = 0;
     errno = 0;
@@ -33,6 +36,7 @@ void Reaped(std::uint32_t pid) {
 }
 }
 
+/** 按指定场景验证 POSIX 子进程退出、信号终止和回收合同。 */
 int main(int argc, char** argv) {
     try {
         Require(argc == 2, "one case name is required");

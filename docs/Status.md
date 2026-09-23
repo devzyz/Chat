@@ -3,7 +3,64 @@
 更新：2026-09-23。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
 项目目标：先完成基本聊天功能，后续主要投入可测量的性能优化。
 
-## 当前工作：N4 Server 契约注释
+## 当前工作：N9 历史余项整改完成
+
+- 在 `chore/repo/incremental-conventions` 完成首次 N9 盘点回挂的命名与注释余项；
+  最新 `origin/develop` 仍为 `ac282b4`，继续更新 [PR #16](https://github.com/devzyz/Chat/pull/16)。
+  首次 2599 条诊断及 48 个解析失败的历史表保留在 [治理计划](plans/CodeConventions.md#n9-全目录审计与余项归属)。
+- 最新全目录审计：411 个支持语言文件、5160 个对象，**0 条诊断、0 个解析失败**。
+  267 个非支持语言或非代码文件仍显式交给所属校验与评审；零诊断只代表公布的检查合同，
+  不等于所有语言和业务语义都已由机器证明。明细位于 `build/conventions/audit-final.json`，可用 `AuditConventions` 重建。
+- N2/N3：完成 Server 自有连接池/锁接口与 Qt 旧 UI、信号槽、单例接口的内部改名，调用和元对象引用同步。
+  Qt 自动槽根据同版本 `.ui` 对象保留；gRPC、SDK 及既有协议字段不改名。
+  schema JS 迁移对象统一为 lowerCamelCase，全部调用同步。
+- N4/N5/N6：补齐生产、shared、Qt/Server/Varify 测试、进程工具和多服务协调器的中文职责说明。
+  对所有权、事务、关闭、回调与重载逐类核对；不将 Status 遗留 MySQL 池描述为已有超时、健康检查或线程回收保证。
+- N8：支持 QTest/GTest、WINAPI、花括号默认参数、转换运算符及同文件权威声明，未知语法继续失败。
+  Qt 自动槽上下文绑定被检查的根目录与提交，避免工作树 UI 干扰 PR 检查；框架例外仍检查注释。
+  凭据形状检查按文件比较新增/删除赋值多重集，原样赋值添加注释不误报，新增值或副本仍阻断。
+- 规范复核发现的 15 组注释语义问题已修正并定向复查；需求复核发现的租约说明和 Qt UI 版本隔离问题已关闭。
+  自动审计不替代这些语义核查，也不据此宣称修复未改动的历史业务缺陷。
+- 本地实际通过：Gate/Status/Chat 生产编译及 Server 250 项；Qt 生产编译及 65 项；
+  Resource 生产构建；Varify 54 项；PowerShell 脚本 13 项；CI/工具链/schema Node 检查 22 项；
+  多服务协调器/报告/拓扑自测 26 项；规范检查器 33 项。
+  原生测试之后的追加说明通过 token 核对；未重复执行与纯注释无关的全量业务场景。
+- 相对本轮开始的 `8611c51`：228 个 C++ 文件在显式改名与删除冗余 stop 别名外 token 一致，
+  56 个 JS 文件在五个迁移 API 改名外 AST 一致，3 个 PowerShell 脚本非注释 token 一致。
+  统一入口的命名接线和凭据 diff 检查有独立回归。日志与对比明细位于 `build/conventions/`。
+- 相对 `origin/develop` 的增量规范检查、测试注册、UTF-8、文档链接及 `git diff --check` 通过。
+  依赖使用本机已有安装，未恢复 vcpkg，未修改生成代码、第三方或 `tests/auto/`。
+- 验证边界：本轮未重跑 Docker 真实 Redis/Mailpit、完整 E2E 或人工桌面验收。
+  PR 原提交 `8611c51` 的快速 CI 已通过，但不作为本次新提交的 CI 证据；更新后以新提交检查为准。
+
+## 前序记录：N5～N9 规范实施与首次目录审计
+
+- 按最新要求在 N4 工作分支继续完成 [N5～N9 本轮范围](plans/CodeConventions.md#n5n8-核查范围)，
+  初次完成时按要求保留为本地修改。用户现已授权提交 PR；原 PR #15 已合并，
+  新分支 `chore/repo/incremental-conventions` 基于最新 develop `ac282b4`，其文件树与既有 `00bea3d` 一致。
+- N5：补齐 Qt 顶层生产类、声明及无独立声明的辅助函数/回调，核实 `recordAt` 借用有效期、
+  账号代失效、SQLite 工作线程退出顺序等；修正旧参数注释及 `appendMessage` 返回值说明。
+  生产范围注释诊断为 0，旧 UI 命名和测试欠账单列 N9，不改 Qt 行为。
+- N6：JS 内部接口改为 `getRedis`、`queryRedis`、`close`、`sendMail`，调用及测试同步，
+  外部 `GetVarifyCode` 不变；补生产 JSDoc 和 `scripts/` PowerShell 帮助/回调说明。
+- N7/N8：实现本地与 CI 共用 Git/源码增量检查，接入 Windows static-check 及既有汇总，
+  PR 标题编辑触发复查。固定历史祖先、真实 merge、revert、squash、发布版本及错误退出均有回归。
+  支持与不支持的语法、人工评审责任见 [CI 治理](../tests/CI-GOVERNANCE.md#12-规范检查合同)。
+- N9：覆盖全部自有适用目录，逐目录归回原工作包，清单见 [审计表](plans/CodeConventions.md#n9-全目录审计与余项归属)。
+  记录 2599 条历史诊断、48 个解析失败文件及 267 个非支持语言/非代码文件；它们尚未逐项整改，
+  不把清单生成成功称为全仓零欠账。明细可由 `AuditConventions` 重建至 `build/conventions/audit.json`。
+- 本地执行通过：规范检查器 23 项（含公开 CLI/PowerShell 失败传播），Varify 33 Unit + 21 Integration，
+  脚本 9 Component + 4 Integration，CI/工具链/缓存治理 19 项，GitHub 下载器合同及 4 份工作流 actionlint。
+  验证码测试首次发现注释插入造成的 JS return 换行问题，修复后 54 项重跑通过；没有弱化断言。
+- 相对 `origin/develop` 的本地增量规范入口通过（0 违规）；UTF-8、39 个本地文档链接/锚点和
+  `git diff --check` 通过。完整审计曾把类外 operator 当成普通函数，补回归修正后得到上列最终计数。
+- 103 个 C++ 文件相对 HEAD 的非注释 token 完全一致；12 个 JS 文件的 AST 除四个明确改名外保持一致，
+  7 个 PowerShell 脚本非注释 token 未变，统一入口新增规范任务另由回归验证。
+  只在 `build/conventions/python` 准备检查工具，在 `build/conventions/actionlint` 准备校验器；未恢复 vcpkg。
+  本轮未重新编译 Qt/Server，未重跑真实 Redis/Mailpit/Docker/E2E，也未声称未提交代码已有远端 CI 结果。
+- 下一步：提交独立 develop PR 并等待远端 CI；本地结果不代替远端检查。N9 回挂历史项按所属模块继续拆批治理。
+
+## 前序记录：N4 Server 契约注释
 
 - 本轮基于最新远端 develop `aa154435af656985a885971b70e54e1ee9f8f546`，工作区原先干净；
   已快进核对后创建 `docs/repo/server-contracts`，按计划每批独立提交 PR。

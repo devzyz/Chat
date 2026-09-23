@@ -12,29 +12,35 @@ LoginDialog::LoginDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     ui->setupUi(this);
 
     // 页面切换逻辑，登录切换注册，登录切换忘记密码
-    connect(ui->register_btn, &QPushButton::clicked, this, &LoginDialog::sig_login_switch_reg);
+    connect(ui->register_btn, &QPushButton::clicked, this, &LoginDialog::registrationRequested);
 
-    connect(ui->forget_label, &ClickedLabel::clicked, this, &LoginDialog::sig_login_switch_reset);
+    connect(ui->forget_label, &ClickedLabel::clicked, this, &LoginDialog::passwordResetRequested);
 
     // 忘记密码高亮显示逻辑
-    ui->forget_label->SetState("invisible_leave","invisible_hover","invisible_press","visible_leave","visible_hover","visible_press");
+    ui->forget_label->setState("invisible_leave","invisible_hover","invisible_press","visible_leave","visible_hover","visible_press");
 
     // 错误提示信息颜色
     ui->err_tip->setProperty("state", "normal");
     repolish(ui->err_tip);
     // 绑定email和password实时检验信号
-    connect(ui->email_edit, &QLineEdit::editingFinished, [this]() {
+    connect(ui->email_edit, &QLineEdit::editingFinished,
+        /** @brief 邮箱编辑结束时更新校验提示。 */
+        [this]() {
         checkEmailValid();
     });
-    connect(ui->password_edit, &QLineEdit::editingFinished, [this]() {
+    connect(ui->password_edit, &QLineEdit::editingFinished,
+        /** @brief 密码编辑结束时更新校验提示。 */
+        [this]() {
         checkPasswordValid();
     });
 
     // 密码隐藏逻辑
-    ui->password_visible->SetState("invisible_leave","invisible_hover","invisible_press","visible_leave","visible_hover","visible_presss");
+    ui->password_visible->setState("invisible_leave","invisible_hover","invisible_press","visible_leave","visible_hover","visible_presss");
     ui->password_edit->setEchoMode(QLineEdit::Password);
-    connect(ui->password_visible, &ClickedLabel::clicked, [this](){
-        auto curState = ui->password_visible->GetCurState();
+    connect(ui->password_visible, &ClickedLabel::clicked,
+        /** @brief 根据可见性标签状态切换密码显示模式。 */
+        [this](){
+        auto curState = ui->password_visible->getCurState();
 
         if (curState == ClickLabelState::Normal) {
             ui->password_edit->setEchoMode(QLineEdit::Password);
@@ -46,8 +52,10 @@ LoginDialog::LoginDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     // 头像处理逻辑
     initHead();
     connect(&_loginFlow, &ClientLoginFlow::failed, this,
+            /** @brief 展示当前认证流程失败的错误。 */
             [this](AuthFlowId, AuthError error) { showAuthError(error); });
     connect(&_loginFlow, &ClientLoginFlow::connected, this,
+            /** @brief 展示聊天连接成功但尚待登录确认的状态。 */
             [this] { showTip(tr("聊天服务器连接成功，正在登录..."), true); });
     connect(&_loginFlow, &ClientLoginFlow::authenticated,
             this, &LoginDialog::loginSucceeded);
@@ -66,13 +74,13 @@ void LoginDialog::showTip(QString str, bool isOk) {
 }
 
 // 添加错误信息到错误map里面
-void LoginDialog::AddTipErr(TipErr te, QString tips) {
+void LoginDialog::addTipErr(TipErr te, QString tips) {
     _tip_errs[te] = tips;
     showTip(tips, false);
 }
 
 // 删除错误信息，如果map内还有未处理的错误，则继续显示
-void LoginDialog::DelTipErr(TipErr te) {
+void LoginDialog::delTipErr(TipErr te) {
     _tip_errs.remove(te);
     if (_tip_errs.empty()) {
         ui->err_tip->setText("");
@@ -86,7 +94,7 @@ bool LoginDialog::checkEmailValid() {
 
     if (email.isEmpty()) {
         // 提示邮箱不正确
-        AddTipErr(TipErr::TIP_EMAIL_ERR, tr("邮箱不能为空"));
+        addTipErr(TipErr::TIP_EMAIL_ERR, tr("邮箱不能为空"));
         return false;
     }
 
@@ -96,11 +104,11 @@ bool LoginDialog::checkEmailValid() {
 
     if (!match) {
         // 提示邮箱不正确
-        AddTipErr(TipErr::TIP_EMAIL_ERR, tr("邮箱地址不正确"));
+        addTipErr(TipErr::TIP_EMAIL_ERR, tr("邮箱地址不正确"));
         return false;
     }
 
-    DelTipErr(TipErr::TIP_EMAIL_ERR);
+    delTipErr(TipErr::TIP_EMAIL_ERR);
     return true;
 }
 
@@ -109,7 +117,7 @@ bool LoginDialog::checkPasswordValid() {
 
     if (pass.length() < 6 || pass.length() > 15) {
         // 提示长度不匹配
-        AddTipErr(TipErr::TIP_PWD_ERR, tr("密码长度应为6~15"));
+        addTipErr(TipErr::TIP_PWD_ERR, tr("密码长度应为6~15"));
         return false;
     }
 
@@ -120,11 +128,11 @@ bool LoginDialog::checkPasswordValid() {
 
     if (!match) {
         // 提示字符非法
-        AddTipErr(TipErr::TIP_PWD_ERR, tr("不能包含非法字符"));
+        addTipErr(TipErr::TIP_PWD_ERR, tr("不能包含非法字符"));
         return false;
     }
 
-    DelTipErr(TipErr::TIP_PWD_ERR);
+    delTipErr(TipErr::TIP_PWD_ERR);
 
     return true;
 }

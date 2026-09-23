@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$JUnitPath
 )
 
@@ -17,6 +17,10 @@ $script:passed = 0
 $script:failed = 0
 $script:results = @()
 
+<#
+.SYNOPSIS
+按真实用例结果写入 JUnit 报告，包含耗时和失败原因。
+#>
 function Write-JUnitReport {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -24,7 +28,7 @@ function Write-JUnitReport {
     if (-not [string]::IsNullOrWhiteSpace($parent)) {
         [void](New-Item -ItemType Directory -Path $parent -Force)
     }
-    $failures = @($script:results | Where-Object { -not $_.Passed }).Count
+    $failures = @($script:results | Where-Object <# 筛选失败用例以计算报告失败数。 #> { -not $_.Passed }).Count
     $duration = ($script:results | Measure-Object -Property Duration -Sum).Sum
     $settings = New-Object System.Xml.XmlWriterSettings
     $settings.Indent = $true
@@ -67,6 +71,10 @@ function Write-JUnitReport {
     }
 }
 
+<#
+.SYNOPSIS
+写入本次生命周期测试使用的独立实例配置。
+#>
 function Write-ConfigFixture {
     param([string]$Path)
 
@@ -82,6 +90,10 @@ function Write-ConfigFixture {
     ) | Set-Content -LiteralPath $Path -Encoding ASCII
 }
 
+<#
+.SYNOPSIS
+写入带指定启动时间和可执行文件的进程状态夹具。
+#>
 function Write-StateFixture {
     param(
         [string]$StateDirectory,
@@ -105,6 +117,10 @@ function Write-StateFixture {
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $statePath 'chat-lifecycle.json') -Encoding UTF8
 }
 
+<#
+.SYNOPSIS
+执行生命周期合同并记录实际耗时、结果及失败原因。
+#>
 function Invoke-TestCase {
     param(
         [ValidatePattern('^A02-LIFE-\d{2}$')][string]$TestId,
@@ -133,6 +149,10 @@ function Invoke-TestCase {
     }
 }
 
+<#
+.SYNOPSIS
+条件为假时抛出给定断言诊断。
+#>
 function Assert-True {
     param([bool]$Condition, [string]$Message)
     if (-not $Condition) {
@@ -148,7 +168,7 @@ try {
     $currentExecutable = [System.IO.Path]::GetFullPath($currentProcess.Path)
     $currentStartedUtc = $currentProcess.StartTime.ToUniversalTime().ToString('o')
 
-    Invoke-TestCase 'A02-LIFE-01' 'A child that exits during startup reports diagnostics and leaves no state' {
+    Invoke-TestCase 'A02-LIFE-01' 'A child that exits during startup reports diagnostics and leaves no state' <# 验证启动失败可被捕获且不留下错误的运行状态。 #> {
         $stateDirectory = Join-Path $testRoot 'startup-failure'
         $caught = $null
         try {
@@ -166,7 +186,7 @@ try {
         Assert-True ($stateFiles.Count -eq 0) 'Startup failure left a process state file behind.'
     }
 
-    Invoke-TestCase 'A02-LIFE-02' 'Status treats a reused PID with a different start time as stopped' {
+    Invoke-TestCase 'A02-LIFE-02' 'Status treats a reused PID with a different start time as stopped' <# 验证过期启动时间的状态记录被识别为失效。 #> {
         $stateDirectory = Join-Path $testRoot 'stale-status'
         Write-StateFixture $stateDirectory '2000-01-01T00:00:00.0000000Z' $currentExecutable
 
@@ -177,7 +197,7 @@ try {
         Assert-True ($null -ne (Get-Process -Id $PID -ErrorAction SilentlyContinue)) 'Status terminated the unrelated current process.'
     }
 
-    Invoke-TestCase 'A02-LIFE-03' 'Stop never terminates a PID whose recorded identity is stale' {
+    Invoke-TestCase 'A02-LIFE-03' 'Stop never terminates a PID whose recorded identity is stale' <# 验证停止时拒绝过期身份且不终止当前测试进程。 #> {
         $stateDirectory = Join-Path $testRoot 'stale-stop'
         Write-StateFixture $stateDirectory '2000-01-01T00:00:00.0000000Z' $currentExecutable
 
@@ -190,7 +210,7 @@ try {
             'Stop did not remove the stale state file.'
     }
 
-    Invoke-TestCase 'A02-LIFE-04' 'Start rejects conflicts recorded by an independently running instance' {
+    Invoke-TestCase 'A02-LIFE-04' 'Start rejects conflicts recorded by an independently running instance' <# 验证同名运行实例冲突在新进程启动前被拒绝。 #> {
         $stateDirectory = Join-Path $testRoot 'running-conflict'
         Write-StateFixture $stateDirectory $currentStartedUtc $currentExecutable
         $caught = $null
