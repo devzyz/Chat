@@ -28,6 +28,8 @@ jobs:
 
       - name: Validate GitHub Actions workflows
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: ./scripts/ci/test-workflows.ps1 -ToolRoot (Join-Path $env:RUNNER_TEMP 'chat-actionlint')
 
       - name: Validate build configuration
@@ -271,6 +273,8 @@ jobs:
       - name: Restore server dependencies with binary archives
         id: dependency-restore
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           Set-StrictMode -Version Latest

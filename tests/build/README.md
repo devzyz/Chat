@@ -10,6 +10,9 @@ The evidence-validator regression runs once in the Linux report job; that job st
 The retired `3C-08` compatibility selector is rejected. Linux keeps its preflight PASS assertion,
 but no longer exposes an unused status output. Protocol/schema compatibility tests remain active.
 `scripts/ci/test-workflows.ps1 -ToolRoot <temporary-directory>` validates every workflow with pinned actionlint.
+`powershell -NoProfile -File scripts/ci/test-vcpkg-github-asset.ps1` checks Release API authentication
+using a synthetic `GH_TOKEN`, anonymous access, codeload token isolation, asset identity and SHA512 failure handling.
+CI supplies its read-only `github.token` only to steps that download tools or dependency assets.
 There is no cross-workflow check poller. The main workflow uses job dependencies and two stable required checks.
 
 ## CI binary dependency cache
