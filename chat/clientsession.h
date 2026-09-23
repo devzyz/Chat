@@ -14,11 +14,13 @@ enum class SessionResetReason {
 
 Q_DECLARE_METATYPE(SessionResetReason)
 
+/** @brief 管理已认证会话的心跳及账号、连接和会话界面的统一清理。 */
 class ClientSession : public QObject
 {
     Q_OBJECT
 
 public:
+    /** @brief 创建心跳定时器，将当前账号心跳交给 TCP 管理器发送。 */
     explicit ClientSession(QObject *parent = nullptr);
 
     void beginSession(QObject *ownedSessionRoot = nullptr);

@@ -3,12 +3,7 @@
 
 #include <QListWidget>
 
-/**
- * @brief The ChatUserList class
- * 显示用户聊天信息的QListWidget的自定义组件
- *
- *
- */
+/** @brief 展示会话列表并在滚动到底部时请求下一页。 */
 class ChatUserList : public QListWidget
 {
     Q_OBJECT
@@ -16,13 +11,7 @@ public:
     ChatUserList(QWidget *parent = nullptr);
 
 protected:
-    /**
-     * @brief eventFilter
-     * @param watched
-     * @param event
-     * @return
-     * 重写了滚轮的一些细节
-     */
+    /** @brief 处理滚动事件，在尚有会话可加载时通知分页请求。 */
     bool eventFilter(QObject * watched, QEvent * event) override;
 
 signals:

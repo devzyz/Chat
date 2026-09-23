@@ -23,13 +23,12 @@ MainWindow::MainWindow(QWidget *parent)
     // 连接登录界面转重置界面信号
     connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
     // 连接登录界面转聊天界面信号
-    connect(_login_dlg, &LoginDialog::sig_login_switch_chat,
+    connect(_login_dlg, &LoginDialog::loginSucceeded,
             this, &MainWindow::slot_login_switch_chat);
     // 连接服务器通知下线信号
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_notify_offline, this, &MainWindow::slot_notify_offline);
-    // 连接服务器断开lian
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_connection_close, this, &MainWindow::slot_connection_close);
-    // emit TcpMgr::GetInstance()->sig_login_switch_chat();
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::forcedOffline, this, &MainWindow::slot_notify_offline);
+    // 连接结束后区分预期关闭与异常断线。
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::connectionClosed, this, &MainWindow::slot_connection_close);
 }
 
 MainWindow::~MainWindow()
@@ -86,7 +85,7 @@ void MainWindow::slot_reg_switch_login() {
     connect(_login_dlg, &LoginDialog::sig_login_switch_reg, this, &MainWindow::slot_login_switch_reg);
     // 连接登录界面和忘记密码界面
     connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
-    connect(_login_dlg, &LoginDialog::sig_login_switch_chat,
+    connect(_login_dlg, &LoginDialog::loginSucceeded,
             this, &MainWindow::slot_login_switch_chat);
     _ui_status = UIStatus::LOGIN_UI;
 }
@@ -103,7 +102,7 @@ void MainWindow::slot_reset_switch_login() {
     connect(_login_dlg, &LoginDialog::sig_login_switch_reg, this, &MainWindow::slot_login_switch_reg);
     // 连接登录界面和忘记密码界面
     connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
-    connect(_login_dlg, &LoginDialog::sig_login_switch_chat,
+    connect(_login_dlg, &LoginDialog::loginSucceeded,
             this, &MainWindow::slot_login_switch_chat);
     _ui_status = UIStatus::LOGIN_UI;
 }
@@ -140,7 +139,7 @@ void MainWindow::slot_connection_close(bool expectedClose)
     }
     AuthOutcome outcome;
     outcome.kind = AuthOutcomeKind::AbnormalDisconnect;
-    const AuthAction action = _authFlow.Reduce(_activeAuthFlowId, outcome);
+    const AuthAction action = _authFlow.reduce(_activeAuthFlowId, outcome);
     if (action.kind != AuthActionKind::ShowLogin) {
         return;
     }
@@ -182,7 +181,7 @@ void MainWindow::offlineLogin()
     connect(_login_dlg, &LoginDialog::sig_login_switch_reg, this, &MainWindow::slot_login_switch_reg);
     // 连接登录界面和忘记密码界面
     connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
-    connect(_login_dlg, &LoginDialog::sig_login_switch_chat,
+    connect(_login_dlg, &LoginDialog::loginSucceeded,
             this, &MainWindow::slot_login_switch_chat);
     _ui_status = UIStatus::LOGIN_UI;
 }

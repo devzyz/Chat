@@ -8,10 +8,7 @@ namespace Ui {
 class ApplyFriendDialog;
 }
 
-/**
- * @brief The ApplyFriendDialog class
- * 申请好友弹出框
- */
+/** @brief 收集好友申请内容并向服务器提交申请。 */
 class ApplyFriendDialog : public QDialog
 {
     Q_OBJECT
@@ -29,6 +26,7 @@ private:
     std::shared_ptr<SearchInfo> _si;
 
 public slots:
+    /** @brief 使用当前账号和搜索结果发送好友申请。 */
     void slot_send_apply_sure();
     void slot_send_apply_cancel();
 };

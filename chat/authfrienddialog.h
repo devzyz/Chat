@@ -9,10 +9,7 @@ namespace Ui {
 class AuthFriendDialog;
 }
 
-/**
- * @brief The AuthFriendDialog class
- * 验证添加好友请求弹出框
- */
+/** @brief 展示好友申请并提交同意添加好友的操作。 */
 class AuthFriendDialog : public QDialog
 {
     Q_OBJECT
@@ -30,7 +27,7 @@ public:
 private slots:
     // 取消验证
     void slot_auth_apply_cancel();
-    // 同意添加好友
+    /** @brief 提交好友审批及双方备注资料。 */
     void slot_auth_apply_sure();
 
 private:

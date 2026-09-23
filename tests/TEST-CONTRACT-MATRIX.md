@@ -526,7 +526,7 @@ authenticated retry 写入 `client_integration.xml`，仅使用动态 loopback�
 
 ### 4.4 Auth/network outcome coordinator（12）
 
-Interface：production `AuthFlowCoordinator::Reduce(flowId, AuthOutcome) -> AuthAction`；`AuthAction::kind` 以 optional 稳定表达无 action，存在的 action 仅为 `StayAndShowError | ConnectChat | ShowLogin | ShowChat`。
+Interface：production `AuthFlowCoordinator::reduce(flowId, AuthOutcome) -> AuthAction`；`AuthAction::kind` 以 optional 稳定表达无 action，存在的 action 仅为 `StayAndShowError | ConnectChat | ShowLogin | ShowChat`。
 Domain/Level：Business/Architecture；Q03-AUTH-01..11 为 Unit，Q03-AUTH-12 为 Component。
 报告：Unit 写入 `client_unit.xml`，Component 写入 `client_component.xml`；synthetic outcome，无真实 HTTP/TCP。
 
@@ -714,7 +714,7 @@ Release 计划已被替代，旧审批、bootstrap 与 admission 规则不再适
 | [3A §8 / 3A-02](plans/PHASE-3A-PLAN.md) / G-010 | T08-STATUS-01..14 | `StatusRouting::Assign/Validate` | Unit + Component / `server_unit.xml` + `server_component.xml` | complete；14 testcase 已进入 194 baseline |
 | [3A §9 / 3A-03](plans/PHASE-3A-PLAN.md) / G-008 | T08-SESSION-01..10 | `ChatSessionState` 的 create/register/find/close/send | Component / `server_component.xml` | complete（3A in-memory part）；10 testcase 已进入 204 baseline |
 | [3A §10 / 3A-04](plans/PHASE-3A-PLAN.md) / G-009 | T08-GATE-01..16 | `GateRequest::Handle` | Component / `server_component.xml` | complete（3A in-process part）；16 testcase 已进入 220 baseline |
-| [3A §11 / 3A-05](plans/PHASE-3A-PLAN.md) / G-011 | Q03-AUTH-01..12 | `AuthFlowCoordinator::Reduce` | Unit + Component / `client_unit.xml` + `client_component.xml` | complete（3A outcome/state 部分）；12 testcase 已进入 232 baseline |
+| [3A §11 / 3A-05](plans/PHASE-3A-PLAN.md) / G-011 | Q03-AUTH-01..12 | `AuthFlowCoordinator::reduce` | Unit + Component / `client_unit.xml` + `client_component.xml` | complete（3A outcome/state 部分）；12 testcase 已进入 232 baseline |
 
 ### Phase 3B planned contract registry
 

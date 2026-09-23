@@ -50,7 +50,7 @@ LoginDialog::LoginDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     connect(&_loginFlow, &ClientLoginFlow::connected, this,
             [this] { showTip(tr("聊天服务器连接成功，正在登录..."), true); });
     connect(&_loginFlow, &ClientLoginFlow::authenticated,
-            this, &LoginDialog::sig_login_switch_chat);
+            this, &LoginDialog::loginSucceeded);
 }
 
 // 用于显示错误信息

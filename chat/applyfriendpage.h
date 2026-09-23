@@ -8,27 +8,22 @@ namespace Ui {
 class ApplyFriendPage;
 }
 
-/**
- * @brief The ApplyFriendPage class
- * 点击ContactUserList内的新的朋友item后触发信号，右侧切换到当前界面
- * 好友申请界面
- */
+/** @brief 展示当前账号收到的好友申请并同步审批结果。 */
 class ApplyFriendPage : public QWidget
 {
     Q_OBJECT
 public:
+    /** @brief 创建好友申请页并连接审批结果通知。 */
     explicit ApplyFriendPage(QWidget *parent = nullptr);
     ~ApplyFriendPage();
-    /**
-     * @brief AddNewApply
-     * 添加新的申请好友请求
-     */
+    /** @brief 将新的好友申请加入页面，已有申请不重复创建。 */
     void AddNewApply(std::shared_ptr<ApplyInfo>);
 
 protected:
     void paintEvent(QPaintEvent * event) override;
 
 private:
+    /** @brief 从账号缓存加载好友申请列表。 */
     void loadApplyList();
     QMap<int, ApplyFriendItem*> _apply_items_map;
 

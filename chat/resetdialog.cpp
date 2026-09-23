@@ -70,7 +70,7 @@ void ResetDialog::slot_reset_mod_finish(AuthFlowId flowId, ReqId id, QString res
     outcome.requestId = static_cast<int>(id);
     if(err != ErrorCodes::SUCCESS){
         outcome.kind = AuthOutcomeKind::HttpNetworkError;
-        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        const AuthAction action = _authFlow.reduce(flowId, outcome);
         if (action.kind == AuthActionKind::StayAndShowError) {
             showAuthError(action.error);
         }
@@ -81,7 +81,7 @@ void ResetDialog::slot_reset_mod_finish(AuthFlowId flowId, ReqId id, QString res
     //json解析错误
     if(jsonDoc.isNull()){
         outcome.kind = AuthOutcomeKind::HttpMalformedJson;
-        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        const AuthAction action = _authFlow.reduce(flowId, outcome);
         if (action.kind == AuthActionKind::StayAndShowError) {
             showAuthError(action.error);
         }
@@ -90,7 +90,7 @@ void ResetDialog::slot_reset_mod_finish(AuthFlowId flowId, ReqId id, QString res
     //json解析错误
     if(!jsonDoc.isObject()){
         outcome.kind = AuthOutcomeKind::HttpMalformedJson;
-        const AuthAction action = _authFlow.Reduce(flowId, outcome);
+        const AuthAction action = _authFlow.reduce(flowId, outcome);
         if (action.kind == AuthActionKind::StayAndShowError) {
             showAuthError(action.error);
         }
@@ -101,7 +101,7 @@ void ResetDialog::slot_reset_mod_finish(AuthFlowId flowId, ReqId id, QString res
     outcome.businessError = businessError;
     outcome.kind = businessError == ErrorCodes::SUCCESS
         ? AuthOutcomeKind::HttpSuccess : AuthOutcomeKind::HttpBusinessError;
-    const AuthAction action = _authFlow.Reduce(flowId, outcome);
+    const AuthAction action = _authFlow.reduce(flowId, outcome);
     if (action.kind == AuthActionKind::StayAndShowError) {
         showAuthError(action.error);
         return;
@@ -275,7 +275,7 @@ void ResetDialog::on_confirm_btn_clicked()
     begin.kind = AuthOutcomeKind::BeginHttp;
     begin.module = static_cast<int>(Modules::RESETMOD);
     begin.requestId = static_cast<int>(ReqId::ID_RESET_PWD);
-    const AuthFlowId flowId = _authFlow.Reduce(0, begin).flowId;
+    const AuthFlowId flowId = _authFlow.reduce(0, begin).flowId;
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/reset_pwd"), json_obj,
                                         ReqId::ID_RESET_PWD, Modules::RESETMOD,
                                         flowId);
@@ -298,7 +298,7 @@ void ResetDialog::on_get_code_btn_clicked()
     begin.kind = AuthOutcomeKind::BeginHttp;
     begin.module = static_cast<int>(Modules::RESETMOD);
     begin.requestId = static_cast<int>(ReqId::ID_GET_VERIFY_CODE);
-    const AuthFlowId flowId = _authFlow.Reduce(0, begin).flowId;
+    const AuthFlowId flowId = _authFlow.reduce(0, begin).flowId;
     HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/get_varifycode"), json_obj,
                                         ReqId::ID_GET_VERIFY_CODE, Modules::RESETMOD,
                                         flowId);

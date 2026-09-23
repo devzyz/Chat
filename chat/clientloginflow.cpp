@@ -6,7 +6,9 @@ ClientLoginFlow::ClientLoginFlow(AuthFlowCoordinator &coordinator, QObject *pare
     : QObject(parent), _coordinator(coordinator)
 {
     _deadline.setSingleShot(true);
+    // 登录总期限到达时结束当前尝试。
     connect(&_deadline, &QTimer::timeout, this, [this] { finishError(AuthError::Network); });
+    // 将选服 HTTP 结果转换为认证流程事件。
     connect(&_http, &GateHttpTransport::finished, this, [this](const GateHttpResult &result) {
         if (!_pending || result.flowId != _flowId) return;
         AuthOutcome outcome;
@@ -41,27 +43,30 @@ ClientLoginFlow::ClientLoginFlow(AuthFlowCoordinator &coordinator, QObject *pare
         apply(outcome);
     });
     const auto tcp = TcpMgr::GetInstance();
-    connect(tcp.get(), &TcpMgr::sig_tcp_connect_success, this, [this](bool success) {
+    // 连接成功且流程仍有效时发送聊天登录请求。
+    connect(tcp.get(), &TcpMgr::connectionAttemptFinished, this, [this](bool success) {
         if (!_pending) return;
         AuthOutcome outcome;
         outcome.kind = success ? AuthOutcomeKind::TcpConnected : AuthOutcomeKind::TcpConnectFailed;
-        const auto action = _coordinator.Reduce(_flowId, outcome);
+        const auto action = _coordinator.reduce(_flowId, outcome);
         if (action.kind == AuthActionKind::StayAndShowError) {
             finishError(action.error);
         } else if (success && action.accepted) {
             emit connected();
-            emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_CHAT_LOGIN_REQ,
+            emit TcpMgr::GetInstance()->sendRequested(ReqId::ID_CHAT_LOGIN_REQ,
                 QJsonDocument(QJsonObject{{"uid", _server.Uid}, {"token", _server.Token}})
                     .toJson(QJsonDocument::Compact));
         }
     });
-    connect(tcp.get(), &TcpMgr::sig_login_failed, this, [this](int error) {
+    // 将聊天登录拒绝交给认证流程处理。
+    connect(tcp.get(), &TcpMgr::loginFailed, this, [this](int error) {
         AuthOutcome outcome;
         outcome.kind = AuthOutcomeKind::ChatLoginFailed;
         outcome.businessError = error;
         apply(outcome);
     });
-    connect(tcp.get(), &TcpMgr::sig_login_switch_chat, this, [this] {
+    // 将聊天登录成功交给认证流程处理。
+    connect(tcp.get(), &TcpMgr::loginSucceeded, this, [this] {
         AuthOutcome outcome;
         outcome.kind = AuthOutcomeKind::ChatLoginSucceeded;
         apply(outcome);
@@ -77,7 +82,7 @@ AuthFlowId ClientLoginFlow::login(const QUrl &gate, const QString &email, const 
     begin.kind = AuthOutcomeKind::BeginHttp;
     begin.module = Modules::LOGINMOD;
     begin.requestId = ReqId::ID_LOGIN_UESR;
-    _flowId = _coordinator.Reduce(0, begin).flowId;
+    _flowId = _coordinator.reduce(0, begin).flowId;
     _pending = true;
     _server = {};
     GateHttpRequest request;
@@ -113,12 +118,12 @@ void ClientLoginFlow::finishError(AuthError error)
 void ClientLoginFlow::apply(const AuthOutcome &outcome)
 {
     if (!_pending) return;
-    const auto action = _coordinator.Reduce(_flowId, outcome);
+    const auto action = _coordinator.reduce(_flowId, outcome);
     if (action.kind == AuthActionKind::StayAndShowError) {
         finishError(action.error);
     } else if (action.kind == AuthActionKind::ConnectChat && action.server) {
         _server = *action.server;
-        TcpMgr::GetInstance()->slot_tcp_connect(_server);
+        TcpMgr::GetInstance()->connectToServer(_server);
     } else if (action.kind == AuthActionKind::ShowChat) {
         _pending = false;
         _deadline.stop();

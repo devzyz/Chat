@@ -1,6 +1,6 @@
 #include "authflowcoordinator.h"
 
-AuthFlowCoordinator::FlowKind AuthFlowCoordinator::FlowFor(int module, int requestId)
+AuthFlowCoordinator::FlowKind AuthFlowCoordinator::flowFor(int module, int requestId)
 {
     if (module == static_cast<int>(Modules::REGISTERMOD)
         && (requestId == static_cast<int>(ReqId::ID_GET_VERIFY_CODE)
@@ -19,15 +19,15 @@ AuthFlowCoordinator::FlowKind AuthFlowCoordinator::FlowFor(int module, int reque
     return FlowKind::None;
 }
 
-int AuthFlowCoordinator::OutcomeKey(const AuthOutcome &outcome)
+int AuthFlowCoordinator::outcomeKey(const AuthOutcome &outcome)
 {
     return static_cast<int>(outcome.kind);
 }
 
-AuthAction AuthFlowCoordinator::Reduce(AuthFlowId flowId, const AuthOutcome &outcome)
+AuthAction AuthFlowCoordinator::reduce(AuthFlowId flowId, const AuthOutcome &outcome)
 {
     if (outcome.kind == AuthOutcomeKind::BeginHttp) {
-        const FlowKind flow = FlowFor(outcome.module, outcome.requestId);
+        const FlowKind flow = flowFor(outcome.module, outcome.requestId);
         if (flow == FlowKind::None) {
             return {};
         }
@@ -48,12 +48,12 @@ AuthAction AuthFlowCoordinator::Reduce(AuthFlowId flowId, const AuthOutcome &out
         || outcome.kind == AuthOutcomeKind::HttpMalformedJson
         || outcome.kind == AuthOutcomeKind::HttpBusinessError
         || outcome.kind == AuthOutcomeKind::HttpSuccess;
-    if (httpOutcome && (FlowFor(outcome.module, outcome.requestId) != _flow
+    if (httpOutcome && (flowFor(outcome.module, outcome.requestId) != _flow
                         || outcome.requestId != _requestId)) {
         return {};
     }
 
-    const int key = OutcomeKey(outcome);
+    const int key = outcomeKey(outcome);
     if (_stage == Stage::AwaitingTcp
         && outcome.kind == AuthOutcomeKind::TcpConnectFailed) {
         if (!_processedOutcomes.insert(key).second) {

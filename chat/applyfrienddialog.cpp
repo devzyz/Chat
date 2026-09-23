@@ -44,7 +44,7 @@ void ApplyFriendDialog::SetSearchInfo(std::shared_ptr<SearchInfo> si)
 void ApplyFriendDialog::slot_send_apply_sure() {
     SPDLOG_DEBUG("friend application confirmation submitted");
     // 设置发送请求的Json参数
-    const auto user_info = UserMgr::GetInstance()->GetUserInfo();
+    const auto user_info = UserMgr::GetInstance()->userInfo();
     auto description = ui->send_apply_user_description_edit->text();
     // 如果为空，则用默认申请语句
     if (description.isEmpty()) {
@@ -62,7 +62,7 @@ void ApplyFriendDialog::slot_send_apply_sure() {
     SPDLOG_DEBUG("friend application TCP request prepared");
 
     // 发送tcp请求
-    emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_ADD_FRIEND_REQ, jsonData);
+    emit TcpMgr::GetInstance()->sendRequested(ReqId::ID_ADD_FRIEND_REQ, jsonData);
 
     this->hide();
     deleteLater();

@@ -27,7 +27,7 @@ void ChatUserItem::SetChatInfo(std::shared_ptr<ChatInfo> chat_info)
 
     if (chat_info->GetChatType() == ChatType::PRIVATE) {
         // 获取到当前用户的信息
-        auto info = UserMgr::GetInstance()->GetFriendById(chat_info->GetUid());
+        auto info = UserMgr::GetInstance()->friendById(chat_info->GetUid());
 
         // 加载head路径下的头像图片
 

@@ -5,10 +5,14 @@
 
 ## 当前工作：命名与注释规范化
 
-- N0 文档规则已落地，任务分支 `docs/repo/code-conventions` 基于已同步的 develop `2307999`。
-- [批次计划](plans/CodeConventions.md) 按问题类型和验证边界组织；下一步 N1 修正错误/失效注释，N7 Git 门禁可独立安排。
-- 本次仅修改规范与计划；未执行历史代码改名/补注释，自动检查尚未实现。验证范围为文档事实、链接和 diff，不代表业务回归或远端 CI 通过。
-- 文档检查通过：7 个版本管理范围内的变更文件、44 个内部链接及锚点、UTF-8/LF、代码块配对和 `git diff --check`；本机忽略的 AGENTS 仅精简 Git 规范读取入口。
+- 分支 `refactor/repo/core-naming` 基于已同步的 develop `2307999`，N0 规范、N1 注释、N2 内部改名、N3 Qt 核心命名分别提交，本轮汇总一个 develop PR。
+- N1：精简 TcpMgr、Gate/Chat LogicSystem 的空模板与失效注释，纠正 ACK/已读和会话绑定说明；核心作用通常一行表达。
+- N2：修正 GetUesr/backanme 标识符，明确回执处理、HTTP 路由注册和消息回调名称；声明、实现、调用及静态接线检查同步更新。
+- N3：统一 UserMgr、TcpMgr、AuthFlowCoordinator 的方法/信号/槽命名，同步 LoginDialog 登录通知、生产调用、测试及当前合同引用；补齐受影响接口的简短职责说明。
+- 本地验证通过：生产 Server/Qt 编译，Server 250 项、Qt 65 项、脚本 13 项回归；附件页面生命周期专项 1 项通过。无失败或跳过，日志见 `build/code-conventions/`，公开报告见 `build/test-results/`。
+- 对比 develop 的 56 个 C++ 文件通过显式改名映射后的 token 序列核对；未改变控制流、常量、协议字段或字符串值。文档链接、编码及 diff 检查通过。
+- Server 验证曾因缺少环境路径及沙箱 SDK 访问失败，指定既有工具路径并取得所需执行权限后通过；附件独立运行补齐 CTest 同等 Qt 插件路径后通过。未恢复依赖或修改业务逻辑。
+- [批次计划](plans/CodeConventions.md) 下一步为 N4 Server 契约注释及 N5 Qt 其余注释；其余旧 UI 命名在后续治理/收口中处理。N7/N8 自动门禁尚未实现，可按依赖另行安排；远端快速 CI 结果以本次 PR 的实际检查为准。
 
 ## 前序记录：消息状态控制
 

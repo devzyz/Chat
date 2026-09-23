@@ -1254,7 +1254,7 @@ function Confirm-TestStructure {
         $tcpMgrSource -notmatch 'messages\(\)->pauseOutgoing\s*\(' -or
         $tcpMgrSource -notmatch 'messages\(\)->stop\s*\(' -or
         $tcpMgrHeader -match 'PendingTextBatch' -or
-        $tcpMgrSource -notmatch 'slot_tcp_connect[\s\S]*?resetConnection\s*\(') {
+        $tcpMgrSource -notmatch 'connectToServer[\s\S]*?resetConnection\s*\(') {
         throw 'TcpMgr connection reset must reset transport and stop the MessageService outbox and run before reconnect.'
     }
     if ($tcpMgrHeader -match 'QTcpSocket|TcpFrameDecoder') {
@@ -1275,9 +1275,9 @@ function Confirm-TestStructure {
     $authFlowSource = Get-Content -LiteralPath (Join-Path $repoRoot 'chat\authflowcoordinator.cpp') -Raw
     $loginDialogSource = Get-Content -LiteralPath (Join-Path $repoRoot 'chat\logindialog.cpp') -Raw
     $httpMgrSource = Get-Content -LiteralPath (Join-Path $repoRoot 'chat\httpmgr.cpp') -Raw
-    if ($authFlowSource -notmatch 'AuthFlowCoordinator::Reduce' -or
+    if ($authFlowSource -notmatch 'AuthFlowCoordinator::reduce' -or
         $loginDialogSource -notmatch '_loginFlow\.login' -or
-        (Get-Content -LiteralPath (Join-Path $repoRoot 'chat\clientloginflow.cpp') -Raw) -notmatch '_coordinator\.Reduce' -or
+        (Get-Content -LiteralPath (Join-Path $repoRoot 'chat\clientloginflow.cpp') -Raw) -notmatch '_coordinator\.reduce' -or
         $httpMgrSource -notmatch 'sig_http_finish\s*\(\s*static_cast<AuthFlowId>\s*\(\s*result\.flowId\s*\)' -or
         $mainWindowSource -notmatch 'AbnormalDisconnect[\s\S]*?AuthActionKind::ShowLogin[\s\S]*?_session\.resetSession\s*\(\s*reason\s*\)') {
         throw 'Qt auth outcomes and abnormal disconnect must route through AuthFlowCoordinator and existing ClientSession reset.'

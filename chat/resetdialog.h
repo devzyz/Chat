@@ -9,6 +9,7 @@ namespace Ui {
     class ResetDialog;
 }
 
+/** @brief 收集密码重置资料和验证码，提交请求并展示处理结果。 */
 class ResetDialog : public QDialog
 {
     Q_OBJECT
@@ -18,10 +19,13 @@ public:
     ~ResetDialog();
 
 private slots:
+    /** @brief 将 HTTP 重置结果交给认证协调器，忽略过期结果。 */
     void slot_reset_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
 
+    /** @brief 校验输入后创建流程并提交密码重置请求。 */
     void on_confirm_btn_clicked();
 
+    /** @brief 校验邮箱后发起密码重置验证码请求。 */
     void on_get_code_btn_clicked();
 
     void on_cancel_btn_clicked();

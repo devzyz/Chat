@@ -2,7 +2,7 @@
 
 ## Production Module and Interface
 
-`AuthFlowCoordinator::Reduce(flowId, AuthOutcome) -> AuthAction` is the sole external Interface. The Module owns monotonic flow generation, the current auth stage, stale-result rejection and outcome deduplication. `AuthAction::kind` is optional for a stable no-action result; present kinds remain limited to `StayAndShowError`, `ConnectChat`, `ShowLogin` and `ShowChat`.
+`AuthFlowCoordinator::reduce(flowId, AuthOutcome) -> AuthAction` is the sole external Interface. The Module owns monotonic flow generation, the current auth stage, stale-result rejection and outcome deduplication. `AuthAction::kind` is optional for a stable no-action result; present kinds remain limited to `StayAndShowError`, `ConnectChat`, `ShowLogin` and `ShowChat`.
 
 HTTP/TCP managers and Login/Register/Reset/MainWindow are production Adapters. Tests submit synthetic outcomes through the same Interface. The reducer performs no I/O, frame parsing, account cleanup or UI construction.
 

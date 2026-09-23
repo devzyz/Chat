@@ -19,24 +19,29 @@ class ChatPage;
 class MessageItemDelegate;
 class ResourceTransferManager;
 
-/** 右侧聊天区主界面。 */
+/** @brief 展示会话消息并协调历史加载、发送、已读观测及资源传输。 */
 class ChatPage : public QWidget
 {
     Q_OBJECT
 
 public:
+    /** @brief 创建消息视图并连接头像、存储和已读观测事件。 */
     explicit ChatPage(QWidget *parent = nullptr);
     ~ChatPage();
 
+    /** @brief 切换当前会话并恢复其消息与滚动状态。 */
     void SetChatInfo(std::shared_ptr<ChatInfo> chatInfo);
     void AppendChatMsg(const std::shared_ptr<ChatDataBase> &message);
     void ApplyHistoryPage(int chatId,
                           const std::vector<std::shared_ptr<ChatDataBase>> &messages,
                           bool canLoadMore, qint64 nextCursor);
     void HistoryLoadFailed(int chatId);
+    /** @brief 按当前发送者和 UUID 合并消息提交确认。 */
     void ApplyDeliveryAcknowledgements(int chatId,
                                        const QVector<MessageAcknowledgement> &acknowledgements);
+    /** @brief 标记当前账号对应的失败消息。 */
     void MarkMessagesFailed(int chatId, const QVector<QString> &clientMessageIds);
+    /** @brief 将持久化消息页合并到对应会话模型。 */
     void applyStoredHistory(int chatId, qint64 before, const QVector<StoredMessage> &messages, bool hasMore);
     qint64 oldestLoadedMessageId(int chatId) const;
 
@@ -44,6 +49,7 @@ protected:
     void paintEvent(QPaintEvent *event) override;
 
 private slots:
+    /** @brief 构造文本消息及 UUID，交给消息服务持久化发送。 */
     void on_send_btn_clicked();
     void requestOlderHistory();
 
@@ -71,7 +77,9 @@ private:
     void restoreScrollAnchor(int chatId, const ScrollAnchor &anchor);
     void queueScrollToBottom(int chatId);
 
+    /** @brief 创建账号资源传输管理器并连接上传下载事件。 */
     void initResourceTransfers();
+    /** @brief 选择附件并为当前私聊启动资源上传。 */
     void selectResource();
     void loadResource(MessageRecord& record);
     ResourceTransferManager* _transfer = nullptr;

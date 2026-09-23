@@ -114,11 +114,11 @@ ChatDialog::ChatDialog(QWidget *parent)
             this, &ChatDialog::slot_switch_apply_friend_list_page);
 
     // 连接添加好友申请信号
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_add_friend_apply,
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::friendApplicationReceived,
             this, &ChatDialog::slot_tcp_add_friend_apply);
 
     // 连接认证添加好友信号
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_add_auth_chat_list,
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::friendChatAdded,
             this, &ChatDialog::slot_tcp_add_chat_list);
 
     // 连接搜索到好友后，跳转到与该好友的聊天界面的信号
@@ -164,26 +164,26 @@ ChatDialog::ChatDialog(QWidget *parent)
     });
 
     // 连接服务器通知我添加消息后的信号，将服务器通知的信息刷新到聊天界面上
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_update_text_chat_msg,
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::chatMessagesReceived,
             this, &ChatDialog::slot_update_text_chat_msg);
 
     // 连接增量加载聊天列表完成
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_load_chat_finish, this, &ChatDialog::slot_tcp_load_chat_finish);
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::chatListLoaded, this, &ChatDialog::slot_tcp_load_chat_finish);
 
     // 连接创建私聊请求完成函数
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_create_private_chat_finish,
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::privateChatCreated,
             this, &ChatDialog::slot_create_private_chat_finish);
 
     // 连接增量加载聊天记录完成
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_load_chat_msg_finish,
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::chatHistoryLoaded,
             this, &ChatDialog::slot_tcp_loading_more_chat_finish);
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_load_chat_msg_failed,
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::chatHistoryFailed,
             this, &ChatDialog::slot_tcp_loading_more_chat_failed);
 
     // 连接服务器回包之后的状态更新
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_text_chat_msg_rsp_finish,
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::messagesAcknowledged,
             this, &ChatDialog::slot_text_chat_msg_rsp_finish);
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_text_chat_msg_failed,
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::messagesFailed,
             this, &ChatDialog::slot_text_chat_msg_failed);
 }
 
@@ -196,14 +196,14 @@ ChatDialog::~ChatDialog()
 void ChatDialog::LoadChatUesrList()
 {
     QJsonObject jsonObj;
-    jsonObj["uid"] = UserMgr::GetInstance()->GetUid();
-    jsonObj["current_chat_id"] = UserMgr::GetInstance()->GetCurrentLoadChatId();
+    jsonObj["uid"] = UserMgr::GetInstance()->uid();
+    jsonObj["current_chat_id"] = UserMgr::GetInstance()->chatListCursor();
 
     QJsonDocument doc(jsonObj);
     QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
 
     // 请求加载一部分chat_id
-    TcpMgr::GetInstance()->sig_send_data(ID_LOAD_CHAT_LIST_REQ, jsonData);
+    TcpMgr::GetInstance()->sendRequested(ID_LOAD_CHAT_LIST_REQ, jsonData);
 }
 
 /**
@@ -402,7 +402,7 @@ void ChatDialog::slot_tcp_add_chat_list(std::shared_ptr<ChatInfo> chat_info)
 void ChatDialog::slot_from_search_jump_chat_item(std::shared_ptr<SearchInfo> si)
 {
     SPDLOG_DEBUG("opening chat from search result");
-    auto chat_id = UserMgr::GetInstance()->GetUidToChatId(si->_uid);
+    auto chat_id = UserMgr::GetInstance()->privateChatIdFor(si->_uid);
 
     if (chat_id == -1) {
         QJsonObject json;
@@ -411,11 +411,11 @@ void ChatDialog::slot_from_search_jump_chat_item(std::shared_ptr<SearchInfo> si)
         json["other_description"] = si->_description;
         json["other_icon"] = si->_icon;
         json["other_sex"] = si->_sex;
-        LoadOncePrivateChat(UserMgr::GetInstance()->GetUid(), si->_uid, json);
+        LoadOncePrivateChat(UserMgr::GetInstance()->uid(), si->_uid, json);
         return;
     }
 
-    chat_id = UserMgr::GetInstance()->GetUidToChatId(si->_uid);
+    chat_id = UserMgr::GetInstance()->privateChatIdFor(si->_uid);
 
     // 取出他对应的item
     auto find_iter = _chat_item_map.find(chat_id);
@@ -462,7 +462,7 @@ void ChatDialog::slot_create_private_chat_finish(std::shared_ptr<ChatInfo> chat_
 void ChatDialog::slot_from_friend_jump_chat_item(std::shared_ptr<UserInfo> si)
 {
     SPDLOG_DEBUG("opening chat from user information");
-    auto chat_id = UserMgr::GetInstance()->GetUidToChatId(si->_uid);
+    auto chat_id = UserMgr::GetInstance()->privateChatIdFor(si->_uid);
 
     if (chat_id == -1) {
         QJsonObject json;
@@ -471,11 +471,11 @@ void ChatDialog::slot_from_friend_jump_chat_item(std::shared_ptr<UserInfo> si)
         json["other_description"] = si->_description;
         json["other_icon"] = si->_icon;
         json["other_sex"] = si->_sex;
-        LoadOncePrivateChat(UserMgr::GetInstance()->GetUid(), si->_uid, json);
+        LoadOncePrivateChat(UserMgr::GetInstance()->uid(), si->_uid, json);
         return;
     }
 
-    chat_id = UserMgr::GetInstance()->GetUidToChatId(si->_uid);
+    chat_id = UserMgr::GetInstance()->privateChatIdFor(si->_uid);
 
     // 取出他对应的item
     auto find_iter = _chat_item_map.find(chat_id);
@@ -496,7 +496,7 @@ void ChatDialog::slot_from_friend_jump_chat_item(std::shared_ptr<UserInfo> si)
 
 void ChatDialog::LoadOncePrivateChat(int self_id, int other_id, QJsonObject json)
 {
-    emit TcpMgr::GetInstance()->sig_send_data(ID_CREATE_PRIVATE_CHAT_REQ,
+    emit TcpMgr::GetInstance()->sendRequested(ID_CREATE_PRIVATE_CHAT_REQ,
         clientPrivateChatRequest(self_id, other_id, json));
 }
 
@@ -662,7 +662,7 @@ void ChatDialog::slot_tcp_load_chat_finish(QJsonArray jsonArray)
         auto chat_id = obj["chat_id"].toInt();
         if (_chat_item_map.contains(chat_id)) continue;
 
-        auto chat_info = UserMgr::GetInstance()->GetChatInfo(chat_id);
+        auto chat_info = UserMgr::GetInstance()->chatInfo(chat_id);
         if (chat_info == nullptr) {
             continue;
         }
@@ -729,7 +729,7 @@ void ChatDialog::SetSelectChatItem(int uid) {
         return ;
     }
 
-    auto chat_id = UserMgr::GetInstance()->GetUidToChatId(uid);
+    auto chat_id = UserMgr::GetInstance()->privateChatIdFor(uid);
     auto iter_find = _chat_item_map.find(chat_id);
 
     if (iter_find == _chat_item_map.end()) {
@@ -785,7 +785,7 @@ void ChatDialog::SetSelectChatPage(int uid) {
         return;
     }
 
-    auto chat_id = UserMgr::GetInstance()->GetUidToChatId(uid);
+    auto chat_id = UserMgr::GetInstance()->privateChatIdFor(uid);
     auto iter_find = _chat_item_map.find(chat_id);
 
     if (iter_find == _chat_item_map.end()) {
@@ -817,7 +817,7 @@ void ChatDialog::TcpLoadingMoreChatMsg(int chatId, qint64 beforeMessageId) {
 void ChatDialog::slot_tcp_loading_more_chat_finish(
     int chat_id, std::vector<std::shared_ptr<ChatDataBase>> chat_msgs,
     bool can_load_more, qint64 next_cursor) {
-    auto chat_info = UserMgr::GetInstance()->GetChatInfo(chat_id);
+    auto chat_info = UserMgr::GetInstance()->chatInfo(chat_id);
     if (chat_info) {
         // 仅保留分页元数据兼容旧代码，不再把整页复制进 ChatInfo::_chat_msgs。
         chat_info->SetIsCanLoadMore(can_load_more);
@@ -845,7 +845,7 @@ void ChatDialog::slot_text_chat_msg_failed(int chat_id, QVector<QString> client_
 
 // 加载更多联系人
 void ChatDialog::LoadingMoreContact() {
-    auto contact_list = UserMgr::GetInstance()->GetSomeContactList();
+    auto contact_list = UserMgr::GetInstance()->nextContactPage();
     if (!contact_list.empty()) {
         for (auto &info : contact_list) {
             auto contact_user_item = new ContactUserItem();
@@ -858,7 +858,7 @@ void ChatDialog::LoadingMoreContact() {
             ui->contact_user_list->setItemWidget(contact_item, contact_user_item);
         }
         // 更新现在已经加载的数据
-        UserMgr::GetInstance()->UpdateContactLoadedCount();
+        UserMgr::GetInstance()->advanceContactPage();
     }
 }
 
@@ -890,14 +890,14 @@ void ChatDialog::slot_tcp_add_friend_apply(std::shared_ptr<ApplyInfo> applyInfo)
     SPDLOG_DEBUG("friend application received from TCP");
 
     // 先判断是否已经添加过请求
-    int b_already_apply = UserMgr::GetInstance()->AlreadyApplyAddFriend(applyInfo->_apply_uid);
+    int b_already_apply = UserMgr::GetInstance()->hasFriendApplication(applyInfo->_apply_uid);
     if (b_already_apply) {
         SPDLOG_DEBUG("duplicate friend application ignored");
         return ;
     }
 
     // 插入请求添加好友列表
-    UserMgr::GetInstance()->AddApply(applyInfo->_apply_uid, applyInfo);
+    UserMgr::GetInstance()->addFriendApplication(applyInfo->_apply_uid, applyInfo);
 
     // 当前选中的不是联系人处后，添加红点提示
     if (ui->side_user_label->GetCurState() == ClickLabelState::Normal) {

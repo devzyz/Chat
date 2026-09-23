@@ -28,7 +28,7 @@ SearchList::SearchList(QWidget * parent)
     addTipItem();
 
     // 连接搜索条目
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::sig_tcp_search_user_finish, this, &SearchList::slot_tcp_search_user_finish);
+    connect(TcpMgr::GetInstance().get(), &TcpMgr::userSearchFinished, this, &SearchList::slot_tcp_search_user_finish);
 }
 
 void SearchList::CloseFindDialog()
@@ -165,7 +165,7 @@ void SearchList::slot_item_clicked(QListWidgetItem *item)
         // 将json数据转换为字节流数据
         QJsonDocument doc(jsonObj);
         QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-        emit TcpMgr::GetInstance()->sig_send_data(ReqId::ID_SEARCH_USER_REQ, jsonData);
+        emit TcpMgr::GetInstance()->sendRequested(ReqId::ID_SEARCH_USER_REQ, jsonData);
 
         return ;
     }
@@ -188,13 +188,13 @@ void SearchList::slot_tcp_search_user_finish(std::shared_ptr<SearchInfo> si)
     }else {
         // 搜索到用户，存在三种逻辑，一不是我的好友，二是我的好友，三是我自己
         // 是我自己, 直接返回，不做处理
-        auto self_uid = UserMgr::GetInstance()->GetUid();
+        auto self_uid = UserMgr::GetInstance()->uid();
         if (si->_uid == self_uid) {
             return ;
         }
 
         // 是我的好友逻辑，则直接跳转到聊天界面
-        auto isFriend = UserMgr::GetInstance()->CheckIsFriendById(si->_uid);
+        auto isFriend = UserMgr::GetInstance()->isFriend(si->_uid);
         if (isFriend) {
             emit sig_jump_chat_item(si);
             return ;

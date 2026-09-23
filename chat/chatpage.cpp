@@ -31,7 +31,7 @@ ChatPage::ChatPage(QWidget *parent)
     });
     connect(UserMgr::GetInstance()->localAvatar(), &LocalAvatar::imageChanged, this, [this]() {
         const auto user = UserMgr::GetInstance();
-        _messageStore.updateSenderAvatar(user->GetUid(), user->selfAvatar());
+        _messageStore.updateSenderAvatar(user->uid(), user->selfAvatar());
     });
 
     ui->receive_btn->SetState("normal", "hover", "press");
@@ -75,7 +75,7 @@ void ChatPage::SetChatInfo(std::shared_ptr<ChatInfo> chatInfo)
     _currentChatId = _chatInfo->GetChatId();
 
     if (_chatInfo->GetChatType() == ChatType::PRIVATE) {
-        const auto friendInfo = UserMgr::GetInstance()->GetFriendById(_chatInfo->GetUid());
+        const auto friendInfo = UserMgr::GetInstance()->friendById(_chatInfo->GetUid());
         if (friendInfo) {
             ui->title_label->setText(friendInfo->_name);
         }
@@ -127,13 +127,13 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before,
         record.messageId = stored.messageId;
         record.chatId = chatId;
         record.senderId = stored.senderId;
-        record.isSelf = stored.senderId == UserMgr::GetInstance()->GetUid();
+        record.isSelf = stored.senderId == UserMgr::GetInstance()->uid();
         // Client UUIDs are sender-scoped; remote rows use their server ID in the GUI index.
         if (record.isSelf) record.clientMessageId = stored.clientMessageId;
         record.sentAt = QDateTime::fromMSecsSinceEpoch(stored.sentAt);
         record.text = stored.content;
-        const auto sender = record.isSelf ? UserMgr::GetInstance()->GetUserInfo()
-                                         : UserMgr::GetInstance()->GetFriendById(stored.senderId);
+        const auto sender = record.isSelf ? UserMgr::GetInstance()->userInfo()
+                                         : UserMgr::GetInstance()->friendById(stored.senderId);
         if (sender) { record.senderName = sender->_name; record.avatarKey = sender->_icon; }
         record.avatar = UserMgr::GetInstance()->avatarFor(stored.senderId, record.avatarKey);
         record.deliveryStatus = !record.isSelf ? DeliveryStatus::None :
@@ -237,13 +237,13 @@ void ChatPage::ApplyDeliveryAcknowledgements(
     int chatId, const QVector<MessageAcknowledgement> &acknowledgements)
 {
     Q_ASSERT(QThread::currentThread() == thread());
-    _messageStore.acknowledge(chatId, acknowledgements, UserMgr::GetInstance()->GetUid());
+    _messageStore.acknowledge(chatId, acknowledgements, UserMgr::GetInstance()->uid());
 }
 
 void ChatPage::MarkMessagesFailed(int chatId, const QVector<QString> &clientMessageIds)
 {
     Q_ASSERT(QThread::currentThread() == thread());
-    _messageStore.markFailed(chatId, clientMessageIds, UserMgr::GetInstance()->GetUid());
+    _messageStore.markFailed(chatId, clientMessageIds, UserMgr::GetInstance()->uid());
 }
 
 void ChatPage::paintEvent(QPaintEvent *event)
@@ -262,7 +262,7 @@ void ChatPage::on_send_btn_clicked()
         return;
     }
 
-    const auto selfInfo = UserMgr::GetInstance()->GetUserInfo();
+    const auto selfInfo = UserMgr::GetInstance()->userInfo();
     if (!selfInfo) {
         return;
     }

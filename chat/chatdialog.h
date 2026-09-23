@@ -12,18 +12,16 @@ namespace Ui {
 class ChatDialog;
 }
 
-/**
- * @brief The ChatDialog class
- * 整个聊天界面的根本Dialog
- */
+/** @brief 组织账号内的会话、联系人和聊天页面，响应网络结果与界面导航。 */
 class ChatDialog : public QDialog
 {
     Q_OBJECT
 
 public:
+    /** @brief 创建聊天界面并连接账号、消息和会话列表事件。 */
     explicit ChatDialog(QWidget *parent = nullptr);
     ~ChatDialog();
-    // 加载聊天列表
+    /** @brief 按当前账号和分页游标请求会话列表。 */
     void LoadChatUesrList();
 
 protected:
@@ -44,13 +42,13 @@ private:
     void ClearLabelState(StateWidget * label);
     // 处理全局的点击，当在搜索界面，点击其他位置时，退出搜索界面，返回到上一次显示的界面
     void handleGlobalMousePress(QMouseEvent * event);
-    // 选中当前的item
+    /** @brief 按对方 UID 选中会话项，未指定时选中首项。 */
     void SetSelectChatItem(int uid = 0);
-    // 更新当前用户对应的聊天记录
+    /** @brief 按对方 UID 展示聊天页，未指定时使用首项。 */
     void SetSelectChatPage(int uid = 0);
     // 加载更多聊天记录
     void TcpLoadingMoreChatMsg(int chatId, qint64 beforeMessageId);
-    // 加载更多联系人
+    /** @brief 追加一页联系人并推进账号缓存的分页游标。 */
     void LoadingMoreContact();
     // 当搜索到聊天或者是从好友列表点击聊天后，如果在当前item中找不到
     // 则触发tcp请求，去服务器拉取或者创建新的聊天
@@ -89,31 +87,32 @@ private slots:
 
     // 添加新的会话到好友列表
     void slot_tcp_add_chat_list(std::shared_ptr<ChatInfo>);
-    // 搜索到的是好友后，跳转到与该好友的聊天界面
+    /** @brief 从搜索结果打开已有私聊，必要时请求创建会话。 */
     void slot_from_search_jump_chat_item(std::shared_ptr<SearchInfo>);
-    // 在联系人详细信息界面点击聊天后，跳转到聊天
+    /** @brief 从好友资料打开私聊，必要时请求创建会话。 */
     void slot_from_friend_jump_chat_item(std::shared_ptr<UserInfo>);
-    // 当点击联系人列表的某个联系人后，右侧跳转到好友详细信息界面
+    /** @brief 切换到好友资料页并显示选中好友的信息。 */
     void slot_switch_friend_info_page(std::shared_ptr<UserInfo>);
-    // 聊天列表的item被点击后，触发的槽函数
+    /** @brief 打开点击的会话并加载相应聊天内容。 */
     void slot_chat_item_clicked(QListWidgetItem *);
-    // 将发送的文本，插入到聊天记录中
+    /** @brief 将待发送消息加入对应会话的兼容缓存。 */
     void slot_append_send_text_cache_msg(QString, std::shared_ptr<ChatDataBase>);
     // 服务器通知我添加聊天数据，将数据刷新到聊天界面上
     void slot_update_text_chat_msg(int , int , int , std::vector<std::shared_ptr<ChatDataBase>>& );
     // 切换右侧界面为setting界面
     void slot_switch_user_info_page();
-    // 聊天列表加载完成
+    /** @brief 将一页会话结果加入列表并恢复选中会话。 */
     void slot_tcp_load_chat_finish(QJsonArray);
-    // 创建私聊完成槽函数
+    /** @brief 将新建私聊加入列表并选中对应页面。 */
     void slot_create_private_chat_finish(std::shared_ptr<ChatInfo>);
-    // 增量加载聊天记录完成处理函数
+    /** @brief 将历史消息页交给聊天页面合并。 */
     void slot_tcp_loading_more_chat_finish(int, std::vector<std::shared_ptr<ChatDataBase>>, bool, qint64);
     void slot_tcp_loading_more_chat_failed(int);
-    // 发送消息后回后，在这里将聊天的未读信息进行更新
+    /** @brief 将服务端提交确认交给聊天页合并，不作为已读证据。 */
     void slot_text_chat_msg_rsp_finish(int, QVector<MessageAcknowledgement>);
     void slot_text_chat_msg_failed(int, QVector<QString>);
 public slots:
+    /** @brief 缓存新的好友申请并更新申请提醒。 */
     void slot_tcp_add_friend_apply(std::shared_ptr<ApplyInfo>);
 };
 

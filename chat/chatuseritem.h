@@ -10,10 +10,7 @@ namespace Ui {
 class ChatUserItem;
 }
 
-/**
- * @brief The ChatUserWidget class
- * 聊天对话列表显示的模板
- */
+/** @brief 展示单个会话的联系人头像、消息摘要与未读提醒。 */
 class ChatUserItem : public ListItemBase
 {
     Q_OBJECT
@@ -24,6 +21,7 @@ public:
     // 目的是为了设置外面的QListItem，因为QListWidget内部只能放这个类，所以要先放这个类，再在这个类内部放自己自定义的
     QSize sizeHint() const override;
 
+    /** @brief 绑定会话资料并刷新联系人信息。 */
     void SetChatInfo(std::shared_ptr<ChatInfo>);
     std::shared_ptr<ChatInfo> GetChatInfo();
     // 设置上一次聊天信息
