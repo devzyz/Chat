@@ -16,6 +16,7 @@
 using namespace std::chrono_literals;
 
 namespace {
+/** 短暂绑定并释放随机回环端口，提供预期不可用的测试端点。 */
 unsigned short FindUnavailableLoopbackPort() {
     boost::asio::io_context context;
     boost::asio::ip::tcp::acceptor acceptor(
@@ -26,8 +27,10 @@ unsigned short FindUnavailableLoopbackPort() {
     return port;
 }
 
+/** 提供确定性的 Status 登录 RPC 测试服务。 */
 class ControlledStatusService final : public message::StatusService::Service {
 public:
+    /** 回显请求 UID 并返回登录成功。 */
     grpc::Status Login(
         grpc::ServerContext*,
         const message::LoginReq* request,
@@ -38,8 +41,10 @@ public:
     }
 };
 
+/** 提供可延时的 Chat RPC 测试服务以覆盖身份和期限。 */
 class ControlledChatService final : public message::ChatService::Service {
 public:
+    /** 核对踢出请求的用户与旧会话标识后返回对应业务结果。 */
     grpc::Status NotifyOtherKickUser(grpc::ServerContext*, const message::KickUserReq* request,
         message::KickUserRsp* response) override {
         response->set_error(request->uid() == 42 && request->session_id() == "old-session"
@@ -47,6 +52,7 @@ public:
         response->set_uid(request->uid());
         return grpc::Status::OK;
     }
+    /** 按故障开关延时后回显申请者并返回成功。 */
     grpc::Status NotifyOtherAddFriend(
         grpc::ServerContext*,
         const message::AddFriendReq* request,
@@ -62,8 +68,10 @@ public:
     std::atomic<bool> delay{ false };
 };
 
+/** 拥有在随机回环端口共享监听的 Status 和 Chat 服务。 */
 class ChatLoopbackServer {
 public:
+    /** 注册测试服务并启动回环监听，绑定失败抛异常。 */
     ChatLoopbackServer() {
         grpc::ServerBuilder builder;
         builder.AddListeningPort("127.0.0.1:0", grpc::InsecureServerCredentials(), &_port);
@@ -75,8 +83,10 @@ public:
         }
     }
 
+    /** 停止所属回环 gRPC 服务。 */
     ~ChatLoopbackServer() { Shutdown(); }
 
+    /** 以两秒截止时间关闭服务并释放实例。 */
     void Shutdown() {
         if (_server) {
             _server->Shutdown(std::chrono::system_clock::now() + 2s);
@@ -84,7 +94,9 @@ public:
         }
     }
 
+    /** 返回实际绑定端口字符串。 */
     std::string Port() const { return std::to_string(_port); }
+    /** 借用可控 Chat 服务，对象存活期间可设置故障开关。 */
     ControlledChatService& Chat() { return _chat; }
 
 private:
@@ -94,6 +106,7 @@ private:
     std::unique_ptr<grpc::Server> _server;
 };
 
+/** 为单个测试对端创建指定策略与单容量的生产 Chat 客户端。 */
 ChatGrpcClient MakeChatClient(const std::string& port, rpc::ClientPolicy policy) {
     ChatGrpcClient::EndpointMap endpoints{
         { "peer", { "127.0.0.1", port } }
@@ -101,6 +114,7 @@ ChatGrpcClient MakeChatClient(const std::string& port, rpc::ClientPolicy policy)
     return ChatGrpcClient(std::move(endpoints), policy, 1);
 }
 
+/** 构造固定申请双方身份的好友请求。 */
 message::AddFriendReq AddFriendRequest() {
     message::AddFriendReq request;
     request.set_applyuid(42);
@@ -109,6 +123,7 @@ message::AddFriendReq AddFriendRequest() {
 }
 }
 
+/** 验证生产 Status 与 Chat 客户端调用真实回环服务并保留会话身份。 */
 TEST(ChatGrpcClientIntegrationTests, StatusAndChatClientsCallDynamicLoopbackServices) {
     ChatLoopbackServer server;
     const rpc::ClientPolicy policy{ 50ms, 200ms };
@@ -123,6 +138,7 @@ TEST(ChatGrpcClientIntegrationTests, StatusAndChatClientsCallDynamicLoopbackServ
     EXPECT_EQ(chat.NotifyOtherKickUser("peer", kick).error(), ErrorCodes::Success);
 }
 
+/** 验证对端延时按配置期限映射为 RPCFailed。 */
 TEST(ChatGrpcClientIntegrationTests, DeadlineExceededMapsToRpcFailedWithinConfiguredDeadline) {
     ChatLoopbackServer server;
     server.Chat().delay = true;
@@ -137,6 +153,7 @@ TEST(ChatGrpcClientIntegrationTests, DeadlineExceededMapsToRpcFailedWithinConfig
     EXPECT_LT(elapsed, 1s);
 }
 
+/** 验证不可用对端有界返回 RPCFailed。 */
 TEST(ChatGrpcClientIntegrationTests, UnavailablePeerReturnsRpcFailedWithinDeadline) {
     auto client = MakeChatClient(
         std::to_string(FindUnavailableLoopbackPort()),
@@ -147,6 +164,7 @@ TEST(ChatGrpcClientIntegrationTests, UnavailablePeerReturnsRpcFailedWithinDeadli
     EXPECT_EQ(response.error(), ErrorCodes::RPCFailed);
 }
 
+/** 验证已关闭对端有界返回 RPCFailed。 */
 TEST(ChatGrpcClientIntegrationTests, PeerShutdownMapsToRpcFailedWithinDeadline) {
     ChatLoopbackServer server;
     auto client = MakeChatClient(server.Port(), { 50ms, 150ms });

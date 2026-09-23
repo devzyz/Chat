@@ -22,14 +22,17 @@ namespace beast = boost::beast;
 namespace http = beast::http;
 using tcp = boost::asio::ip::tcp;
 
+/** 线程安全记录 Gate 委托端点，隔离业务实现供 HTTP 路由测试使用。 */
 class RecordingGateRequest final : public gate::GateRequest {
 public:
+	/** 在锁内记录端点并返回默认 Gate 结果。 */
 	gate::Result Handle(gate::Endpoint endpoint, const Json::Value&) override {
 		std::lock_guard<std::mutex> lock(mutex_);
 		endpoints_.push_back(endpoint);
 		return {};
 	}
 
+	/** 在锁内复制已接收端点列表，调用方不借用内部容器。 */
 	std::vector<gate::Endpoint> Endpoints() const {
 		std::lock_guard<std::mutex> lock(mutex_);
 		return endpoints_;
@@ -40,16 +43,19 @@ private:
 	std::vector<gate::Endpoint> endpoints_;
 };
 
+/** 拥有 loopback Gate 服务、工作线程和请求替身，逐用例启动与停止。 */
 class T09_GHTTP_Core : public testing::Test {
 protected:
+	/** 创建请求替身和真实 HTTP 监听器，并启动事件线程。 */
 	void SetUp() override {
 		request_ = std::make_shared<RecordingGateRequest>();
 		logic_ = std::make_shared<LogicSystem>(*request_);
 		server_ = std::make_shared<CServer>(ioc_, "127.0.0.1", 0, logic_);
 		server_->Start();
-		server_thread_ = std::thread([this] { ioc_.run(); });
+		server_thread_ = std::thread(/** 在夹具工作线程中运行 Gate 事件循环。 */ [this] { ioc_.run(); });
 	}
 
+	/** 停止监听与事件循环并等待线程退出。 */
 	void TearDown() override {
 		server_->Stop();
 		ioc_.stop();
@@ -58,6 +64,7 @@ protected:
 		}
 	}
 
+	/** 向所属 Gate 端点发送 JSON POST，并返回完整 HTTP 响应。 */
 	http::response<http::dynamic_body> Post(
 		const std::string& route,
 		const std::string& body) {
@@ -87,6 +94,7 @@ protected:
 };
 
 // T09-GHTTP-01
+/** 验证监听端点已分配，且重复停止无副作用。 */
 TEST_F(T09_GHTTP_Core, PublishesReadyLoopbackEndpointAndStopsIdempotently) {
 	EXPECT_EQ(server_->BoundAddress(), "127.0.0.1");
 	EXPECT_NE(server_->BoundPort(), 0);
@@ -95,30 +103,35 @@ TEST_F(T09_GHTTP_Core, PublishesReadyLoopbackEndpointAndStopsIdempotently) {
 }
 
 // T09-GHTTP-02
+/** 验证验证码路由委托正确的 Gate 端点。 */
 TEST_F(T09_GHTTP_Core, VerificationRouteDelegatesToGateRequest) {
 	EXPECT_EQ(Post("/get_varifycode", "{}").result(), http::status::ok);
 	EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::GetVarifyCode});
 }
 
 // T09-GHTTP-03
+/** 验证注册路由委托正确的 Gate 端点。 */
 TEST_F(T09_GHTTP_Core, RegistrationRouteDelegatesToGateRequest) {
 	EXPECT_EQ(Post("/user_register", "{}").result(), http::status::ok);
 	EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::UserRegister});
 }
 
 // T09-GHTTP-04
+/** 验证密码重置路由委托正确的 Gate 端点。 */
 TEST_F(T09_GHTTP_Core, ResetRouteDelegatesToGateRequest) {
 	EXPECT_EQ(Post("/reset_pwd", "{}").result(), http::status::ok);
 	EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::ResetPassword});
 }
 
 // T09-GHTTP-05
+/** 验证登录路由委托正确的 Gate 端点。 */
 TEST_F(T09_GHTTP_Core, LoginRouteDelegatesToGateRequest) {
 	EXPECT_EQ(Post("/user_login", "{}").result(), http::status::ok);
 	EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::UserLogin});
 }
 
 // T09-GHTTP-06
+/** 验证按片段发送的最大合法请求体仅触发一次业务处理。 */
 TEST_F(T09_GHTTP_Core, FragmentedMaximumBodyIsAcceptedExactlyOnce) {
 	const std::string prefix = "{\"padding\":\"";
 	const std::string suffix = "\"}";
@@ -143,6 +156,7 @@ TEST_F(T09_GHTTP_Core, FragmentedMaximumBodyIsAcceptedExactlyOnce) {
 }
 
 // T09-GHTTP-07
+/** 验证超限、畸形与中断请求均不会触发业务委托。 */
 TEST_F(T09_GHTTP_Core, OverLimitMalformedAndInterruptedRequestsNeverDispatch) {
 	const std::string prefix = "{\"padding\":\"";
 	const std::string suffix = "\"}";
@@ -180,6 +194,7 @@ TEST_F(T09_GHTTP_Core, OverLimitMalformedAndInterruptedRequestsNeverDispatch) {
 	EXPECT_EQ(Post("/user_login", "{}").result(), http::status::ok);
 }
 
+/** 验证非法百分号编码返回坏请求，服务仍可处理后续请求。 */
 TEST_F(T09_GHTTP_Core, InvalidPercentEncodingReturnsBadRequestAndServerRemainsUsable) {
     for (const auto& query : {"%", "%1", "%GG", "%0/", "%/0", "%z1"}) {
         boost::asio::io_context client_ioc;

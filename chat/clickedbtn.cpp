@@ -12,7 +12,7 @@ ClickedBtn::~ClickedBtn() {
 
 }
 
-void ClickedBtn::SetState(QString normal, QString hover, QString press) {
+void ClickedBtn::setState(QString normal, QString hover, QString press) {
     _normal = normal;
     _hover = hover;
     _press = press;

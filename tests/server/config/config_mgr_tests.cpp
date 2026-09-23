@@ -12,8 +12,10 @@
 
 namespace {
 
+/** 在作用域内替换环境变量并在退出时恢复原值。 */
 class ScopedEnvironmentVariable {
 public:
+    /** 保存原环境值后设置测试值。 */
     ScopedEnvironmentVariable(const char* name, const std::string& value) : name_(name) {
         const char* previous = std::getenv(name);
         if (previous != nullptr) {
@@ -23,6 +25,7 @@ public:
         _putenv_s(name_.c_str(), value.c_str());
     }
 
+    /** 恢复环境变量的原值或原缺失状态。 */
     ~ScopedEnvironmentVariable() {
         _putenv_s(name_.c_str(), had_previous_ ? previous_.c_str() : "");
     }
@@ -33,8 +36,10 @@ private:
     bool had_previous_ = false;
 };
 
+/** 拥有本用例创建的唯一临时配置文件。 */
 class ConfigFile {
 public:
+    /** 按进程及序列号创建配置文件并写入内容。 */
     explicit ConfigFile(const std::string& contents) {
         static unsigned long sequence = 0;
         path_ = std::filesystem::temp_directory_path() /
@@ -45,17 +50,20 @@ public:
         output.close();
     }
 
+    /** 删除所属临时配置文件，不向析构外传播文件错误。 */
     ~ConfigFile() {
         std::error_code error;
         std::filesystem::remove(path_, error);
     }
 
-    const std::filesystem::path& path() const { return path_; }
+    /** 借用临时文件路径，对象销毁后引用失效。 */
+    const std::filesystem::path& Path() const { return path_; }
 
 private:
     std::filesystem::path path_;
 };
 
+/** 生成可带对端列表的合法非生产配置。 */
 std::string ValidConfig(const std::string& peer_servers = "") {
     return
         "[Redis]\n"
@@ -81,6 +89,7 @@ std::string ValidConfig(const std::string& peer_servers = "") {
         "LogDir=Log\n";
 }
 
+/** 替换夹具文本的首次匹配，缺失时报告夹具构造错误。 */
 std::string ReplaceOnce(std::string value, const std::string& from, const std::string& to) {
     const auto position = value.find(from);
     if (position == std::string::npos) {
@@ -90,9 +99,10 @@ std::string ReplaceOnce(std::string value, const std::string& from, const std::s
     return value;
 }
 
+/** 加载给定非法配置并断言诊断包含预期原因。 */
 void ExpectInvalidConfig(const std::string& contents, const std::string& message_fragment) {
     ConfigFile file(contents);
-    ConfigMgr::SetConfigPath(file.path().string());
+    ConfigMgr::SetConfigPath(file.Path().string());
     try {
         ConfigMgr config;
         FAIL() << "Expected invalid configuration to throw";
@@ -102,17 +112,19 @@ void ExpectInvalidConfig(const std::string& contents, const std::string& message
     }
 }
 
+/** 验证显式配置路径优先于环境变量。 */
 TEST(ConfigMgrTests, ExplicitPathOverridesChatConfigEnvironmentVariable) {
     ConfigFile selected(ValidConfig());
     ScopedEnvironmentVariable environment("CHAT_CONFIG", "missing-environment-config.ini");
 
-    ConfigMgr::SetConfigPath(selected.path().string());
+    ConfigMgr::SetConfigPath(selected.Path().string());
     ConfigMgr config;
 
     EXPECT_EQ(config["SelfServer"]["Name"], "ChatTest");
     EXPECT_EQ(config["SelfServer"]["Port"], "18090");
 }
 
+/** 验证随仓双实例配置的运行身份与监听端口不同。 */
 TEST(ConfigMgrTests, ShippedDualInstanceConfigurationsHaveDistinctIdentities) {
     const auto fixture_root = std::filesystem::current_path() / "fixtures";
     const auto first_path = fixture_root / "chat-01.ini";
@@ -129,13 +141,15 @@ TEST(ConfigMgrTests, ShippedDualInstanceConfigurationsHaveDistinctIdentities) {
     EXPECT_NE(first["Log"]["Name"], second["Log"]["Name"]);
 }
 
+/** 验证空对端列表允许单实例运行。 */
 TEST(ConfigMgrTests, EmptyPeerListAllowsSingleInstanceConfiguration) {
     ConfigFile file(ValidConfig());
-    ConfigMgr::SetConfigPath(file.path().string());
+    ConfigMgr::SetConfigPath(file.Path().string());
 
     EXPECT_NO_THROW({ ConfigMgr config; });
 }
 
+/** 验证配置文件缺失会抛读取异常。 */
 TEST(ConfigMgrTests, MissingConfigFileIsRejected) {
     const auto missing = std::filesystem::temp_directory_path() / "chat-config-that-does-not-exist.ini";
     std::error_code error;
@@ -145,18 +159,22 @@ TEST(ConfigMgrTests, MissingConfigFileIsRejected) {
     EXPECT_THROW({ ConfigMgr config; }, boost::property_tree::ini_parser_error);
 }
 
+/** 验证缺失必需配置节被拒绝。 */
 TEST(ConfigMgrTests, MissingRequiredSectionIsRejected) {
     const auto invalid = ReplaceOnce(ValidConfig(), "[StatusServer]\nHost=127.0.0.1\nPort=50052\n", "");
     ExpectInvalidConfig(invalid, "[StatusServer].Host");
 }
 
+/** 验证缺失必需配置键被拒绝。 */
 TEST(ConfigMgrTests, MissingRequiredKeyIsRejected) {
     const auto invalid = ReplaceOnce(ValidConfig(), "Name=ChatTest\n", "");
     ExpectInvalidConfig(invalid, "[SelfServer].Name");
 }
 
+/** 提供非法端口字符串的参数化测试夹具。 */
 class InvalidPortTest : public testing::TestWithParam<std::string> {};
 
+/** 验证 TCP 端口拒绝非规范格式及范围外数值。 */
 TEST_P(InvalidPortTest, SelfServerTcpPortIsRejectedOutsideCanonicalRange) {
     const auto invalid = ReplaceOnce(ValidConfig(), "Port=18090\n", "Port=" + GetParam() + "\n");
     ExpectInvalidConfig(invalid, "[SelfServer].Port must be a number between 1 and 65535");
@@ -165,21 +183,25 @@ TEST_P(InvalidPortTest, SelfServerTcpPortIsRejectedOutsideCanonicalRange) {
 INSTANTIATE_TEST_SUITE_P(InvalidPorts, InvalidPortTest,
     testing::Values("", "not-a-number", "-1", "0", "65536", "8090suffix"));
 
+/** 验证 TCP 与 RPC 端口相同被拒绝。 */
 TEST(ConfigMgrTests, EqualTcpAndRpcPortsAreRejected) {
     const auto invalid = ReplaceOnce(ValidConfig(), "RPCPort=15055", "RPCPort=18090");
     ExpectInvalidConfig(invalid, "must be different");
 }
 
+/** 验证对端列表引用的配置节必须存在。 */
 TEST(ConfigMgrTests, ReferencedPeerSectionMustExist) {
     ExpectInvalidConfig(ValidConfig("MissingPeer"), "[MissingPeer].Name");
 }
 
+/** 验证对端不能引用本实例身份。 */
 TEST(ConfigMgrTests, SelfReferencePeerIsRejected) {
     auto invalid = ValidConfig("SelfPeer");
     invalid += "[SelfPeer]\nName=ChatTest\nHost=127.0.0.1\nPort=15056\n";
     ExpectInvalidConfig(invalid, "different from [SelfServer].Name");
 }
 
+/** 验证不同配置节不能定义重复的对端身份。 */
 TEST(ConfigMgrTests, DuplicatePeerNamesAreRejectedAcrossSections) {
     auto invalid = ValidConfig("PeerOne,PeerTwo");
     invalid +=
@@ -188,6 +210,7 @@ TEST(ConfigMgrTests, DuplicatePeerNamesAreRejectedAcrossSections) {
     ExpectInvalidConfig(invalid, "duplicate peer name SamePeer");
 }
 
+/** 验证对端列表中的空条目被拒绝。 */
 TEST(ConfigMgrTests, EmptyPeerEntryIsRejected) {
     auto invalid = ValidConfig("PeerOne,,PeerTwo");
     invalid +=

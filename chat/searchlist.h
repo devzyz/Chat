@@ -14,12 +14,12 @@ public:
     /** @brief 创建搜索列表并连接用户查询结果。 */
     SearchList(QWidget * parent = nullptr);
     /**
-     * @brief CloseFindDialog
+     * @brief closeFindDialog
      * 关闭搜索弹出框
      */
-    void CloseFindDialog();
+    void closeFindDialog();
     /** @brief 借用搜索输入控件，调用期间要求控件仍由页面持有。 */
-    void SetSearchEdit(QWidget * edit);
+    void setSearchEdit(QWidget * edit);
 
 protected:
     // 处理滚轮的一些变化
@@ -39,16 +39,16 @@ private:
 
 signals:
     /**
-     * @brief sig_jump_chat_item
+     * @brief chatRequested
      * 搜索后，如果搜索到的是自己的好友，则进行跳转
      */
-    void sig_jump_chat_item(std::shared_ptr<SearchInfo>);
+    void chatRequested(std::shared_ptr<SearchInfo>);
 
 private slots:
     /** @brief 根据点击条目类型发起搜索或关闭结果对话框。 */
-    void slot_item_clicked(QListWidgetItem * item);
+    void itemClicked(QListWidgetItem * item);
     /** @brief 展示查询结果；已是好友时允许跳转私聊。 */
-    void slot_tcp_search_user_finish(std::shared_ptr<SearchInfo> si);
+    void tcpSearchUserFinish(std::shared_ptr<SearchInfo> si);
 };
 
 #endif // SEARCHLIST_H

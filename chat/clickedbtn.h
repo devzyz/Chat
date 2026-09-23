@@ -17,7 +17,7 @@ public:
     ~ClickedBtn();
     // 初始化按钮的状态设置
     /** @brief 初始化按钮的状态设置。 */
-    void SetState(QString normal, QString hover, QString press);
+    void setState(QString normal, QString hover, QString press);
 
 protected:
     /** @brief 处理鼠标按下，更新控件当前交互状态。 */

@@ -5,25 +5,25 @@ const { createRedisAdapter } = require('../../redis');
 const { poll } = require('../../../tests/services/dependencyCoordinator');
 const { stableProxy, restartRedis, restoreRedis } = require('../../../tests/server/data/runRedisCases');
 
-function adapterFor(coordinator, overrides = {}) {
+/** 以协调器拥有的端点和测试密码创建短期限 Redis 适配器，允许单例覆盖配置。 */ function adapterFor(coordinator, overrides = {}) {
     return createRedisAdapter({ host: coordinator.config.host, port: coordinator.config.ports.redis,
         password: coordinator.password, connectTimeoutMs: 250, commandTimeoutMs: 100, ...overrides });
 }
 
-async function withAdmin(coordinator, action) {
+/** 借用管理客户端执行测试动作，结束后断开并移除跟踪。 */ async function withAdmin(coordinator, action) {
     const client = await coordinator.redis();
     try { return await action(client); }
     finally { client.disconnect(); coordinator.clients.delete(client); }
 }
 
-async function cleanup(coordinator) {
-    await withAdmin(coordinator, async (client) => {
+/** 只扫描和删除本次运行的 Node 测试前缀，并断言无残留键。 */ async function cleanup(coordinator) {
+    await withAdmin(coordinator, /** 分页扫描所属前缀，核对归属后删除并验证清理完成。 */ async (client) => {
         const pattern = `${coordinator.config.prefix}node:*`;
         let cursor = '0';
         do {
             const [next, keys] = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
             cursor = next;
-            assert.ok(keys.every((key) => key.startsWith(`${coordinator.config.prefix}node:`)));
+            assert.ok(keys.every(/** 确认待删键属于本次运行的 Node 测试命名空间。 */ (key) => key.startsWith(`${coordinator.config.prefix}node:`)));
             if (keys.length) await client.del(...keys);
         } while (cursor !== '0');
         assert.deepEqual(await client.keys(pattern), []);
@@ -40,26 +40,26 @@ async function cleanup(coordinator) {
                 assert.equal(await adapter.setRedisExpire(key, 'synthetic-value', 1), true);
                 assert.equal(await adapter.getRedis(key), 'synthetic-value');
                 assert.equal(await adapter.queryRedis(key), 1);
-                await withAdmin(coordinator, async (client) => {
+                await withAdmin(coordinator, /** 核对毫秒 TTL 有界并等待键真实过期。 */ async (client) => {
                     const ttl = await client.pttl(key);
                     assert.ok(ttl >= 0 && ttl <= 1000);
-                    await poll(async () => (await client.exists(key)) === 0, 2500);
+                    await poll(/** 查询测试键是否已过期消失。 */ async () => (await client.exists(key)) === 0, 2500);
                 });
                 // JavaScript's largest safe integer is still a valid Redis EX
                 // value: seconds * 1000 fits Redis's signed 64-bit timestamp.
                 assert.equal(await adapter.setRedisExpire(key, 'large-ttl', Number.MAX_SAFE_INTEGER), true);
                 assert.equal(await adapter.getRedis(key), 'large-ttl');
-                await withAdmin(coordinator, async (client) => {
+                await withAdmin(coordinator, /** 核对测试键仍有期限并显式删除。 */ async (client) => {
                     assert.ok(await client.ttl(key) > 0);
                     assert.equal(await client.del(key), 1);
                 });
                 for (const seconds of [0, Number.MAX_SAFE_INTEGER + 1]) {
                     assert.equal(await adapter.setRedisExpire(key, 'must-not-persist', seconds), false);
-                    await withAdmin(coordinator, async (client) => assert.equal(await client.exists(key), 0));
+                    await withAdmin(coordinator, /** 确认被测写入未留下键。 */ async (client) => assert.equal(await client.exists(key), 0));
                 }
                 // Zero cannot pass the adapter's validation. Probe Redis directly
                 // for server rejection without claiming an adapter failure.
-                await withAdmin(coordinator, async (client) => {
+                await withAdmin(coordinator, /** 验证 Redis 拒绝零秒过期且不持久化该值。 */ async (client) => {
                     await assert.rejects(client.set(key, 'must-not-persist', 'EX', 0),
                         /invalid expire time/i);
                     assert.equal(await client.exists(key), 0);
@@ -79,13 +79,13 @@ async function cleanup(coordinator) {
             const adapter = adapterFor(coordinator);
             try {
                 assert.equal(await adapter.setRedisExpire(key, 'before-pause', 30), true);
-                await withAdmin(coordinator, (client) => client.call('CLIENT', 'PAUSE', '400', 'ALL'));
+                await withAdmin(coordinator, /** 暂停 Redis 命令处理以制造可重复的超时。 */ (client) => client.call('CLIENT', 'PAUSE', '400', 'ALL'));
                 const started = performance.now();
                 assert.equal(await adapter.getRedis(key), null);
                 assert.ok(performance.now() - started < 500);
                 // A readiness probe is not an adapter command replay. The failed
                 // business call above remains failed and is never retried.
-                await withAdmin(coordinator, async (client) => assert.equal(await client.ping(), 'PONG'));
+                await withAdmin(coordinator, /** 验证 Redis 恢复响应 PING。 */ async (client) => assert.equal(await client.ping(), 'PONG'));
                 assert.equal(await adapter.getRedis(key), 'before-pause');
             } finally { await adapter.close(); }
         });
@@ -111,20 +111,20 @@ async function cleanup(coordinator) {
             const adapter = adapterFor(coordinator, { port: proxy.port, commandTimeoutMs: 1000 });
             try {
                 assert.equal(await adapter.setRedisExpire(key, 'before-close', 30), true);
-                await withAdmin(coordinator, (client) => client.call('CLIENT', 'PAUSE', '400', 'ALL'));
+                await withAdmin(coordinator, /** 暂停 Redis 命令处理以覆盖关闭期间的未完成请求。 */ (client) => client.call('CLIENT', 'PAUSE', '400', 'ALL'));
                 const forwarded = proxy.waitForForward();
                 const pending = adapter.getRedis(key);
                 await forwarded; // The real command reached the transport before cancellation.
                 await adapter.close();
                 assert.equal(await pending, null);
                 assert.equal(await adapter.setRedisExpire(key, 'after-close', 30), false);
-                await withAdmin(coordinator, async (client) => assert.equal(await client.get(key), 'before-close'));
+                await withAdmin(coordinator, /** 验证关闭过程未破坏此前保存的值。 */ async (client) => assert.equal(await client.get(key), 'before-close'));
             } finally { await adapter.close(); await proxy.close(); }
         });
     } catch (error) {
         primaryFailure = error;
     } finally {
-        try { await record('V08-REDIS-06', 'production Node suite prefix cleanup', () => cleanup(coordinator)); }
+        try { await record('V08-REDIS-06', 'production Node suite prefix cleanup', /** 清理本次运行拥有的 Redis 测试键。 */ () => cleanup(coordinator)); }
         catch (error) { primaryFailure ??= error; }
     }
     if (primaryFailure) throw primaryFailure;

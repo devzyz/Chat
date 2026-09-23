@@ -22,7 +22,7 @@ public:
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~FindSuccessDialog();
     /** @brief 保存搜索命中的用户资料并刷新对话框展示。 */
-    void SetSearchInfo(std::shared_ptr<SearchInfo> si);
+    void setSearchInfo(std::shared_ptr<SearchInfo> si);
 
 private:
     Ui::FindSuccessDialog *ui;

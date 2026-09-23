@@ -20,8 +20,8 @@ RegisterDialog::RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     repolish(ui->err_tip);
 
     // 连接单例类的信号与当前类的槽
-    connect(HttpMgr::GetInstance().get(), &HttpMgr::sig_reg_mod_finish,
-            this, &RegisterDialog::slot_reg_mod_finish);
+    connect(HttpMgr::instance().get(), &HttpMgr::registrationHttpFinished,
+            this, &RegisterDialog::regModFinish);
 
     // 网络请求的回调函数
     initHttpHandlers();
@@ -58,17 +58,17 @@ RegisterDialog::RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
         checkVarifyValid();
     });
 
-    ui->password_visible->SetState("invisible_leave", "invisible_hover", "",
+    ui->password_visible->setState("invisible_leave", "invisible_hover", "",
                                    "visible_leave", "visible_hover", "");
 
-    ui->confirm_visible->SetState("invisible_leave", "invisible_hover", "",
+    ui->confirm_visible->setState("invisible_leave", "invisible_hover", "",
                                    "visible_leave", "visible_hover", "");
 
     // 连接槽函数，触发真正的密码的隐藏与显示
     connect(ui->password_visible, &ClickedLabel::clicked, this,
         /** @brief 按标签状态切换密码可见性。 */
         [this]() {
-        auto state = ui->password_visible->GetCurState();
+        auto state = ui->password_visible->getCurState();
 
         // 当为隐藏状态时，切换编辑框为密码模式;否则为显示模式
         if (state == ClickLabelState::Normal) {
@@ -81,7 +81,7 @@ RegisterDialog::RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     connect(ui->confirm_visible, &ClickedLabel::clicked, this,
         /** @brief 按标签状态切换确认密码可见性。 */
         [this]() {
-        auto state = ui->confirm_visible->GetCurState();
+        auto state = ui->confirm_visible->getCurState();
 
         // 当为隐藏状态时，切换编辑框为密码模式;否则为显示模式
         if (state == ClickLabelState::Normal) {
@@ -101,7 +101,7 @@ RegisterDialog::RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
         [this]() {
         if (_return_login_counter == 0) {
             _return_login_timer->stop();
-            emit sig_reg_switch_login();
+            emit loginRequested();
             return;
         }
         _return_login_counter --;
@@ -129,7 +129,7 @@ void RegisterDialog::on_get_code_clicked()
         begin.module = static_cast<int>(Modules::REGISTERMOD);
         begin.requestId = static_cast<int>(ReqId::ID_GET_VERIFY_CODE);
         const AuthFlowId flowId = _authFlow.reduce(0, begin).flowId;
-        HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/get_varifycode"),
+        HttpMgr::instance()->postHttpReq(QUrl(gate_url_prefix + "/get_varifycode"),
                                             json_obj, ReqId::ID_GET_VERIFY_CODE,
                                             Modules::REGISTERMOD, flowId);
     }else {
@@ -138,7 +138,7 @@ void RegisterDialog::on_get_code_clicked()
 }
 
 // 与httpmgr内sig_reg_mod_finish连接的槽函数，用于处理http完成后的工作
-void RegisterDialog::slot_reg_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err)
+void RegisterDialog::regModFinish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err)
 {
     AuthOutcome outcome;
     outcome.module = static_cast<int>(Modules::REGISTERMOD);
@@ -245,13 +245,13 @@ void RegisterDialog::initHttpHandlers()
 }
 
 // 添加错误信息到错误map里面
-void RegisterDialog::AddTipErr(TipErr te, QString tips) {
+void RegisterDialog::addTipErr(TipErr te, QString tips) {
     _tip_errs[te] = tips;
     showTip(tips, false);
 }
 
 // 删除错误信息，如果map内还有未处理的错误，则继续显示
-void RegisterDialog::DelTipErr(TipErr te) {
+void RegisterDialog::delTipErr(TipErr te) {
     _tip_errs.remove(te);
     if (_tip_errs.empty()) {
         ui->err_tip->setText("");
@@ -263,10 +263,10 @@ void RegisterDialog::DelTipErr(TipErr te) {
 bool RegisterDialog::checkUserValid()
 {
     if (ui->user_edit->text() == "") {
-        AddTipErr(TipErr::TIP_USER_ERR, tr("用户名不能为空"));
+        addTipErr(TipErr::TIP_USER_ERR, tr("用户名不能为空"));
         return false;
     }
-    DelTipErr(TipErr::TIP_USER_ERR);
+    delTipErr(TipErr::TIP_USER_ERR);
     return true;
 }
 
@@ -279,11 +279,11 @@ bool RegisterDialog::checkEmailValid() {
 
     if (!match) {
         // 提示邮箱不正确
-        AddTipErr(TipErr::TIP_EMAIL_ERR, tr("邮箱地址不正确"));
+        addTipErr(TipErr::TIP_EMAIL_ERR, tr("邮箱地址不正确"));
         return false;
     }
 
-    DelTipErr(TipErr::TIP_EMAIL_ERR);
+    delTipErr(TipErr::TIP_EMAIL_ERR);
     return true;
 }
 
@@ -293,7 +293,7 @@ bool RegisterDialog::checkPasswordValid() {
 
     if (pass.length() < 6 || pass.length() > 15) {
         // 提示长度不匹配
-        AddTipErr(TipErr::TIP_PWD_ERR, tr("密码长度应为6~15"));
+        addTipErr(TipErr::TIP_PWD_ERR, tr("密码长度应为6~15"));
         return false;
     }
 
@@ -304,18 +304,18 @@ bool RegisterDialog::checkPasswordValid() {
 
     if (!match) {
         // 提示字符非法
-        AddTipErr(TipErr::TIP_PWD_ERR, tr("不能包含非法字符"));
+        addTipErr(TipErr::TIP_PWD_ERR, tr("不能包含非法字符"));
         return false;
     }
 
-    DelTipErr(TipErr::TIP_PWD_ERR);
+    delTipErr(TipErr::TIP_PWD_ERR);
 
     if (pass != confirm) {
         // 提示密码与确认密码不匹配
-        AddTipErr(TipErr::TIP_PWD_CONFIRM, tr("密码和确认密码不匹配"));
+        addTipErr(TipErr::TIP_PWD_CONFIRM, tr("密码和确认密码不匹配"));
         return false;
     }else {
-        DelTipErr(TipErr::TIP_PWD_CONFIRM);
+        delTipErr(TipErr::TIP_PWD_CONFIRM);
     }
 
     return true;
@@ -327,7 +327,7 @@ bool RegisterDialog::checkConfirmValid() {
 
     if (confirm.length() < 6 || confirm.length() > 15) {
         // 提示长度不匹配
-        AddTipErr(TipErr::TIP_CONFIRM_ERR, tr("确认密码长度应为6~15"));
+        addTipErr(TipErr::TIP_CONFIRM_ERR, tr("确认密码长度应为6~15"));
         return false;
     }
 
@@ -338,18 +338,18 @@ bool RegisterDialog::checkConfirmValid() {
 
     if (!match) {
         // 提示字符非法
-        AddTipErr(TipErr::TIP_CONFIRM_ERR, tr("不能包含非法字符"));
+        addTipErr(TipErr::TIP_CONFIRM_ERR, tr("不能包含非法字符"));
         return false;
     }
 
-    DelTipErr(TipErr::TIP_CONFIRM_ERR);
+    delTipErr(TipErr::TIP_CONFIRM_ERR);
 
     if (pass != confirm) {
         // 提示密码与确认密码不匹配
-        AddTipErr(TipErr::TIP_PWD_CONFIRM, tr("确认密码和密码不匹配"));
+        addTipErr(TipErr::TIP_PWD_CONFIRM, tr("确认密码和密码不匹配"));
         return false;
     }else {
-        DelTipErr(TipErr::TIP_PWD_CONFIRM);
+        delTipErr(TipErr::TIP_PWD_CONFIRM);
     }
 
     return true;
@@ -359,16 +359,16 @@ bool RegisterDialog::checkVarifyValid() {
     auto varify = ui->varify_edit->text();
 
     if (varify.isEmpty()) {
-        AddTipErr(TipErr::TIP_VARIFY_ERR, tr("验证码不能为空"));
+        addTipErr(TipErr::TIP_VARIFY_ERR, tr("验证码不能为空"));
         return false;
     }
 
     if (varify.length() != 4) {
-        AddTipErr(TipErr::TIP_VARIFY_ERR, tr("请输入4位验证码"));
+        addTipErr(TipErr::TIP_VARIFY_ERR, tr("请输入4位验证码"));
         return false;
     }
 
-    DelTipErr(TipErr::TIP_VARIFY_ERR);
+    delTipErr(TipErr::TIP_VARIFY_ERR);
     return true;
 }
 
@@ -420,7 +420,7 @@ void RegisterDialog::on_confirm_btn_clicked()
     begin.module = static_cast<int>(Modules::REGISTERMOD);
     begin.requestId = static_cast<int>(ReqId::ID_REG_USER);
     const AuthFlowId flowId = _authFlow.reduce(0, begin).flowId;
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/user_register"),
+    HttpMgr::instance()->postHttpReq(QUrl(gate_url_prefix + "/user_register"),
                                         json_obj, ReqId::ID_REG_USER,
                                         Modules::REGISTERMOD, flowId);
 }
@@ -429,12 +429,12 @@ void RegisterDialog::on_confirm_btn_clicked()
 void RegisterDialog::on_return_btn_clicked()
 {
     _return_login_timer->stop();
-    emit sig_reg_switch_login();
+    emit loginRequested();
 }
 
 // 点击取消登录，也进行跳转
 void RegisterDialog::on_cancel_btn_clicked()
 {
     _return_login_timer->stop();
-    emit sig_reg_switch_login();
+    emit loginRequested();
 }

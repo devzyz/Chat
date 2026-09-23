@@ -20,17 +20,17 @@ public:
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~AuthFriendDialog();
     /**
-     * @brief SetApplyInfo
+     * @brief setApplyInfo
      * 设置验证好友信息
      */
-    void SetApplyInfo(std::shared_ptr<ApplyInfo> applyinfo);
+    void setApplyInfo(std::shared_ptr<ApplyInfo> applyinfo);
 
 private slots:
     // 取消验证
     /** @brief 取消验证。 */
-    void slot_auth_apply_cancel();
+    void authApplyCancel();
     /** @brief 提交好友审批及双方备注资料。 */
-    void slot_auth_apply_sure();
+    void authApplySure();
 
 private:
     Ui::AuthFriendDialog *ui;

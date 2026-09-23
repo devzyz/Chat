@@ -12,7 +12,7 @@ LOCAL_PACKAGES = ROOT / "build/conventions/python"
 if LOCAL_PACKAGES.is_dir():
     sys.path.insert(0, str(LOCAL_PACKAGES))
 from git_rules import BASELINE, check_range, event_range, git
-from syntax import affected_symbols, check_source, language_for, parse, problems
+from syntax import affected_symbols, check_source, language_for, parse, problems, qt_auto_slots
 
 EXCLUDED = ("chat/packages/", "generated/", "tests/auto/", "build/", "Cache/", "help/", "interview/",
             "vcpkg_installed/", ".git/")
@@ -43,8 +43,18 @@ def source_paths(root, base, head=None):
     return sorted(path for path in files if path and owned(path))
 
 
+def designer_slots(root, path, head):
+    """只使用当前被检查根目录与版本的 Designer 文件判定自动槽名称。"""
+    if not path.startswith('chat/') or language_for(path) != 'cpp':
+        return set()
+    ui = Path(path).with_suffix('.ui').as_posix()
+    source = read_revision(root, head, ui) if head else (
+        (root / ui).read_text(encoding='utf-8-sig') if (root / ui).is_file() else '')
+    return qt_auto_slots(source)
+
+
 def documented_declarations(root, path, head):
-    """读取同名头文件及直接本地 include，按函数、所属类与参数匹配权威声明。"""
+    """读取同名头文件、直接 include 及本文件前置声明，匹配权威接口说明。"""
     result = {}
     def read(candidate):
         """仅读取仓库内存在的文件；拒绝越界 include。"""
@@ -55,6 +65,7 @@ def documented_declarations(root, path, head):
     candidates = {Path(path).with_suffix(".h").as_posix()}
     candidates.update((Path(path).parent / name).as_posix()
                       for name in re.findall(r'^\s*#include\s+"([^"\n]+\.(?:h|hpp))"', read(path), re.M))
+    candidates.add(path)
     for candidate in sorted(candidates):
         source = read(candidate)
         if not source:
@@ -63,6 +74,8 @@ def documented_declarations(root, path, head):
             if symbol.kind == "class":
                 result.setdefault(("__class__", symbol.name, ()), []).append(symbol)
             if symbol.kind == "function":
+                if candidate == path and not symbol.code.rstrip().endswith(';'):
+                    continue  # 同文件只借用声明，不能用定义自身或另一实现掩盖遗漏。
                 key = (symbol.name.split("::")[-1], symbol.owner.split("::")[-1], symbol.parameters)
                 result.setdefault(key, []).append(symbol)
     return result
@@ -75,6 +88,11 @@ def has_authoritative_comment(symbol, declarations, path):
     parts = symbol.name.split("::")
     owner = parts[-2] if len(parts) > 1 else symbol.owner
     matches = declarations.get((parts[-1], owner, symbol.parameters), [])
+    if not matches:
+        # 声明与定义允许使用不同参数名；仅在参数数量唯一时借用契约，不猜测歧义重载。
+        matches = [candidate for (name, enclosing, params), values in declarations.items()
+                   if name == parts[-1] and enclosing == owner and len(params) == len(symbol.parameters)
+                   for candidate in values]
     return len(matches) == 1 and not any(
         not error.startswith("invalid ") for error in problems(matches[0], "cpp", path))
 
@@ -90,7 +108,7 @@ def source_errors(root, base, head, paths):
         before = read_revision(root, base, path)
         after = read_revision(root, head, path) if head else (root / path).read_text(encoding="utf-8-sig")
         try:
-            findings = check_source(path, before, after)
+            findings = check_source(path, before, after, qt_slots=designer_slots(root, path, head))
             declarations = documented_declarations(root, path, head) if path.endswith((".cpp", ".cc")) else {}
             for symbol, error in findings:
                 if error == "missing Chinese responsibility comment" and has_authoritative_comment(symbol, declarations, path):
@@ -122,11 +140,12 @@ def audit(root):
             continue
         try:
             symbols = parse((root / path).read_text(encoding="utf-8-sig"), language_for(path))
+            slots = designer_slots(root, path, None)
             declarations = documented_declarations(root, path, None) if path.endswith((".cpp", ".cc")) else {}
             group["parsed"] += 1
             group["symbols"] += len(symbols)
             for symbol in symbols:
-                for error in problems(symbol, language_for(path), path):
+                for error in problems(symbol, language_for(path), path, slots):
                     if error == "missing Chinese responsibility comment" and has_authoritative_comment(symbol, declarations, path):
                         continue
                     report["findings"].append({"path": path, "line": symbol.line, "name": symbol.name, "error": error})

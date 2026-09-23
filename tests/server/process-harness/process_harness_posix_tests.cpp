@@ -4,6 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 
+/** 验证 POSIX 子进程就绪、忽略温和终止后的升级关闭，以及临时根目录清理。 */
 int main() {
     using namespace std::chrono_literals;
     try {
@@ -14,7 +15,7 @@ int main() {
         spec.arguments = {L"-c", L"trap '' TERM; printf ready; while :; do :; done"};
         spec.working_directory = root;
         auto harness = integration::ProcessHarness::Start(*context, spec);
-        if (!harness->WaitReady([&] { return harness->CollectEvidence().stdout_text == "ready"; },
+        if (!harness->WaitReady(/** 以子进程输出 ready 作为本场景的就绪条件。 */ [&] { return harness->CollectEvidence().stdout_text == "ready"; },
                 std::chrono::steady_clock::now() + 2s)) {
             throw std::runtime_error("harness did not observe child handshake");
         }

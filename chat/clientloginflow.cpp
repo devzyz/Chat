@@ -46,7 +46,7 @@ ClientLoginFlow::ClientLoginFlow(AuthFlowCoordinator &coordinator, QObject *pare
         }
         apply(outcome);
     });
-    const auto tcp = TcpMgr::GetInstance();
+    const auto tcp = TcpMgr::instance();
     // 连接成功且流程仍有效时发送聊天登录请求。
     connect(tcp.get(), &TcpMgr::connectionAttemptFinished, this,
         /** @brief 将连接结果交给认证协调器并决定是否发送聊天登录。 */
@@ -59,7 +59,7 @@ ClientLoginFlow::ClientLoginFlow(AuthFlowCoordinator &coordinator, QObject *pare
             finishError(action.error);
         } else if (success && action.accepted) {
             emit connected();
-            emit TcpMgr::GetInstance()->sendRequested(ReqId::ID_CHAT_LOGIN_REQ,
+            emit TcpMgr::instance()->sendRequested(ReqId::ID_CHAT_LOGIN_REQ,
                 QJsonDocument(QJsonObject{{"uid", _server.Uid}, {"token", _server.Token}})
                     .toJson(QJsonDocument::Compact));
         }
@@ -115,7 +115,7 @@ void ClientLoginFlow::cancel()
     _deadline.stop();
     _http.reset();
     _server.Token.clear();
-    if (pending) TcpMgr::GetInstance()->resetConnection(true);
+    if (pending) TcpMgr::instance()->resetConnection(true);
 }
 
 void ClientLoginFlow::finishError(AuthError error)
@@ -133,7 +133,7 @@ void ClientLoginFlow::apply(const AuthOutcome &outcome)
         finishError(action.error);
     } else if (action.kind == AuthActionKind::ConnectChat && action.server) {
         _server = *action.server;
-        TcpMgr::GetInstance()->connectToServer(_server);
+        TcpMgr::instance()->connectToServer(_server);
     } else if (action.kind == AuthActionKind::ShowChat) {
         _pending = false;
         _deadline.stop();

@@ -18,35 +18,35 @@ public:
     explicit StateWidget(QWidget * parent = nullptr);
 
     /** @brief 设置控件各交互状态对应的样式名称。 */
-    void SetState(QString leave="", QString hover="", QString select="");
+    void setState(QString leave="", QString hover="", QString select="");
 
     /**
-     * @brief GetCurState
+     * @brief getCurState
      * @return
      * 获取当前StateWidget的状态
      */
-    ClickLabelState GetCurState();
+    ClickLabelState getCurState();
     /**
-     * @brief ClearState
+     * @brief clearState
      * 刷新状态
      */
-    void ClearState();
+    void clearState();
 
     /**
-     * @brief SetSelected
+     * @brief setSelected
      * 设置为选中状态
      */
-    void SetSelected(bool bselected);
+    void setSelected(bool bselected);
     /**
-     * @brief AddRedPoint
+     * @brief addRedPoint
      * 设置红点
      */
-    void AddRedPoint();
+    void addRedPoint();
     /**
-     * @brief ShowRedPoint
+     * @brief showRedPoint
      * 是否展示红点
      */
-    void ShowRedPoint(bool show = true);
+    void showRedPoint(bool show = true);
 
 protected:
     /** @brief 绘制当前控件的背景、边框或内容，遵循 Qt GUI 线程事件约束。 */

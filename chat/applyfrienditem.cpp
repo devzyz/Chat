@@ -8,31 +8,31 @@ ApplyFriendItem::ApplyFriendItem(QWidget *parent)
 {
     ui->setupUi(this);
     // 设置类型
-    SetItemType(ListItemType::APPLY_FRIEND_ITEM);
+    setItemType(ListItemType::APPLY_FRIEND_ITEM);
     // 添加好友的按钮
-    ui->apply_friend_add_friend_btn->SetState("normal", "hover", "press");
+    ui->apply_friend_add_friend_btn->setState("normal", "hover", "press");
     ui->apply_friend_add_friend_btn->hide();
 
     // 当点击添加后，发送认证成功信号
     connect(ui->apply_friend_add_friend_btn, &ClickedBtn::clicked, this,
         /** @brief 将审批按钮点击转换为当前申请的审批通知。 */
         [this]() {
-        emit this->sig_auth_friend(_apply_info);
+        emit this->friendApprovalRequested(_apply_info);
     });
 }
 
 /**
- * @brief ApplyFriendItem::SetInfo
+ * @brief ApplyFriendItem::setInfo
  * @param apply_info
  * 设置item的属性
  */
-void ApplyFriendItem::SetInfo(std::shared_ptr<ApplyInfo> apply_info) {
+void ApplyFriendItem::setInfo(std::shared_ptr<ApplyInfo> apply_info) {
     _apply_info = apply_info;
     // 加载图片
 
 
     // 设置图片大小以及自动缩放
-    UserMgr::GetInstance()->bindAvatar(ui->apply_friend_head_label, _apply_info->_apply_uid, _apply_info->_apply_icon);
+    UserMgr::instance()->bindAvatar(ui->apply_friend_head_label, _apply_info->_apply_uid, _apply_info->_apply_icon);
     ui->apply_friend_head_label->setScaledContents(true);
 
     // 添加昵称
@@ -41,16 +41,16 @@ void ApplyFriendItem::SetInfo(std::shared_ptr<ApplyInfo> apply_info) {
     ui->apply_friend_user_chat_label->setText(_apply_info->_description);
 
     // 根据是否已添加来判断是否显示已添加按钮
-    ShowAddBtn(!_apply_info->_status);
+    showAddBtn(!_apply_info->_status);
 }
 
 /**
- * @brief ApplyFriendItem::ShowAddBtn
+ * @brief ApplyFriendItem::showAddBtn
  * @param bshow
  * 是否显示添加按钮
  * 当点击添加按钮后，将其隐藏，将已添加的label显示
  */
-void ApplyFriendItem::ShowAddBtn(bool bshow)
+void ApplyFriendItem::showAddBtn(bool bshow)
 {
     if (bshow) {
         ui->apply_friend_add_friend_btn->show();
@@ -68,7 +68,7 @@ QSize ApplyFriendItem::sizeHint() const
     return QSize(250, 80);
 }
 
-int ApplyFriendItem::GetUid()
+int ApplyFriendItem::getUid()
 {
     return _apply_info->_apply_uid;
 }

@@ -8,6 +8,7 @@
 #include <QtTest>
 
 namespace {
+/** 生成固定会话及发送者的消息样本，按服务端编号选择初始发送状态。 */
 MessageRecord message(qint64 id, const QString &clientId,
                       const QString &text = QStringLiteral("text"))
 {
@@ -25,18 +26,27 @@ MessageRecord message(qint64 id, const QString &clientId,
 }
 } // namespace
 
+/** 验证消息模型的稳定标识、索引、历史去重、状态推进及布局刷新。 */
 class MessageModelTests final : public QObject
 {
     Q_OBJECT
 
 private slots:
+    /** 验证发送状态及增删确认操作保持索引和模型通知同步。 */
     void appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized();
+    /** 验证未知或冲突身份的确认与移除不会误改模型。 */
     void unknownStableIdsDoNotMutateTheModel();
+    /** 验证历史去重后按时间顺序插入且持久索引有效。 */
     void historyDeduplicatesAndRemainsChronological();
+    /** 验证连续历史分页去重并保持消息顺序。 */
     void multipleHistoryPagesRemainChronological();
+    /** 验证移除和确认后重建位移索引并拒绝身份冲突。 */
     void removalAndAcknowledgementRebuildShiftedIndexes();
+    /** 验证已读曝光边界及消息正文、会话身份原样保留。 */
     void textAndChatIdentityRoundTripWithoutNormalization();
+    /** 验证每个会话只持有一个模型且分页状态独立。 */
     void storeRetainsOneModelAndPaginationStatePerChat();
+    /** 验证混合文本在窄视口下换行增高并响应宽度改变。 */
     void delegateReflowsLongTextForANarrowViewport();
 };
 
@@ -54,9 +64,9 @@ void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized
     int inserted = 0;
     int changed = 0;
     int removed = 0;
-    connect(&model, &QAbstractItemModel::rowsInserted, [&inserted]() { ++inserted; });
-    connect(&model, &QAbstractItemModel::dataChanged, [&changed]() { ++changed; });
-    connect(&model, &QAbstractItemModel::rowsRemoved, [&removed]() { ++removed; });
+    connect(&model, &QAbstractItemModel::rowsInserted, /** 累计行插入信号次数。 */ [&inserted]() { ++inserted; });
+    connect(&model, &QAbstractItemModel::dataChanged, /** 累计数据变化信号次数。 */ [&changed]() { ++changed; });
+    connect(&model, &QAbstractItemModel::rowsRemoved, /** 累计行移除信号次数。 */ [&removed]() { ++removed; });
 
     QCOMPARE(model.appendMessage(message(0, QStringLiteral("uuid-1"))), 1);
     QCOMPARE(inserted, 1);
@@ -126,8 +136,8 @@ void MessageModelTests::unknownStableIdsDoNotMutateTheModel()
     model.appendMessage(message(101, QStringLiteral("known-client")));
     int changes = 0;
     int removals = 0;
-    connect(&model, &QAbstractItemModel::dataChanged, [&changes]() { ++changes; });
-    connect(&model, &QAbstractItemModel::rowsRemoved, [&removals]() { ++removals; });
+    connect(&model, &QAbstractItemModel::dataChanged, /** 累计拒绝操作期间的数据变化次数。 */ [&changes]() { ++changes; });
+    connect(&model, &QAbstractItemModel::rowsRemoved, /** 累计拒绝操作期间的移除次数。 */ [&removals]() { ++removals; });
 
     QVERIFY(!model.acknowledgeMessage(QStringLiteral("missing-client"), 202,
                                       DeliveryStatus::Sent));

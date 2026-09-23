@@ -1341,8 +1341,8 @@ function Confirm-TestStructure {
     if ($tcpMgrHeader -match 'QTcpSocket|TcpFrameDecoder') {
         throw 'TcpMgr must not expose transport socket or decoder ownership.'
     }
-    if ($clientSessionSource -notmatch 'UserMgr::GetInstance\(\)->resetSession\s*\(' -or
-        $clientSessionSource -notmatch 'TcpMgr::GetInstance\(\)->resetConnection\s*\(' -or
+    if ($clientSessionSource -notmatch 'UserMgr::instance\(\)->resetSession\s*\(' -or
+        $clientSessionSource -notmatch 'TcpMgr::instance\(\)->resetConnection\s*\(' -or
         $clientSessionSource -notmatch 'delete\s+ownedSessionRoot') {
         throw 'ClientSession reset must clear real user/connection state and destroy the owned session UI.'
     }
@@ -1359,7 +1359,7 @@ function Confirm-TestStructure {
     if ($authFlowSource -notmatch 'AuthFlowCoordinator::reduce' -or
         $loginDialogSource -notmatch '_loginFlow\.login' -or
         (Get-Content -LiteralPath (Join-Path $repoRoot 'chat\clientloginflow.cpp') -Raw) -notmatch '_coordinator\.reduce' -or
-        $httpMgrSource -notmatch 'sig_http_finish\s*\(\s*static_cast<AuthFlowId>\s*\(\s*result\.flowId\s*\)' -or
+        $httpMgrSource -notmatch 'httpFinished\s*\(\s*static_cast<AuthFlowId>\s*\(\s*result\.flowId\s*\)' -or
         $mainWindowSource -notmatch 'AbnormalDisconnect[\s\S]*?AuthActionKind::ShowLogin[\s\S]*?_session\.resetSession\s*\(\s*reason\s*\)') {
         throw 'Qt auth outcomes and abnormal disconnect must route through AuthFlowCoordinator and existing ClientSession reset.'
     }
@@ -1451,13 +1451,12 @@ function Confirm-TestStructure {
         $runnerRegistration -notmatch '(?ms)^function\s+Assert-RegressionReport\b.*?credential-shaped assignment') {
         throw 'RunAllTests must enforce aggregate residue, cleanup-evidence, and secret/report-integrity gates.'
     }
-    $addedDiff = (& git -C $repoRoot diff --unified=0 --no-ext-diff 2>$null | Where-Object <# 筛选 diff 新增源码行并排除文件头。 #> { $_ -match '^\+(?!\+\+)' }) -join "`n"
+    $workingDiff = @(& git -C $repoRoot diff --unified=0 --no-ext-diff 2>$null)
     if ($LASTEXITCODE -ne 0) {
         throw 'Unable to scan the working diff for credential-shaped assignments.'
     }
-    # Workflow expressions reference runtime credentials; they are not literal secret values.
-    $addedDiff = [regex]::Replace($addedDiff, '\$\{\{[^}]+\}\}', '<runtime>')
-    if ($addedDiff -match '(?i)(?:password|passwd|secret|token|verification[-_ ]?code|email)\s*[:=]\s*[^\s<]{3,}') {
+    . (Join-Path $PSScriptRoot 'Test-CredentialDiff.ps1')
+    if (Test-CredentialDiff -Diff $workingDiff) {
         throw 'The working diff contains a credential-shaped assignment.'
     }
 

@@ -84,31 +84,31 @@ public:
                  ChatMessageType chat_msg_type, QString content, int send_uid, QDateTime sent_at);
 
     /** @brief 返回服务器分配的消息 ID，本地待发消息可能尚无有效 ID。 */
-    int GetMsgId();
+    int getMsgId();
     /** @brief 返回消息或资料所属会话 ID。 */
-    int GetChatId();
+    int getChatId();
     /** @brief 返回消息所属会话类型；保留旧接口拼写供后续兼容改名。 */
-    ChatType GetChatTpe();
+    ChatType getChatType();
     /** @brief 返回消息内容类型。 */
-    ChatMessageType GetChatMsgType();
+    ChatMessageType getChatMsgType();
     /** @brief 返回消息正文副本。 */
-    QString GetContent();
+    QString getContent();
     /** @brief 返回发送者 UID。 */
-    int GetSendId();
+    int getSendId();
     /** @brief 返回消息时间的日内部分。 */
-    QTime GetSendTime();
+    QTime getSendTime();
     /** @brief 返回包含日期的完整发送时间。 */
-    QDateTime GetSentAt();
+    QDateTime getSentAt();
     /** @brief 保存服务器确认的消息 ID。 */
-    void SetMessageId(int msg_id);
+    void setMessageId(int msg_id);
     /** @brief 更新旧界面消息状态值。 */
-    void SetStatus(ChatStatus status);
+    void setStatus(ChatStatus status);
     /** @brief 返回旧界面消息状态值。 */
-    ChatStatus GetStatus();
+    ChatStatus getStatus();
     /** @brief 返回客户端生成的消息 UUID，用于 ACK 和重试关联。 */
-    QString GetCacheMsgId();
+    QString getCacheMsgId();
     /** @brief 设置客户端消息 UUID，保持与本地发送身份一致。 */
-    void SetClientMessageId(const QString &clientMessageId);
+    void setClientMessageId(const QString &clientMessageId);
 private:
     // 客户端本地保存的id
     QString _client_msg_id;
@@ -169,48 +169,48 @@ public:
 
     // 添加一条聊天数据
     /** @brief 添加一条聊天数据。 */
-    void AddChatData(std::shared_ptr<ChatDataBase>);
+    void addChatData(std::shared_ptr<ChatDataBase>);
     // 添加一条聊天缓存数据
     /** @brief 添加一条聊天缓存数据。 */
-    void AddCacheChatData(QString uuid, std::shared_ptr<ChatDataBase>);
+    void addCacheChatData(QString uuid, std::shared_ptr<ChatDataBase>);
 
     // 获取当前聊天对方的uid
     /** @brief 获取当前聊天对方的uid。 */
-    int GetUid();
+    int getUid();
     /** @brief 返回当前记录的最后服务器消息 ID。 */
-    int GetLastMsgId();
+    int getLastMsgId();
     /** @brief 返回消息或资料所属会话 ID。 */
-    int GetChatId();
+    int getChatId();
     /** @brief 更新此会话是否还允许请求更多历史。 */
-    void SetIsCanLoadMore(bool flag);
+    void setCanLoadMore(bool flag);
     /** @brief 记录最近历史页或消息中的末尾服务器 ID。 */
-    void SetLastMsgId(int current_msg_id);
+    void setLastMsgId(int current_msg_id);
     /** @brief 返回私聊或群聊会话类型。 */
-    ChatType GetChatType();
+    ChatType getChatType();
     // 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息
     /** @brief 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息。 */
-    std::shared_ptr<ChatDataBase> GetChatDataByMsgId(int msg_id);
+    std::shared_ptr<ChatDataBase> getChatDataByMsgId(int msg_id);
     // 获取聊天记录数据
     /** @brief 获取聊天记录数据。 */
-    QMap<int, std::shared_ptr<ChatDataBase>>& GetChatMsgs();
+    QMap<int, std::shared_ptr<ChatDataBase>>& getChatMsgs();
     // 获取缓存聊天记录数据
     /** @brief 获取缓存聊天记录数据。 */
-    QMap<QString, std::shared_ptr<ChatDataBase>>& GetCacheChatMsgs();
+    QMap<QString, std::shared_ptr<ChatDataBase>>& getCacheChatMsgs();
     // 添加缓存聊天数据
     /** @brief 添加缓存聊天数据。 */
-    void AddCacheChatMessage(QString uuid, std::shared_ptr<ChatDataBase> _cache_text_msg);
+    void addCacheChatMessage(QString uuid, std::shared_ptr<ChatDataBase> _cache_text_msg);
     // 获取聊天数据
     /** @brief 获取聊天数据。 */
-    std::shared_ptr<ChatDataBase> GetCacheChatMessage(QString uuid);
+    std::shared_ptr<ChatDataBase> getCacheChatMessage(QString uuid);
     // 删除聊天数据
     /** @brief 删除聊天数据。 */
-    void EraseCacheChatMessage(QString uuid);
+    void eraseCacheChatMessage(QString uuid);
     // 获取是否能够加载更多
     /** @brief 获取是否能够加载更多。 */
-    bool GetIsCanLoadMore();
+    bool canLoadMore();
     // 聊天记录是否是空的
     /** @brief 聊天记录是否是空的。 */
-    bool IsEmpty();
+    bool isEmpty();
 private:
     // private: 对方的uid, group: 0
     int _uid;

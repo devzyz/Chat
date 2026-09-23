@@ -17,7 +17,7 @@ void SessionLifecycleCoordinator::OnAuthenticated(std::shared_ptr<CSession> sess
         std::lock_guard<std::mutex> lock(_binding_mutex);
         _binding_sessions.emplace(session->Id(), std::make_pair(uid, session));
     }
-    boost::asio::post(_worker, [this, session, uid, completion = std::move(completion)]() mutable {
+    boost::asio::post(_worker, /** @brief 在存储执行器登记用户归属并协调旧会话替换。 */ [this, session, uid, completion = std::move(completion)]() mutable {
         const chat_session::UserPresence current{_server_id, session->Id()};
         PresenceResult result;
         try { result = _presence->Publish(uid, current); }
@@ -27,7 +27,7 @@ void SessionLifecycleCoordinator::OnAuthenticated(std::shared_ptr<CSession> sess
         auto cancelled = std::make_shared<std::atomic<bool>>(false);
         session->FinishBinding(uid, result.status == PresenceStatus::Unavailable
             ? SessionBindResult::Unavailable : SessionBindResult::Bound, std::move(completion), cancelled,
-            [committed](bool success) { committed->set_value(success); });
+            /** @brief 把会话线程的绑定提交结果送回等待的存储任务。 */ [committed](bool success) { committed->set_value(success); });
         // Only the dedicated lifecycle worker waits; no socket executor or business worker is blocked.
         const bool completed = ready.wait_for(std::chrono::seconds(5)) == std::future_status::ready;
         const bool success = completed && ready.get();
@@ -68,7 +68,7 @@ void SessionLifecycleCoordinator::CloseReplaced(int uid, const SessionId& id) {
 void SessionLifecycleCoordinator::OnClosing(const SessionId& id, int uid) {
     if (uid <= 0) return;
     _directory->UnregisterIfCurrent(uid, id);
-    boost::asio::post(_worker, [this, id, uid] {
+    boost::asio::post(_worker, /** @brief 只有仍属于此服务和会话的在线记录才被删除。 */ [this, id, uid] {
         try {
             if (!_presence->RemoveIfCurrent(uid, {_server_id, id}))
                 SPDLOG_WARN("presence cleanup failed, uid={}", uid);

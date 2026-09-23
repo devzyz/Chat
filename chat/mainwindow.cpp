@@ -19,16 +19,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 创建和注册消息链接
     // 连接登录界面转注册界面信号
-    connect(_login_dlg, &LoginDialog::sig_login_switch_reg, this, &MainWindow::slot_login_switch_reg);
+    connect(_login_dlg, &LoginDialog::registrationRequested, this, &MainWindow::loginSwitchReg);
     // 连接登录界面转重置界面信号
-    connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
+    connect(_login_dlg, &LoginDialog::passwordResetRequested, this, &MainWindow::loginSwitchReset);
     // 连接登录界面转聊天界面信号
     connect(_login_dlg, &LoginDialog::loginSucceeded,
-            this, &MainWindow::slot_login_switch_chat);
+            this, &MainWindow::loginSwitchChat);
     // 连接服务器通知下线信号
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::forcedOffline, this, &MainWindow::slot_notify_offline);
+    connect(TcpMgr::instance().get(), &TcpMgr::forcedOffline, this, &MainWindow::notifyOffline);
     // 连接结束后区分预期关闭与异常断线。
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::connectionClosed, this, &MainWindow::slot_connection_close);
+    connect(TcpMgr::instance().get(), &TcpMgr::connectionClosed, this, &MainWindow::connectionClose);
 }
 
 MainWindow::~MainWindow()
@@ -46,13 +46,13 @@ MainWindow::~MainWindow()
 //     }
 }
 
-void MainWindow::slot_login_switch_reg() {
+void MainWindow::loginSwitchReg() {
     // 创建注册界面窗口，因为我在切换到其他界面后，这个界面可能就被析构了
     _register_dlg = new RegisterDialog(_authFlow, this);
     _register_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
 
     // 连接注册界面返回登录信号
-    connect(_register_dlg, &RegisterDialog::sig_reg_switch_login, this, &MainWindow::slot_reg_switch_login);
+    connect(_register_dlg, &RegisterDialog::loginRequested, this, &MainWindow::regSwitchLogin);
 
     setCentralWidget(_register_dlg);
     _login_dlg->hide();
@@ -60,7 +60,7 @@ void MainWindow::slot_login_switch_reg() {
     _ui_status = UIStatus::REGISTER_UI;
 }
 
-void MainWindow::slot_login_switch_reset()
+void MainWindow::loginSwitchReset()
 {
     _reset_dlg = new ResetDialog(_authFlow, this);
     _reset_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
@@ -69,11 +69,11 @@ void MainWindow::slot_login_switch_reset()
     _login_dlg->hide();
     _reset_dlg->show();
 
-    connect(_reset_dlg, &ResetDialog::sig_reset_switch_login, this, &MainWindow::slot_reset_switch_login);
+    connect(_reset_dlg, &ResetDialog::loginRequested, this, &MainWindow::resetSwitchLogin);
     _ui_status = UIStatus::RESET_UI;
 }
 
-void MainWindow::slot_reg_switch_login() {
+void MainWindow::regSwitchLogin() {
     // 创建一个登录页面，因为之前的页面切换后，被析构了
     _login_dlg = new LoginDialog(_authFlow, this);
     _login_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
@@ -82,15 +82,15 @@ void MainWindow::slot_reg_switch_login() {
     _register_dlg->hide();
     _login_dlg->show();
     // 连接登录界面和注册界面
-    connect(_login_dlg, &LoginDialog::sig_login_switch_reg, this, &MainWindow::slot_login_switch_reg);
+    connect(_login_dlg, &LoginDialog::registrationRequested, this, &MainWindow::loginSwitchReg);
     // 连接登录界面和忘记密码界面
-    connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
+    connect(_login_dlg, &LoginDialog::passwordResetRequested, this, &MainWindow::loginSwitchReset);
     connect(_login_dlg, &LoginDialog::loginSucceeded,
-            this, &MainWindow::slot_login_switch_chat);
+            this, &MainWindow::loginSwitchChat);
     _ui_status = UIStatus::LOGIN_UI;
 }
 
-void MainWindow::slot_reset_switch_login() {
+void MainWindow::resetSwitchLogin() {
     // 创建一个登录页面，因为之前的页面切换后，被析构了
     _login_dlg = new LoginDialog(_authFlow, this);
     _login_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
@@ -99,15 +99,15 @@ void MainWindow::slot_reset_switch_login() {
     _reset_dlg->hide();
     _login_dlg->show();
     // 连接登录界面和注册界面
-    connect(_login_dlg, &LoginDialog::sig_login_switch_reg, this, &MainWindow::slot_login_switch_reg);
+    connect(_login_dlg, &LoginDialog::registrationRequested, this, &MainWindow::loginSwitchReg);
     // 连接登录界面和忘记密码界面
-    connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
+    connect(_login_dlg, &LoginDialog::passwordResetRequested, this, &MainWindow::loginSwitchReset);
     connect(_login_dlg, &LoginDialog::loginSucceeded,
-            this, &MainWindow::slot_login_switch_chat);
+            this, &MainWindow::loginSwitchChat);
     _ui_status = UIStatus::LOGIN_UI;
 }
 
-void MainWindow::slot_login_switch_chat(AuthFlowId flowId) {
+void MainWindow::loginSwitchChat(AuthFlowId flowId) {
     _activeAuthFlowId = flowId;
     _chat_dlg = new ChatDialog(this);
     _chat_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
@@ -122,7 +122,7 @@ void MainWindow::slot_login_switch_chat(AuthFlowId flowId) {
     _session.beginSession(_chat_dlg);
 }
 
-void MainWindow::slot_notify_offline()
+void MainWindow::notifyOffline()
 {
     if (!_session.isActive()) {
         return;
@@ -132,7 +132,7 @@ void MainWindow::slot_notify_offline()
     resetSession(SessionResetReason::Kicked);
 }
 
-void MainWindow::slot_connection_close(bool expectedClose)
+void MainWindow::connectionClose(bool expectedClose)
 {
     if (expectedClose || !_session.isActive()) {
         return;
@@ -178,10 +178,10 @@ void MainWindow::offlineLogin()
 
     _login_dlg->show();
     // 连接登录界面和注册界面
-    connect(_login_dlg, &LoginDialog::sig_login_switch_reg, this, &MainWindow::slot_login_switch_reg);
+    connect(_login_dlg, &LoginDialog::registrationRequested, this, &MainWindow::loginSwitchReg);
     // 连接登录界面和忘记密码界面
-    connect(_login_dlg, &LoginDialog::sig_login_switch_reset, this, &MainWindow::slot_login_switch_reset);
+    connect(_login_dlg, &LoginDialog::passwordResetRequested, this, &MainWindow::loginSwitchReset);
     connect(_login_dlg, &LoginDialog::loginSucceeded,
-            this, &MainWindow::slot_login_switch_chat);
+            this, &MainWindow::loginSwitchChat);
     _ui_status = UIStatus::LOGIN_UI;
 }

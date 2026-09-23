@@ -5,6 +5,7 @@ const fixture = require('./phase3d.fixture.json');
 
 const portNames = ['gate', 'status', 'varify', 'chatA', 'rpcA', 'chatB', 'rpcB'];
 
+/** 校验运行身份和独立端口，生成双 Chat 实例及测试用户的隔离拓扑。 */
 function createTopology(runId, ports) {
     assert.match(runId, /^[a-f0-9]{32}$/);
     assert.deepEqual(Object.keys(ports).sort(), [...portNames].sort());
@@ -13,13 +14,14 @@ function createTopology(runId, ports) {
     return {
         format: fixture.format, fixture: fixture.identity, seed: fixture.seed, runId,
         database: `chat_${runId}_3d`, host: '127.0.0.1', ports: { ...ports },
-        servers: fixture.servers.map((logical, index) => ({ logical, name: `${logical}-${runId}`,
+        servers: fixture.servers.map(/** 为逻辑实例生成带运行身份的名称及独立 TCP、RPC 端口。 */ (logical, index) => ({ logical, name: `${logical}-${runId}`,
             port: index === 0 ? ports.chatA : ports.chatB, rpcPort: index === 0 ? ports.rpcA : ports.rpcB })),
-        users: fixture.users.map(logical => ({ logical, name: `${logical}_${runId}`,
+        users: fixture.users.map(/** 为逻辑用户生成本次唯一名称和不可投递的测试邮箱。 */ logical => ({ logical, name: `${logical}_${runId}`,
             email: `${logical}-${runId}@example.invalid` }))
     };
 }
 
+/** 按角色生成生产 INI，拒绝非法凭据、路径及重叠依赖端口。 */
 function nativeConfig(topology, role, dependencies, logDirectory) {
     assert.ok(['GateServer', 'StatusServer', 'ChatA', 'ChatB'].includes(role));
     // Only a run-generated credential and single-line owned path can enter INI.
@@ -30,7 +32,7 @@ function nativeConfig(topology, role, dependencies, logDirectory) {
     }
     assert.notEqual(dependencies.redis, dependencies.mysql);
     assert.ok(typeof logDirectory === 'string' && logDirectory.length > 0 && !/[\r\n\0]/.test(logDirectory));
-    const section = (name, values) => `[${name}]\n` + Object.entries(values).map(([key, value]) => `${key}=${value}\n`).join('');
+    const section = /** 把单个配置节与键值序列编码为 INI 文本。 */ (name, values) => `[${name}]\n` + Object.entries(values).map(/** 把已校验的单个键值编码为配置行。 */ ([key, value]) => `${key}=${value}\n`).join('');
     let result = section('Redis', { Host: topology.host, Port: dependencies.redis, Password: dependencies.password }) +
         section('Mysql', { Host: topology.host, Port: dependencies.mysql, User: 'root',
             Password: dependencies.password, Schema: topology.database }) +
@@ -47,18 +49,19 @@ function nativeConfig(topology, role, dependencies, logDirectory) {
         result += section('GateServer', { Port: topology.ports.gate }) +
             section('VarifyServer', { Host: topology.host, Port: topology.ports.varify }) +
             section('ChatServers', { Name: 'ChatA,ChatB' });
-        topology.servers.forEach((server, index) => {
+        topology.servers.forEach(/** 把两个 Chat 实例的选服端点加入配置。 */ (server, index) => {
             result += section(index === 0 ? 'ChatA' : 'ChatB', { Name: server.name, Host: topology.host, Port: server.port });
         });
     }
     return result;
 }
 
+/** 核对两个已观察客户端的用户、PID 和实例端点，拒绝重复或错连。 */
 function assertConnectedClients(topology, clients) {
     assert.equal(clients.length, 2, 'two observed clients required');
     const pids = new Set();
     const users = new Set();
-    clients.forEach((client, index) => {
+    clients.forEach(/** 核对单个客户端与预期逻辑用户及实例的对应关系。 */ (client, index) => {
         assert.equal(client.logical, fixture.users[index]);
         assert.ok(Number.isSafeInteger(client.pid) && client.pid > 0);
         assert.ok(Number.isSafeInteger(client.uid) && client.uid > 0);

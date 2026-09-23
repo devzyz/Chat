@@ -18,7 +18,7 @@ UserMgr::UserMgr()
     qAddPostRoutine(
         /** @brief 应用退出时释放消息服务，兼容单例已释放的关闭顺序。 */
         [] {
-        const auto user = UserMgr::GetInstance();
+        const auto user = UserMgr::instance();
         if (!user) return; // Normal application exit may already release the singleton.
         delete user->_messages;
         user->_messages = nullptr;

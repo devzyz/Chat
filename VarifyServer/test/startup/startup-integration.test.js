@@ -17,9 +17,9 @@ const credentialEnvironment = Object.freeze({
 });
 
 // V07-START-04
-test('direct process exits with a failure status when its port is occupied', async (t) => {
+test('direct process exits with a failure status when its port is occupied', /** 占用回环端口后启动真实服务，验证绑定冲突导致失败退出。 */ async (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-startup-'));
-    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    t.after(/** 清理本用例的临时配置目录。 */ () => fs.rmSync(root, { recursive: true, force: true }));
     const configPath = path.join(root, 'config.json');
     fs.writeFileSync(configPath, JSON.stringify({
         email: {},
@@ -28,8 +28,8 @@ test('direct process exits with a failure status when its port is occupied', asy
     }));
 
     const blocker = net.createServer();
-    t.after(() => blocker.close());
-    await new Promise((resolve, reject) => {
+    t.after(/** 释放本用例占用的监听端口。 */ () => blocker.close());
+    await new Promise(/** 绑定随机回环端口作为冲突对端并传播监听错误。 */ (resolve, reject) => {
         blocker.once('error', reject);
         blocker.listen(0, '127.0.0.1', resolve);
     });

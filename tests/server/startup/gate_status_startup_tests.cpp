@@ -26,12 +26,15 @@ enum class ServiceKind {
     Status,
 };
 
+/** 将参数化服务类型映射为正式产物名称。 */
 const char* ServiceName(ServiceKind service) {
     return service == ServiceKind::Gate ? "GateServer" : "StatusServer";
 }
 
+/** 独占本次启动测试的临时目录，并在作用域结束时清理。 */
 class TempDirectory {
 public:
+    /** 在系统临时目录下有界尝试创建唯一的本次运行目录。 */
     TempDirectory() {
         const auto base = std::filesystem::temp_directory_path();
         for (int attempt = 0; attempt < 100; ++attempt) {
@@ -47,6 +50,7 @@ public:
         throw std::runtime_error("unable to create a unique Gate/Status startup test directory");
     }
 
+    /** 只移除自身创建的临时目录，清理失败记为测试失败。 */
     ~TempDirectory() {
         std::error_code error;
         std::filesystem::remove_all(_path, error);
@@ -56,6 +60,7 @@ public:
         }
     }
 
+    /** 借用临时目录路径，引用仅在目录对象存活时有效。 */
     const std::filesystem::path& Path() const {
         return _path;
     }
@@ -64,8 +69,10 @@ private:
     std::filesystem::path _path;
 };
 
+/** 保存并恢复进程环境变量，调用方须避免同名变量并发修改。 */
 class ScopedEnvironmentValue {
 public:
+    /** 保存原环境值并设置临时覆盖，设置失败抛异常。 */
     ScopedEnvironmentValue(const wchar_t* name, const std::optional<std::wstring>& value) : _name(name) {
         const DWORD required = GetEnvironmentVariableW(name, nullptr, 0);
         if (required > 0) {
@@ -79,6 +86,7 @@ public:
         }
     }
 
+    /** 恢复作用域进入前的环境值或未设置状态。 */
     ~ScopedEnvironmentValue() {
         SetEnvironmentVariableW(_name.c_str(), _original ? _original->c_str() : nullptr);
     }
@@ -88,17 +96,21 @@ private:
     std::optional<std::wstring> _original;
 };
 
+/** 按二进制方式读取完整证据文件内容。 */
 std::string ReadAll(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
+/** 为测试命令行中的单个路径参数添加双引号。 */
 std::wstring Quote(const std::wstring& value) {
     return L"\"" + value + L"\"";
 }
 
+/** 独占测试子进程和证据文件，回收前核对进程身份。 */
 class OwnedProcess {
 public:
+    /** 以指定参数和工作目录启动子进程，将两路输出重定向到所属文件。 */
     OwnedProcess(
         const std::filesystem::path& executable,
         const std::vector<std::wstring>& arguments,
@@ -148,9 +160,12 @@ public:
         }
     }
 
+    /** 禁止复制，避免重复终止进程或关闭句柄。 */
     OwnedProcess(const OwnedProcess&) = delete;
+    /** 禁止复制赋值，保持进程资源唯一归属。 */
     OwnedProcess& operator=(const OwnedProcess&) = delete;
 
+    /** 核对身份后有界终止遗留进程，并关闭拥有的进程与线程句柄。 */
     ~OwnedProcess() {
         if (IsRunning()) {
             if (!IdentityMatches()) {
@@ -165,18 +180,22 @@ public:
         if (_process_info.hProcess) CloseHandle(_process_info.hProcess);
     }
 
+    /** 返回本对象启动的进程编号。 */
     DWORD Pid() const {
         return _process_info.dwProcessId;
     }
 
+    /** 无阻塞检查所属进程是否仍运行。 */
     bool IsRunning() const {
         return WaitForSingleObject(_process_info.hProcess, 0) == WAIT_TIMEOUT;
     }
 
+    /** 在指定毫秒上限内等待所属进程退出。 */
     bool WaitForExit(DWORD timeout_ms) const {
         return WaitForSingleObject(_process_info.hProcess, timeout_ms) == WAIT_OBJECT_0;
     }
 
+    /** 读取所属进程退出码，查询失败时抛异常。 */
     DWORD ExitCode() const {
         DWORD exit_code = STILL_ACTIVE;
         if (!GetExitCodeProcess(_process_info.hProcess, &exit_code)) {
@@ -185,10 +204,12 @@ public:
         return exit_code;
     }
 
+    /** 向所属进程组发送 CTRL_BREAK，返回系统是否接受。 */
     bool SendCtrlBreak() const {
         return GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, _process_info.dwProcessId) != FALSE;
     }
 
+    /** 仅对仍运行且身份匹配的所属进程强制终止，并有界等待退出。 */
     bool ForceTerminate(DWORD exit_code) {
         if (!IsRunning() || !IdentityMatches()) {
             return false;
@@ -199,10 +220,13 @@ public:
         return WaitForExit(STOP_TIMEOUT_MS);
     }
 
+    /** 读取所属进程的标准输出证据。 */
     std::string Stdout() const { return ReadAll(_stdout_path); }
+    /** 读取所属进程的标准错误证据。 */
     std::string Stderr() const { return ReadAll(_stderr_path); }
 
 private:
+    /** 核对句柄对应 PID 与可执行文件路径，拒绝不匹配的进程。 */
     bool IdentityMatches() const {
         if (GetProcessId(_process_info.hProcess) != _process_info.dwProcessId) {
             return false;
@@ -226,6 +250,7 @@ private:
     PROCESS_INFORMATION _process_info{};
 };
 
+/** 根据测试产物布局定位仓库根目录。 */
 std::filesystem::path RepositoryRoot() {
     std::vector<wchar_t> module_path(32768, L'\0');
     const DWORD length = GetModuleFileNameW(nullptr, module_path.data(), static_cast<DWORD>(module_path.size()));
@@ -237,6 +262,7 @@ std::filesystem::path RepositoryRoot() {
     return test_executable.parent_path().parent_path().parent_path().parent_path();
 }
 
+/** 按测试当前构建配置定位 Gate 或 Status 正式产物。 */
 std::filesystem::path FindServiceExecutable(ServiceKind service) {
     std::vector<wchar_t> module_path(32768, L'\0');
     const DWORD length = GetModuleFileNameW(nullptr, module_path.data(), static_cast<DWORD>(module_path.size()));
@@ -250,6 +276,7 @@ std::filesystem::path FindServiceExecutable(ServiceKind service) {
     return RepositoryRoot() / "build" / "windows-servers" / configuration / name / (std::string(name) + ".exe");
 }
 
+/** 写入本用例的配置文件，写入失败抛异常。 */
 void WriteText(const std::filesystem::path& path, const std::string& content) {
     std::ofstream output(path, std::ios::binary);
     output << content;
@@ -258,6 +285,7 @@ void WriteText(const std::filesystem::path& path, const std::string& content) {
     }
 }
 
+/** 独占绑定临时端口并保持监听，返回分配的端口号。 */
 unsigned short ReservePort(boost::asio::ip::tcp::acceptor& acceptor, bool wildcard = false) {
     acceptor.open(boost::asio::ip::tcp::v4());
     const BOOL exclusive = TRUE;
@@ -271,6 +299,7 @@ unsigned short ReservePort(boost::asio::ip::tcp::acceptor& acceptor, bool wildca
     return acceptor.local_endpoint().port();
 }
 
+/** 通过临时独占绑定取得当前空闲端口后释放，不保证后续无人抢占。 */
 unsigned short FindAvailablePort(bool wildcard = false) {
     boost::asio::io_context context;
     boost::asio::ip::tcp::acceptor acceptor(context);
@@ -279,6 +308,7 @@ unsigned short FindAvailablePort(bool wildcard = false) {
     return port;
 }
 
+/** 写入隔离的服务启动配置，支持缺失端点和非法 gRPC 参数场景。 */
 void WriteServiceConfig(
     ServiceKind service,
     const std::filesystem::path& path,
@@ -323,6 +353,7 @@ void WriteServiceConfig(
     WriteText(path, config.str());
 }
 
+/** 通过有界 HTTP 交互确认 Gate 协议就绪。 */
 bool ProbeGateHttp(unsigned short port) {
     boost::asio::io_context context;
     boost::asio::ip::tcp::socket socket(context);
@@ -358,12 +389,14 @@ bool ProbeGateHttp(unsigned short port) {
     return false;
 }
 
+/** 通过有界 gRPC 通道连接确认 Status 协议就绪。 */
 bool ProbeStatusGrpc(unsigned short port) {
     auto channel = grpc::CreateChannel(
         "127.0.0.1:" + std::to_string(port), grpc::InsecureChannelCredentials());
     return channel->WaitForConnected(std::chrono::system_clock::now() + 250ms);
 }
 
+/** 在启动期限内轮询协议就绪，进程提前退出则立即失败。 */
 bool WaitForReady(ServiceKind service, unsigned short port, const OwnedProcess& process) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(STARTUP_TIMEOUT_MS);
     while (std::chrono::steady_clock::now() < deadline) {
@@ -377,6 +410,7 @@ bool WaitForReady(ServiceKind service, unsigned short port, const OwnedProcess& 
     return false;
 }
 
+/** 保存一次进程运行的退出码、超时状态及两路输出。 */
 struct CompletedProcess {
     DWORD exit_code = STILL_ACTIVE;
     bool timed_out = false;
@@ -384,6 +418,7 @@ struct CompletedProcess {
     std::string stderr_text;
 };
 
+/** 启动正式服务并有界等待退出，超时时终止所属进程后收集证据。 */
 CompletedProcess RunToExit(
     ServiceKind service,
     const std::vector<std::wstring>& arguments,
@@ -404,6 +439,7 @@ CompletedProcess RunToExit(
     return result;
 }
 
+/** 断言进程自行以非零退出，失败时附带输出诊断。 */
 void ExpectFailure(const CompletedProcess& result) {
     EXPECT_FALSE(result.timed_out)
         << "stdout:\n" << result.stdout_text << "\nstderr:\n" << result.stderr_text;
@@ -411,14 +447,17 @@ void ExpectFailure(const CompletedProcess& result) {
         << "stdout:\n" << result.stdout_text << "\nstderr:\n" << result.stderr_text;
 }
 
+/** 对 Gate 与 Status 复用同一组正式启动合同。 */
 class GateStatusStartupTests : public testing::TestWithParam<ServiceKind> {};
 
+/** 以正式服务名称生成稳定的参数化测试标识。 */
 std::string ServiceParameterName(const testing::TestParamInfo<ServiceKind>& info) {
     return ServiceName(info.param);
 }
 }
 
 // S02-CLI-01 / S03-CLI-01
+/** 验证 config 参数缺值返回非零并显示用法。 */
 TEST_P(GateStatusStartupTests, MissingConfigValueReturnsNonZeroWithUsage) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
@@ -429,6 +468,7 @@ TEST_P(GateStatusStartupTests, MissingConfigValueReturnsNonZeroWithUsage) {
 }
 
 // S02-CLI-02 / S03-CLI-02
+/** 验证未知参数返回非零并显示用法。 */
 TEST_P(GateStatusStartupTests, UnknownArgumentReturnsNonZeroWithUsage) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
@@ -439,6 +479,7 @@ TEST_P(GateStatusStartupTests, UnknownArgumentReturnsNonZeroWithUsage) {
 }
 
 // S02-CFG-01 / S03-CFG-01
+/** 验证显式选择的配置文件缺失时启动失败。 */
 TEST_P(GateStatusStartupTests, MissingConfigFileReturnsNonZero) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
@@ -449,6 +490,7 @@ TEST_P(GateStatusStartupTests, MissingConfigFileReturnsNonZero) {
 }
 
 // S02-CFG-02 / S03-CFG-02
+/** 验证非法服务端口在启动时被拒绝。 */
 TEST_P(GateStatusStartupTests, InvalidServicePortReturnsNonZero) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
@@ -460,6 +502,7 @@ TEST_P(GateStatusStartupTests, InvalidServicePortReturnsNonZero) {
 }
 
 // S02-CFG-03 / S03-CFG-03
+/** 验证缺少关键端点时启动失败并指出配置字段。 */
 TEST_P(GateStatusStartupTests, MissingCriticalEndpointReturnsNonZero) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
@@ -471,6 +514,7 @@ TEST_P(GateStatusStartupTests, MissingCriticalEndpointReturnsNonZero) {
 }
 
 // S02-CFG-04 / S03-CFG-04
+/** 验证显式配置路径优先于环境变量。 */
 TEST_P(GateStatusStartupTests, ExplicitConfigPathOverridesEnvironment) {
     TempDirectory fixture;
     const auto explicit_config = fixture.Path() / "explicit-selected.ini";
@@ -485,6 +529,7 @@ TEST_P(GateStatusStartupTests, ExplicitConfigPathOverridesEnvironment) {
 }
 
 // S02-CFG-05 / S03-CFG-05
+/** 验证环境配置路径优先于工作目录默认文件。 */
 TEST_P(GateStatusStartupTests, EnvironmentConfigPathOverridesWorkingDirectoryDefault) {
     TempDirectory fixture;
     const auto environment_config = fixture.Path() / "environment-selected.ini";
@@ -497,6 +542,7 @@ TEST_P(GateStatusStartupTests, EnvironmentConfigPathOverridesWorkingDirectoryDef
 }
 
 // S02-CFG-06 / S03-CFG-06
+/** 验证未显式选路时使用工作目录的默认配置。 */
 TEST_P(GateStatusStartupTests, WorkingDirectoryConfigIsTheDefault) {
     TempDirectory fixture;
     WriteText(fixture.Path() / "config.ini", "default-selected-not-ini\n");
@@ -507,6 +553,7 @@ TEST_P(GateStatusStartupTests, WorkingDirectoryConfigIsTheDefault) {
 }
 
 // S02-GRPC-CFG-01
+/** 验证越界 gRPC 借用超时在监听前被拒绝。 */
 TEST(GateGrpcStartupTests, OutOfRangeGrpcTimeoutReturnsNonZeroBeforeListening) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
@@ -525,6 +572,7 @@ TEST(GateGrpcStartupTests, OutOfRangeGrpcTimeoutReturnsNonZeroBeforeListening) {
 }
 
 // S02-BIND-01 / S03-BIND-01
+/** 验证占用端口导致启动失败且不影响原端口拥有者。 */
 TEST_P(GateStatusStartupTests, OccupiedPortFailsWithoutProtocolReadyAndReleasesOwnership) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
@@ -553,6 +601,7 @@ TEST_P(GateStatusStartupTests, OccupiedPortFailsWithoutProtocolReadyAndReleasesO
 }
 
 // S02-LIFE-01 / S03-LIFE-01
+/** 验证协议就绪后 CTRL_BREAK 可在期限内关闭服务并释放端口。 */
 TEST_P(GateStatusStartupTests, ProtocolReadyThenCtrlBreakStopsWithinDeadlineAndReleasesPort) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);

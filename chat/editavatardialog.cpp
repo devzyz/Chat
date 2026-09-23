@@ -14,8 +14,8 @@ EditAvatarDialog::EditAvatarDialog(LocalAvatar *avatar, const QPixmap &current, 
     ui->setupUi(this);
 
     // 设置按钮的属性
-    ui->edit_avatar_cancel_btn->SetState("leave", "hover", "select");
-    ui->edit_avatar_confirm_btn->SetState("leave", "hover", "select");
+    ui->edit_avatar_cancel_btn->setState("leave", "hover", "select");
+    ui->edit_avatar_confirm_btn->setState("leave", "hover", "select");
 
     // 设置头像
     QPixmap pixmap(":/res/chat.ico");

@@ -97,7 +97,7 @@ void ClickedLabel::leaveEvent(QEvent *event) {
 }
 
 // 用于保存每种状态
-void ClickedLabel::SetState(QString normal_leave, QString normal_hover, QString normal_press,
+void ClickedLabel::setState(QString normal_leave, QString normal_hover, QString normal_press,
                             QString select_leave, QString select_hover, QString select_press) {
     _normal_leave = normal_leave;
     _normal_hover = normal_hover;
@@ -111,11 +111,11 @@ void ClickedLabel::SetState(QString normal_leave, QString normal_hover, QString 
     repolish(this);
 }
 
-ClickLabelState ClickedLabel::GetCurState() {
+ClickLabelState ClickedLabel::getCurState() {
     return _curState;
 }
 
-bool ClickedLabel::SetCurState(ClickLabelState state)
+bool ClickedLabel::setCurState(ClickLabelState state)
 {
     _curState = state;
 
@@ -130,7 +130,7 @@ bool ClickedLabel::SetCurState(ClickLabelState state)
     return true;
 }
 
-void ClickedLabel::ResetNormalState()
+void ClickedLabel::resetNormalState()
 {
     _curState = ClickLabelState::Normal;
     setProperty("state", _normal_leave);

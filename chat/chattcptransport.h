@@ -55,7 +55,7 @@ class ChatTcpTransport final : public QObject
 
 public:
     /** @brief 返回普通 TCP 消息允许的最大 body 字节数。 */
-    static constexpr qsizetype MaxBodyBytes() noexcept { return 2048; }
+    static constexpr qsizetype maxBodyBytes() noexcept { return 2048; }
 
     /** @brief 初始化对象，用于在所属 Qt 线程管理 TCP 连接及有界帧收发。 */
     explicit ChatTcpTransport(QObject *parent = nullptr);

@@ -8,6 +8,7 @@ const { runFiveProcessCases } = require('./fiveProcessCases');
 const { writeReports } = require('./serviceReports');
 
 const { reportGroups } = require('./phase3dEvidence');
+/** 按所选 Phase 3D 范围运行真实服务合同，聚合用例与清理证据并传播失败。 */
 async function run(root) {
     const selector = process.env.CHAT_SERVICE_SELECTOR || '3D-00';
     const groups = reportGroups(selector);
@@ -16,7 +17,7 @@ async function run(root) {
     let coordinator;
     let primaryFailure;
     let cleanup = { complete: false };
-    const record = async (id, name, action) => {
+    const record = /** 记录用例耗时与真实结果，失败时以稳定 Test ID 中断。 */ async (id, name, action) => {
         const started = performance.now();
         try {
             await action();
@@ -41,13 +42,13 @@ async function run(root) {
         fs.writeFileSync(path.join(root, 'teardown.json'), JSON.stringify({ ...cleanup, primaryFailure }));
         writeReports(root, selector, cases, { groups, manifest: 'phase3d-reports.json', level: 'E2E' });
     }
-    if (primaryFailure || !cleanup.complete || cases.length !== groups.reduce((sum, group) => sum + group.expected, 0) || cases.some(value => !value.pass)) {
+    if (primaryFailure || !cleanup.complete || cases.length !== groups.reduce(/** 累计所选报告组预期用例总数。 */ (sum, group) => sum + group.expected, 0) || cases.some(/** 识别未通过的用例以判定本次运行失败。 */ value => !value.pass)) {
         throw new Error('phase3d-contract-failed');
     }
 }
 
 module.exports = { run };
-if (require.main === module) run(process.env.CHAT_SERVICE_EVIDENCE_ROOT).catch(() => {
+if (require.main === module) run(process.env.CHAT_SERVICE_EVIDENCE_ROOT).catch(/** 主流程异常时输出证据定位提示并以非零退出。 */ () => {
     process.stderr.write('Phase 3D contract failed; inspect bounded evidence\n');
     process.exitCode = 1;
 });

@@ -25,24 +25,24 @@ public:
     QSize sizeHint() const override;
 
     /** @brief 绑定会话资料并刷新联系人信息。 */
-    void SetChatInfo(std::shared_ptr<ChatInfo>);
+    void setChatInfo(std::shared_ptr<ChatInfo>);
     /** @brief 返回条目持有的会话共享引用，调用方可延长数据对象生命周期。 */
-    std::shared_ptr<ChatInfo> GetChatInfo();
+    std::shared_ptr<ChatInfo> getChatInfo();
     // 设置上一次聊天信息
     /** @brief 设置上一次聊天信息。 */
-    void SetLastChatInfo();
+    void setLastChatInfo();
     // 设置上一次聊天数据
     /** @brief 设置上一次聊天数据。 */
-    void SetLastTextChatMsg(QString last_text_msg);
+    void setLastTextChatMsg(QString last_text_msg);
     // 通过判断_new_msg_count来决定是否显示新消息提醒
     /** @brief 通过判断_new_msg_count来决定是否显示新消息提醒。 */
-    void ShowNewMsgTip();
+    void showNewMsgTip();
     // 更新_new_msg_count的数量
     /** @brief 更新_new_msg_count的数量。 */
-    void UpdateNewMsgCount(int);
+    void updateNewMsgCount(int);
     // 重置新消息数量
     /** @brief 重置新消息数量。 */
-    void ResetNewMsgCount();
+    void resetNewMsgCount();
 private:
     Ui::ChatUserItem *ui;
     std::shared_ptr<ChatInfo> _chat_info;

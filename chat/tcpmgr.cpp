@@ -34,8 +34,8 @@ TcpMgr::TcpMgr() : _host("") {
         _expectedClose = false;
         _acceptingSends = false;
         _authenticated = false;
-        if (expectedClose && !_retainingPending) UserMgr::GetInstance()->messages()->pauseOutgoing();
-        UserMgr::GetInstance()->messages()->stop();
+        if (expectedClose && !_retainingPending) UserMgr::instance()->messages()->pauseOutgoing();
+        UserMgr::instance()->messages()->stop();
         if (outcome.terminal == ChatTcpTerminal::Refused
             || outcome.terminal == ChatTcpTerminal::ConnectDeadlineExceeded) {
             emit connectionAttemptFinished(false);
@@ -46,7 +46,7 @@ TcpMgr::TcpMgr() : _host("") {
 
     // 连接发送数据信号与槽函数
     connect(this, &TcpMgr::sendRequested, this, &TcpMgr::sendData);
-    auto *messages = UserMgr::GetInstance()->messages();
+    auto *messages = UserMgr::instance()->messages();
     // 将已落盘的发送确认同步到兼容缓存并通知界面。
     connect(messages, &MessageService::sendResponseApplied, this,
         /** @brief 将已落盘 ACK 应用到会话展示并继续失败处理。 */
@@ -55,19 +55,19 @@ TcpMgr::TcpMgr() : _host("") {
         const int error = response["error"].toInt(-1);
         if (error == 0) {
             QVector<MessageAcknowledgement> acknowledgements;
-            const auto chat = UserMgr::GetInstance()->chatInfo(chatId);
+            const auto chat = UserMgr::instance()->chatInfo(chatId);
             for (const auto &entry : response["uuid_msgId"].toArray()) {
                 const auto item = entry.toObject();
                 const auto uuid = item["msg_uuid"].toString();
                 const int id = item["message_id"].toInt();
                 acknowledgements.push_back({uuid, id});
                 if (chat) {
-                    const auto cached = chat->GetCacheChatMessage(uuid);
-                    chat->EraseCacheChatMessage(uuid);
+                    const auto cached = chat->getCacheChatMessage(uuid);
+                    chat->eraseCacheChatMessage(uuid);
                     if (cached) {
-                        cached->SetMessageId(id);
-                        cached->SetStatus(ChatStatus::STATUS_NO_READ);
-                        chat->AddChatData(cached);
+                        cached->setMessageId(id);
+                        cached->setStatus(ChatStatus::STATUS_NO_READ);
+                        chat->addChatData(cached);
                     }
                 }
             }
@@ -154,34 +154,34 @@ void TcpMgr::initHandlers()
         auto token = jsonObj["token"].toString();
 
         auto user_info = std::make_shared<UserInfo> (uid, name, description, icon, sex);
-        UserMgr::GetInstance()->setToken(token);
-        UserMgr::GetInstance()->setUserInfo(user_info);
-        UserMgr::GetInstance()->startResourceSession();
+        UserMgr::instance()->setToken(token);
+        UserMgr::instance()->setUserInfo(user_info);
+        UserMgr::instance()->startResourceSession();
         _authenticated = true;
         const bool receipts = jsonObj["capabilities"].toArray().contains("message_receipts_v1");
-        UserMgr::GetInstance()->messages()->start(UserMgr::GetInstance()->storageRoot(), uid, receipts);
+        UserMgr::instance()->messages()->start(UserMgr::instance()->storageRoot(), uid, receipts);
 
         // 如果包含好友申请列表，则添加上
         if (jsonObj.contains("apply_list")) {
-            UserMgr::GetInstance()->addFriendApplications(jsonObj["apply_list"].toArray());
+            UserMgr::instance()->addFriendApplications(jsonObj["apply_list"].toArray());
         }
 
         // 如果包含好友列表，则添加上
         if (jsonObj.contains("friend_list")) {
-            UserMgr::GetInstance()->addFriends(jsonObj["friend_list"].toArray());
+            UserMgr::instance()->addFriends(jsonObj["friend_list"].toArray());
         }
 
         emit loginSucceeded();
 
         // 加载初始化会话列表
-        auto self_id = UserMgr::GetInstance()->uid();
+        auto self_id = UserMgr::instance()->uid();
 
         auto current_chat_id = jsonObj["current_chat_id"].toInt();
         auto load_more = jsonObj["load_more"].toBool();
 
         // 更新状态
-        UserMgr::GetInstance()->setChatListCursor(current_chat_id);
-        UserMgr::GetInstance()->setChatListFullyLoaded(!load_more);
+        UserMgr::instance()->setChatListCursor(current_chat_id);
+        UserMgr::instance()->setChatListFullyLoaded(!load_more);
 
         if (jsonObj.contains("chat_list")) {
             const auto chat_list = jsonObj["chat_list"].toArray();
@@ -198,15 +198,15 @@ void TcpMgr::initHandlers()
                     // 另一个人的uid
                     auto other_id = (user1_id == self_id) ? user2_id : user1_id;
 
-                    UserMgr::GetInstance()->addPrivateChatMapping(other_id, chat_id);
+                    UserMgr::instance()->addPrivateChatMapping(other_id, chat_id);
                     // 获取到另一个人的uid
-                    auto other_info = UserMgr::GetInstance()->friendById(other_id);
+                    auto other_info = UserMgr::instance()->friendById(other_id);
                     // 通过对方的uid, 会话id, 当前消息的id来构造ChatInfo
                     auto chat_info = std::make_shared<ChatInfo>(other_id,
                         other_info ? other_info->_name : QString::number(other_id),
                         other_info ? other_info->_icon : QString(),
                         other_info ? other_info->_backname : QString(), chat_id, ChatType::PRIVATE);
-                    UserMgr::GetInstance()->addChatInfo(chat_id, chat_info);
+                    UserMgr::instance()->addChatInfo(chat_id, chat_info);
                 }else if (type == "group") {
                     // todo 群聊
                 }
@@ -432,8 +432,8 @@ void TcpMgr::initHandlers()
         auto chat_info = std::make_shared<ChatInfo> (authuid, authname, authicon, backname, chat_id, ChatType::PRIVATE);
 
         // 更新usermgr
-        UserMgr::GetInstance()->addPrivateChatMapping(authuid, chat_id);
-        UserMgr::GetInstance()->addChatInfo(chat_id, chat_info);
+        UserMgr::instance()->addPrivateChatMapping(authuid, chat_id);
+        UserMgr::instance()->addChatInfo(chat_id, chat_info);
         // 更新消息记录
         for (const auto & msg : jsonObj["chat_msgs"].toArray()) {
             const auto msg_info = msg.toObject();
@@ -444,15 +444,15 @@ void TcpMgr::initHandlers()
             auto content = msg_info["content"].toString();
             auto status = msg_info["status"].toInt();
             auto text_msg = std::make_shared<TextChatData> (message_id, chat_id, ChatType::PRIVATE, ChatMessageType::TEXT_TYPE, content, send_id, QTime::currentTime());
-            text_msg->SetClientMessageId(msg_info["msg_uuid"].toString());
-            chat_info->AddChatData(text_msg);
+            text_msg->setClientMessageId(msg_info["msg_uuid"].toString());
+            chat_info->addChatData(text_msg);
         }
 
         // 发送认证信息
         auto auth_info = std::make_shared<AuthInfo> (authuid, authname, authdescription, authicon, authsex, backname);
 
         // 将好友添加上
-        UserMgr::GetInstance()->addFriend(auth_info);
+        UserMgr::instance()->addFriend(auth_info);
 
         emit friendAdded(auth_info);
         emit friendChatAdded(chat_info);
@@ -516,8 +516,8 @@ void TcpMgr::initHandlers()
         auto chat_info = std::make_shared<ChatInfo> (authuid, authname, authicon, backname, chat_id, ChatType::PRIVATE);
 
         // 更新usermgr
-        UserMgr::GetInstance()->addPrivateChatMapping(authuid, chat_id);
-        UserMgr::GetInstance()->addChatInfo(chat_id, chat_info);
+        UserMgr::instance()->addPrivateChatMapping(authuid, chat_id);
+        UserMgr::instance()->addChatInfo(chat_id, chat_info);
         // 更新消息记录
         for (const auto & msg : jsonObj["chat_msgs"].toArray()) {
             const auto msg_info = msg.toObject();
@@ -529,15 +529,15 @@ void TcpMgr::initHandlers()
             auto status = msg_info["status"].toInt();
             auto text_msg = std::make_shared<TextChatData> (message_id, chat_id, ChatType::PRIVATE,
                                                            ChatMessageType::TEXT_TYPE, content, send_id, QTime::currentTime());
-            text_msg->SetClientMessageId(msg_info["msg_uuid"].toString());
-            chat_info->AddChatData(text_msg);
+            text_msg->setClientMessageId(msg_info["msg_uuid"].toString());
+            chat_info->addChatData(text_msg);
         }
 
         // 发送认证信息
         auto auth_info = std::make_shared<AuthInfo> (authuid, authname, authdescription, authicon, authsex, backname);
 
         // 将好友添加上
-        UserMgr::GetInstance()->addFriend(auth_info);
+        UserMgr::instance()->addFriend(auth_info);
 
         emit friendAdded(auth_info);
         emit friendChatAdded(chat_info);
@@ -547,21 +547,21 @@ void TcpMgr::initHandlers()
     _handlers.insert(ID_TEXT_CHAT_MSG_RSP,
         /** @brief 将文本 ACK 交给持久化消息服务。 */
         [](ReqId, int, QByteArray data) {
-        UserMgr::GetInstance()->messages()->acceptSendResponse(QJsonDocument::fromJson(data).object());
+        UserMgr::instance()->messages()->acceptSendResponse(QJsonDocument::fromJson(data).object());
     });
     for (const auto id : {ID_MESSAGE_RECEIPT_REPORT_RSP, ID_MESSAGE_RECEIPT_SYNC_RSP}) {
         // 将回执结果交给消息服务合并。
         _handlers.insert(id,
             /** @brief 将回执回复交给持久化消息服务。 */
             [](ReqId, int, QByteArray data) {
-            UserMgr::GetInstance()->messages()->acceptReceiptResponse(QJsonDocument::fromJson(data).object());
+            UserMgr::instance()->messages()->acceptReceiptResponse(QJsonDocument::fromJson(data).object());
         });
     }
     // 收到回执变化提示后主动补拉权威状态。
     _handlers.insert(ID_MESSAGE_RECEIPT_CHANGED_NOTIFY,
         /** @brief 收到回执变化提示后登记会话并补拉消息及回执。 */
         [](ReqId, int, QByteArray data) {
-        auto *messages = UserMgr::GetInstance()->messages();
+        auto *messages = UserMgr::instance()->messages();
         const int chatId = QJsonDocument::fromJson(data).object()["chat_id"].toInt();
         messages->registerChat(chatId);
         messages->synchronizeReceipts(chatId);
@@ -613,7 +613,7 @@ void TcpMgr::initHandlers()
         auto chat_id = jsonObj["chat_id"].toInt();
 
         const auto json = jsonObj["notify_msgs"].toArray();
-        auto chat_info = UserMgr::GetInstance()->chatInfo(chat_id);
+        auto chat_info = UserMgr::instance()->chatInfo(chat_id);
         std::vector<std::shared_ptr<ChatDataBase>> msgs;
         for (const auto& msg : json) {
             const auto info = msg.toObject();
@@ -622,16 +622,16 @@ void TcpMgr::initHandlers()
             auto text_msg = std::make_shared<TextChatData> (msgid, chat_id, ChatType::PRIVATE,
                                                            ChatMessageType::TEXT_TYPE, msgcontent,
                                                            from_uid, QTime::currentTime());
-            text_msg->SetClientMessageId(info["msg_uuid"].toString());
+            text_msg->setClientMessageId(info["msg_uuid"].toString());
             if (chat_info) {
-                chat_info->AddChatData(text_msg);
+                chat_info->addChatData(text_msg);
             }
             msgs.push_back(text_msg);
         }
 
         emit chatMessagesReceived(from_uid, to_uid, chat_id, msgs);
-        UserMgr::GetInstance()->messages()->registerChat(chat_id);
-        UserMgr::GetInstance()->messages()->synchronize(chat_id);
+        UserMgr::instance()->messages()->registerChat(chat_id);
+        UserMgr::instance()->messages()->synchronize(chat_id);
     });
 
     // 服务器通知客户端下线
@@ -761,15 +761,15 @@ void TcpMgr::initHandlers()
             return ;
         }
 
-        auto self_id = UserMgr::GetInstance()->uid();
+        auto self_id = UserMgr::instance()->uid();
 
         auto current_chat_id = jsonObj["current_chat_id"].toInt();
         auto load_more = jsonObj["load_more"].toBool();
 
         // 更新状态
-        UserMgr::GetInstance()->setChatListCursor(current_chat_id);
+        UserMgr::instance()->setChatListCursor(current_chat_id);
         // 传过来的是否还能够加载，因此这里应该取非
-        UserMgr::GetInstance()->setChatListFullyLoaded(!load_more);
+        UserMgr::instance()->setChatListFullyLoaded(!load_more);
 
         const auto chat_list = jsonObj["chat_list"].toArray();
         for (const auto & chat : chat_list) {
@@ -785,13 +785,13 @@ void TcpMgr::initHandlers()
                 // 另一个人的uid
                 auto other_id = (user1_id == self_id) ? user2_id : user1_id;
 
-                UserMgr::GetInstance()->addPrivateChatMapping(other_id, chat_id);
+                UserMgr::instance()->addPrivateChatMapping(other_id, chat_id);
                 // 获取到另一个人的uid
-                auto other_info = UserMgr::GetInstance()->friendById(other_id);
+                auto other_info = UserMgr::instance()->friendById(other_id);
                 // 通过对方的uid, 会话id, 当前消息的id来构造ChatInfo
                 auto chat_info = std::make_shared<ChatInfo> (other_id, other_info->_name, other_info->_icon,
                                                             other_info->_backname, chat_id, ChatType::PRIVATE);
-                UserMgr::GetInstance()->addChatInfo(chat_id, chat_info);
+                UserMgr::instance()->addChatInfo(chat_id, chat_info);
             }else if (type == "group") {
                 // todo 群聊
             }
@@ -851,11 +851,11 @@ void TcpMgr::initHandlers()
         auto chat_id = jsonObj["chat_id"].toInt();
         auto other_info = jsonObj["other_info"].toObject();
 
-        UserMgr::GetInstance()->addPrivateChatMapping(other_uid, chat_id);
+        UserMgr::instance()->addPrivateChatMapping(other_uid, chat_id);
         auto chat_info = std::make_shared<ChatInfo> (other_uid, other_info["other_name"].toString(),
                                                     other_info["other_icon"].toString(), "", chat_id, ChatType::PRIVATE);
 
-        UserMgr::GetInstance()->addChatInfo(chat_id, chat_info);
+        UserMgr::instance()->addChatInfo(chat_id, chat_info);
 
         emit privateChatCreated(chat_info);
     });
@@ -881,10 +881,10 @@ void TcpMgr::initHandlers()
         // 取到json键值对数据
         QJsonObject jsonObj = jsonDoc.object();
         if (jsonObj.contains("request_id")) {
-            UserMgr::GetInstance()->messages()->acceptSyncPage(jsonObj);
+            UserMgr::instance()->messages()->acceptSyncPage(jsonObj);
             return;
         }
-        if (UserMgr::GetInstance()->messages()->isActive()) {
+        if (UserMgr::instance()->messages()->isActive()) {
             // An old server response cannot establish the incremental sync contract.
             emit chatHistoryFailed(jsonObj["chat_id"].toInt());
             return;
@@ -932,9 +932,9 @@ void TcpMgr::initHandlers()
             auto msg_info = std::make_shared<TextChatData> (message_id, chat_id, ChatType::PRIVATE,
                                                            ChatMessageType::TEXT_TYPE,
                                                             content, send_id, dt);
-            msg_info->SetClientMessageId(msg_obj["msg_uuid"].toString());
+            msg_info->setClientMessageId(msg_obj["msg_uuid"].toString());
             if (status >= ChatStatus::STATUS_EMPTY && status <= ChatStatus::STATUS_READ_ALREADY) {
-                msg_info->SetStatus(static_cast<ChatStatus>(status));
+                msg_info->setStatus(static_cast<ChatStatus>(status));
             }
             chat_msgs.push_back(msg_info);
         }
@@ -974,9 +974,9 @@ void TcpMgr::resetConnection(bool expectedClose)
     _acceptingSends = false;
     _authenticated = false;
     if (expectedClose) {
-        UserMgr::GetInstance()->messages()->pauseOutgoing();
+        UserMgr::instance()->messages()->pauseOutgoing();
     }
-    UserMgr::GetInstance()->messages()->stop();
+    UserMgr::instance()->messages()->stop();
     _host.clear();
     _port = 0;
     _expectedClose = expectedClose;
@@ -996,7 +996,7 @@ void TcpMgr::sendData(ReqId reqId, QByteArray dataBytes)
         const auto request = QJsonDocument::fromJson(dataBytes).object();
         QVector<QString> uuids;
         for (const auto &item : request["text_array"].toArray()) uuids.push_back(item.toObject()["msg_uuid"].toString());
-        UserMgr::GetInstance()->messages()->markUncertain(request["chat_id"].toInt(), uuids);
+        UserMgr::instance()->messages()->markUncertain(request["chat_id"].toInt(), uuids);
     };
     if (!_acceptingSends || ((reqId == ID_TEXT_CHAT_MSG_REQ || reqId == ID_MESSAGE_RECEIPT_REPORT_REQ
          || reqId == ID_MESSAGE_RECEIPT_SYNC_REQ) && !_authenticated)) {
@@ -1017,8 +1017,8 @@ void TcpMgr::connectToServer(ServerInfo si)
     resetConnection(false);
     // 尝试连接到服务器
     SPDLOG_INFO("connecting to chat server, host={}, port={}",
-                LogMgr::ToUtf8(si.Host),
-                LogMgr::ToUtf8(si.Port));
+                LogMgr::toUtf8(si.Host),
+                LogMgr::toUtf8(si.Port));
     _host = si.Host;
     _port = static_cast<quint16> (si.Port.toUInt());
 

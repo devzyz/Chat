@@ -33,9 +33,12 @@ commit 范围排除目标分支已包含的提交及固定历史祖先。缺失�
 
 - 合法/非法分支、普通/squash、真实 merge、revert、breaking 和发布标题；标题编辑、push 新分支、
   固定历史豁免、非法 PR 元数据不执行命令。
-- C++ 重载、default/delete、类归属、直接头文件契约、歧义重载、Qt 信号槽/emit/foreach 与 Lambda。
+- C++ 重载、default/delete、转换运算符、类归属、直接头文件及同文件声明契约、歧义重载。
+- Qt 信号槽/emit/foreach、经 `.ui` 核对的自动槽、QTest 入口；GTest 用例及其内层回调、WINAPI 和花括号默认参数。
+- 框架夹具、显式声明合同来源的 Connector/C++ 替身及 JS 匿名类保留合法形式，职责说明仍检查。
 - JS 具名函数、方法及匿名回调；PowerShell 原生函数/脚本块、帮助与 token 比较；待检查脚本从不执行。
 - 注释/空白不扩大历史治理范围；新增或代码变化必须检查；错误语法与未知声明宏不能伪报通过。
+- 凭据形状 diff 检查区分原样赋值与新增值，覆盖重复副本、跨文件复制及运行时表达式。
 
 本地与 CI 共用同一 Python 实现及 PowerShell 入口。任何断言失败或检查器非零退出都会使 static-check
 失败，继而阻断现有 Windows 汇总；不新增悬空 Required Check，不计入业务 JUnit 报告数量。

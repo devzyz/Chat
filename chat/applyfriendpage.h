@@ -18,7 +18,7 @@ public:
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ApplyFriendPage();
     /** @brief 将新的好友申请加入页面，已有申请不重复创建。 */
-    void AddNewApply(std::shared_ptr<ApplyInfo>);
+    void addNewApply(std::shared_ptr<ApplyInfo>);
 
 protected:
     /** @brief 绘制当前控件的背景、边框或内容，遵循 Qt GUI 线程事件约束。 */
@@ -34,11 +34,11 @@ private:
 
 signals:
     /** @brief 通知上层切换到用户搜索入口。 */
-    void sig_show_search(bool);
+    void searchRequested(bool);
 
 public slots:
     /** @brief 接收好友审批成功结果并刷新申请状态。 */
-    void slot_auth_finish(std::shared_ptr<AuthInfo>);
+    void authFinish(std::shared_ptr<AuthInfo>);
 };
 
 #endif // APPLYFRIENDPAGE_H

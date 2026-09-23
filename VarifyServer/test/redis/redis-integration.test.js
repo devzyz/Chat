@@ -6,19 +6,19 @@ const { once } = require('node:events');
 const test = require('node:test');
 const { createRedisAdapter } = require('../../redis');
 
-async function blackhole(t) {
+/** 建立接收但不响应的回环 TCP 对端，并注册套接字和监听器清理。 */ async function blackhole(t) {
     const sockets = new Set();
-    const server = net.createServer((socket) => {
+    const server = net.createServer(/** 跟踪连接并消费输入，刻意不发送 Redis 响应以触发期限。 */ (socket) => {
         sockets.add(socket);
-        socket.on('error', () => socket.destroy());
-        socket.on('close', () => sockets.delete(socket));
+        socket.on('error', /** 连接出错时销毁套接字。 */ () => socket.destroy());
+        socket.on('close', /** 连接关闭后从跟踪集合移除。 */ () => sockets.delete(socket));
         socket.resume();
     });
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
-    t.after(async () => {
+    t.after(/** 销毁剩余连接并等待监听器关闭。 */ async () => {
         for (const socket of sockets) socket.destroy();
-        await new Promise((resolve) => server.close(resolve));
+        await new Promise(/** 将监听器关闭完成转换为 Promise。 */ (resolve) => server.close(resolve));
     });
     return server;
 }
@@ -56,7 +56,7 @@ test('closed ephemeral loopback endpoint fails without retries', { timeout: 3000
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     const port = server.address().port;
-    await new Promise((resolve) => server.close(resolve));
+    await new Promise(/** 等待测试监听器完成关闭。 */ (resolve) => server.close(resolve));
     const adapter = createRedisAdapter({ host: '127.0.0.1', port, connectTimeoutMs: 100, commandTimeoutMs: 100 });
     try {
         const started = performance.now();

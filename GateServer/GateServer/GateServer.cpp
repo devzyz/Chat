@@ -1,4 +1,4 @@
-﻿#include "CServer.h"
+#include "CServer.h"
 #include "const.h"
 #include "ConfigMgr.h"
 #include <hiredis/hiredis.h>
@@ -10,6 +10,7 @@
 #include <csignal>
 #include <iostream>
 
+/** @brief 执行本地 Redis 管理器演示调用；不是自动回归入口。 */
 void TestRedisMgr() {
     assert(RedisMgr::GetInstance()->Set("blogwebsite", "llfc.club"));
     std::string value = "";
@@ -31,6 +32,7 @@ void TestRedisMgr() {
     RedisMgr::GetInstance()->Close();
 }
 
+/** @brief 解析启动配置并初始化本服务依赖，发布就绪信息后运行事件循环，按信号或错误执行关闭流程。 */
 int main(int argc, char* argv[])
 {
     if (argc != 1 && (argc != 3 || std::string(argv[1]) != "--config")) {
@@ -60,13 +62,13 @@ int main(int argc, char* argv[])
         auto server = std::make_shared<CServer>(ioc, port, logic);
         auto pool = AsioIOServicePool::GetInstance();
 
-        signals.async_wait([&ioc, pool, server](const boost::system::error_code& err, int signal_number) {
+        signals.async_wait(/** @brief 在正常退出信号到来时停止监听、连接与工作池。 */ [&ioc, pool, server](const boost::system::error_code& err, int signal_number) {
             if (err) {
                 return;
             }
             SPDLOG_INFO("GateServer shutting down, signal={}", signal_number);
             server->Stop();
-            pool->stop();
+            pool->Stop();
             ioc.stop();
             });
 
@@ -77,11 +79,11 @@ int main(int argc, char* argv[])
         }
         catch (...) {
             server->Stop();
-            pool->stop();
+            pool->Stop();
             throw;
         }
         server->Stop();
-        pool->stop();
+        pool->Stop();
         SPDLOG_INFO("GateServer stopped");
         logger->Close();
     }

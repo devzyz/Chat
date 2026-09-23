@@ -46,22 +46,22 @@ public:
 public slots:
     // 登录转注册槽函数
     /** @brief 登录转注册槽函数。 */
-    void slot_login_switch_reg();
+    void loginSwitchReg();
     /** @brief 从注册页面返回登录页面并恢复登录事件连接。 */
-    void slot_reg_switch_login();
+    void regSwitchLogin();
     // 登录转重置槽函数
     /** @brief 登录转重置槽函数。 */
-    void slot_login_switch_reset();
+    void loginSwitchReset();
     /** @brief 从密码重置页面返回登录页面。 */
-    void slot_reset_switch_login();
+    void resetSwitchLogin();
     // 登录转聊天槽函数
     /** @brief 登录转聊天槽函数。 */
-    void slot_login_switch_chat(AuthFlowId flowId);
+    void loginSwitchChat(AuthFlowId flowId);
     // 服务器通知下线槽函数
     /** @brief 服务器通知下线槽函数。 */
-    void slot_notify_offline();
+    void notifyOffline();
     /** @brief 处理连接结束，仅异常断线触发账号会话重置。 */
-    void slot_connection_close(bool expectedClose);
+    void connectionClose(bool expectedClose);
 private:
     /** @brief 重新创建并展示登录页，恢复页面切换连接。 */
     void offlineLogin();

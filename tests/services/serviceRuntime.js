@@ -3,6 +3,7 @@
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
+/** 校验 Linux 动态依赖仅来自系统白名单或指定自有包，按需要求包内 hiredis。 */
 function verifyDependencies(output, bundle, requireHiredis = false) {
     const root = path.posix.resolve(bundle);
     let hasHiredis = false;

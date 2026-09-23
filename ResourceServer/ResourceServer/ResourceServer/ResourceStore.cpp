@@ -17,7 +17,7 @@ ResourceStore::ResourceStore(std::filesystem::path root, std::uint64_t max_size)
     std::filesystem::create_directories(_root);
 }
 std::filesystem::path ResourceStore::Path(const std::string& id, const char* suffix) const {
-    if (id.size() != 36 || !std::all_of(id.begin(), id.end(), [](char c) {
+    if (id.size() != 36 || !std::all_of(id.begin(), id.end(), /** @brief 只接受资源 ID 所允许的十六进制字符与连字符。 */ [](char c) {
         return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || c == '-';
     })) throw Error(400, "invalid resource id");
     return _root / (id + suffix);
@@ -29,7 +29,7 @@ Metadata ResourceStore::Create(int owner, const std::string& name, const std::st
     if (type != "image/png" && type != "image/jpeg" && type != "video/mp4" && type != "video/x-msvideo" &&
         type != "application/octet-stream")
         throw Error(415, "unsupported media type");
-    if (sha256.size() != 64 || !std::all_of(sha256.begin(), sha256.end(), [](char c) {
+    if (sha256.size() != 64 || !std::all_of(sha256.begin(), sha256.end(), /** @brief 只接受 SHA256 文本的小写十六进制字符。 */ [](char c) {
         return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
     })) throw Error(400, "SHA-256 required");
     const auto id = boost::uuids::to_string(boost::uuids::random_generator()());

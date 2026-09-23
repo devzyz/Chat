@@ -15,8 +15,10 @@
 namespace {
 constexpr DWORD PROCESS_TIMEOUT_MS = 10000;
 
+/** 拥有启动测试的唯一临时目录，退出时清理所属文件。 */
 class TempDirectory {
 public:
+    /** 有限次尝试创建唯一临时目录，失败抛异常。 */
     TempDirectory() {
         const auto base = std::filesystem::temp_directory_path();
         for (int attempt = 0; attempt < 100; ++attempt) {
@@ -32,11 +34,13 @@ public:
         throw std::runtime_error("unable to create a unique startup test directory");
     }
 
+    /** 清理本对象创建的目录，忽略析构期文件错误。 */
     ~TempDirectory() {
         std::error_code error;
         std::filesystem::remove_all(_path, error);
     }
 
+    /** 借用所属临时目录路径。 */
     const std::filesystem::path& Path() const {
         return _path;
     }
@@ -45,8 +49,10 @@ private:
     std::filesystem::path _path;
 };
 
+/** 在作用域内设置或移除 Windows 环境变量并保存原状态。 */
 class ScopedEnvironmentValue {
 public:
+    /** 读取原值后设置指定测试环境状态。 */
     ScopedEnvironmentValue(const wchar_t* name, const std::optional<std::wstring>& value) : _name(name) {
         const DWORD required = GetEnvironmentVariableW(name, nullptr, 0);
         if (required > 0) {
@@ -59,6 +65,7 @@ public:
         SetEnvironmentVariableW(name, value ? value->c_str() : nullptr);
     }
 
+    /** 恢复原环境值或缺失状态。 */
     ~ScopedEnvironmentValue() {
         SetEnvironmentVariableW(_name.c_str(), _original ? _original->c_str() : nullptr);
     }
@@ -68,6 +75,7 @@ private:
     std::optional<std::wstring> _original;
 };
 
+/** 保存子进程退出码、期限状态及捕获输出。 */
 struct ProcessResult {
     DWORD exit_code = 0;
     bool timed_out = false;
@@ -75,15 +83,18 @@ struct ProcessResult {
     std::string stderr_text;
 };
 
+/** 按二进制读取输出文件的全部内容。 */
 std::string ReadAll(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
+/** 为受控测试命令参数添加双引号。 */
 std::wstring Quote(const std::wstring& value) {
     return L"\"" + value + L"\"";
 }
 
+/** 启动真实测试子进程并将输出定向到所属目录，有限等待后收集结果。 */
 ProcessResult RunProcess(
     const std::filesystem::path& executable,
     const std::vector<std::wstring>& arguments,
@@ -171,6 +182,7 @@ ProcessResult RunProcess(
     return result;
 }
 
+/** 从测试可执行文件位置推导同配置的生产 ChatServer 路径。 */
 std::filesystem::path FindChatServerExecutable() {
     std::vector<wchar_t> module_path(32768, L'\0');
     const DWORD length = GetModuleFileNameW(nullptr, module_path.data(), static_cast<DWORD>(module_path.size()));
@@ -185,6 +197,7 @@ std::filesystem::path FindChatServerExecutable() {
     return repository_root / "build" / "windows-servers" / configuration / "ChatServer" / "ChatServer.exe";
 }
 
+/** 写入夹具文件，写失败时报告路径。 */
 void WriteText(const std::filesystem::path& path, const std::string& content) {
     std::ofstream output(path, std::ios::binary);
     output << content;
@@ -193,6 +206,7 @@ void WriteText(const std::filesystem::path& path, const std::string& content) {
     }
 }
 
+/** 独占绑定随机回环 TCP 端口并开始监听，返回实际端口。 */
 unsigned short ReservePort(boost::asio::ip::tcp::acceptor& acceptor) {
     acceptor.open(boost::asio::ip::tcp::v4());
     const BOOL exclusive = TRUE;
@@ -209,6 +223,7 @@ unsigned short ReservePort(boost::asio::ip::tcp::acceptor& acceptor) {
     return acceptor.local_endpoint().port();
 }
 
+/** 独占绑定随机通配监听端口，用于复现生产绑定冲突。 */
 unsigned short ReserveWildcardPort(boost::asio::ip::tcp::acceptor& acceptor) {
     acceptor.open(boost::asio::ip::tcp::v4());
     const BOOL exclusive = TRUE;
@@ -225,6 +240,7 @@ unsigned short ReserveWildcardPort(boost::asio::ip::tcp::acceptor& acceptor) {
     return acceptor.local_endpoint().port();
 }
 
+/** 临时独占端口后释放，提供待测服务可尝试使用的端口。 */
 unsigned short FindAvailablePort() {
     boost::asio::io_context context;
     boost::asio::ip::tcp::acceptor acceptor(context);
@@ -233,6 +249,7 @@ unsigned short FindAvailablePort() {
     return port;
 }
 
+/** 生成指定 TCP、RPC 端口及可选 gRPC 设置的启动配置。 */
 void WriteValidStartupConfig(
     const std::filesystem::path& path,
     unsigned short tcp_port,
@@ -270,6 +287,7 @@ void WriteValidStartupConfig(
     WriteText(path, config.str());
 }
 
+/** 断言启动在期限内失败并显示命令用法。 */
 void ExpectPromptFailure(const ProcessResult& result) {
     EXPECT_FALSE(result.timed_out);
     EXPECT_NE(result.exit_code, 0U);
@@ -279,6 +297,7 @@ void ExpectPromptFailure(const ProcessResult& result) {
 }
 
 // S01-CLI-01
+/** 验证配置参数缺少路径值时非零退出并显示用法。 */
 TEST(StartupConfigTests, MissingConfigValueReturnsNonZeroWithUsage) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
@@ -291,6 +310,7 @@ TEST(StartupConfigTests, MissingConfigValueReturnsNonZeroWithUsage) {
 }
 
 // S01-CLI-02
+/** 验证未知命令行参数导致非零退出并显示用法。 */
 TEST(StartupConfigTests, UnknownArgumentReturnsNonZeroWithUsage) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
@@ -303,6 +323,7 @@ TEST(StartupConfigTests, UnknownArgumentReturnsNonZeroWithUsage) {
 }
 
 // S01-CFG-01
+/** 验证显式配置路径优先于环境指定路径。 */
 TEST(StartupConfigTests, ExplicitConfigPathOverridesEnvironment) {
     TempDirectory fixture;
     const auto explicit_config = fixture.Path() / "explicit-selected.ini";
@@ -322,6 +343,7 @@ TEST(StartupConfigTests, ExplicitConfigPathOverridesEnvironment) {
 }
 
 // S01-CFG-02
+/** 验证环境配置优先于工作目录默认配置。 */
 TEST(StartupConfigTests, EnvironmentConfigPathOverridesWorkingDirectoryDefault) {
     TempDirectory fixture;
     const auto environment_config = fixture.Path() / "environment-selected.ini";
@@ -339,6 +361,7 @@ TEST(StartupConfigTests, EnvironmentConfigPathOverridesWorkingDirectoryDefault) 
 }
 
 // S01-CFG-03
+/** 验证未指定路径时选择工作目录配置。 */
 TEST(StartupConfigTests, WorkingDirectoryConfigIsTheDefault) {
     TempDirectory fixture;
     const auto default_config = fixture.Path() / "config.ini";
@@ -355,6 +378,7 @@ TEST(StartupConfigTests, WorkingDirectoryConfigIsTheDefault) {
 }
 
 // S01-GRPC-CFG-01
+/** 验证越界 gRPC 期限在监听前拒绝启动。 */
 TEST(StartupConfigTests, OutOfRangeGrpcTimeoutReturnsNonZeroBeforeListening) {
     TempDirectory fixture;
     const auto config_path = fixture.Path() / "invalid-grpc-timeout.ini";
@@ -375,6 +399,7 @@ TEST(StartupConfigTests, OutOfRangeGrpcTimeoutReturnsNonZeroBeforeListening) {
 }
 
 // S01-BIND-01
+/** 验证 TCP 端口占用在连接外部依赖前导致失败。 */
 TEST(StartupConfigTests, OccupiedTcpPortFailsBeforeExternalDependencies) {
     TempDirectory fixture;
     boost::asio::io_context context;
@@ -396,6 +421,7 @@ TEST(StartupConfigTests, OccupiedTcpPortFailsBeforeExternalDependencies) {
 }
 
 // S01-BIND-02
+/** 验证 RPC 绑定失败会释放已绑定的 TCP 端口。 */
 TEST(StartupConfigTests, OccupiedGrpcPortFailureReleasesTcpPort) {
     TempDirectory fixture;
     boost::asio::io_context context;

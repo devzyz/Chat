@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <cstdlib>
 
+/** 验证真实数据库空闲连接被杀死后，目录操作在下一次借用前替换连接。 */
 TEST(ResourceCatalogIntegration, KilledIdleConnectionsAreReplacedBeforeTheNextOperation) {
     const auto* endpoint = std::getenv("RESOURCE_TEST_MYSQL");
     if (!endpoint) GTEST_SKIP() << "Requires disposable MySQL";
@@ -20,6 +21,7 @@ TEST(ResourceCatalogIntegration, KilledIdleConnectionsAreReplacedBeforeTheNextOp
     EXPECT_NO_THROW(catalog.GetAvatar(900002));
 }
 
+/** 验证资源提交重试幂等、成员资格及下载授权。 */
 TEST(ResourceCatalogIntegration, CommitRetryMembershipAndDownloadAuthorization) {
     const auto* endpoint = std::getenv("RESOURCE_TEST_MYSQL");
     if (!endpoint) GTEST_SKIP() << "RESOURCE_TEST_MYSQL must identify the disposable test MySQL";
@@ -53,6 +55,7 @@ TEST(ResourceCatalogIntegration, CommitRetryMembershipAndDownloadAuthorization) 
     EXPECT_EQ(identity->getString(1), "message-1");
 }
 
+/** 验证头像发布遵循拥有者权限、持久化且独立于聊天消息。 */
 TEST(ResourceCatalogIntegration, AvatarPublicationIsOwnedPersistentAndSeparateFromMessages) {
     const auto* endpoint = std::getenv("RESOURCE_TEST_MYSQL");
     if (!endpoint) GTEST_SKIP() << "Requires disposable MySQL";

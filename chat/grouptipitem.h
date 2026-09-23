@@ -32,10 +32,10 @@ public:
      */
     QSize sizeHint() const override;
     /**
-     * @brief SetGroupTip
+     * @brief setGroupTip
      * 设置本grouptip的标题
      */
-    void SetGroupTip(QString str);
+    void setGroupTip(QString str);
 
 private:
     Ui::GroupTipItem *ui;

@@ -54,14 +54,24 @@ PR 元数据仅作为 JSON 数据读取，不插入 shell。源码以 merge-base
 
 支持边界：Tree-sitter 定位 C++/Qt 与 JS 类、函数声明/定义及回调；PowerShell 使用原生 AST。
 去除注释/空白后的 token 变化决定增量，纯注释不触发未修改的旧函数。头文件为权威说明；
-C++ 定义可引用同名或直接本地 include 中唯一匹配的声明，歧义重载需在定义处说明。
+C++ 定义可引用同名头文件、直接本地 include 或本文件前置声明中的唯一匹配说明；
+参数名称不同只在同名、同类且参数数量唯一时复用，歧义重载需在定义处说明。
 类外成员变化同时检查已解析头文件中的所属类。不是编译器级符号解析：跨间接 include、别名、
 条件编译可达性及复杂模板归属仍需评审；局部 direct-init 与函数原型的歧义交由编译校验。
-已支持 Qt 元对象/信号槽宏、emit、foreach；固定 grammar 的默认空列表表示差异有窄范围兼容。
-未知声明宏、GTest `TEST*`、QTest 主入口宏及 Windows 调用约定未自动展开，触及文件时解析失败会阻断，
-需要补解析支持及反例，不能按“无对象”通过。Python、CMake、YAML、SQL、protobuf 等由所属校验器与评审负责。
+已支持 Qt 元对象/信号槽宏、emit、foreach、QTest 的三个主入口宏和 `WINAPI` 调用约定；
+入口宏只做等长遮罩，测试类与回调仍完整检查。支持双标识符参数的 GTest `TEST`/`TEST_F`/`TEST_P`，
+宏体按函数检查，内部 Lambda 不豁免。固定 grammar 的花括号默认参数表示差异有窄范围兼容。
+其他未知声明宏或损坏语法在触及文件时仍阻断，需要补解析支持及反例，不能按“无对象”通过。
+Python、CMake、YAML、SQL、protobuf 等由所属校验器与评审负责。
 自动检查只检查函数/类命名形状、中文说明存在与显式 `@param` 名称，不检查变量命名、参数类型语义、
-无 `@param` 时的完整性或说明是否真实；框架 override、构造/析构、operator、main、外部 GetVarifyCode 保留名称。
+无 `@param` 时的完整性或说明是否真实；框架 override、构造/析构、operator、main/wmain、外部 GetVarifyCode 保留名称。
+GTest 夹具和用例保留注册身份；Qt `on_<对象名>_clicked` 只在对应 `.ui` 确有对象时保留；
+Connector/C++ 的五个结构化替身接口须用 `@see sql::Connection::<方法>` 标明合同来源。
+JS 匿名类没有命名要求，具名类仍检查。这些例外都不免除中文职责说明。
+
+工作区凭据形状检查按文件比较删除和新增赋值的多重集，避免原样代码添加注释后误报；
+新增值、新增副本和跨文件复制仍阻断，运行时工作流表达式保持豁免。实现与反例见
+`scripts/Test-CredentialDiff.ps1` 和规范检查器测试，不把形状扫描等同完整秘密检测。
 
 ## 2. 回归测试
 

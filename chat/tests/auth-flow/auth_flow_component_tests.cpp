@@ -13,7 +13,9 @@ class AuthFlowComponentTests : public QObject
     Q_OBJECT
 
 private slots:
+    /** 注册会话重置类型并配置不输出日志的测试日志器。 */
     void initTestCase();
+    /** 释放测试使用的 TCP 与用户管理单例。 */
     void cleanupTestCase();
     /** @brief 验证异常断线动作委托会话对象清理账号状态。 */
     void abnormalDisconnectDelegatesToClientSessionReset();
@@ -28,8 +30,8 @@ void AuthFlowComponentTests::initTestCase()
 
 void AuthFlowComponentTests::cleanupTestCase()
 {
-    TcpMgr::ReleaseInstance();
-    UserMgr::ReleaseInstance();
+    TcpMgr::releaseInstance();
+    UserMgr::releaseInstance();
 }
 
 void AuthFlowComponentTests::abnormalDisconnectDelegatesToClientSessionReset()

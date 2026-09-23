@@ -9,6 +9,7 @@
 #include <string>
 #include <utility>
 
+/** 在独立运行上下文中启动 Node 协调器，有界监督退出并保存进程清理证据。 */
 int main(int argc, char** argv) {
     if (argc != 4) {
         std::cerr << "usage: service_run <node> <coordinator> <evidence-root>\n";
@@ -31,7 +32,7 @@ int main(int argc, char** argv) {
         auto child = integration::ProcessHarness::Start(*context, std::move(spec));
         // Here the probe observes completion, not protocol readiness. Dependency
         // readiness is checked by the coordinator before writing any run data.
-        child->WaitReady([&] {
+        child->WaitReady(/** 当协调器子进程已退出时结束等待。 */ [&] {
             return child->CollectEvidence().exit_code.has_value();
         }, deadline - std::chrono::seconds(20));
         const auto evidence = child->CollectEvidence();

@@ -31,20 +31,20 @@ public:
     ~ChatPage();
 
     /** @brief 切换当前会话并恢复其消息与滚动状态。 */
-    void SetChatInfo(std::shared_ptr<ChatInfo> chatInfo);
+    void setChatInfo(std::shared_ptr<ChatInfo> chatInfo);
     /** @brief 将旧消息数据转换并追加到当前消息模型。 */
-    void AppendChatMsg(const std::shared_ptr<ChatDataBase> &message);
+    void appendChatMsg(const std::shared_ptr<ChatDataBase> &message);
     /** @brief 将对应会话的历史页合并到模型，保留当前阅读锚点。 */
-    void ApplyHistoryPage(int chatId,
+    void applyHistoryPage(int chatId,
                           const std::vector<std::shared_ptr<ChatDataBase>> &messages,
                           bool canLoadMore, qint64 nextCursor);
     /** @brief 结束历史页加载标志并恢复后续请求能力。 */
-    void HistoryLoadFailed(int chatId);
+    void historyLoadFailed(int chatId);
     /** @brief 按当前发送者和 UUID 合并消息提交确认。 */
-    void ApplyDeliveryAcknowledgements(int chatId,
+    void applyDeliveryAcknowledgements(int chatId,
                                        const QVector<MessageAcknowledgement> &acknowledgements);
     /** @brief 标记当前账号对应的失败消息。 */
-    void MarkMessagesFailed(int chatId, const QVector<QString> &clientMessageIds);
+    void markMessagesFailed(int chatId, const QVector<QString> &clientMessageIds);
     /** @brief 将持久化消息页合并到对应会话模型。 */
     void applyStoredHistory(int chatId, qint64 before, const QVector<StoredMessage> &messages, bool hasMore);
     /** @brief 返回当前模型中最早有效服务器消息 ID，无记录时返回 0。 */
@@ -63,9 +63,9 @@ private slots:
 signals:
     // 兼容现有 ChatInfo 缓存；消息显示与状态不再依赖该缓存。
     /** @brief 兼容现有 ChatInfo 缓存；消息显示与状态不再依赖该缓存。 */
-    void sig_append_send_text_cache_msg(QString, std::shared_ptr<ChatDataBase>);
+    void outgoingTextQueued(QString, std::shared_ptr<ChatDataBase>);
     /** @brief 通知外部加载指定会话及游标的历史消息。 */
-    void sig_request_history(int chatId, qint64 beforeMessageId);
+    void historyRequested(int chatId, qint64 beforeMessageId);
 
 private:
     /** @brief 保存稳定消息身份及视口偏移，用于历史插入后恢复阅读位置。 */

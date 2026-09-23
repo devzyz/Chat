@@ -16,7 +16,7 @@ class TcpFrameDecoder
 {
 public:
     /** @brief 返回普通 TCP 消息允许的最大 body 字节数。 */
-    static constexpr qsizetype MaxBodyBytes() noexcept { return 2048; }
+    static constexpr qsizetype maxBodyBytes() noexcept { return 2048; }
 
     /** @brief 追加网络字节并输出完整帧；非法帧头设置错误标记，由 reset 清除。 */
     QVector<DecodedTcpFrame> append(const QByteArray &bytes);

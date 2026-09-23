@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$JUnitPath
 )
 
@@ -25,6 +25,10 @@ $script:passed = 0
 $script:failed = 0
 $script:results = @()
 
+<#
+.SYNOPSIS
+按实际配置校验结果写入 JUnit 报告。
+#>
 function Write-JUnitReport {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -32,7 +36,7 @@ function Write-JUnitReport {
     if (-not [string]::IsNullOrWhiteSpace($parent)) {
         [void](New-Item -ItemType Directory -Path $parent -Force)
     }
-    $failures = @($script:results | Where-Object { -not $_.Passed }).Count
+    $failures = @($script:results | Where-Object <# 筛选失败用例以计算报告失败数。 #> { -not $_.Passed }).Count
     $duration = ($script:results | Measure-Object -Property Duration -Sum).Sum
     $settings = New-Object System.Xml.XmlWriterSettings
     $settings.Indent = $true
@@ -75,6 +79,10 @@ function Write-JUnitReport {
     }
 }
 
+<#
+.SYNOPSIS
+写入指定实例身份、监听端口及对端设置的配置夹具。
+#>
 function Write-ConfigFixture {
     param(
         [Parameter(Mandatory = $true)]
@@ -106,6 +114,10 @@ function Write-ConfigFixture {
     Set-Content -LiteralPath $Path -Value $lines -Encoding ASCII
 }
 
+<#
+.SYNOPSIS
+在子进程执行预期失败的配置校验，核对退出和诊断并记录结果。
+#>
 function Invoke-ExpectedValidationFailure {
     param(
         [Parameter(Mandatory = $true)]

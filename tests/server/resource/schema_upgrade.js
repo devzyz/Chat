@@ -8,6 +8,7 @@ const { startLocalMysql } = require('../schema-migration/localMysql');
 const { MysqlSession, mysqlArgs } = require('../../../schema/MysqlSession');
 const { SchemaMigration } = require('../../../schema/SchemaMigration');
 
+/** 在自建 MySQL 重现版本二后升级到当前 schema，验证旧数据、幂等及缺表检测并清理。 */
 async function main() {
     const fixture = await startLocalMysql(process.env.CHAT_MYSQL_BIN);
     const session = new MysqlSession(fixture.mysql, [...fixture.args, ...mysqlArgs], fixture.env);
@@ -27,19 +28,19 @@ async function main() {
                 'CONTRACT_HASH = "ed537ccc940ce556b6838307a2229223841ee32aebe3dc62ae23e40855a42dab"');
         fs.writeFileSync(path.join(root, 'SchemaContract.h'), header);
         await session.execute('CREATE DATABASE resource_upgrade');
-        assert.equal((await new SchemaMigration(session, 'resource_upgrade', root).Apply()).version, 2);
+        assert.equal((await new SchemaMigration(session, 'resource_upgrade', root).apply()).version, 2);
         await session.execute("CALL reg_user('upgrade_user','upgrade@example.invalid','fixture',@uid)");
         await session.execute("INSERT INTO chat_message(chat_id,send_id,recv_id,content,status,client_msg_uuid) " +
             "VALUES(1,1,2,'preserve existing message',0,'55555555-5555-4555-8555-555555555555')");
         const before = await session.execute('SELECT message_id,content,client_msg_uuid FROM chat_message');
         const current = new SchemaMigration(session, 'resource_upgrade');
-        assert.deepEqual((await current.Plan()).map(entry => entry.id), [3, 4]);
-        assert.equal((await current.Apply()).version, 4);
-        assert.equal((await current.Apply()).version, 4);
+        assert.deepEqual((await current.plan()).map(/** 提取待应用迁移编号以核对升级计划。 */ entry => entry.id), [3, 4]);
+        assert.equal((await current.apply()).version, 4);
+        assert.equal((await current.apply()).version, 4);
         assert.equal(await session.execute('SELECT message_id,content,client_msg_uuid FROM chat_message'), before);
         assert.equal(await session.execute('SELECT COUNT(*) FROM user'), '1');
         await session.execute('DROP TABLE user_avatar');
-        await assert.rejects(current.Verify(), /SchemaContractDrift/);
+        await assert.rejects(current.verify(), /SchemaContractDrift/);
         console.log('S05-RESOURCE-17 PASS version 2 to 4 preserves user/message data; repeat and drift checks pass');
     } finally {
         await session.close();
@@ -50,4 +51,4 @@ async function main() {
     }
 }
 
-main().catch(error => { console.error(error.message); process.exitCode = 1; });
+main().catch(/** 输出升级合同失败并设置非零退出状态。 */ error => { console.error(error.message); process.exitCode = 1; });

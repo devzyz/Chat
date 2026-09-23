@@ -16,8 +16,8 @@ ResetDialog::ResetDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     repolish(ui->err_tip);
 
     // 连接单例类的信号与当前类的槽
-    connect(HttpMgr::GetInstance().get(), &HttpMgr::sig_reset_mod_finish,
-            this, &ResetDialog::slot_reset_mod_finish);
+    connect(HttpMgr::instance().get(), &HttpMgr::passwordResetHttpFinished,
+            this, &ResetDialog::resetModFinish);
 
     initHttpHandlers();
 
@@ -46,14 +46,14 @@ ResetDialog::ResetDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
         checkVarifyValid();
     });
 
-    ui->password_visible->SetState("invisible_leave", "invisible_hover", "",
+    ui->password_visible->setState("invisible_leave", "invisible_hover", "",
                                    "visible_leave", "visible_hover", "");
 
     // 连接槽函数，触发真正的密码的隐藏与显示
     connect(ui->password_visible, &ClickedLabel::clicked, this,
         /** @brief 按标签状态切换密码可见性。 */
         [this]() {
-        auto state = ui->password_visible->GetCurState();
+        auto state = ui->password_visible->getCurState();
 
         // 当为隐藏状态时，切换编辑框为密码模式;否则为显示模式
         if (state == ClickLabelState::Normal) {
@@ -73,7 +73,7 @@ ResetDialog::~ResetDialog()
     delete ui;
 }
 
-void ResetDialog::slot_reset_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err)
+void ResetDialog::resetModFinish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err)
 {
     AuthOutcome outcome;
     outcome.module = static_cast<int>(Modules::RESETMOD);
@@ -176,13 +176,13 @@ void ResetDialog::initHttpHandlers()
 }
 
 // 添加错误信息到错误map里面
-void ResetDialog::AddTipErr(TipErr te, QString tips) {
+void ResetDialog::addTipErr(TipErr te, QString tips) {
     _tip_errs[te] = tips;
     showTip(tips, false);
 }
 
 // 删除错误信息，如果map内还有未处理的错误，则继续显示
-void ResetDialog::DelTipErr(TipErr te) {
+void ResetDialog::delTipErr(TipErr te) {
     _tip_errs.remove(te);
     if (_tip_errs.empty()) {
         ui->err_tip->setText("");
@@ -194,10 +194,10 @@ void ResetDialog::DelTipErr(TipErr te) {
 bool ResetDialog::checkUserValid()
 {
     if (ui->user_edit->text() == "") {
-        AddTipErr(TipErr::TIP_USER_ERR, tr("用户名不能为空"));
+        addTipErr(TipErr::TIP_USER_ERR, tr("用户名不能为空"));
         return false;
     }
-    DelTipErr(TipErr::TIP_USER_ERR);
+    delTipErr(TipErr::TIP_USER_ERR);
     return true;
 }
 
@@ -210,11 +210,11 @@ bool ResetDialog::checkEmailValid() {
 
     if (!match) {
         // 提示邮箱不正确
-        AddTipErr(TipErr::TIP_EMAIL_ERR, tr("邮箱地址不正确"));
+        addTipErr(TipErr::TIP_EMAIL_ERR, tr("邮箱地址不正确"));
         return false;
     }
 
-    DelTipErr(TipErr::TIP_EMAIL_ERR);
+    delTipErr(TipErr::TIP_EMAIL_ERR);
     return true;
 }
 
@@ -223,7 +223,7 @@ bool ResetDialog::checkPasswordValid() {
 
     if (pass.length() < 6 || pass.length() > 15) {
         // 提示长度不匹配
-        AddTipErr(TipErr::TIP_PWD_ERR, tr("密码长度应为6~15"));
+        addTipErr(TipErr::TIP_PWD_ERR, tr("密码长度应为6~15"));
         return false;
     }
 
@@ -234,11 +234,11 @@ bool ResetDialog::checkPasswordValid() {
 
     if (!match) {
         // 提示字符非法
-        AddTipErr(TipErr::TIP_PWD_ERR, tr("不能包含非法字符"));
+        addTipErr(TipErr::TIP_PWD_ERR, tr("不能包含非法字符"));
         return false;
     }
 
-    DelTipErr(TipErr::TIP_PWD_ERR);
+    delTipErr(TipErr::TIP_PWD_ERR);
     return true;
 }
 
@@ -246,16 +246,16 @@ bool ResetDialog::checkVarifyValid() {
     auto varify = ui->varify_edit->text();
 
     if (varify.isEmpty()) {
-        AddTipErr(TipErr::TIP_VARIFY_ERR, tr("验证码不能为空"));
+        addTipErr(TipErr::TIP_VARIFY_ERR, tr("验证码不能为空"));
         return false;
     }
 
     if (varify.length() != 4) {
-        AddTipErr(TipErr::TIP_VARIFY_ERR, tr("请输入4位验证码"));
+        addTipErr(TipErr::TIP_VARIFY_ERR, tr("请输入4位验证码"));
         return false;
     }
 
-    DelTipErr(TipErr::TIP_VARIFY_ERR);
+    delTipErr(TipErr::TIP_VARIFY_ERR);
     return true;
 }
 
@@ -290,7 +290,7 @@ void ResetDialog::on_confirm_btn_clicked()
     begin.module = static_cast<int>(Modules::RESETMOD);
     begin.requestId = static_cast<int>(ReqId::ID_RESET_PWD);
     const AuthFlowId flowId = _authFlow.reduce(0, begin).flowId;
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/reset_pwd"), json_obj,
+    HttpMgr::instance()->postHttpReq(QUrl(gate_url_prefix + "/reset_pwd"), json_obj,
                                         ReqId::ID_RESET_PWD, Modules::RESETMOD,
                                         flowId);
 }
@@ -313,7 +313,7 @@ void ResetDialog::on_get_code_btn_clicked()
     begin.module = static_cast<int>(Modules::RESETMOD);
     begin.requestId = static_cast<int>(ReqId::ID_GET_VERIFY_CODE);
     const AuthFlowId flowId = _authFlow.reduce(0, begin).flowId;
-    HttpMgr::GetInstance()->PostHttpReq(QUrl(gate_url_prefix + "/get_varifycode"), json_obj,
+    HttpMgr::instance()->postHttpReq(QUrl(gate_url_prefix + "/get_varifycode"), json_obj,
                                         ReqId::ID_GET_VERIFY_CODE, Modules::RESETMOD,
                                         flowId);
 }
@@ -321,5 +321,5 @@ void ResetDialog::on_get_code_btn_clicked()
 
 void ResetDialog::on_cancel_btn_clicked()
 {
-    emit sig_reset_switch_login();
+    emit loginRequested();
 }

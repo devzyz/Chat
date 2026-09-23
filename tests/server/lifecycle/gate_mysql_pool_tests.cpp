@@ -6,6 +6,7 @@
 #include <iostream>
 #include <stdexcept>
 
+/** 无需数据库连接地验证真实空池关闭唤醒、重复关闭和析构有界。 */
 int main() {
     using namespace std::chrono_literals;
     try {
@@ -14,13 +15,13 @@ int main() {
             // An empty pool exercises the actual pool and waiting borrowers
             // without opening a database connection or using a test adapter.
             MysqlConnectionPool pool("", "", "", "", 0);
-            auto borrower = std::async(std::launch::async, [&pool] { return pool.getConnection(); });
-            pool.close();
-            pool.close();
+            auto borrower = std::async(std::launch::async, /** 在独立任务中等待借用，以验证关闭会唤醒等待者。 */ [&pool] { return pool.GetConnection(); });
+            pool.Close();
+            pool.Close();
             if (borrower.wait_for(1s) != std::future_status::ready || borrower.get()) {
                 throw std::runtime_error("closed_pool_borrow_failed");
             }
-            if (pool.getConnection()) { throw std::runtime_error("closed_pool_reopened"); }
+            if (pool.GetConnection()) { throw std::runtime_error("closed_pool_reopened"); }
         }
         { MysqlConnectionPool pool("", "", "", "", 0); }
         if (std::chrono::steady_clock::now() - started > 2s) {

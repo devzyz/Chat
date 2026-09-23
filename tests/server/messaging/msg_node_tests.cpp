@@ -9,14 +9,16 @@
 
 namespace {
 
+/** 验证构造消息节点时清零缓冲并预留末尾零字节。 */
 TEST(MsgNodeTests, ConstructorCreatesZeroedNullTerminatedBuffer) {
     MsgNode node(8);
 
     EXPECT_EQ(node._cur_len, 0);
     EXPECT_EQ(node._total_len, 8);
-    EXPECT_TRUE(std::all_of(node._data, node._data + 9, [](char value) { return value == 0; }));
+    EXPECT_TRUE(std::all_of(node._data, node._data + 9, /** 检查单字节已清零。 */ [](char value) { return value == 0; }));
 }
 
+/** 验证零长度节点仍提供结束零字节。 */
 TEST(MsgNodeTests, ZeroLengthNodeStillProvidesTerminator) {
     MsgNode node(0);
 
@@ -24,6 +26,7 @@ TEST(MsgNodeTests, ZeroLengthNodeStillProvidesTerminator) {
     EXPECT_EQ(node._data[0], '\0');
 }
 
+/** 验证清理同时重置进度并清零完整正文。 */
 TEST(MsgNodeTests, ClearResetsProgressAndEntirePayloadBuffer) {
     MsgNode node(6);
     node._cur_len = 4;
@@ -32,10 +35,11 @@ TEST(MsgNodeTests, ClearResetsProgressAndEntirePayloadBuffer) {
     node.Clear();
 
     EXPECT_EQ(node._cur_len, 0);
-    EXPECT_TRUE(std::all_of(node._data, node._data + 6, [](char value) { return value == 0; }));
+    EXPECT_TRUE(std::all_of(node._data, node._data + 6, /** 检查单字节已清零。 */ [](char value) { return value == 0; }));
     EXPECT_EQ(node._data[6], '\0');
 }
 
+/** 验证发送节点复制正文时保留内嵌零字节。 */
 TEST(SendNodeTests, StringConstructorPreservesEmbeddedNullBytes) {
     const std::string body("left\0right", 10);
 
@@ -46,6 +50,7 @@ TEST(SendNodeTests, StringConstructorPreservesEmbeddedNullBytes) {
     EXPECT_EQ(std::memcmp(node._data + HEAD_TOTAL_LEN, body.data(), body.size()), 0);
 }
 
+/** 验证最大合法正文完整复制而不截断。 */
 TEST(SendNodeTests, MaximumApplicationBodyLengthIsCopiedWithoutTruncation) {
     const std::string body(MAX_LENGTH, 'x');
 
@@ -55,6 +60,7 @@ TEST(SendNodeTests, MaximumApplicationBodyLengthIsCopiedWithoutTruncation) {
     EXPECT_EQ(std::memcmp(node._data + HEAD_TOTAL_LEN, body.data(), body.size()), 0);
 }
 
+/** 验证一般消息和历史消息分别遵守长度上限，超限在分配前拒绝。 */
 TEST(SendNodeTests, OversizedApplicationBodyIsRejectedBeforeAllocation) {
     const std::string body(MAX_LENGTH + 1, 'x');
 
@@ -67,12 +73,14 @@ TEST(SendNodeTests, OversizedApplicationBodyIsRejectedBeforeAllocation) {
         MAX_HISTORY_BODY_LENGTH + 1), std::length_error);
 }
 
+/** 验证声明长度不能超过源字符串实际长度。 */
 TEST(SendNodeTests, DeclaredLengthCannotExceedTheSourceString) {
     const std::string body("short");
 
     EXPECT_THROW(SendNode(body, 1024, body.size() + 1), std::invalid_argument);
 }
 
+/** 验证接收节点清理复用缓冲并保留消息身份。 */
 TEST(RecvNodeTests, ConstructorRetainsMessageIdentityAndClearReusesBuffer) {
     RecvNode node(MAX_LENGTH, 0xffff);
     node._cur_len = 12;
@@ -83,7 +91,7 @@ TEST(RecvNodeTests, ConstructorRetainsMessageIdentityAndClearReusesBuffer) {
     EXPECT_EQ(node._msg_id, 0xffff);
     EXPECT_EQ(node._total_len, MAX_LENGTH);
     EXPECT_EQ(node._cur_len, 0);
-    EXPECT_TRUE(std::all_of(node._data, node._data + MAX_LENGTH, [](char value) { return value == 0; }));
+    EXPECT_TRUE(std::all_of(node._data, node._data + MAX_LENGTH, /** 检查单字节已清零。 */ [](char value) { return value == 0; }));
 }
 
 } // namespace

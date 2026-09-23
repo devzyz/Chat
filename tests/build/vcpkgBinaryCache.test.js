@@ -7,7 +7,7 @@ const { test } = require('node:test');
 
 const script = path.resolve(__dirname, '../../scripts/ci/vcpkgBinaryCache.js');
 
-test('dependency edits change preference but retain a platform-specific fallback', () => {
+test('dependency edits change preference but retain a platform-specific fallback', /** 验证依赖清单等分层输入变动影响缓存键且保留正确回退层。 */ () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-cache-inputs-'));
     try {
         const fixture = path.join(root, 'scripts/ci/vcpkgBinaryCache.js');
@@ -18,13 +18,13 @@ test('dependency edits change preference but retain a platform-specific fallback
         fs.writeFileSync(path.join(root, 'scripts/ci/linux-tool-assets.json'), '{}');
         const manifest = path.join(root, 'vcpkg.json');
         fs.writeFileSync(manifest, '{"dependencies":["grpc"]}');
-        const run = () => {
+        const run = /** 在隔离夹具目录执行缓存准备并解析输出键值。 */ () => {
             const result = spawnSync(process.execPath,
                 [fixture, 'prepare', path.join(root, 'archives'), 'x64-linux-chat-release'],
                 { encoding: 'utf8', env: { ...process.env, RUNNER_OS: 'Linux', RUNNER_ARCH: 'X64',
                     ImageOS: 'ubuntu24', GITHUB_RUN_ID: '100', GITHUB_RUN_ATTEMPT: '1', GITHUB_OUTPUT: '' } });
             assert.equal(result.status, 0, result.stderr);
-            return Object.fromEntries(result.stdout.trim().split('\n').map(line => line.split('=')));
+            return Object.fromEntries(result.stdout.trim().split('\n').map(/** 拆分缓存准备输出行的键值。 */ line => line.split('=')));
         };
         const original = run();
         fs.writeFileSync(manifest, '{"dependencies":["grpc","jsoncpp"]}');
@@ -38,7 +38,7 @@ test('dependency edits change preference but retain a platform-specific fallback
     }
 });
 
-test('Linux binary cache path is bound on the runner before dependency restoration', () => {
+test('Linux binary cache path is bound on the runner before dependency restoration', /** 验证 Linux 运行器临时目录仅在可解析上下文使用且恢复前完成绑定。 */ () => {
     const workflow = fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/linux-ci.yml'), 'utf8');
     const preflight = workflow.slice(workflow.indexOf('  linux-preflight:'));
     const jobEnv = preflight.slice(preflight.indexOf('    env:'), preflight.indexOf('    steps:'));
@@ -49,7 +49,7 @@ test('Linux binary cache path is bound on the runner before dependency restorati
     assert.match(preflight.slice(binding).split('\n')[0], /GITHUB_ENV/);
 });
 
-test('stale restored cache is refreshed once; a warm run does not upload identical archives', () => {
+test('stale restored cache is refreshed once; a warm run does not upload identical archives', /** 验证缓存准备、快照和报告准确反映 ABI、工具及归档变化。 */ () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-cache-test-'));
     try {
         const cache = path.join(root, 'archives');
@@ -60,6 +60,7 @@ test('stale restored cache is refreshed once; a warm run does not upload identic
             CHAT_WINDOWS_TOOLCHAIN: path.resolve(__dirname, '../../scripts/ci/windows-toolchain.json'),
             ImageOS: 'win22', ImageVersion: 'fixture-1', GITHUB_RUN_ID: '100', GITHUB_RUN_ATTEMPT: '1',
             GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary };
+        /** 执行指定缓存动作并读取输出，非零退出使断言失败。 */
         function run(command, overrides = {}) {
             fs.writeFileSync(output, '');
             const result = spawnSync(process.execPath, [script, command, cache,
@@ -67,7 +68,7 @@ test('stale restored cache is refreshed once; a warm run does not upload identic
             { env: { ...env, ...overrides }, encoding: 'utf8' });
             assert.equal(result.status, 0, result.stderr);
             return Object.fromEntries(fs.readFileSync(output, 'utf8').trim().split('\n')
-                .filter(Boolean).map(line => line.split('=')));
+                .filter(Boolean).map(/** 拆分缓存测量输出行的键值。 */ line => line.split('=')));
         }
         const first = run('prepare');
         assert.ok(first.key.startsWith(first.prefix));
@@ -79,7 +80,7 @@ test('stale restored cache is refreshed once; a warm run does not upload identic
         assert.ok(first.prefix.startsWith(first.fallback));
         assert.equal(first.legacy, '', 'do not restore archives from an unverified toolchain');
         const upgradedLock = JSON.parse(fs.readFileSync(env.CHAT_WINDOWS_TOOLCHAIN, 'utf8'));
-        upgradedLock.tools.find(tool => tool.name === 'powershell-core').version = '7.6.6';
+        upgradedLock.tools.find(/** 定位 PowerShell 工具锁项以测试版本身份变化。 */ tool => tool.name === 'powershell-core').version = '7.6.6';
         const upgradedPath = path.join(root, 'upgraded-toolchain.json');
         fs.writeFileSync(upgradedPath, JSON.stringify(upgradedLock));
         const upgraded = run('prepare', { CHAT_WINDOWS_TOOLCHAIN: upgradedPath });
@@ -117,14 +118,14 @@ test('stale restored cache is refreshed once; a warm run does not upload identic
     }
 });
 
-test('empty archives do not request a save and a missing snapshot fails', () => {
+test('empty archives do not request a save and a missing snapshot fails', /** 验证缺少快照时报告失败，空缓存经快照后不误报变化。 */ () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-cache-empty-'));
     try {
         const cache = path.join(root, 'archives');
         const output = path.join(root, 'output');
         fs.mkdirSync(cache);
         const env = { ...process.env, GITHUB_OUTPUT: output };
-        const run = command => spawnSync(process.execPath, [script, command, cache], { env, encoding: 'utf8' });
+        const run = /** 在隔离缓存环境执行指定命令。 */ command => spawnSync(process.execPath, [script, command, cache], { env, encoding: 'utf8' });
         assert.notEqual(run('report').status, 0);
         assert.equal(run('snapshot').status, 0);
         assert.equal(run('report').status, 0);
@@ -133,7 +134,7 @@ test('empty archives do not request a save and a missing snapshot fails', () => 
         fs.rmSync(root, { recursive: true, force: true });
     }
 });
-test('both workflows restore layered keys and save before business builds', () => {
+test('both workflows restore layered keys and save before business builds', /** 验证工作流恢复层级及缓存保存条件不制造无效副本。 */ () => {
     for (const platform of ['windows', 'linux']) {
         const workflow = fs.readFileSync(path.resolve(__dirname, `../../.github/workflows/${platform}-ci.yml`), 'utf8');
         assert.match(workflow, /restore-keys: \|\s+\$\{\{ steps.binary-cache-key.outputs.prefix \}\}\s+\$\{\{ steps.binary-cache-key.outputs.fallback \}\}\s+\$\{\{ steps.binary-cache-key.outputs.legacy \}\}/);
@@ -148,12 +149,12 @@ test('both workflows restore layered keys and save before business builds', () =
     }
 });
 
-test('Linux installs dependencies independently of project configuration using the preset inputs', () => {
+test('Linux installs dependencies independently of project configuration using the preset inputs', /** 验证 Linux 恢复步骤仅恢复依赖、传递预设并保留管道失败传播。 */ () => {
     const root = path.resolve(__dirname, '../..');
     const workflow = fs.readFileSync(path.join(root, '.github/workflows/linux-ci.yml'), 'utf8');
     const restore = workflow.split('        id: dependency-restore\n')[1].split('\n      - name:')[0];
     const preset = JSON.parse(fs.readFileSync(path.join(root, 'CMakePresets.json'), 'utf8'))
-        .configurePresets.find(item => item.name === 'linux-x64-release').cacheVariables;
+        .configurePresets.find(/** 定位 Linux Release 配置预设。 */ item => item.name === 'linux-x64-release').cacheVariables;
     assert.match(restore, /"\$VCPKG_ROOT\/vcpkg" install/);
     assert.doesNotMatch(restore, /cmake|linux-ci\.sh/);
     assert.match(restore, /set -o pipefail/);

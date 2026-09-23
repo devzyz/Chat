@@ -47,7 +47,7 @@ class GateHttpTransport final : public QObject
 
 public:
     /** @brief 返回 HTTP 响应允许的最大字节数。 */
-    static constexpr qsizetype MaxResponseBytes() noexcept { return 8192; }
+    static constexpr qsizetype maxResponseBytes() noexcept { return 8192; }
 
     /** @brief 初始化对象，用于在所属 Qt 线程拥有 HTTP 请求，限制响应大小并为每个操作发布终态。 */
     explicit GateHttpTransport(QObject *parent = nullptr);

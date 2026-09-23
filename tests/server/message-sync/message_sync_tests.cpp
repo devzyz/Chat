@@ -13,12 +13,14 @@
 #include "../../../ChatServer/ChatServer/MySqlMessageCommitAdapter.h"
 #include "../../../common/resource/ResourceCatalog.h"
 
+/** 初始化并执行消息同步数据库测试，返回真实测试状态。 */
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
 
 namespace {
+/** 连接显式指定的隔离测试库并限制锁等待时间，未指定端点则拒绝。 */
 std::unique_ptr<sql::Connection> Connect() {
     const auto* endpoint = std::getenv("MESSAGE_SYNC_TEST_MYSQL");
     if (!endpoint) throw std::runtime_error("requires isolated MESSAGE_SYNC_TEST_MYSQL");
@@ -28,6 +30,7 @@ std::unique_ptr<sql::Connection> Connect() {
     statement->execute("SET SESSION innodb_lock_wait_timeout=5");
     return connection;
 }
+/** 为样本名称分配进程内稳定的合法 UUID。 */
 std::string Uuid(const std::string& name) {
     static std::map<std::string, int> identifiers;
     if (!identifiers.count(name)) identifiers[name] = static_cast<int>(identifiers.size()) + 1;
@@ -35,6 +38,7 @@ std::string Uuid(const std::string& name) {
     value << "00000000-0000-4000-8000-" << std::setfill('0') << std::setw(12) << identifiers[name];
     return value.str();
 }
+/** 经生产提交器保存文本批次并返回消息编号，提交失败抛异常。 */
 std::vector<int> SaveText(sql::Connection& connection, int sender, int recipient, int chat,
                          message_commit::Batch messages) {
     for (auto& message : messages) message.first = Uuid(message.first);
@@ -46,6 +50,7 @@ std::vector<int> SaveText(sql::Connection& connection, int sender, int recipient
     for (const auto& item : result.items) ids.push_back(item.message_id);
     return ids;
 }
+/** 为固定参与者读取受字节上限约束的增量页。 */
 Json::Value Page(sql::Connection& connection, int chat, std::int64_t after, std::size_t limit = 2048) {
     Json::Value result;
     result["mode"] = "sync_v1";
@@ -58,6 +63,7 @@ Json::Value Page(sql::Connection& connection, int chat, std::int64_t after, std:
 }
 }
 
+/** 验证相同身份重试幂等、冲突批次整批回滚及伪造参与者拒绝。 */
 TEST(MessageSync, RetryConflictAndBatchRollback) {
     auto connection = Connect();
     const auto ids = SaveText(*connection, 7, 8, 101, {{"a", "first"}});
@@ -71,6 +77,7 @@ TEST(MessageSync, RetryConflictAndBatchRollback) {
     EXPECT_TRUE(connection->getAutoCommit());
 }
 
+/** 验证按字节限制分页无遗漏，并保留资源消息身份。 */
 TEST(MessageSync, IncrementalByteBoundedPagesAndResourceIdentity) {
     auto connection = Connect();
     std::vector<std::pair<std::string, std::string>> messages;
@@ -106,6 +113,7 @@ TEST(MessageSync, IncrementalByteBoundedPagesAndResourceIdentity) {
     EXPECT_EQ(resource["msgs"][0]["msg_uuid"].asString(), Uuid("resource"));
 }
 
+/** 验证同步读取等待尚未提交的写事务，游标不能越过它。 */
 TEST(MessageSync, CursorCannotPassAnUncommittedWriter) {
     auto first = Connect();
     first->setAutoCommit(false);
@@ -114,7 +122,7 @@ TEST(MessageSync, CursorCannotPassAnUncommittedWriter) {
     statement->execute("INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES(104,7,11,'held',0)");
     // Production sync uses the same row lock. Observe an actual DB lock wait,
     // rather than inferring ordering from a fixed sleep.
-    auto reading = std::async(std::launch::async, [] {
+    auto reading = std::async(std::launch::async, /** 使用独立数据库会话读取被写事务阻塞的同步页。 */ [] {
         auto second = Connect();
         return Page(*second, 104, 0);
     });
@@ -137,6 +145,7 @@ TEST(MessageSync, CursorCannotPassAnUncommittedWriter) {
 }
 
 namespace {
+/** 构造并执行回执上报或 revision 同步请求，返回协议响应。 */
 Json::Value Receipt(sql::Connection& connection, int uid, int chat, const std::vector<int>& ids,
                     const std::string& level, std::int64_t after = 0) {
     Json::Value request;
@@ -158,6 +167,7 @@ Json::Value Receipt(sql::Connection& connection, int uid, int chat, const std::v
 }
 }
 
+/** 验证回执参与权限、单调升级及持久化结果。 */
 TEST(MessageSync, ReceiptsAreAuthorizedMonotonicAndDurable) {
     auto connection = Connect();
     const auto ids = SaveText(*connection, 7, 8, 101, {{"receipt-first", "receipt one"}, {"receipt-second", "receipt two"}});
@@ -181,6 +191,7 @@ TEST(MessageSync, ReceiptsAreAuthorizedMonotonicAndDurable) {
     EXPECT_EQ(increment["next_revision"].asString(), "3");
 }
 
+/** 验证分页期间已读升级移动到新 revision 后仍能被后续页读取。 */
 TEST(MessageSync, ReceiptPageCannotSkipAnUpgrade) {
     auto connection = Connect();
     std::vector<int> ids;

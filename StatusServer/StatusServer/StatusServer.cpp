@@ -1,4 +1,4 @@
-﻿// StatusServer.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
+// StatusServer.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
 //
 
 #include <iostream>
@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+/** @brief 从已验证配置构建 Status 路由及依赖端口。 */
 std::unique_ptr<StatusRouting> CreateConfiguredStatusRouting() {
 	auto& config = ConfigMgr::GetInstance();
 	std::stringstream names(config["ChatServers"]["Name"]);
@@ -27,6 +28,7 @@ std::unique_ptr<StatusRouting> CreateConfiguredStatusRouting() {
 	return CreateProductionStatusRouting(std::move(servers));
 }
 
+/** @brief 按参数启动 Status 服务，发布就绪信息并等待受控关闭。 */
 void RunServer() {
 	auto& configMgr = ConfigMgr::GetInstance();
 
@@ -56,7 +58,7 @@ void RunServer() {
 #endif
 
 	// 异步等待停止信号
-	signals.async_wait([&server](const boost::system::error_code& error, int signal_number) {
+	signals.async_wait(/** @brief 收到正常退出信号时以有限截止时间关闭 gRPC 服务。 */ [&server](const boost::system::error_code& error, int signal_number) {
 		if (!error) {
 			SPDLOG_INFO("StatusServer shutting down");
 			server.Stop(std::chrono::system_clock::now() + std::chrono::seconds(5));
@@ -66,7 +68,7 @@ void RunServer() {
 	std::thread signal_thread;
 	try {
 		// 在单独的线程中运行io_context，并由 RunServer 明确 join。
-		signal_thread = std::thread([&io_context]() {
+		signal_thread = std::thread(/** @brief 运行退出信号所需的 Asio 事件循环。 */ [&io_context]() {
 			io_context.run();
 			});
 
@@ -87,6 +89,7 @@ void RunServer() {
 	}
 }
 
+/** @brief 解析启动配置并初始化本服务依赖，发布就绪信息后运行事件循环，按信号或错误执行关闭流程。 */
 int main(int argc, char* argv[])
 {
 	if (argc != 1 && (argc != 3 || std::string(argv[1]) != "--config")) {

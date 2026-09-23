@@ -20,16 +20,16 @@ RedisMgr::~RedisMgr() {
 }
 
 /**
- * @brief
- * @param key
+ *
+ *
  * @param value 结果保存位置
- * @return
+ *
  * 1. 判断返回非空
  * 2. 判断返回非无效值
  * 3. 返回值类型必须为string
  */
 bool RedisMgr::Get(const std::string& key, std::string& value) {
-	auto connection = _pool->getConnection();
+	auto connection = _pool->GetConnection();
 	if (connection == nullptr) {
 		value = "";
 		return false;
@@ -40,13 +40,13 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
 	if (reply == nullptr) {
 		SPDLOG_ERROR("redis GET failed, key={}, reason=null_reply", key);
 		value = "";
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		return false;
 	}
 
-	Defer defer([this, reply, connection]() {
+	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, reply, connection]() {
 		freeReplyObject(reply);
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		});
 
 	if (reply->type == REDIS_REPLY_NIL) {
@@ -67,16 +67,16 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
 }
 
 /**
- * @brief
- * @param key
- * @param value
- * @return
+ *
+ *
+ *
+ *
  * 1. 返回非空
  * 2. 返回的类型为status类型
  * 3. status的内容状态为ok
  */
 bool RedisMgr::Set(const std::string& key, const std::string& value) {
-	auto connection = _pool->getConnection();
+	auto connection = _pool->GetConnection();
 	if (connection == nullptr) {
 		return false;
 	}
@@ -85,13 +85,13 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
 
 	if (reply == nullptr) {
 		SPDLOG_ERROR("redis SET failed, key={}, value_size={}, reason=null_reply", key, value.size());
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		return false;
 	}
 
-	Defer defer([this, reply, connection]() {
+	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, reply, connection]() {
 		freeReplyObject(reply);
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		});
 
 	if (!(reply->type == REDIS_REPLY_STATUS &&
@@ -105,17 +105,17 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
 }
 
 /**
- * @brief
- * @param first_key
- * @param second_key
+ *
+ *
+ *
  * @param value 结果保存位置
- * @return
+ *
  * 1. 返回非空
  * 2. 返回值非无效值
  * 3. 返回类型必须为string
  */
 bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key, std::string& value) {
-	auto connection = _pool->getConnection();
+	auto connection = _pool->GetConnection();
 	if (connection == nullptr) {
 		value = "";
 		return false;
@@ -126,13 +126,13 @@ bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key,
 	if (reply == nullptr) {
 		SPDLOG_ERROR("redis HGET failed, key={}, field={}, reason=null_reply", first_key, second_key);
 		value = "";
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		return false;
 	}
 
-	Defer defer([this, reply, connection]() {
+	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, reply, connection]() {
 		freeReplyObject(reply);
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		});
 
 	if (reply->type == REDIS_REPLY_NIL) {
@@ -153,16 +153,16 @@ bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key,
 }
 
 /**
- * @brief
- * @param first_key
- * @param second_key
- * @param value
- * @return
+ *
+ *
+ *
+ *
+ *
  * 1. 返回非空
  * 2. 返回类型必须为integer （1为新增，0为更新已有）
  */
 bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key, const std::string& value) {
-	auto connection = _pool->getConnection();
+	auto connection = _pool->GetConnection();
 	if (connection == nullptr) {
 		return false;
 	}
@@ -171,13 +171,13 @@ bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key,
 
 	if (reply == nullptr) {
 		SPDLOG_ERROR("redis HSET failed, key={}, field={}, value_size={}, reason=null_reply", first_key, second_key, value.size());
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		return false;
 	}
 
-	Defer defer([this, reply, connection]() {
+	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, reply, connection]() {
 		freeReplyObject(reply);
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		});
 
 	if (reply->type != REDIS_REPLY_INTEGER) {
@@ -191,15 +191,15 @@ bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key,
 }
 
 /**
- * @brief
- * @param first_key
- * @param second_key
- * @return
+ *
+ *
+ *
+ *
  * 1. 返回非空
  * 2. 返回类型必须为整数
  */
 bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key) {
-	auto connection = _pool->getConnection();
+	auto connection = _pool->GetConnection();
 	if (connection == nullptr) {
 		return false;
 	}
@@ -208,13 +208,13 @@ bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key)
 
 	if (reply == nullptr) {
 		SPDLOG_ERROR("redis HDEL failed, key={}, field={}, reason=null_reply", first_key, second_key);
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		return false;
 	}
 
-	Defer defer([this, reply, connection]() {
+	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, reply, connection]() {
 		freeReplyObject(reply);
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		});
 
 	if (reply->type != REDIS_REPLY_INTEGER) {
@@ -228,14 +228,14 @@ bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key)
 }
 
 /**
- * @brief
- * @param key
- * @return
+ *
+ *
+ *
  * 1. 返回非空
  * 2. 返回类型必须为整数
  */
 bool RedisMgr::Del(const std::string& key) {
-	auto connection = _pool->getConnection();
+	auto connection = _pool->GetConnection();
 	if (connection == nullptr) {
 		return false;
 	}
@@ -244,13 +244,13 @@ bool RedisMgr::Del(const std::string& key) {
 
 	if (reply == nullptr) {
 		SPDLOG_ERROR("redis DEL failed, key={}, reason=null_reply", key);
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		return false;
 	}
 
-	Defer defer([this, connection, reply]() {
+	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, connection, reply]() {
 		freeReplyObject(reply);
-		_pool->returnConnection(connection);
+		_pool->ReturnConnection(connection);
 		});
 
 	if (reply->type != REDIS_REPLY_INTEGER) {
@@ -264,52 +264,52 @@ bool RedisMgr::Del(const std::string& key) {
 }
 
 // 如果加锁成功，则返回一个锁的唯一标识
-std::string RedisMgr::acquireLock(const std::string& lockName, int lockTimeout, int acquireTimeout) {
-	auto connection = _pool->getConnection();
+std::string RedisMgr::AcquireLock(const std::string& lockName, int lockTimeout, int acquireTimeout) {
+	auto connection = _pool->GetConnection();
 
 	if (connection == nullptr) {
 		return "";
 	}
 
-	Defer defer([this, connection]() {
-		_pool->returnConnection(connection);
+	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, connection]() {
+		_pool->ReturnConnection(connection);
 		});
 
-	return DistLock::GetInstance()->acquireLock(connection, lockName, lockTimeout, acquireTimeout);
+	return DistLock::GetInstance()->AcquireLock(connection, lockName, lockTimeout, acquireTimeout);
 }
 
 // 如果解锁成功，则返回true
-bool RedisMgr::releaseLock(const std::string& lockName, const std::string& identifier) {
+bool RedisMgr::ReleaseLock(const std::string& lockName, const std::string& identifier) {
 	if (identifier.empty()) {
 		return true;
 	}
 
-	auto connection = _pool->getConnection();
+	auto connection = _pool->GetConnection();
 
 	if (connection == nullptr) {
 		return false;
 	}
 
-	Defer defer([this, connection]() {
-		_pool->returnConnection(connection);
+	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, connection]() {
+		_pool->ReturnConnection(connection);
 		});
 
-	return DistLock::GetInstance()->releaseLock(connection, lockName, identifier);
+	return DistLock::GetInstance()->ReleaseLock(connection, lockName, identifier);
 }
 
 /**
- * @brief
- * @return
+ *
+ *
  */
 void RedisMgr::Close() {
-	_pool->close();
+	_pool->Close();
 }
 
 std::optional<std::vector<std::string>> RedisMgr::Eval(const std::string& script,
     const std::vector<std::string>& keys, const std::vector<std::string>& arguments) {
-    auto* connection = _pool->getConnection();
+    auto* connection = _pool->GetConnection();
     if (!connection) return std::nullopt;
-    Defer release([this, connection] { _pool->returnConnection(connection); });
+    Defer release(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, connection] { _pool->ReturnConnection(connection); });
     const timeval timeout{2, 0};
     if (redisSetTimeout(connection, timeout) != REDIS_OK) return std::nullopt;
     std::vector<std::string> command{"EVAL", script, std::to_string(keys.size())};
@@ -321,7 +321,7 @@ std::optional<std::vector<std::string>> RedisMgr::Eval(const std::string& script
     auto* reply = static_cast<redisReply*>(redisCommandArgv(connection,
         static_cast<int>(argv.size()), argv.data(), lengths.data()));
     if (!reply) return std::nullopt;
-    Defer free_reply([reply] { freeReplyObject(reply); });
+    Defer free_reply(/** @brief 释放本次 Redis 命令响应，保证异常路径也回收内存。 */ [reply] { freeReplyObject(reply); });
     if (reply->type != REDIS_REPLY_ARRAY) return std::nullopt;
     std::vector<std::string> result;
     for (std::size_t i = 0; i < reply->elements; ++i) {

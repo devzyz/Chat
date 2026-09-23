@@ -6,14 +6,14 @@ const { test } = require('node:test');
 const { validate, identity, canRefresh, trustedRun, select } = require('../../scripts/ci/toolchain');
 const bootstrap = require('../../scripts/ci/windows-toolchain.json');
 const root = path.resolve(__dirname, '../..');
-const read = name => fs.readFileSync(path.join(root, name), 'utf8');
+const read = /** 读取仓库相对路径文本用于工作流合同校验。 */ name => fs.readFileSync(path.join(root, name), 'utf8');
 
-test('selection retains previous approved tools after a failed refresh and rejects expired or unavailable records', () => {
+test('selection retains previous approved tools after a failed refresh and rejects expired or unavailable records', /** 验证只选择成功可信运行的工具工件，过期或 API 失败不能静默降级。 */ () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-toolchain-'));
     const env = { GITHUB_REPOSITORY: 'owner/repo', GITHUB_EVENT_NAME: 'pull_request', GITHUB_REF: 'refs/pull/8/merge' };
     let expired = false;
     let acquisitions = 0;
-    const request = endpoint => {
+    const request = /** 模拟仓库、工件和工作流运行 API，未知请求立即失败。 */ endpoint => {
         if (endpoint === 'repos/owner/repo') return { default_branch: 'develop' };
         if (endpoint.endsWith('/workflows/ci.yml')) return { id: 12 };
         if (endpoint.includes('/artifacts?')) return { artifacts: [
@@ -26,19 +26,19 @@ test('selection retains previous approved tools after a failed refresh and rejec
         }
         throw new Error(`Unexpected API call ${endpoint}`);
     };
-    const acquire = (repo, runId, directory) => {
+    const acquire = /** 核对被下载的运行身份并写入受控锁文件。 */ (repo, runId, directory) => {
         acquisitions++;
         assert.equal(repo, 'owner/repo');
         assert.equal(runId, 2);
         fs.writeFileSync(path.join(directory, 'windows-toolchain.json'), JSON.stringify(bootstrap));
     };
-    const options = { env, request, acquire, publish() {} };
+    const options = { env, request, acquire, /** 消费测试发布结果而不写入真实工作流输出。 */ publish() {} };
     try {
         assert.equal(select(dir, options).source, 'approved run 2');
         assert.equal(acquisitions, 1);
         expired = true;
-        assert.throws(() => select(dir, options), /expired/);
-        assert.throws(() => select(dir, { ...options, request() { throw new Error('API unavailable'); } }), /API unavailable/);
+        assert.throws(/** 执行工件选择以验证过期工件拒绝。 */ () => select(dir, options), /expired/);
+        assert.throws(/** 执行 API 不可用场景以验证失败传播。 */ () => select(dir, { ...options, /** 注入 API 不可用异常。 */ request() { throw new Error('API unavailable'); } }), /API unavailable/);
         // A refresh can recover from expired artifacts, but still cannot publish before full success.
         const refresh = select(dir, { ...options, env: { ...env, GITHUB_EVENT_NAME: 'schedule', GITHUB_REF: 'refs/heads/develop' } });
         assert.equal(refresh.refresh, true);
@@ -46,7 +46,7 @@ test('selection retains previous approved tools after a failed refresh and rejec
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('only weekly or explicit default-branch runs may discover new tool versions', () => {
+test('only weekly or explicit default-branch runs may discover new tool versions', /** 验证工具刷新严格限定默认分支与指定事件。 */ () => {
     for (const event of ['pull_request', 'push', 'workflow_dispatch', 'schedule']) {
         for (const ref of ['refs/pull/8/merge', 'refs/heads/feature']) {
             assert.equal(canRefresh(event, ref, 'develop', 'true'), false);
@@ -58,7 +58,7 @@ test('only weekly or explicit default-branch runs may discover new tool versions
     assert.equal(canRefresh('schedule', 'refs/heads/develop', 'develop', 'false'), true);
 });
 
-test('failed, unfinished, PR, foreign workflow and non-default-branch records cannot be promoted', () => {
+test('failed, unfinished, PR, foreign workflow and non-default-branch records cannot be promoted', /** 验证失败、取消、其他分支及非刷新事件的工件不受信。 */ () => {
     const good = { workflow_id: 12, head_branch: 'develop', conclusion: 'success', event: 'schedule' };
     assert.equal(trustedRun(good, 12, 'develop'), true);
     for (const change of [{ conclusion: 'failure' }, { conclusion: null }, { conclusion: 'cancelled' },
@@ -67,11 +67,11 @@ test('failed, unfinished, PR, foreign workflow and non-default-branch records ca
     }
 });
 
-test('PowerShell patch upgrades and compiler identity changes isolate native cache namespaces', () => {
+test('PowerShell patch upgrades and compiler identity changes isolate native cache namespaces', /** 验证工具、编译器或 SDK 版本变化都会改变锁身份。 */ () => {
     const original = identity(bootstrap);
-    for (const change of [lock => { lock.tools[2].version = '7.6.6'; },
-        lock => { lock.msvc.compilerVersion = '19.44.35229.0'; },
-        lock => { lock.msvc.sdk = '10.0.22621.0'; }]) {
+    for (const change of [/** 修改工具版本以触发身份变化。 */ lock => { lock.tools[2].version = '7.6.6'; },
+        /** 修改编译器版本以触发身份变化。 */ lock => { lock.msvc.compilerVersion = '19.44.35229.0'; },
+        /** 修改 SDK 版本以触发身份变化。 */ lock => { lock.msvc.sdk = '10.0.22621.0'; }]) {
         const candidate = structuredClone(bootstrap);
         change(candidate);
         assert.notEqual(identity(candidate), original);
@@ -79,18 +79,18 @@ test('PowerShell patch upgrades and compiler identity changes isolate native cac
     assert.equal(identity(structuredClone(bootstrap)), original);
 });
 
-test('malformed versions, duplicate tools, untrusted downloads and missing digests fail closed', () => {
+test('malformed versions, duplicate tools, untrusted downloads and missing digests fail closed', /** 验证浮动版本、重复工具、非法来源、缺摘要及越界可执行路径被拒绝。 */ () => {
     validate(bootstrap);
-    for (const mutate of [lock => { lock.msvc.toolset = 'latest'; },
-        lock => { lock.tools[2] = lock.tools[0]; }, lock => { lock.tools[0].url = 'https://example.com/tool.zip'; },
-        lock => { lock.tools[0].sha512 = ''; }, lock => { lock.tools[0].executable = '../tool.exe'; }]) {
+    for (const mutate of [/** 注入未固定的工具集版本。 */ lock => { lock.msvc.toolset = 'latest'; },
+        /** 注入重复工具身份。 */ lock => { lock.tools[2] = lock.tools[0]; }, /** 注入非批准工具来源。 */ lock => { lock.tools[0].url = 'https://example.com/tool.zip'; },
+        /** 移除工具校验和。 */ lock => { lock.tools[0].sha512 = ''; }, /** 注入越界可执行文件路径。 */ lock => { lock.tools[0].executable = '../tool.exe'; }]) {
         const candidate = structuredClone(bootstrap);
         mutate(candidate);
-        assert.throws(() => validate(candidate));
+        assert.throws(/** 校验当前变异锁文件，供拒绝断言。 */ () => validate(candidate));
     }
 });
 
-test('tool selection precedes restore; cold refresh skips caches and promotion requires full regression', () => {
+test('tool selection precedes restore; cold refresh skips caches and promotion requires full regression', /** 验证工作流刷新、固定工具安装、缓存绕过和批准工件发布真实接入。 */ () => {
     const ci = read('.github/workflows/ci.yml');
     const windows = read('.github/workflows/windows-ci.yml');
     const linux = read('.github/workflows/linux-ci.yml');

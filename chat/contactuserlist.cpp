@@ -20,28 +20,28 @@ ContactUserList::ContactUserList(QWidget *parent) : QListWidget(parent), _loadin
     // 安装事件过滤器
     this->viewport()->installEventFilter(this);
 
-    LoadContactUserList();
+    loadContactUserList();
 
     // 连接点击item的信号和槽
-    connect(this, &QListWidget::itemClicked, this, &ContactUserList::slot_item_clicked);
+    connect(this, &QListWidget::itemClicked, this, &ContactUserList::itemClicked);
 
     // 连接认证的服务器回包处理发出的更新信号
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::friendAdded,
-            this, &ContactUserList::slot_tcp_add_friend);
+    connect(TcpMgr::instance().get(), &TcpMgr::friendAdded,
+            this, &ContactUserList::tcpAddFriend);
 }
 
 /**
- * @brief ContactUserList::ShowRedPoint
+ * @brief ContactUserList::showRedPoint
  * @param bshow
  * 这里的_add_friend_item保存的是新的朋友对应的item, 展示的是新的朋友右上角的红点
  */
-void ContactUserList::ShowRedPoint(bool bshow)
+void ContactUserList::showRedPoint(bool bshow)
 {
     // 如果当前新的朋友已经被选中了，则直接返回
     if (_add_friend_item->isSelected()) {
         return ;
     }
-    _add_friend_item_inner_widget->ShowRedPoint(bshow);
+    _add_friend_item_inner_widget->showRedPoint(bshow);
 }
 
 /**
@@ -86,7 +86,7 @@ bool ContactUserList::eventFilter(QObject *watched, QEvent *event)
             // 滚动到底部，加载新的联系人
             SPDLOG_DEBUG("loading more contacts");
             // 判断联系人是否加载完成
-            auto isLoadingFinish = UserMgr::GetInstance()->isContactListFullyLoaded();
+            auto isLoadingFinish = UserMgr::instance()->isContactListFullyLoaded();
             if (isLoadingFinish) {
                 return true;
             }
@@ -102,7 +102,7 @@ bool ContactUserList::eventFilter(QObject *watched, QEvent *event)
                 _loading_contact = false;
             });
             // 发送信号通知聊天界面加载更多聊天内容
-            emit sig_loading_contact_list();
+            emit moreContactsRequested();
         }
 
         return true;
@@ -117,13 +117,13 @@ bool ContactUserList::eventFilter(QObject *watched, QEvent *event)
  * 新的朋友
  * 用户的联系人
  */
-void ContactUserList::LoadContactUserList()
+void ContactUserList::loadContactUserList()
 {
     // 添加新的朋友分组标题item
     // 创建一个QListWidgetItem放入QListWidget,将item绑定到GroupTipItem上
     auto * newFriendGroupTip = new GroupTipItem();
     QListWidgetItem * new_friend_group_item = new QListWidgetItem();
-    newFriendGroupTip->SetGroupTip("新的朋友");
+    newFriendGroupTip->setGroupTip("新的朋友");
     new_friend_group_item->setSizeHint(newFriendGroupTip->sizeHint());
     this->addItem(new_friend_group_item);
     this->setItemWidget(new_friend_group_item, newFriendGroupTip);
@@ -132,8 +132,8 @@ void ContactUserList::LoadContactUserList()
     // 创建新的朋友分组下的item
     _add_friend_item_inner_widget = new ContactUserItem();
     _add_friend_item_inner_widget->setObjectName("new_friend_item");
-    _add_friend_item_inner_widget->SetInfo(0, tr("新的朋友"), ":/res/add_friend.png");
-    _add_friend_item_inner_widget->SetItemType(ListItemType::APPLY_FRIEND_ITEM);
+    _add_friend_item_inner_widget->setInfo(0, tr("新的朋友"), ":/res/add_friend.png");
+    _add_friend_item_inner_widget->setItemType(ListItemType::APPLY_FRIEND_ITEM);
 
     _add_friend_item = new QListWidgetItem();
     _add_friend_item->setSizeHint(_add_friend_item_inner_widget->sizeHint());
@@ -144,34 +144,34 @@ void ContactUserList::LoadContactUserList()
 
     // 已添加联系人的groupItem
     auto * contactGroupTip = new GroupTipItem();
-    contactGroupTip->SetGroupTip("联系人");
+    contactGroupTip->setGroupTip("联系人");
     _contact_item = new QListWidgetItem();
     _contact_item->setSizeHint(contactGroupTip->sizeHint());
     this->addItem(_contact_item);
     this->setItemWidget(_contact_item, contactGroupTip);
     _contact_item->setFlags(_contact_item->flags() & ~Qt::ItemIsSelectable); // 设置为不可点击
 
-    auto contact_list = UserMgr::GetInstance()->nextContactPage();
+    auto contact_list = UserMgr::instance()->nextContactPage();
     if (!contact_list.empty()) {
         for (auto &info : contact_list) {
             auto _contact_user_item = new ContactUserItem();
-            _contact_user_item->SetInfo(info);
-            _contact_user_item->SetItemType(ListItemType::CONTACT_USER_ITEM);
+            _contact_user_item->setInfo(info);
+            _contact_user_item->setItemType(ListItemType::CONTACT_USER_ITEM);
 
             QListWidgetItem * _friend_item = new QListWidgetItem();
             _friend_item->setSizeHint(_contact_user_item->sizeHint());
             this->addItem(_friend_item);
             this->setItemWidget(_friend_item, _contact_user_item);
         }
-        UserMgr::GetInstance()->advanceContactPage();
+        UserMgr::instance()->advanceContactPage();
     }
 }
 
 /**
- * @brief ContactUserList::slot_item_clicked
+ * @brief ContactUserList::itemClicked
  * 点击QListWidget列表内item触发的槽函数
  */
-void ContactUserList::slot_item_clicked(QListWidgetItem * item)
+void ContactUserList::itemClicked(QListWidgetItem * item)
 {
     // 先转换为基类
     QWidget * widget = this->itemWidget(item);
@@ -188,7 +188,7 @@ void ContactUserList::slot_item_clicked(QListWidgetItem * item)
     }
 
     // 判断是不是无效的类别或者是分组
-    auto itemType = customItem->GetItemType();
+    auto itemType = customItem->getItemType();
     if (itemType == ListItemType::INVALID_ITEM ||
         itemType == ListItemType::GROUP_TIP_ITEM) {
         SPDLOG_WARN("invalid contact list item clicked");
@@ -199,8 +199,8 @@ void ContactUserList::slot_item_clicked(QListWidgetItem * item)
     if (itemType == ListItemType::APPLY_FRIEND_ITEM) {
         SPDLOG_DEBUG("friend application item clicked");
         ContactUserItem * contact_friend_item = qobject_cast<ContactUserItem*> (customItem);
-        contact_friend_item->ShowRedPoint(false); // 点击后关闭红点提示
-        emit sig_switch_apply_friend_list_page();
+        contact_friend_item->showRedPoint(false); // 点击后关闭红点提示
+        emit friendApplicationsRequested();
         return ;
     }
 
@@ -208,18 +208,18 @@ void ContactUserList::slot_item_clicked(QListWidgetItem * item)
     if (itemType == ListItemType::CONTACT_USER_ITEM) {
         ContactUserItem * contact_friend_item = qobject_cast<ContactUserItem*> (customItem);
         SPDLOG_DEBUG("contact user item clicked");
-        emit sig_switch_friend_info_page(contact_friend_item->GetFriendInfo());
+        emit friendDetailsRequested(contact_friend_item->getFriendInfo());
         return ;
     }
 }
 
 // 添加联系人
 /** @brief 创建并插入联系人展示项。 */
-void ContactUserList::AddNewContact(std::shared_ptr<AuthInfo> auth_info)
+void ContactUserList::addNewContact(std::shared_ptr<AuthInfo> auth_info)
 {
     // 否则更新contactlist列表
     auto * contact_user_item = new ContactUserItem();
-    contact_user_item->SetInfo(auth_info);
+    contact_user_item->setInfo(auth_info);
 
     QListWidgetItem *item = new QListWidgetItem();
     item->setSizeHint(contact_user_item->sizeHint());
@@ -233,9 +233,9 @@ void ContactUserList::AddNewContact(std::shared_ptr<AuthInfo> auth_info)
 
 // Tcp发出添加好友
 /** @brief 收到新增好友通知后补充联系人列表。 */
-void ContactUserList::slot_tcp_add_friend(std::shared_ptr<AuthInfo> auth_info)
+void ContactUserList::tcpAddFriend(std::shared_ptr<AuthInfo> auth_info)
 {
     SPDLOG_DEBUG("authenticated friend added to contact list");
 
-    AddNewContact(auth_info);
+    addNewContact(auth_info);
 }

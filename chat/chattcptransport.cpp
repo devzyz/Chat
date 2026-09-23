@@ -135,7 +135,7 @@ struct ChatTcpTransport::Impl
     /** @brief 校验当前连接及帧长度后复制入写队列，拒绝时返回 false。 */
     bool send(quint16 messageId, const QByteArray &body)
     {
-        if (!active || !connected || !socket || body.size() > ChatTcpTransport::MaxBodyBytes()) {
+        if (!active || !connected || !socket || body.size() > ChatTcpTransport::maxBodyBytes()) {
             return false;
         }
 

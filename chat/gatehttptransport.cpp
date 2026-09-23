@@ -70,7 +70,7 @@ struct GateHttpTransport::Impl
                 return;
             }
             response.append(current->readAll());
-            if (response.size() > GateHttpTransport::MaxResponseBytes()) {
+            if (response.size() > GateHttpTransport::maxResponseBytes()) {
                 finish(currentGeneration, GateHttpTerminal::ResponseTooLarge, true);
             }
         });
@@ -81,7 +81,7 @@ struct GateHttpTransport::Impl
                 return;
             }
             response.append(current->readAll());
-            if (response.size() > GateHttpTransport::MaxResponseBytes()) {
+            if (response.size() > GateHttpTransport::maxResponseBytes()) {
                 finish(currentGeneration, GateHttpTerminal::ResponseTooLarge, false);
                 return;
             }

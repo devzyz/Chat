@@ -10,6 +10,7 @@ const repositoryRoot = path.resolve(__dirname, '..');
 const fixtureRoot = path.join(repositoryRoot, 'tests', 'server', 'protocol', 'fixtures');
 const baselinePath = path.join(fixtureRoot, 'initial-release-descriptor.pb');
 
+/** 将非负夹具整数编码为 protobuf 变长整数字节。 */
 function encodeVarint(value) {
     const bytes = [];
     let remaining = value;

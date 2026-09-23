@@ -23,7 +23,7 @@ private slots:
     /** @brief 校验邮箱后发起注册验证码请求。 */
     void on_get_code_clicked();
     /** @brief 将 HTTP 注册结果交给认证协调器，忽略过期结果。 */
-    void slot_reg_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
+    void regModFinish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
 
     /** @brief 校验注册资料后创建流程并提交注册请求。 */
     void on_confirm_btn_clicked();
@@ -48,10 +48,10 @@ private:
     QMap<TipErr, QString> _tip_errs;
     // 注册错误
     /** @brief 注册错误。 */
-    void AddTipErr(TipErr te, QString tips);
+    void addTipErr(TipErr te, QString tips);
     // 移除错误
     /** @brief 移除错误。 */
-    void DelTipErr(TipErr te);
+    void delTipErr(TipErr te);
 
     // 用于检查注册所有输入是否符合要求的
     /** @brief 用于检查注册所有输入是否符合要求的。 */
@@ -74,7 +74,7 @@ private:
 
 signals:
     /** @brief 通知主窗口由注册页返回登录页。 */
-    void sig_reg_switch_login();
+    void loginRequested();
 };
 
 #endif // REGISTERDIALOG_H

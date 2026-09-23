@@ -14,6 +14,7 @@
 namespace integration {
 namespace {
 
+/** 严格解析四段数值 IPv4 并判断是否位于回环网段。 */
 bool IsIpv4Loopback(std::string_view address) {
 	std::array<unsigned int, 4> octets{};
 	for (std::size_t index = 0; index < octets.size(); ++index) {
@@ -45,18 +46,22 @@ bool IsIpv4Loopback(std::string_view address) {
 	return octets[0] == 127;
 }
 
+/** 判断地址是否为数值 IPv4 回环或 IPv6 回环。 */
 bool IsNumericLoopback(const std::string& address) {
 	return address == "::1" || IsIpv4Loopback(address);
 }
 
+/** 拒绝缺失或无限期限。 */
 bool IsBoundedDeadline(Deadline deadline) {
 	return deadline != Deadline{} && deadline != Deadline::max();
 }
 
+/** 判断期限有限且仍属于未来。 */
 bool IsFutureOwnedDeadline(Deadline deadline) {
 	return IsBoundedDeadline(deadline) && deadline > std::chrono::steady_clock::now();
 }
 
+/** 按宿主族核对必需生产模块是否齐全。 */
 bool HasRequiredModules(HostFamily family, const ProductionModules& modules) {
 	switch (family) {
 	case HostFamily::GateHttp:
@@ -69,6 +74,7 @@ bool HasRequiredModules(HostFamily family, const ProductionModules& modules) {
 	return false;
 }
 
+/** 在启动失败后有界停机并发布清理结果，停机异常转换为失败证据。 */
 CleanupResult StopForFailedStart(
 	TransportHost& transport,
 	Deadline deadline,
@@ -103,8 +109,10 @@ CleanupResult CleanupObserver::Result() const {
 	return result_;
 }
 
+/** 初始化为空的生产模块集合。 */
 ProductionModules::ProductionModules() = default;
 ProductionModules::~ProductionModules() = default;
+/** 转移各生产模块的独占所有权。 */
 ProductionModules::ProductionModules(ProductionModules&&) noexcept = default;
 ProductionModules& ProductionModules::operator=(ProductionModules&&) noexcept = default;
 

@@ -8,26 +8,42 @@
 #include <QSqlQuery>
 #include <QtTest>
 
+/** 验证真实 SQLite 消息与回执持久化、重试身份、事务游标及账号隔离。 */
 class MessageStorageTests : public QObject
 {
     Q_OBJECT
 private slots:
+    /** 验证重启恢复同步游标，迟到 ACK 不跳过尚未同步的消息区间。 */
     void restartAndIncrementalCursor();
+    /** 验证待发消息、历史与 ACK 按完整身份合并并保留本地编号。 */
     void pendingHistoryAndAckMerge();
+    /** 验证非法同步页整页回滚且游标不前进。 */
     void failedPageDoesNotAdvanceCursor();
+    /** 验证本地历史分页顺序与服务端、账号存储隔离。 */
     void accountsAndLocalPagination();
+    /** 验证消息服务同步流程并拒绝旧会话结果污染新账号。 */
     void serviceSyncAndSessionIsolation();
+    /** 验证待发消息必须先持久化，存储失败不得发送。 */
     void outgoingRequiresDurableStorage();
+    /** 验证增量刷新补全已展示区间，不截断为固定页长。 */
     void refreshKeepsTheDisplayedIntervalComplete();
+    /** 验证回执可先于消息到达、重启后保留且等级单调，回执游标独立。 */
     void receiptsAreDurableMonotonicAndIndependent();
+    /** 验证 Delivered 确认不能清除更新的 Read 上报意图。 */
     void deliveredAckCannotEraseNewReadIntent();
+    /** 验证重试批次正文及 UUID 不变，attempt 递增且期限、预算有效。 */
     void outgoingBatchRetriesUseStableIdentityAndAttempt();
+    /** 验证非法回执页回滚所有状态且不推进 revision 游标。 */
     void invalidReceiptPageRollsBackAndDoesNotAdvance();
+    /** 验证消息服务回执上报往返及账号切换后的结果隔离。 */
     void serviceReceiptRoundTripAndAccountIsolation();
+    /** 验证 schema 1 升级保留历史并创建原库备份。 */
     void schemaOneUpgradePreservesHistoryAndBackup();
+    /** 验证资源发送意图在重启与重试预算耗尽后仍保留原资源身份。 */
     void resourceIntentSurvivesRecoveryAndRetryBudget();
 };
 
+/** 生成固定会话的存储消息，按服务端编号选择待发或确认状态。 */
 static StoredMessage message(qint64 id, QString uuid = {})
 {
     StoredMessage result;
@@ -264,6 +280,7 @@ void MessageStorageTests::refreshKeepsTheDisplayedIntervalComplete()
 }
 
 
+/** 生成带等级、时间和 revision 的回执响应夹具。 */
 static QJsonObject receipt(qint64 id, int uid, int level, int revision)
 {
     return {{"message_id", id}, {"recipient_uid", uid}, {"level", level == 2 ? "read" : "delivered"},

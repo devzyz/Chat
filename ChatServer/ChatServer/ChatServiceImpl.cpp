@@ -176,6 +176,7 @@ Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, co
 	return Status::OK;
 }
 
+/** @brief 请求对端实例使指定旧登录会话下线。 */
 Status ChatServiceImpl::NotifyOtherKickUser(ServerContext*, const KickUserReq* request, KickUserRsp* response) {
     if (request->session_id().empty()) {
         response->set_error(ErrorCodes::UidInvalid);
@@ -234,6 +235,7 @@ bool ChatServiceImpl::GetUserBaseInfo(std::string baseinfo_key, int uid, std::sh
 	return true;
 }
 
+/** @brief 接收跨实例回执变化并提示本地目标会话补拉；提示不代替持久化回执事实。 */
 Status ChatServiceImpl::NotifyMessageReceiptChanged(ServerContext*, const message::ReceiptChangedReq* request,
     message::ReceiptChangedRsp* response) {
     if (request->uid() <= 0 || request->chat_id() <= 0 || request->revision() <= 0) {

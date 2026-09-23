@@ -13,13 +13,13 @@ tcp::socket& HttpConnection::GetSocket() {
 }
 
 /**
- * @brief 
+ *
  * 异步读取客户端的请求，同时进行处理和开启定时器
  */
 void HttpConnection::Start() {
 	auto self = shared_from_this();
 	CheckDeadline();
-	http::async_read(_socket, _buffer, _parser, [self](beast::error_code ec, std::size_t bytes_transferred) {
+	http::async_read(_socket, _buffer, _parser, /** @brief 读取请求后处理正文上限和传输错误，再进入路由。 */ [self](beast::error_code ec, std::size_t bytes_transferred) {
 		try {
 			if (ec) {
 				if (ec == http::error::body_limit) {
@@ -47,7 +47,7 @@ void HttpConnection::Start() {
 
 void HttpConnection::Stop() {
 	auto self = shared_from_this();
-	net::dispatch(_socket.get_executor(), [self] {
+	net::dispatch(_socket.get_executor(), /** @brief 在 socket 执行器取消期限和双向连接。 */ [self] {
 		beast::error_code error;
 		self->deadline_.cancel();
 		self->_socket.cancel(error);
@@ -57,11 +57,13 @@ void HttpConnection::Stop() {
 }
 
 // 数字转16进制
+/** @brief 把半字节数值转换为十六进制字符。 */
 unsigned char ToHex(unsigned char x) {
 	return x > 9 ? x + 55 : x + 48;
 }
 
 // 16进制转数字
+/** @brief 将一个十六进制字符转换为数值，无效字符返回约定失败值。 */
 unsigned char FromHex(unsigned char value) {
     if (value >= 'A' && value <= 'F') return value - 'A' + 10;
     if (value >= 'a' && value <= 'f') return value - 'a' + 10;
@@ -70,6 +72,7 @@ unsigned char FromHex(unsigned char value) {
 }
 
 // 生成可发送的请求串
+/** @brief 按 URL 参数编码规则转义输入字节。 */
 std::string UrlEncode(const std::string& str) {
 	std::string strTemp = "";
 	size_t length = str.length();
@@ -99,6 +102,7 @@ std::string UrlEncode(const std::string& str) {
 }
 
 // 还原为原来的请求串
+/** @brief 解码 URL 转义序列，拒绝残缺或非法的百分号编码。 */
 std::string UrlDecode(const std::string& str) {
 	std::string strTemp = "";
 	size_t length = str.length();
@@ -221,7 +225,7 @@ void HttpConnection::WriteResponse() {
 	auto self = shared_from_this();
 	// 设置回复消息的长度，用于http粘包处理
 	_response.content_length(_response.body().size());
-	http::async_write(_socket, _response, [self](beast::error_code ec, std::size_t bytes_transferred) {
+	http::async_write(_socket, _response, /** @brief 响应发送完成后关闭发送方向并取消期限。 */ [self](beast::error_code ec, std::size_t bytes_transferred) {
 		// 发送完成后，关闭发送端，并取消关联的定时器
 		self->_socket.shutdown(tcp::socket::shutdown_send, ec);
 		self->deadline_.cancel();
@@ -230,7 +234,7 @@ void HttpConnection::WriteResponse() {
 // 开启定时器
 void HttpConnection::CheckDeadline() {
 	auto self = shared_from_this();
-	deadline_.async_wait([self](beast::error_code ec) {
+	deadline_.async_wait(/** @brief 仅在真实期限到达时关闭 socket，忽略取消完成。 */ [self](beast::error_code ec) {
 		if (!ec) {
 			self->_socket.close(ec);
 		}

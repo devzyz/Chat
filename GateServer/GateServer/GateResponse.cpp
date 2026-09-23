@@ -11,6 +11,7 @@ namespace gate {
 
 namespace {
 
+/** @brief 将业务 JSON 响应与请求状态组合为稳定的 HTTP 响应结果。 */
 std::string ShapeResponse(Endpoint endpoint, const Result& result) {
 	Json::Value response;
 	response["error"] = result.error;

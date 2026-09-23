@@ -22,7 +22,7 @@ public:
 
 private slots:
     /** @brief 将 HTTP 重置结果交给认证协调器，忽略过期结果。 */
-    void slot_reset_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
+    void resetModFinish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
 
     /** @brief 校验输入后创建流程并提交密码重置请求。 */
     void on_confirm_btn_clicked();
@@ -35,7 +35,7 @@ private slots:
 
 signals:
     /** @brief 通知主窗口由密码重置页返回登录页。 */
-    void sig_reset_switch_login();
+    void loginRequested();
 
 private:
     Ui::ResetDialog* ui;
@@ -51,10 +51,10 @@ private:
     QMap<TipErr, QString> _tip_errs;
     // 注册错误
     /** @brief 注册错误。 */
-    void AddTipErr(TipErr te, QString tips);
+    void addTipErr(TipErr te, QString tips);
     // 移除错误
     /** @brief 移除错误。 */
-    void DelTipErr(TipErr te);
+    void delTipErr(TipErr te);
 
     // 用于检查注册所有输入是否符合要求的
     /** @brief 用于检查注册所有输入是否符合要求的。 */

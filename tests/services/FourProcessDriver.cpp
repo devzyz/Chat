@@ -16,8 +16,11 @@
 namespace {
 using namespace std::chrono_literals;
 volatile std::sig_atomic_t stopping = 0;
+/** 以信号安全的标志通知主流程停止。 */
 void StopSignal(int) { stopping = 1; }
+/** 条件不满足时抛出统一合同错误，避免泄漏协议敏感内容。 */
 void Require(bool condition) { if (!condition) throw std::runtime_error("four_process_contract"); }
+/** 解析 JSON 输入，格式错误时中止合同。 */
 Json::Value Parse(const std::string& input) {
     Json::Value value;
     Json::Reader reader;
@@ -27,36 +30,40 @@ Json::Value Parse(const std::string& input) {
 
 // Each request uses the production codec and a hard socket deadline. No test
 // parser or private handler invocation bypasses the formal Chat transport.
+/** 拥有一条 Chat TCP 连接，为四进程合同执行有界协议交互。 */
 class WireClient {
 public:
+    /** 在有界异步操作中连接指定 loopback 端口。 */
     explicit WireClient(unsigned short port) : socket_(io_), timer_(io_) {
-        Run([&](auto done) { socket_.async_connect(
+        Run(/** 启动 TCP 连接并把结果交给统一完成回调。 */ [&](auto done) { socket_.async_connect(
             {boost::asio::ip::make_address("127.0.0.1"), port}, done); });
     }
+    /** 编码并发送请求帧，读取完整响应帧后返回解析结果。 */
     Json::Value Request(int id, const Json::Value& body) {
         const auto text = Json::writeString(Json::StreamWriterBuilder{}, body);
         Require(text.size() <= MAX_LENGTH);
         const auto header = ChatFrameCodec::EncodeHeader(id, static_cast<std::uint16_t>(text.size()));
         const auto bytes = std::string(reinterpret_cast<const char*>(header.data()), header.size()) + text;
-        Run([&](auto done) { boost::asio::async_write(socket_, boost::asio::buffer(bytes),
-            [done](auto error, auto) { done(error); }); });
+        Run(/** 异步写入完整请求字节，保持缓冲有效直到操作完成。 */ [&](auto done) { boost::asio::async_write(socket_, boost::asio::buffer(bytes),
+            /** 将写入错误交给统一截止管理。 */ [done](auto error, auto) { done(error); }); });
         ChatFrameCodec::HeaderBytes response{};
-        Run([&](auto done) { boost::asio::async_read(socket_, boost::asio::buffer(response),
-            [done](auto error, auto) { done(error); }); });
+        Run(/** 异步读取固定大小响应帧头。 */ [&](auto done) { boost::asio::async_read(socket_, boost::asio::buffer(response),
+            /** 将帧头读取结果交给统一截止管理。 */ [done](auto error, auto) { done(error); }); });
         const auto decoded = ChatFrameCodec::DecodeValidatedHeader(response.data(), MAX_LENGTH);
         Require(decoded && decoded->message_id == id + 1);
         std::string result(decoded->body_length, '\0');
-        Run([&](auto done) { boost::asio::async_read(socket_, boost::asio::buffer(result),
-            [done](auto error, auto) { done(error); }); });
+        Run(/** 异步读取帧头声明的完整载荷。 */ [&](auto done) { boost::asio::async_read(socket_, boost::asio::buffer(result),
+            /** 将载荷读取结果交给统一截止管理。 */ [done](auto error, auto) { done(error); }); });
         return Parse(result);
     }
 private:
+    /** 为单次异步动作提供五秒期限，失败或超时均拒绝继续。 */
     template<class Action> void Run(Action action) {
         io_.restart();
         boost::system::error_code result = boost::asio::error::timed_out;
         timer_.expires_after(5s);
-        timer_.async_wait([&](auto error) { if (!error) { boost::system::error_code ignored; socket_.close(ignored); } });
-        action([&](auto error) { result = error; timer_.cancel(); });
+        timer_.async_wait(/** 期限到达时关闭连接以结束未完成操作。 */ [&](auto error) { if (!error) { boost::system::error_code ignored; socket_.close(ignored); } });
+        action(/** 保存动作结果并取消超时计时器。 */ [&](auto error) { result = error; timer_.cancel(); });
         io_.run();
         Require(!result);
     }
@@ -65,6 +72,7 @@ private:
     boost::asio::steady_timer timer_;
 };
 
+/** 从环境读取协议计划，登录后执行允许的请求并输出响应证据。 */
 int Chat() {
     const auto* raw = std::getenv("CHAT_FOUR_WIRE");
     Require(raw != nullptr);
@@ -89,6 +97,7 @@ int Chat() {
     return 0;
 }
 
+/** 用运行上下文监督指定子进程，处理停止信号并收集清理证据。 */
 int Supervise(int argc, char** argv) {
     Require(argc >= 5);
     std::signal(SIGTERM, StopSignal);
@@ -109,7 +118,7 @@ int Supervise(int argc, char** argv) {
         output << Json::writeString(Json::StreamWriterBuilder{}, value);
         Require(static_cast<bool>(output));
     }
-    const bool completed = child->WaitReady([&] { return stopping || child->CollectEvidence().exit_code.has_value(); },
+    const bool completed = child->WaitReady(/** 在收到停止信号或子进程退出时结束监督等待。 */ [&] { return stopping || child->CollectEvidence().exit_code.has_value(); },
         context->Deadline() - 15s);
     const auto cleanup = child->Stop(std::chrono::steady_clock::now() + 10s);
     const auto evidence = child->CollectEvidence();
@@ -125,6 +134,7 @@ int Supervise(int argc, char** argv) {
 }
 }
 
+/** 分派协议客户端、监督器或故障中继模式，异常时以失败退出。 */
 int main(int argc, char** argv) {
     try {
         Require(argc >= 2);
@@ -141,7 +151,7 @@ int main(int argc, char** argv) {
             std::signal(SIGINT, StopSignal);
             FrameFaultRelay relay(static_cast<unsigned short>(port), static_cast<unsigned short>(backend),
                 config["dropUuid"].asString(), config["replayUuid"].asString(), argv[2]);
-            return relay.Run([] { return stopping != 0; });
+            return relay.Run(/** 向中继报告是否已收到停止信号。 */ [] { return stopping != 0; });
         }
         if (std::string(argv[1]) == "chat") return Chat();
         if (std::string(argv[1]) == "supervise") return Supervise(argc, argv);

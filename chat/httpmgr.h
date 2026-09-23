@@ -31,7 +31,7 @@ public:
      */
     ~HttpMgr();
     /** @brief 提交指定模块的 JSON HTTP 请求，完成结果通过请求标识和模块信号分发。 */
-    void PostHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod,
+    void postHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod,
                      AuthFlowId flowId);
 
 private:
@@ -49,19 +49,19 @@ private:
 
 private slots:
     /** @brief 按模块将 HTTP 终态分发给注册、登录或重置密码页面。 */
-    void slot_http_finish(AuthFlowId flowId, ReqId id, Modules mod,
+    void httpFinish(AuthFlowId flowId, ReqId id, Modules mod,
                           QString res, ErrorCodes err);
 
 signals:
     /** @brief 通知请求 ID、响应体、错误及模块关联的 HTTP 完成结果。 */
-    void sig_http_finish(AuthFlowId flowId, ReqId id, Modules mod,
+    void httpFinished(AuthFlowId flowId, ReqId id, Modules mod,
                          QString res, ErrorCodes err);
     /** @brief 通知注册模块的 HTTP 请求结果。 */
-    void sig_reg_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
+    void registrationHttpFinished(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
     /** @brief 通知重置密码模块的 HTTP 请求结果。 */
-    void sig_reset_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
+    void passwordResetHttpFinished(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
     /** @brief 通知登录模块的 HTTP 请求结果。 */
-    void sig_login_mod_finish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
+    void loginHttpFinished(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
 };
 
 #endif // HTTPMGR_H

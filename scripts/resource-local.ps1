@@ -21,7 +21,7 @@ $output = Join-Path $repo 'build/resource'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 <#
 .SYNOPSIS
-使用既有 CMake 和依赖构建 Resource 项目，命令失败终止。
+使用既有 MSBuild 和依赖构建指定项目，命令失败终止。
 #>
 function Build-ResourceProject([string]$Project) {
     $name = [IO.Path]::GetFileNameWithoutExtension($Project)

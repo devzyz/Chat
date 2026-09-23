@@ -15,9 +15,12 @@ constexpr unsigned int MAX_HISTORY_BODY_LENGTH = 0xffff;
 // 头部数据长度
 #define HEAD_DATA_LEN 2
 
+/** @brief 在作用域结束时调用所保存的清理动作；清理动作不得向析构传播异常。 */
 class Defer {
 public:
+	/** @brief 接收并保存退出作用域时需要执行的清理动作。 */
 	Defer(std::function<void()> func);
+	/** @brief 执行保存的作用域退出动作，清理回调不得抛异常。 */
 	~Defer();
 private:
 	std::function<void()> _func;

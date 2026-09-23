@@ -9,12 +9,14 @@
 #include <string>
 
 namespace {
+/** 条件不满足时抛出测试诊断。 */
 void Require(bool condition, const char* message) {
     if (!condition) {
         throw std::runtime_error(message);
     }
 }
 
+/** 读取必需的集成测试环境值，空值或缺失时拒绝。 */
 std::string Environment(const char* name) {
     const auto* value = std::getenv(name);
     Require(value != nullptr && value[0] != '\0', "missing integration environment");
@@ -22,19 +24,24 @@ std::string Environment(const char* name) {
 }
 
 using Reply = std::unique_ptr<redisReply, decltype(&freeReplyObject)>;
+/** 从真实 Redis 池借用连接并在作用域退出时归还，池须仍存活。 */
 struct Lease {
     chat_redis::RedisPool& pool;
     redisContext* connection;
+    /** 借用连接并要求成功，否则抛测试异常。 */
     explicit Lease(chat_redis::RedisPool& owner) : pool(owner), connection(pool.Borrow()) {
         Require(connection != nullptr, "Redis borrow failed");
     }
+    /** 把连接归还原池。 */
     ~Lease() { pool.Return(connection); }
 };
 
+/** 执行 Redis 命令并以独占回复对象管理释放。 */
 Reply Command(redisContext* connection, const char* command) {
     return Reply(static_cast<redisReply*>(redisCommand(connection, command)), &freeReplyObject);
 }
 
+/** 读取真实 Redis 客户端编号，要求整数回复。 */
 long long ClientId(redisContext* connection) {
     auto reply = Command(connection, "CLIENT ID");
     Require(reply && reply->type == REDIS_REPLY_INTEGER, "client identity failed");
@@ -42,6 +49,7 @@ long long ClientId(redisContext* connection) {
 }
 }
 
+/** 运行独立生命周期或显式 Redis 集成合同，按真实结果输出标记和退出状态。 */
 int main(int argc, char** argv) {
     try {
         using namespace std::chrono_literals;
@@ -50,7 +58,7 @@ int main(int argc, char** argv) {
             const auto started = std::chrono::steady_clock::now();
             Require(pool.Borrow(30ms) == nullptr, "empty pool borrow succeeded");
             Require(std::chrono::steady_clock::now() - started < 500ms, "borrow deadline exceeded");
-            auto borrower = std::async(std::launch::async, [&]() { return pool.Borrow(2s); });
+            auto borrower = std::async(std::launch::async, /** 在并发任务中进行两秒有界借用，以验证关闭唤醒。 */ [&]() { return pool.Borrow(2s); });
             pool.Close();
             pool.Close();
             Require(borrower.wait_for(300ms) == std::future_status::ready, "close did not wake borrower");

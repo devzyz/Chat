@@ -48,7 +48,7 @@ inline constexpr const char* VERSION_ROWS =
     "3:0fba30c1dcf87f8e3fe30deef9d296fe8f64d91dd45a7e70cb36f2acb40d68d0:applied,"
     "4:04143b2e07a3a64ca77e302f3f64d1380d278655e18ec04e5527b8c60093ce3c:applied";
 
-inline void Verify(sql::Connection& connection) {
+/** 校验当前数据库版本、元数据指纹与 UID 计数器；失败统一抛安全错误，不泄露驱动诊断。 */ inline void Verify(sql::Connection& connection) {
     try {
         const std::unique_ptr<sql::Statement> statement(connection.createStatement());
         statement->execute("SET SESSION group_concat_max_len=65536");

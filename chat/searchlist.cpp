@@ -22,16 +22,16 @@ SearchList::SearchList(QWidget * parent)
     // 安装事件过滤器
     this->viewport()->installEventFilter(this);
     // 连接点击信号和槽
-    connect(this, &QListWidget::itemClicked, this, &SearchList::slot_item_clicked);
+    connect(this, &QListWidget::itemClicked, this, &SearchList::itemClicked);
 
     // 添加条目
     addTipItem();
 
     // 连接搜索条目
-    connect(TcpMgr::GetInstance().get(), &TcpMgr::userSearchFinished, this, &SearchList::slot_tcp_search_user_finish);
+    connect(TcpMgr::instance().get(), &TcpMgr::userSearchFinished, this, &SearchList::tcpSearchUserFinish);
 }
 
-void SearchList::CloseFindDialog()
+void SearchList::closeFindDialog()
 {
     if (_find_dialog) {
         _find_dialog->hide(); // 隐藏如果其他地方没有使用，则会析构
@@ -40,11 +40,11 @@ void SearchList::CloseFindDialog()
 }
 
 /**
- * @brief SearchList::SetSearchEdit
+ * @brief SearchList::setSearchEdit
  * @param edit
  * 设置当前搜索框
  */
-void SearchList::SetSearchEdit(QWidget *edit)
+void SearchList::setSearchEdit(QWidget *edit)
 {
     _search_edit = edit;
 }
@@ -120,7 +120,7 @@ void SearchList::addTipItem()
 }
 
 // 当某个搜索到的条目被点击时触发
-void SearchList::slot_item_clicked(QListWidgetItem *item)
+void SearchList::itemClicked(QListWidgetItem *item)
 {
     // 获取自定义的widget对象
     QWidget * widget = this->itemWidget(item);
@@ -137,7 +137,7 @@ void SearchList::slot_item_clicked(QListWidgetItem *item)
     }
 
     // 判断type是不是invalid_item
-    auto itemType = customItem->GetItemType();
+    auto itemType = customItem->getItemType();
     if (itemType == ListItemType::INVALID_ITEM) {
         SPDLOG_WARN("invalid search list item clicked");
         return ;
@@ -165,13 +165,13 @@ void SearchList::slot_item_clicked(QListWidgetItem *item)
         // 将json数据转换为字节流数据
         QJsonDocument doc(jsonObj);
         QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-        emit TcpMgr::GetInstance()->sendRequested(ReqId::ID_SEARCH_USER_REQ, jsonData);
+        emit TcpMgr::instance()->sendRequested(ReqId::ID_SEARCH_USER_REQ, jsonData);
 
         return ;
     }
 
     //清除弹出框
-    CloseFindDialog();
+    closeFindDialog();
 }
 
 /**
@@ -179,7 +179,7 @@ void SearchList::slot_item_clicked(QListWidgetItem *item)
  * @param si
  * 搜索用于的tcp请求结束
  */
-void SearchList::slot_tcp_search_user_finish(std::shared_ptr<SearchInfo> si)
+void SearchList::tcpSearchUserFinish(std::shared_ptr<SearchInfo> si)
 {
     // 网络请求结束，停止等待
     waitPending(false);
@@ -188,22 +188,22 @@ void SearchList::slot_tcp_search_user_finish(std::shared_ptr<SearchInfo> si)
     }else {
         // 搜索到用户，存在三种逻辑，一不是我的好友，二是我的好友，三是我自己
         // 是我自己, 直接返回，不做处理
-        auto self_uid = UserMgr::GetInstance()->uid();
+        auto self_uid = UserMgr::instance()->uid();
         if (si->_uid == self_uid) {
             return ;
         }
 
         // 是我的好友逻辑，则直接跳转到聊天界面
-        auto isFriend = UserMgr::GetInstance()->isFriend(si->_uid);
+        auto isFriend = UserMgr::instance()->isFriend(si->_uid);
         if (isFriend) {
-            emit sig_jump_chat_item(si);
+            emit chatRequested(si);
             return ;
         }
 
         // 不是我的好友逻辑
         _find_dialog = std::make_shared<FindSuccessDialog> (this);
         // 设置一下搜索成功的弹出框的信息
-        std::dynamic_pointer_cast<FindSuccessDialog>(_find_dialog)->SetSearchInfo(si);
+        std::dynamic_pointer_cast<FindSuccessDialog>(_find_dialog)->setSearchInfo(si);
     }
 
     _find_dialog->show();

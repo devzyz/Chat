@@ -41,9 +41,12 @@ enum ErrorCodes {
 };
 
 // 用于实现在defer类析构时，自动执行构造传递的lambda或者function函数
+/** @brief 在作用域结束时调用所保存的清理动作；清理动作不得向析构传播异常。 */
 class Defer {
 public :
+	/** @brief 接收并保存退出作用域时需要执行的清理动作。 */
 	Defer(std::function<void()> func) : _func(func) {}
+	/** @brief 执行保存的作用域退出动作，清理回调不得抛异常。 */
 	~Defer() {
 		_func();
 	}

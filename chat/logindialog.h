@@ -28,10 +28,10 @@ private:
     QMap<TipErr, QString> _tip_errs;
     // 注册错误
     /** @brief 注册错误。 */
-    void AddTipErr(TipErr te, QString tips);
+    void addTipErr(TipErr te, QString tips);
     // 移除错误
     /** @brief 移除错误。 */
-    void DelTipErr(TipErr te);
+    void delTipErr(TipErr te);
 
     // 用于检查邮箱和密码有没有错误
     /** @brief 用于检查邮箱和密码有没有错误。 */
@@ -49,9 +49,9 @@ private:
     ClientLoginFlow _loginFlow;
 signals:
     /** @brief 通知主窗口从登录页切换到注册页。 */
-    void sig_login_switch_reg();
+    void registrationRequested();
     /** @brief 通知主窗口从登录页切换到密码重置页。 */
-    void sig_login_switch_reset();
+    void passwordResetRequested();
     /** @brief 通知认证成功的流程 ID，供主窗口切换到聊天界面。 */
     void loginSucceeded(AuthFlowId flowId);
 private slots:

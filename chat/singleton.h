@@ -21,8 +21,8 @@ protected:
     /** @brief 禁止复制赋值，避免产生多个单例状态持有者。 */
     Singleton<T>& operator = (const Singleton<T>&) = delete;
 public:
-    /** @brief 通过 call_once 初始化共享实例并返回强引用；ReleaseInstance 后不会再次自动构造。 */
-    static std::shared_ptr<T> GetInstance() {
+    /** @brief 通过 call_once 初始化共享实例并返回强引用；releaseInstance 后不会再次自动构造。 */
+    static std::shared_ptr<T> instance() {
         // 因为为静态变量，只会被初始化一次
         static std::once_flag s_flag;
         // call_once只有当s_flag第一次被定义的时候，才会执行后面的函数
@@ -34,7 +34,7 @@ public:
     }
 
     /** @brief 释放静态实例引用，不重置 call_once；调用方须确保没有并发访问。 */
-    static void ReleaseInstance() {
+    static void releaseInstance() {
         _instance.reset();
     }
 
@@ -47,7 +47,7 @@ public:
     }
 
     /** @brief 在日志可用时记录当前单例地址，供生命周期诊断。 */
-    void PrintAddress() {
+    void printAddress() {
         const auto logger = spdlog::default_logger();
         if (logger) {
             SPDLOG_LOGGER_DEBUG(

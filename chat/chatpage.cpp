@@ -26,27 +26,27 @@ ChatPage::ChatPage(QWidget *parent)
     : QWidget(parent), ui(new Ui::ChatPage)
 {
     ui->setupUi(this);
-    connect(UserMgr::GetInstance().get(), &UserMgr::avatarChanged, this,
+    connect(UserMgr::instance().get(), &UserMgr::avatarChanged, this,
         /** @brief 更新对应发送者的消息头像。 */
         [this](int uid) {
-        _messageStore.updateSenderAvatar(uid, UserMgr::GetInstance()->avatarFor(uid));
+        _messageStore.updateSenderAvatar(uid, UserMgr::instance()->avatarFor(uid));
     });
-    connect(UserMgr::GetInstance()->localAvatar(), &LocalAvatar::imageChanged, this,
+    connect(UserMgr::instance()->localAvatar(), &LocalAvatar::imageChanged, this,
         /** @brief 本人头像变化时更新所有关联消息行。 */
         [this]() {
-        const auto user = UserMgr::GetInstance();
+        const auto user = UserMgr::instance();
         _messageStore.updateSenderAvatar(user->uid(), user->selfAvatar());
     });
 
-    ui->receive_btn->SetState("normal", "hover", "press");
-    ui->send_btn->SetState("normal", "hover", "press");
-    ui->emoij_label->SetState("normal", "hover", "press", "normal", "hover", "press");
-    ui->file_label->SetState("normal", "hover", "press", "normal", "hover", "press");
+    ui->receive_btn->setState("normal", "hover", "press");
+    ui->send_btn->setState("normal", "hover", "press");
+    ui->emoij_label->setState("normal", "hover", "press", "normal", "hover", "press");
+    ui->file_label->setState("normal", "hover", "press", "normal", "hover", "press");
 
     _messageDelegate = new MessageItemDelegate(ui->chat_detail_data_list);
     ui->chat_detail_data_list->setItemDelegate(_messageDelegate);
     _readTracker = new MessageReadTracker(ui->chat_detail_data_list);
-    connect(_readTracker, &MessageReadTracker::observed, UserMgr::GetInstance()->messages(), &MessageService::observeRead);
+    connect(_readTracker, &MessageReadTracker::observed, UserMgr::instance()->messages(), &MessageService::observeRead);
     initResourceTransfers();
     connect(ui->chat_detail_data_list, &ChatDetailList::viewportResized, this,
         /** @brief 视口变化时清空尺寸缓存并重新布局。 */
@@ -68,7 +68,7 @@ ChatPage::~ChatPage()
     ui = nullptr;
 }
 
-void ChatPage::SetChatInfo(std::shared_ptr<ChatInfo> chatInfo)
+void ChatPage::setChatInfo(std::shared_ptr<ChatInfo> chatInfo)
 {
     Q_ASSERT(QThread::currentThread() == thread());
     if (!chatInfo) {
@@ -76,12 +76,12 @@ void ChatPage::SetChatInfo(std::shared_ptr<ChatInfo> chatInfo)
     }
 
     saveCurrentScrollAnchor();
-    if (_currentChatId != chatInfo->GetChatId()) _readTracker->resetExposure();
+    if (_currentChatId != chatInfo->getChatId()) _readTracker->resetExposure();
     _chatInfo = std::move(chatInfo);
-    _currentChatId = _chatInfo->GetChatId();
+    _currentChatId = _chatInfo->getChatId();
 
-    if (_chatInfo->GetChatType() == ChatType::PRIVATE) {
-        const auto friendInfo = UserMgr::GetInstance()->friendById(_chatInfo->GetUid());
+    if (_chatInfo->getChatType() == ChatType::PRIVATE) {
+        const auto friendInfo = UserMgr::instance()->friendById(_chatInfo->getUid());
         if (friendInfo) {
             ui->title_label->setText(friendInfo->_name);
         }
@@ -135,15 +135,15 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before,
         record.messageId = stored.messageId;
         record.chatId = chatId;
         record.senderId = stored.senderId;
-        record.isSelf = stored.senderId == UserMgr::GetInstance()->uid();
+        record.isSelf = stored.senderId == UserMgr::instance()->uid();
         // Client UUIDs are sender-scoped; remote rows use their server ID in the GUI index.
         if (record.isSelf) record.clientMessageId = stored.clientMessageId;
         record.sentAt = QDateTime::fromMSecsSinceEpoch(stored.sentAt);
         record.text = stored.content;
-        const auto sender = record.isSelf ? UserMgr::GetInstance()->userInfo()
-                                         : UserMgr::GetInstance()->friendById(stored.senderId);
+        const auto sender = record.isSelf ? UserMgr::instance()->userInfo()
+                                         : UserMgr::instance()->friendById(stored.senderId);
         if (sender) { record.senderName = sender->_name; record.avatarKey = sender->_icon; }
-        record.avatar = UserMgr::GetInstance()->avatarFor(stored.senderId, record.avatarKey);
+        record.avatar = UserMgr::instance()->avatarFor(stored.senderId, record.avatarKey);
         record.deliveryStatus = !record.isSelf ? DeliveryStatus::None :
             stored.receipt == ReceiptLevel::Read ? DeliveryStatus::Read :
             stored.receipt == ReceiptLevel::Delivered ? DeliveryStatus::Delivered :
@@ -167,7 +167,7 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before,
     }
 }
 
-void ChatPage::AppendChatMsg(const std::shared_ptr<ChatDataBase> &message)
+void ChatPage::appendChatMsg(const std::shared_ptr<ChatDataBase> &message)
 {
     Q_ASSERT(QThread::currentThread() == thread());
     if (!message) {
@@ -186,7 +186,7 @@ void ChatPage::AppendChatMsg(const std::shared_ptr<ChatDataBase> &message)
     }
 }
 
-void ChatPage::ApplyHistoryPage(int chatId,
+void ChatPage::applyHistoryPage(int chatId,
                                 const std::vector<std::shared_ptr<ChatDataBase>> &messages,
                                 bool canLoadMore, qint64 nextCursor)
 {
@@ -237,7 +237,7 @@ void ChatPage::ApplyHistoryPage(int chatId,
     });
 }
 
-void ChatPage::HistoryLoadFailed(int chatId)
+void ChatPage::historyLoadFailed(int chatId)
 {
     Q_ASSERT(QThread::currentThread() == thread());
     if (auto *model = _messageStore.find(chatId)) {
@@ -245,17 +245,17 @@ void ChatPage::HistoryLoadFailed(int chatId)
     }
 }
 
-void ChatPage::ApplyDeliveryAcknowledgements(
+void ChatPage::applyDeliveryAcknowledgements(
     int chatId, const QVector<MessageAcknowledgement> &acknowledgements)
 {
     Q_ASSERT(QThread::currentThread() == thread());
-    _messageStore.acknowledge(chatId, acknowledgements, UserMgr::GetInstance()->uid());
+    _messageStore.acknowledge(chatId, acknowledgements, UserMgr::instance()->uid());
 }
 
-void ChatPage::MarkMessagesFailed(int chatId, const QVector<QString> &clientMessageIds)
+void ChatPage::markMessagesFailed(int chatId, const QVector<QString> &clientMessageIds)
 {
     Q_ASSERT(QThread::currentThread() == thread());
-    _messageStore.markFailed(chatId, clientMessageIds, UserMgr::GetInstance()->uid());
+    _messageStore.markFailed(chatId, clientMessageIds, UserMgr::instance()->uid());
 }
 
 void ChatPage::paintEvent(QPaintEvent *event)
@@ -274,7 +274,7 @@ void ChatPage::on_send_btn_clicked()
         return;
     }
 
-    const auto selfInfo = UserMgr::GetInstance()->userInfo();
+    const auto selfInfo = UserMgr::instance()->userInfo();
     if (!selfInfo) {
         return;
     }
@@ -289,9 +289,9 @@ void ChatPage::on_send_btn_clicked()
         if (textArray.isEmpty()) {
             return;
         }
-        const QByteArray data = clientTextRequest(selfInfo->_uid, _chatInfo->GetUid(),
-                                                  _chatInfo->GetChatId(), textArray);
-        UserMgr::GetInstance()->messages()->send(QJsonDocument::fromJson(data).object());
+        const QByteArray data = clientTextRequest(selfInfo->_uid, _chatInfo->getUid(),
+                                                  _chatInfo->getChatId(), textArray);
+        UserMgr::instance()->messages()->send(QJsonDocument::fromJson(data).object());
         textLength = 0;
         textArray = QJsonArray();
     };
@@ -315,11 +315,11 @@ void ChatPage::on_send_btn_clicked()
         textLength += message.content.length();
 
         auto textMessage = std::make_shared<TextChatData>(
-            uuid, _chatInfo->GetChatId(), _chatInfo->GetChatType(),
+            uuid, _chatInfo->getChatId(), _chatInfo->getChatType(),
             ChatMessageType::TEXT_TYPE, message.content, selfInfo->_uid,
             QTime::currentTime());
-        AppendChatMsg(textMessage);
-        emit sig_append_send_text_cache_msg(uuid, textMessage);
+        appendChatMsg(textMessage);
+        emit outgoingTextQueued(uuid, textMessage);
     }
 
     sendTextBatch();
@@ -339,7 +339,7 @@ MessageRecord ChatPage::toMessageRecord(const std::shared_ptr<ChatDataBase> &mes
 {
     auto record = clientMessageRecord(message);
     loadResource(record);
-    record.avatar = UserMgr::GetInstance()->avatarFor(record.senderId, record.avatarKey);
+    record.avatar = UserMgr::instance()->avatarFor(record.senderId, record.avatarKey);
     return record;
 }
 
@@ -368,7 +368,7 @@ void ChatPage::seedModelFromLegacyData(MessageListModel *model,
     // Temporary compatibility: pending DTOs may predate creation of this Model.
     // Confirmed/history DTOs are deliberately not copied; the Model is their source of truth.
     QVector<MessageRecord> records;
-    const auto pending = chatInfo->GetCacheChatMsgs();
+    const auto pending = chatInfo->getCacheChatMsgs();
     records.reserve(pending.size());
     for (const auto &message : pending) records.push_back(toMessageRecord(message));
     model->appendMessages(records);
@@ -383,7 +383,7 @@ void ChatPage::requestHistory(MessageListModel *model)
     const qint64 cursor = model->hasLoadedInitialPage()
         ? (model->historyCursor() > 0 ? model->historyCursor() : model->oldestMessageId())
         : 0;
-    emit sig_request_history(model->chatId(), cursor);
+    emit historyRequested(model->chatId(), cursor);
 }
 
 ChatPage::ScrollAnchor ChatPage::captureScrollAnchor() const

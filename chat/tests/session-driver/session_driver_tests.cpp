@@ -16,9 +16,11 @@
 #include <QtEndian>
 #include <memory>
 
+/** 拥有一个独立客户端进程及本地控制管道，负责启动、命令和退出清理。 */
 class OwnedClient
 {
 public:
+    /** 终止尚未退出的所属进程并有限等待结束。 */
     ~OwnedClient()
     {
         if (process.state() != QProcess::NotRunning) {
@@ -26,6 +28,7 @@ public:
             process.waitForFinished(3000);
         }
     }
+    /** 建立仅当前用户可访问的本地管道并启动客户端，等待就绪事件。 */
     bool start()
     {
         server.setSocketOptions(QLocalServer::UserAccessOption);
@@ -39,11 +42,13 @@ public:
         pipe.reset(server.nextPendingConnection());
         return receive().value("event") == "ready";
     }
+    /** 把控制命令编码为一行 JSON 并刷新管道。 */
     void send(const QJsonObject &object)
     {
         pipe->write(QJsonDocument(object).toJson(QJsonDocument::Compact) + '\n');
         pipe->flush();
     }
+    /** 在四秒内读取一行控制响应，解析后返回对象。 */
     QJsonObject receive()
     {
         QElapsedTimer elapsed;
@@ -68,6 +73,7 @@ public:
         buffer.remove(0, end + 1);
         return object;
     }
+    /** 发送停止命令并核对响应身份、正常退出状态及退出码。 */
     bool stop(qint64 id)
     {
         send(QJsonObject{{"id", id}, {"command", "stop"}});
@@ -85,14 +91,16 @@ public:
     QByteArray buffer;
 };
 
+/** 提供真实回环 Gate 与 Chat 登录对端，记录账号请求和心跳。 */
 class LoopbackLogin : public QObject
 {
 public:
+    /** 为指定测试用户安装 HTTP 登录与聊天帧处理回调。 */
     explicit LoopbackLogin(int uid) : userId(uid)
     {
-        QObject::connect(&gate, &QTcpServer::newConnection, this, [this] {
+        QObject::connect(&gate, &QTcpServer::newConnection, this, /** 接收 Gate 连接并安装请求正文处理。 */ [this] {
             auto *peer = gate.nextPendingConnection();
-            QObject::connect(peer, &QTcpSocket::readyRead, peer, [this, peer, buffer = QByteArray()]() mutable {
+            QObject::connect(peer, &QTcpSocket::readyRead, peer, /** 等待完整 HTTP JSON 后记录登录请求并返回测试用户选服结果。 */ [this, peer, buffer = QByteArray()]() mutable {
                 buffer += peer->readAll();
                 const auto end = buffer.indexOf("\r\n\r\n");
                 if (end < 0) return;
@@ -107,9 +115,9 @@ public:
                 peer->disconnectFromHost();
             });
         });
-        QObject::connect(&chat, &QTcpServer::newConnection, this, [this] {
+        QObject::connect(&chat, &QTcpServer::newConnection, this, /** 接收 Chat 连接并安装生产帧解码回调。 */ [this] {
             auto *peer = chat.nextPendingConnection();
-            QObject::connect(peer, &QTcpSocket::readyRead, peer, [this, peer, decoder = TcpFrameDecoder()]() mutable {
+            QObject::connect(peer, &QTcpSocket::readyRead, peer, /** 处理登录、心跳及增量同步请求，回送确定性的协议响应。 */ [this, peer, decoder = TcpFrameDecoder()]() mutable {
                 for (const auto &frame : decoder.append(peer->readAll())) {
                     if (frame.messageId == 1020) { ++heartbeats; continue; }
                     if (frame.messageId == 1027) {
@@ -136,7 +144,7 @@ public:
                             result["error"] = 0;
                             result["chatid"] = 7;
                         }
-                        const auto sendFrame = [peer](int id, const QJsonObject &object) {
+                        const auto sendFrame = /** 将响应 JSON 编码为大端聊天帧发送给该连接。 */ [peer](int id, const QJsonObject &object) {
                             const auto payload = QJsonDocument(object).toJson(QJsonDocument::Compact);
                             QByteArray header(4, '\0');
                             qToBigEndian<quint16>(id, header.data());
@@ -185,7 +193,9 @@ public:
             });
         });
     }
+    /** 同时在随机回环端口监听 Gate 和 Chat 服务。 */
     bool listen() { return gate.listen(QHostAddress::LocalHost, 0) && chat.listen(QHostAddress::LocalHost, 0); }
+    /** 返回回环 Gate 的 HTTP 入口。 */
     QString url() const { return QString("http://127.0.0.1:%1").arg(gate.serverPort()); }
     int userId;
     QTcpServer gate, chat;
@@ -197,10 +207,12 @@ public:
     bool dropNextText = false;
 };
 
+/** 验证独立客户端进程的登录隔离、控制协议及生命周期。 */
 class SessionDriverTests : public QObject
 {
     Q_OBJECT
 private slots:
+    /** 验证两个真实客户端分别保持所属账号与端点。 */
     void productionLoginKeepsAccountsAndEndpointsSeparate()
     {
         LoopbackLogin first(41), second(42);
@@ -293,6 +305,7 @@ private slots:
         QCOMPARE(bob.receive().value("uid").toInt(), 42);
         QVERIFY(bob.stop(3));
     }
+    /** 验证两个客户端进程的生命周期相互独立。 */
     void twoProcessesHaveIndependentLifetimes()
     {
         LoopbackLogin fixture(41);
@@ -321,6 +334,7 @@ private slots:
         QCOMPARE(bob.receive().value("status").toString(), QString("snapshot"));
         QVERIFY(bob.stop(2));
     }
+    /** 验证非法、超长及重放控制命令使客户端失败关闭。 */
     void malformedAndReplayedCommandsFailClosed()
     {
         for (const auto &payload : {QByteArray("not-json\n"), QByteArray(8193, 'x'),
@@ -335,6 +349,7 @@ private slots:
             QCOMPARE(client.process.exitCode(), 2);
         }
     }
+    /** 验证控制器断开后客户端在期限内退出。 */
     void lostControllerTerminatesClient()
     {
         OwnedClient client;
@@ -343,6 +358,7 @@ private slots:
         QVERIFY(client.process.waitForFinished(3000));
         QCOMPARE(client.process.exitCode(), 2);
     }
+    /** 验证停止命令取消尚未完成的生产 HTTP 请求并关闭连接。 */
     void stopCancelsPendingProductionHttp()
     {
         QTcpServer gate;

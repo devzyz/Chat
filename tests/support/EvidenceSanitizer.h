@@ -5,6 +5,7 @@
 
 namespace integration {
 
+/** 替换证据中凭据形状赋值的值，保留键名及其他诊断文本。 */
 inline std::string SanitizeEvidence(std::string evidence) {
 	static const std::regex secret_assignment(
 		R"((password|token|code|email)\s*[:=]\s*[^\s\r\n]+)",

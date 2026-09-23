@@ -6,6 +6,7 @@
 
 namespace {
 
+/** @brief 检查消息长度和协议限制后计算包含帧头的缓冲大小，非法输入抛异常。 */
 std::size_t CheckedSendTotalLength(const char* message, std::size_t message_length, std::uint16_t message_id) {
     const auto limit = message_id == MSG_LOAD_CHAT_MESSAGE_RSP ? MAX_HISTORY_BODY_LENGTH : MAX_LENGTH;
     if (message_length > limit) {
@@ -17,6 +18,7 @@ std::size_t CheckedSendTotalLength(const char* message, std::size_t message_leng
 	return message_length + HEAD_TOTAL_LEN;
 }
 
+/** @brief 检查消息长度和协议限制后计算包含帧头的缓冲大小，非法输入抛异常。 */
 std::size_t CheckedSendTotalLength(const std::string& message, std::size_t message_length, std::uint16_t message_id) {
     const auto limit = message_id == MSG_LOAD_CHAT_MESSAGE_RSP ? MAX_HISTORY_BODY_LENGTH : MAX_LENGTH;
     if (message_length > limit) {
@@ -45,10 +47,10 @@ void MsgNode::Clear() {
 }
 
 /**
- * @brief 
- * @param msg 
- * @param msgId 
- * @param msgLen 
+ *
+ *
+ *
+ *
  * 注意要将本地字节序转换为网络字节序
  */
 SendNode::SendNode(const char* msg, std::uint16_t msgId, std::size_t msgLen) : MsgNode(CheckedSendTotalLength(msg, msgLen, msgId)), _msg_id(msgId) {
@@ -61,7 +63,7 @@ SendNode::SendNode(const char* msg, std::uint16_t msgId, std::size_t msgLen) : M
 	memcpy(_data + HEAD_TOTAL_LEN, msg, msgLen);
 }
 /**
- * @brief 
+ *
  * @param msg 要发送的数据
  * @param msgId 要发的数据id
  * @param msgLen 要发送的数据长度

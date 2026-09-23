@@ -16,7 +16,7 @@ FindSuccessDialog::FindSuccessDialog(QWidget *parent)
     // 隐藏对话框标题栏
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
 
-    ui->add_friend_btn->SetState("normal", "hover","press");
+    ui->add_friend_btn->setState("normal", "hover","press");
     this->setModal(true); // 将主窗口等禁用，直到关闭当前窗口
 }
 
@@ -27,15 +27,15 @@ FindSuccessDialog::~FindSuccessDialog()
 }
 
 /**
- * @brief FindSuccessDialog::SetSearchInfo
+ * @brief FindSuccessDialog::setSearchInfo
  * @param si
  * 搜索到的用户信息
  */
-void FindSuccessDialog::SetSearchInfo(std::shared_ptr<SearchInfo> si)
+void FindSuccessDialog::setSearchInfo(std::shared_ptr<SearchInfo> si)
 {
     ui->name_label->setText(si->_name);
     _si = si;
-    UserMgr::GetInstance()->bindAvatar(ui->head_label, si->_uid, si->_icon);
+    UserMgr::instance()->bindAvatar(ui->head_label, si->_uid, si->_icon);
 }
 
 /**
@@ -48,7 +48,7 @@ void FindSuccessDialog::on_add_friend_btn_clicked()
     this->hide();
     // 弹出添加好友界面
     auto applyFriend = new ApplyFriendDialog(_parent);
-    applyFriend->SetSearchInfo(_si);
+    applyFriend->setSearchInfo(_si);
     applyFriend->setModal(true);
     applyFriend->show();
 }

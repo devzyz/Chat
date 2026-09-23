@@ -29,23 +29,23 @@ public:
     QSize sizeHint() const override;
     // 添加好友后，设置好友信息
     /** @brief 添加好友后，设置好友信息。 */
-    void SetInfo(std::shared_ptr<AuthInfo> auth_info);
+    void setInfo(std::shared_ptr<AuthInfo> auth_info);
     /**
-     * @brief SetInfo
+     * @brief setInfo
      * 设置当前item的信息
      */
-    void SetInfo(int uid, QString name, QString icon);
+    void setInfo(int uid, QString name, QString icon);
     // 设置当前item的信息
     /** @brief 设置当前item的信息。 */
-    void SetInfo(std::shared_ptr<UserInfo>);
+    void setInfo(std::shared_ptr<UserInfo>);
     /**
-     * @brief ShowRedPoint
+     * @brief showRedPoint
      * 显示当前item的红点
      */
-    void ShowRedPoint(bool show = false);
+    void showRedPoint(bool show = false);
     // 获取当前item的信息
     /** @brief 获取当前item的信息。 */
-    std::shared_ptr<UserInfo> GetFriendInfo();
+    std::shared_ptr<UserInfo> getFriendInfo();
 
 private:
     Ui::ContactUserItem *ui;

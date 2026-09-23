@@ -20,7 +20,7 @@ protected:
 
 signals:
     /** @brief 通知上层切换到用户搜索入口。 */
-    void sig_show_search(bool);
+    void searchRequested(bool);
 };
 
 #endif // APPLYFRIENDLIST_H

@@ -21,9 +21,9 @@ public:
     /** @brief 初始化对象，用于为列表展示组件保存条目类别并绘制样式背景。 */
     explicit ListItemBase(QWidget* parent = nullptr);
     /** @brief 保存列表条目的业务类别，用于点击路由。 */
-    void SetItemType(ListItemType itemType);
+    void setItemType(ListItemType itemType);
     /** @brief 返回当前列表条目类别。 */
-    ListItemType GetItemType();
+    ListItemType getItemType();
 
 protected:
     // 让 ChatPage 能完整显示样式表定义的背景颜色、背景图片、边框

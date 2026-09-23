@@ -5,11 +5,11 @@ const constModule = require('../../const');
 const { createGetVarifyCodeHandler } = require('../../server');
 
 const recipient = 'recipient@example.test';
-const silentLogger = { log() {} };
+const silentLogger = { /** 丢弃测试日志，避免适配器输出干扰断言。 */ log() {} };
 
-async function invoke(handler) {
+/** 调用验证码处理器并要求 gRPC 回调恰好完成一次，返回业务响应。 */ async function invoke(handler) {
     const callbackCalls = [];
-    await handler({ request: { email: recipient } }, (error, response) => {
+    await handler({ request: { email: recipient } }, /** 收集处理器的回调错误及响应供次数断言。 */ (error, response) => {
         callbackCalls.push({ error, response });
     });
     assert.equal(callbackCalls.length, 1, 'gRPC callback must complete exactly once');
@@ -19,7 +19,7 @@ async function invoke(handler) {
 }
 
 // V06-MOD-01
-test('requiring the handler module does not load Redis or SMTP adapters', () => {
+test('requiring the handler module does not load Redis or SMTP adapters', /** 验证导入服务模块不会提前加载 Redis 和邮件适配器。 */ () => {
     // Arrange
     const redisPath = require.resolve('../../redis');
     const emailPath = require.resolve('../../email');
@@ -44,7 +44,7 @@ test('cached code is reused without UUID generation or Redis write', /** 验证�
             assert.equal(key, constModule.code_prefix + recipient);
             return 'A1B2';
         },
-        async setRedisExpire() {
+        /** 缓存命中时若再次写入验证码则使测试失败。 */ async setRedisExpire() {
             assert.fail('cached code must not be written again');
         }
     };
@@ -57,7 +57,7 @@ test('cached code is reused without UUID generation or Redis write', /** 验证�
     const handler = createGetVarifyCodeHandler({
         redisModule,
         emailModule,
-        generateUuid() {
+        /** 缓存命中时若生成新 UUID 则使测试失败。 */ generateUuid() {
             assert.fail('cached code must not generate a UUID');
         },
         logger: silentLogger
@@ -108,7 +108,7 @@ test('missing code generates four characters and stores a 600 second TTL', /** �
         /** 模拟缓存未命中。 */ async getRedis() {
             return null;
         },
-        async setRedisExpire(key, value, ttlSeconds) {
+        /** 记录验证码缓存写入的键、值及期限并模拟成功。 */ async setRedisExpire(key, value, ttlSeconds) {
             writes.push({ key, value, ttlSeconds });
             return true;
         }
@@ -122,7 +122,7 @@ test('missing code generates four characters and stores a 600 second TTL', /** �
     const handler = createGetVarifyCodeHandler({
         redisModule,
         emailModule,
-        generateUuid: () => 'WXYZ-extra',
+        generateUuid: /** 提供固定 UUID 前缀以断言新验证码生成。 */ () => 'WXYZ-extra',
         logger: silentLogger
     });
 
@@ -149,7 +149,7 @@ test('failed Redis write returns RedisErr without sending mail', /** 验证缓�
             /** 模拟缓存未命中以触发写入。 */ async getRedis() {
                 return null;
             },
-            async setRedisExpire(key, value, ttlSeconds) {
+            /** 核对失败写入的键、验证码及期限并模拟 Redis 拒绝。 */ async setRedisExpire(key, value, ttlSeconds) {
                 assert.equal(key, constModule.code_prefix + recipient);
                 assert.equal(value, 'R3D1');
                 assert.equal(ttlSeconds, 600);
@@ -162,7 +162,7 @@ test('failed Redis write returns RedisErr without sending mail', /** 验证缓�
                 return 'accepted';
             }
         },
-        generateUuid: () => 'R3D1-extra',
+        generateUuid: /** 提供固定 UUID 前缀以复现缓存写失败。 */ () => 'R3D1-extra',
         logger: silentLogger
     });
 
@@ -265,7 +265,7 @@ test('mail rejection returns Exception', /** 验证 SMTP 抛异常仍完成业�
 test('default handler events never disclose the recipient or verification code', /** 验证日志不泄漏验证码或服务商敏感细节。 */ async () => {
     const entries = [];
     const logger = {
-        log(...values) {
+        /** 收集日志文本以检查敏感数据是否泄露。 */ log(...values) {
             entries.push(values.map(String).join(' '));
         }
     };

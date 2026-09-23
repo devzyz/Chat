@@ -11,7 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT / "build/conventions/python"), str(ROOT / "scripts/conventions")]
 from git_rules import check_range, event_range, validate_branch, validate_message
-from syntax import check_source, parse
+from syntax import check_source, parse, qt_auto_slots
 from check import source_errors
 
 
@@ -134,6 +134,68 @@ class SyntaxTests(unittest.TestCase):
         self.assertEqual([], check_source("chat/a.cpp", "",
             '/** 初始化。 */ Widget::Widget() { foreach(Item x, items) { use(x); } }'))
 
+    def test_gtest_macros_retain_test_bodies(self):
+        """已知 GTest 宏的测试体及嵌套回调仍逐个检查，不把整个宏块跳过。"""
+        for macro in ['TEST', 'TEST_F', 'TEST_P']:
+            source = f'/** 验证发送顺序。 */ {macro}(Session, SendOrder) {{ auto cb = [] {{return 1;}}; }}'
+            errors = check_source('tests/server/sample.cpp', '', source)
+            self.assertEqual(1, len(errors))
+            self.assertEqual('lambda', errors[0][0].kind)
+            self.assertTrue(check_source('tests/server/sample.cpp', '', f'{macro}(Session, SendOrder) {{}}'))
+        with self.assertRaises(ValueError):
+            parse('CUSTOM_TEST(Session, SendOrder) {}', 'cpp')
+
+    def test_qtest_main_and_windows_calling_convention(self):
+        """框架生成 main 不要求重复说明，自有槽和 Windows 回调仍可定位。"""
+        source = '/** 测试界面。 */ class WidgetTests {\nQ_OBJECT\npublic slots:\nvoid missingDoc(); };\nQTEST_MAIN(WidgetTests)\n'
+        self.assertTrue(check_source('chat/tests/sample.cpp', '', source))
+        self.assertEqual([], check_source('tests/server/sample.cpp', '',
+            '/** 处理控制台关闭信号。 */ BOOL WINAPI HandleSignal(DWORD signal) { return TRUE; }'))
+
+    def test_braced_default_argument_preserves_body_errors(self):
+        """非空列表默认参数可解析，非法初始化语法和函数体仍阻断。"""
+        self.assertEqual([], check_source('common/sample.h', '',
+            '/** 发送给定帧。 */ void Send(Frame frame = {100, "body"});'))
+        with self.assertRaises(ValueError):
+            parse('void Send(Frame frame = {100, "body"}) { if (; }', 'cpp')
+
+    def test_conversion_operator_requires_documentation(self):
+        """转换运算符必须纳入函数注释覆盖，不能因无普通返回类型而漏掉。"""
+        source = '/** 管理租约。 */ class Lease { explicit operator bool() const {return true;} };'
+        errors = check_source('common/lease.h', '', source)
+        self.assertTrue(any(s.name == 'operator bool' and 'missing' in e for s, e in errors))
+        self.assertEqual([], check_source('common/lease.h', '', source.replace(
+            'explicit operator', '/** 检查租约是否有效。 */ explicit operator')))
+
+    def test_framework_names_do_not_exempt_documentation(self):
+        """GTest 报告身份、宽字符入口和明确 SDK 替身保留名称，普通旧接口仍拒绝。"""
+        fixture = '/** 持有传输夹具。 */ class T09_CTCP_Stream : public testing::Test {};'
+        self.assertEqual([], check_source('tests/sample.cpp', '', fixture))
+        self.assertTrue(check_source('tests/sample.cpp', '', fixture.replace(' : public testing::Test', '')))
+        self.assertTrue(check_source('tests/sample.cpp', '', fixture.replace('/** 持有传输夹具。 */', '')))
+        self.assertEqual([], check_source('tests/sample.cpp', '', '/** 运行宽字符入口。 */ int wmain(){return 0;}'))
+        sdk = '/** 模拟连接。 */ struct Fake { /** 查询健康。 @see sql::Connection::isValid */ bool isValid(){return true;} };'
+        self.assertEqual([], check_source('tests/sample.cpp', '', sdk))
+        self.assertTrue(check_source('tests/sample.cpp', '', sdk.replace('@see sql::Connection::isValid', '')))
+        self.assertTrue(check_source('tests/sample.cpp', '', sdk.replace('isValid', 'other_method')))
+
+    def test_anonymous_js_class_keeps_method_requirements(self):
+        """匿名类没有类名可校验，但类及方法仍要求职责说明。"""
+        source = 'module.exports = /** 模拟连接。 */ class { /** 关闭连接。 */ close() {} };'
+        self.assertEqual([], check_source('tests/fake.js', '', source))
+        self.assertTrue(check_source('tests/fake.js', '', source.replace('/** 关闭连接。 */', '')))
+
+    def test_qt_auto_slot_requires_designer_object(self):
+        """自动槽只按实际 Designer 对象保留拼写，任意旧命名和缺注释仍拒绝。"""
+        source = '/** 登录窗口。 */ class LoginDialog { /** 提交登录。 */ void on_login_btn_clicked(); };'
+        slots = qt_auto_slots('<ui><widget name="login_btn"/></ui>')
+        self.assertEqual([], check_source('chat/logindialog.h', '', source, qt_slots=slots))
+        self.assertTrue(check_source('chat/logindialog.h', '', source))
+        self.assertTrue(check_source('chat/logindialog.h', '', source.replace('login_btn', 'missing_btn'), qt_slots=slots))
+        self.assertTrue(check_source('chat/logindialog.h', '', source.replace('/** 提交登录。 */', ''), qt_slots=slots))
+        with self.assertRaises(ValueError):
+            qt_auto_slots('<ui><widget>')
+
     def test_powershell_comment_only_and_strings(self):
         """原生 token 比较忽略帮助文本，但保留字符串中的代码变化。"""
         before = 'function Get-Value { return "one" }'
@@ -198,6 +260,35 @@ class GitIntegrationTests(unittest.TestCase):
 class HeaderContractTests(unittest.TestCase):
     """在独立 Git 工作区验证声明归属。"""
 
+    def test_designer_contract_uses_requested_root_and_revision(self):
+        """自动槽按被检查版本的 UI 判定，工作树或另一仓库的同名 UI 不能影响结果。"""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            def run(*args):
+                """仅在本测试拥有的临时仓库操作版本。"""
+                return subprocess.check_output(['git', '-C', folder, *args], stderr=subprocess.DEVNULL, timeout=10).decode().strip()
+            run('init')
+            run('config', 'user.name', 'Test')
+            run('config', 'user.email', 'test@example.invalid')
+            run('commit', '--allow-empty', '-m', 'baseline')
+            base = run('rev-parse', 'HEAD')
+            (root / 'chat').mkdir()
+            path = 'chat/logindialog.h'
+            (root / path).write_text('/** 登录窗口。 */ class LoginDialog { /** 登录。 */ void on_login_btn_clicked(); };', encoding='utf8')
+            ui = root / 'chat/logindialog.ui'
+            ui.write_text('<ui><widget name="login_btn"/></ui>', encoding='utf8')
+            run('add', '.')
+            run('commit', '-m', 'fixture')
+            head = run('rev-parse', 'HEAD')
+            ui.write_text('<ui><widget name="other"/></ui>', encoding='utf8')
+            self.assertEqual(([], []), source_errors(root, base, head, [path]))
+            self.assertTrue(source_errors(root, base, None, [path])[0])
+            run('add', '.')
+            run('commit', '-m', 'changed designer')
+            ui.write_text('<ui><widget name="login_btn"/></ui>', encoding='utf8')
+            self.assertTrue(source_errors(root, base, 'HEAD', [path])[0])
+            self.assertEqual(([], []), source_errors(root, base, None, [path]))
+
     def test_header_contract_and_changed_owner(self):
         """类外方法可引用头文件契约，但不能绕过所属类说明与重载歧义检查。"""
         with tempfile.TemporaryDirectory() as folder:
@@ -216,6 +307,47 @@ class HeaderContractTests(unittest.TestCase):
             self.assertTrue(any('owner Store' in e for e in errors))
             header.write_text('/** 管理值。 */ class Store { /** 读取值。 */ int Read(int id); int Read(double id); };', encoding='utf8')
             self.assertTrue(source_errors(root, 'HEAD', None, ['common/store.cpp'])[0])
+
+    def test_local_declaration_and_parameter_rename(self):
+        """同文件前置声明和唯一参数改名可复用契约；歧义重载不可借用。"""
+        from check import documented_declarations, has_authoritative_comment
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            path = root / 'sample.cpp'
+            source = '/** 管理数据。 */ class Store { /** 读取记录。 */ int Read(int id); }; int Store::Read(int key){return key;}'
+            path.write_text(source, encoding='utf8')
+            definition = parse(source, 'cpp')[-1]
+            self.assertTrue(has_authoritative_comment(definition,
+                documented_declarations(root, 'sample.cpp', None), 'sample.cpp'))
+            path.write_text(source.replace('int Read(int id);', 'int Read(int id); int Read(double value);'), encoding='utf8')
+            self.assertFalse(has_authoritative_comment(definition,
+                documented_declarations(root, 'sample.cpp', None), 'sample.cpp'))
+
+
+class CredentialDiffTests(unittest.TestCase):
+    """确认注释修改不误报既有赋值，新值、新副本及跨文件复制仍阻断。"""
+
+    def test_diff_multiset_is_scoped_to_each_file(self):
+        """运行真实 PowerShell 检查函数且不输出任何匹配文本。"""
+        import shutil
+        key = 'pass' + 'word'
+        old, new = key + '=fixtureOld', key + '=fixtureNew'
+        cases = [([f'-{old}', f'+/** note */ {old}'], False),
+                 ([f'-{old}', f'+{new}'], True), ([f'+{new}'], True),
+                 ([f'-{old}', f'+{old}', f'+{old}'], True),
+                 ([f'-{old}', 'diff --git a/b b/b', f'+{old}'], True),
+                 (['+' + key + ': ${{ secrets.TEST_VALUE }}'], False),
+                 (['--- a/sample', '+++ b/sample'], False)]
+        with tempfile.TemporaryDirectory() as folder:
+            script = Path(folder) / 'check.ps1'
+            lines = [". '" + str(ROOT / 'scripts/Test-CredentialDiff.ps1').replace("'", "''") + "'"]
+            for diff, expected in cases:
+                quoted = ','.join("'" + line.replace("'", "''") + "'" for line in ['diff --git a/a b/a', *diff])
+                lines.append(f"if ((Test-CredentialDiff -Diff @({quoted})) -ne ${str(expected).lower()}) {{ exit 1 }}")
+            script.write_text('\n'.join(lines), encoding='utf-8-sig')
+            result = subprocess.run([shutil.which('pwsh') or shutil.which('powershell'),
+                '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(script)], capture_output=True, timeout=30)
+            self.assertEqual(0, result.returncode, result.stderr.decode(errors='replace'))
 
 
 class EntryPointTests(unittest.TestCase):
