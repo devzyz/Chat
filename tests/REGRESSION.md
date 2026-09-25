@@ -33,8 +33,9 @@ VarifyServer, or PowerShell test source exists but is absent from its real
 MSBuild/CMake/npm/PowerShell runner, or when a CTest target has no Level label.
 It prevents silent tests; it does not replace behavioral assertions.
 
-`CheckTestReports` is the result-integrity gate. It requires exactly thirteen
-registered XML reports and 313 runner testcases while preserving the original
+`CheckTestReports` is the result-integrity gate. It requires the exact XML report
+groups and testcase counts defined by `$regressionReportGroups` in the public runner,
+including `server_resource_integration.xml`, while preserving the original
 twelve-report/232-testcase floor. It rejects a missing/invalid report, count
 drift, any failure/error/skipped/disabled/unavailable/timeout result, a
 credential-shaped assignment, missing cleanup evidence, or an incomplete aggregate.

@@ -13,7 +13,7 @@ ChatServer 的 TCP Session 由 `CServer` 持有，`CSession` 在独立 strand �
 停机等待 accept、Session 的在途 I/O 与绑定完成，再排空生命周期任务，最后停 I/O 和依赖。
 
 
-Chat 是由 Qt 桌面客户端和多个独立服务组成的分布式聊天项目。当前 Windows 发布基线包含 GateServer、StatusServer、ChatServer、VarifyServer 和 Qt 客户端；Server 之间通过 HTTP/TCP、gRPC、Redis 和 MySQL 协作。
+Chat 是由 Qt 桌面客户端和多个独立服务组成的分布式聊天项目。当前 Windows 发布基线包含 GateServer、StatusServer、ChatServer、ResourceServer、VarifyServer 和 Qt 客户端；Server 之间通过 HTTP/TCP、gRPC、Redis 和 MySQL 协作。
 
 ```text
 Qt Client
@@ -36,11 +36,11 @@ ChatServer instance A <---gRPC---> ChatServer instance B ... N
 
 ## 发布单元
 
-1. GateServer、StatusServer、ChatServer 和 VarifyServer MUST 视为独立发布单元。
+1. GateServer、StatusServer、ChatServer、ResourceServer 和 VarifyServer MUST 视为独立发布单元。
 2. 每个发布单元 MUST 携带自身运行所需的配置、DLL 或 `node_modules`，不得依赖另一个服务的输出目录。
 3. Qt 客户端 MUST 作为独立目录发布，并由 `windeployqt` 补齐 Qt 和编译器运行时。
 4. 服务 MUST NOT 依赖目标机器的全局第三方 DLL。
-5. `ResourceServer` 当前存在于 `Chat.sln`，但不在 `scripts/windows-local.ps1` 和 Windows CI 的三 Server 发布链路中。将它纳入正式发布前 MUST 明确职责、依赖、测试和 artifact，而不是默认认为已被 CI 覆盖。
+5. `ResourceServer` 与其余三个 C++ Server 一同通过 `scripts/windows-local.ps1` 构建；Windows CI 运行资源存储合同并生成独立 ZIP，发布组装和包启动冒烟必须包含该服务。数据库、视频和跨服务资源业务集成仍使用独立入口，其证据不由存储合同替代。
 
 ## 服务职责
 

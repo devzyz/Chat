@@ -4,7 +4,7 @@ This document describes the shared Windows baseline used by local development
 and the phase-two GitHub Actions workflow. It builds the existing projects
 without changing their build systems:
 
-- GateServer, StatusServer and ChatServer: Visual Studio/MSBuild
+- GateServer, StatusServer, ChatServer and ResourceServer: Visual Studio/MSBuild
 - chat: CMake with the existing Qt 6.5.3 MinGW 64-bit kit
 - VarifyServer: npm ci
 
@@ -59,7 +59,7 @@ otherwise independent:
    target and host dependencies with `x64-windows-chat-release`, and invokes
    `RunServerTests` to build production servers and test targets together in Release. It verifies that each
    app-local directory contains its executable, configuration and required
-   DLLs, then uploads three independent ZIP files in the
+   DLLs, then uploads four independent ZIP files in the
    `windows-servers-release` artifact.
 3. `client-release` installs Qt 6.5.3 with its MinGW toolchain, invokes the same
    `RunClientTests -Configuration Release` entry point used locally, builds and runs CTest,
@@ -185,7 +185,7 @@ Run all commands from the repository root:
     # Restore the root manifest into vcpkg_installed\x64-windows-chat.
     .\scripts\windows-local.ps1 -Task RestoreServers
 
-    # Build the three C++ service executables.
+    # Build the four C++ service executables.
     .\scripts\windows-local.ps1 -Task BuildServers -Configuration Debug
     .\scripts\windows-local.ps1 -Task BuildServers -Configuration Release
 
@@ -237,7 +237,7 @@ and Level classification rules. `tests\REGRESSION.md` defines the permanent
 baseline and admission contract for future modules; phase numbers do not retire
 older regression tests.
 
-The current develop baseline is exactly 173 testcases in 12 reports.
+The exact current baseline is maintained by `$regressionReportGroups` in `scripts/windows-local.ps1`.
 `CheckTestReports` performs the no-build integrity audit; `RunAllTests` invokes
 the same audit after all four toolchain runners. A missing report, count drift,
 failure/error node, test exit failure, or newly-created known test temporary
@@ -346,7 +346,10 @@ If RestoreServers reports a shallow checkout, complete it and retry:
 
 ## Avatar and resource integration
 
-Build and test ResourceServer with the existing dependency tree using
-`scripts/resource-local.ps1`; see [ResourceServer](ResourceServer/README.md).
-Avatar Unit/Component cases run through `RunClientTests`; resource integration
-uses the separate local runner. Neither command authorizes dependency restoration.
+ResourceServer is built by `BuildServers` and `RunServerTests`. The latter also runs
+the eight filesystem-backed `StoreTest` contracts with a 60-second process timeout
+and writes `server_resource_integration.xml`. Windows CI stages ResourceServer.zip
+and release assembly requires it. Avatar Unit/Component cases run through `RunClientTests`.
+The database, HTTP/video and cross-service resource integrations retain the separate
+`scripts/resource-local.ps1` entry; see [ResourceServer](ResourceServer/README.md).
+None of these build/test commands authorizes dependency restoration.

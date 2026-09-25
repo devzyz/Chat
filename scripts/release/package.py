@@ -7,9 +7,10 @@ import re
 import tempfile
 import zipfile
 
-APPS = ('GateServer', 'StatusServer', 'ChatServer', 'chat-client', 'VarifyServer')
-REQUIRED = [*(f'{app}/{app}.exe' for app in APPS[:3]),
-            *(f'{app}/{dll}' for app in APPS[:3]
+SERVERS = ('GateServer', 'StatusServer', 'ChatServer', 'ResourceServer')
+APPS = (*SERVERS, 'chat-client', 'VarifyServer')
+REQUIRED = [*(f'{app}/{app}.exe' for app in SERVERS),
+            *(f'{app}/{dll}' for app in SERVERS
               for dll in ('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')),
             'chat-client/chat.exe', 'chat-client/Qt6Core.dll', 'chat-client/Qt6Widgets.dll',
             'chat-client/platforms/qwindows.dll', 'VarifyServer/node.exe', 'VarifyServer/server.js',

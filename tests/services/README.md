@@ -2,6 +2,12 @@
 
 ## Integration and business regression
 
+Linux client bundles now receive both the explicit Qt installation and the run-owned
+vcpkg installation as allowed library roots, since logging is owned by vcpkg in the
+combined build. `node --test tests/services/coordinator.test.js` verifies both roots
+and rejects adjacent/unlisted directories. Relocated bundles still verify every
+dependency against their app-local manifest; no inherited library path is accepted.
+
 The reusable Linux workflow runs on master PR/push, weekly develop checks and manual full checks.
 Its final job validates this run's 3C service reports and 3D E2E reports, their source SHA and teardown.
 It does not poll Windows checks or query published releases. The parent CI workflow directly depends

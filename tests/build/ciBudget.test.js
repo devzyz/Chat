@@ -64,7 +64,7 @@ test('Windows builds production servers once and validates registration before a
     }
     const runner = fs.readFileSync(path.join(__dirname, '../../scripts/windows-local.ps1'), 'utf8');
     const server = runner.split('function Run-ServerTests {')[1].split('function ')[0];
-    assert.match(server, /\/t:GateServer;StatusServer;ChatServer;ServerUnitTests/);
+    assert.match(server, /\/t:GateServer;StatusServer;ChatServer;ResourceServer;ServerUnitTests/);
     assert.match(server, /Assert-RegressionReport/);
 });
 
@@ -107,4 +107,30 @@ test('Linux retains PASS validation without the retired compatibility selector o
     assert.ok(linux.includes("jq -e '.status == \"PASS\"' out/phase3c/preflight/linux-preflight.json"));
     assert.match(job(linux, 'downstream-contract'), /verify-service-reports\.js/);
     assert.match(job(ci, 'release'), /needs: full/);
+});
+
+test('ResourceServer participates in build, storage regression and release staging', /** 验证资源服务生产目标、存储回归及发布阶段接入统一入口。 */ () => {
+    const windows = workflow('windows-ci.yml');
+    const runner = fs.readFileSync(path.join(__dirname, '../../scripts/windows-local.ps1'), 'utf8');
+    assert.match(runner, /\/t:GateServer;StatusServer;ChatServer;ResourceServer'/);
+    assert.match(runner, /\$resourceTestProject\)/);
+    assert.match(runner, /server_resource_integration\.xml/);
+    assert.match(runner, /Filter = 'StoreTest\.\*'/);
+    for (const name of ['Verify independent app-local server directories', 'Create independent server ZIP packages']) {
+        const step = windows.split(`- name: ${name}`)[1].split(/\r?\n      - /)[0];
+        assert.match(step, /'ResourceServer'/);
+    }
+});
+
+test('full Linux CI keeps client coverage and separately builds without Qt', /** 验证完整 CI 显式保留客户端，同时构建禁用 Qt 的服务端目标。 */ () => {
+    const presets = JSON.parse(fs.readFileSync(path.join(__dirname, '../../CMakePresets.json'), 'utf8'));
+    const variables = presets.configurePresets.find(/** 定位完整 Linux CI 配置。 */ item => item.name === 'linux-x64-release').cacheVariables;
+    assert.equal(variables.CHAT_BUILD_CLIENT, 'ON');
+    assert.equal(variables.BUILD_TESTING, 'ON');
+    assert.equal(variables.CHAT_ENABLE_HOSTED_PREFLIGHT, 'ON');
+    const linux = workflow('linux-ci.yml');
+    assert.match(linux, /-DCHAT_BUILD_CLIENT=OFF -DBUILD_TESTING=OFF/);
+    assert.match(linux, /-DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE/);
+    assert.match(linux, /cmake --build out\/build\/linux-server-only --target GateServer StatusServer ChatServer/);
+    assert.match(workflow('windows-ci.yml'), /tests\/build\/server_only_configuration\.cmake/);
 });

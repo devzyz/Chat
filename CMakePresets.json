@@ -12,6 +12,9 @@
       "generator": "Unix Makefiles",
       "binaryDir": "${sourceDir}/out/build/linux-x64-release",
       "cacheVariables": {
+        "CHAT_BUILD_CLIENT": "ON",
+        "BUILD_TESTING": "ON",
+        "CHAT_ENABLE_HOSTED_PREFLIGHT": "ON",
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_INSTALLED_DIR": "${sourceDir}/.ci/vcpkg_installed",

@@ -171,7 +171,16 @@ jobs:
           set -o pipefail
           timeout --signal=TERM --kill-after=30s 55m \
             bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-00-T2 \
-            2>&1 | tee "$CHAT_EVIDENCE_ROOT/preflight.log"
+              2>&1 | tee "$CHAT_EVIDENCE_ROOT/preflight.log"
+
+      - name: Configure and compile servers without Qt or client modules
+        timeout-minutes: 20
+        run: |
+          cmake --preset linux-x64-release -B out/build/linux-server-only \
+            -DCHAT_BUILD_CLIENT=OFF -DBUILD_TESTING=OFF \
+            -DVCPKG_MANIFEST_INSTALL=OFF \
+            -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_Qt5=TRUE
+          cmake --build out/build/linux-server-only --target GateServer StatusServer ChatServer --parallel 2
 
       - name: Verify shared production targets and ProcessHarness
         run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-01
@@ -194,7 +203,7 @@ jobs:
           node tests/services/messageRuntime.js pack out/build/linux-x64-release/bin/message_commit_integration out/phase3c/service-launcher/message .ci/vcpkg_installed
           git rev-parse HEAD > out/phase3c/service-launcher/source-sha.txt
           node tests/services/fourRuntime.js pack out/build/linux-x64-release/bin out/phase3c/service-launcher/four .ci/vcpkg_installed
-          node tests/services/clientRuntime.js pack out/build/linux-x64-release/bin/chat_e2e_client out/phase3c/service-launcher/client "$(qmake -query QT_INSTALL_PREFIX)"
+          node tests/services/clientRuntime.js pack out/build/linux-x64-release/bin/chat_e2e_client out/phase3c/service-launcher/client "$(qmake -query QT_INSTALL_PREFIX)" .ci/vcpkg_installed
           (cd out/phase3c/service-launcher && sha256sum service_run redis_adapter_integration libhiredis.so.1 message/* four/*/* client/* > service_run.sha256)
 
       - name: Upload same-run service launcher

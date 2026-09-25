@@ -145,7 +145,7 @@ dependencies:
 cmake -DCHAT_EXPECT=GREEN -DCHAT_JUNIT_PATH=out/phase3c/contract.xml -DCHAT_EVIDENCE_PATH=out/phase3c/contract.json -P tests/build/linux_preflight_contract.cmake
 ```
 
-The root CMake project resolves Qt Core 6.5.3 explicitly in its own directory
+When `CHAT_BUILD_CLIENT=ON`, the root CMake project resolves Qt Core 6.5.3 explicitly in its own directory
 scope before checking the Qt identity. Qt discovery inside the `chat/` child
 directory does not export `Qt6Core_VERSION` to the root. A missing or different
 version remains a configuration failure; it is never inferred from the
@@ -176,3 +176,30 @@ current installer and asset lock, not the removed third-party acquisition Action
 Any configure, compile, link, loader, startup, identity, timeout, or evidence
 failure remains `LINUX_PREFLIGHT_BLOCKED`. The evidence scope is CI
 portability; it is not application containerization or Linux release support.
+
+## Server-only Linux configuration
+
+The root CMake project defaults to `CHAT_BUILD_CLIENT=OFF`. It resolves `spdlog`
+from the existing vcpkg manifest; it does not enter `chat/` or require Qt.
+Use `-DBUILD_TESTING=OFF` for a production-only graph. Hosted identity checks are
+opt-in via `CHAT_ENABLE_HOSTED_PREFLIGHT`; the existing `linux-x64-release` preset
+explicitly enables client, tests and hosted checks to preserve full CI coverage.
+
+```sh
+cmake --preset linux-x64-release -B out/build/linux-server-only \
+  -DCHAT_BUILD_CLIENT=OFF -DBUILD_TESTING=OFF -DVCPKG_MANIFEST_INSTALL=OFF \
+  -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_Qt5=TRUE
+cmake --build out/build/linux-server-only --target GateServer StatusServer ChatServer
+```
+
+This reuses an existing Linux dependency installation; it does not restore packages.
+Outside the pinned hosted runner, also set `-DCHAT_ENABLE_HOSTED_PREFLIGHT=OFF`;
+the preset otherwise retains its compiler/CMake/install-root identity checks.
+Windows C++ servers continue to use MSBuild. ResourceServer's published platform
+remains Windows; this change does not claim Linux ResourceServer runtime support.
+
+`cmake -DCHAT_TEST_NINJA=<ninja-path> -P tests/build/server_only_configuration.cmake`
+configures the real root graph with dependency stand-ins and rejects any Qt/GTest
+discovery or client/test source leakage. It runs in Windows static CI. It proves
+configuration only; full Linux CI also compiles all three targets with real dependencies
+and Qt discovery explicitly disabled. No native compile is claimed by the stand-ins.

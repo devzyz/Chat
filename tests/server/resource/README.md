@@ -2,8 +2,14 @@
 
 Test IDs: S05-RESOURCE-01..17; method mapping and CI boundary are in `tests/TEST-CONTRACT-MATRIX.md`.
 
-Run `scripts/resource-local.ps1 -Task Test` with existing dependency/tool paths; no CI workflow is changed.
-Reports and build logs live in `build/resource`.
+Run `scripts/windows-local.ps1 -Task RunServerTests` for the eight `StoreTest.*` filesystem
+integration cases (60-second timeout, no database). Windows develop/full CI runs the same
+entry and retains `build/test-results/server_resource_integration.xml`. Debug and Release
+are supported. ResourceServer is built and deployed by this entry and `BuildServers`.
+
+Run `scripts/resource-local.ps1 -Task Test` for the additional HTTP/video/database/Qt
+integration suite with existing dependency/tool paths. Its reports and logs remain in
+`build/resource`; these additional cases are not claimed by the routine storage report.
 
 For database-only regression, build `ResourceTests.vcxproj` with manifest restore
 disabled and run `python -B tests/server/resource/catalog_integration.py --catalog-only`.

@@ -36,13 +36,15 @@ if(WIN32)
     endif()
 endif()
 
-set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Build spdlog as a static library" FORCE)
-set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "Disable spdlog examples" FORCE)
-set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "Disable spdlog tests" FORCE)
-set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "Disable spdlog benchmarks" FORCE)
-set(SPDLOG_INSTALL OFF CACHE BOOL "Disable spdlog install target" FORCE)
-set(SPDLOG_FMT_EXTERNAL OFF CACHE BOOL "Use spdlog bundled fmt" FORCE)
-add_subdirectory(packages/spdlog EXCLUDE_FROM_ALL)
+if(NOT TARGET spdlog::spdlog)
+    set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Build spdlog as a static library" FORCE)
+    set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "Disable spdlog examples" FORCE)
+    set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "Disable spdlog tests" FORCE)
+    set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "Disable spdlog benchmarks" FORCE)
+    set(SPDLOG_INSTALL OFF CACHE BOOL "Disable spdlog install target" FORCE)
+    set(SPDLOG_FMT_EXTERNAL OFF CACHE BOOL "Use spdlog bundled fmt" FORCE)
+    add_subdirectory(packages/spdlog EXCLUDE_FROM_ALL)
+endif()
 
 add_library(chat_network_core STATIC
     tcpframedecoder.h tcpframedecoder.cpp

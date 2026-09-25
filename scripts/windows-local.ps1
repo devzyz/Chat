@@ -50,6 +50,10 @@ $gateAsioTestProject = Join-Path $repoRoot 'tests\server\lifecycle\GateAsioPoolT
 $statusAsioTestProject = Join-Path $repoRoot 'tests\server\lifecycle\StatusAsioPoolTests.vcxproj'
 $gateAsioTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\gate_asio_pool_tests.exe"
 $statusAsioTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\status_asio_pool_tests.exe"
+$resourceTestProject = Join-Path $repoRoot 'tests\server\resource\ResourceTests.vcxproj'
+$resourceTestExecutable = Join-Path $repoRoot 'build\resource\ResourceTests.exe'
+if ($Configuration -eq 'Debug') { $resourceTestExecutable = Join-Path $repoRoot 'build\resource\Debug\ResourceTests.exe' }
+$resourceServerExecutable = Join-Path $repoRoot "build\windows-servers\$Configuration\ResourceServer\ResourceServer.exe"
 $testResults = Join-Path $repoRoot 'build\test-results'
 $clientTestGroups = @(
     [pscustomobject]@{ Level = 'unit'; Report = (Join-Path $testResults 'client_unit.xml'); ExpectedCount = 24 }
@@ -79,6 +83,7 @@ $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_resource_integration.xml'; ExpectedCount = 8 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 24 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 13 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 28 }
@@ -333,7 +338,7 @@ function Build-Servers {
     $arguments = @(
         $solution
         '/m'
-        '/t:GateServer;StatusServer;ChatServer'
+        '/t:GateServer;StatusServer;ChatServer;ResourceServer'
         "/p:Configuration=$Configuration"
         '/p:Platform=x64'
         "/p:VcpkgRoot=$($vcpkg.Root)"
@@ -365,7 +370,7 @@ function Run-ServerTests {
     $arguments = @(
         $solution
         '/m'
-        '/t:GateServer;StatusServer;ChatServer;ServerUnitTests;ServerComponentTests;ServerIntegrationTests;ChatGrpcClientTests'
+        '/t:GateServer;StatusServer;ChatServer;ResourceServer;ServerUnitTests;ServerComponentTests;ServerIntegrationTests;ChatGrpcClientTests'
         "/p:Configuration=$Configuration"
         '/p:Platform=x64'
         "/p:VcpkgRoot=$($vcpkg.Root)"
@@ -382,6 +387,7 @@ function Run-ServerTests {
         (Join-Path $testResults 'server_chat_grpc_integration.xml')
         (Join-Path $testResults 'server_gate_unit.xml')
         (Join-Path $testResults 'server_status_unit.xml')
+        (Join-Path $testResults 'server_resource_integration.xml')
     )
     [void](New-Item -ItemType Directory -Path $testResults -Force)
     foreach ($report in $reports) {
@@ -398,7 +404,7 @@ function Run-ServerTests {
     Invoke-ProtocolCompatibility 'check'
 
     $installedRoot = $VcpkgInstalledRoot
-    foreach ($project in @($gateAsioTestProject, $statusAsioTestProject)) {
+    foreach ($project in @($gateAsioTestProject, $statusAsioTestProject, $resourceTestProject)) {
         $poolArguments = @(
             $project
             '/m'
@@ -414,7 +420,7 @@ function Run-ServerTests {
         $poolArguments += @(Get-CiToolchainArguments)
         & $msbuild @poolArguments
         if ($LASTEXITCODE -ne 0) {
-            throw "Server Asio lifecycle test build failed with exit code $LASTEXITCODE`: $project"
+            throw "Server module test build failed with exit code $LASTEXITCODE`: $project"
         }
     }
 
@@ -429,6 +435,7 @@ function Run-ServerTests {
         (Require-File $gateServerExecutable 'Build the GateServer target first.')
         (Require-File $statusServerExecutable 'Build the StatusServer target first.')
         (Require-File $chatServerExecutable 'Build the ChatServer target first.')
+        (Require-File $resourceServerExecutable 'Build the ResourceServer target first.')
     )) {
         & $vcpkg.Exe z-applocal "--target-binary=$productionBinary" "--installed-bin-dir=$installedBin"
         if ($LASTEXITCODE -ne 0) {
@@ -449,6 +456,7 @@ function Run-ServerTests {
         @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4]; ExpectedCount = 2 }
         @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5]; ExpectedCount = 2 }
     )
+    $executions += @{ Binary = (Require-File $resourceTestExecutable 'Build ResourceTests first.'); Report = $reports[6]; ExpectedCount = 8; Filter = 'StoreTest.*' }
     $failures = @()
     foreach ($execution in $executions) {
         & $vcpkg.Exe z-applocal "--target-binary=$($execution.Binary)" "--installed-bin-dir=$installedBin"
@@ -457,8 +465,22 @@ function Run-ServerTests {
         }
         Push-Location (Split-Path -Parent $execution.Binary)
         try {
-            & $execution.Binary "--gtest_output=xml:$($execution.Report)"
-            $exitCode = $LASTEXITCODE
+            if ($execution.ContainsKey('Filter')) {
+                $process = Start-Process -FilePath $execution.Binary -ArgumentList @(
+                    "--gtest_filter=$($execution.Filter)", "`"--gtest_output=xml:$($execution.Report)`"") `
+                    -WindowStyle Hidden -PassThru
+                try {
+                    if (-not $process.WaitForExit(60000)) {
+                        $process.Kill()
+                        $process.WaitForExit()
+                        throw 'Resource storage tests exceeded 60 seconds.'
+                    }
+                    $exitCode = $process.ExitCode
+                } finally { $process.Dispose() }
+            } else {
+                & $execution.Binary "--gtest_output=xml:$($execution.Report)"
+                $exitCode = $LASTEXITCODE
+            }
         } finally {
             Pop-Location
         }
@@ -635,8 +657,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 13 -or $total -ne 382) {
-        throw "Regression report baseline mismatch: expected 13 reports and 382 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 14 -or $total -ne 390) {
+        throw "Regression report baseline mismatch: expected 14 reports and 390 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     $legacyTotal = 0
     foreach ($legacyGroup in $legacyRegressionReportGroups) {
@@ -1389,7 +1411,7 @@ function Confirm-TestStructure {
         $runServerTests.Groups['body'].Value -notmatch "(?m)^\s*Invoke-ProtocolCompatibility\s+'check'\s*$") {
         throw "RunServerTests must execute Invoke-ProtocolCompatibility 'check' so generated and descriptor drift block develop."
     }
-    foreach ($requiredProductionTarget in @('GateServer', 'StatusServer')) {
+    foreach ($requiredProductionTarget in @('GateServer', 'StatusServer', 'ChatServer', 'ResourceServer')) {
         if ($runServerTests.Groups['body'].Value -notmatch [regex]::Escape($requiredProductionTarget)) {
             throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
         }
@@ -1427,11 +1449,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact thirteen-report/382-testcase baseline.'
+        throw 'RunAllTests must audit the exact fourteen-report/390-testcase baseline.'
     }
-    if ($regressionReportGroups.Count -ne 13 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 382) {
-        throw 'The registered regression baseline must remain exactly 13 reports and 382 testcases.'
+    if ($regressionReportGroups.Count -ne 14 -or
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 390) {
+        throw 'The registered regression baseline must remain exactly 14 reports and 390 testcases.'
     }
     if ($legacyRegressionReportGroups.Count -ne 12 -or
         ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 232) {

@@ -64,7 +64,11 @@ Chat TCP 和跨服 gRPC 通道发送资源描述。图片在消息列表展示�
 5. 登录后点击文件按钮上传；再次点击暂停，重新选择同一内容文件继续。消息发送失败时双击重试。
    下载中断时双击消息继续。退出账号取消任务；头像、附件及续传信息保存在安装目录的 `data/` 内，按环境和账号隔离。
 
-本地入口（不会恢复依赖、修改或触发 CI）：
+统一构建和常规回归入口为 `scripts/windows-local.ps1 -Task BuildServers` / `RunServerTests`。
+Windows CI 构建资源服务、执行八项文件存储合同，并在完整运行中提供独立 ResourceServer.zip。
+发布包启动冒烟使用隔离临时 MySQL，不代表资源业务全链路验收。
+
+补充本地集成入口（不会恢复依赖或触发 CI）：
 
 ```powershell
 .\scripts\resource-local.ps1 -Task Build -VcpkgRoot <已有vcpkg路径> -InstalledDir <已有vcpkg_installed路径>
