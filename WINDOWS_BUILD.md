@@ -101,13 +101,16 @@ later PRs. A new target branch can still require a cold build. Hosted toolchain 
 and a second unchanged warm run must confirm real reuse; local fixture success
 is not performance evidence. See [cache regression](tests/build/README.md#ci-binary-dependency-cache).
 
-Ordinary CI uses the latest fully validated weekly Windows toolchain record,
+Ordinary CI uses the latest Windows-validated weekly toolchain record,
 with the committed `scripts/ci/windows-toolchain.json` as the initial bootstrap.
 Weekly CI cold-builds on both platforms, tests the latest stable Windows
 PowerShell/CMake/Ninja and runner-provided MSVC 2022/SDK, then publishes the record
-only after full regression. An unsuccessful weekly run cannot replace the approved
-record. Tool versions are verified before dependency installation; runner compiler
-drift fails early instead of silently triggering hours of rebuilding.
+only after all Windows jobs pass. Linux failures still block full regression and
+release, but do not invalidate successful Windows toolchain validation. Weekly runs
+also retain a digest-verified MSVC/SDK snapshot; ordinary runs restore that exact
+toolchain on the disposable runner before dependency installation and cache reuse.
+Legacy records without snapshots require a matching preinstalled compiler until
+the next refresh. Missing or corrupt snapshots fail instead of silently rebuilding.
 The first transition may require one cold build. For a deliberate refresh on the
 default branch, use `gh workflow run ci.yml --ref develop -f refresh_tools=true`;
 ordinary manual runs retain approved versions. See the

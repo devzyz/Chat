@@ -25,10 +25,15 @@ develop Required Check 为 `Regression checks`；master 为 `Regression checks` 
 
 日常 PR、push 和普通手动运行使用已验证的 Windows 工具链版本；每周在默认分支获取
 最新稳定 PowerShell/CMake/Ninja，以及 runner 提供的最新 MSVC 2022/SDK，执行双平台冷构建和完整回归。
-只有完整回归成功且依赖缓存已保存，才发布新的不可变工具链记录供日常 CI 选择；失败保留旧记录。
+只有四个 Windows 作业全部成功且依赖缓存已保存，才批准新的不可变 Windows 工具链记录供日常 CI 选择。
+Linux 失败不否定 Windows 工具链验证，但 `Full regression checks` 与发布仍必须双平台成功。
+选择器逐一核对默认分支刷新运行中的四个 Windows 作业，可恢复旧版因 Linux 失败而未发布批准工件的候选记录；
+Windows 失败、缺项、跳过、取消或运行未结束均不能批准。
 显式手动刷新仅允许默认分支的 `refresh_tools=true`。PR、其他分支或其他 workflow 的记录不可被采用。
 本次调整由用户要求的“每周升级、日常固定”策略授权；不升级业务依赖、Qt、Node、GCC 或 vcpkg baseline。
-编译器漂移在依赖恢复前失败，不自动修改 Visual Studio、不静默回退。首次引导、缓存和记录保留期
+周检保存完整 MSVC 工具集及版本化 SDK 的 SHA256 快照；日常在依赖恢复前还原临时 runner 的对应版本目录，
+再校验编译器版本和摘要，不依赖 runner 镜像保留旧版本。旧记录无快照时仍严格校验预装版本，下一次周检生成快照。
+该恢复只限 GitHub 临时环境，不修改本机 Visual Studio 或 vcpkg。首次引导、缓存和记录保留期
 见 [构建测试入口](build/README.md#validated-weekly-windows-toolchain)。本机 DG-25 边界不变。
 
 ### 1.2 规范检查合同

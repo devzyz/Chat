@@ -6,12 +6,16 @@ on:
       toolchain_lock:
         type: string
         required: true
+      toolchain_run:
+        type: string
+        default: ''
       refresh_tools:
         type: boolean
         default: false
 
 permissions:
   contents: read
+  actions: read
 
 env:
   BUILD_PACKAGES: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.base_ref == 'master' }}
@@ -148,6 +152,10 @@ jobs:
         shell: pwsh
         run: node --test tests/build/vcpkgBinaryCache.test.js tests/build/toolchain.test.js
 
+      - name: Verify native toolchain snapshot recovery
+        shell: powershell
+        run: ./scripts/ci/test-native-toolchain.ps1
+
       - name: Verify CI triggers and execution budgets
         shell: pwsh
         run: node --test tests/build/ciBudget.test.js
@@ -259,10 +267,26 @@ jobs:
         env:
           CHAT_TOOLCHAIN_LOCK: ${{ inputs.toolchain_lock }}
           CHAT_REFRESH_TOOLS: ${{ inputs.refresh_tools }}
+          CHAT_TOOLCHAIN_RUN: ${{ inputs.toolchain_run }}
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/ci/install-windows-toolchain.ps1 -VcpkgRoot $env:VCPKG_ROOT -Refresh:($env:CHAT_REFRESH_TOOLS -eq 'true')
 
-      - name: Retain candidate toolchain for full-regression promotion
+      - name: Retain native toolchain snapshot
+        if: inputs.refresh_tools
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-native-toolchain
+          path: .ci/windows-native-toolchain.tar
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Release uploaded native archive disk space
+        if: inputs.refresh_tools
+        shell: pwsh
+        run: Remove-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE '.ci/windows-native-toolchain.tar') -Force
+
+      - name: Retain candidate toolchain for Windows validation
         if: inputs.refresh_tools
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -270,7 +294,7 @@ jobs:
           path: .ci/windows-toolchain.json
           include-hidden-files: true
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 90
 
       - name: Prepare layered binary cache keys
         id: binary-cache-key
