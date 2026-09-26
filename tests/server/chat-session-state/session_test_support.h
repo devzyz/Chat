@@ -1,6 +1,7 @@
 #pragma once
 #include "CSession.h"
-#include "CServer.h"
+// GateServer has a different CServer.h; include order must not select its transport.
+#include "../../../ChatServer/ChatServer/CServer.h"
 #include "SessionLifecycleCoordinator.h"
 #include <gtest/gtest.h>
 #include <future>
