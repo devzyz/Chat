@@ -119,7 +119,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup>
-    <Link><AdditionalDependencies>zlib.lib;%(AdditionalDependencies)</AdditionalDependencies></Link>
+    <Link><AdditionalDependencies Condition="'$(Configuration)'=='Debug'">zlibd.lib;%(AdditionalDependencies)</AdditionalDependencies><AdditionalDependencies Condition="'$(Configuration)'!='Debug'">zlib.lib;%(AdditionalDependencies)</AdditionalDependencies></Link>
     <ClCompile>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>

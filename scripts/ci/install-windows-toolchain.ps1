@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param([Parameter(Mandatory = $true)][string]$VcpkgRoot, [switch]$Refresh)
 
 Set-StrictMode -Version Latest
@@ -20,6 +20,16 @@ $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer
 $vs = (& $vswhere -latest -version '[17.0,18.0)' -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'Visual Studio 2022 C++ tools are required.' }
 $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/Include'
+. (Join-Path $PSScriptRoot 'native-toolchain.ps1')
+if (-not $Refresh -and $lock.PSObject.Properties.Name -contains 'nativeSnapshotSha256') {
+    if ($env:CHAT_TOOLCHAIN_RUN -notmatch '^\d+$') { throw 'Native snapshot requires a Windows-validated run.' }
+    $archive = Join-Path $repoRoot '.ci/windows-native-toolchain.tar'
+    & gh run download $env:CHAT_TOOLCHAIN_RUN --repo $env:GITHUB_REPOSITORY `
+        --name windows-native-toolchain --dir (Join-Path $repoRoot '.ci')
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot download approved native toolchain; refusing runner fallback.' }
+    Restore-NativeToolchain (Join-Path $vs 'VC/Tools/MSVC') (Split-Path $sdkRoot) $lock $archive $lock.nativeSnapshotSha256
+    Remove-Item -LiteralPath $archive -Force
+}
 if ($Refresh) {
     $lock.msvc.toolset = (Get-ChildItem -LiteralPath (Join-Path $vs 'VC/Tools/MSVC') -Directory |
         Where-Object <# 筛选 MSVC 版本目录。 #> { $_.Name -match '^14\.\d+\.\d+$' } | Sort-Object <# 按 MSVC 版本数值排序。 #> { [version]$_.Name } -Descending | Select-Object -First 1).Name
@@ -77,6 +87,11 @@ if ($Refresh) {
         $tool.sha512 = (Get-FileHash -LiteralPath $download -Algorithm SHA512).Hash.ToLowerInvariant()
         if ($tool.name -eq 'cmake') { $tool.executable = "cmake-$version-windows-x86_64/bin/cmake.exe" }
     }
+}
+if ($Refresh) {
+    $archive = Join-Path $repoRoot '.ci/windows-native-toolchain.tar'
+    $snapshotHash = Save-NativeToolchain (Join-Path $vs 'VC/Tools/MSVC') (Split-Path $sdkRoot) $lock $archive
+    $lock | Add-Member -NotePropertyName nativeSnapshotSha256 -NotePropertyValue $snapshotHash -Force
 }
 [IO.File]::WriteAllText($lockPath, ($lock | ConvertTo-Json -Depth 10) + "`n", $utf8)
 & node (Join-Path $PSScriptRoot 'toolchain.js') validate $lockPath

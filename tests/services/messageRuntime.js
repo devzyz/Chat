@@ -44,11 +44,19 @@ function inspect(binary, bundle) {
         env: { ...process.env, LD_LIBRARY_PATH: bundle || '', LD_PRELOAD: '' } });
 }
 
-/** 只从指定安装树复制运行依赖到新包目录，记录清单并执行迁移后探针。 */
+/** 验证动态库来源属于显式安装树或 Linux 系统库，返回规范路径。 */
+function validateLibrarySource(source, installedRoots) {
+    const real = fs.realpathSync(source);
+    assert.ok(installedRoots.some(/** 按目录边界限定允许的依赖安装树。 */ root => real.startsWith(root + path.sep)) ||
+        /^\/(?:usr\/)?lib\/x86_64-linux-gnu\//.test(real), 'library source outside locked/system roots');
+    return real;
+}
+
+/** 只从指定的一棵或多棵安装树复制运行依赖到新包目录，记录清单并执行迁移后探针。 */
 function pack(binary, bundle, installedRoot, name = 'message_commit_integration', probe = ['validation']) {
     assert.match(name, /^[A-Za-z][A-Za-z0-9_]*$/);
     binary = fs.realpathSync(binary);
-    installedRoot = fs.realpathSync(installedRoot);
+    const installedRoots = [installedRoot].flat().map(/** 规范化每个显式依赖安装根目录。 */ root => fs.realpathSync(root));
     bundle = path.resolve(bundle);
     assert.ok(!fs.existsSync(bundle), 'message runtime destination must be new');
     const libraries = dependencies(inspect(binary));
@@ -56,9 +64,7 @@ function pack(binary, bundle, installedRoot, name = 'message_commit_integration'
     fs.copyFileSync(binary, path.join(bundle, name));
     fs.chmodSync(path.join(bundle, name), 0o755);
     for (const [name, source] of libraries) {
-        const real = fs.realpathSync(source);
-        assert.ok(real.startsWith(installedRoot + path.sep) ||
-            /^\/(?:usr\/)?lib\/x86_64-linux-gnu\//.test(real), 'library source outside locked/system roots');
+        const real = validateLibrarySource(source, installedRoots);
         fs.copyFileSync(real, path.join(bundle, name));
     }
     fs.writeFileSync(path.join(bundle, 'libraries.json'), JSON.stringify([...libraries.keys()].sort()) + '\n');
@@ -83,4 +89,4 @@ if (require.main === module) {
     else throw new Error('messageRuntime requires pack <binary> <new-bundle> <installed-root> or verify <bundle>');
 }
 
-module.exports = { dependencies, validateRelocated, pack, verify };
+module.exports = { dependencies, inspect, validateRelocated, validateLibrarySource, pack, verify };

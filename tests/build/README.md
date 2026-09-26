@@ -28,12 +28,14 @@ default-branch refresh routing, cold-cache selection and early compiler/version 
 Windows static checks own the toolchain regression; these infrastructure tests do not
 change business Test IDs or report counts.
 
-Ordinary PR/push/manual CI selects the newest `ci-toolchain-approved` artifact from a
-successful scheduled or explicit refresh run of `ci.yml` on the repository default branch.
-PRs, other workflows, failed/in-progress runs and other branches cannot supply the lock.
+Ordinary PR/push/manual CI selects the newest `windows-toolchain-candidate` artifact from a
+completed scheduled or explicit refresh run of `ci.yml` on the repository default branch,
+after verifying all four Windows jobs succeeded. A Linux failure does not invalidate that
+Windows result. Missing, failed, skipped or duplicate Windows jobs cannot approve a lock.
+PRs, other workflows, cancelled/in-progress runs and other branches cannot supply the lock.
 Selection happens once per run. API/download/validation failures fail closed. Before the
 first promotion, `scripts/ci/windows-toolchain.json` supplies the bootstrap identity.
-The approved artifact is retained 90 days; an expired approved record requires a new
+Candidate records and native snapshots are retained 90 days; an expired approved record requires a new
 default-branch refresh rather than silently upgrading. A refresh does not depend on an
 old artifact remaining downloadable.
 
@@ -41,16 +43,30 @@ The weekly run (or `gh workflow run ci.yml --ref develop -f refresh_tools=true`)
 the latest stable Windows PowerShell/CMake/Ninja releases and the newest MSVC 2022 toolset
 and Windows SDK available on the hosted runner. Release SHA256 digests are verified before
 recording SHA512 hashes in the candidate vcpkg tool catalog. Both platforms skip binary
-cache restoration for this run. Only successful Windows and Linux full regression can
-publish the candidate as approved; native archives have already been saved on the default
-branch. A failed refresh leaves the previous approved record active.
+cache restoration for this run. All Windows checks must succeed before approval;
+native dependency archives have already been saved on the default branch. A failed Windows
+refresh leaves the previous approved record active. Linux remains required for full checks
+and release, independently of Windows toolchain approval. The promotion job still publishes
+`ci-toolchain-approved` as a human-readable record; selection verifies the candidate's actual
+Windows jobs, including legacy runs where Linux failures prevented that publication.
 
 Every Windows build uses the approved exact tool catalog with
 `VCPKG_FORCE_DOWNLOADED_BINARIES=1`, fetches each tool, and verifies its executable version
 before installing any dependency. MSVC version (and binary digest after the first promotion)
 and SDK presence are checked first; the exact toolset/SDK are passed to both vcpkg and
-MSBuild. If a hosted image drops the locked compiler, CI fails early with a refresh message.
-It does not modify the hosted Visual Studio installation or fall back to a different compiler.
+MSBuild. Refresh runs save the complete MSVC toolset plus the versioned SDK Include/Lib/bin
+directories in `windows-native-toolchain`. Ordinary runs download that same run's snapshot,
+verify its SHA256, and replace only those version directories on the disposable runner before
+compiler verification. No local Visual Studio or vcpkg installation is changed. Missing or
+corrupt snapshots fail instead of falling back to the runner's compiler. Legacy records without
+a snapshot retain the strict preinstalled-compiler check until the next weekly refresh.
+The snapshot transport digest is excluded from dependency cache identity: archiving timestamps
+must not invalidate otherwise identical compiler/tool inputs. Compiler hashes remain included.
+
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/test-native-toolchain.ps1`
+exercises real archive capture and restoration against temporary directories, including runner
+compiler drift, stale-file removal, SDK restoration, digest rejection before writes, and invalid
+version paths. Windows static CI runs this regression. It does not install real compilers locally.
 
 Windows v4 cache keys and fallbacks include the complete tool identity; they never restore
 a different toolchain namespace. The initial migration can require one cold build, and
@@ -145,7 +161,7 @@ dependencies:
 cmake -DCHAT_EXPECT=GREEN -DCHAT_JUNIT_PATH=out/phase3c/contract.xml -DCHAT_EVIDENCE_PATH=out/phase3c/contract.json -P tests/build/linux_preflight_contract.cmake
 ```
 
-The root CMake project resolves Qt Core 6.5.3 explicitly in its own directory
+When `CHAT_BUILD_CLIENT=ON`, the root CMake project resolves Qt Core 6.5.3 explicitly in its own directory
 scope before checking the Qt identity. Qt discovery inside the `chat/` child
 directory does not export `Qt6Core_VERSION` to the root. A missing or different
 version remains a configuration failure; it is never inferred from the
@@ -176,3 +192,30 @@ current installer and asset lock, not the removed third-party acquisition Action
 Any configure, compile, link, loader, startup, identity, timeout, or evidence
 failure remains `LINUX_PREFLIGHT_BLOCKED`. The evidence scope is CI
 portability; it is not application containerization or Linux release support.
+
+## Server-only Linux configuration
+
+The root CMake project defaults to `CHAT_BUILD_CLIENT=OFF`. It resolves `spdlog`
+from the existing vcpkg manifest; it does not enter `chat/` or require Qt.
+Use `-DBUILD_TESTING=OFF` for a production-only graph. Hosted identity checks are
+opt-in via `CHAT_ENABLE_HOSTED_PREFLIGHT`; the existing `linux-x64-release` preset
+explicitly enables client, tests and hosted checks to preserve full CI coverage.
+
+```sh
+cmake --preset linux-x64-release -B out/build/linux-server-only \
+  -DCHAT_BUILD_CLIENT=OFF -DBUILD_TESTING=OFF -DVCPKG_MANIFEST_INSTALL=OFF \
+  -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_Qt5=TRUE
+cmake --build out/build/linux-server-only --target GateServer StatusServer ChatServer
+```
+
+This reuses an existing Linux dependency installation; it does not restore packages.
+Outside the pinned hosted runner, also set `-DCHAT_ENABLE_HOSTED_PREFLIGHT=OFF`;
+the preset otherwise retains its compiler/CMake/install-root identity checks.
+Windows C++ servers continue to use MSBuild. ResourceServer's published platform
+remains Windows; this change does not claim Linux ResourceServer runtime support.
+
+`cmake -DCHAT_TEST_NINJA=<ninja-path> -P tests/build/server_only_configuration.cmake`
+configures the real root graph with dependency stand-ins and rejects any Qt/GTest
+discovery or client/test source leakage. It runs in Windows static CI. It proves
+configuration only; full Linux CI also compiles all three targets with real dependencies
+and Qt discovery explicitly disabled. No native compile is claimed by the stand-ins.

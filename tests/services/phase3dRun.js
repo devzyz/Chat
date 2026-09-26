@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { performance } = require('node:perf_hooks');
-const { DependencyCoordinator, loadConfiguration } = require('./dependencyCoordinator');
+const { DependencyCoordinator, loadConfiguration, caseDiagnostic } = require('./dependencyCoordinator');
 const { runFiveProcessCases } = require('./fiveProcessCases');
 const { writeReports } = require('./serviceReports');
 
@@ -22,8 +22,8 @@ async function run(root) {
         try {
             await action();
             cases.push({ id, name, pass: true, seconds: (performance.now() - started) / 1000 });
-        } catch {
-            cases.push({ id, name, pass: false, seconds: (performance.now() - started) / 1000 });
+        } catch (error) {
+            cases.push({ id, name, pass: false, diagnostic: caseDiagnostic(error), seconds: (performance.now() - started) / 1000 });
             throw new Error(id);
         }
     };

@@ -2,6 +2,12 @@
 
 ## Integration and business regression
 
+Linux client bundles now receive both the explicit Qt installation and the run-owned
+vcpkg installation as allowed library roots, since logging is owned by vcpkg in the
+combined build. `node --test tests/services/coordinator.test.js` verifies both roots
+and rejects adjacent/unlisted directories. Relocated bundles still verify every
+dependency against their app-local manifest; no inherited library path is accepted.
+
 The reusable Linux workflow runs on master PR/push, weekly develop checks and manual full checks.
 Its final job validates this run's 3C service reports and 3D E2E reports, their source SHA and teardown.
 It does not poll Windows checks or query published releases. The parent CI workflow directly depends
@@ -51,6 +57,9 @@ cleanup failure remain failures. Shutdown failures retain only an allowlisted
 process name and category (including a numeric exit code); raw child output and
 configuration remain private. Three report/port/stop regressions and three compiled
 driver regressions support this suite but do not replace hosted acceptance.
+Registration/login and initial client message failures additionally retain fixed
+substep names and numeric response codes. Raw assertions, credentials, tokens and
+message payloads are discarded; the existing deadlines and assertions are unchanged.
 Current evidence remains in the main workspace's `docs/Status.md`.
 
 ```sh
@@ -329,8 +338,10 @@ It requires the same-source `CHAT_SERVICE_LAUNCHER`, `CHAT_FOUR_BUNDLE`,
 `CHAT_E2E_CLIENT`, and job-owned container IDs/mapped ports used by the existing
 coordinator. The `two-server-contract` hosted job supplies these inputs and
 uploads `phase3d-contract-evidence`. `clientRuntime.js` packs the Qt binary and
-its dependency closure in the checksummed launcher artifact; no GUI platform
-plugin is needed by this QCoreApplication entry point.
+its dependency closure and dynamically loaded `sqldrivers/libqsqlite.so` in the
+checksummed launcher artifact. The storage probe opens a temporary production
+message database using only deployed plugins, and must fail with SQLite removed.
+No GUI platform plugin is needed by this QCoreApplication entry point.
 
 `fiveProcessCases.js` reuses RunContext/ProcessHarness supervisors, the real
 schema migration and dependency coordinator. It runs Varify, Status, Gate,

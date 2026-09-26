@@ -49,6 +49,7 @@ network.
 | Suite | Level | Report |
 | --- | --- | --- |
 | ChatServer deterministic logic, Status selection, plus Gate/Status Asio contracts | Unit | `server_unit.xml`, `server_gate_unit.xml`, `server_status_unit.xml` |
+| ResourceStore restart/resume, ownership, integrity and path validation on temporary files | Integration | `server_resource_integration.xml` |
 | ChatServer service-free Redis pool, session registry/send state, Gate response/request orchestration, plus Status token/store behavior | Component | `server_component.xml` |
 | Chat/Gate/Status CLI, config, bind, ready, shutdown plus C++→Node Varify, run-owned process harness, and production gRPC-client loopback | Integration | `server_integration.xml`, `server_chat_grpc_integration.xml` |
 | Qt frame decoder, message-model rules Q01-MODEL-01..06, auth outcomes Q03-AUTH-01..11 | Unit | `client_unit.xml` |

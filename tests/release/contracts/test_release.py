@@ -56,6 +56,33 @@ class ReleaseContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Missing runtime'):
             self.build()
 
+    def test_resource_package_is_required_and_sanitized(self):
+        """资源服务必须随包提供，且只交付无连接信息的配置模板。"""
+        self.assertIn('ResourceServer', package.APPS)
+        archive = self.build()
+        destination = self.root / 'resource-package'
+        package.verify(archive, destination, self.sha)
+        self.assertTrue((destination / 'ResourceServer/ResourceServer.exe').is_file())
+        self.assertFalse((destination / 'ResourceServer/config.ini').exists())
+        self.assertNotIn('private-example', (destination / 'ResourceServer/config.ini.template').read_text())
+        (self.artifacts / 'ResourceServer.zip').unlink()
+        with self.assertRaisesRegex(ValueError, 'Expected one CI ZIP for ResourceServer'):
+            package.assemble(ROOT, self.artifacts, self.root / 'missing-resource', self.sha)
+
+    def test_resource_runtime_files_cannot_be_omitted(self):
+        """资源服务缺少可执行文件或运行库时必须拒绝发布包。"""
+        self.assertIn('ResourceServer', package.APPS)
+        archive = self.build()
+        destination = self.root / 'missing-runtime'
+        package.verify(archive, destination, self.sha)
+        for name in ('ResourceServer.exe', 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'):
+            file = destination / 'ResourceServer' / name
+            content = file.read_bytes()
+            file.unlink()
+            with self.assertRaisesRegex(ValueError, 'Missing runtime file: ResourceServer/'):
+                package.check_layout(destination)
+            file.write_bytes(content)
+
     def test_other_commit_and_modified_payload_fail_verification(self):
         archive = self.build()
         with self.assertRaisesRegex(ValueError, 'another commit'):

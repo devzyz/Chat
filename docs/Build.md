@@ -5,7 +5,7 @@
 
 | 单元 | 工具链 | 依赖方式 | 发布方式 |
 | --- | --- | --- | --- |
-| GateServer、StatusServer、ChatServer | Visual Studio 2022 v143、MSBuild、C++17 | 根 `vcpkg.json` manifest | 每个 Server 独立 app-local 目录和 ZIP |
+| GateServer、StatusServer、ChatServer、ResourceServer | Visual Studio 2022 v143、MSBuild、C++17 | 根 `vcpkg.json` manifest | 每个 Server 独立 app-local 目录和 ZIP |
 | Qt 客户端 | Qt 6.5.3 MinGW、CMake、Ninja | Qt kit 与仓库内 spdlog | `windeployqt` 后独立 ZIP |
 | VarifyServer | Node.js 22（CI） | `package-lock.json` + `npm ci` | JS/JSON/proto 与 `node_modules` 独立 ZIP |
 
@@ -34,9 +34,11 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 6. 评估磁盘、构建时间和 binary cache key 影响。
 
 - 禁止提交 `vcpkg_installed`、buildtrees、packages 或 `node_modules`。
-- CI 只可缓存 vcpkg binary archives 和包管理器下载缓存，不缓存已安装树或编译中间目录。
-- Windows CI 日常使用已通过完整回归的精确工具链；每周以新版 PowerShell/CMake/Ninja 和 runner 提供的最新 MSVC 2022/SDK 冷构建。
-  全量回归成功、缓存预热完成后才发布新的工具链记录，失败保留上次已验证版本；发现编译器漂移须在恢复依赖前失败。
+- 依赖缓存只保存 vcpkg binary archives 和包管理器下载，不缓存依赖 installed tree 或编译中间目录。
+  周检另存带 SHA256 的 MSVC/SDK 工具链快照工件，日常只在临时 GitHub runner 恢复该工具链。
+- Windows CI 日常使用已通过全部 Windows 检查的精确工具链；每周以新版 PowerShell/CMake/Ninja 和 runner 提供的最新 MSVC 2022/SDK 冷构建。
+  Windows 回归成功、缓存预热完成后才批准工具链记录；Linux 失败仍阻止完整回归和发布，但不阻止 Windows 工具链批准。
+  日常先恢复并校验已验证 MSVC/SDK 快照，再恢复依赖缓存；快照缺失或摘要不符必须失败，不静默换用预装编译器。
   首次引导、手动刷新、保留期及升级边界见 [构建测试入口](../tests/build/README.md#validated-weekly-windows-toolchain)。
 - Windows vcpkg 的 GitHub archive 下载适配器使用官方 codeload 路径，并以 port 固定的 SHA-512 校验。
   校验通过 .NET 文件流执行，不依赖子进程能自动加载 `Get-FileHash`；下载失败或摘要不符不得接受文件。
@@ -83,7 +85,7 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 
 ## 发布单元
 
-- 上游 develop 检查中的 GateServer、StatusServer、ChatServer 各自目录 MUST 包含自身 EXE、`config.ini` 和运行所需 app-local DLL。
+- 上游 develop 检查中的 GateServer、StatusServer、ChatServer、ResourceServer 各自目录 MUST 包含自身 EXE、`config.ini` 和运行所需 app-local DLL。
 - ChatServer 发布目录 MUST 包含受支持的实例示例配置。
 - 每个 Server ZIP 解压后不得依赖另一个 Server ZIP 的文件。
 - Qt ZIP MUST 自包含；最终合并包 MUST 包含 VarifyServer 运行库及其相邻 proto 目录。
@@ -97,6 +99,10 @@ Varify 携带 Node runtime/锁定依赖，并由合并包的相邻 proto 目录�
 同 SHA 的未发布草稿允许重试，已发布版本不可覆盖。验证范围和命令见 [Release 模块入口](../tests/release/contracts/README.md)。
 
 ## 跨平台要求
+
+根 CMake 的 `CHAT_BUILD_CLIENT` 默认关闭，Server 的 spdlog 通过既有 vcpkg manifest 提供，
+不再由 `chat/` 子工程提供。`BUILD_TESTING=OFF` 可排除测试目标；完整 Linux CI preset 显式启用
+客户端、测试和 hosted 工具链校验。独立服务端命令和配置回归见 [构建测试入口](../tests/build/README.md#server-only-linux-configuration)。
 
 - 当前 Windows 构建是权威可运行基线；Linux Server 尚未完成时，不得声称已经支持。
 - 新 Server 业务代码 MUST 避免 Win32 专用 API；不可避免时用窄平台适配层隔离。

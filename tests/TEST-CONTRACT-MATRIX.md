@@ -827,10 +827,12 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 客户端报告变为 24 / 12 / 28，Windows 聚合注册为 13 份报告、357 项。
 这只是注册数量，不代表本次执行了全仓 357 项。下文阶段数量保留其历史口径。
 
-### 本地资源扩展合同（尚未纳入发布 CI）
+### 资源扩展合同与 CI 边界
 
 现有 Q04-AVATAR-03 扩展安装目录和旧头像复制迁移断言，不删除原账号/环境隔离语义。
-资源扩展使用 `scripts/resource-local.ps1 -Task Test`，不改变现有聚合报告的预期计数。
+`S05-RESOURCE-01..08` 由 `RunServerTests` 和 Windows CI 执行，计入 `server_resource_integration.xml`；
+它们使用真实临时文件，归类为 Integration。其余资源扩展继续使用 `scripts/resource-local.ps1 -Task Test`，
+不由这八项存储合同推断通过。发布包必须包含 ResourceServer 及其运行库、配置模板。
 
 | Test ID | 所属入口 | 合同 |
 | --- | --- | --- |

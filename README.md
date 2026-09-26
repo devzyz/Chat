@@ -1,7 +1,7 @@
 # Chat
 
 This repository contains a Qt chat client and the GateServer, StatusServer,
-ChatServer and VarifyServer services.
+ChatServer, ResourceServer and VarifyServer services.
 
 ## Current status and development
 

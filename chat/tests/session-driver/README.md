@@ -61,6 +61,10 @@ data at 64 KiB, and controller inactivity at 60 seconds. Invalid input, replayed
 IDs, control loss and timeouts exit nonzero. The controller must own/reap its
 child on failure. Snapshots never expose credentials, raw replies or containers.
 
+The separate `--check-storage` packaging probe opens a temporary production
+message database with plugin search restricted to the executable directory.
+It requires the deployed SQLite plugin and never opens an existing account.
+
 | Test ID | CTest suffix under `session_driver.` | Contract |
 | --- | --- | --- |
 | E03-CONTRACT-01 | productionLoginKeepsAccountsAndEndpointsSeparate | Two processes authenticate through production HTTP/TCP against fixture peers; send/ACK updates the model, both heartbeat, and account/endpoint isolation survives one exit |

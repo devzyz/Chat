@@ -42,7 +42,7 @@ function(chat_register_linux_preflight_contract)
             "${CHAT_LINUX_CMAKE_VERSION}, got ${CMAKE_VERSION}")
     endif()
 
-    if(NOT Qt6Core_VERSION VERSION_EQUAL CHAT_LINUX_QT_VERSION)
+    if(CHAT_BUILD_CLIENT AND NOT Qt6Core_VERSION VERSION_EQUAL CHAT_LINUX_QT_VERSION)
         message(FATAL_ERROR
             "LINUX_PREFLIGHT_BLOCKED: Qt identity mismatch; expected "
             "${CHAT_LINUX_QT_VERSION}, got ${Qt6Core_VERSION}")

@@ -46,6 +46,20 @@ async function bootstrapStep(stage, action) {
     }
 }
 
+/** 为业务合同子步骤保留固定阶段及数值错误码，始终丢弃原始错误内容。 */
+async function contractStep(stage, action) {
+    if (!/^(gate-(verify|mail|register|login|selection)|client-(create|chat-id|send|message-sync|message-data))$/.test(stage)) {
+        throw new Error('Unknown contract diagnostic stage');
+    }
+    try { return await action(); }
+    catch (error) {
+        const category = error.name === 'TimeoutError' || error.name === 'AbortError' ? 'deadline'
+            : error.code === 'ERR_ASSERTION' && Number.isInteger(error.actual) && Math.abs(error.actual) <= 2147483647
+                ? `response-${error.actual}` : error.code === 'ERR_ASSERTION' ? 'assertion' : 'operation-failed';
+        throw new ServiceStepFailure(stage, category);
+    }
+}
+
 /** 校验隔离运行身份、loopback 端点与精确容器 ID，生成所属资源名称。 */
 function loadConfiguration(env) {
     const port = /** 读取并严格校验十进制端口范围。 */ (name) => {
@@ -446,7 +460,7 @@ async function runSuite(evidenceRoot) {
     if (primaryFailure || !cleanup.complete || cases.some(/** 识别未通过用例以决定整体退出结果。 */ (entry) => !entry.pass)) throw new Error('services proof failed');
 }
 
-module.exports = { DependencyCoordinator, loadConfiguration, poll, runCommand, runSuite, caseDiagnostic };
+module.exports = { DependencyCoordinator, loadConfiguration, poll, runCommand, runSuite, caseDiagnostic, contractStep };
 if (require.main === module) {
     runSuite(process.env.CHAT_SERVICE_EVIDENCE_ROOT).catch(/** 主流程失败时输出有界证据定位提示并设置非零退出码。 */ () => {
         process.stderr.write('services proof failed; inspect bounded service evidence\n');

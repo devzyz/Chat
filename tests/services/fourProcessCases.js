@@ -45,7 +45,7 @@ async function stop(owned, expected = 0) {
 
 /** 在隔离依赖和临时目录中运行四个正式服务，验证协议、故障恢复与清理。 */
 async function runFourProcessCases(coordinator, record) {
-    const { poll, runCommand } = require('./dependencyCoordinator');
+    const { poll, runCommand, contractStep } = require('./dependencyCoordinator');
     const bundle = process.env.CHAT_FOUR_BUNDLE;
     assert.ok(bundle && path.isAbsolute(bundle), 'same-run four-process bundle required');
     const driver = path.join(bundle, 'driver', 'FourProcessDriver');
@@ -138,7 +138,9 @@ async function runFourProcessCases(coordinator, record) {
     async function register(index) {
         const email = `${coordinator.config.runId}-four-${index}@example.invalid`;
         recipients.push(email);
-        assert.equal((await http('/get_varifycode', { email })).error, 0);
+        await contractStep('gate-verify', /** 定位验证码请求失败，不记录邮箱或响应正文。 */ async () => {
+            assert.equal((await http('/get_varifycode', { email })).error, 0);
+        });
         let code;
         await poll(/** 轮询所属测试收件人的邮件并提取验证码。 */ async () => {
             const result = await coordinator.mailApi(`/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`);
@@ -148,11 +150,18 @@ async function runFourProcessCases(coordinator, record) {
             return Boolean(code);
         }, 5000);
         const password = randomUUID();
-        assert.equal((await http('/user_register', { user: `four_${index}`, email, passwd: password,
-            confirm: password, varifycode: code })).error, 0);
-        const login = await http('/user_login', { email, password });
-        assert.equal(login.error, 0);
-        assert.equal(Number(login.port), ports.ChatServer);
+        await contractStep('gate-register', /** 定位注册请求失败，仅保留数值错误码。 */ async () => {
+            assert.equal((await http('/user_register', { user: `four_${index}`, email, passwd: password,
+                confirm: password, varifycode: code })).error, 0);
+        });
+        const login = await contractStep('gate-login', /** 定位登录请求失败，Token 仅留在私有运行内存。 */ async () => {
+            const result = await http('/user_login', { email, password });
+            assert.equal(result.error, 0);
+            return result;
+        });
+        await contractStep('gate-selection', /** 核对选服端口，不输出实际端点。 */ async () => {
+            assert.equal(Number(login.port), ports.ChatServer);
+        });
         users.push({ uid: login.uid, token: login.token, email, password });
     }
     try {

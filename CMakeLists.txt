@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.28.3)
 
 project(ChatServices VERSION 0.1.0 LANGUAGES CXX)
 
+option(CHAT_BUILD_CLIENT "Build Qt client and client modules" OFF)
+option(CHAT_ENABLE_HOSTED_PREFLIGHT "Enforce pinned hosted CI toolchain identity" OFF)
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -11,7 +15,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(FATAL_ERROR
-        "LINUX_PREFLIGHT_BLOCKED: linux-x64-release must configure on hosted Ubuntu")
+        "The root CMake project requires Linux; use MSBuild for Windows servers")
 endif()
 
 find_package(Boost REQUIRED COMPONENTS filesystem)
@@ -21,8 +25,11 @@ find_package(hiredis CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(unofficial-mysql-connector-cpp CONFIG REQUIRED)
 find_package(Threads REQUIRED)
-# The root preflight checks this variable; discovery in chat/ has child scope.
-find_package(Qt6 6.5.3 EXACT REQUIRED COMPONENTS Core)
+find_package(spdlog CONFIG REQUIRED)
+if(CHAT_BUILD_CLIENT)
+    # Hosted preflight checks this variable in the root directory scope.
+    find_package(Qt6 6.5.3 EXACT REQUIRED COMPONENTS Core)
+endif()
 
 if(TARGET unofficial::mysql-connector-cpp::connector-jdbc)
     set(CHAT_MYSQL_TARGET unofficial::mysql-connector-cpp::connector-jdbc)
@@ -62,15 +69,17 @@ add_library(chat_protocol_cpp STATIC ${CHAT_PROTOCOL_SOURCES} ${CHAT_PROTOCOL_HE
 target_include_directories(chat_protocol_cpp PUBLIC "${CHAT_PROTOCOL_OUTPUT_DIR}")
 target_link_libraries(chat_protocol_cpp PUBLIC protobuf::libprotobuf gRPC::grpc++)
 
-# Reuse the existing Qt production libraries without copying their sources.
-add_subdirectory(chat)
-add_library(client_modules INTERFACE)
-target_link_libraries(client_modules INTERFACE
-    chat_network_core
-    chat_message_model
-    chat_session_core
-)
-add_library(chat::client_modules ALIAS client_modules)
+# Reuse the existing Qt production libraries only in client-enabled builds.
+if(CHAT_BUILD_CLIENT)
+    add_subdirectory(chat)
+    add_library(client_modules INTERFACE)
+    target_link_libraries(client_modules INTERFACE
+        chat_network_core
+        chat_message_model
+        chat_session_core
+    )
+    add_library(chat::client_modules ALIAS client_modules)
+endif()
 
 function(chat_configure_server_target target source_root)
     target_include_directories(${target} PUBLIC
@@ -128,7 +137,7 @@ add_library(chat::chat_server_modules ALIAS chat_server_modules)
 add_executable(ChatServer ChatServer/ChatServer/ChatServer.cpp)
 target_link_libraries(ChatServer PRIVATE "$<LINK_GROUP:RESCAN,chat_server_modules,ChatTransport,LogicDispatcher,ChatGrpcClients>")
 
-enable_testing()
+if(BUILD_TESTING)
 add_library(process_harness STATIC
     tests/support/RunContext.cpp
     tests/support/ProcessHarness.cpp
@@ -186,6 +195,8 @@ set_tests_properties(phase3c-gate-mysql-lifecycle PROPERTIES LABELS "phase3c-gat
 add_test(NAME T10-BLD-03-process-harness COMMAND process_harness_posix_tests)
 set_tests_properties(T10-BLD-03-process-harness PROPERTIES LABELS "phase3c-build-ownership" TIMEOUT 15)
 
+endif()
+
 set(CHAT_LINUX_EXPECTED_TARGETS
     chat_protocol_cpp
     gate_server_modules
@@ -194,12 +205,14 @@ set(CHAT_LINUX_EXPECTED_TARGETS
     GateServer
     StatusServer
     ChatServer
-    chat_network_core
-    chat_message_model
-    chat_session_core
 )
+if(CHAT_BUILD_CLIENT)
+    list(APPEND CHAT_LINUX_EXPECTED_TARGETS chat_network_core chat_message_model chat_session_core)
+endif()
 
 set(CHAT_LINUX_PRODUCTION_TARGETS_READY ON)
 
-include(cmake/LinuxPreflight.cmake)
-chat_register_linux_preflight_contract()
+if(CHAT_ENABLE_HOSTED_PREFLIGHT)
+    include(cmake/LinuxPreflight.cmake)
+    chat_register_linux_preflight_contract()
+endif()

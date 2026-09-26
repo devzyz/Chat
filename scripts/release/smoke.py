@@ -1,10 +1,12 @@
 """Windows package loading/startup smoke. Real dependency E2E remains in the Linux job."""
 import argparse
 import ctypes
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
 import socket
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -13,6 +15,100 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 from package import APPS, sha256, verify
+
+
+@contextmanager
+def resource_database(root):
+    """创建仅供资源服务启动验证使用的临时 MySQL，退出时关闭所属进程。"""
+    configured = os.environ.get('CHAT_SMOKE_MYSQL_BIN')
+    executable = str(Path(configured) / 'mysqld.exe') if configured else shutil.which('mysqld.exe')
+    if not executable:
+        candidates = sorted(Path(os.environ.get('ProgramFiles', 'C:/Program Files')).glob(
+            'MySQL/MySQL Server 8.*/bin/mysqld.exe'))
+        if len(candidates) != 1:
+            raise RuntimeError('Set CHAT_SMOKE_MYSQL_BIN to an existing MySQL 8 bin directory')
+        executable = str(candidates[0])
+    binary = Path(executable).resolve()
+    mysql = binary.with_name('mysql.exe')
+    data = root / 'resource-smoke-mysql'
+    port = free_port()
+    environment = {key: value for key, value in os.environ.items() if not key.startswith('MYSQL')}
+    environment['MYSQL_TEST_LOGIN_FILE'] = str(root / 'no-mysql-login-file')
+    arguments = [str(binary), '--no-defaults', '--no-monitor', f'--basedir={binary.parent.parent}',
+                 f'--datadir={data}']
+    subprocess.run([*arguments, '--initialize-insecure'], env=environment, check=True,
+                   capture_output=True, timeout=90, creationflags=subprocess.CREATE_NO_WINDOW)
+    client = [str(mysql), '--no-defaults', '--protocol=TCP', '--host=127.0.0.1', f'--port={port}',
+              '--user=root', '--password=', '--connect-timeout=2', '--batch', '--skip-column-names']
+    with (root / 'resource-mysql.log').open('wb') as log:
+        database = subprocess.Popen([*arguments, '--bind-address=127.0.0.1', f'--port={port}',
+                                     '--mysqlx=0', '--skip-log-bin'], env=environment,
+                                    stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
+        try:
+            def ready():
+                """通过 SQL 而非仅端口检查临时数据库是否可用。"""
+                result = subprocess.run([*client, '--execute=SELECT 1'], env=environment,
+                                        capture_output=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
+                return result.returncode == 0 and result.stdout.strip() == b'1'
+            wait_until(ready, database, timeout=45)
+            subprocess.run([*client, '--execute=CREATE DATABASE resource_smoke'], env=environment,
+                           check=True, capture_output=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
+            yield port
+        finally:
+            if database.poll() is None:
+                try:
+                    subprocess.run([*client, '--execute=SHUTDOWN'], env=environment, check=True,
+                                   capture_output=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
+                    database.wait(timeout=15)
+                finally:
+                    if database.poll() is None:
+                        database.kill()
+                        database.wait(timeout=10)
+
+
+def resource_smoke(root, environment):
+    """使用包内资源服务和临时数据库验证监听、未认证请求拒绝及正常停止。"""
+    with resource_database(root) as mysql_port:
+        folder = root / 'ResourceServer'
+        port = free_port()
+        config = f'''[ResourceServer]
+Host=127.0.0.1
+Port={port}
+StorageRoot=data/resources
+[Mysql]
+Host=127.0.0.1
+Port={mysql_port}
+User=root
+Password=
+Schema=resource_smoke
+[StatusServer]
+Host=127.0.0.1
+Port=1
+[Log]
+LogDir=logs
+'''
+        (folder / 'config.ini').write_text(config, encoding='utf-8')
+        with (root / 'ResourceServer.log').open('wb') as log:
+            process = start([str(folder / 'ResourceServer.exe'), '--config', str(folder / 'config.ini')],
+                            folder, environment, log)
+            try:
+                def ready():
+                    """通过真实 HTTP 认证拒绝确认资源服务已开始处理请求。"""
+                    try:
+                        request = urllib.request.Request(f'http://127.0.0.1:{port}/resources',
+                                                         headers={'X-User-Id': '7'})
+                        urllib.request.urlopen(request, timeout=1).close()
+                    except urllib.error.HTTPError as error:
+                        return error.code == 401
+                    return False
+                wait_until(ready, process)
+                stop(process)
+                with socket.socket() as listener:
+                    listener.bind(('127.0.0.1', port))
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=10)
 
 
 def free_port():
@@ -194,6 +290,8 @@ def run(directory, source_sha, report):
                                 process.kill()
                                 process.wait(timeout=10)
                 case(app + ' startup and shutdown', server)
+            case('ResourceServer startup, authentication rejection and shutdown',
+                 lambda: resource_smoke(root, environment))
             def client():
                 folder = root / 'chat-client'
                 (folder / 'config.ini').write_text('[GateServer]\nhost=127.0.0.1\nport=1\n', encoding='utf-8')
