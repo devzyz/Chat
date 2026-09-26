@@ -12,6 +12,8 @@
 #include <QUuid>
 #include <QLocalSocket>
 #include <QTimer>
+#include <QTemporaryDir>
+#include "localmessagestore.h"
 #include <cmath>
 
 // The control channel carries commands, never a substitute Chat wire protocol.
@@ -379,6 +381,17 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     const auto args = app.arguments();
+    if (args.size() == 2 && args[1] == "--check-storage") {
+        // Probe only deployed plugins, even when the build runner still has Qt installed.
+        QCoreApplication::setLibraryPaths({QCoreApplication::applicationDirPath()});
+        QTemporaryDir root;
+        if (!root.isValid()) return 2;
+        try {
+            LocalMessageStore store;
+            store.open(root.path(), 1);
+            return store.cursor(1) == 0 ? 0 : 2;
+        } catch (const std::exception &) { return 2; }
+    }
     if (args.size() != 3 || args[1] != "--control" || args[2].isEmpty()) return 2;
     int result = 2;
     {

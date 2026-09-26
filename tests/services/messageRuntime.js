@@ -89,4 +89,4 @@ if (require.main === module) {
     else throw new Error('messageRuntime requires pack <binary> <new-bundle> <installed-root> or verify <bundle>');
 }
 
-module.exports = { dependencies, validateRelocated, validateLibrarySource, pack, verify };
+module.exports = { dependencies, inspect, validateRelocated, validateLibrarySource, pack, verify };

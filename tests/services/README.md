@@ -338,8 +338,10 @@ It requires the same-source `CHAT_SERVICE_LAUNCHER`, `CHAT_FOUR_BUNDLE`,
 `CHAT_E2E_CLIENT`, and job-owned container IDs/mapped ports used by the existing
 coordinator. The `two-server-contract` hosted job supplies these inputs and
 uploads `phase3d-contract-evidence`. `clientRuntime.js` packs the Qt binary and
-its dependency closure in the checksummed launcher artifact; no GUI platform
-plugin is needed by this QCoreApplication entry point.
+its dependency closure and dynamically loaded `sqldrivers/libqsqlite.so` in the
+checksummed launcher artifact. The storage probe opens a temporary production
+message database using only deployed plugins, and must fail with SQLite removed.
+No GUI platform plugin is needed by this QCoreApplication entry point.
 
 `fiveProcessCases.js` reuses RunContext/ProcessHarness supervisors, the real
 schema migration and dependency coordinator. It runs Varify, Status, Gate,

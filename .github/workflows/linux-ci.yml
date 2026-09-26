@@ -204,7 +204,7 @@ jobs:
           git rev-parse HEAD > out/phase3c/service-launcher/source-sha.txt
           node tests/services/fourRuntime.js pack out/build/linux-x64-release/bin out/phase3c/service-launcher/four .ci/vcpkg_installed
           node tests/services/clientRuntime.js pack out/build/linux-x64-release/bin/chat_e2e_client out/phase3c/service-launcher/client "$(qmake -query QT_INSTALL_PREFIX)" .ci/vcpkg_installed
-          (cd out/phase3c/service-launcher && sha256sum service_run redis_adapter_integration libhiredis.so.1 message/* four/*/* client/* > service_run.sha256)
+          (cd out/phase3c/service-launcher && { sha256sum service_run redis_adapter_integration libhiredis.so.1 message/* four/*/*; find client -type f -print0 | sort -z | xargs -0 sha256sum; } > service_run.sha256)
 
       - name: Upload same-run service launcher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -384,8 +384,8 @@ jobs:
           node tests/services/fourRuntime.js verify out/phase3c/service-launcher/four
           node tests/services/messageRuntime.js verify out/phase3c/service-launcher/message
           env -u LD_LIBRARY_PATH -u LD_PRELOAD "$CHAT_REDIS_TEST_BINARY" lifecycle
-          node tests/services/clientRuntime.js verify out/phase3c/service-launcher/client
           chmod u+x "$CHAT_E2E_CLIENT"
+          node tests/services/clientRuntime.js verify out/phase3c/service-launcher/client
       - name: Restore existing locked Node libraries
         timeout-minutes: 2
         working-directory: VarifyServer
