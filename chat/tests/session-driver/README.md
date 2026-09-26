@@ -94,3 +94,7 @@ Explicit commands reusing an already committed UUID remain wire probes for serve
 and conflict rejection; they bypass only the local duplicate-send suppression. Recovery updates
 existing pending model rows from stored facts, while the harness retains explicit legacy history
 traversal for its separate paging contracts. QT_PLUGIN_PATH must include the kit SQL plugins.
+The existing E03-CONTRACT-01 also reads legacy history after authenticated storage startup.
+It interleaves a sync response and replays an unsolicited legacy response: only the explicitly
+requested page may complete the history command and update its model cursor. Sync responses
+remain owned by MessageService and legacy pages cannot advance its persisted sync cursor.

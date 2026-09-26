@@ -122,15 +122,37 @@ public:
                     if (frame.messageId == 1020) { ++heartbeats; continue; }
                     if (frame.messageId == 1027) {
                         auto result = QJsonDocument::fromJson(frame.body).object();
+                        const bool legacy = !result.contains("request_id");
                         result["error"] = 0;
                         result["msgs"] = QJsonArray{};
                         result["next_cursor"] = result["after_id"];
                         result["load_more"] = false;
+                        if (legacy) {
+                            result["current_msg_id"] = 83;
+                            result["msgs"] = QJsonArray{QJsonObject{{"message_id", 83}, {"send_id", 42},
+                                {"recv_id", userId}, {"content", "legacy history"}, {"created_at", 1700000000},
+                                {"msg_uuid", "00000000-0000-4000-8000-000000000083"}, {"status", 0}}};
+                            // 同一响应 ID 的后台同步失败不能结算显式历史命令。
+                            const auto sync = QJsonDocument(QJsonObject{{"request_id", "unrelated-sync"},
+                                {"chat_id", result["chat_id"]}, {"error", 87}}).toJson(QJsonDocument::Compact);
+                            QByteArray syncHeader(4, '\0');
+                            qToBigEndian<quint16>(1028, syncHeader.data());
+                            qToBigEndian<quint16>(static_cast<quint16>(sync.size()), syncHeader.data() + 2);
+                            peer->write(syncHeader + sync);
+                        }
                         const auto payload = QJsonDocument(result).toJson(QJsonDocument::Compact);
                         QByteArray header(4, '\0');
                         qToBigEndian<quint16>(1028, header.data());
                         qToBigEndian<quint16>(static_cast<quint16>(payload.size()), header.data() + 2);
                         peer->write(header + payload);
+                        if (legacy) {
+                            // 重放且改变游标的未请求旧响应不能再改变模型。
+                            result["current_msg_id"] = 999;
+                            result["msgs"] = QJsonArray{};
+                            const auto unsolicited = QJsonDocument(result).toJson(QJsonDocument::Compact);
+                            qToBigEndian<quint16>(static_cast<quint16>(unsolicited.size()), header.data() + 2);
+                            peer->write(header + unsolicited);
+                        }
                         continue;
                     }
                     if (frame.messageId == 1009 || frame.messageId == 1013) {
@@ -300,7 +322,15 @@ private slots:
         QCOMPARE(recovered.size(), 2);
         QCOMPARE(recovered.last().toObject()["uuid"].toString(), uncertainUuid);
         QCOMPARE(first.sentBody["attempt_id"].toString(), QString("2"));
-        QVERIFY(alice.stop(14));
+        alice.send({{"id", 14}, {"command", "history"}, {"chatId", 8}, {"cursor", "0"}});
+        QCOMPARE(alice.receive().value("error").toInt(-1), 0);
+        alice.send({{"id", 15}, {"command", "snapshot"}, {"chatId", 8}});
+        const auto history = alice.receive();
+        QCOMPARE(history.value("cursor").toString(), QString("83"));
+        QCOMPARE(history.value("messages").toArray().size(), 1);
+        QCOMPARE(history.value("messages").toArray().first().toObject()["uuid"].toString(),
+                 QString("00000000-0000-4000-8000-000000000083"));
+        QVERIFY(alice.stop(16));
         bob.send({{"id", 2}, {"command", "snapshot"}});
         QCOMPARE(bob.receive().value("uid").toInt(), 42);
         QVERIFY(bob.stop(3));

@@ -126,6 +126,11 @@ Rows are ordered by increasing server ID; only IDs greater than `after_id` are r
 
 The client atomically commits a whole page and its cursor; ACKs/pushes never advance it. Existing committed local history is trusted. Synchronization and deployment details: [MessageStorage](MessageStorage.md).
 
+Explicit legacy history requests remain usable while MessageService is active. TcpMgr accepts
+one matching legacy response per requested chat in the current connection; unsolicited legacy
+responses are rejected. These pages update only the legacy model, never the persisted sync cursor.
+Responses carrying `request_id` belong to MessageService and do not complete legacy history commands.
+
 ## Private message receipts v1
 
 The negotiated `message_receipts_v1` capability adds TCP 1029/1030 report, 1031 change hint,

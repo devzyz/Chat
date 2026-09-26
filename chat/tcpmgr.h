@@ -5,6 +5,7 @@
 #include <QObject>
 #include <functional>
 #include <QQueue>
+#include <QSet>
 #include "userdata.h"
 #include "messagerecord.h"
 #include "chattcptransport.h"
@@ -70,7 +71,7 @@ public slots:
     void connectToServer(ServerInfo si);
 
 private slots:
-    /** @brief 检查发送及认证状态后发送包体；文本请求未发出时标为待核实。 */
+    /** @brief 检查发送及认证状态后发送包体，登记显式旧历史请求；文本请求未发出时标为待核实。 */
     void sendData(ReqId reqId, QByteArray data);
 private:
     friend class Singleton<TcpMgr>;
@@ -81,6 +82,7 @@ private:
 
     QMap<ReqId, std::function<void(ReqId id, int len, QByteArray)>> _handlers;
     bool _authenticated = false;
+    QSet<int> _legacyHistoryRequests;
     ChatTcpTransport _transport;
     QString _host;
     quint16 _port = 0;
