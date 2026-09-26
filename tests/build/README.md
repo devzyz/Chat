@@ -18,6 +18,17 @@ using a synthetic `GH_TOKEN`, anonymous access, codeload token isolation, asset 
 CI supplies its read-only `github.token` only to steps that download tools or dependency assets.
 There is no cross-workflow check poller. The main workflow uses job dependencies and two stable required checks.
 
+`node --test tests/build/ciScope.test.js tests/build/ciBudget.test.js` also checks the conservative
+documentation route, obsolete-run cancellation, explicit Linux cold restore and report failure propagation.
+Only develop PR/push changes entirely within root README.md, WINDOWS_BUILD.md or docs/**/*.md use static-only
+Windows checks. Missing Git objects, unknown paths, renames involving code and mixed changes retain builds.
+PR classification uses the complete merge-base range, not the latest commit. Full lanes always build.
+No workflow-level path filter or additional Required Check is introduced. Static check failure still blocks merging.
+PR metadata edits retain the normal scope so a metadata-only success cannot replace unverified code results.
+Develop push runs cancel obsolete develop push runs; master, scheduled and manual runs remain independent.
+Service evidence validation runs even after failed upstream/download steps and independently of business validation,
+so upstream business failure no longer prevents the service gate from writing its failure report.
+
 ## CI binary dependency cache
 
 ### Validated weekly Windows toolchain
@@ -42,8 +53,10 @@ old artifact remaining downloadable.
 The weekly run (or `gh workflow run ci.yml --ref develop -f refresh_tools=true`) discovers
 the latest stable Windows PowerShell/CMake/Ninja releases and the newest MSVC 2022 toolset
 and Windows SDK available on the hosted runner. Release SHA256 digests are verified before
-recording SHA512 hashes in the candidate vcpkg tool catalog. Both platforms skip binary
-cache restoration for this run. All Windows checks must succeed before approval;
+recording SHA512 hashes in the candidate vcpkg tool catalog. Windows skips binary
+cache restoration for this run. Linux keeps ABI-checked binary cache restoration; use the explicit
+manual `cold_linux=true` input to exercise Linux cold restoration independently. Fixed Qt installations
+are cached on both platforms; application source is still built and tested. All Windows checks must succeed before approval;
 native dependency archives have already been saved on the default branch. A failed Windows
 refresh leaves the previous approved record active. Linux remains required for full checks
 and release, independently of Windows toolchain approval. The promotion job still publishes

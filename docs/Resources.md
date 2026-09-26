@@ -1,6 +1,6 @@
 # 用户目录、头像与资源传输
 
-本地功能版本，2026-09-19。实际验证范围见 [Status](Status.md)。
+本文定义当前资源与头像合同。消息持久化见 [MessageStorage](MessageStorage.md)，实际验证范围见 [Status](Status.md)。
 
 ## 客户端目录合同
 
@@ -29,7 +29,8 @@
 旧 `AppLocalDataLocation/avatars/v1/<原始Gate地址SHA256>/<uid>.png` 只读迁移：
 新目录没有 current.png 时才读取、验证并复制，保留源文件；新目录已有头像时不覆盖。
 文件传输旧工作树的系统缓存不自动迁移，避免在缺少环境标识时混入其他服务的数据。
-用户资料、好友、消息模型仍以服务端及会话内存为准，本次没有新增本地消息数据库。
+用户资料和好友由服务端及会话缓存提供；消息已接入账号级 SQLite、持久化发送和增量同步，
+消息数据库与资源文件共用账号根目录，详见 [MessageStorage](MessageStorage.md)。
 应用内默认头像仍打包在 `:/res` 中。
 
 ## 头像发布与读取
@@ -62,17 +63,19 @@
 
 ## 本地启用
 
-1. 使用现有 `schema/migrate.js plan/apply/verify` 入口迁移到版本 3。
-   `schema/migrations/003_avatar_resources.sql` 只新增资源及头像表，旧版本 1/2 的迁移保持原校验和；
-   空库按序应用全部版本，已有受管版本 2 只应用版本 3。迁移后更新完整结构指纹，重复 apply 不改数据。
+1. 按 [Data 的迁移入口](Data.md#operational-entry) 应用 manifest 中的全部待执行迁移，当前为 schema 4。
+   migration 003 引入资源及头像表，004 引入消息回执；空库应用 001～004，受管版本 2 应用 003、004。
+   启用前备份并停止写入，迁移后更新全部 Gate/Chat/Resource 二进制；旧二进制不能混跑新 schema。
+   已应用迁移保持原校验和，重复 apply 不改数据。
    未登记版本的个人数据库仍需原有受审导入流程，不能直接套用；自动测试只操作临时数据库。
 2. 配置并启动 ResourceServer；`StorageRoot=data/resources` 相对于配置文件目录解析。
    默认将配置文件放在资源服务安装目录，因此文件也保存在该安装目录内。
 3. 客户端 `[ResourceServer] Url` 指向该服务，头像和附件共用此地址。
 4. 按 [资源服务说明](../ResourceServer/README.md) 构建与验证。
 
-头像解压直接使用已有依赖树中的 zlib，并在根 manifest 显式声明；没有恢复或修改本机 vcpkg。
-本地资源构建入口保留 `VcpkgManifestInstall=false`。正式 CI/发布纳入与完整真实依赖 GUI 验收另行推进。
+头像解压使用根 vcpkg manifest 显式声明的 zlib；本地构建保持 `VcpkgManifestInstall=false`。
+ResourceServer 已接入统一构建、Windows 存储回归、完整运行打包和发布包启动冒烟。
+HTTP/数据库/跨服务资源专项仍有独立入口；上述接线不代表全真实依赖 GUI 或大文件性能验收，见 [Status](Status.md)。
 
 ## 验证入口
 

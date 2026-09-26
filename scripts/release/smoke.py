@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import shutil
 import subprocess
@@ -17,9 +18,8 @@ import xml.etree.ElementTree as ET
 from package import APPS, sha256, verify
 
 
-@contextmanager
-def resource_database(root):
-    """创建仅供资源服务启动验证使用的临时 MySQL，退出时关闭所属进程。"""
+def mysql_tools():
+    """定位并核验 MySQL 8 服务端和客户端，缺失或版本不符时在写入数据前失败。"""
     configured = os.environ.get('CHAT_SMOKE_MYSQL_BIN')
     executable = str(Path(configured) / 'mysqld.exe') if configured else shutil.which('mysqld.exe')
     if not executable:
@@ -30,17 +30,35 @@ def resource_database(root):
         executable = str(candidates[0])
     binary = Path(executable).resolve()
     mysql = binary.with_name('mysql.exe')
+    for tool in (binary, mysql):
+        if not tool.is_file():
+            raise RuntimeError(f'Missing smoke prerequisite: {tool.name}')
+    for tool in (binary, mysql):
+        result = subprocess.run([str(tool), '--no-defaults', '--version'], check=True,
+                                capture_output=True, text=True, timeout=10,
+                                creationflags=subprocess.CREATE_NO_WINDOW)
+        if re.search(r'\bVer\s+8\.\d+\.\d+\b', result.stdout) is None:
+            raise RuntimeError(f'MySQL 8 required for smoke prerequisite: {tool.name}')
+    return binary, mysql
+
+
+@contextmanager
+def resource_database(root, diagnostics=None):
+    """创建隔离 MySQL 并关闭所属进程；调用方可指定外部目录保留失败日志。"""
+    binary, mysql = mysql_tools()
     data = root / 'resource-smoke-mysql'
     port = free_port()
     environment = {key: value for key, value in os.environ.items() if not key.startswith('MYSQL')}
     environment['MYSQL_TEST_LOGIN_FILE'] = str(root / 'no-mysql-login-file')
-    arguments = [str(binary), '--no-defaults', '--no-monitor', f'--basedir={binary.parent.parent}',
+    arguments = [str(binary), '--no-defaults', '--no-monitor', '--console', f'--basedir={binary.parent.parent}',
                  f'--datadir={data}']
-    subprocess.run([*arguments, '--initialize-insecure'], env=environment, check=True,
-                   capture_output=True, timeout=90, creationflags=subprocess.CREATE_NO_WINDOW)
     client = [str(mysql), '--no-defaults', '--protocol=TCP', '--host=127.0.0.1', f'--port={port}',
               '--user=root', '--password=', '--connect-timeout=2', '--batch', '--skip-column-names']
-    with (root / 'resource-mysql.log').open('wb') as log:
+    log_root = diagnostics if diagnostics is not None else root
+    log_root.mkdir(parents=True, exist_ok=True)
+    with (log_root / 'resource-mysql.log').open('wb') as log:
+        subprocess.run([*arguments, '--initialize-insecure'], env=environment, check=True,
+                       stdout=log, stderr=log, timeout=90, creationflags=subprocess.CREATE_NO_WINDOW)
         database = subprocess.Popen([*arguments, '--bind-address=127.0.0.1', f'--port={port}',
                                      '--mysqlx=0', '--skip-log-bin'], env=environment,
                                     stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -66,9 +84,9 @@ def resource_database(root):
                         database.wait(timeout=10)
 
 
-def resource_smoke(root, environment):
+def resource_smoke(root, environment, diagnostics=None):
     """使用包内资源服务和临时数据库验证监听、未认证请求拒绝及正常停止。"""
-    with resource_database(root) as mysql_port:
+    with resource_database(root, diagnostics) as mysql_port:
         folder = root / 'ResourceServer'
         port = free_port()
         config = f'''[ResourceServer]
@@ -88,7 +106,7 @@ Port=1
 LogDir=logs
 '''
         (folder / 'config.ini').write_text(config, encoding='utf-8')
-        with (root / 'ResourceServer.log').open('wb') as log:
+        with ((diagnostics if diagnostics is not None else root) / 'ResourceServer.log').open('wb') as log:
             process = start([str(folder / 'ResourceServer.exe'), '--config', str(folder / 'config.ini')],
                             folder, environment, log)
             try:
@@ -251,7 +269,7 @@ def run(directory, source_sha, report):
             action()
         except Exception:
             failures += 1
-            ET.SubElement(entry, 'failure', message='package smoke failed; see job log')
+            ET.SubElement(entry, 'failure', message='package smoke failed; see job log and smoke artifact')
             raise
     try:
         if os.name != 'nt':
@@ -294,7 +312,7 @@ def run(directory, source_sha, report):
                                 process.wait(timeout=10)
                 case(app + ' startup and shutdown', server)
             case('ResourceServer startup, authentication rejection and shutdown',
-                 lambda: resource_smoke(root, environment))
+                 lambda: resource_smoke(root, environment, report.parent / (report.stem + '-logs')))
             def client():
                 folder = root / 'chat-client'
                 (folder / 'config.ini').write_text('[GateServer]\nhost=127.0.0.1\nport=1\n', encoding='utf-8')

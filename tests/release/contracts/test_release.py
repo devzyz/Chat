@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -15,6 +15,7 @@ import smoke
 
 
 class ReleaseContracts(unittest.TestCase):
+    """验证发布包、发布保护及失败诊断，不启动个人服务。"""
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -143,6 +144,63 @@ class ReleaseContracts(unittest.TestCase):
         with self.assertRaises(Exception):
             smoke.run(self.root, self.sha, report)
         self.assertIn('failures="1"', report.read_text())
+
+    def test_mysql_tools_reject_missing_or_non_mysql8_pair(self):
+        """在创建数据目录前拒绝缺失客户端或不匹配的 MySQL 版本。"""
+        tools = self.root / 'mysql-bin'
+        tools.mkdir()
+        (tools / 'mysqld.exe').touch()
+        with patch.dict(os.environ, {'CHAT_SMOKE_MYSQL_BIN': str(tools)}), patch.object(smoke.subprocess, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'mysql.exe'):
+                smoke.mysql_tools()
+            run.assert_not_called()
+            (tools / 'mysql.exe').touch()
+            for versions in [('mysqld Ver 5.7.44', 'mysql Ver 8.4.4'),
+                             ('mysqld Ver 8.4.4', 'mysql Ver 9.0.0')]:
+                run.side_effect = [Mock(stdout=value, returncode=0) for value in versions]
+                with self.assertRaisesRegex(RuntimeError, 'MySQL 8'):
+                    smoke.mysql_tools()
+            run.side_effect = [Mock(stdout=value, returncode=0) for value in
+                               ('mysqld  Ver 8.4.4 for Win64', 'mysql  Ver 8.4.4 for Win64')]
+            self.assertEqual(smoke.mysql_tools(), (tools / 'mysqld.exe', tools / 'mysql.exe'))
+
+    def test_mysql_initialization_failure_retains_external_diagnostics(self):
+        """初始化失败仍保留 stderr 到临时应用目录之外，不启动数据库。"""
+        diagnostics = self.root / 'diagnostics'
+        def initialize(command, **options):
+            """模拟 mysqld 把初始化错误写到真实日志句柄后失败。"""
+            self.assertIn('--console', command)
+            options['stderr'].write(b'synthetic initialization failure\n')
+            raise smoke.subprocess.CalledProcessError(1, command)
+        with tempfile.TemporaryDirectory(dir=self.root) as temporary:
+            with patch.object(smoke, 'mysql_tools', return_value=(self.root / 'mysqld.exe', self.root / 'mysql.exe')), \
+                 patch.object(smoke.subprocess, 'run', side_effect=initialize), \
+                 patch.object(smoke.subprocess, 'Popen') as start:
+                with self.assertRaises(smoke.subprocess.CalledProcessError):
+                    with smoke.resource_database(Path(temporary), diagnostics):
+                        self.fail('Failed initialization cannot yield a ready database')
+                start.assert_not_called()
+        self.assertIn('synthetic initialization failure',
+                      (diagnostics / 'resource-mysql.log').read_text())
+
+    def test_mysql_startup_failure_retains_log_after_application_cleanup(self):
+        """数据库就绪失败后保留启动错误，不因应用临时目录清理而丢失。"""
+        diagnostics = self.root / 'startup-diagnostics'
+        process = Mock()
+        process.poll.return_value = 1
+        def start(command, **options):
+            """模拟数据库在绑定阶段写入错误并自行退出。"""
+            self.assertIn('--console', command)
+            options['stderr'].write(b'synthetic startup failure\n')
+            return process
+        with tempfile.TemporaryDirectory(dir=self.root) as temporary:
+            with patch.object(smoke, 'mysql_tools', return_value=(self.root / 'mysqld.exe', self.root / 'mysql.exe')), \
+                 patch.object(smoke.subprocess, 'run'), patch.object(smoke.subprocess, 'Popen', side_effect=start):
+                with self.assertRaisesRegex(RuntimeError, 'exited before readiness'):
+                    with smoke.resource_database(Path(temporary), diagnostics):
+                        self.fail('Exited database cannot become ready')
+        self.assertIn('synthetic startup failure', (diagnostics / 'resource-mysql.log').read_text())
+        process.kill.assert_not_called()
 
 
 if __name__ == '__main__':

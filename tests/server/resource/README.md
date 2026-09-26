@@ -35,7 +35,7 @@ focused option does not claim production Redis/Status or TCP-flow coverage.
   retry, receiver download authorization, relogin/history and same-instance delivery. This is NOT evidence
   of real Redis or production Status adapter behavior.
 - `schema_upgrade.js`: prepares the verified version-2 schema in its own temporary MySQL,
-  upgrades only migration 3, verifies old user/message data and repeat application, then proves
+  applies migrations 3 and 4, verifies old user/message data and repeat application, then proves
   a missing avatar table is still rejected by schema verification. Uses `CHAT_MYSQL_BIN`.
 - Qt `resource_transfer_tests`: cancel after an acknowledged prefix, destroy/recreate the transfer manager,
   resume from the persisted task, download and compare bytes; reject unsupported files.

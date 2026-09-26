@@ -37,6 +37,8 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 - 依赖缓存只保存 vcpkg binary archives 和包管理器下载，不缓存依赖 installed tree 或编译中间目录。
   周检另存带 SHA256 的 MSVC/SDK 工具链快照工件，日常只在临时 GitHub runner 恢复该工具链。
 - Windows CI 日常使用已通过全部 Windows 检查的精确工具链；每周以新版 PowerShell/CMake/Ninja 和 runner 提供的最新 MSVC 2022/SDK 冷构建。
+  此精确工具链用于 Server 原生构建；Qt 的 CMake/Ninja、其他作业的 PowerShell 仍按各自安装与最低版本合同选择。
+  Linux 周检正常复用 ABI 校验的依赖缓存，显式手动 `cold_linux=true` 才跳过缓存恢复；固定 Qt kit 允许安装缓存。
   Windows 回归成功、缓存预热完成后才批准工具链记录；Linux 失败仍阻止完整回归和发布，但不阻止 Windows 工具链批准。
   日常先恢复并校验已验证 MSVC/SDK 快照，再恢复依赖缓存；快照缺失或摘要不符必须失败，不静默换用预装编译器。
   首次引导、手动刷新、保留期及升级边界见 [构建测试入口](../tests/build/README.md#validated-weekly-windows-toolchain)。

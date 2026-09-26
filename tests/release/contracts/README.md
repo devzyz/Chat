@@ -30,7 +30,10 @@ Server ZIP 必须携带 MSVC redistributable，Varify ZIP 携带 node.exe；组�
 Windows 冒烟验证摘要、文件、Gate HTTP/Status 与 Chat 监听启动、独占控制台停止、Qt 窗口和包内 Node/gRPC 模块加载。
 资源服务额外使用独立临时 MySQL 验证 HTTP 认证拒绝和正常停止；不连接个人数据库。
 MySQL 8 工具从 `CHAT_SMOKE_MYSQL_BIN`、PATH 或 Program Files 的唯一 MySQL 8 安装定位；
-缺失工具即失败，不自动安装。程序只使用包内运行库，PATH 不引入构建工具目录；
+服务端及客户端均在创建数据前校验为 MySQL 8；缺失工具或版本不符即失败，不自动安装。
+MySQL 初始化及运行错误通过 `--console` 写入报告旁的 `<report-stem>-logs/resource-mysql.log`，
+ResourceServer 启动日志也保留于同目录；CI 连同冒烟 XML 上传，不随临时应用目录清理而丢失。
+程序只使用包内运行库，PATH 不引入构建工具目录；
 临时数据库仅验证启动，未执行资源业务或真实 Redis/Status 调用，不声称覆盖 Windows 业务 E2E。
 同 SHA 的 Linux 完整业务 E2E 必须先成功。冒烟失败不发布，JUnit 即使失败也上传。
 
