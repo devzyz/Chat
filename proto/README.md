@@ -5,7 +5,7 @@ The three editable protobuf authorities are split by owning service:
 | Source | Owner and consumers |
 | --- | --- |
 | `varify.proto` | Varify owns; Gate C++ and Varify Node consume |
-| `status.proto` | Status owns; Gate, Status, and Chat C++ consume |
+| `status.proto` | Status owns; Gate, Status, Chat, and Resource C++ consume |
 | `chat.proto` | Chat owns; Chat C++ alone consumes |
 
 All files retain `package message` and the migration-preexisting service, RPC,
@@ -27,6 +27,11 @@ correlation, retaining the existing numeric error envelope. Storage/deadline
 failures are uncertain and retry with the original UUID. Missing receiver routing
 does not revoke committed success. Old history remains readable; this does not
 claim network exactly-once delivery or N/N-1 runtime compatibility.
+
+The production dispatcher closes a session whose request claims another sender
+identity before invoking the commit handler. That protocol violation does not
+promise a structured `UnauthorizedSender` reply; the wire regression checks the
+disconnect and absence of persistence. Commit-handler errors retain the envelope above.
 
 ```powershell
 .\scripts\windows-local.ps1 -Task GenerateProtocols

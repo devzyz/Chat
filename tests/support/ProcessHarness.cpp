@@ -150,6 +150,13 @@ bool ProcessHarness::WaitReady(const ReadyProbe& probe, RunDeadline deadline) {
 		}
 		if (!impl_->adapter->IsRunning(impl_->identity)) {
 			impl_->adapter->ClosePipes(deadline);
+			// Completion probes can observe a stale running state just before
+			// IsRunning reaps the child. Recheck once with final exit evidence.
+			if (probe()) {
+				std::lock_guard<std::mutex> lock(impl_->mutex);
+				impl_->ready_probe_succeeded = true;
+				return true;
+			}
 			return false;
 		}
 		const auto next_event_wait = std::min(deadline, std::chrono::steady_clock::now() + std::chrono::milliseconds(10));

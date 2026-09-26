@@ -3,10 +3,10 @@
 Branch and release enforcement is defined in
 [`CI-GOVERNANCE.md`](CI-GOVERNANCE.md). The authoritative inventory of current
 Test IDs, reports, lanes, and gaps is
-[`TEST-CONTRACT-MATRIX.md`](TEST-CONTRACT-MATRIX.md). Phase 2.5 and Plans
-3A-01..05 are complete. The next planned item is Plan 3A-06 in
-[`plans/PHASE-3A-PLAN.md`](plans/PHASE-3A-PLAN.md). The fixed local vcpkg tree
-was verified read-only for 3A-02. DG-25 remains in force: a missing or inconsistent
+[`TEST-CONTRACT-MATRIX.md`](TEST-CONTRACT-MATRIX.md); exact executable registration
+and aggregate counts are owned by `scripts/windows-local.ps1`.
+Current progress and next work are maintained only in [Status](../docs/Status.md).
+Phase plans retain historical evidence. DG-25 remains in force: a missing or inconsistent
 dependency fails closed and never authorizes an automatic restore.
 
 This document turns the phase-one and phase-two suites into a permanent
@@ -41,9 +41,13 @@ drift, any failure/error/skipped/disabled/unavailable/timeout result, a
 credential-shaped assignment, missing cleanup evidence, or an incomplete aggregate.
 `RunAllTests` calls the same audit after all four public toolchain runners.
 
-## Permanent baseline from phases one and two
+## Historical foundation from phases one and two
 
-| Capability | Protected contracts | Current confidence | Next missing layer |
+The following table preserves the scope at the end of those phases. Its missing
+layers are historical, not the current backlog. Later transport, dependency,
+storage and resource coverage is recorded in the current contract matrix and module READMEs.
+
+| Capability | Protected contracts | Confidence at that phase | Missing layer at that phase |
 | --- | --- | --- | --- |
 | Build and startup | pinned toolchains, app-local packaging, config precedence, invalid argument/port fail-fast | Baseline | clean-runner parity and graceful service shutdown |
 | Server foundation | config validation, message nodes, protobuf round-trip, frame validation, Asio lifecycle | Baseline | protocol compatibility fixtures and cancellation races |
@@ -57,24 +61,23 @@ credential-shaped assignment, missing cleanup evidence, or an incomplete aggrega
 Baseline means the listed contracts are protected, not that the entire owning
 executable is covered. In particular, real `CSession` TCP behavior, Gate HTTP transport,
 Status transport/persistence, Qt network managers, and cross-service flows remain outside
-the current baseline.
+that historical baseline. They must not be described as absent from today's repository.
 
 ## Required lanes
 
 | Lane | Runs | Purpose |
 | --- | --- | --- |
-| Fast regression | every PR; Unit and deterministic Component | pure rules, state machines, serialization, in-process composition |
-| Integration regression | every PR when loopback/process-only; otherwise a provisioned job | real protocols, processes, temporary databases and owned adapters |
-| E2E smoke | release candidate, and PRs that change a public workflow | a small set of complete user/protocol journeys across release units |
-| Stress/soak | scheduled or explicit | long-running concurrency, media, reconnect, resource and race behavior |
+| Fast regression | develop PR/push under the CI governance scope rules | existing Windows unit, component and deterministic loopback/process contracts |
+| Full regression | master PR/push, weekly develop and manual runs | additional Linux real-dependency Integration and registered business E2E |
+| Package startup smoke | master push after full checks | assembled Windows package startup and cleanup before publication |
+| Focused local integration | owning module entry when relevant | resource and message-sync/receipt opt-in contracts outside the routine aggregate |
+| Stress/soak | explicit work when a scenario exists | long-running concurrency, media, reconnect and resource measurements; no completed baseline is implied |
 
-The original Phase 3A floor remains 232/232 across twelve reports. Phase 3B adds
-six host, twelve process-harness, seven Gate HTTP, twelve Status gRPC, sixteen Chat
-TCP, six formal-composition, ten Qt HTTP, and twelve Qt TCP cases, plus the
-thirteenth `client_integration.xml` report. The current local baseline is therefore
-313/313 across thirteen reports. Remote clean-PR checks, artifact evidence, and
-post-merge `develop` evidence remain closeout requirements; local evidence does not
-substitute for them.
+The original Phase 3A floor remains protected. Phase 3B added transport/process
+contracts and `client_integration.xml`; later changes added storage, resources and
+receipts. Current report groups and expected counts come from the public runner,
+not historical phase totals. Local results do not substitute for remote checks
+required by CI governance or prove that every opt-in suite was executed.
 
 Execution depth follows the canonical proportional tiers in
 [`CI-GOVERNANCE.md` section 2.1](CI-GOVERNANCE.md#21-比例化执行合同). Focused
@@ -120,7 +123,13 @@ Do not create empty future test directories. Add a module directory when its
 production Interface exists, then register its tests explicitly. The static
 registration gate ensures the test is not silently omitted.
 
-## Future capability map
+## Capability extension map
+
+Local message persistence and file/resource transfer already exist; their rows
+describe continuing regression requirements, not unimplemented modules. See
+[MessageStorage](../docs/MessageStorage.md) and [Resources](../docs/Resources.md).
+Group chat, voice messages, calls and LAN entries are future design guidance,
+not claims of implemented or accepted capabilities.
 
 | Capability | Recommended module Interface and Seam | Unit/Component regression | Integration/E2E regression |
 | --- | --- | --- | --- |
@@ -148,7 +157,7 @@ For every production change:
 5. register every new test in its owning target/runner; the plan or phase closeout
    verifies registration without repeating the same structure gate per task;
 6. run the changed Module's owning public runner once after its plan stabilizes;
-7. let the phase closeout run `RunAllTests` once and reconcile aggregate evidence;
+7. collect aggregate evidence for phase closeout or an explicitly requested full validation, following CI governance;
 8. add Integration/E2E coverage when a protocol, process, persistence Adapter,
    or public workflow changed.
 

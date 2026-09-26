@@ -9,8 +9,8 @@ Chat TCP 和跨服 gRPC 通道发送资源描述。图片在消息列表展示�
 
 - `common/asio/IOServicePool.h` 是三个现有 Server 和资源服务共用的线程池实现；服务原接口保留。
 - 资源服务沿用 Boost.PropertyTree INI、spdlog 轮转日志、Status `Login` 鉴权。
-- `common/resource/ResourceCatalog.h` 复用已有 `rpc::BoundedPool` 的有界借用和 RAII 归还。
-  未抽取旧 `MysqlPool`，因为旧实现把后台线程 detach，不能直接作为新服务的关闭基础。
+- `common/resource/ResourceCatalog.h` 使用 `common/mysql/ConnectionPool.h` 的有界 MySQL 池和 RAII 租约，
+  借出前检查连接，归还时清理事务；Status RPC 另使用 `common/grpc/GrpcClientRuntime.h` 的有界 stub 池。
 - 上传任务元数据以 JSON 伴随文件保存，`.part` 实际长度是续传偏移；完成时校验 SHA-256 和媒体签名，
   重命名为不可变 `.data`。已完成资源与消息引用保存在 MySQL。
 - 一个存储执行线程处理磁盘/摘要/数据库操作；网络上下文保持响应。最多 32 个连接，文件读写块为 64 KiB，
@@ -57,7 +57,7 @@ Chat TCP 和跨服 gRPC 通道发送资源描述。图片在消息列表展示�
 
 ## 本地运行
 
-1. 经现有 `schema/migrate.js plan/apply/verify` 入口迁移到版本 3；资源表的唯一来源为 `schema/migrations/003_avatar_resources.sql`，保留完整 schema 校验。不要直接执行旧工作树的独立 SQL。
+1. 按 [Data 的迁移入口](../docs/Data.md#operational-entry) 应用全部待执行迁移，当前为 schema 4。资源表来自 migration 003，回执表来自 004；当前二进制校验完整结构，不能只应用 003。升级前备份并停止写入，迁移后更新全部 Gate/Chat/Resource 实例。不要直接执行旧工作树的独立 SQL。
 2. 复制示例 INI，填写本机 MySQL/Status 配置和存储目录，不提交真实凭据。
 3. 编译后运行 `ResourceServer.exe --config <配置路径>`。
 4. 客户端 `config.ini` 可设置 `[ResourceServer] Url=http://127.0.0.1:8090`，默认即此地址。

@@ -23,16 +23,22 @@ GateServer ------gRPC------> VarifyServer
   |                           | Redis / SMTP
   | gRPC
   v
-StatusServer ----Redis/MySQL----+
+StatusServer --------Redis
   |
   | 返回 ChatServer endpoint/token
   v
 ChatServer instance A <---gRPC---> ChatServer instance B ... N
   | TCP                                |
   +-------------- Qt Client ----------+
+
+Qt Client ------HTTP------> ResourceServer
+                              | gRPC -> StatusServer
+                              | MySQL metadata / filesystem bytes
 ```
 
-该图表达允许的主要依赖方向，不表示所有调用都已完成生产级隔离或 Linux 验证。
+图示生产通信主路径；Gate/Chat 的数据访问也使用 MySQL/Redis。Status 当前选服与 Token 路径使用 Redis，
+遗留 MySQL DAO 和配置要求仍在仓库中，不能据此称其参与生产认证。图不代表所有链路已完成真实依赖验收；
+当前 Linux 根构建包含 Gate/Status/Chat，ResourceServer 的统一构建与发布基线为 Windows。
 
 ## 发布单元
 
@@ -75,7 +81,7 @@ ChatServer instance A <---gRPC---> ChatServer instance B ... N
 - UI 层 MUST NOT 直接操作 Server 的 Redis/MySQL 数据结构。
 - 网络 DTO、领域状态、Qt Model 和 Widget 展示 SHOULD 分层，避免把业务规则固化在事件处理函数中。
 - `ClientSession` 是 authenticated-session 生命周期的单一 owning Module。返回登录页前 MUST 通过其 `resetSession` 清理 `TcpMgr` connection 状态与 `UserMgr` account transient state，并销毁旧 `ChatDialog` 所有权树；仅隐藏旧页面不构成会话结束。
-- `TcpMgr`/`TcpFrameDecoder` 只拥有 connection 生命周期；主题、窗口策略和服务器配置属于应用级状态，不随账号 reset。未来本地缓存 MUST 作为独立 Module 按账号和 schema version 隔离。
+- `TcpMgr`/`TcpFrameDecoder` 只拥有 connection 生命周期；主题、窗口策略和服务器配置属于应用级状态，不随账号 reset。已实现的本地消息存储由 `MessageService` 协调，MUST 按账号和 schema version 隔离，见 [MessageStorage](MessageStorage.md)。
 
 ## 依赖规则
 
@@ -103,7 +109,7 @@ ChatServer instance A <---gRPC---> ChatServer instance B ... N
 3. 输入、输出、错误和超时契约是什么？
 4. 是否引入新的网络端口、配置、Redis key、数据库结构或第三方依赖？
 5. Windows 本地和 CI 如何构建、测试和打包？
-6. 是否保持未来 Linux Server 的可实现性？
+6. 是否保持已有 Linux Server 构建，并说明尚未接入 Linux 的模块边界？
 
 无法清楚回答时，不应通过复制现有目录先行实现。
 

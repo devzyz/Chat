@@ -124,7 +124,7 @@ getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超�
 
 ## 可观察启动
 
-- “进程存在”不等于服务 ready。未来 Integration 测试和部署脚本 SHOULD 使用端口、健康接口或协议探测判断 ready。
+- “进程存在”不等于服务 ready。Integration 测试和部署脚本 SHOULD 使用端口、健康接口或协议探测判断 ready。
 - 启动成功日志 MUST 在本地端口绑定成功后输出。
 - 服务停止 SHOULD 记录原因和完成状态。
 - CI 失败时 SHOULD 保存对应 stdout/stderr 和 JUnit/XML；不得只保留退出码。
@@ -150,7 +150,7 @@ getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超�
 - C++ Redis Host 必须是数字 IPv4/IPv6 或 `localhost`（映射为 `127.0.0.1`）；
   其他 DNS 名称在池构造时明确报配置错误。hiredis 的同步 DNS 不受 socket timeout 约束，
   因而不能把未限定的名称解析标成有限连接。原有数字地址配置不变。
-- 池按需连接，没有后台心跳线程；`close()` 幂等并唤醒等待者。调用方在销毁池前必须
+- 池按需连接，没有后台心跳线程；C++ `Close()` 幂等并唤醒等待者。调用方在销毁池前必须
   停止业务请求并归还借出的连接；已借出的命令通过自身有限 timeout 收敛。
 - Varify 的 `redis.js` 在导入时不读取配置、不创建客户端；默认 handler 组合注入配置，
   首次操作才创建 ioredis 连接。JSON `redis.connectTimeoutMs` / `commandTimeoutMs`
@@ -158,7 +158,7 @@ getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超�
   `CHAT_VARIFY_REDIS_PASSWORD` 提供。Node 连接总期限为两者之和，包含异步解析和 AUTH。
 - ioredis 关闭离线队列、自动重发与自动重连；失败命令保留 null/false 旧映射，
   后续独立操作才创建新连接。验证码写入为单条 `SET key value EX seconds`，不再分步 EXPIRE。
-  `Quit()` 直接断开并取消等待，不发送可能阻塞的 QUIT；入口绑定失败与 SIGINT/SIGTERM
+  Node adapter 的 `close()` 直接断开并取消等待，不发送可能阻塞的 QUIT；入口绑定失败与 SIGINT/SIGTERM
   都关闭 Redis/SMTP adapter，gRPC 排空最多 10 秒后强制关闭。
 - 测试只使用本次 RunContext 的动态地址、合成密码和 key prefix；真实服务验收状态见
   主工作区 `docs/Status.md`，本地 loopback fault 测试不代表真实 Redis 数据/重启测试已通过。
@@ -167,8 +167,9 @@ ChatServer 已具有较完整的 fail-fast 配置和异常清理。GateServer、
 
 ## 资源服务启用
 
-通过现有 `schema/migrate.js plan/apply/verify` 入口迁移到版本 3
-（`schema/migrations/003_avatar_resources.sql`），再配置 ResourceServer 的 MySQL、Status 和存储根目录。
+按 [Data 的迁移入口](Data.md#operational-entry) 应用全部待执行迁移，当前为 schema 4；
+migration 003 提供资源表，004 提供回执表。升级前备份并停止写入，迁移后更新全部
+Gate/Chat/Resource 实例，再配置 ResourceServer 的 MySQL、Status 和存储根目录。
 构建和本地验证命令见 [资源服务说明](../ResourceServer/README.md)，
 目录、头像发布与失败语义见 [Resources](Resources.md)。
 自动集成测试仅初始化自己的临时 MySQL，不修改个人数据库。

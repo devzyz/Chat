@@ -34,6 +34,7 @@ TcpMgr::TcpMgr() : _host("") {
         _expectedClose = false;
         _acceptingSends = false;
         _authenticated = false;
+        _legacyHistoryRequests.clear();
         if (expectedClose && !_retainingPending) UserMgr::instance()->messages()->pauseOutgoing();
         UserMgr::instance()->messages()->stop();
         if (outcome.terminal == ChatTcpTerminal::Refused
@@ -884,8 +885,9 @@ void TcpMgr::initHandlers()
             UserMgr::instance()->messages()->acceptSyncPage(jsonObj);
             return;
         }
-        if (UserMgr::instance()->messages()->isActive()) {
-            // An old server response cannot establish the incremental sync contract.
+        const bool requestedLegacy = _legacyHistoryRequests.remove(jsonObj["chat_id"].toInt());
+        if (UserMgr::instance()->messages()->isActive() && !requestedLegacy) {
+            // Only explicit legacy reads reach the compatibility model; sync still requires its envelope.
             emit chatHistoryFailed(jsonObj["chat_id"].toInt());
             return;
         }
@@ -954,6 +956,7 @@ void TcpMgr::handleMessage(ReqId id, int len, QByteArray data)
     if (id == ID_CREATE_PRIVATE_CHAT_RSP || id == ID_LOAD_CHAT_MESSAGE_RSP ||
         id == ID_ADD_FRIEND_RSP || id == ID_AUTH_FRIEND_RSP) {
         const auto object = QJsonDocument::fromJson(data).object();
+        if (id == ID_LOAD_CHAT_MESSAGE_RSP && object.contains("request_id")) return;
         emit requestCompleted(id, object.value("error").toInt(-1));
     }
 }
@@ -973,6 +976,7 @@ void TcpMgr::resetConnection(bool expectedClose)
 {
     _acceptingSends = false;
     _authenticated = false;
+    _legacyHistoryRequests.clear();
     if (expectedClose) {
         UserMgr::instance()->messages()->pauseOutgoing();
     }
@@ -1008,7 +1012,17 @@ void TcpMgr::sendData(ReqId reqId, QByteArray dataBytes)
         request["capabilities"] = QJsonArray{"message_receipts_v1"};
         dataBytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
     }
-    if (!_transport.send(static_cast<quint16>(reqId), dataBytes)) rejected();
+    if (!_transport.send(static_cast<quint16>(reqId), dataBytes)) {
+        rejected();
+        return;
+    }
+    if (reqId == ID_LOAD_CHAT_MESSAGE_REQ) {
+        const auto request = QJsonDocument::fromJson(dataBytes).object();
+        if (!request.contains("request_id") && request.contains("current_msg_id")
+            && request["chat_id"].toInt() > 0) {
+            _legacyHistoryRequests.insert(request["chat_id"].toInt());
+        }
+    }
 }
 
 void TcpMgr::connectToServer(ServerInfo si)

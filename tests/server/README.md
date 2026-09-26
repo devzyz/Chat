@@ -17,9 +17,10 @@
 | `gate-response` | Architecture | Component | `server_component_tests` / `server_component.xml` |
 | `startup`, protocol/RPC loopback | Architecture | Integration | `server_integration_tests`, `chat_grpc_client_tests` / `server_integration.xml`, `server_chat_grpc_integration.xml` |
 | `integration-host` | Architecture | Integration | `server_integration_tests` / `server_integration.xml` |
+| [resource](resource/README.md) | Business | Integration | `ResourceTests` / `server_resource_integration.xml`（存储合同）；HTTP/数据库等扩展使用专项入口 |
 
 ```powershell
 .\scripts\windows-local.ps1 -Task RunServerTests -Configuration Release
 ```
 
-The runner removes stale files, uses the fixed read-only dependency tree with manifest installation disabled, builds and app-local deploys all three production executables, and writes `server_unit.xml`, `server_component.xml`, `server_integration.xml`, `server_chat_grpc_integration.xml`, `server_gate_unit.xml`, and `server_status_unit.xml`. It rejects missing reports and exact testcase-count drift (77 Unit, 58 Component, 107 main Integration, 4 Chat gRPC Integration, and 2 for each Gate/Status lifecycle target), for 250 Server cases total. CI always uploads `build/test-results/server_*.xml`; a missing or count-drifted report is an error.
+The runner removes stale reports, uses the fixed read-only dependency tree with manifest installation disabled, and builds and app-local deploys GateServer, StatusServer, ChatServer and ResourceServer. It runs the report owners above, including ResourceStore filesystem contracts. Exact report groups and testcase counts are maintained by `scripts/windows-local.ps1`; missing reports and count drift fail the entry. CI retains `build/test-results/server_*.xml`. Resource HTTP/database and message-sync/receipt opt-in tests are documented separately and are not implied by this aggregate.

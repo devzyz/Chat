@@ -3,11 +3,35 @@
 #include <chrono>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
 
 /** 验证 POSIX 子进程就绪、忽略温和终止后的升级关闭，以及临时根目录清理。 */
 int main() {
     using namespace std::chrono_literals;
     try {
+        {
+            auto race_context = integration::RunContext::Create(std::chrono::steady_clock::now() + 3s);
+            integration::ProcessSpec exit_spec;
+            exit_spec.executable = "/bin/sh";
+            exit_spec.arguments = {L"-c", L"exit 23"};
+            exit_spec.working_directory = race_context->TempRoot();
+            auto exited = integration::ProcessHarness::Start(*race_context, exit_spec);
+            const auto deadline = std::chrono::steady_clock::now() + 2s;
+            bool first_probe = true;
+            if (!exited->WaitReady(/** 固定退出发生在首次探针旧结果与存活检查之间，保护最终完成观察。 */ [&] {
+                if (first_probe) {
+                    first_probe = false;
+                    while (!exited->CollectEvidence().exit_code.has_value() && std::chrono::steady_clock::now() < deadline) {
+                        std::this_thread::yield();
+                    }
+                    return false;
+                }
+                return exited->CollectEvidence().exit_code.has_value();
+            }, deadline) || exited->CollectEvidence().exit_code != 23 ||
+                !exited->Stop(deadline).Complete() || !race_context->Teardown().complete) {
+                throw std::runtime_error("completion probe lost final exit evidence");
+            }
+        }
         auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 10s);
         const auto root = context->TempRoot();
         integration::ProcessSpec spec;

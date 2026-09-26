@@ -56,7 +56,7 @@ public:
 - 能前置声明的项目类型 SHOULD 前置声明，避免在公共头文件引入 gRPC、MySQL 或大型 Boost 头。
 - 公共头文件 MUST NOT 使用 `using namespace`。
 - `#include` 路径大小写 MUST 与磁盘文件一致。
-- `message.pb.*` 和 `message.grpc.pb.*` MUST 由 proto 工具生成，不得手工编辑。
+- `generated/proto/cpp/` 下的 `*.pb.*` 和 `*.grpc.pb.*` MUST 由 `proto/` 中的权威协议源生成，不得手工编辑；入口见 [proto README](../proto/README.md)。
 
 ## 所有权与资源
 
