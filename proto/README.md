@@ -12,6 +12,9 @@ All files retain `package message` and the migration-preexisting service, RPC,
 message, field-number, type, and cardinality contracts. Generated C++ under
 `generated/proto/cpp` is reproducible output, not an editable authority.
 
+`ChatServer/ChatServer/start.bat` is a retained convenience wrapper for
+`scripts/windows-local.ps1 -Task GenerateProtocols`; it does not start a server.
+
 Phase 3C adds optional `ChatMessage.client_msg_uuid` at previously unused field 7.
 The existing `TextChatData.uuid` field 1 remains unchanged. An empty UUID denotes
 a legacy record without a client idempotency key. Current text submissions require

@@ -24,6 +24,10 @@ business evidence validation; `gate.py` owns service report validation.
 
 ## Four production processes (3C-07)
 
+Four/five-process fixtures omit `[Mysql]` for StatusServer. The topology unit
+contract checks its absence while retaining MySQL for Chat; real routing and
+token scenarios continue to use the production Status process with Redis.
+
 Selector `3C-07` retains the adapter reports and adds `linux_four_process.xml`
 with eighteen `T10-4PROC` cases. The same-SHA artifact contains formal
 Gate/Status/Chat binaries and `FourProcessDriver`, with the existing dynamic

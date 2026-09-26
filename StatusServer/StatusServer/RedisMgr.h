@@ -56,10 +56,6 @@ public:
 	/** @brief 停止接受新的借用并释放空闲连接，唤醒等待者；借出资源仍须按原协议归还。 */
 	void Close();
 
-	/** @brief 在有限等待内尝试 SET NX EX，成功返回唯一所有者标识，失败返回空字符串；时间参数为秒。 */
-	std::string AcquireLock(const std::string& lockName, int lockTimeout, int acquireTimeout);
-	/** @brief 仅当锁值仍等于给定所有者标识时原子删除锁，返回是否释放成功。 */
-	bool ReleaseLock(const std::string& lockName, const std::string& identifier);
 protected:
 	/** @brief 初始化RedisMgr，执行模块 Redis 命令并检查响应类型；命令失败不自动重放写入。 */
 	RedisMgr();

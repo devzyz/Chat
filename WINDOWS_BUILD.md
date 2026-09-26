@@ -36,8 +36,8 @@ instances are separate processes of that executable using different explicit
 configuration files. Object and incremental-build files are isolated by server
 unit. The helper script places them under
 `D:\vcpkg-chat-temp\msbuild` by default.
-The tracked legacy MySQL DLLs remain in the repository for now, but the projects
-no longer copy or link against them.
+The unused legacy MySQL DLL copies have been removed from source control.
+Builds use the vcpkg connector and app-local deployment; do not copy legacy DLLs into output folders.
 
 CI uses `x64-windows-chat-release` for both target and host tools. It keeps the
 same dynamic CRT/library policy while setting `VCPKG_BUILD_TYPE=release`, so a

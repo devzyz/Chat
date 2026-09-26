@@ -115,9 +115,6 @@ ConfigMgr::ConfigMgr() {
 
 	ValidateEndpoint((*this)["StatusServer"], "StatusServer");
 	ValidateEndpoint((*this)["Redis"], "Redis");
-	ValidateEndpoint((*this)["Mysql"], "Mysql");
-	RequireValue((*this)["Mysql"], "Mysql", "User");
-	RequireValue((*this)["Mysql"], "Mysql", "Schema");
 
 	auto server_list = (*this)["ChatServers"]["Name"];
 	if (server_list.empty()) {

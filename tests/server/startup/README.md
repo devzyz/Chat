@@ -16,6 +16,8 @@ Domain 为 Architecture，Level 为 Integration。`startup_config_tests.cpp` 包
 
 每例创建唯一临时目录并分别捕获 stdout/stderr。Gate ready 使用真实 `GET /get_test` HTTP 200/body 探针；Status ready 使用真实 gRPC channel handshake，不调用会访问 Redis 的业务 RPC。配置中的 Redis、MySQL、Varify 与其他 service endpoint 都是不可用 loopback 占位，fail-fast 和 ready/stop 路径不连接它们，也不读取仓库开发配置。
 
+Status 夹具不再生成 `[Mysql]`，现有 S03 配置、就绪、端口冲突与正常关闭用例同时保护“不依赖 MySQL 配置即可启动”的契约。Gate 仍保留其必需的 MySQL 配置。
+
 进程 startup 硬上限为 15 秒，stop 硬上限为 5 秒。Windows graceful-stop 使用 `CREATE_NEW_PROCESS_GROUP` 创建本测试独占的 console process group，再只向该 PID/group 发送 `CTRL_BREAK_EVENT`；生产 `boost::asio::signal_set` 在 Windows 注册 `SIGBREAK`，与 `SIGINT`/`SIGTERM` 进入同一停止路径。该机制要求测试进程与子进程共享 console，验证的是当前 Windows console 等价终止路径；它不声称覆盖 Windows Service Control Manager，Linux 的 SIGINT/SIGTERM 行为仍需目标平台验证。
 
 兜底终止前同时核验测试持有的 process handle、PID 和 executable image path。析构只清理本例已核验进程和本例唯一 tempdir；不枚举或终止其他同名进程。端口由 RAII acceptor 管理，并在失败与正常停止后验证可立即重新 bind。
@@ -27,7 +29,7 @@ Domain 为 Architecture，Level 为 Integration。`startup_config_tests.cpp` 包
 .\build\windows-tests\Release\server_integration_tests.exe --gtest_filter=StartupConfigTests.*:ProductionExecutables/*
 ```
 
-统一 runner 构建并 app-local deploy Gate、Status、Chat 和 Integration test EXE，要求 `server_integration.xml` 精确 34 case（29 startup + 1 C++→Node protocol loopback + 4 Gate production gRPC client loopback）。CI 复用 `servers-release` job 的同一依赖恢复，并由现有 report artifact 路径保留失败诊断。
+统一 runner 构建并 app-local deploy Gate、Status、Chat 和 Integration test EXE，将本模块用例计入 `server_integration.xml`；整组精确数量以 `scripts/windows-local.ps1` 的报告注册为准。CI 复用服务构建 job 的同一依赖恢复，并由现有 report artifact 路径保留失败诊断。
 
 ## 已知缺口
 
