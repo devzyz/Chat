@@ -35,8 +35,12 @@ function xml(value) {
         .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;');
 }
 
-/** 只保留白名单内的进程停止阶段与分类，拒绝任意敏感诊断。 */
+/** 只保留白名单内的进程停止或业务子步骤诊断，拒绝任意敏感内容。 */
 function processDiagnostic(value) {
+    if (value && /^(gate-(verify|mail|register|login|selection)|client-(create|chat-id|send|message-sync|message-data))$/.test(value.stage)
+        && /^(deadline|assertion|operation-failed|response--?\d{1,10})$/.test(value.category)) {
+        return { stage: value.stage, category: value.category };
+    }
     if (!value || !/^stop-(GateServer|StatusServer|ChatServer|VarifyServer)$/.test(value.stage)
         || !/^(stop-timeout|report-unavailable|stop-escalated|exit-[0-9]{1,10}|harness-incomplete|exit-unavailable|expected-failure)$/.test(value.category)) return undefined;
     return { stage: value.stage, category: value.category };

@@ -8,7 +8,7 @@ const { spawn } = require('node:child_process');
 const { randomUUID, createHash } = require('node:crypto');
 const { createRequire } = require('node:module');
 const { reserve, stop } = require('./fourProcessCases');
-const { poll, runCommand } = require('./dependencyCoordinator');
+const { poll, runCommand, contractStep } = require('./dependencyCoordinator');
 const { createTopology, nativeConfig, assertConnectedClients } = require('./twoServerTopology');
 const { ClientControl } = require('./clientControl');
 const { waitForConnectionCount } = require('./connectionCount');
@@ -230,9 +230,16 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
         }
         const uuid = randomUUID();
         await test('production models correlate a durable cross-instance message', /** 通过 Qt 创建会话和发送消息，核对双方快照及数据库内容。 */ async () => {
-            const created = await alice.control.command('create', { toUid: users[1].uid });
-            assert.equal(created.error, 0); chatId = created.chatId; assert.ok(chatId > 0);
-            assert.equal((await alice.control.command('send', { toUid: users[1].uid, chatId, uuid, text: fixture.text })).error, 0);
+            const created = await contractStep('client-create', /** 定位创建会话的控制响应，保留数值错误码。 */ async () => {
+                const result = await alice.control.command('create', { toUid: users[1].uid });
+                assert.equal(result.error, 0);
+                return result;
+            });
+            chatId = created.chatId;
+            await contractStep('client-chat-id', /** 核对服务返回了有效会话编号。 */ async () => { assert.ok(chatId > 0); });
+            await contractStep('client-send', /** 定位消息发送的控制响应，不记录正文。 */ async () => {
+                assert.equal((await alice.control.command('send', { toUid: users[1].uid, chatId, uuid, text: fixture.text })).error, 0);
+            });
             const expectedHash = createHash('sha256').update(fixture.text).digest('hex');
             let first, second;
             await poll(/** 等待双方各出现一条消息且发送方已获得持久化标识。 */ async () => {

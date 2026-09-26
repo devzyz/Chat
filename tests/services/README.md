@@ -57,6 +57,9 @@ cleanup failure remain failures. Shutdown failures retain only an allowlisted
 process name and category (including a numeric exit code); raw child output and
 configuration remain private. Three report/port/stop regressions and three compiled
 driver regressions support this suite but do not replace hosted acceptance.
+Registration/login and initial client message failures additionally retain fixed
+substep names and numeric response codes. Raw assertions, credentials, tokens and
+message payloads are discarded; the existing deadlines and assertions are unchanged.
 Current evidence remains in the main workspace's `docs/Status.md`.
 
 ```sh

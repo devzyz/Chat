@@ -10,7 +10,26 @@ const net = require('node:net');
 const lock = require('./services.lock.json');
 const { reportGroups, writeReports } = require('./serviceReports');
 const { verifyDependencies } = require('./serviceRuntime');
+const { contractStep, caseDiagnostic } = require('./dependencyCoordinator');
 const { validateRelocated, validateLibrarySource } = require('./messageRuntime');
+
+test('business substeps retain only fixed stages and numeric response diagnostics', /** 验证诊断定位失败子步骤但不泄漏原始响应、正文或凭据。 */ async () => {
+    for (const [error, category] of [
+        [Object.assign(new Error('private payload'), { name: 'TimeoutError' }), 'deadline'],
+        [new assert.AssertionError({ actual: 1001, expected: 0 }), 'response-1001'],
+        [new assert.AssertionError({ actual: 'private payload', expected: 0 }), 'assertion'],
+        [new Error('password=private'), 'operation-failed']
+    ]) {
+        await assert.rejects(contractStep('client-create', /** 注入不应进入报告的原始错误。 */ async () => { throw error; }),
+            /** 核对经过脱敏的阶段与分类。 */ failure => {
+                assert.deepEqual(caseDiagnostic(failure), { stage: 'client-create', category });
+                assert.doesNotMatch(failure.message, /private/);
+                return true;
+            });
+    }
+    await assert.rejects(contractStep('private-user', /** 不应执行非法阶段的回调。 */ async () => {}), /Unknown/);
+    assert.equal(await contractStep('gate-login', /** 验证正常结果原样返回。 */ async () => 42), 42);
+});
 
 test('client libraries may come from Qt and vcpkg but not adjacent or unlisted roots', /** 验证客户端运行库仅允许显式 Qt/vcpkg 安装树，不接受相邻同名前缀目录。 */ () => {
     const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-runtime-roots-'));
