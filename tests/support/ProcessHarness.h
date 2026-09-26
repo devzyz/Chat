@@ -54,7 +54,7 @@ public:
 
 	/** 返回所启动进程的 PID 与创建时间。 */
 	ProcessIdentity Identity() const;
-	/** 在不超过运行硬期限的期限内轮询就绪探针；进程退出或期限到达返回假。 */
+	/** 在运行硬期限内轮询探针；退出时最后观察一次，探针仍不满足或期限到达返回假。 */
 	bool WaitReady(const ReadyProbe& probe, RunDeadline deadline);
 	/** 幂等请求正常退出，宽限期后按完整身份升级终止并清理管道，返回清理结果。 */
 	CleanupStatus Stop(RunDeadline graceful_deadline);

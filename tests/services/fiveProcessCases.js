@@ -277,12 +277,12 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
                 const spoofUuid = randomUUID();
                 const result = JSON.parse(await runCommand(supervisor, ['chat'], { timeout: 15000,
                     env: { ...env, LD_LIBRARY_PATH: path.dirname(supervisor), CHAT_FOUR_WIRE: JSON.stringify({
-                        port: ports.chatA, login: { uid: users[0].uid, token }, requests: [{ id: 1016,
+                        port: ports.chatA, login: { uid: users[0].uid, token }, requests: [{ id: 1016, expect_disconnect: true,
                             body: { from_uid: users[1].uid, to_uid: users[0].uid, chat_id: chatId,
                                 text_array: [{ msg_uuid: spoofUuid, msg_content: 'forged sender' }] } }] }) } }));
                 assert.equal(result.error, 0);
                 assert.equal(result.responses.length, 1);
-                assert.equal(result.responses[0].commit_error, 'UnauthorizedSender');
+                assert.equal(result.responses[0].disconnected, true);
                 assert.equal(await sql.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${spoofUuid}'`), '0');
             });
         }

@@ -47,3 +47,55 @@ for (const id of [1006, 1008]) test(`wire response ${id} validates production fr
         assert.ok(!result.output.includes('not-for-evidence'));
     } finally { for (const socket of sockets) socket.destroy(); await new Promise(/** 等待本用例响应服务关闭。 */ resolve => server.close(resolve)); }
 });
+
+test('supervision distinguishes an expected application failure from incomplete cleanup', /** 重复观察自行失败退出的真实子进程，退出状态不得被误报为监督器清理失败。 */ async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-driver-exit-'));
+    try {
+        for (let index = 0; index < 40; ++index) {
+            const report = path.join(root, `${index}.json`);
+            const result = await run(['supervise', process.execPath, root, report, '-e', 'process.exit(1)']);
+            assert.equal(result.code, 0, `supervisor iteration ${index}`);
+            assert.deepEqual(JSON.parse(fs.readFileSync(report)), { complete: true, escalated: false, exitCode: 1 });
+        }
+    } finally { fs.rmSync(root, { recursive: true }); }
+});
+
+for (const phase of ['request', 'login', 'partial', 'success', 'timeout']) {
+    test(`wire disconnect evidence rejects ${phase} ambiguity`, /** 核对仅登录成功后的完整请求被明确断开才构成拒绝证据，半帧及业务成功不算拒绝。 */ async () => {
+        const sockets = new Set();
+        const server = net.createServer(/** 逐帧读取登录及消息请求，模拟正式协议的拒绝关闭边界。 */ socket => {
+            sockets.add(socket);
+            socket.on('error', /** 预期断连由驱动结果断言，不把传输错误作为测试进程异常。 */ () => {});
+            socket.on('close', /** 移除已结束的所属连接。 */ () => sockets.delete(socket));
+            let buffered = Buffer.alloc(0), count = 0;
+            socket.on('data', /** 累计完整帧后按阶段发送成功响应或关闭连接。 */ bytes => {
+                buffered = Buffer.concat([buffered, bytes]);
+                while (buffered.length >= 4 && buffered.length >= 4 + buffered.readUInt16BE(2)) {
+                    const id = buffered.readUInt16BE(0);
+                    buffered = buffered.subarray(4 + buffered.readUInt16BE(2));
+                    ++count;
+                    if (count === 2 && phase === 'timeout') return;
+                    if ((count === 1 && phase === 'login') || (count === 2 && phase !== 'success')) {
+                        socket.end(phase === 'partial' ? Buffer.from([0]) : undefined);
+                        return;
+                    }
+                    const body = Buffer.from('{"error":0}');
+                    const header = Buffer.alloc(4); header.writeUInt16BE(id + 1); header.writeUInt16BE(body.length, 2);
+                    socket.write(Buffer.concat([header, body]));
+                }
+            });
+        });
+        await new Promise(/** 等待本次 loopback 服务成功监听。 */ resolve => server.listen(0, '127.0.0.1', resolve));
+        try {
+            const result = await run(['chat'], { CHAT_FOUR_WIRE: JSON.stringify({ port: server.address().port,
+                login: { uid: 1, token: '<synthetic-token>' }, requests: [{ id: 1016, expect_disconnect: true,
+                    body: { from_uid: 2 } }] }) });
+            assert.equal(result.code, phase === 'request' ? 0 : 1);
+            if (phase === 'request') assert.deepEqual(JSON.parse(result.output),
+                { error: 0, responses: [{ disconnected: true }] });
+        } finally {
+            for (const socket of sockets) socket.destroy();
+            await new Promise(/** 等待本次监听与全部连接完成清理。 */ resolve => server.close(resolve));
+        }
+    });
+}
