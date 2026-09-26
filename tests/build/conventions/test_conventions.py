@@ -31,6 +31,7 @@ class GitRulesTests(unittest.TestCase):
         self.assertEqual([], validate_message("refactor(verify): standardize adapter names and contracts"))
         self.assertEqual([], validate_message("fix(scripts): authenticate GitHub release asset requests"))
         self.assertEqual([], validate_message("fix(chat): disambiguate the shared session fixture server header"))
+        self.assertEqual([], validate_message("test(repo): retain safe diagnostics in two-server reports"))
         for message in ["fix(client): fix bugs", "chore(repo): update code", "docs(repo): update docs.",
                         "fix(other): add tests", "fix(chat): disambiguated server headers",
                         "fix(chat): 修复错误", "fix(chat): add " + "x" * 100]:
