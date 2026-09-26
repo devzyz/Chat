@@ -13,6 +13,7 @@ node --test tests/build/ciBudget.test.js
 ```
 
 使用临时 ZIP 验证缺文件、修改字节、错误 SHA、版本、配置清理、proto 布局、失败报告以及草稿重试与发布保护。
+MySQL 工具测试使用非规范路径并比较解析后的路径，覆盖 Windows 临时目录短文件名展开的等价性。
 测试自动发现，不手工维护精确数量或 Test ID 清单；JUnit 输出到 `build/test-results/release_candidate_contracts.xml`。
 合成字节测试不是实际程序启动证明。
 

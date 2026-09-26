@@ -149,6 +149,8 @@ class ReleaseContracts(unittest.TestCase):
         """在创建数据目录前拒绝缺失客户端或不匹配的 MySQL 版本。"""
         tools = self.root / 'mysql-bin'
         tools.mkdir()
+        # 使用同一目录的非规范路径复现 Windows TEMP 短文件名展开后的路径差异。
+        tools = tools / '..' / tools.name
         (tools / 'mysqld.exe').touch()
         with patch.dict(os.environ, {'CHAT_SMOKE_MYSQL_BIN': str(tools)}), patch.object(smoke.subprocess, 'run') as run:
             with self.assertRaisesRegex(RuntimeError, 'mysql.exe'):
@@ -162,7 +164,8 @@ class ReleaseContracts(unittest.TestCase):
                     smoke.mysql_tools()
             run.side_effect = [Mock(stdout=value, returncode=0) for value in
                                ('mysqld  Ver 8.4.4 for Win64', 'mysql  Ver 8.4.4 for Win64')]
-            self.assertEqual(smoke.mysql_tools(), (tools / 'mysqld.exe', tools / 'mysql.exe'))
+            self.assertEqual(smoke.mysql_tools(), ((tools / 'mysqld.exe').resolve(),
+                                                  (tools / 'mysql.exe').resolve()))
 
     def test_mysql_initialization_failure_retains_external_diagnostics(self):
         """初始化失败仍保留 stderr 到临时应用目录之外，不启动数据库。"""
