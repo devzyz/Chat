@@ -1,9 +1,25 @@
 # 项目当前状态
 
-更新：2026-09-23。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
+更新：2026-09-26。此页维护当前进度、下一步与验证边界；计划和阶段总结保留历史证据。
 项目目标：先完成基本聊天功能，后续主要投入可测量的性能优化。
 
-## 当前工作：N9 历史余项整改完成
+## 当前工作：仓库冗余清理
+
+- 分支 `refactor/repo/remove-redundancy` 基于最新 `origin/develop` 的 `7f41441`，
+  在独立工作树执行，原工作区的文档和 CI 修改保留原样。范围与保留依据见 [清理计划](plans/RedundancyCleanup.md)。
+- 删除 6 个旧 MySQL DLL（约 73.5 MiB）、9 个未接入构建的 Qt 气泡文件、
+  Status 未使用的 MySQL DAO/Mgr、Chat/Status 未调用的锁类及包装方法；Gate/Status 共用滚动日志实现。
+- 本地四服务 Release 构建通过；Qt 24 Unit + 13 Component + 28 Integration 全部通过。
+  Qt 测试进程需优先使用本次 Qt kit 对应的 MinGW 运行库；初次本机 PATH 冲突造成的持久化超时已在正确环境下重跑通过。
+- 拓扑合同 3 项、发布合同 9 项通过；发布配置解析确认仅 Status 不含 MySQL。
+  MSBuild/Linux 源码归属、Linux server-only 配置合同、增量规范、文档链接与 diff 检查通过。
+- Server 258 项全部通过：77 Unit、58 Component、107 Integration、4 Chat gRPC、
+  Gate/Status 各 2 项 Asio、8 项 Resource；包含不提供 MySQL 配置的真实 Status 启动/关闭回归。
+- 下一步：完成 develop PR 的远端检查与审阅。此处不声称已完成 Linux 原生编译、真实 Redis 多进程业务回归或远端 CI。
+
+以下保留历史阶段证据；其中旧分支、提交和“下一步”只描述当时状态，不作为当前执行入口。
+
+## 历史记录：N9 历史余项整改完成
 
 - 在 `chore/repo/incremental-conventions` 完成首次 N9 盘点回挂的命名与注释余项；
   最新 `origin/develop` 仍为 `ac282b4`，继续更新 [PR #16](https://github.com/devzyz/Chat/pull/16)。

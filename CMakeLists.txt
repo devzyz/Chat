@@ -96,10 +96,12 @@ function(chat_configure_server_target target source_root)
         gRPC::grpc++
         hiredis::hiredis
         JsonCpp::JsonCpp
-        ${CHAT_MYSQL_TARGET}
         spdlog::spdlog
         Threads::Threads
     )
+    if(NOT source_root MATCHES "^StatusServer/")
+        target_link_libraries(${target} PUBLIC ${CHAT_MYSQL_TARGET})
+    endif()
 endfunction()
 
 include(cmake/ServerSourceOwnership.cmake)

@@ -17,6 +17,13 @@ Gate 的 MySQL Connector 连接、读取和写入超时均为 2 秒，关闭池�
 
 ## 配置校验
 
+StatusServer 的选服与 Token 路径依赖 Redis，不要求 `[Mysql]`；旧配置中保留该段不会恢复数据库访问。
+Gate、Chat 与 Resource 的 MySQL 配置要求不变。Gate/Status 的滚动日志行为共用
+`common/logging/RotatingLog.h`，各服务 `LogMgr` 只读取本服务配置；关闭仍仅刷新，保留注册表供静态析构记录日志。
+
+Gate 的 `GET /get_test` 保留为发布冒烟和服务回归的 HTTP 就绪探针。
+HTTP 200 与响应正文只证明 Gate 监听可用，不代表 Redis、MySQL 或下游服务健康。
+
 - 配置 MUST 在启动监听、创建后台线程和登记 Redis 状态前完成校验。
 - 必填 section、key 和非空值 MUST 逐项校验，错误包含配置路径和字段名。
 - 端口 MUST 是完整的十进制整数且位于 1..65535；同一实例的 TCP/RPC 端口不得冲突。

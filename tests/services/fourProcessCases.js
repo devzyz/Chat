@@ -82,7 +82,8 @@ async function runFourProcessCases(coordinator, record) {
     /** 生成对应正式服务的隔离配置，指向本次依赖和数据库。 */
     function writeConfig(name) {
         const common = `[Redis]\nHost=127.0.0.1\nPort=${coordinator.config.ports.redis}\nPassword=${coordinator.password}\n` +
-            `[Mysql]\nHost=127.0.0.1\nPort=${coordinator.config.ports.mysql}\nUser=root\nPassword=${coordinator.password}\nSchema=${database}\n` +
+            (name === 'StatusServer' ? '' : `[Mysql]\nHost=127.0.0.1\nPort=${coordinator.config.ports.mysql}\nUser=root\nPassword=${coordinator.password}\nSchema=${database}\n`
+            ) +
             `[StatusServer]\nHost=127.0.0.1\nPort=${ports.StatusServer}\n` +
             `[Log]\nName=${name}\nLogDir=${root}/logs\nMaxSizeMB=1\nMaxTotalFiles=2\nLevel=warn\nFlushLevel=warn\n`;
         const extra = name === 'ChatServer'

@@ -137,7 +137,6 @@
     <ClCompile Include="AsioIOServicePool.cpp" />
     <ClCompile Include="ChatServer.cpp" />
     <ClCompile Include="ChatServiceImpl.cpp" />
-    <ClCompile Include="DistLock.cpp" />
     <ClCompile Include="LogicSystem.cpp" />
     <ClCompile Include="LogMgr.cpp" />
     <ClCompile Include="$(ProtocolGeneratedDir)\chat.grpc.pb.cc" />
@@ -160,7 +159,6 @@
     <ClInclude Include="CServer.h" />
     <ClInclude Include="CSession.h" />
     <ClInclude Include="Data.h" />
-    <ClInclude Include="DistLock.h" />
     <ClInclude Include="LogicSystem.h" />
     <ClInclude Include="LogicDispatcher.h" />
     <ClInclude Include="LogMgr.h" />

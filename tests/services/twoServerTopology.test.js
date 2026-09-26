@@ -29,6 +29,9 @@ test('native configs use reciprocal peer RPC ports and both discoverable client 
     assert.match(first, /\[Peer\]\nName=chat-e2e-b-[a-f0-9]+\nHost=127.0.0.1\nPort=31007/);
     assert.match(second, /\[Peer\]\nName=chat-e2e-a-[a-f0-9]+\nHost=127.0.0.1\nPort=31005/);
     assert.match(status, /\[ChatServers\]\nName=ChatA,ChatB/);
+    assert.doesNotMatch(status, /\[Mysql\]/);
+    assert.match(first, /\[Mysql\]/);
+    assert.match(second, /\[Mysql\]/);
     assert.match(status, /Port=31004/);
     assert.match(status, /Port=31006/);
     assert.ok(!JSON.stringify(topology).includes(dependencies.password));

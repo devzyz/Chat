@@ -316,6 +316,15 @@ void WriteServiceConfig(
     bool include_critical_endpoint = true,
     const std::string& grpc_settings = {}) {
     std::ostringstream config;
+    // Status routing must start without any MySQL configuration.
+    if (service == ServiceKind::Gate) {
+        config << "[Mysql]\n"
+           << "Host = 127.0.0.1\n"
+           << "Port = 1\n"
+           << "Password = fixture-placeholder\n"
+           << "User = fixture-user\n"
+           << "Schema = fixture-schema\n";
+    }
     config << "[GateServer]\n"
            << "Port = " << (service == ServiceKind::Gate ? service_port : "1") << "\n"
            << "[VarifyServer]\n"
@@ -325,12 +334,6 @@ void WriteServiceConfig(
            << "Host = 127.0.0.1\n"
            << "Port = 1\n"
            << "Password = fixture-placeholder\n"
-           << "[Mysql]\n"
-           << "Host = 127.0.0.1\n"
-           << "Port = 1\n"
-           << "Password = fixture-placeholder\n"
-           << "User = fixture-user\n"
-           << "Schema = fixture-schema\n"
            << "[StatusServer]\n";
     if (include_critical_endpoint) {
         config << "Host = 127.0.0.1\n";

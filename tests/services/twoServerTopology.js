@@ -34,8 +34,8 @@ function nativeConfig(topology, role, dependencies, logDirectory) {
     assert.ok(typeof logDirectory === 'string' && logDirectory.length > 0 && !/[\r\n\0]/.test(logDirectory));
     const section = /** 把单个配置节与键值序列编码为 INI 文本。 */ (name, values) => `[${name}]\n` + Object.entries(values).map(/** 把已校验的单个键值编码为配置行。 */ ([key, value]) => `${key}=${value}\n`).join('');
     let result = section('Redis', { Host: topology.host, Port: dependencies.redis, Password: dependencies.password }) +
-        section('Mysql', { Host: topology.host, Port: dependencies.mysql, User: 'root',
-            Password: dependencies.password, Schema: topology.database }) +
+        (role === 'StatusServer' ? '' : section('Mysql', { Host: topology.host, Port: dependencies.mysql, User: 'root',
+            Password: dependencies.password, Schema: topology.database })) +
         section('StatusServer', { Host: topology.host, Port: topology.ports.status }) +
         section('Log', { Name: role, LogDir: logDirectory, MaxSizeMB: 1, MaxTotalFiles: 2, Level: 'warn', FlushLevel: 'warn' });
     if (role === 'ChatA' || role === 'ChatB') {

@@ -197,7 +197,7 @@ finally:
 
 
 def server_config(app, port, rpc_port):
-    return f'''[GateServer]
+    config = f'''[GateServer]
 Port={port}
 [VarifyServer]
 Host=127.0.0.1
@@ -209,12 +209,6 @@ Port={port}
 Host=127.0.0.1
 Port=1
 Password=package-smoke
-[Mysql]
-Host=127.0.0.1
-Port=1
-Password=package-smoke
-User=package-smoke
-Schema=package_smoke
 [SelfServer]
 Name=PackageChat
 Host=127.0.0.1
@@ -236,6 +230,15 @@ MaxTotalFiles=2
 Level=info
 FlushLevel=warn
 '''
+    if app != 'StatusServer':
+        config += '''[Mysql]
+Host=127.0.0.1
+Port=1
+Password=package-smoke
+User=package-smoke
+Schema=package_smoke
+'''
+    return config
 
 
 def run(directory, source_sha, report):

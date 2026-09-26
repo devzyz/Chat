@@ -139,10 +139,7 @@
   <ItemGroup>
     <ClCompile Include="AsioIOServicePool.cpp" />
     <ClCompile Include="ConfigMgr.cpp" />
-    <ClCompile Include="DistLock.cpp" />
     <ClCompile Include="LogMgr.cpp" />
-    <ClCompile Include="MysqlDao.cpp" />
-    <ClCompile Include="MysqlMgr.cpp" />
     <ClCompile Include="RedisMgr.cpp" />
     <ClCompile Include="Singleton.cpp" />
     <ClCompile Include="StatusServer.cpp" />
@@ -151,12 +148,9 @@
     <ClInclude Include="AsioIOServicePool.h" />
     <ClInclude Include="ConfigMgr.h" />
     <ClInclude Include="const.h" />
-    <ClInclude Include="DistLock.h" />
     <ClInclude Include="LogMgr.h" />
     <ClInclude Include="$(ProtocolGeneratedDir)\status.grpc.pb.h" />
     <ClInclude Include="$(ProtocolGeneratedDir)\status.pb.h" />
-    <ClInclude Include="MysqlDao.h" />
-    <ClInclude Include="MysqlMgr.h" />
     <ClInclude Include="RedisMgr.h" />
     <ClInclude Include="Singleton.h" />
     <ClInclude Include="StatusServiceImpl.h" />

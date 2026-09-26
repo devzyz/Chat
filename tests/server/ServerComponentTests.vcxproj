@@ -63,7 +63,6 @@
     <ClCompile Include="status-routing\status_routing_component_tests.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\ConfigMgr.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\Const.cpp" />
-    <ClCompile Include="..\..\ChatServer\ChatServer\DistLock.cpp" />
     <ClCompile Include="..\..\ChatServer\ChatServer\RedisMgr.cpp" />
   </ItemGroup>
   <ItemGroup>

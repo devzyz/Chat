@@ -2,7 +2,6 @@
 #include <boost/asio.hpp>
 #include "ConfigMgr.h"
 #include "Const.h"
-#include "DistLock.h"
 #include "LogMgr.h"
 
 
@@ -263,39 +262,6 @@ bool RedisMgr::Del(const std::string& key) {
 	return true;
 }
 
-// 如果加锁成功，则返回一个锁的唯一标识
-std::string RedisMgr::AcquireLock(const std::string& lockName, int lockTimeout, int acquireTimeout) {
-	auto connection = _pool->GetConnection();
-
-	if (connection == nullptr) {
-		return "";
-	}
-
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, connection]() {
-		_pool->ReturnConnection(connection);
-		});
-
-	return DistLock::GetInstance()->AcquireLock(connection, lockName, lockTimeout, acquireTimeout);
-}
-
-// 如果解锁成功，则返回true
-bool RedisMgr::ReleaseLock(const std::string& lockName, const std::string& identifier) {
-	if (identifier.empty()) {
-		return true;
-	}
-
-	auto connection = _pool->GetConnection();
-
-	if (connection == nullptr) {
-		return false;
-	}
-
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, connection]() {
-		_pool->ReturnConnection(connection);
-		});
-
-	return DistLock::GetInstance()->ReleaseLock(connection, lockName, identifier);
-}
 
 /**
  *
