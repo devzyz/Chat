@@ -30,8 +30,10 @@ class GitRulesTests(unittest.TestCase):
         self.assertEqual([], validate_message("docs(repo): document shutdown contracts"))
         self.assertEqual([], validate_message("refactor(verify): standardize adapter names and contracts"))
         self.assertEqual([], validate_message("fix(scripts): authenticate GitHub release asset requests"))
+        self.assertEqual([], validate_message("fix(chat): disambiguate the shared session fixture server header"))
         for message in ["fix(client): fix bugs", "chore(repo): update code", "docs(repo): update docs.",
-                        "fix(other): add tests", "fix(chat): 修复错误", "fix(chat): add " + "x" * 100]:
+                        "fix(other): add tests", "fix(chat): disambiguated server headers",
+                        "fix(chat): 修复错误", "fix(chat): add " + "x" * 100]:
             self.assertTrue(validate_message(message))
 
     def test_merge_requires_real_parents(self):
