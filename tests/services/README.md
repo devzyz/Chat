@@ -1,5 +1,14 @@
 # Disposable dependency coordinator and adapters (3C-02/04/06)
 
+The driver regression distinguishes a cleanly supervised nonzero application exit
+from failed teardown. Its wire rejection mode requires a successful login and full
+request write, then EOF/reset before any response bytes. Login failure, timeout,
+partial frame and successful business response cannot satisfy rejection evidence.
+`E03-XMSG-08` uses that mode because production `LogicSystem::Dispatch` closes
+forged-identity sessions before calling the message commit handler; it still checks
+that the forged UUID has no database row. This is distinct from handler-level
+`UnauthorizedSender` responses.
+
 ## Integration and business regression
 
 Linux client bundles now receive both the explicit Qt installation and the run-owned

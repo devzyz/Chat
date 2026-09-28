@@ -12,4 +12,4 @@ The focused selector is:
 ctest --test-dir build/windows-client/Release -R "tcp_transport" --output-on-failure
 ```
 
-The twelve cases are part of the 22-case `client_integration.xml` report and the 307-case thirteen-report regression manifest. The stale-generation identity mutation is owned by `Q04-TCP-11`; it fails when terminal identity is cleared before publication and passes only after restoring the production generation/flow snapshot.
+The twelve cases are part of `client_integration.xml`; current report and aggregate counts are maintained by `scripts/windows-local.ps1`. The stale-generation identity mutation is owned by `Q04-TCP-11`; it fails when terminal identity is cleared before publication and passes only after restoring the production generation/flow snapshot.

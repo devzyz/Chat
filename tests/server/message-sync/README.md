@@ -32,7 +32,8 @@ uses the existing deterministic fixture. This is real MySQL/TCP/gRPC evidence,
 not production Status/Redis or a full desktop E2E claim.
 
 MySQL results: `build/message-sync/mysql.xml`; TCP failures propagate as nonzero
-exit. These opt-in Integration cases are outside the thirteen-report quick CI lane.
+exit. These opt-in Integration cases are outside the quick CI aggregate defined by
+`scripts/windows-local.ps1`; current report counts are maintained there.
 
 ## Receipt extensions
 

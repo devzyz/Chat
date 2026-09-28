@@ -15,14 +15,18 @@ on:
         description: Cold-build latest stable Windows tools and approve after Windows checks (default branch only)
         type: boolean
         default: false
+      cold_linux:
+        description: Verify Linux dependency restoration without binary cache
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (github.event_name == 'push' && github.ref == 'refs/heads/develop' && 'develop-push') || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 jobs:
   toolchain:
@@ -55,7 +59,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.base_ref == 'master'
     uses: ./.github/workflows/linux-ci.yml
     with:
-      cold_build: ${{ needs.toolchain.outputs.refresh == 'true' }}
+      cold_build: ${{ github.event_name == 'workflow_dispatch' && inputs.cold_linux == true }}
 
   regression:
     name: Regression checks

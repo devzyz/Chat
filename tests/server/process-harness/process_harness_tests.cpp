@@ -10,6 +10,7 @@
 #include <chrono>
 #include <filesystem>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -75,6 +76,23 @@ TEST(T09_PROC_ProcessHarness, StartupExitRetainsBoundedOutputIdentityAndExitCode
 	EXPECT_NE(evidence.stderr_text.find("synthetic stderr"), std::string::npos);
 	EXPECT_LE(evidence.stdout_text.size(), 4096U);
 	EXPECT_LE(evidence.stderr_text.size(), 4096U);
+    auto racing = integration::ProcessHarness::Start(
+        *context, HelperSpec(*context, {L"--mode=exit", L"--exit-code=23"}));
+    bool first_probe = true;
+    const auto deadline = std::chrono::steady_clock::now() + 2s;
+    EXPECT_TRUE(racing->WaitReady(/** 把退出固定在首次探针返回旧结果之前，复现监督器的完成观察竞态。 */ [&] {
+        if (first_probe) {
+            first_probe = false;
+            while (!racing->CollectEvidence().exit_code.has_value() && std::chrono::steady_clock::now() < deadline) {
+                std::this_thread::yield();
+            }
+            return false;
+        }
+        return racing->CollectEvidence().exit_code.has_value();
+    }, deadline));
+    EXPECT_TRUE(racing->CollectEvidence().ready_probe_succeeded);
+    EXPECT_TRUE(racing->Stop(deadline).Complete());
+    EXPECT_FALSE(racing->CollectEvidence().escalated);
 }
 
 // T09-PROC-07

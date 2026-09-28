@@ -52,6 +52,10 @@ triplet so Debug builds remain available.
 three build/package jobs depend on the static configuration check, but are
 otherwise independent:
 
+For develop-only Markdown changes in root README.md, WINDOWS_BUILD.md or docs/,
+only the static job runs. Unknown or mixed changes retain all jobs; master,
+weekly and manual full runs always build. See [CI governance](tests/CI-GOVERNANCE.md).
+
 1. `static-check` validates the solution and MSBuild XML, the pinned manifest
    baseline, the repository triplets, and the absence of legacy ChatServer or
    static-triplet references in active build inputs.

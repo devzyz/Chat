@@ -8,6 +8,52 @@ const workflow = /** 读取指定工作流的 UTF-8 文本。 */ name => fs.read
 const ci = workflow('ci.yml');
 const job = /** 提取指定作业块用于路由与依赖合同断言。 */ (text, name) => text.split(`  ${name}:`)[1]?.split(/\r?\n  [\w-]+:/)[0];
 
+test('only PR and develop pushes cancel obsolete work', /** 验证快速运行可取消过时版本，发布、周检和手动运行保持独立。 */ () => {
+    const concurrency = ci.split('concurrency:')[1].split('jobs:')[0];
+    const cancel = new Function('github', `return ${concurrency.match(/cancel-in-progress: \$\{\{ (.+) \}\}/)[1]};`);
+    const group = new Function('github', 'format', `return ${concurrency.match(/group: ci-\$\{\{ (.+) \}\}/)[1]};`);
+    const format = /** 展开此工作流使用的单值组名格式。 */ (value, id) => value.replace('{0}', id);
+    for (const [event_name, ref, expected] of [
+        ['pull_request', 'refs/pull/7/merge', true], ['push', 'refs/heads/develop', true],
+        ['push', 'refs/heads/master', false], ['schedule', 'refs/heads/develop', false],
+        ['workflow_dispatch', 'refs/heads/develop', false]
+    ]) {
+        const event = { event_name, ref, event: { pull_request: { number: 7 } }, run_id: 1 };
+        assert.equal(cancel(event), expected);
+        assert.equal(group(event, format) === group({ ...event, run_id: 2 }, format), expected);
+    }
+});
+
+test('documentation builds skip only behind successful scope and static checks', /** 验证文档分流保留实际静态门禁和失败传播，其他路线仍构建。 */ () => {
+    const windows = workflow('windows-ci.yml');
+    assert.match(job(windows, 'static-check'), /docs_only: \$\{\{ steps\.scope\.outputs\.docs_only \}\}/);
+    assert.match(job(windows, 'static-check'), /run: node scripts\/ci\/ciScope\.js/);
+    assert.match(job(ci, 'windows'), /needs: toolchain/);
+    assert.doesNotMatch(job(windows, 'static-check'), /if:.*docs_only/);
+    for (const name of ['servers-release', 'client-release', 'varify-release']) {
+        assert.match(job(windows, name), /needs: static-check\s+if: needs\.static-check\.outputs\.docs_only != 'true'/);
+    }
+    assert.match(job(ci, 'regression'), /if: \$\{\{ always\(\) \}\}/);
+    assert.match(job(ci, 'regression'), /test "\$RESULT" = success/);
+});
+
+test('Linux cold restore is explicit and report validation still runs after upstream failure', /** 验证冷恢复与周检升级解耦，业务失败不阻止生成服务失败报告。 */ () => {
+    const condition = job(ci, 'linux').match(/cold_build: \$\{\{ (.+) \}\}/)[1];
+    const cold = new Function('github', 'inputs', `return ${condition};`);
+    assert.equal(cold({ event_name: 'schedule' }, { refresh_tools: true }), false);
+    assert.equal(cold({ event_name: 'workflow_dispatch' }, { refresh_tools: true }), false);
+    assert.equal(cold({ event_name: 'workflow_dispatch' }, { cold_linux: true }), true);
+    const downstream = job(workflow('linux-ci.yml'), 'downstream-contract');
+    const service = downstream.split('- name: Check service reports and cleanup')[1].split('- name:')[0];
+    const business = downstream.split('- name: Check business reports and cleanup')[1].split('- name:')[0];
+    assert.match(service, /if: \$\{\{ !cancelled\(\) \}\}/);
+    assert.match(service, /python3 tests\/services\/gate\.py/);
+    assert.doesNotMatch(service, /BUSINESS_RESULT/);
+    assert.match(business, /if: \$\{\{ !cancelled\(\) \}\}/);
+    assert.match(business, /test "\$BUSINESS_RESULT" = success/);
+    assert.match(business, /verify-service-reports\.js/);
+});
+
 test('develop uses quick regression; master, weekly and manual runs use full regression', /** 验证 develop 使用快速回归，master、每周及手动任务执行完整回归。 */ () => {
     const condition = job(ci, 'linux').match(/^    if: (.+)$/m)[1];
     const full = new Function('github', `return ${condition};`);

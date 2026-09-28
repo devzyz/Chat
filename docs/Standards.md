@@ -11,7 +11,7 @@
 - `scripts/`、`.github/workflows/`、MSBuild、CMake、vcpkg 和 triplet 配置。
 - 测试、示例配置、协议文件和发布脚本。
 
-第三方源码和工具生成文件不要求追溯整改，但不得手工修改来迁就业务需求。当前典型例子包括 `chat/packages/spdlog/` 和 `message.pb.*`、`message.grpc.pb.*`。
+第三方源码和工具生成文件不要求追溯整改，但不得手工修改来迁就业务需求。当前典型例子包括 `chat/packages/spdlog/` 和 `generated/proto/cpp/` 下由 `chat.proto`、`status.proto`、`varify.proto` 生成的 `*.pb.*`、`*.grpc.pb.*`。
 
 ## 约束级别
 

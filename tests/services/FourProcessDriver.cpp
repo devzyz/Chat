@@ -38,8 +38,8 @@ public:
         Run(/** 启动 TCP 连接并把结果交给统一完成回调。 */ [&](auto done) { socket_.async_connect(
             {boost::asio::ip::make_address("127.0.0.1"), port}, done); });
     }
-    /** 编码并发送请求帧，读取完整响应帧后返回解析结果。 */
-    Json::Value Request(int id, const Json::Value& body) {
+    /** 编码并发送完整请求；普通模式要求响应帧，拒绝模式仅接受零响应字节后的明确断开。 */
+    Json::Value Request(int id, const Json::Value& body, bool expect_disconnect = false) {
         const auto text = Json::writeString(Json::StreamWriterBuilder{}, body);
         Require(text.size() <= MAX_LENGTH);
         const auto header = ChatFrameCodec::EncodeHeader(id, static_cast<std::uint16_t>(text.size()));
@@ -47,8 +47,20 @@ public:
         Run(/** 异步写入完整请求字节，保持缓冲有效直到操作完成。 */ [&](auto done) { boost::asio::async_write(socket_, boost::asio::buffer(bytes),
             /** 将写入错误交给统一截止管理。 */ [done](auto error, auto) { done(error); }); });
         ChatFrameCodec::HeaderBytes response{};
-        Run(/** 异步读取固定大小响应帧头。 */ [&](auto done) { boost::asio::async_read(socket_, boost::asio::buffer(response),
-            /** 将帧头读取结果交给统一截止管理。 */ [done](auto error, auto) { done(error); }); });
+        std::size_t header_bytes = 0;
+        const auto header_error = Run(/** 异步读取响应帧头，保留字节数以拒绝截断帧。 */ [&](auto done) {
+            boost::asio::async_read(socket_, boost::asio::buffer(response),
+                /** 保存实际字节数并将读取结果交给统一截止管理。 */ [done, &header_bytes](auto error, auto bytes) {
+                    header_bytes = bytes; done(error);
+                });
+        }, expect_disconnect);
+        if (expect_disconnect) {
+            Require(header_bytes == 0 && (header_error == boost::asio::error::eof ||
+                header_error == boost::asio::error::connection_reset));
+            Json::Value rejected;
+            rejected["disconnected"] = true;
+            return rejected;
+        }
         const auto decoded = ChatFrameCodec::DecodeValidatedHeader(response.data(), MAX_LENGTH);
         Require(decoded && decoded->message_id == id + 1);
         std::string result(decoded->body_length, '\0');
@@ -57,15 +69,16 @@ public:
         return Parse(result);
     }
 private:
-    /** 为单次异步动作提供五秒期限，失败或超时均拒绝继续。 */
-    template<class Action> void Run(Action action) {
+    /** 为单次异步动作提供五秒期限；观察模式返回错误供调用方严格分类，默认失败即中止。 */
+    template<class Action> boost::system::error_code Run(Action action, bool observe_error = false) {
         io_.restart();
         boost::system::error_code result = boost::asio::error::timed_out;
         timer_.expires_after(5s);
         timer_.async_wait(/** 期限到达时关闭连接以结束未完成操作。 */ [&](auto error) { if (!error) { boost::system::error_code ignored; socket_.close(ignored); } });
         action(/** 保存动作结果并取消超时计时器。 */ [&](auto error) { result = error; timer_.cancel(); });
         io_.run();
-        Require(!result);
+        if (!observe_error) Require(!result);
+        return result;
     }
     boost::asio::io_context io_;
     boost::asio::ip::tcp::socket socket_;
@@ -89,7 +102,9 @@ int Chat() {
         for (const auto& request : input["requests"]) {
             const int id = request["id"].asInt();
             Require(id == MSG_CREATE_PRIVATE_CHAT_REQ || id == MSG_TEXT_CHAT_MSG_REQ || id == MSG_LOAD_CHAT_MESSAGE_REQ);
-            output["responses"].append(client.Request(id, request["body"]));
+            const bool expect_disconnect = request.get("expect_disconnect", false).asBool();
+            output["responses"].append(client.Request(id, request["body"], expect_disconnect));
+            if (expect_disconnect) break;
         }
     }
     // Login tokens and private account data never leave the helper.

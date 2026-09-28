@@ -9,7 +9,7 @@ ResourceServer HTTP、头像权限、用户目录和资源消息合同见 [Resou
 
 ## 范围
 
-本规范覆盖 `message.proto`、gRPC、GateServer HTTP、ChatServer TCP 包、Redis key/value 和 MySQL 持久化边界。它约束项目定义的契约，不测试或重写第三方库内部实现。
+本规范覆盖 `proto/chat.proto`、`proto/status.proto`、`proto/varify.proto`、gRPC、GateServer/ResourceServer HTTP、ChatServer TCP 包、Redis key/value 和 MySQL 持久化边界。它约束项目定义的契约，不测试或重写第三方库内部实现。
 
 ## protobuf
 
@@ -19,7 +19,7 @@ ResourceServer HTTP、头像权限、用户目录和资源消息合同见 [Resou
 - 新字段 SHOULD 为可选兼容扩展，并定义旧客户端未发送时的默认行为。
 - 命名使用清晰的 PascalCase message/service 和 lower_snake_case 字段。
 - 不得用数据库表的内部列顺序决定 proto 字段设计。
-- proto 修改 MUST 同步所有持有副本的服务；当前 GateServer、StatusServer、ChatServer 和 VarifyServer 均包含相关协议文件，禁止只更新单个消费者。
+- proto 修改 MUST 核对全部消费者并同步生成结果；GateServer、StatusServer、ChatServer、ResourceServer 和 VarifyServer 按 [proto README](../proto/README.md) 消费共享权威源，禁止创建服务内协议副本或只更新单个消费者。
 - 生成的 `.pb.cc/.pb.h`、`.grpc.pb.cc/.grpc.pb.h` MUST 由固定工具链生成，不得手工修改。
 - 生成结果和 proto 变更 SHOULD 在同一提交中完成，便于审核来源一致性。
 
@@ -125,6 +125,11 @@ Request 1027 adds `mode: "sync_v1"`, authenticated `uid`, `chat_id`, nonnegative
 Rows are ordered by increasing server ID; only IDs greater than `after_id` are returned. A page contains at most 50 rows and fits the complete encoded response. Only response 1028 permits a body up to 65535 bytes; other messages and client requests retain the 2048-byte bound. Legacy history keeps its existing serializer and fields. Old clients cannot consume large sync responses; update all ChatServer writers before deploying the new client.
 
 The client atomically commits a whole page and its cursor; ACKs/pushes never advance it. Existing committed local history is trusted. Synchronization and deployment details: [MessageStorage](MessageStorage.md).
+
+Explicit legacy history requests remain usable while MessageService is active. TcpMgr accepts
+one matching legacy response per requested chat in the current connection; unsolicited legacy
+responses are rejected. These pages update only the legacy model, never the persisted sync cursor.
+Responses carrying `request_id` belong to MessageService and do not complete legacy history commands.
 
 ## Private message receipts v1
 

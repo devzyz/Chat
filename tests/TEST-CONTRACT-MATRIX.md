@@ -51,10 +51,10 @@ not hosted acceptance; recovery, multipage history and compatibility remain open
 Phase 3D-00 client foundation adds `E03-CONTRACT-01..05`, registered as
 `session_driver.*` in [the client driver module](../chat/tests/session-driver/README.md).
 They execute real client processes and loopback production transports, under
-`client_integration.xml`: 28 Integration cases, 54 total client cases.
+`client_integration.xml`. Exact current client and aggregate counts are owned by
+`scripts/windows-local.ps1`.
 These results do not close G-016 or establish the real five-service topology.
-The registered aggregate becomes 13 reports / 347 cases; this registration
-does not mean all 347 cases were re-executed for this change.
+Registration does not mean that the aggregate was executed or passed.
 
 The cumulative Linux `3D-01` selector adds `E03-JOURNEY-01..07` in
 `linux_phase3d_journey.xml`: account failure isolation, cross-account Token
@@ -85,52 +85,57 @@ registration alone is not PASS evidence.
 
 ## 1. 统计口径
 
-当前公开 runner 注册 342 个 testcase：Server 226、Qt 49、VarifyServer 54、PowerShell 13。
-3C-04/06 在既有两份 Varify 报告新增 25 项（Unit +15、Integration +10），
-3C-05 新增 1 项 Server session principal Component、2 项 Qt pending/账号 Component 和
-1 项 Qt authenticated retry Integration，计数从 338 增至 342。
-报告集合仍为 13 份；注册数量不代表本轮执行了全量门禁。下方 313 等计数保留阶段历史。
+当前公开 runner 的执行注册、报告分组与期望数量以 `scripts/windows-local.ps1` 为唯一来源。
+本矩阵维护业务 Test ID、覆盖范围和依赖边界，不再维护全仓总数的阶段增量账本。
 
 Test ID 表示被保护的 Interface 合同，runner testcase 表示测试框架实际报告的用例。二者不必一一对应：例如 Qt `network_state_tests` 是一个 runner testcase，但同时保护拆分 header、拆分 body 和相邻 frame 三个合同。覆盖率、testcase 数量和合同数量必须分别报告，不能相互替代。
 
-上述 342 个 testcase 属于 `develop` 快速门禁；`master` 和 release 继承它们。
-新增 hosted Redis/SMTP、SchemaMigration 和 MessageCommit 报告单独统计，不计入这 342 项；
-真实数据库迁移/事务的执行证据与四服务业务 E2E 分开，注册不代表 hosted 验收完成。
+Windows 快速回归及 Linux 全量运行时机以 [CI 治理](CI-GOVERNANCE.md) 为准。
+hosted Redis/SMTP、SchemaMigration、MessageCommit 和业务 E2E 单独报告；
+资源与消息同步的 opt-in 入口不因存在于仓库就被计为全量 CI 已执行。
+
+<details>
+<summary>阶段引入时的数量与证据（历史口径）</summary>
+
+以下只保留原阶段记录，不是当前执行数量、远端结果或下一步要求。
 
 Plan 2.5-07 的历史本地证据为 12 份报告 / 173 testcase。Plan 3A-01 在同一报告集合中新增
 7 个 `LogicDispatcherTests` runner testcase；focused 7/7 与完整 `server_unit.xml` 60/60
 均已通过，manifest 因此增至 12 份报告 / 180 testcase。Plan 3A-02 又在同一报告集合中增加
-8 个 Unit 与 6 个 Component case，当前 manifest
-因此为 12 份报告 / 194 testcase。Plan 3A-03 再增加 10 个 Chat session Component case，当前 manifest
-为 12 份报告 / 204 testcase。Plan 3A-04 再增加 16 个 Gate request Component case，当前 manifest
-为 12 份报告 / 220 testcase。Plan 3A-05 再增加 11 个 Qt Unit 与 1 个 Qt Component case，当前 manifest
+8 个 Unit 与 6 个 Component case，当时 manifest
+因此为 12 份报告 / 194 testcase。Plan 3A-03 再增加 10 个 Chat session Component case，当时 manifest
+为 12 份报告 / 204 testcase。Plan 3A-04 再增加 16 个 Gate request Component case，当时 manifest
+为 12 份报告 / 220 testcase。Plan 3A-05 再增加 11 个 Qt Unit 与 1 个 Qt Component case，当时 manifest
 为 12 份报告 / 232 testcase。Plan 3B-00 在既有 `server_integration.xml` 中增加 6 个 T09-HOST contract case，manifest 因此增至 12 份报告 / 238 testcase。Plan 3B-01 再增加 12 个 T09-PROC contract case，manifest 为 12 份报告 / 250 testcase。Plan 3B-02 增加 7 个 T09-GHTTP 与 10 个 Q04-HTTP case，并首次生成 `client_integration.xml`，manifest 为 13 份报告 / 267 testcase。Plan 3B-03 再增加 12 个 T09-SGRPC case，manifest 为 13 份报告 / 279 testcase。Plan 3B-04 增加 16 个 T09-CTCP 与 12 个 Q04-TCP case，manifest 为 13 份报告 / 307 testcase。Plan 3B-05 增加 6 个 actual T09-COMP case，本地 manifest 为 13 份报告 / 313 testcase。完整 `RunAllTests`、clean PR、远端 artifact 和 `develop`
-branch protection 仍必须由 3A-06/实际 GitHub check 证明。
+branch protection 在该记录时仍需由 3A-06/实际 GitHub check 证明；当前状态见 docs/Status.md。
+
+</details>
 
 ## 2. Suite 与报告
 
-| Suite | Module | Domain | Current Level | Testcases | Report | 当前依赖 | Lane |
-| --- | --- | --- | --- | ---: | --- | --- | --- |
-| Server unit | config、messaging、transport、protocol、rpc、Chat lifecycle/logic dispatcher、Status selection | Foundation/Architecture/Business | Unit | 68 | `server_unit.xml` | in-process；临时文件；旧 wire fixture | develop required |
-| Gate Asio | Gate lifecycle | Foundation | Unit | 2 | `server_gate_unit.xml` | in-process thread/io_context | develop required |
-| Status Asio | Status lifecycle | Foundation | Unit | 2 | `server_status_unit.xml` | in-process thread/io_context | develop required |
-| Server component | Chat Redis pool/session state/principal、Gate response/request、Status token/store | Foundation/Architecture/Business | Component | 57 | `server_component.xml` | in-process fake；不连接 Redis/MySQL/Status/Varify | develop required |
-| Server integration | Chat/Gate/Status startup、C++→Node Varify、Gate gRPC clients、IntegrationHost composition、run-owned process harness、Gate Beast HTTP、Status gRPC、Chat TCP、formal production composition | Architecture | Integration | 106 | `server_integration.xml` | 受控子进程、动态 loopback 端口、run-owned temp、in-memory Adapter；Chat real-ready 留在 G-015/3C | develop required |
-| Chat gRPC integration | Chat production gRPC clients | Architecture | Integration | 4 | `server_chat_grpc_integration.xml` | 动态 loopback 端口、无外部服务 | develop required |
-| Qt unit | frame decoder、message model rules Q01-MODEL-01..06、auth outcomes Q03-AUTH-01..11 | Foundation/Architecture/Business | Unit | 18 | `client_unit.xml` | Qt Core/Widgets minimal，无 socket | develop required |
-| Qt component | message store/delegate Q01-MODEL-07..08、session reset/pending Q02-SESSION-01..08、auth reset wiring Q03-AUTH-12 | Architecture/Business | Component | 8 | `client_component.xml` | Qt Widgets/Network minimal；真实 in-process Module，无连接 | develop required |
-| Qt HTTP integration | production GateHttpTransport Q04-HTTP-01..10 | Architecture/Business | Integration | 10 | `client_integration.xml` | Qt QNetworkAccessManager、动态 numeric loopback、无公网 | develop required |
-| Qt TCP integration | production ChatTcpTransport Q04-TCP-01..12 | Architecture/Business | Integration | 12 | `client_integration.xml` | real QTcpSocket、动态 numeric loopback、无公网 | develop required |
-| Qt authenticated retry integration | session reset/retry Q02-SESSION-09 | Architecture/Business | Integration | 1 | `client_integration.xml` | real QTcpSocket、动态 loopback；认证后保留原 UUID 重试 | develop required |
-| Varify unit | protocol、handler、fake startup、Redis/SMTP adapters | Foundation/Business/Architecture | Unit | 33 | `varify_unit.xml` | in-process fake；descriptor/fixture | develop required |
-| Varify integration | config、loopback RPC、process startup、Redis/SMTP bounded faults | Foundation/Architecture | Integration | 21 | `varify_integration.xml` | 子进程或动态 loopback | develop required |
-| Script component | instance validation | Architecture | Component | 9 | `script_component.xml` | 临时目录、占位进程 | develop required |
-| Script integration | instance lifecycle | Architecture | Integration | 4 | `script_integration.xml` | 受控子进程/PID identity | develop required |
-| **合计** |  |  |  | **342** | 13 份报告 | 无个人服务或凭据；保留 12/232 floor |  |
+下表列出报告职责；执行数量和 develop 纯文档豁免以 runner 与 CI 治理为准。
 
-PowerShell 报告逐项输出 13 个 testcase：validation 9 个、lifecycle 4 个；控制台同步保留逐 Test ID 的 PASS/FAIL。该报告粒度改进不改变本表的逻辑基线数量。
+| Suite | 主要合同 | Level | Report |
+| --- | --- | --- | --- |
+| Server unit | config、codec、dispatcher、Status selection、连接池与消息/回执规则 | Unit | `server_unit.xml` |
+| Gate Asio | Gate 生命周期 | Unit | `server_gate_unit.xml` |
+| Status Asio | Status 生命周期 | Unit | `server_status_unit.xml` |
+| Server component | session、Gate request/response、Status store、Redis 回复 | Component | `server_component.xml` |
+| Server integration | CLI/config/ready/stop、loopback transport、process harness、production composition | Integration | `server_integration.xml` |
+| Chat gRPC | 生产客户端与动态 loopback | Integration | `server_chat_grpc_integration.xml` |
+| Resource storage | 临时文件、续传、摘要和路径验证 | Integration | `server_resource_integration.xml` |
+| Qt unit | frame/model/auth 及头像规则 | Unit | `client_unit.xml` |
+| Qt component | 模型/展示、会话、头像及 SQLite 持久化 | Component | `client_component.xml` |
+| Qt integration | HTTP/TCP、认证重试和 session driver | Integration | `client_integration.xml` |
+| Varify unit | protocol、handler、fake startup、Redis/SMTP adapter | Unit | `varify_unit.xml` |
+| Varify integration | config、loopback RPC、进程及有界依赖故障 | Integration | `varify_integration.xml` |
+| Script validation | 实例配置验证 | Component | `script_component.xml` |
+| Script lifecycle | 受控进程与身份清理 | Integration | `script_integration.xml` |
 
-## 3. Server testcase 目录（226）
+以下模块目录记录 Test ID 与合同；后续资源、存储和回执扩展见本页对应节。
+业务合同数与 runner testcase 数可能不同，不用章节标题推算当前总量。
+
+## 3. Server testcase 目录
 
 ### 3.1 Chat ConfigMgr（17）
 
@@ -476,7 +481,7 @@ Domain/Level：Architecture / Integration。
 
 冻结的 `T09-COMP-07..08` 保留为 structure-only planned identifiers；它们不对应 fabricated JUnit case，也不计入 313 baseline。
 
-## 4. Qt testcase 目录（49）
+## 4. Qt testcase 目录
 
 ### 4.1 Frame decoder（1 runner testcase / 4 contracts）
 
@@ -582,7 +587,7 @@ Domain/Level：Architecture/Business / Integration。
 
 Qt runner testcase 合计 46：Unit 18、Component 6、Integration 22。
 
-## 5. VarifyServer testcase 目录（29）
+## 5. VarifyServer testcase 目录
 
 ### 5.1 Configuration process（9）
 
@@ -658,7 +663,7 @@ Domain：Architecture。
 | V07-START-03 | Unit | `successful bind starts once and exposes the actual bound port` | 成功 bind 只 start 一次并返回实际端口 |
 | V07-START-04 | Integration | `direct process exits with a failure status when its port is occupied` | 固定端口冲突时直接进程非零退出且不泄密 |
 
-## 6. PowerShell testcase 目录（13）
+## 6. PowerShell testcase 目录
 
 ### 6.1 Instance validation（9）
 
@@ -718,7 +723,9 @@ Release 计划已被替代，旧审批、bootstrap 与 admission 规则不再适
 
 ### Phase 3B planned contract registry
 
-The following identifiers are frozen by [`PHASE-3B-TEST-PLAN.md`](plans/PHASE-3B-TEST-PLAN.md). T09-HOST contributes six emitted cases, T09-PROC contributes twelve, Plan 3B-02 contributes seven T09-GHTTP plus ten Q04-HTTP cases, Plan 3B-03 contributes twelve T09-SGRPC cases, Plan 3B-04 contributes sixteen T09-CTCP plus twelve Q04-TCP cases, and Plan 3B-05 contributes six actual T09-COMP cases to the current 13-report/313-case local baseline. T09-COMP-07..08 remain planned-only and contribute zero; remote closeout evidence remains pending.
+下表的 local complete/remote pending 和引入时数量保留原阶段快照；当前执行结果只见 Status，不能用历史 pending 判定今日状态。
+
+The following identifiers originate in [`PHASE-3B-TEST-PLAN.md`](plans/PHASE-3B-TEST-PLAN.md). T09-HOST contributes six emitted cases, T09-PROC contributes twelve, Plan 3B-02 contributes seven T09-GHTTP plus ten Q04-HTTP cases, Plan 3B-03 contributes twelve T09-SGRPC cases, Plan 3B-04 contributes sixteen T09-CTCP plus twelve Q04-TCP cases, and Plan 3B-05 contributes six actual T09-COMP cases. Current aggregate counts are maintained by `scripts/windows-local.ps1`; T09-COMP-07..08 remain planned-only and contribute zero. Actual validation status is maintained in [Status](../docs/Status.md).
 
 | Plan | Planned Test IDs | Domain / Level | Planned report owner | Current state |
 | --- | --- | --- | --- | --- |
@@ -734,7 +741,7 @@ The following identifiers are frozen by [`PHASE-3B-TEST-PLAN.md`](plans/PHASE-3B
 
 3A-05 的 production library、Module README、非空测试源、真实 CMake/runner registration 与 production Adapter 接线均已落地。
 
-| Gap ID | Module / Interface | 当前风险 | 目标 Level | 计划归属 | 目标 lane |
+| Gap ID | Module / Interface | 当前实现与证据边界 | 目标 Level | 计划归属 | 目标 lane |
 | --- | --- | --- | --- | --- | --- |
 | G-001 | Gate/Status CLI 与 Config | 已由 Plan 2.5-04 关闭：真实 EXE CLI/config/bind/ready/stop，15 秒 startup、5 秒 stop 与 scoped PID cleanup | Integration | Phase 2.5-04 complete | develop |
 | G-002 | 跨服务 protobuf | 已由 Plan 2.5-02 关闭：canonical Module、初始 descriptor、旧 wire fixture、生成漂移与 C++→Node loopback | Unit/Integration | Phase 2.5-02 complete | develop |
@@ -743,17 +750,17 @@ The following identifiers are frozen by [`PHASE-3B-TEST-PLAN.md`](plans/PHASE-3B
 | G-005 | Qt connection/session reset | 已由 Plan 2.5-06 关闭：decoder/reconnect reset、pending batch、账号 transient state、owned 页面/MessageModelStore 销毁、幂等与关闭分类 | Unit/Component | Phase 2.5-06 complete | develop |
 | G-006 | PowerShell JUnit | 已由 Plan 2.5-01 关闭：13 个逻辑用例逐 Test ID 呈现 | reporting | Phase 2.5-01 complete | develop |
 | G-007 | Chat Logic dispatcher | Phase 3A-01 已关闭：FIFO、多 producer exactly-once、精确容量、wake/drain/closed/幂等 Stop 与未知 ID 脱敏诊断 | Unit | Phase 3A-01 complete | develop |
-| G-008 | Chat CSession/session registry | 3A in-memory identity、FIFO、容量、并发/旧 session close 已关闭；真实 TCP partial write/peer disconnect 与 Redis presence integration 仍未证明 | Component/Integration | Phase 3A-03 in-memory part complete → [3B §11 / 3B-04；§12 / 3B-05](plans/PHASE-3B-PLAN.md) → Phase 3C Redis Integration | develop |
-| G-009 | Gate request Module | 3A in-process 注册/登录/重置顺序、早退和依赖失败已保护；真实 HTTP 组合及 Redis/MySQL/gRPC/SMTP Adapter 仍未证明 | Component/Integration | Phase 3A-04 in-process part complete → [3B §9 / 3B-02；§12 / 3B-05](plans/PHASE-3B-PLAN.md) → Phase 3C real Adapters | develop |
-| G-010 | Status selector/token | Phase 3A-02 已保护空列表、确定性选择和 token fail-closed；真实 Redis 与 process 组合仍未证明 | Unit/Component/Integration | Phase 3A-02 complete → [3B §10 / 3B-03；§12 / 3B-05](plans/PHASE-3B-PLAN.md) → Phase 3C Redis Integration | develop |
-| G-011 | Qt UserMgr/TcpMgr/HttpMgr/UI state | 3A synthetic outcome/state、duplicate/late 与 abnormal reset wiring 已保护；真实 HTTP/TCP transport timing 未证明 | Unit/Component/Integration | Phase 3A-05 outcome/state part complete → [3B §9 / 3B-02；§11 / 3B-04；§12 / 3B-05](plans/PHASE-3B-PLAN.md) | develop |
-| G-012 | Redis Adapters | 真实命令、断线、锁和 TTL 未证明 | Integration | [3C §11 / 3C-02；§13 / 3C-04；§16 / 3C-07；§18 / 3C-09](plans/PHASE-3C-PLAN.md) | master |
-| G-013 | MySQL Adapters | 无可重复 schema/migration/事务测试 | Integration | [3C §11 / 3C-02；§12 / 3C-03；§14 / 3C-05；§16 / 3C-07；§18 / 3C-09](plans/PHASE-3C-PLAN.md) | master |
-| G-014 | SMTP Adapter | 真实发送参数和错误映射未证明 | Integration | [3C §11 / 3C-02；§15 / 3C-06；§16 / 3C-07；§18 / 3C-09](plans/PHASE-3C-PLAN.md) | master |
-| G-015 | 四进程生命周期 | run-owned process/port/temp/deadline 与 Gate/Status 单进程 ready/stop 已覆盖；四发布单元依赖编排、共享状态与业务恢复仍未证明 | Integration | [3B §8 / 3B-01；§10 / 3B-03；§11 / 3B-04；§12 / 3B-05](plans/PHASE-3B-PLAN.md) → [3C §9 / 3C-00；§10 / 3C-01；§11 / 3C-02；§16 / 3C-07；§18 / 3C-09](plans/PHASE-3C-PLAN.md) | master |
-| G-016 | 双 ChatServer 业务流 | 跨实例好友/消息/重连/历史没有公开 E2E | E2E | [3C §14 / 3C-05（持久化前置）](plans/PHASE-3C-PLAN.md) → [3D §9..12 / 3D-00..03；§14 / 3D-05（current-N owner）](plans/PHASE-3D-PLAN.md) | master/release |
+| G-008 | Chat CSession/session registry | 已有 session/真实 TCP transport 回归；Redis adapter 与多进程测试另有入口，实例异常退出租约仍需补齐 | Component/Integration | Phase 3A-03 in-memory part complete → [3B §11 / 3B-04；§12 / 3B-05](plans/PHASE-3B-PLAN.md) → Phase 3C Redis Integration | develop |
+| G-009 | Gate request Module | 已有 in-process 编排、真实 HTTP 和生产组合测试；依赖与完整流程见 services 入口，认证强化不由已有顺序测试替代 | Component/Integration | Phase 3A-04 in-process part complete → [3B §9 / 3B-02；§12 / 3B-05](plans/PHASE-3B-PLAN.md) → Phase 3C real Adapters | develop |
+| G-010 | Status selector/token | 已有确定性选服/Token 及真实 gRPC 测试；实例租约、Token 有效期和撤销仍需补齐 | Unit/Component/Integration | Phase 3A-02 complete → [3B §10 / 3B-03；§12 / 3B-05](plans/PHASE-3B-PLAN.md) → Phase 3C Redis Integration | develop |
+| G-011 | Qt UserMgr/TcpMgr/HttpMgr/UI state | 已有真实 HTTP/TCP transport、账号 SQLite 及回执控件测试；完整人工桌面流程仍需独立验收 | Unit/Component/Integration | Phase 3A-05 outcome/state part complete → [3B §9 / 3B-02；§11 / 3B-04；§12 / 3B-05](plans/PHASE-3B-PLAN.md) | develop |
+| G-012 | Redis Adapters | 已有真实 Redis 命令、故障及生命周期注册；具体场景见 services 和 data README，注册不等于本轮通过 | Integration | [3C §11 / 3C-02；§13 / 3C-04；§16 / 3C-07；§18 / 3C-09](plans/PHASE-3C-PLAN.md) | master |
+| G-013 | MySQL Adapters | 已有真实 schema/migration/事务测试；资源和同步扩展含 opt-in 入口，执行边界见所属 README | Integration | [3C §11 / 3C-02；§12 / 3C-03；§14 / 3C-05；§16 / 3C-07；§18 / 3C-09](plans/PHASE-3C-PLAN.md) | master |
+| G-014 | SMTP Adapter | 已有 Mailpit SMTP adapter 场景及错误映射测试；实际运行结果见 Status | Integration | [3C §11 / 3C-02；§15 / 3C-06；§16 / 3C-07；§18 / 3C-09](plans/PHASE-3C-PLAN.md) | master |
+| G-015 | 四进程生命周期 | 已有四生产进程启动/关闭测试；已记录端口占用场景清理失败，仍需按当前提交复现 | Integration | [3B §8 / 3B-01；§10 / 3B-03；§11 / 3B-04；§12 / 3B-05](plans/PHASE-3B-PLAN.md) → [3C §9 / 3C-00；§10 / 3C-01；§11 / 3C-02；§16 / 3C-07；§18 / 3C-09](plans/PHASE-3C-PLAN.md) | master |
+| G-016 | 双 ChatServer 业务流 | 已有跨实例好友/消息/重连/历史 E2E；已记录伪造发送方断言失败，资源和回执全真实依赖范围仍需补齐 | E2E | [3C §14 / 3C-05（持久化前置）](plans/PHASE-3C-PLAN.md) → [3D §9..12 / 3D-00..03；§14 / 3D-05（current-N owner）](plans/PHASE-3D-PLAN.md) | master/release |
 | G-017 | 版本兼容 | 真实 N/N-1 矩阵暂缓；旧 bootstrap 入口已退役 | Compatibility | [兼容性范围](compatibility/README.md)；当前策略见 [CI 治理](CI-GOVERNANCE.md) | 暂缓，不阻断发布 |
-| G-018 | 发布包 | 组包、同包冒烟、上传回验已实现；首次实际发布仍待验收，人工审批方案已取消 | Release | [发布包验证](release/contracts/README.md)；实际证据见 [Status](../docs/Status.md) | master push |
+| G-018 | 发布包 | 组包、同包冒烟、上传回验已实现；首次正式发布结果本轮未核实，历史记录不作当前断言 | Release | [发布包验证](release/contracts/README.md)；实际证据见 [Status](../docs/Status.md) | master push |
 
 ### Current report aggregation and deferred compatibility
 
@@ -762,7 +769,7 @@ G-017 的真实跨版本验证仍暂缓，不记为通过，也不阻断当前�
 范围与保留的协议/schema 测试见 [兼容性说明](compatibility/README.md)。
 
 3C-09 从 `tests/services/serviceReports.js` 实际注册产生 `phase3c-reports.json`，并由
-[aggregate gate](services/README.md#current-n-evidence-gate-3c-09) 检查同 SHA 的 JUnit、摘要和清理。
+[aggregate gate](services/README.md#integration-and-business-regression) 检查同 SHA 的 JUnit、摘要和清理。
 仅登记真实报告聚合断言，不为填满 CLOSE 范围创建占位用例。`currentNPass` 反映本轮服务报告，
 不再产生或消费旧 `releaseEligible` 字段。发布由父工作流的全量成功依赖及包冒烟决定。
 具体报告和用例数以实际 manifest 为准，状态与远端证据由 `docs/Status.md` 维护。
@@ -813,7 +820,7 @@ SchemaMigration has 12 cases; MessageCommit has 20. They use the same versioned
 SQL and owned hosted MySQL service. The native MessageCommit executable links the
 production library and connects through its C++ driver to the mapped TCP port;
 the migration helper's mysql CLI is not itself native DAO proof. Both groups are
-additional reports and do not alter the thirteen-report/342-case Windows count.
+additional reports outside the Windows aggregate defined by `scripts/windows-local.ps1`.
 No promoted N-1 is supplied: `BOOTSTRAP_NO_PROMOTED_N_MINUS_1` remains a compatibility
 gap; importing historical DDL or rebuilding a disposable empty database is not an
 N-1 upgrade result. Local MySQL 8.0 evidence does not substitute for hosted 8.4
@@ -823,9 +830,8 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 ## 头像与资源整合注册（2026-09-19）
 
 `Q04-AVATAR-01..10` 由 [头像测试](../chat/tests/local-avatar/README.md) 逐项定义；
-在最新 develop 的 18 Unit / 8 Component / 28 Integration 基线上新增 6 Unit、4 Component，
-客户端报告变为 24 / 12 / 28，Windows 聚合注册为 13 份报告、357 项。
-这只是注册数量，不代表本次执行了全仓 357 项。下文阶段数量保留其历史口径。
+它们已注册到客户端所属报告，实际报告分组和数量由 `scripts/windows-local.ps1` 维护。
+此处记录业务覆盖，不把注册成功记为全仓执行通过；历史执行证据见 [Status](../docs/Status.md) 的归档入口。
 
 ### 资源扩展合同与 CI 边界
 
@@ -862,11 +868,11 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 
 ## Local message synchronization
 
-Q05-STORE-01..07 are mapped in [message-storage](../chat/tests/message-storage/README.md), aggregated as one component CTest case. Client Component increases from 12 to 13; the thirteen-report registration increases from 357 to 358. Other lane counts stay unchanged.
+Q05-STORE-01..07 are mapped in [message-storage](../chat/tests/message-storage/README.md), aggregated as one component CTest case. Current report groups and counts are owned by `scripts/windows-local.ps1`.
 
 S06-SYNC-01..05 are opt-in real MySQL / production ChatServer / Qt-SQLite contracts in [message-sync](server/message-sync/README.md), outside that aggregate. Local conflict rollback, original-ID retry, ordered commit/cursor behavior and process restart are covered; production Status/Redis and full GUI workflows are not claimed.
 
-Session FSM adaptation to current develop: the current runner manifest is 13 reports / 371 cases, including 239 Server cases. Historical baselines above remain historical evidence.
+Session FSM contracts remain part of their owning Server/Qt suites. Registration and report integrity are checked by the public runner; execution evidence belongs to [Status](../docs/Status.md).
 
 ## Message state control (2026-09-23)
 

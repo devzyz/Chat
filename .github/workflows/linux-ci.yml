@@ -70,7 +70,7 @@ jobs:
           host: linux
           target: desktop
           arch: gcc_64
-          cache: false
+          cache: true
 
       - name: Check out repository-pinned vcpkg
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -442,14 +442,19 @@ jobs:
         with:
           name: phase3d-contract-evidence
           path: out/phase3d/contracts
-      - name: Check all reports and cleanup
+      - name: Check service reports and cleanup
+        if: ${{ !cancelled() }}
         env:
           SOURCE_SHA: ${{ github.sha }}
           CHAT_JOB_RESULTS: '{"linux-preflight":"${{ needs.linux-preflight.result }}","posix-process-contracts":"${{ needs.posix-process-contracts.result }}","disposable-services":"${{ needs.disposable-services.result }}"}'
+        run: python3 tests/services/gate.py --services out/phase3c/services --output out/phase3c/gate --source-sha "$SOURCE_SHA" --jobs "$CHAT_JOB_RESULTS"
+      - name: Check business reports and cleanup
+        if: ${{ !cancelled() }}
+        env:
+          SOURCE_SHA: ${{ github.sha }}
           BUSINESS_RESULT: ${{ needs.two-server-contract.result }}
         run: |
           test "$BUSINESS_RESULT" = success
-          python3 tests/services/gate.py --services out/phase3c/services --output out/phase3c/gate --source-sha "$SOURCE_SHA" --jobs "$CHAT_JOB_RESULTS"
           node scripts/ci/verify-service-reports.js out/phase3d/contracts "$SOURCE_SHA"
       - name: Upload report validation
         if: always()

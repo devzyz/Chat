@@ -4,6 +4,11 @@ This module owns deterministic resources for Phase 3B process and transport inte
 
 The process tests never adopt an existing directory or PID, delete outside the run root, use a fixed shared port, or wait with a fixed sleep. Primary failures and cleanup failures remain separate so teardown cannot hide the reason a scenario failed.
 
+Completion probes receive one final observation after the adapter detects exit.
+The Windows startup-exit case and POSIX harness case deterministically put an exit
+between a stale probe result and the liveness check. A permanently false readiness
+probe must still fail; exit alone is not protocol readiness.
+
 ## Stable contracts
 
 - `T09-PROC-01..05`: run identity, ports, temp ownership, deadline and reverse teardown.

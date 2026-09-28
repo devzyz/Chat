@@ -16,15 +16,24 @@
 | master push | 实际合并 SHA 的全量检查、Windows 包启动冒烟 | 成功后自动发布 |
 | workflow_dispatch | 所选分支全量检查 | 否 |
 
+develop PR/push 若完整变更范围仅包含根目录 `README.md`、`WINDOWS_BUILD.md` 或 `docs/**/*.md`，
+只运行既有 Windows 静态检查，不恢复原生工具链快照、不编译应用。范围判断复用静态作业已有的 Git 历史；混合改动、未知路径、空差异或无法取得
+比较提交均保留正常回归；PR 比较整个分支差异，不只看最后一条提交。master、周检和手动运行不使用文档豁免。
+`Regression checks` 仍要求 Windows 工作流成功，静态检查失败不能放行。PR 元数据编辑仍复查，
+不使用独立的轻量成功结果覆盖代码回归。PR 和 develop push 取消各自过时运行；master、周检和手动运行不互相取消。
+
 GitHub schedule 使用默认分支，可能延迟。默认分支须配置为 develop。
 develop Required Check 为 `Regression checks`；master 为 `Regression checks` 和 `Full regression checks`。
-两者都是汇总真实 job 结果，失败或 skipped 不算通过。master 禁止直接推送、强推和删除，不要求人工审批。
+两者都是汇总真实 job 结果，失败或非预期 skipped 不算通过；只有上述明确的 develop 纯文档范围允许跳过应用构建。
+master 禁止直接推送、强推和删除，不要求人工审批。
 切换保护检查须在新工作流出现并验证后完成，避免只改名称导致合并失去保护或永久等待。
 
 ### 1.1 工具链维护周期
 
 日常 PR、push 和普通手动运行使用已验证的 Windows 工具链版本；每周在默认分支获取
-最新稳定 PowerShell/CMake/Ninja，以及 runner 提供的最新 MSVC 2022/SDK，执行双平台冷构建和完整回归。
+最新稳定 PowerShell/CMake/Ninja，以及 runner 提供的最新 MSVC 2022/SDK，执行 Windows 冷构建和双平台完整回归。
+Linux 正常复用经 ABI 校验的二进制依赖缓存；需要验证冷恢复时，手动运行显式选择 `cold_linux=true`。
+Qt 安装缓存只复用固定版本工具，业务源码仍重新构建和测试。
 只有四个 Windows 作业全部成功且依赖缓存已保存，才批准新的不可变 Windows 工具链记录供日常 CI 选择。
 Linux 失败不否定 Windows 工具链验证，但 `Full regression checks` 与发布仍必须双平台成功。
 选择器逐一核对默认分支刷新运行中的四个 Windows 作业，可恢复旧版因 Linux 失败而未发布批准工件的候选记录；
@@ -112,7 +121,8 @@ develop PR/push 保留所有测试及报告上传，不生成或上传应用 ZIP
 3. 新 Windows runner 下载并解压候选包，在源码目录之外验证文件、程序加载、启动和清理。
 4. 创建或继续同 SHA 的未发布草稿，上传同一个 ZIP，再下载核对字节后公开 Release。
 
-Windows 冒烟不提供真实 MySQL/Redis；完整业务由同 SHA 的 Linux 真实依赖 E2E 验证。
+Windows 冒烟仅为 ResourceServer 启动临时 MySQL，先核验服务端及客户端为 MySQL 8，缺失时失败；
+不提供真实 Redis。完整业务由同 SHA 的 Linux 真实依赖 E2E 验证。
 不将包启动冒烟称为 Windows 真实数据库端到端验证。
 未发布构建允许重试，不占用版本或源码；已发布版本和文件不覆盖，需要新的 VERSION。
 定时、PR、手动全量检查均不发布。N-1 完整矩阵暂缓，已有协议和 schema 迁移回归继续运行。

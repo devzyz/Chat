@@ -12,6 +12,6 @@ The focused selector is:
 ctest --test-dir build/windows-client/Release -R "http_transport" --output-on-failure
 ```
 
-All ten cases are emitted to `client_integration.xml`. Together with seven new Server Integration cases, Plan 3B-02 raises `server_integration.xml` to 59 cases, Server to 191, Qt to 34, and the complete manifest to 13 reports / 267 cases.
+All ten cases are emitted to `client_integration.xml`. Current client, Server and aggregate report counts are maintained by `scripts/windows-local.ps1`; the introduction of these cases in Plan 3B-02 does not define today's totals.
 
 The meaningful Task 2 mutation emitted a second terminal completion. `explicitCancelHasExactlyOneTerminalOutcome` failed with two results instead of one, and the restored SHA-256 for `gatehttptransport.cpp` is `1C893D108A2DB0514E951C0363DCFB824CEF044A116BEACF72FAD93FEB9AD6AC`.
