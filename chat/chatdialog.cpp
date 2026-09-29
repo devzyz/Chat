@@ -19,7 +19,7 @@
 
 ChatDialog::ChatDialog(QWidget *parent)
     : QDialog(parent), _mode(ChatUIMode::ChatMode), _state(ChatUIMode::ChatMode)
-    , ui(new Ui::ChatDialog), _b_chat_loading(false), _b_contact_loading(false), _cur_chat_id(0)
+    , ui(new Ui::ChatDialog), _b_chat_loading(false), _cur_chat_id(0)
 {
     ui->setupUi(this);
 
@@ -123,9 +123,6 @@ ChatDialog::ChatDialog(QWidget *parent)
     connect(TcpMgr::instance().get(), &TcpMgr::friendApplicationReceived,
             this, &ChatDialog::tcpAddFriendApply);
 
-    // 连接认证添加好友信号
-    connect(TcpMgr::instance().get(), &TcpMgr::friendChatAdded,
-            this, &ChatDialog::tcpAddChatList);
 
     // 连接搜索到好友后，跳转到与该好友的聊天界面的信号
     connect(ui->search_list, &SearchList::chatRequested, this, &ChatDialog::fromSearchJumpChatItem);
@@ -178,8 +175,36 @@ ChatDialog::ChatDialog(QWidget *parent)
     connect(TcpMgr::instance().get(), &TcpMgr::chatMessagesReceived,
             this, &ChatDialog::updateTextChatMsg);
 
-    // 连接增量加载聊天列表完成
-    connect(TcpMgr::instance().get(), &TcpMgr::chatListLoaded, this, &ChatDialog::tcpLoadChatFinish);
+    connect(messages, &MessageService::directoryPageLoaded, this,
+        /** @brief 展示 SQLite 会话页，界面游标与网络同步游标独立。 */
+        [this](const QString &kind, int after, const QJsonArray &rows, bool more) {
+            if (kind != "conversations" || after != _chatCursor) return;
+            QJsonArray chats;
+            for (const auto &value : rows) chats.append(QJsonObject{{"chat_id", value.toObject()["id"]}});
+            tcpLoadChatFinish(chats);
+            if (!rows.isEmpty()) _chatCursor = rows.last().toObject()["id"].toInt();
+            _hasMoreChats = more;
+            _b_chat_loading = false;
+        });
+    connect(messages, &MessageService::directoryChanged, this,
+        /** @brief 本地提交后更新已展示行，未展示会话保持可分页读取。 */
+        [this](const QJsonObject &directory) {
+            const bool wasComplete = !_hasMoreChats;
+            for (const auto &value : directory["conversations"].toArray()) {
+                const int id = value.toObject()["id"].toInt();
+                if (id <= _chatCursor) tcpLoadChatFinish(QJsonArray{QJsonObject{{"chat_id", id}}});
+                else _hasMoreChats = true;
+            }
+            for (const auto &value : directory["contacts"].toArray()) {
+                const int chat = UserMgr::instance()->privateChatIdFor(value.toObject()["id"].toInt());
+                if (_chat_item_map.contains(chat)) tcpLoadChatFinish(QJsonArray{QJsonObject{{"chat_id", chat}}});
+            }
+            if (_chat_item_map.isEmpty() || wasComplete) loadChatUserList();
+        });
+    connect(messages, &MessageService::directoryFailed, this,
+        /** @brief 目录查询失败后恢复加载入口。 */
+        [this](const QString &kind) { if (kind.isEmpty() || kind == "conversations") _b_chat_loading = false; });
+    loadChatUserList();
 
     // 连接创建私聊请求完成函数
     connect(TcpMgr::instance().get(), &TcpMgr::privateChatCreated,
@@ -206,15 +231,9 @@ ChatDialog::~ChatDialog()
 // 获取一部分聊天列表
 void ChatDialog::loadChatUserList()
 {
-    QJsonObject jsonObj;
-    jsonObj["uid"] = UserMgr::instance()->uid();
-    jsonObj["current_chat_id"] = UserMgr::instance()->chatListCursor();
-
-    QJsonDocument doc(jsonObj);
-    QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-
-    // 请求加载一部分chat_id
-    TcpMgr::instance()->sendRequested(ID_LOAD_CHAT_LIST_REQ, jsonData);
+    if (_b_chat_loading || !_hasMoreChats) return;
+    _b_chat_loading = true;
+    UserMgr::instance()->messages()->loadDirectoryPage("conversations", _chatCursor, LOADING_STEP_LENGTH);
 }
 
 /**
@@ -311,21 +330,7 @@ void ChatDialog::handleGlobalMousePress(QMouseEvent *event)
  */
 void ChatDialog::loadingChatList()
 {
-    // 判断当前是否在加载
-    if (_b_chat_loading) {
-        return ;
-    }
-
-    _b_chat_loading = true;
-    // 创建一个加载的动画
-    LoadingDialog * loadingDialog = new LoadingDialog(this);
-    loadingDialog->setModal(true); // 拦截所有的鼠标和键盘事件
-    loadingDialog->show();
-    // QThread::sleep(2);
-
     loadChatUserList();
-    // 加载完毕后关闭对话框
-    loadingDialog->deleteLater();
 }
 
 /**
@@ -431,8 +436,10 @@ void ChatDialog::fromSearchJumpChatItem(std::shared_ptr<SearchInfo> si)
     // 取出他对应的item
     auto find_iter = _chat_item_map.find(chat_id);
     if (find_iter == _chat_item_map.end()) {
-        SPDLOG_WARN("chat item not found for search result");
-        return;
+        const auto chat = UserMgr::instance()->chatInfo(chat_id);
+        if (!chat) return;
+        addNewChat(chat);
+        find_iter = _chat_item_map.find(chat_id);
     }
     ui->chat_user_list->scrollToItem(find_iter.value()); // 将列表滚动到用户可以见的viewport区域
     ui->side_chat_label->setSelected(true); // 选中侧边栏中的聊天
@@ -447,18 +454,8 @@ void ChatDialog::fromSearchJumpChatItem(std::shared_ptr<SearchInfo> si)
 
 /** @brief 插入新私聊列表项并选中对应聊天页。 */
 void ChatDialog::createPrivateChatFinish(std::shared_ptr<ChatInfo> chat_info) {
-    // 创建信息进行插入
-    auto * chat_user_item = new ChatUserItem();
-    chat_user_item->setChatInfo(chat_info);
-    chat_user_item->setItemType(ListItemType::CHAT_USER_ITEM);
-
-    QListWidgetItem * item = new QListWidgetItem();
-    item->setSizeHint(chat_user_item->sizeHint());
-    ui->chat_user_list->insertItem(0, item); //插入到顶部
-    ui->chat_user_list->setItemWidget(item, chat_user_item);
-
-    _chat_item_map.insert(chat_info->getChatId(), item);
-
+    if (!_chat_item_map.contains(chat_info->getChatId())) addNewChat(chat_info);
+    auto *item = _chat_item_map.value(chat_info->getChatId());
     ui->chat_user_list->scrollToItem(item); // 将列表滚动到用户可以见的viewport区域
     ui->side_chat_label->setSelected(true); // 选中侧边栏中的聊天
     ui->side_chat_label->showRedPoint(false); // 选中后，红点消失
@@ -493,8 +490,10 @@ void ChatDialog::fromFriendJumpChatItem(std::shared_ptr<UserInfo> si)
     // 取出他对应的item
     auto find_iter = _chat_item_map.find(chat_id);
     if (find_iter == _chat_item_map.end()) {
-        SPDLOG_WARN("chat item not found for user information");
-        return;
+        const auto chat = UserMgr::instance()->chatInfo(chat_id);
+        if (!chat) return;
+        addNewChat(chat);
+        find_iter = _chat_item_map.find(chat_id);
     }
     ui->chat_user_list->scrollToItem(find_iter.value()); // 将列表滚动到用户可以见的viewport区域
     ui->side_chat_label->setSelected(true); // 选中侧边栏中的聊天
@@ -678,7 +677,12 @@ void ChatDialog::tcpLoadChatFinish(QJsonArray jsonArray)
         auto obj = chat.toObject();
 
         auto chat_id = obj["chat_id"].toInt();
-        if (_chat_item_map.contains(chat_id)) continue;
+        if (_chat_item_map.contains(chat_id)) {
+            auto *widget = qobject_cast<ChatUserItem*>(ui->chat_user_list->itemWidget(_chat_item_map.value(chat_id)));
+            if (widget) widget->setChatInfo(UserMgr::instance()->chatInfo(chat_id));
+            UserMgr::instance()->messages()->loadHistory(chat_id);
+            continue;
+        }
 
         auto chat_info = UserMgr::instance()->chatInfo(chat_id);
         if (chat_info == nullptr) {
@@ -867,43 +871,13 @@ void ChatDialog::textChatMsgFailed(int chat_id, QVector<QString> client_message_
 
 // 加载更多联系人
 void ChatDialog::loadingMoreContact() {
-    auto contact_list = UserMgr::instance()->nextContactPage();
-    if (!contact_list.empty()) {
-        for (auto &info : contact_list) {
-            auto contact_user_item = new ContactUserItem();
-            contact_user_item->setInfo(info);
-            contact_user_item->setItemType(ListItemType::CONTACT_USER_ITEM);
-
-            QListWidgetItem * contact_item = new QListWidgetItem();
-            contact_item->setSizeHint(contact_user_item->sizeHint());
-            ui->contact_user_list->addItem(contact_item);
-            ui->contact_user_list->setItemWidget(contact_item, contact_user_item);
-        }
-        // 更新现在已经加载的数据
-        UserMgr::instance()->advanceContactPage();
-    }
+    ui->contact_user_list->loadNextPage();
 }
 
 // 加载更多联系人列表槽函数
 void ChatDialog::loadingContactList()
 {
-    SPDLOG_DEBUG("loading contact list");
-
-    // 判断当前是否在加载
-    if (_b_contact_loading) {
-        return ;
-    }
-
-    _b_contact_loading = true;
-    // 创建一个加载的动画
-    LoadingDialog * loadingDialog = new LoadingDialog(this);
-    loadingDialog->setModal(true); // 拦截所有的鼠标和键盘事件
-    loadingDialog->show();
-    // QThread::sleep(2);
-
     loadingMoreContact();
-    // 加载完毕后关闭对话框
-    loadingDialog->deleteLater();
 }
 
 // 别人添加我为好友，好友列表显示逻辑
@@ -912,16 +886,6 @@ void ChatDialog::tcpAddFriendApply(std::shared_ptr<ApplyInfo> applyInfo)
 {
     SPDLOG_DEBUG("friend application received from TCP");
 
-    // 先判断是否已经添加过请求
-    int b_already_apply = UserMgr::instance()->hasFriendApplication(applyInfo->_apply_uid);
-    if (b_already_apply) {
-        SPDLOG_DEBUG("duplicate friend application ignored");
-        return ;
-    }
-
-    // 插入请求添加好友列表
-    UserMgr::instance()->addFriendApplication(applyInfo->_apply_uid, applyInfo);
-
     // 当前选中的不是联系人处后，添加红点提示
     if (ui->side_user_label->getCurState() == ClickLabelState::Normal) {
         // 展示左侧联系人处的红点提醒
@@ -929,6 +893,6 @@ void ChatDialog::tcpAddFriendApply(std::shared_ptr<ApplyInfo> applyInfo)
     }
     // 设置新的朋友item处的红点提醒
     ui->contact_user_list->showRedPoint(true);
-    // 将新的请求插入到列表中
-    ui->apply_friend_page->addNewApply(applyInfo);
+    // 申请行已由本地目录提交通知刷新。
+    Q_UNUSED(applyInfo);
 }

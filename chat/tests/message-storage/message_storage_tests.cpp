@@ -13,6 +13,12 @@ class MessageStorageTests : public QObject
 {
     Q_OBJECT
 private slots:
+    /** 验证目录事务、重启、本地三页分页及审批状态保持。 */
+    void directoryPersistenceAndPagination();
+    /** 验证目录异步恢复、失败不发布和切换账号隔离。 */
+    void directoryServiceIsolation();
+    /** 验证 schema 2 升级保留消息并备份旧数据库。 */
+    void schemaTwoDirectoryUpgrade();
     /** 验证重启恢复同步游标，迟到 ACK 不跳过尚未同步的消息区间。 */
     void restartAndIncrementalCursor();
     /** 验证待发消息、历史与 ACK 按完整身份合并并保留本地编号。 */
@@ -449,6 +455,99 @@ void MessageStorageTests::serviceReceiptRoundTripAndAccountIsolation()
     QTRY_COMPARE_WITH_TIMEOUT(loaded.size(), 1, 5000);
     QCOMPARE(changed.size(), count);
     QVERIFY(qvariant_cast<QVector<StoredMessage>>(loaded.first()[2]).isEmpty());
+}
+
+void MessageStorageTests::directoryPersistenceAndPagination()
+{
+    QTemporaryDir root;
+    LocalMessageStore store;
+    store.open(root.path(), 8);
+    QJsonArray contacts;
+    for (int id = 1; id <= 40; ++id) contacts.append(QJsonObject{{"id", id}, {"uid", id}, {"name", QString::number(id)}});
+    const QJsonObject application{{"id", 7}, {"fromuid", 7}, {"status", 0}};
+    store.mergeDirectory({{"contacts", contacts}, {"applications", QJsonArray{application}}});
+    store.mergeDirectory({{"contacts", QJsonArray{QJsonObject{{"id", 7}, {"uid", 7}, {"name", "updated"}}}},
+        {"conversations", QJsonArray{QJsonObject{{"id", 12}, {"uid", 7}, {"type", "private"}}}}, {"approved_uid", 7}});
+    store.close();
+    store.open(root.path(), 8);
+    QCOMPARE(store.directory()["contacts"].toArray().size(), 40);
+    QCOMPARE(store.directory()["applications"].toArray().first().toObject()["status"].toInt(), 1);
+    QCOMPARE(store.directory()["conversations"].toArray().size(), 1);
+    int cursor = 0, count = 0;
+    QSet<int> seen;
+    while (true) {
+        const auto page = store.directoryPage("contacts", cursor, 13);
+        if (page.isEmpty()) break;
+        for (const auto &row : page) {
+            const int id = row.toObject()["id"].toInt();
+            QVERIFY(!seen.contains(id));
+            seen.insert(id);
+            ++count;
+        }
+        cursor = page.last().toObject()["id"].toInt();
+    }
+    QCOMPARE(count, 40);
+    QVERIFY_EXCEPTION_THROWN(store.mergeDirectory({{"contacts", QJsonArray{
+        QJsonObject{{"id", 41}}, QJsonObject{{"id", 0}}}}}), std::runtime_error);
+    QCOMPARE(store.directory()["contacts"].toArray().size(), 40);
+    store.mergeDirectory({});
+    QCOMPARE(store.directory()["contacts"].toArray().size(), 40);
+}
+
+void MessageStorageTests::directoryServiceIsolation()
+{
+    QTemporaryDir first, second;
+    MessageService service;
+    QSignalSpy restored(&service, &MessageService::directoryRestored);
+    QSignalSpy changed(&service, &MessageService::directoryChanged);
+    QSignalSpy pages(&service, &MessageService::directoryPageLoaded);
+    QSignalSpy failed(&service, &MessageService::directoryFailed);
+    service.start(first.path(), 8);
+    QTRY_COMPARE(restored.size(), 1);
+    service.saveDirectory({{"contacts", QJsonArray{QJsonObject{{"id", 7}, {"uid", 7}}}}});
+    QTRY_COMPARE(changed.size(), 1);
+    service.loadDirectoryPage("contacts", 0, 13);
+    QTRY_COMPARE(pages.size(), 1);
+    QCOMPARE(pages.first()[2].toJsonArray().size(), 1);
+    QVERIFY(!pages.first()[3].toBool());
+    service.saveDirectory({{"contacts", QJsonArray{QJsonObject{{"id", 0}}}}});
+    QTRY_COMPARE(failed.size(), 1);
+    QCOMPARE(changed.size(), 1);
+    service.saveDirectory({{"contacts", QJsonArray{QJsonObject{{"id", 9}, {"uid", 9}}}}});
+    service.start(second.path(), 10);
+    QTRY_COMPARE(restored.size(), 2);
+    QVERIFY(restored.last()[0].toJsonObject()["contacts"].toArray().isEmpty());
+    QCOMPARE(changed.size(), 1);
+    service.start(first.path(), 8);
+    QTRY_COMPARE(restored.size(), 3);
+    QCOMPARE(restored.last()[0].toJsonObject()["contacts"].toArray().size(), 2);
+}
+
+void MessageStorageTests::schemaTwoDirectoryUpgrade()
+{
+    QTemporaryDir root;
+    LocalMessageStore store;
+    store.open(root.path(), 8);
+    store.applySyncPage(12, 0, 10, {message(10, "preserved")});
+    store.close();
+    const QString connection = "directory-upgrade-fixture";
+    {
+        auto db = QSqlDatabase::addDatabase("QSQLITE", connection);
+        db.setDatabaseName(root.path() + "/messages.sqlite");
+        QVERIFY(db.open());
+        QSqlQuery query(db);
+        QVERIFY(query.exec("DROP TABLE contacts"));
+        QVERIFY(query.exec("DROP TABLE conversations"));
+        QVERIFY(query.exec("DROP TABLE applications"));
+        QVERIFY(query.exec("PRAGMA user_version=2"));
+    }
+    QSqlDatabase::removeDatabase(connection);
+    store.open(root.path(), 8);
+    QCOMPARE(store.cursor(12), 10);
+    QCOMPARE(store.history(12, 0, 50).messages.size(), 1);
+    QVERIFY(QFile::exists(root.path() + "/messages.schema2.sqlite"));
+    store.mergeDirectory({{"contacts", QJsonArray{QJsonObject{{"id", 7}}}}});
+    QCOMPARE(store.directory()["contacts"].toArray().size(), 1);
 }
 
 QTEST_GUILESS_MAIN(MessageStorageTests)

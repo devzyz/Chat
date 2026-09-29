@@ -51,3 +51,15 @@ and TCP coverage belongs to `tests/server/message-sync`.
 The optional probe `receipts` argument negotiates the production receipt protocol, reports durable
 messages, submits explicit Read observations, waits for confirmed SQLite facts and verifies reopen.
 It does not substitute for the GUI visibility tests or production Redis/Status verification.
+
+## 本地目录（schema 3）
+
+同一个 `message_storage.persistence` 入口新增：
+
+| Test ID | Method | Contract |
+| --- | --- | --- |
+| Q05-STORE-15 | directoryPersistenceAndPagination | 目录重启、40 条联系人完整分页、主键更新、审批状态及非法记录整批回滚 |
+| Q05-STORE-16 | directoryServiceIsolation | 异步本地页、失败不发布、旧账号回调丢弃及已接受写入排空 |
+| Q05-STORE-17 | schemaTwoDirectoryUpgrade | schema 2 升级快照、原消息与游标保留及目录可写 |
+
+网络回包到目录存储的组合由 `session_reset.account_state` 补充验证。

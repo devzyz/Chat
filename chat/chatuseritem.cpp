@@ -34,10 +34,10 @@ void ChatUserItem::setChatInfo(std::shared_ptr<ChatInfo> chat_info)
 
 
         // 将图片缩放为icon_label的大小，并显示
-        UserMgr::instance()->bindAvatar(ui->icon_label, info->_uid, info->_icon);
+        UserMgr::instance()->bindAvatar(ui->icon_label, chat_info->getUid(), info ? info->_icon : QString(":/res/head_1.jpg"));
         ui->icon_label->setScaledContents(true);
         // 更新用户名和上次聊天记录
-        ui->user_name_label->setText(info->_name);
+        ui->user_name_label->setText(info ? info->_name : QString::number(chat_info->getUid()));
 
         auto last_msg_id = chat_info->getLastMsgId();
 

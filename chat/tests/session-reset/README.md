@@ -37,3 +37,7 @@ RED evidence was recorded for the missing owning Module/User reset, retained own
 - Retained: theme/style, window policy, and Gate/server configuration because they are application-level rather than account-level.
 - Local storage is isolated by account and schema version; it does not rely on `UserMgr` retaining an in-memory queue.
 - Retry follows MessageService's bounded attempt policy. UUID/attempt correlation prevents a late failure from removing another batch; model deduplication does not imply network exactly-once delivery.
+
+`session_reset.account_state` 同时通过生产 `TcpMgr::handleMessage` 处理好友申请与审批回包，
+验证目录提交后缓存更新、重复审批不重复联系人，以及清空内存后从原账号库恢复申请状态和会话。
+该场景使用临时 SQLite，不访问真实服务。

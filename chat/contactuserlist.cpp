@@ -8,6 +8,7 @@
 #include <QScrollBar>
 #include "tcpmgr.h"
 #include "usermgr.h"
+#include "messageservice.h"
 #include <QTimer>
 #include <QCoreApplication>
 
@@ -25,9 +26,31 @@ ContactUserList::ContactUserList(QWidget *parent) : QListWidget(parent), _loadin
     // 连接点击item的信号和槽
     connect(this, &QListWidget::itemClicked, this, &ContactUserList::itemClicked);
 
-    // 连接认证的服务器回包处理发出的更新信号
-    connect(TcpMgr::instance().get(), &TcpMgr::friendAdded,
-            this, &ContactUserList::tcpAddFriend);
+    auto *messages = UserMgr::instance()->messages();
+    connect(messages, &MessageService::directoryPageLoaded, this,
+        /** @brief 按本地页推进联系人游标，重复记录只更新已有行。 */
+        [this](const QString &kind, int after, const QJsonArray &rows, bool more) {
+            if (kind != "contacts" || after != _cursor) return;
+            for (const auto &value : rows) applyContact(value.toObject());
+            if (!rows.isEmpty()) _cursor = rows.last().toObject()["id"].toInt();
+            _hasMore = more;
+            _loading_contact = false;
+        });
+    connect(messages, &MessageService::directoryChanged, this,
+        /** @brief 已落盘的资料更新已显示行，新记录由本地分页读取。 */
+        [this](const QJsonObject &directory) {
+            const bool wasComplete = !_hasMore;
+            for (const auto &value : directory["contacts"].toArray()) {
+                const auto row = value.toObject();
+                if (row["id"].toInt() <= _cursor) applyContact(row);
+                else _hasMore = true;
+            }
+            if (_items.isEmpty() || wasComplete) loadNextPage();
+        });
+    connect(messages, &MessageService::directoryFailed, this,
+        /** @brief 存储失败时结束当前列表等待，允许用户重试。 */
+        [this](const QString &kind) { if (kind.isEmpty() || kind == "contacts") _loading_contact = false; });
+    loadNextPage();
 }
 
 /**
@@ -85,23 +108,6 @@ bool ContactUserList::eventFilter(QObject *watched, QEvent *event)
         if (maxScrollValue - currentValue <= 0) {
             // 滚动到底部，加载新的联系人
             SPDLOG_DEBUG("loading more contacts");
-            // 判断联系人是否加载完成
-            auto isLoadingFinish = UserMgr::instance()->isContactListFullyLoaded();
-            if (isLoadingFinish) {
-                return true;
-            }
-            // 判断当前是否已正在加载
-            if (_loading_contact) {
-                return true;
-            }
-            _loading_contact = true;
-            // 放置短时间内重复加载
-            QTimer::singleShot(100, this,
-                /** @brief 分页等待结束后允许下一次联系人加载。 */
-                [this]() {
-                _loading_contact = false;
-            });
-            // 发送信号通知聊天界面加载更多聊天内容
             emit moreContactsRequested();
         }
 
@@ -151,20 +157,7 @@ void ContactUserList::loadContactUserList()
     this->setItemWidget(_contact_item, contactGroupTip);
     _contact_item->setFlags(_contact_item->flags() & ~Qt::ItemIsSelectable); // 设置为不可点击
 
-    auto contact_list = UserMgr::instance()->nextContactPage();
-    if (!contact_list.empty()) {
-        for (auto &info : contact_list) {
-            auto _contact_user_item = new ContactUserItem();
-            _contact_user_item->setInfo(info);
-            _contact_user_item->setItemType(ListItemType::CONTACT_USER_ITEM);
 
-            QListWidgetItem * _friend_item = new QListWidgetItem();
-            _friend_item->setSizeHint(_contact_user_item->sizeHint());
-            this->addItem(_friend_item);
-            this->setItemWidget(_friend_item, _contact_user_item);
-        }
-        UserMgr::instance()->advanceContactPage();
-    }
 }
 
 /**
@@ -213,29 +206,26 @@ void ContactUserList::itemClicked(QListWidgetItem * item)
     }
 }
 
-// 添加联系人
-/** @brief 创建并插入联系人展示项。 */
-void ContactUserList::addNewContact(std::shared_ptr<AuthInfo> auth_info)
+void ContactUserList::loadNextPage()
 {
-    // 否则更新contactlist列表
-    auto * contact_user_item = new ContactUserItem();
-    contact_user_item->setInfo(auth_info);
-
-    QListWidgetItem *item = new QListWidgetItem();
-    item->setSizeHint(contact_user_item->sizeHint());
-
-    int index = this->row(_contact_item);
-    // 在_contact_item后插入"新的朋友"
-    this->insertItem(index + 1, item);
-    // 设置QListWidgetItem的widget为自定义的widget
-    this->setItemWidget(item, contact_user_item);
+    if (_loading_contact || !_hasMore) return;
+    _loading_contact = true;
+    UserMgr::instance()->messages()->loadDirectoryPage("contacts", _cursor, LOADING_STEP_LENGTH);
 }
 
-// Tcp发出添加好友
-/** @brief 收到新增好友通知后补充联系人列表。 */
-void ContactUserList::tcpAddFriend(std::shared_ptr<AuthInfo> auth_info)
+void ContactUserList::applyContact(const QJsonObject &row)
 {
-    SPDLOG_DEBUG("authenticated friend added to contact list");
-
-    addNewContact(auth_info);
+    const int uid = row["id"].toInt();
+    auto info = UserMgr::instance()->friendById(uid);
+    if (!info) return;
+    auto *item = _items.value(uid, nullptr);
+    if (!item) {
+        auto *widget = new ContactUserItem();
+        item = new QListWidgetItem();
+        item->setSizeHint(widget->sizeHint());
+        addItem(item);
+        setItemWidget(item, widget);
+        _items.insert(uid, item);
+    }
+    qobject_cast<ContactUserItem*>(itemWidget(item))->setInfo(info);
 }

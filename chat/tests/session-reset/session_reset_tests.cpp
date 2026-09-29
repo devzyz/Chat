@@ -112,6 +112,42 @@ void SessionResetTests::accountStateDoesNotCrossLoginSessions()
     QVERIFY(!userMgr->isChatListFullyLoaded());
     QVERIFY(userMgr->nextContactPage().empty());
     QCOMPARE(gate_url_prefix, preservedGateEndpoint);
+
+    QTemporaryDir directory;
+    userMgr->setUserInfo(std::make_shared<UserInfo>(101, "self", "", "", 0));
+    auto *messages = userMgr->messages();
+    QSignalSpy restored(messages, &MessageService::directoryRestored);
+    QSignalSpy changed(messages, &MessageService::directoryChanged);
+    messages->start(directory.path(), 101);
+    QTRY_COMPARE(restored.size(), 1);
+    const QJsonObject application{{"error", 0}, {"fromuid", 301}, {"touid", 101}, {"applyname", "peer"}};
+    const auto notification = QJsonDocument(application).toJson(QJsonDocument::Compact);
+    TcpMgr::instance()->handleMessage(ID_NOTIFY_ADD_FRIEND_REQ, notification.size(), notification);
+    QTRY_COMPARE(changed.size(), 1);
+    QVERIFY(userMgr->hasFriendApplication(301));
+    const QJsonObject approval{{"error", 0}, {"chatid", 401},
+        {"applyinfo", QJsonObject{{"applyuid", 301}, {"applyname", "peer"}}},
+        {"authinfo", QJsonObject{{"backname", "alias"}}}};
+    const auto response = QJsonDocument(approval).toJson(QJsonDocument::Compact);
+    TcpMgr::instance()->handleMessage(ID_AUTH_FRIEND_RSP, response.size(), response);
+    QTRY_COMPARE(changed.size(), 2);
+    QVERIFY(userMgr->isFriend(301));
+    QCOMPARE(userMgr->privateChatIdFor(301), 401);
+    QCOMPARE(userMgr->nextContactPage().size(), size_t(1));
+    // 重复通知不重复联系人，退出清空内存后仍能从原账号数据库恢复。
+    TcpMgr::instance()->handleMessage(ID_AUTH_FRIEND_RSP, response.size(), response);
+    QTRY_COMPARE(changed.size(), 3);
+    QCOMPARE(userMgr->nextContactPage().size(), size_t(1));
+    userMgr->resetSession();
+    messages->start(directory.path(), 101);
+    QTRY_COMPARE(restored.size(), 2);
+    QVERIFY(userMgr->isFriend(301));
+    QCOMPARE(userMgr->privateChatIdFor(301), 401);
+    std::vector<std::shared_ptr<ApplyInfo>> applications;
+    userMgr->appendFriendApplicationsTo(applications);
+    QCOMPARE(applications.size(), size_t(1));
+    QCOMPARE(applications.front()->_status, 1);
+    userMgr->resetSession();
 }
 
 void SessionResetTests::resetDestroysOwnedSessionUiOnceAndPreservesReason()

@@ -401,11 +401,11 @@ void LocalMessageStore::open(const QString &accountRoot, int uid)
         require(version.next(), "Cannot read database version");
         const int schema = version.value(0).toInt();
         version.finish();
-        require(schema >= 0 && schema <= 2, "Message database requires a newer client");
-        if (schema == 1) {
-            auto backup = QDir(accountRoot).filePath("messages.schema1.sqlite");
+        require(schema >= 0 && schema <= 3, "Message database requires a newer client");
+        if (schema > 0 && schema < 3) {
+            auto backup = QDir(accountRoot).filePath(QString("messages.schema%1.sqlite").arg(schema));
             // A previous failed upgrade may leave an incomplete or stale backup. Never overwrite it.
-            if (QFile::exists(backup)) backup = QDir(accountRoot).filePath("messages.schema1."
+            if (QFile::exists(backup)) backup = QDir(accountRoot).filePath(QString("messages.schema%1.").arg(schema)
                 + QUuid::createUuid().toString(QUuid::WithoutBraces) + ".sqlite");
             query(_db, "VACUUM INTO ?", {backup});
         }
@@ -431,6 +431,12 @@ void LocalMessageStore::open(const QString &accountRoot, int uid)
                 "level INTEGER NOT NULL,rejected INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(chat_id,message_id))");
             query(_db, "CREATE TABLE receipt_sync_state(chat_id INTEGER PRIMARY KEY,revision INTEGER NOT NULL)");
             query(_db, "PRAGMA user_version=2");
+        }
+        if (schema < 3) {
+            query(_db, "CREATE TABLE contacts(id INTEGER PRIMARY KEY,data TEXT NOT NULL)");
+            query(_db, "CREATE TABLE conversations(id INTEGER PRIMARY KEY,data TEXT NOT NULL)");
+            query(_db, "CREATE TABLE applications(id INTEGER PRIMARY KEY,data TEXT NOT NULL)");
+            query(_db, "PRAGMA user_version=3");
         }
         query(_db, "UPDATE outgoing_batches SET in_flight=0 WHERE in_flight=1");
         query(_db, "UPDATE messages SET state=? WHERE state=?", {StoredMessage::Uncertain, StoredMessage::Pending});
@@ -604,4 +610,66 @@ LocalMessagePage LocalMessageStore::history(int chatId, qint64 before, int limit
         if (receipt.next()) message.receipt = static_cast<ReceiptLevel>(receipt.value(0).toInt());
     }
     return page;
+}
+
+QJsonArray LocalMessageStore::directoryPage(const QString &kind, int after, int limit)
+{
+    require(kind == "contacts" || kind == "conversations" || kind == "applications", "Invalid directory kind");
+    require(after >= 0 && limit > 0, "Invalid directory page");
+    auto rows = query(_db, "SELECT data FROM " + kind + " WHERE id>? ORDER BY id LIMIT ?", {after, limit});
+    QJsonArray result;
+    while (rows.next()) result.append(QJsonDocument::fromJson(rows.value(0).toByteArray()).object());
+    return result;
+}
+
+QJsonObject LocalMessageStore::directory()
+{
+    QJsonObject result;
+    for (const auto &kind : {QString("contacts"), QString("conversations"), QString("applications")})
+        result[kind] = directoryPage(kind, 0, INT_MAX);
+    return result;
+}
+
+QJsonObject LocalMessageStore::mergeDirectory(const QJsonObject &directory)
+{
+    Transaction transaction(_db);
+    QJsonObject changed;
+    for (const auto &kind : {QString("contacts"), QString("conversations"), QString("applications")}) {
+        QJsonArray saved;
+        for (const auto &value : directory[kind].toArray()) {
+            auto row = value.toObject();
+            const int id = row["id"].toInt();
+            require(id > 0, "Invalid directory identity");
+            if (kind == "conversations") {
+                auto previous = query(_db, "SELECT data FROM conversations WHERE id=?", {id});
+                if (previous.next()) {
+                    auto merged = QJsonDocument::fromJson(previous.value(0).toByteArray()).object();
+                    for (auto field = row.begin(); field != row.end(); ++field) merged[field.key()] = field.value();
+                    row = merged;
+                }
+            }
+            query(_db, "INSERT INTO " + kind + "(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
+                {id, QJsonDocument(row).toJson(QJsonDocument::Compact)});
+            auto stored = query(_db, "SELECT data FROM " + kind + " WHERE id=?", {id});
+            require(stored.next(), "Missing stored directory row");
+            saved.append(QJsonDocument::fromJson(stored.value(0).toByteArray()).object());
+        }
+        changed[kind] = saved;
+    }
+    const int approved = directory["approved_uid"].toInt();
+    if (approved > 0) {
+        auto stored = query(_db, "SELECT data FROM applications WHERE id=?", {approved});
+        if (stored.next()) {
+            auto application = QJsonDocument::fromJson(stored.value(0).toByteArray()).object();
+            stored.finish();
+            application["status"] = 1;
+            query(_db, "UPDATE applications SET data=? WHERE id=?",
+                {QJsonDocument(application).toJson(QJsonDocument::Compact), approved});
+            auto rows = changed["applications"].toArray();
+            rows.append(application);
+            changed["applications"] = rows;
+        }
+    }
+    transaction.commit();
+    return changed;
 }

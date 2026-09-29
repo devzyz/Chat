@@ -56,17 +56,12 @@ bool ChatUserList::eventFilter(QObject *watched, QEvent *event) {
         if (maxScrollValue - currentValue <= 0) {
             // 滚动到底部，加载新的联系人
             SPDLOG_DEBUG("loading more chat users");
-            // 不能无限制的加载，如果已经加载完成了，则不触发加载信号
-            auto isLoadingFinish = UserMgr::instance()->isChatListFullyLoaded();
-            if (isLoadingFinish) {
-                return true;
-            }
             // 不能加载的太快，通过一个变量加一个定时器来实现控制加载间隔
             if (_loading_chat) {
                 return true;
             }
             _loading_chat = true;
-            QTimer::singleShot(100,
+            QTimer::singleShot(100, this,
                 /** @brief 分页等待结束后允许下一次会话列表加载。 */
                 [this]() {
                 _loading_chat = false;

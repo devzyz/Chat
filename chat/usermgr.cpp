@@ -14,6 +14,8 @@ UserMgr::UserMgr()
       _contact_load_count(0), _current_load_chat_id(0), _last_chat_id(0),
       _is_load_chat_finish(false)
 {
+    connect(_messages, &MessageService::directoryRestored, this, &UserMgr::applyDirectory);
+    connect(_messages, &MessageService::directoryChanged, this, &UserMgr::applyDirectory);
     // 在 Qt 事件投递停止前排空存储，避免工作线程无法收到退出任务。
     qAddPostRoutine(
         /** @brief 应用退出时释放消息服务，兼容单例已释放的关闭顺序。 */
@@ -199,8 +201,9 @@ void UserMgr::addFriends(QJsonArray list)
         auto sex = value["sex"].toInt();
         auto backname = value["backname"].toString();
         auto friend_info = std::make_shared<UserInfo> (uid, name, description, icon, sex, backname);
+        if (!_friend_map.contains(uid)) _friend_list.push_back(friend_info);
+        else for (auto &existing : _friend_list) if (existing->_uid == uid) existing = friend_info;
         _friend_map.insert(uid, friend_info);
-        _friend_list.push_back(friend_info);
     }
 }
 
@@ -227,8 +230,9 @@ bool UserMgr::isFriend(int uid)
 void UserMgr::addFriend(std::shared_ptr<AuthInfo> auth_info)
 {
     auto friend_info = std::make_shared<UserInfo> (auth_info);
+    if (!_friend_map.contains(auth_info->_auth_uid)) _friend_list.push_back(friend_info);
+    else for (auto &existing : _friend_list) if (existing->_uid == auth_info->_auth_uid) existing = friend_info;
     _friend_map.insert(auth_info->_auth_uid, friend_info);
-    _friend_list.push_back(friend_info);
 }
 
 // 获取某个好友的信息
@@ -352,4 +356,21 @@ std::shared_ptr<ChatInfo> UserMgr::chatInfo(int chat_id)
         return nullptr;
     }
     return find_iter.value();
+}
+
+void UserMgr::applyDirectory(const QJsonObject &directory)
+{
+    addFriends(directory["contacts"].toArray());
+    addFriendApplications(directory["applications"].toArray());
+    for (const auto &value : directory["conversations"].toArray()) {
+        const auto row = value.toObject();
+        const int chat = row["id"].toInt();
+        const int peer = row["uid"].toInt();
+        const auto contact = friendById(peer);
+        addPrivateChatMapping(peer, chat);
+        addChatInfo(chat, std::make_shared<ChatInfo>(peer,
+            contact ? contact->_name : row["name"].toString(QString::number(peer)),
+            contact ? contact->_icon : row["icon"].toString(),
+            contact ? contact->_backname : QString(), chat, ChatType::PRIVATE));
+    }
 }
