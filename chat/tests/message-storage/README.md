@@ -68,3 +68,12 @@ Basic groups additionally cover directory-gated zero recipients, sender-scoped U
 restart/cursor preservation, conflict rollback, two-second incremental polling and
 exclusion from private receipt reporting. The account-state regression also exercises
 network group directory conversion and restores the group type after account reset.
+
+## 动态成员与本地查找（schema 4）
+
+既有 `message_storage.persistence` 入口的 `groupEpochAndLocalSearch` 覆盖移除、
+重新加入、旧代次/旧版本拒绝、历史保留和超过一页的本地搜索。
+`directoryPersistenceAndPagination` 同时验证备注部分合并、全目录筛选及稳定分页。
+升级用例目标为 schema 4；既有故障注入、账号隔离和发送/回执恢复用例继续回归。
+
+`groupOperationSurvivesRefreshAndRestart` 验证目录刷新与管理命令落盘排队时不丢失原身份，重启后可恢复并清除。`schemaTwoDirectoryUpgrade` 同时覆盖 3→4 快照及数据保留。

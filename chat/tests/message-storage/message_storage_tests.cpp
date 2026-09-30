@@ -13,6 +13,8 @@ class MessageStorageTests : public QObject
 {
     Q_OBJECT
 private slots:
+    /** 验证离群、重新加入时旧请求与页被拒绝，旧历史和分页搜索保留。 */
+    void groupEpochAndLocalSearch();
     /** 验证群目录、零收件人正文、重启和 outbox 保持幂等且不生成私聊回执。 */
     void groupMessagesPersistWithoutPrivateReceipts();
     /** 验证群同步不触发私聊回执，并在账号结束后停止轮询。 */
@@ -21,6 +23,8 @@ private slots:
     void directoryPersistenceAndPagination();
     /** 验证目录异步恢复、失败不发布和切换账号隔离。 */
     void directoryServiceIsolation();
+    /** 验证管理命令在并发目录刷新和重启后仍保存同一身份。 */
+    void groupOperationSurvivesRefreshAndRestart();
     /** 验证 schema 2 升级保留消息并备份旧数据库。 */
     void schemaTwoDirectoryUpgrade();
     /** 验证重启恢复同步游标，迟到 ACK 不跳过尚未同步的消息区间。 */
@@ -53,17 +57,54 @@ private slots:
     void resourceIntentSurvivesRecoveryAndRetryBudget();
 };
 
+void MessageStorageTests::groupEpochAndLocalSearch()
+{
+    QTemporaryDir directory;
+    LocalMessageStore store; store.open(directory.path(),7);
+    QJsonObject group{{"id",12},{"type","group"},{"name","Group"},{"group_state","active"},
+        {"membership_epoch","1"},{"group_revision","1"},{"joined_after_id",0}};
+    store.mergeDirectory({{"conversations",QJsonArray{group}}});
+    QJsonObject request{{"chat_id",12},{"chat_type","group"},{"from_uid",7},{"to_uid",0},{"membership_epoch","1"},
+        {"text_array",QJsonArray{QJsonObject{{"msg_uuid","epoch-outbox"},{"msg_content","pending"}}}}};
+    store.saveOutgoingRequest(request);
+    StoredMessage row; row.chatId=12; row.senderId=8; row.recipientId=0; row.content="search needle"; row.sentAt=1000;
+    QVector<StoredMessage> history;
+    for (int i=1;i<=55;++i) { row.messageId=i; row.clientMessageId=QString("received-%1").arg(i); history.push_back(row); }
+    store.applySyncPage(12,0,55,history,"1");
+    auto first=store.search(12,"needle"); QCOMPARE(first.size(),50);
+    auto second=store.search(12,"needle",first.back().localId); QCOMPARE(second.size(),5);
+    QCOMPARE(store.search(13,"needle").size(),0);
+    group["group_state"]="removed"; group["group_revision"]="2";
+    store.mergeDirectory({{"conversations",QJsonArray{group}}});
+    QVERIFY(store.dispatchDue(10000).isEmpty());
+    QVERIFY_EXCEPTION_THROWN(store.saveOutgoingRequest(request),std::exception);
+    QVERIFY_EXCEPTION_THROWN(store.applySyncPage(12,55,55,{},"1"),std::exception);
+    group["group_state"]="active"; group["membership_epoch"]="2"; group["group_revision"]="3"; group["joined_after_id"]=80;
+    store.mergeDirectory({{"conversations",QJsonArray{group}}});
+    store.retry("epoch-outbox"); QVERIFY(store.dispatchDue(10000).isEmpty());
+    QVERIFY_EXCEPTION_THROWN(store.acceptSendResponse(QJsonObject{{"chat_id",12},{"error",0},{"membership_epoch","1"}}),std::exception);
+    QVERIFY_EXCEPTION_THROWN(store.applySyncPage(12,55,55,{},"1"),std::exception);
+    row.messageId=70; row.clientMessageId="while-away";
+    QVERIFY_EXCEPTION_THROWN(store.applySyncPage(12,55,70,{row},"2"),std::exception);
+    auto stale=group; stale["group_revision"]="2"; stale["group_state"]="removed";
+    store.mergeDirectory({{"conversations",QJsonArray{stale}}});
+    QCOMPARE(store.groupState(12)["group_state"].toString(),QString("active"));
+    store.close(); store.open(directory.path(),7);
+    QCOMPARE(store.cursor(12),55); QCOMPARE(store.history(12,0,100).messages.size(),56);
+    QCOMPARE(store.groupState(12)["membership_epoch"].toString(),QString("2"));
+}
+
 void MessageStorageTests::groupMessagesPersistWithoutPrivateReceipts()
 {
     QTemporaryDir directory;
     LocalMessageStore store;
     store.open(directory.path(), 7);
-    const QJsonObject request{{"from_uid", 7}, {"to_uid", 0}, {"chat_id", 12}, {"chat_type", "group"},
+    const QJsonObject request{{"from_uid", 7}, {"to_uid", 0}, {"chat_id", 12}, {"chat_type", "group"}, {"membership_epoch", "1"},
         {"text_array", QJsonArray{QJsonObject{{"msg_uuid", "00000000-0000-4000-8000-000000000333"},
             {"msg_content", "group text"}}}}};
     QVERIFY_EXCEPTION_THROWN(store.saveOutgoingRequest(request), std::exception);
     store.mergeDirectory(QJsonObject{{"conversations", QJsonArray{QJsonObject{
-        {"id", 12}, {"type", "group"}, {"name", "Test group"}, {"uid", 0}}}}});
+        {"id", 12}, {"type", "group"}, {"group_state", "active"}, {"membership_epoch", "1"}, {"group_revision", "1"}, {"name", "Test group"}, {"uid", 0}}}}});
     store.saveOutgoingRequest(request);
     store.saveOutgoingRequest(request);
     StoredMessage sent;
@@ -73,14 +114,14 @@ void MessageStorageTests::groupMessagesPersistWithoutPrivateReceipts()
     auto received = sent;
     received.senderId = 8; received.messageId = 101;
     // Same UUID from another sender remains a distinct message.
-    store.applySyncPage(12, 0, 101, {sent, received});
+    store.applySyncPage(12, 0, 101, {sent, received}, "1");
     QVERIFY(store.pendingReceipts(12).isEmpty());
     store.close(); store.open(directory.path(), 7);
     QCOMPARE(store.cursor(12), 101);
     QCOMPARE(store.directory()["conversations"].toArray().first().toObject()["type"].toString(), QString("group"));
     QCOMPARE(store.history(12, 0, 50).messages.size(), 2);
     auto conflict = sent; conflict.messageId = 102; conflict.content = "changed";
-    QVERIFY_EXCEPTION_THROWN(store.applySyncPage(12, 101, 102, {conflict}), std::exception);
+    QVERIFY_EXCEPTION_THROWN(store.applySyncPage(12, 101, 102, {conflict}, "1"), std::exception);
     QCOMPARE(store.cursor(12), 101);
 }
 
@@ -93,7 +134,8 @@ void MessageStorageTests::groupServiceSkipsReceipts()
     QSignalSpy receipts(&service, &MessageService::receiptRequested);
     service.start(directory.path(), 7, true);
     QTRY_COMPARE(restored.size(), 1);
-    service.registerChat(12, true);
+    service.saveDirectory(QJsonObject{{"conversations",QJsonArray{QJsonObject{{"id",12},{"type","group"},{"name","Group"},
+        {"group_state","active"},{"membership_epoch","1"},{"group_revision","1"}}}}});
     QTRY_COMPARE(sync.size(), 1);
     auto page = sync.first().first().toJsonObject();
     page["error"] = 0; page["msgs"] = QJsonArray{};
@@ -548,6 +590,13 @@ void MessageStorageTests::directoryPersistenceAndPagination()
         cursor = page.last().toObject()["id"].toInt();
     }
     QCOMPARE(count, 40);
+    store.mergeDirectory({{"contacts",QJsonArray{QJsonObject{{"id",7},{"backname","我的备注"}}}}});
+    QCOMPARE(store.findDirectory("contacts","我的备注",0,50).size(),1);
+    QCOMPARE(store.findDirectory("contacts","updated",0,50).first().toObject()["backname"].toString(),QString("我的备注"));
+    QCOMPARE(store.findDirectory("contacts","40",0,50).first().toObject()["id"].toInt(),40);
+    QCOMPARE(store.findDirectory("contacts","",0,13).size(),13);
+    QCOMPARE(store.findDirectory("contacts","",13,13).first().toObject()["id"].toInt(),14);
+    QCOMPARE(store.findDirectory("conversations","",0,50).size(),0);
     QVERIFY_EXCEPTION_THROWN(store.mergeDirectory({{"contacts", QJsonArray{
         QJsonObject{{"id", 41}}, QJsonObject{{"id", 0}}}}}), std::runtime_error);
     QCOMPARE(store.directory()["contacts"].toArray().size(), 40);
@@ -584,6 +633,29 @@ void MessageStorageTests::directoryServiceIsolation()
     QCOMPARE(restored.last()[0].toJsonObject()["contacts"].toArray().size(), 2);
 }
 
+void MessageStorageTests::groupOperationSurvivesRefreshAndRestart()
+{
+    QTemporaryDir directory;
+    MessageService service;
+    QSignalSpy restored(&service,&MessageService::directoryRestored);
+    QSignalSpy changed(&service,&MessageService::directoryChanged);
+    service.start(directory.path(),7); QTRY_COMPARE(restored.size(),1);
+    QJsonObject row{{"id",12},{"type","group"},{"name","group"},{"group_state","active"},
+        {"membership_epoch","1"},{"group_revision","1"}};
+    service.saveDirectory({{"conversations",QJsonArray{row}}}); QTRY_COMPARE(changed.size(),1);
+    row["group_revision"]="2"; row["name"]="renamed";
+    service.saveDirectory({{"conversations",QJsonArray{row}}});
+    const QJsonObject command{{"request_id","immutable-request"},{"expected_revision","1"},{"operation","leave"}};
+    service.saveGroupOperation(12,command); QTRY_COMPARE(changed.size(),3);
+    QCOMPARE(service.groupState(12)["group_revision"].toString(),QString("2"));
+    QCOMPARE(service.groupState(12)["pending_group_operation"].toObject(),command);
+    service.start(directory.path(),7); QTRY_COMPARE(restored.size(),2);
+    QCOMPARE(service.groupState(12)["pending_group_operation"].toObject(),command);
+    service.saveGroupOperation(12,{}); QTRY_COMPARE(changed.size(),4);
+    service.start(directory.path(),7); QTRY_COMPARE(restored.size(),3);
+    QVERIFY(service.groupState(12)["pending_group_operation"].toObject().isEmpty());
+}
+
 void MessageStorageTests::schemaTwoDirectoryUpgrade()
 {
     QTemporaryDir root;
@@ -609,6 +681,18 @@ void MessageStorageTests::schemaTwoDirectoryUpgrade()
     QVERIFY(QFile::exists(root.path() + "/messages.schema2.sqlite"));
     store.mergeDirectory({{"contacts", QJsonArray{QJsonObject{{"id", 7}}}}});
     QCOMPARE(store.directory()["contacts"].toArray().size(), 1);
+    store.close();
+    {
+        auto db = QSqlDatabase::addDatabase("QSQLITE", connection);
+        db.setDatabaseName(root.path() + "/messages.sqlite");
+        QVERIFY(db.open());
+        QSqlQuery query(db); QVERIFY(query.exec("PRAGMA user_version=3"));
+    }
+    QSqlDatabase::removeDatabase(connection);
+    store.open(root.path(),8);
+    QVERIFY(QFile::exists(root.path()+"/messages.schema3.sqlite"));
+    QCOMPARE(store.cursor(12),10);
+    QCOMPARE(store.directory()["contacts"].toArray().size(),1);
 }
 
 QTEST_GUILESS_MAIN(MessageStorageTests)

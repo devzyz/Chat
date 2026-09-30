@@ -1,4 +1,5 @@
 #pragma once
+#include <json/json.h>
 #include <string>
 
 // 用户基本信息
@@ -125,5 +126,6 @@ public:
     GroupChatInfo(std::string type, int chat_id, std::string group_name) : 
         ChatInfoBase(type, chat_id), _group_name(group_name) {}
     // 群聊的名称
+    Json::Value _membership;
     std::string _group_name; 
 };

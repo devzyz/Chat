@@ -1,5 +1,6 @@
 #include "../../common/message/MessagePersistence.h"
 #include "../../common/message/MessageReceipts.h"
+#include "../../common/message/GroupMembership.h"
 #include "../../common/resource/ResourceCatalog.h"
 #include "LogicSystem.h"
 #include "CSession.h"
@@ -56,6 +57,20 @@ bool LogicSystem::Dispatch(const LogicMessage& message) {
 }
 
 void LogicSystem::RegisterCallbacks() {
+    for (const auto id : {MSG_GROUP_INFO_REQ, MSG_GROUP_MANAGE_REQ, MSG_FRIEND_REMARK_REQ}) {
+        _fun_callbacks[id] = /** @brief 从认证会话取得操作身份并返回有界群业务响应。 */
+            [](std::shared_ptr<CSession> session, const short& id, const std::string& body) {
+            Json::Value request, response; Json::Reader reader;
+            response["error"] = ErrorCodes::Error_Json;
+            if (reader.parse(body, request) && request.isObject() && request["request_id"].isString()
+                && request["request_id"].asString().size() <= 64) {
+                if (id == MSG_FRIEND_REMARK_REQ) request["operation"] = "remark";
+                else if (request["operation"] == "remark") { session->Send(messaging::CompactJson(response), id + 1); return; }
+                MysqlMgr::GetInstance()->GroupRequest(session->AuthenticatedUid(), request, id != MSG_GROUP_INFO_REQ, response);
+            }
+            session->Send(messaging::CompactJson(response), id + 1);
+        };
+    }
     _fun_callbacks[MSG_CREATE_GROUP_REQ] =
         /** @brief 校验建群参数，成员与建群身份由数据库事务核对。 */
         [](std::shared_ptr<CSession> session, const short&, const std::string& body) {
@@ -77,6 +92,11 @@ void LogicSystem::RegisterCallbacks() {
                 response["error"] = 0;
                 response["chat_id"] = chat;
                 response["group_name"] = request["name"];
+                Json::Value info_request, info_response;
+                info_request["chat_id"] = chat; info_request["after_uid"] = 0; info_request["request_id"] = request["request_id"];
+                if (MysqlMgr::GetInstance()->GroupRequest(session->AuthenticatedUid(), info_request, false, info_response)) {
+                    info_response.removeMember("members"); response = info_response;
+                }
             } else response["error"] = ErrorCodes::UidInvalid;
         }
         session->Send(messaging::CompactJson(response), MSG_CREATE_GROUP_RSP);
@@ -247,7 +267,7 @@ void LogicSystem::RegisterCallbacks() {
 				}
 				else if (chat->_type == "group") {
 					auto child = std::dynamic_pointer_cast<GroupChatInfo> (chat);
-					item["group_name"] = child->_group_name;
+					item = child->_membership;
 				}
 
 				return_value["chat_list"].append(item);
@@ -264,6 +284,11 @@ void LogicSystem::RegisterCallbacks() {
         session->EnableReceipts(receipts);
         return_value["capabilities"] = Json::Value(Json::arrayValue);
         if (receipts) return_value["capabilities"].append("message_receipts_v1");
+        bool groups = false;
+        if (root["capabilities"].isArray()) for (const auto& value : root["capabilities"])
+            if (value.isString() && value.asString() == "group_membership_v1") groups = true;
+        session->EnableGroups(groups);
+        if (groups) return_value["capabilities"].append("group_membership_v1");
         // 将会话绑定结果合并到登录响应。
         session->BindAuthenticatedUser(uid, /** @brief 按异步会话绑定结果完成登录响应。 */ [session, response = std::move(return_value)](SessionBindResult result) mutable {
             if (result != SessionBindResult::Bound) response["error"] = ErrorCodes::RPCFailed;
@@ -617,10 +642,20 @@ void LogicSystem::RegisterCallbacks() {
             return;
         }
         if (!data_array.isArray() || data_array.empty() || chat_id <= 0
-            || (group_message ? (to_uid != 0 || resource_message) : to_uid <= 0)) {
+            || (group_message ? to_uid != 0 : to_uid <= 0)) {
             return_value["error"] = ErrorCodes::Error_Json;
             return_value["commit_error"] = "InvalidMembership";
             return;
+        }
+        std::int64_t group_epoch = 0;
+        if (group_message) {
+            try {
+                if (!session->SupportsGroups()) throw messaging::GroupError("UpgradeRequired");
+                group_epoch = messaging::GroupNumber(root["membership_epoch"]);
+                return_value["membership_epoch"] = root["membership_epoch"];
+            } catch (const std::exception&) {
+                return_value["error"] = ErrorCodes::UidInvalid; return_value["commit_error"] = "InvalidMembership"; return;
+            }
         }
         std::vector<std::pair<std::string, std::string>> _cache_msgs;
 		std::vector<std::shared_ptr<ChatMessage>> _chat_msgs;
@@ -647,7 +682,7 @@ void LogicSystem::RegisterCallbacks() {
                 static resource::ResourceCatalog catalog(config["Mysql"]["Host"] + ":" + config["Mysql"]["Port"],
                     config["Mysql"]["User"], config["Mysql"]["Password"], config["Mysql"]["Schema"]);
                 auto saved = catalog.CommitMessage(from_uid, to_uid, chat_id,
-                    data_array[0]["msg_uuid"].asString(), root["resource_id"].asString());
+                    data_array[0]["msg_uuid"].asString(), root["resource_id"].asString(), group_epoch);
                 data_array[0]["msg_content"] = saved.content;
                 _chat_msgs.push_back(std::make_shared<ChatMessage>(saved.id,
                     data_array[0]["msg_uuid"].asString(), chat_id, from_uid, to_uid, saved.content, 0));
@@ -666,7 +701,7 @@ void LogicSystem::RegisterCallbacks() {
             }
             result = MysqlMgr::GetInstance()->AddChatMessageList(
                 message_commit::AuthenticatedPrincipal{principal_uid}, from_uid, to_uid, chat_id,
-                _cache_msgs, _chat_msgs, std::chrono::steady_clock::now() + std::chrono::seconds(5));
+                _cache_msgs, _chat_msgs, std::chrono::steady_clock::now() + std::chrono::seconds(5), group_epoch);
         }
         if (!result.IsSuccess()) {
 			return_value["error"] = ErrorCodes::UidInvalid;
@@ -866,7 +901,7 @@ void LogicSystem::RegisterCallbacks() {
 			}
 			else if (chat->_type == "group") {
 				auto child = std::dynamic_pointer_cast<GroupChatInfo> (chat);
-				item["group_name"] = child->_group_name;
+				item = child->_membership;
 			}
 
 			return_value["chat_list"].append(item);
@@ -894,6 +929,7 @@ void LogicSystem::RegisterCallbacks() {
             response["chat_id"] = root["chat_id"];
             response["request_id"] = root["request_id"];
             response["after_id"] = root["after_id"];
+            if (root["membership_epoch"].isString()) response["membership_epoch"] = root["membership_epoch"];
             if (root["mode"].isString() && root["mode"].asString() == "sync_v1"
                 && root["uid"].isInt() && root["uid"].asInt() > 0
                 && root["chat_id"].isInt() && root["chat_id"].asInt() > 0

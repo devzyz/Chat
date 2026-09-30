@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.28.3)
 
 project(ChatServices VERSION 0.1.0 LANGUAGES CXX)
 
+option(CHAT_BUILD_ACCEPTANCE_RESOURCES "Build production ResourceServer and resource acceptance host" OFF)
 option(CHAT_BUILD_CLIENT "Build Qt client and client modules" OFF)
 option(CHAT_ENABLE_HOSTED_PREFLIGHT "Enforce pinned hosted CI toolchain identity" OFF)
 include(CTest)
@@ -139,6 +140,20 @@ add_library(chat::chat_server_modules ALIAS chat_server_modules)
 add_executable(ChatServer ChatServer/ChatServer/ChatServer.cpp)
 target_link_libraries(ChatServer PRIVATE "$<LINK_GROUP:RESCAN,chat_server_modules,ChatTransport,LogicDispatcher,ChatGrpcClients>")
 
+# The opt-in hosted acceptance reuses Windows-owned production translation units.
+if(CHAT_BUILD_ACCEPTANCE_RESOURCES)
+    find_package(OpenSSL REQUIRED)
+    find_package(ZLIB REQUIRED)
+    chat_read_project_sources("${CMAKE_CURRENT_SOURCE_DIR}/ResourceServer/ResourceServer/ResourceServer/ResourceServer.vcxproj" resource_sources)
+    list(FILTER resource_sources EXCLUDE REGEX "/generated/proto/cpp/")
+    list(REMOVE_ITEM resource_sources "${CMAKE_CURRENT_SOURCE_DIR}/ResourceServer/ResourceServer/ResourceServer/ResourceServer.cpp")
+    add_library(resource_server_modules STATIC ${resource_sources})
+    chat_configure_server_target(resource_server_modules "ResourceServer/ResourceServer/ResourceServer")
+    target_link_libraries(resource_server_modules PUBLIC OpenSSL::Crypto ZLIB::ZLIB)
+    add_executable(ResourceServer ResourceServer/ResourceServer/ResourceServer/ResourceServer.cpp)
+    target_link_libraries(ResourceServer PRIVATE resource_server_modules)
+endif()
+
 if(BUILD_TESTING)
 add_library(process_harness STATIC
     tests/support/RunContext.cpp
@@ -151,6 +166,10 @@ target_include_directories(integration_host PUBLIC tests/support)
 target_link_libraries(integration_host PUBLIC
     GateTransport GateRequest StatusTransport StatusRouting ChatTransport LogicDispatcher)
 find_package(GTest CONFIG REQUIRED)
+if(CHAT_BUILD_ACCEPTANCE_RESOURCES)
+    add_executable(resource_http_test_host tests/server/resource/resource_tests.cpp)
+    target_link_libraries(resource_http_test_host PRIVATE resource_server_modules GTest::gtest)
+endif()
 add_executable(integration_host_contract_tests tests/server/integration-host/integration_host_contract_tests.cpp)
 target_link_libraries(integration_host_contract_tests PRIVATE integration_host GTest::gtest_main)
 add_test(NAME T10-BLD-02-integration-host COMMAND integration_host_contract_tests)

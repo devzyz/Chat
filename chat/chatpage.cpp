@@ -1,4 +1,5 @@
 #include "chatpage.h"
+#include "grouppanel.h"
 #include "clientmessage.h"
 #include "clientrequests.h"
 #include "messageservice.h"
@@ -26,6 +27,40 @@ ChatPage::ChatPage(QWidget *parent)
     : QWidget(parent), ui(new Ui::ChatPage)
 {
     ui->setupUi(this);
+    auto *details = new QPushButton(tr("资料 / 备注"), this);
+    auto *search = new QPushButton(tr("查找历史"), this);
+    ui->horizontalLayout_3->addWidget(details); ui->horizontalLayout_3->addWidget(search);
+    connect(search, &QPushButton::clicked, this, &ChatPage::openHistorySearch);
+    connect(details, &QPushButton::clicked, this, /** @brief 群打开成员资料，私聊修改当前好友个人备注。 */ [this] {
+        if (!_chatInfo) return;
+        if (_chatInfo->getChatType() == ChatType::GROUP) {
+            auto *panel = findChild<QDialog*>(QString("group-details-%1").arg(_currentChatId));
+            if (!panel) panel = new GroupPanel(_currentChatId,this);
+            panel->show(); panel->raise(); return;
+        }
+        bool ok = false;
+        const auto name = QInputDialog::getText(this,tr("好友备注"),tr("仅自己可见，可留空"),QLineEdit::Normal,QString(),&ok);
+        if (!ok || name.toUtf8().size() > 60) return;
+        _remarkRequest = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        const QJsonObject request{{"target_uid",_chatInfo->getUid()},{"name",name},{"request_id",_remarkRequest}};
+        emit TcpMgr::instance()->sendRequested(ID_FRIEND_REMARK_REQ,QJsonDocument(request).toJson(QJsonDocument::Compact));
+        const auto identity = _remarkRequest;
+        QTimer::singleShot(10000,this, /** @brief 无回包时不宣称保存失败，允许重新设置相同备注。 */ [this,identity] {
+            if (_remarkRequest != identity) return;
+            _remarkRequest.clear();
+            QMessageBox::information(this,tr("好友备注"),tr("结果尚未确认，请刷新联系人或重新设置备注。"));
+        });
+    });
+    connect(TcpMgr::instance().get(), &TcpMgr::groupResponse, this, /** @brief 备注写入完成后显示结果，拒绝时显示错误。 */
+        [this](ReqId id, const QJsonObject &response) {
+        if (id != ID_FRIEND_REMARK_RSP || _remarkRequest.isEmpty() || response["request_id"] != _remarkRequest) return;
+        _remarkRequest.clear();
+        QMessageBox::information(this,tr("好友备注"),response["local_save_failed"].toBool()
+            ? tr("操作已完成，本地保存失败。请刷新联系人恢复。")
+            : response["error"].toInt(-1)==0 ? tr("备注已保存") : tr("备注未保存，请稍后重试"));
+    });
+    connect(UserMgr::instance()->messages(), &MessageService::directoryChanged, this,
+        /** @brief 已落盘的群权限变化即时关闭输入。 */ [this](const QJsonObject &) { refreshGroupState(); });
     connect(UserMgr::instance().get(), &UserMgr::avatarChanged, this,
         /** @brief 更新对应发送者的消息头像。 */
         [this](int uid) {
@@ -76,17 +111,20 @@ void ChatPage::setChatInfo(std::shared_ptr<ChatInfo> chatInfo)
     }
 
     saveCurrentScrollAnchor();
-    if (_currentChatId != chatInfo->getChatId()) _readTracker->resetExposure();
+    if (_currentChatId != chatInfo->getChatId()) {
+        _readTracker->resetExposure();
+        _remarkRequest.clear();
+        _searchJumpId = 0;
+    }
     _chatInfo = std::move(chatInfo);
     _currentChatId = _chatInfo->getChatId();
 
     ui->title_label->setText(_chatInfo->name());
-    ui->file_label->setEnabled(_chatInfo->getChatType() == ChatType::PRIVATE);
-    ui->file_label->setToolTip(_chatInfo->getChatType() == ChatType::GROUP ? tr("基础群聊暂只支持文字") : tr("发送文件"));
+    refreshGroupState();
     if (_chatInfo->getChatType() == ChatType::PRIVATE) {
         const auto friendInfo = UserMgr::instance()->friendById(_chatInfo->getUid());
         if (friendInfo) {
-            ui->title_label->setText(friendInfo->_name);
+            ui->title_label->setText(friendInfo->_backname.isEmpty() ? friendInfo->_name : friendInfo->_backname);
         }
     }
 
@@ -166,7 +204,21 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before,
     model->setLoadingHistory(false);
     if (current) {
         _messageDelegate->clearSizeCache();
-        if (initial || anchor.wasAtBottom) queueScrollToBottom(chatId);
+        // A periodic refresh must not consume the pending search-range navigation.
+        if (_searchJumpId > 0 && before == _searchJumpId + 1) {
+            const auto target = _searchJumpId; _searchJumpId = 0;
+            QTimer::singleShot(0,this,/** @brief 模型完成布局后定位搜索命中的消息。 */ [this,chatId,target] {
+                if (_currentChatId != chatId) return;
+                auto *model = ui->chat_detail_data_list->model();
+                for (int row=0;row<model->rowCount();++row) {
+                    const auto index=model->index(row,0);
+                    if (index.data(MessageListModel::MessageIdRole).toLongLong()==target) {
+                        ui->chat_detail_data_list->setCurrentIndex(index);
+                        ui->chat_detail_data_list->scrollTo(index,QAbstractItemView::PositionAtCenter); break;
+                    }
+                }
+            });
+        } else if (initial || anchor.wasAtBottom) queueScrollToBottom(chatId);
         else restoreScrollAnchor(chatId, anchor);
     }
 }
@@ -458,4 +510,59 @@ void ChatPage::queueScrollToBottom(int chatId)
             ui->chat_detail_data_list->scrollToBottom();
         }
     });
+}
+
+void ChatPage::refreshGroupState()
+{
+    if (!_chatInfo) return;
+    const auto state = UserMgr::instance()->messages()->groupState(_currentChatId);
+    const bool group = _chatInfo->getChatType() == ChatType::GROUP;
+    const bool active = !group || state["group_state"] == "active";
+    ui->send_btn->setEnabled(active); ui->file_label->setEnabled(active); ui->chat_edit->setEnabled(active);
+    if (group) ui->title_label->setText(state["name"].toString(_chatInfo->name()) + (active ? QString() : tr("（已离群或解散，只读）")));
+    else if (const auto contact=UserMgr::instance()->friendById(_chatInfo->getUid()))
+        ui->title_label->setText(contact->_backname.isEmpty() ? contact->_name : contact->_backname);
+    ui->file_label->setToolTip(active ? tr("发送图片、视频或文件") : tr("当前群只读"));
+}
+
+void ChatPage::openHistorySearch()
+{
+    if (!_chatInfo) return;
+    const int chat = _currentChatId;
+    auto *dialog = new QDialog(this); dialog->setAttribute(Qt::WA_DeleteOnClose); dialog->setWindowTitle(tr("搜索本机已保存历史")); dialog->resize(480,420);
+    auto *layout = new QVBoxLayout(dialog); auto *input = new QLineEdit(dialog); input->setMaxLength(200);
+    input->setPlaceholderText(tr("当前会话正文或附件名称")); layout->addWidget(input);
+    auto *rows = new QListWidget(dialog); layout->addWidget(rows);
+    auto *more = new QPushButton(tr("下一页"),dialog); layout->addWidget(more); more->setEnabled(false);
+    auto cursor = std::make_shared<qint64>(0); auto term = std::make_shared<QString>();
+    auto pending = std::make_shared<bool>(false);
+    connect(input,&QLineEdit::returnPressed,dialog,/** @brief 新查询重新开始本地分页。 */ [chat,input,rows,more,cursor,term,pending] {
+        *term=input->text().trimmed(); if (term->isEmpty()) return;
+        rows->clear(); *cursor=0; *pending=true; more->setEnabled(false);
+        UserMgr::instance()->messages()->search(chat,*term);
+    });
+    connect(more,&QPushButton::clicked,dialog,/** @brief 从上一页末尾继续搜索。 */ [chat,cursor,term,pending,more] {
+        if (*pending) return; *pending=true; more->setEnabled(false); UserMgr::instance()->messages()->search(chat,*term,*cursor);
+    });
+    connect(UserMgr::instance()->messages(),&MessageService::searchLoaded,dialog,
+        /** @brief 只接受当前查询的结果，保留完整分页定位标识。 */
+        [chat,rows,more,cursor,term,pending](int resultChat,const QString &text,qint64 before,const QVector<StoredMessage> &results) {
+        if (resultChat!=chat || text!=*term || before!=*cursor) return;
+        *pending=false;
+        for (const auto &result : results) {
+            const auto visible=result.content.startsWith("@resource:v1:")
+                ? QJsonDocument::fromJson(result.content.mid(13).toUtf8()).object()["name"].toString() : result.content;
+            auto *item=new QListWidgetItem(visible.left(250),rows);
+            item->setData(Qt::UserRole,result.messageId); *cursor=result.localId;
+        }
+        more->setEnabled(results.size()==50);
+    });
+    connect(rows,&QListWidget::itemDoubleClicked,dialog,/** @brief 将结果所在历史范围加载到消息视图并请求定位。 */
+        [this,chat,dialog](QListWidgetItem *item) {
+        if (_currentChatId!=chat) return;
+        _searchJumpId=item->data(Qt::UserRole).toLongLong();
+        if (_searchJumpId>0) UserMgr::instance()->messages()->loadHistory(chat,_searchJumpId+1);
+        dialog->close();
+    });
+    dialog->show();
 }

@@ -293,7 +293,7 @@ if(BUILD_TESTING)
     find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Test)
 
     add_executable(chat_e2e_client tests/session-driver/client_driver.cpp)
-    target_link_libraries(chat_e2e_client PRIVATE chat_client_login)
+    target_link_libraries(chat_e2e_client PRIVATE chat_client_login chat_resource_transfer)
     add_executable(session_driver_tests tests/session-driver/session_driver_tests.cpp)
     target_link_libraries(session_driver_tests PRIVATE
         chat_network_core Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Network)
@@ -671,12 +671,36 @@ target_link_libraries(chat_avatar_sync PUBLIC chat_local_avatar chat_resource_tr
 target_include_directories(chat_avatar_sync PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(chat_session_core PUBLIC chat_avatar_sync)
 target_link_libraries(chat PRIVATE chat_resource_transfer)
-target_sources(chat PRIVATE chatpageresources.cpp)
+target_sources(chat PRIVATE chatpageresources.cpp grouppanel.h)
 
 if(BUILD_TESTING)
     add_executable(resource_transfer_tests tests/resource-transfer/resource_transfer_tests.cpp
         chatpage.h chatpage.cpp chatpage.ui chatpageresources.cpp
         chatdetaillist.h chatdetaillist.cpp clickedbtn.h clickedbtn.cpp
         clickedlabel.h clickedlabel.cpp messagetextedit.h messagetextedit.cpp)
+    # The acceptance helper is C++ rather than an AUTOUIC-generated header.
+    set_source_files_properties(tests/resource-transfer/resource_transfer_tests.cpp PROPERTIES SKIP_AUTOUIC ON)
+    target_sources(resource_transfer_tests PRIVATE
+        tests/resource-transfer/ui_acceptance_cases.h
+        chatdialog.h chatdialog.cpp chatdialog.ui
+        customizeedit.h customizeedit.cpp
+        chatuserlist.h chatuserlist.cpp chatuseritem.h chatuseritem.cpp chatuseritem.ui
+        listitembase.h listitembase.cpp loadingdialog.h loadingdialog.cpp loadingdialog.ui
+        statewidget.h statewidget.cpp searchlist.h searchlist.cpp
+        adduseritem.h adduseritem.cpp adduseritem.ui
+        findsuccessdialog.h findsuccessdialog.cpp findsuccessdialog.ui
+        applyfrienddialog.h applyfrienddialog.cpp applyfrienddialog.ui
+        clickedoncelabel.h clickedoncelabel.cpp
+        contactuserlist.h contactuserlist.cpp contactuseritem.h contactuseritem.cpp contactuseritem.ui
+        grouptipitem.h grouptipitem.cpp
+        applyfriendpage.h applyfriendpage.cpp applyfriendpage.ui
+        applyfrienditem.h applyfrienditem.cpp applyfrienditem.ui
+        applyfriendlist.h applyfriendlist.cpp
+        findfaildialog.h findfaildialog.cpp findfaildialog.ui
+        authfrienddialog.h authfrienddialog.cpp authfrienddialog.ui
+        friendinfopage.h friendinfopage.cpp friendinfopage.ui
+        userinfopage.h userinfopage.cpp userinfopage.ui
+        editavatardialog.h editavatardialog.cpp editavatardialog.ui
+        avatarcropwidget.h avatarcropwidget.cpp)
     target_link_libraries(resource_transfer_tests PRIVATE chat_list_view chat_resource_transfer chat_client_login Qt${QT_VERSION_MAJOR}::Test)
 endif()

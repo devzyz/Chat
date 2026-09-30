@@ -42,7 +42,7 @@ void ContactUserItem::setInfo(std::shared_ptr<AuthInfo> auth_info)
     UserMgr::instance()->bindAvatar(ui->contact_user_head_label, _friend_info->_uid, _friend_info->_icon);
     ui->contact_user_head_label->setScaledContents(true);
 
-    ui->contact_user_name_label->setText(_friend_info->_name);
+    ui->contact_user_name_label->setText(_friend_info->_backname.isEmpty() ? _friend_info->_name : _friend_info->_backname);
 }
 
 /**
@@ -62,7 +62,7 @@ void ContactUserItem::setInfo(int uid, QString name, QString icon)
     UserMgr::instance()->bindAvatar(ui->contact_user_head_label, _friend_info->_uid, _friend_info->_icon);
     ui->contact_user_head_label->setScaledContents(true);
 
-    ui->contact_user_name_label->setText(_friend_info->_name);
+    ui->contact_user_name_label->setText(_friend_info->_backname.isEmpty() ? _friend_info->_name : _friend_info->_backname);
 }
 
 /**
@@ -80,7 +80,7 @@ void ContactUserItem::setInfo(std::shared_ptr<UserInfo> friend_info)
     UserMgr::instance()->bindAvatar(ui->contact_user_head_label, _friend_info->_uid, _friend_info->_icon);
     ui->contact_user_head_label->setScaledContents(true);
 
-    ui->contact_user_name_label->setText(_friend_info->_name);
+    ui->contact_user_name_label->setText(_friend_info->_backname.isEmpty() ? _friend_info->_name : _friend_info->_backname);
 }
 
 /**

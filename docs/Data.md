@@ -30,7 +30,7 @@ recovery descriptions in [`manifest.json`](../schema/manifest.json).
 - `004_message_receipts.sql` adds the per-conversation revision clock and current message receipt rows.
   Revisions are allocated under the same conversation lock as message commits and receipt page reads.
   Unique conversation/revision and message/recipient keys prevent duplicate facts. See [MessageStates](MessageStates.md).
-  Schema 4 introduced receipts; the current required schema is 5 (see the group migration below).
+  Schema 4 introduced receipts; the current required schema is 6 (see the group migration below).
 
 ## Operational entry
 
@@ -84,8 +84,17 @@ the user's VM database.
 `owner_uid`/`creation_uuid` and their unique index to `group_chat` for idempotent creation.
 Existing rows remain intact. Group text uses `chat_message.recv_id=0` as an explicit
 group sentinel; private messages keep positive recipients. All schema-verifying
-Gate/Chat/Resource binaries must be upgraded together after migration to schema 5.
-The basic fixed-member group protocol is defined in [Protocol](Protocol.md#基础文字群聊).
+Gate/Chat/Resource binaries must be upgraded together after migration to schema 6.
+The group protocol is defined in [Protocol](Protocol.md#基础文字群聊).
+
+`006_group_membership.sql` adds group revision/dissolved state and member state,
+membership epoch and joined-after message boundary. Existing members become active
+at epoch 1, boundary 0. A preflight CHECK rejects missing owners or contradictory
+owner roles before altering the group tables; it never guesses an owner.
+Immutable creator/original name and `group_creation_member` preserve creation retry
+identity after later rename, transfer or membership changes. `group_operation`
+stores actor/request identity, canonical request and original result in the same
+transaction as each successful management operation. No history/resource bytes are deleted.
 
 For executed evidence and follow-up scope use the main workspace `docs/Status.md`.
 The [schema owner tests](../tests/server/schema-migration/README.md) are separate from

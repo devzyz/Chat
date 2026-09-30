@@ -62,8 +62,8 @@ def tcp_flow(directory, mysql_command, mysql_port):
         def login(index, uid):
             sock = socket.create_connection(("127.0.0.1", tcp_ports[index]), timeout=10)
             sockets.append(sock)
-            send(sock, 1005, {"uid": uid, "token": "fixture-token", "capabilities": ["message_receipts_v1"]})
-            assert receive(sock, 1006)["capabilities"] == ["message_receipts_v1"]
+            send(sock, 1005, {"uid": uid, "token": "fixture-token", "capabilities": ["message_receipts_v1", "group_membership_v1"]})
+            assert receive(sock, 1006)["capabilities"] == ["message_receipts_v1", "group_membership_v1"]
             return sock
 
         def sync(sock, after):
@@ -164,7 +164,7 @@ def tcp_flow(directory, mysql_command, mysql_port):
         send(receiver, 1025, dict(uid=8, current_chat_id=group - 1))
         listed = receive(receiver, 1026)["chat_list"]
         assert any(row["chat_id"] == group and row["type"] == "group" for row in listed)
-        text = dict(from_uid=7, to_uid=0, chat_id=group, chat_type="group",
+        text = dict(from_uid=7, to_uid=0, chat_id=group, chat_type="group", membership_epoch="1",
             text_array=[dict(msg_uuid="00000000-0000-4000-8000-000000009003", msg_content="Hello group")])
         send(sender, 1016, text)
         group_message = receive(sender, 1017)["uuid_msgId"][0]["message_id"]
@@ -198,7 +198,7 @@ def tcp_flow(directory, mysql_command, mysql_port):
             receive(sender, 1035)
         found = []
         cursor = group - 1
-        for _ in range(3):
+        for _ in range(8):
             send(receiver, 1025, dict(uid=8, current_chat_id=cursor))
             result = receive(receiver, 1026)
             found.extend(row["chat_id"] for row in result["chat_list"])
@@ -209,6 +209,52 @@ def tcp_flow(directory, mysql_command, mysql_port):
         receiver.close()
         receiver = login(1, 8)
         print("Group TCP: atomic creation/retry, membership, cross-instance send/sync and offline recovery passed")
+        # Dynamic group operations use production protocol, including stale versions and replay after mutation.
+        import uuid
+        def manage(sock, operation, version, **fields):
+            request = dict(chat_id=group, operation=operation, expected_revision=str(version), request_id=str(uuid.uuid4()), **fields)
+            send(sock, 1038, request)
+            return request, receive(sock, 1039)
+        subprocess.run(mysql_command, input="USE message_sync_test; INSERT INTO friend(self_id,other_id,backname) VALUES(7,9,''),(7,10,'');",text=True,check=True,timeout=10)
+        request, changed = manage(sender, "add", 1, members=[9,10])
+        assert changed["group_revision"] == "2"
+        send(sender, 1038, request)
+        assert receive(sender, 1039)["group_revision"] == "2"
+        send(outsider, 1027, dict(mode="sync_v1",uid=9,chat_id=group,after_id=0,request_id="new-member",membership_epoch="1"))
+        assert receive(outsider, 1028)["msgs"] == []
+        send(receiver, 1038, dict(request, request_id=str(uuid.uuid4()),expected_revision="2",operation="rename",name="forbidden"))
+        assert receive(receiver, 1039, success=False)["group_error"] == "Forbidden"
+        _, changed = manage(sender,"rename",2,name="Renamed")
+        send(sender,1034,creation)
+        assert receive(sender,1035)["chat_id"]==group
+        send(sender,1036,dict(chat_id=group,after_uid=0,request_id="members"))
+        details=receive(sender,1037)
+        assert details["member_count"]==4 and details["group_name"]=="Renamed"
+        _, changed=manage(sender,"remove",3,target_uid=8)
+        send(receiver,1027,dict(mode="sync_v1",uid=8,chat_id=group,after_id=0,request_id="removed",membership_epoch="1"))
+        assert receive(receiver,1028,success=False)["error"]!=0
+        _, changed=manage(sender,"add",4,members=[8])
+        send(receiver,1016,dict(text,from_uid=8))
+        assert receive(receiver,1017,success=False)["error"]!=0
+        send(receiver,1027,dict(mode="sync_v1",uid=8,chat_id=group,after_id=0,request_id="rejoined",membership_epoch="2"))
+        assert receive(receiver,1028)["msgs"]==[]
+        _, changed=manage(sender,"transfer",5,target_uid=9)
+        _, changed=manage(sender,"leave",6)
+        assert changed["group_state"]=="left"
+        request,changed=manage(outsider,"dissolve",7)
+        assert changed["group_state"]=="dissolved"
+        send(outsider,1038,request)
+        assert receive(outsider,1039)["group_revision"]=="8"
+        send(receiver,1025,dict(uid=8,current_chat_id=group-1))
+        assert receive(receiver,1026)["chat_list"][0]["group_state"]=="dissolved"
+        remark=dict(target_uid=8,name="Local nickname",request_id=str(uuid.uuid4()))
+        send(sender,1040,remark)
+        assert receive(sender,1041)["name"]=="Local nickname"
+        sender.close(); sender=login(0,7)
+        verify=subprocess.run(mysql_command+["-N","-B","-e","USE message_sync_test; SELECT backname FROM friend WHERE self_id=7 AND other_id=8; SELECT backname FROM friend WHERE self_id=8 AND other_id=7;"],capture_output=True,text=True,check=True,timeout=10)
+        assert verify.stdout.splitlines()==["Local nickname", ""]
+        print("Dynamic group TCP: four accounts, version conflict, membership epochs, history boundary, transfer/leave/dissolve, replay and personal remark passed")
+
     finally:
         if sys.exc_info()[0] is not None:
             evidence = ROOT / "build/message-sync/failed-flow"

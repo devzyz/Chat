@@ -29,6 +29,10 @@ public:
     /** @brief 返回已绑定 UID 的原子快照；未绑定或进入关闭时为 0。 */
     int AuthenticatedUid() const noexcept { return _authenticated_uid.load(); }
     /** @brief 查询客户端是否启用送达及已读回执能力。 */
+    /** @brief 返回此连接是否协商动态群成员协议。 */
+    bool SupportsGroups() const noexcept { return _groups.load(); }
+    /** @brief 保存登录协商结果。 */
+    void EnableGroups(bool enabled) noexcept { _groups.store(enabled); }
     bool SupportsReceipts() const noexcept { return _receipts.load(); }
     /** @brief 原子更新协商后的回执能力，不改变认证状态。 */
     void EnableReceipts(bool enabled) noexcept { _receipts.store(enabled); }
@@ -81,6 +85,7 @@ private:
     SessionState _state = SessionState::Created;
     std::optional<SessionCloseReason> _close_reason;
     std::atomic<bool> _receipts{false};
+    std::atomic<bool> _groups{false};
     std::atomic<int> _authenticated_uid{0}; // Read-only snapshot for business threads.
     int _binding_uid = 0;
     bool _binding = false;

@@ -392,3 +392,39 @@ CHAT_E2E_CLIENT="$PWD/out/build/linux-x64-release/bin/chat_e2e_client" node --te
 These seven support cases exercise topology rejection, real Node-to-Qt control,
 bounded controller failures, delayed count publication and evidence validation. Synthetic validator inputs
 are not E2E results; only the real hosted selector can supply that evidence.
+
+
+## 按需首版真实环境验收
+
+在 GitHub Actions 的 **CI → Run workflow** 中选择待验分支，勾选 `real_acceptance`；
+`refresh_tools` 和 `cold_linux` 保持 false。需有 Actions 写权限，且 workflow_dispatch 入口可用。
+也可在已有认证的 GitHub CLI 中执行：
+
+```sh
+gh workflow run ci.yml --ref <candidate-branch> -f real_acceptance=true -f refresh_tools=false -f cold_linux=false
+```
+
+分支继续提交后，先前结果不能证明新 SHA；使用运行页的 head SHA 和证据中的 source SHA 核对。
+开关默认关闭，普通提交/PR和周检不新增昂贵的首版专项。原完整 Linux 回归仍按既有规则执行。
+
+显式启用后复用当前 3D 的 MySQL、Redis、Mailpit、Gate、Status、Varify、双 Chat 和 Qt 客户端，
+增加生产 ResourceServer。四个额外账号通过真实验证码邮件注册、登录、好友申请和通过，
+完成群管理、入群边界、旧代次拒绝、离线重登、三类资源、独立私聊资源引用、备注和本地查找。
+服务端已成功而 SQLite 写入失败使用第二个真实 SQLite 连接持写锁触发，解锁后按原请求重试恢复。
+
+- `E03-RELEASE-01..14`：独立 `linux_first_release.xml`，与既有 33 条 3D 用例一同校验。
+- `phase3d-contract-evidence`：同运行 JUnit、SHA/摘要清单、脱敏拓扑、清理及 `real-acceptance.json`。
+- `real-acceptance-widgets`：18 项实际 Qt 控件、8 项资源 Store 报告、群面板截图及源码 SHA。
+  控件测试的部分故障信号是测试驱动；这份证据独立于真实服务业务报告，不能改称四账号人工桌面。
+- 媒体样本在临时目录生成；PNG/视频经实际下载摘要校验和解码，十秒视频检查 250 帧。
+- 缺项、失败、跳过、错误 SHA、报告篡改、清理未完成均拒绝。未启用明确 `not-requested`。
+
+新门禁使用既有 `service_run`/`FourProcessDriver` 有界监督，不清空共享 Redis，不访问个人库。
+本地可运行开关/证据/编排合同：
+
+```sh
+node --test tests/build/ciBudget.test.js tests/services/phase3dEvidence.test.js tests/services/widgetEvidence.test.js tests/services/firstReleaseCases.test.js
+```
+
+这些合同单测不替代托管环境真实运行。人工视觉可用性、真实局域网特性与个人旧库兼容性仍单独验证。
+当前执行证据与尚未覆盖项只维护在 [Status](../../docs/Status.md)。

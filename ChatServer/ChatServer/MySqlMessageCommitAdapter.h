@@ -32,11 +32,14 @@ public:
      */
     Result Commit(int sender, int recipient, int chat, const Batch& batch, Deadline deadline) override;
     /** @brief 查询连接是否仍可归还池；false 时调用方必须丢弃连接，不能重新借出。 */
+    /** @brief 设置群发送请求绑定的成员资格代次。 */
+    void SetGroupEpoch(std::int64_t epoch) { _group_epoch = epoch; }
     bool IsReusable() const { return _is_reusable; }
 private:
     sql::Connection& _connection;
     TransactionCommit* _commit = nullptr;
     bool _is_reusable = true;
+    std::int64_t _group_epoch = 0;
 };
 
 /**

@@ -13,7 +13,7 @@ import subprocess
 import threading
 import time
 import sys
-from stream_integration import process_line, avatar_png
+from stream_integration import process_line, avatar_png, create_video_fixture
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 
@@ -164,7 +164,7 @@ def run_flow(directory, mysql_command, mysql_port):
             wait_port(tcp, process)
         def login(tcp, uid):
             sock = socket.create_connection(("127.0.0.1", tcp), timeout=10); sockets.append(sock)
-            send(sock, 1005, dict(uid=uid, token="fixture-token")); receive(sock, 1006); return sock
+            send(sock, 1005, dict(capabilities=["group_membership_v1"], uid=uid, token="fixture-token")); receive(sock, 1006); return sock
         sender, receiver = login(chat_a, 7), login(chat_b, 8)
         def request_resource(method, route, data=b"", uid=7, extra=None):
             conn = http.client.HTTPConnection("127.0.0.1", resource_port, timeout=15)
@@ -198,7 +198,8 @@ def run_flow(directory, mysql_command, mysql_port):
                        text_array=[dict(msg_uuid="11111111-1111-4111-8111-111111111111", msg_content="")])
         forged = dict(payload, from_uid=9)
         send(sender, 1016, forged)
-        assert receive(sender, 1017, success=False)["commit_error"] == "UnauthorizedSender"
+        assert sender.recv(1) == b"", "forged sender must be disconnected"
+        sender = login(chat_a,7)
         invalid = dict(payload, text_array=[dict(msg_uuid="invalid", msg_content="")])
         send(sender, 1016, invalid); receive(sender, 1017, success=False)
         send(sender, 1016, payload); acknowledgement = receive(sender, 1017)
@@ -225,6 +226,102 @@ def run_flow(directory, mysql_command, mysql_port):
         payload["text_array"][0]["msg_uuid"] = "22222222-2222-4222-8222-222222222222"
         send(sender, 1016, payload); receive(sender, 1017); receive(receiver, 1018)
         print("production flow: avatar publication/restart, cross-instance send, idempotent retry, authorized download, relogin/history, same-instance send passed")
+        import uuid
+        subprocess.run(mysql_command,input="USE resource_test; INSERT IGNORE INTO friend(self_id,other_id,backname) VALUES(7,8,''),(7,9,'');",text=True,check=True,timeout=10)
+        send(sender,1034,dict(name="Resources",members=[8],request_id=str(uuid.uuid4())))
+        group=receive(sender,1035)["chat_id"]
+        video_path = directory / "group-video.avi"
+        create_video_fixture(video_path)
+        fixtures = [("group.png", "image/png", avatar_png((0, 128, 255))),
+                    ("group.avi", "video/x-msvideo", video_path.read_bytes()),
+                    ("group.txt", "application/octet-stream", b"group-only-file-content")]
+        resources = []
+        for name, media_type, group_data in fixtures:
+            code, body = request_resource("POST", "/uploads", json.dumps(dict(name=name,
+                media_type=media_type, size=str(len(group_data)),
+                sha256=hashlib.sha256(group_data).hexdigest())).encode())
+            assert code == 200, body
+            group_resource = json.loads(body)["upload_id"]
+            # Reopen HTTP connections between chunks and recover the acknowledged offset.
+            offset = 0
+            while offset < len(group_data):
+                block = group_data[offset:offset + 262144]
+                code, body = request_resource("PATCH", "/uploads/" + group_resource, block,
+                                              extra={"Upload-Offset": str(offset)})
+                assert code == 200, body
+                offset = int(json.loads(body)["offset"])
+                code, body = request_resource("GET", "/uploads/" + group_resource)
+                assert code == 200 and int(json.loads(body)["offset"]) == offset
+            assert request_resource("POST", "/uploads/" + group_resource + "/complete")[0] == 200
+            resources.append((group_resource, group_data))
+
+        def commit_group(resource):
+            """提交真实群资源并验证相同 UUID 重试返回原消息身份。"""
+            payload = dict(from_uid=7, to_uid=0, chat_id=group, chat_type="group", membership_epoch="1",
+                           resource_id=resource, text_array=[dict(msg_uuid=str(uuid.uuid4()), msg_content="")])
+            send(sender, 1016, payload)
+            committed = receive(sender, 1017)
+            send(sender, 1016, payload)
+            assert receive(sender, 1017)["uuid_msgId"] == committed["uuid_msgId"]
+            return committed["uuid_msgId"][0]["message_id"]
+
+        def sync_group(sock, uid, after=0):
+            """通过现有正文同步合同获取群资源消息。"""
+            send(sock, 1027, dict(mode="sync_v1", uid=uid, chat_id=group, after_id=after,
+                                 request_id=str(uuid.uuid4()), membership_epoch="1"))
+            return receive(sock, 1028)["msgs"]
+
+        online_ids = [commit_group(resource) for resource, _ in resources]
+        assert [row["message_id"] for row in sync_group(receiver, 8)] == online_ids
+        receiver.close()
+        offline_ids = [commit_group(resource) for resource, _ in resources]
+        receiver = login(chat_b, 8)
+        offline = sync_group(receiver, 8, online_ids[-1])
+        assert [row["message_id"] for row in offline] == offline_ids
+        for (resource, expected), message in zip(resources, offline):
+            assert resource in message["content"]
+            code, downloaded = request_resource("GET", "/resources/" + resource, uid=8)
+            assert code == 200
+            assert hashlib.sha256(downloaded).digest() == hashlib.sha256(expected).digest()
+        import cv2
+        restored = directory / "group-downloaded.avi"
+        restored.write_bytes(request_resource("GET", "/resources/" + resources[1][0], uid=8)[1])
+        capture = cv2.VideoCapture(str(restored))
+        frames = 0
+        while capture.read()[0]:
+            frames += 1
+        capture.release()
+        assert frames == 250, frames
+        send(sender, 1038, dict(chat_id=group, operation="add", members=[9], expected_revision="1",
+                               request_id=str(uuid.uuid4())))
+        receive(sender, 1039)
+        late_member = login(chat_a, 9)
+        assert sync_group(late_member, 9) == []
+        for resource, _ in resources:
+            assert request_resource("GET", "/resources/" + resource, uid=9)[0] == 403
+        send(sender, 1038, dict(chat_id=group, operation="remove", target_uid=8, expected_revision="2",
+                               request_id=str(uuid.uuid4())))
+        receive(sender, 1039)
+        for resource, _ in resources:
+            assert request_resource("GET", "/resources/" + resource, uid=8)[0] == 403
+        # A new independent private reference restores access to the same bytes for every media type.
+        for resource, expected in resources:
+            private_payload = dict(from_uid=7, to_uid=8, chat_id=1, resource_id=resource,
+                text_array=[dict(msg_uuid=str(uuid.uuid4()), msg_content="")])
+            send(sender, 1016, private_payload)
+            receive(sender, 1017)
+            receive(receiver, 1018)
+            assert request_resource("GET", "/resources/" + resource, uid=8) == (200, expected)
+        send(sender, 1038, dict(chat_id=group, operation="dissolve", expected_revision="3",
+                               request_id=str(uuid.uuid4())))
+        receive(sender, 1039)
+        for resource, expected in resources:
+            assert request_resource("GET", "/resources/" + resource, uid=8) == (200, expected)
+        # The earlier private-chat reference independently continues to authorize this resource.
+        assert request_resource("GET", "/resources/" + resource_id, uid=8) == (200, data)
+        print("group PNG/video/file: resumed upload, online/offline sync, UUID replay, SHA-256 download, "
+              "250 decoded video frames, join boundary, removal and independent private permission passed")
+
     finally:
         if sys.exc_info()[0] is not None:
             print("Flow process exit codes before cleanup:", [(p.args[0], p.poll()) for p in processes], flush=True)

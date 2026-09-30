@@ -42,7 +42,7 @@ public:
     /** @brief 转交已认证文本批次提交；DAO 先清空 chat_msgs，成功按输入顺序填充，错误不代表可换 UUID 重试。 */
 	message_commit::Result AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
         int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
-        std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline);
+        std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline, std::int64_t epoch = 0);
     /** @brief 转交带成员校验的 ID 升序分页，输出消息、后续页标志和末尾 ID；false 时不得消费输出。 */
 	bool GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
 		std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id);
@@ -51,6 +51,9 @@ public:
     /** @brief 转交持久化消息增量同步；成功填充 response，false 表示存储或请求处理失败。 */
     bool SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response);
     /** @brief 原子建立固定成员群；同一创建 UUID 重试返回原群，内容冲突或非好友返回 false。 */
+    /** @brief 执行群资料、成员管理或个人好友备注事务，响应包含稳定业务错误。 */
+    bool GroupRequest(int uid, const Json::Value& request, bool manage, Json::Value& response);
+    /** @brief 原子建群并按不可变创建者与原始成员集合处理重试。 */
     bool CreateGroup(int owner, const std::string& name, const std::string& uuid,
         const std::vector<int>& members, int& chat_id);
 private:

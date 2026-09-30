@@ -189,6 +189,8 @@ public:
     ChatType getChatType();
     /** @brief 返回会话展示名称，群聊使用建群时的群名。 */
     QString name() const { return _name; }
+    /** @brief 更新已持久化会话的展示名称，保留消息缓存。 */
+    void setName(const QString &name) { _name = name; }
     // 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息
     /** @brief 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息。 */
     std::shared_ptr<ChatDataBase> getChatDataByMsgId(int msg_id);

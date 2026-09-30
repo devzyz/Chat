@@ -28,6 +28,21 @@ develop Required Check 为 `Regression checks`；master 为 `Regression checks` 
 master 禁止直接推送、强推和删除，不要求人工审批。
 切换保护检查须在新工作流出现并验证后完成，避免只改名称导致合并失去保护或永久等待。
 
+### 按需首版真实环境验收
+
+`workflow_dispatch` 新增 `real_acceptance` 布尔输入，默认 `false`。只有手动运行并显式启用时，
+Linux 既有完整 3D 路径额外启动生产 ResourceServer，执行四账号首版场景和自动 Qt 控件验收。
+普通 PR/push、周检、master 流程不自动启用此专项；既有 Windows/Linux 检查与发布条件保持原合同。
+
+启用时，`Real environment acceptance` 要求同一次运行的 Windows 与 Linux 全部成功；Linux 内部
+还核对新增场景完整性、源码 SHA、报告摘要和资源清理。未请求记录 `not-requested`，不能当作此专项通过。
+该可选检查不设为所有 PR 的无条件 required check，避免未请求时永久等待。
+
+沿用固定 Docker 镜像、随机凭据、loopback 端口、临时库及已有进程监督。邮件仅进入 Mailpit；
+新增 ffmpeg/ffprobe 是临时 runner 的媒体验收工具，不启用工具链刷新、不改本机依赖。
+自动控件/协议证据不等于人工 Windows 桌面走查，也不检查个人虚拟机已有数据库。
+入口、报告和边界见 [服务验收说明](services/README.md#按需首版真实环境验收)。
+
 ### 1.1 工具链维护周期
 
 日常 PR、push 和普通手动运行使用已验证的 Windows 工具链版本；每周在默认分支获取

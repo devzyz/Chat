@@ -165,7 +165,7 @@ jobs:
 
       - name: Verify CI triggers and execution budgets
         shell: pwsh
-        run: node --test tests/build/ciBudget.test.js tests/build/ciScope.test.js
+        run: node --test tests/build/ciBudget.test.js tests/build/ciScope.test.js tests/services/phase3dEvidence.test.js tests/services/widgetEvidence.test.js tests/services/firstReleaseCases.test.js
 
       - name: Test release packaging
         shell: pwsh
@@ -173,7 +173,13 @@ jobs:
 
       - name: Verify server-only CMake configuration
         shell: pwsh
-        run: cmake "-DCHAT_TEST_NINJA=$((Get-Command ninja).Source)" -P tests/build/server_only_configuration.cmake
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          cmake "-DCHAT_TEST_NINJA=$((Get-Command ninja).Source)" -P tests/build/server_only_configuration.cmake
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake "-DCHAT_TEST_NINJA=$((Get-Command ninja).Source)" -DCHAT_TEST_BINARY_DIR=build/server-only-acceptance-contract -DCHAT_TEST_ACCEPTANCE_RESOURCES=ON -P tests/build/server_only_configuration.cmake
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Reject an already published master version
         if: github.base_ref == 'master' || (github.event_name == 'push' && github.ref == 'refs/heads/master')

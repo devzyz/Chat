@@ -7,11 +7,12 @@ const { DependencyCoordinator, loadConfiguration, caseDiagnostic } = require('./
 const { runFiveProcessCases } = require('./fiveProcessCases');
 const { writeReports } = require('./serviceReports');
 
-const { reportGroups } = require('./phase3dEvidence');
+const { reportGroups, realAcceptanceRequested } = require('./phase3dEvidence');
 /** 按所选 Phase 3D 范围运行真实服务合同，聚合用例与清理证据并传播失败。 */
 async function run(root) {
     const selector = process.env.CHAT_SERVICE_SELECTOR || '3D-00';
-    const groups = reportGroups(selector);
+    const realAcceptance = realAcceptanceRequested();
+    const groups = reportGroups(selector, realAcceptance);
     fs.mkdirSync(root, { recursive: true });
     const cases = [];
     let coordinator;
@@ -34,13 +35,21 @@ async function run(root) {
         await coordinator.bootstrap();
         await runFiveProcessCases(coordinator, record, root, selector);
     } catch (error) {
-        primaryFailure = /^E03-(?:CONTRACT|JOURNEY|XMSG|RECOVER)-\d\d$/.test(error.message) ? error.message : 'setup';
+        primaryFailure = /^E03-(?:CONTRACT|JOURNEY|XMSG|RECOVER|RELEASE)-\d\d$/.test(error.message) ? error.message : 'setup';
     } finally {
         if (coordinator) {
             try { cleanup = await coordinator.teardown(); } catch { cleanup = { complete: false }; }
         }
         fs.writeFileSync(path.join(root, 'teardown.json'), JSON.stringify({ ...cleanup, primaryFailure }));
         writeReports(root, selector, cases, { groups, manifest: 'phase3d-reports.json', level: 'E2E' });
+        const complete = !primaryFailure && cleanup.complete === true &&
+            cases.length === groups.reduce(/** 汇总全部必需用例，缺项不能通过。 */ (sum, group) => sum + group.expected, 0) &&
+            cases.every(/** 仅接受实际执行成功的用例。 */ value => value.pass === true);
+        fs.writeFileSync(path.join(root, 'real-acceptance.json'), JSON.stringify({
+            requested: realAcceptance, sourceSha: process.env.CHAT_CANDIDATE_SHA || null,
+            status: realAcceptance ? (complete ? 'passed' : 'failed') : 'not-requested',
+            cleanupComplete: realAcceptance && cleanup.complete === true
+        }, null, 2));
     }
     if (primaryFailure || !cleanup.complete || cases.length !== groups.reduce(/** 累计所选报告组预期用例总数。 */ (sum, group) => sum + group.expected, 0) || cases.some(/** 识别未通过的用例以判定本次运行失败。 */ value => !value.pass)) {
         throw new Error('phase3d-contract-failed');

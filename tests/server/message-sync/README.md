@@ -61,3 +61,19 @@ Group delivery is polling-based; this test does not claim desktop interaction or
 `MessageSync.GroupMembershipAndCommitOrdering` verifies three members sharing one
 message, UUID retry identity, non-member denial and an observed InnoDB lock wait
 while group synchronization waits for an uncommitted writer.
+
+## Dynamic group extension
+
+The same runner now applies migration 006. `DynamicGroupLifecycleAndResources`
+covers batch rollback, role checks, version/UUID conflicts, join boundaries, rejoin
+epochs, transfer/leave/dissolve and resource authorization.
+`ConcurrentGroupVersionsSerialize` executes competing management transactions and
+requires exactly one success. The existing lock-wait test protects group/message serialization.
+`integration.py` adds four-account TCP management, late-generation rejection, creation
+retry after rename, tombstone discovery, and direction-specific friend remarks.
+All tests retain the real-MySQL/fixture-Status/fixture-Redis boundary described above.
+
+`MembershipChangesWaitForCommittedMessages` observes real InnoDB lock waits for
+add/remove behind a message transaction, then verifies the join boundary and revoked
+send/sync permission. `TransferAndLeaveCannotRemoveTheOwner` races transfer against
+the target's leave and requires exactly one success and one active owner.

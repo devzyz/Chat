@@ -20,6 +20,7 @@
 #include "chatuseritem.h"
 #include "contactuseritem.h"
 #include <QTimer>
+#include <QComboBox>
 #include <QJsonDocument>
 #include <QByteArray>
 
@@ -33,6 +34,9 @@ ChatDialog::ChatDialog(QWidget *parent)
     ui->add_btn->setState("normal", "hover", "press");
     ui->add_btn->setToolTip(tr("创建群聊"));
     connect(ui->add_btn, &QPushButton::clicked, this, &ChatDialog::openCreateGroup);
+    auto *findLocal = new QPushButton(tr("本地查找"), this);
+    ui->add_btn->parentWidget()->layout()->addWidget(findLocal);
+    connect(findLocal,&QPushButton::clicked,this,&ChatDialog::openDirectorySearch);
 
     // 搜索框最大长度限制
     ui->search_edit->setMaxLength(15);
@@ -902,7 +906,7 @@ void ChatDialog::openCreateGroup()
     name->setPlaceholderText(tr("群名称（最多 20 个字）"));
     name->setMaxLength(20);
     layout->addWidget(name);
-    layout->addWidget(new QLabel(tr("选择 1～19 位好友，建群后成员固定"), dialog));
+    layout->addWidget(new QLabel(tr("选择 1～19 位好友，群主可管理成员"), dialog));
     auto *members = new QListWidget(dialog);
     for (const auto &user : UserMgr::instance()->friends()) {
         auto *item = new QListWidgetItem(user->_name + QString(" (%1)").arg(user->_uid), members);
@@ -970,4 +974,40 @@ void ChatDialog::openCreateGroup()
             dialog->accept();
         });
     dialog->open();
+}
+
+void ChatDialog::openDirectorySearch()
+{
+    auto *dialog=new QDialog(this); dialog->setAttribute(Qt::WA_DeleteOnClose); dialog->setWindowTitle(tr("联系人与群")); dialog->resize(400,450);
+    auto *layout=new QVBoxLayout(dialog); auto *kind=new QComboBox(dialog);
+    kind->addItem(tr("联系人"),"contacts"); kind->addItem(tr("群聊"),"conversations"); layout->addWidget(kind);
+    auto *input=new QLineEdit(dialog); input->setMaxLength(200); input->setPlaceholderText(tr("名称、备注或编号；回车查找")); layout->addWidget(input);
+    auto *rows=new QListWidget(dialog); layout->addWidget(rows); auto *more=new QPushButton(tr("下一页"),dialog); layout->addWidget(more); more->setEnabled(false);
+    auto text=std::make_shared<QString>(); auto category=std::make_shared<QString>(); auto cursor=std::make_shared<int>(0);
+    connect(input,&QLineEdit::returnPressed,dialog,/** @brief 从头筛选选定类别的本地目录。 */ [input,kind,rows,more,text,category,cursor] {
+        *text=input->text().trimmed(); *category=kind->currentData().toString(); *cursor=0; rows->clear(); more->setEnabled(false);
+        UserMgr::instance()->messages()->findDirectory(*category,*text);
+    });
+    connect(more,&QPushButton::clicked,dialog,/** @brief 沿匹配记录的主键继续查询。 */ [more,text,category,cursor] {
+        more->setEnabled(false); UserMgr::instance()->messages()->findDirectory(*category,*text,*cursor);
+    });
+    connect(UserMgr::instance()->messages(),&MessageService::directoryFound,dialog,
+        /** @brief 合并仍匹配搜索身份的页，并保留完整目录定位信息。 */
+        [rows,more,text,category,cursor](const QString &foundKind,const QString &foundText,int after,const QJsonArray &values) {
+        if (foundKind!=*category || foundText!=*text || after!=*cursor) return;
+        for (const auto &value:values) {
+            const auto row=value.toObject();
+            auto *item=new QListWidgetItem(row["name"].toString()+" "+row["backname"].toString()+QString(" (%1)").arg(row["id"].toInt()),rows);
+            item->setData(Qt::UserRole,row); *cursor=row["id"].toInt();
+        }
+        more->setEnabled(values.size()==50);
+    });
+    connect(rows,&QListWidget::itemDoubleClicked,dialog,/** @brief 从搜索结果打开已有群或联系人的会话。 */ [this,dialog](QListWidgetItem *item) {
+        const auto row=item->data(Qt::UserRole).toJsonObject();
+        int chat=row["type"]=="group" ? row["id"].toInt() : UserMgr::instance()->privateChatIdFor(row["id"].toInt());
+        if (chat<=0 || !UserMgr::instance()->chatInfo(chat)) return;
+        tcpLoadChatFinish(QJsonArray{QJsonObject{{"chat_id",chat}}});
+        midlistToChatList(); ui->chat_user_list->setCurrentItem(_chat_item_map.value(chat)); chatItemClicked(_chat_item_map.value(chat)); dialog->close();
+    });
+    dialog->show();
 }

@@ -44,8 +44,16 @@ public:
     QJsonObject mergeDirectory(const QJsonObject &directory);
     /** @brief 读取账号目录，用于恢复内存查询缓存。 */
     QJsonObject directory();
+    /** @brief 读取已持久化群状态；非群返回空对象。 */
+    QJsonObject groupState(int chatId);
+    /** @brief 检查请求所属群资格，防止旧 outbox 在重新入群后发送。 */
+    bool canSendGroup(const QJsonObject &request);
+    /** @brief 按本地消息主键倒序搜索当前会话正文和资源文件名，最多返回 limit 条。 */
+    QVector<StoredMessage> search(int chatId, const QString &text, qint64 before = 0, int limit = 50);
     /** @brief 按固定主键升序读取目录页；kind 为 contacts、conversations 或 applications。 */
     QJsonArray directoryPage(const QString &kind, int after, int limit);
+    /** @brief 在完整本地目录按名称、备注或编号筛选，返回稳定 ID 分页。 */
+    QJsonArray findDirectory(const QString &kind, const QString &text, int after, int limit);
     /** @brief 默认构造空状态，实际账号或资源在显式初始化时接入。 */
     LocalMessageStore() = default;
     /** @brief 关闭账号数据库并移除本对象的 SQLite 连接。 */
@@ -63,7 +71,7 @@ public:
     /** @brief 读取指定会话已经事务提交的消息同步游标。 */
     qint64 cursor(int chatId);
     /** @brief 在同一事务中合并服务器消息并推进匹配 previous 的游标；失败不推进游标。 */
-    void applySyncPage(int chatId, qint64 previous, qint64 next, const QVector<StoredMessage> &messages);
+    void applySyncPage(int chatId, qint64 previous, qint64 next, const QVector<StoredMessage> &messages, const QString &epoch = {});
     /** @brief 将待发消息落入本地存储，保留客户端 UUID 以支持重试。 */
     void saveOutgoing(const QVector<StoredMessage> &messages);
     /** @brief 按会话、发送者和 UUID 将已发送消息与服务器 ID 关联，不推断送达或已读。 */
