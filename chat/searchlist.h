@@ -21,11 +21,6 @@ public:
     /** @brief 借用搜索输入控件，调用期间要求控件仍由页面持有。 */
     void setSearchEdit(QWidget * edit);
 
-protected:
-    // 处理滚轮的一些变化
-    /** @brief 观察关联对象事件并处理本控件负责的交互，其余事件交回 Qt。 */
-    bool eventFilter(QObject * watched, QEvent * event) override;
-
 private:
     /** @brief 进入等待时创建提示并锁定搜索，结束时销毁提示并允许下一次搜索。 */
     void waitPending(bool pending = true);

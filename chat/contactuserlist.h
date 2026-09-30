@@ -22,10 +22,6 @@ public:
     /** @brief 从账号 SQLite 请求下一页联系人，查询完成前不重复请求。 */
     void loadNextPage();
 
-protected:
-    /** @brief 处理滚动事件，在联系人未全部加载时请求下一页。 */
-    bool eventFilter(QObject * watched, QEvent * event);
-
 private:
     /** @brief 从账号缓存加载一页联系人并推进游标。 */
     void loadContactUserList();
@@ -43,11 +39,6 @@ public slots:
      */
     void itemClicked(QListWidgetItem * item);
 signals:
-    /**
-     * @brief sig_loading_contact_user
-     * 加载更多联系人的信号
-     */
-    void moreContactsRequested();
     /**
      * @brief sig_switch_apply_friend_page
      * 将右侧界面切换为新朋友申请列表

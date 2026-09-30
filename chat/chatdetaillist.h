@@ -21,8 +21,6 @@ signals:
     void viewportResized();
 
 protected:
-    /** @brief 观察关联对象事件并处理本控件负责的交互，其余事件交回 Qt。 */
-    bool eventFilter(QObject *watched, QEvent *event) override;
     /** @brief 响应控件尺寸变化并更新布局或通知视口变化。 */
     void resizeEvent(QResizeEvent *event) override;
 };

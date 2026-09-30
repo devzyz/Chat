@@ -890,3 +890,6 @@ preserving prior rows and rejecting schema drift. No personal database or promot
 Q05-STORE-15..17 在 [message-storage](../chat/tests/message-storage/README.md) 定义，
 纳入既有 `message_storage.persistence`，覆盖联系人/会话/申请持久化、分页、事务及 schema 3 升级。
 `session_reset.account_state` 增加生产目录回包与重启缓存恢复的组合验证；不增加聚合报告数量。
+
+`Q01-LIST-01` / `list_view.interaction` 覆盖共享列表交互：原生滚动、键盘/滚动条到底、短列表重试和销毁取消；
+所属 Foundation / Component，入口与边界见 [列表测试](../chat/tests/list-view/README.md)。

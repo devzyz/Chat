@@ -1,11 +1,10 @@
 #include "contactuserlist.h"
+#include "listviewbehavior.h"
 #include "logmgr.h"
 #include "contactuseritem.h"
 #include "grouptipitem.h"
 #include <QListWidgetItem>
 #include <QEvent>
-#include <QWheelEvent>
-#include <QScrollBar>
 #include "tcpmgr.h"
 #include "usermgr.h"
 #include "messageservice.h"
@@ -14,12 +13,8 @@
 
 ContactUserList::ContactUserList(QWidget *parent) : QListWidget(parent), _loading_contact(false)
 {
-    // 关闭滚动条
-    this->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    this->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-
-    // 安装事件过滤器
-    this->viewport()->installEventFilter(this);
+    auto *behavior = new ListViewBehavior(this);
+    connect(behavior, &ListViewBehavior::bottomReached, this, &ContactUserList::loadNextPage);
 
     loadContactUserList();
 
@@ -65,56 +60,6 @@ void ContactUserList::showRedPoint(bool bshow)
         return ;
     }
     _add_friend_item_inner_widget->showRedPoint(bshow);
-}
-
-/**
- * @brief ContactUserList::eventFilter
- * @param watched
- * @param event
- * @return
- * 重写QListWidget的鼠标移入移出（是否显示滚轮）
- * 重写在QListWidget内鼠标的滚动事件
- */
-bool ContactUserList::eventFilter(QObject *watched, QEvent *event)
-{
-    // 如果鼠标进入了这个列表的显示窗口区域
-    if (watched == this->viewport()) {
-        if (event->type() == QEvent::Enter) {
-            // 鼠标悬浮在当前窗口，显示滚动条
-            this->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        }else if(event->type() == QEvent::Leave){
-            // 鼠标不在当前窗口，隐藏滚动条
-            this->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        }
-    }
-
-    // 检查鼠标在显示窗口内的滚轮事件
-    if (watched == this->viewport() && event->type() == QEvent::Wheel) {
-        // 将基类QEvent转换为对应的子类，QWheelEvent来访问他的私有数据
-        QWheelEvent *wheelEvent = static_cast<QWheelEvent*>(event);
-        // 计算移动的步长
-        // angleDeltada返回的单位为1/8度，因此，除以8能够得到角度，然后一般鼠标滚轮嘎达一下为15度，因此除以15得到步数
-        int numDegrees = wheelEvent->angleDelta().y() / 8;
-        int numSteps = numDegrees / 15;
-
-        // 设置滚动幅度
-        this->verticalScrollBar()->setValue(this->verticalScrollBar()->value() - numSteps);
-
-        // 检查是否滚动到底部
-        QScrollBar *scrollBar = this->verticalScrollBar();
-        int maxScrollValue = scrollBar->maximum();
-        int currentValue = scrollBar->value();
-
-        if (maxScrollValue - currentValue <= 0) {
-            // 滚动到底部，加载新的联系人
-            SPDLOG_DEBUG("loading more contacts");
-            emit moreContactsRequested();
-        }
-
-        return true;
-    }
-
-    return QListWidget::eventFilter(watched, event);
 }
 
 /**
