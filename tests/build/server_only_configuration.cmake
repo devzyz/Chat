@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.28.3)
 get_filename_component(repo_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+if(NOT DEFINED CHAT_TEST_ACCEPTANCE_RESOURCES)
+    set(CHAT_TEST_ACCEPTANCE_RESOURCES OFF)
+endif()
 if(NOT DEFINED CHAT_TEST_BINARY_DIR)
     set(CHAT_TEST_BINARY_DIR "${repo_root}/build/server-only-contract")
 endif()
@@ -13,7 +16,7 @@ function(find_package name)
     endif()
     foreach(target IN ITEMS Boost::filesystem gRPC::grpc++ protobuf::libprotobuf
             hiredis::hiredis JsonCpp::JsonCpp unofficial::mysql-connector-cpp::connector-jdbc
-            spdlog::spdlog Threads::Threads)
+            spdlog::spdlog Threads::Threads OpenSSL::Crypto ZLIB::ZLIB)
         if(NOT TARGET ${target})
             add_library(${target} INTERFACE IMPORTED GLOBAL)
         endif()
@@ -36,7 +39,7 @@ execute_process(COMMAND "${CMAKE_COMMAND}" -S "${repo_root}" -B "${CHAT_TEST_BIN
     -DCMAKE_CXX_COMPILER_VERSION=13.3.0 -DCMAKE_CXX_ABI_COMPILED=TRUE
     -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_BUILD_TYPE=Release
     "-DCMAKE_PROJECT_ChatServices_INCLUDE_BEFORE=${CHAT_TEST_BINARY_DIR}/dependencies.cmake"
-    -DCHAT_BUILD_CLIENT=OFF -DBUILD_TESTING=OFF -DCHAT_ENABLE_HOSTED_PREFLIGHT=OFF
+    -DCHAT_BUILD_CLIENT=OFF "-DCHAT_BUILD_ACCEPTANCE_RESOURCES=${CHAT_TEST_ACCEPTANCE_RESOURCES}" -DBUILD_TESTING=OFF -DCHAT_ENABLE_HOSTED_PREFLIGHT=OFF
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
 if(NOT result EQUAL 0)
     message(FATAL_ERROR "Headless configuration failed (${result}):\n${output}\n${error}")
@@ -47,6 +50,12 @@ foreach(server IN ITEMS GateServer StatusServer ChatServer)
         message(FATAL_ERROR "Missing server build target: ${server}")
     endif()
 endforeach()
+if(CHAT_TEST_ACCEPTANCE_RESOURCES AND NOT graph MATCHES "build ResourceServer:")
+    message(FATAL_ERROR "Requested acceptance is missing production ResourceServer")
+endif()
+if(NOT CHAT_TEST_ACCEPTANCE_RESOURCES AND graph MATCHES "build ResourceServer:")
+    message(FATAL_ERROR "Default build unexpectedly enabled acceptance resources")
+endif()
 if(graph MATCHES "chat/packages/spdlog|Qt[56]|tests/server|chat_session_core")
     message(FATAL_ERROR "Server-only graph contains client or test dependencies")
 endif()

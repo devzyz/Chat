@@ -3,6 +3,9 @@ name: Linux integration and end-to-end tests
 on:
   workflow_call:
     inputs:
+      real_acceptance:
+        type: boolean
+        default: false
       cold_build:
         type: boolean
         default: false
@@ -185,6 +188,31 @@ jobs:
       - name: Verify shared production targets and ProcessHarness
         run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-01
 
+      - name: Build opt-in production resources and widget acceptance
+        if: inputs.real_acceptance
+        timeout-minutes: 15
+        run: |
+          cmake --preset linux-x64-release -DCHAT_BUILD_ACCEPTANCE_RESOURCES=ON -DVCPKG_MANIFEST_INSTALL=OFF
+          cmake --build out/build/linux-x64-release --target ResourceServer resource_http_test_host resource_transfer_tests --parallel 2
+          mkdir -p out/real-acceptance/widgets
+          out/build/linux-x64-release/bin/resource_http_test_host --gtest_filter=StoreTest.* --gtest_output=xml:out/real-acceptance/widgets/resource-store.xml
+          RESOURCE_TEST_HOST="$PWD/out/build/linux-x64-release/bin/resource_http_test_host" \
+            CHAT_UI_CAPTURE="$PWD/out/real-acceptance/widgets/group-panel.png" \
+            QT_QPA_PLATFORM=offscreen QT_STYLE_OVERRIDE=Fusion \
+            timeout --signal=TERM --kill-after=5s 120s out/build/linux-x64-release/bin/resource_transfer_tests \
+            -o out/real-acceptance/widgets/widgets.xml,junitxml
+          git rev-parse HEAD > out/real-acceptance/widgets/source-sha.txt
+          node tests/services/widgetEvidence.js out/real-acceptance/widgets "$(git rev-parse HEAD)"
+
+      - name: Upload opt-in automated widget evidence
+        if: always() && inputs.real_acceptance
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: real-acceptance-widgets
+          path: out/real-acceptance/widgets/*
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Build same-source service RunContext launcher
         run: |
           timeout --signal=TERM --kill-after=5s 120s cmake --build out/build/linux-x64-release --target service_run redis_adapter_integration message_commit_integration gate_mysql_pool_tests FourProcessDriver history_response_tests chat_tcp_transport_tests --parallel 2
@@ -202,7 +230,7 @@ jobs:
           env -u LD_LIBRARY_PATH -u LD_PRELOAD out/phase3c/service-launcher/redis_adapter_integration lifecycle
           node tests/services/messageRuntime.js pack out/build/linux-x64-release/bin/message_commit_integration out/phase3c/service-launcher/message .ci/vcpkg_installed
           git rev-parse HEAD > out/phase3c/service-launcher/source-sha.txt
-          node tests/services/fourRuntime.js pack out/build/linux-x64-release/bin out/phase3c/service-launcher/four .ci/vcpkg_installed
+          CHAT_REAL_ACCEPTANCE=${{ inputs.real_acceptance && '1' || '0' }} node tests/services/fourRuntime.js pack out/build/linux-x64-release/bin out/phase3c/service-launcher/four .ci/vcpkg_installed
           node tests/services/clientRuntime.js pack out/build/linux-x64-release/bin/chat_e2e_client out/phase3c/service-launcher/client "$(qmake -query QT_INSTALL_PREFIX)" .ci/vcpkg_installed
           (cd out/phase3c/service-launcher && { sha256sum service_run redis_adapter_integration libhiredis.so.1 message/* four/*/*; find client -type f -print0 | sort -z | xargs -0 sha256sum; } > service_run.sha256)
 
@@ -347,6 +375,7 @@ jobs:
           MP_DATABASE: /tmp/phase3c-mailpit.db
         ports: ["127.0.0.1::1025", "127.0.0.1::8025"]
     env:
+      CHAT_REAL_ACCEPTANCE: ${{ inputs.real_acceptance && '1' || '0' }}
       CHAT_CANDIDATE_SHA: ${{ github.sha }}
       CHAT_E2E_CLIENT: ${{ github.workspace }}/out/phase3c/service-launcher/client/chat_e2e_client
       CHAT_SERVICE_LAUNCHER: ${{ github.workspace }}/out/phase3c/service-launcher/service_run
@@ -386,6 +415,11 @@ jobs:
           env -u LD_LIBRARY_PATH -u LD_PRELOAD "$CHAT_REDIS_TEST_BINARY" lifecycle
           chmod u+x "$CHAT_E2E_CLIENT"
           node tests/services/clientRuntime.js verify out/phase3c/service-launcher/client
+      - name: Install media validation tools for requested acceptance
+        if: inputs.real_acceptance
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
       - name: Restore existing locked Node libraries
         timeout-minutes: 2
         working-directory: VarifyServer
@@ -453,6 +487,7 @@ jobs:
         env:
           SOURCE_SHA: ${{ github.sha }}
           BUSINESS_RESULT: ${{ needs.two-server-contract.result }}
+          CHAT_REAL_ACCEPTANCE: ${{ inputs.real_acceptance && '1' || '0' }}
         run: |
           test "$BUSINESS_RESULT" = success
           node scripts/ci/verify-service-reports.js out/phase3d/contracts "$SOURCE_SHA"

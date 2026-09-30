@@ -18,10 +18,12 @@ function read(name) {
 /** 检查所选服务报告与内外清理证据，写最终合同并传播失败。 */
 async function finalize() {
     const phase3d = ['3D-00', '3D-01', '3D-02', '3D-03-history', '3D-03', '3D'].includes(process.env.CHAT_SERVICE_SELECTOR);
+    const realAcceptance = require('./phase3dEvidence').realAcceptanceRequested();
+    if (realAcceptance && !phase3d) throw new Error('real acceptance requires full 3D');
     const teardown = read('teardown.json');
     const processTeardown = read('process-teardown.json');
     const junit = path.join(root, phase3d ? 'linux_phase3d_contract.xml' : 'linux_services.xml');
-    const reports = phase3d ? require('./phase3dEvidence').reportGroups(process.env.CHAT_SERVICE_SELECTOR) : reportGroups(process.env.CHAT_SERVICE_SELECTOR || '3C-02');
+    const reports = phase3d ? require('./phase3dEvidence').reportGroups(process.env.CHAT_SERVICE_SELECTOR, realAcceptance) : reportGroups(process.env.CHAT_SERVICE_SELECTOR || '3C-02');
     let reportsComplete = reports.every(/** 确认报告存在测试套件且没有失败或错误标记。 */ (group) => {
         try {
             const report = fs.readFileSync(path.join(root, group.file), 'utf8');
@@ -30,7 +32,7 @@ async function finalize() {
         } catch { return false; }
     });
     if (phase3d) {
-        try { require('./phase3dEvidence').validate(root, process.env.CHAT_CANDIDATE_SHA, process.env.CHAT_SERVICE_SELECTOR); }
+        try { require('./phase3dEvidence').validate(root, process.env.CHAT_CANDIDATE_SHA, process.env.CHAT_SERVICE_SELECTOR, realAcceptance); }
         catch { reportsComplete = false; }
     }
     teardown.processComplete = processTeardown.complete === true;
@@ -58,6 +60,12 @@ async function finalize() {
         }
     }
     fs.writeFileSync(path.join(root, 'teardown.json'), JSON.stringify(teardown, null, 2));
+    const acceptance = read('real-acceptance.json');
+    fs.writeFileSync(path.join(root, 'real-acceptance.json'), JSON.stringify({
+        requested: realAcceptance, sourceSha: process.env.CHAT_CANDIDATE_SHA || null,
+        status: realAcceptance ? (teardown.complete && acceptance.status === 'passed' ? 'passed' : 'failed') : 'not-requested',
+        cleanupComplete: realAcceptance && teardown.complete === true
+    }, null, 2));
     if (!phase3d && !fs.existsSync(path.join(root, 'service-endpoints.json'))) {
         fs.writeFileSync(path.join(root, 'service-endpoints.json'), '{"status":"not-started"}\n');
     }

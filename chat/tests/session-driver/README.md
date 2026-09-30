@@ -98,3 +98,58 @@ The existing E03-CONTRACT-01 also reads legacy history after authenticated stora
 It interleaves a sync response and replays an unsolicited legacy response: only the explicitly
 requested page may complete the history command and update its model cursor. Sync responses
 remain owned by MessageService and legacy pages cannot advance its persisted sync cursor.
+
+## Opt-in real acceptance controls
+
+The existing driver also supports the manually selected real-dependency gate.
+All commands require an authenticated production session; responses have
+`status: completed`, `error`, and `result` (the existing send response remains
+flat). No command inserts successful group or resource facts directly.
+
+- `group-create`: `uuid`, `name`, `members`; `group-info`: `uuid`, `chatId`, `after`.
+- `group-manage`: `uuid`, `chatId`, string `version`, `operation`, `params`
+  (`members`, `target_uid`, or `name`). It persists the pending request before
+  transmitting. Results preserve `local_save_failed` separately from server error.
+- `group-state`: `chatId`; returns the production persisted membership snapshot.
+- `group-send`: `uuid`, `chatId`, `text`, optional string `epoch`.
+  New sends use the persistent outbox. Committed UUID probes replay the actual
+  previously sent payload to exercise server duplicate/conflict behavior.
+- `resource-send`: `uuid`, `chatId`, `toUid` (zero for groups), `descriptor`.
+- `upload`: `path`; returns the real server descriptor. `download`: `descriptor`;
+  returns actual file `path`, `sha256`, and `size` after production download/hash
+  validation. Each transfer gets an isolated temporary cache; paths survive until
+  the process exits, so the controller can decode downloaded media.
+- `resource-probe`: `descriptor`; makes an independent authenticated real HTTP
+  range GET and returns `httpStatus`. A network error is status zero and error -1,
+  never an authorization denial. Use this alongside production transfer checks.
+- `local-history`: `chatId`, string `before`; `search`: additionally `text`.
+  Both return `result.messages` containing UUID, message/local IDs, sender, state
+  and actual content hash. `sync` waits for a committed production sync event.
+- `directory-find`: `kind` (`contacts` or `conversations`), `text`, `after`;
+  returns `result.rows` from the complete account SQLite directory.
+- `remark`: `uuid`, `toUid`, `backname`; `logout` resets the production session
+  while keeping the controller alive for relogin/account isolation checks.
+
+The test process can use `CHAT_RESOURCE_URL` for its isolated ResourceServer;
+otherwise it reads the same `ResourceServer/Url` configuration as the GUI.
+`group-manage` may set `localSaveFailure: true`: after the durable request has
+been saved, a second SQLite connection acquires a real write lock before TCP
+transmission. The production response handler must report its actual failed
+write. `storage-unlock` releases the lock, allowing original-identity retry and
+refresh recovery. This is confined to the test executable, not a production mode.
+
+Extended commands have a 30-second deadline. These controls provide automated
+production-client evidence, not manual Windows desktop acceptance. The existing
+session-driver regression also exercises real SQLite history/search/directory
+responses and logout; full group/resource outcomes require the real-dependency
+scenario, not fixture-only test success.
+
+The process regression also sends fixture TCP group responses through production
+TcpMgr while an actual second SQLite connection holds a write lock. It verifies
+that unrelated group sync failures cannot consume the pending management reply,
+that server-success/local-save-failure remains explicit, and that unlocking then
+retrying the identical management UUID completes without that local failure.
+This proves the client persistence boundary only; server group transactions are
+covered separately by the real-dependency run. A pre-send storage failure has no
+request-scoped failure callback in the production API, so the driver fails at its
+bounded deadline rather than misattributing a background directory failure.

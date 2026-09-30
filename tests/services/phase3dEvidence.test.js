@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { groups, reportGroups, validate } = require('./phase3dEvidence');
+const { groups, reportGroups, validate, realAcceptanceRequested } = require('./phase3dEvidence');
 const { writeReports } = require('./serviceReports');
 const { createTopology } = require('./twoServerTopology');
 
@@ -106,6 +106,94 @@ test('foundation evidence binds exact cases, bytes, SHA, distinct clients and cl
         fs.appendFileSync(path.join(root, 'linux_phase3d_recovery.xml'), 'modified');
         assert.throws(/** 校验字节被篡改的恢复报告，预期失败。 */ () => validate(root, sha, '3D-03-history'));
         assert.equal(reportGroups('3D-03').at(-1).expected, 11);
+    } finally {
+        if (previous === undefined) delete process.env.CHAT_CANDIDATE_SHA;
+        else process.env.CHAT_CANDIDATE_SHA = previous;
+        fs.rmSync(root, { recursive: true });
+    }
+});
+
+
+test('requested release acceptance fails closed on evidence and teardown gaps', /** 验证按需门禁拒绝缺项、跳过、错源码及不完整清理。 */ () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-release-evidence-'));
+    const previous = process.env.CHAT_CANDIDATE_SHA;
+    const sha = 'd'.repeat(40);
+    const write = /** 写入本测试拥有的合成证据。 */ (name, value) =>
+        fs.writeFileSync(path.join(root, name), JSON.stringify(value));
+    const selected = reportGroups('3D', true);
+    const cases = selected.flatMap(/** 生成各组连续 Test ID 供校验器测试，不作为业务证据。 */ (group, groupIndex) =>
+        Array.from({ length: group.expected }, /** 为每条合成记录设置精确编号。 */ (_, index) => ({
+            id: `${group.prefix}${String(index + (groupIndex === 0 ? 6 : 1)).padStart(2, '0')}`,
+            name: 'synthetic validator input', pass: true })));
+    const topology = createTopology('e'.repeat(32), {
+        gate: 31001, status: 31002, varify: 31003, chatA: 31004, rpcA: 31005, chatB: 31006, rpcB: 31007 });
+    topology.clients = topology.users.map(/** 构造互不共享的客户端身份。 */ (user, index) => ({ logical: user.logical,
+        pid: 100 + index, uid: index + 1, active: true, host: topology.host, port: topology.servers[index].port }));
+    topology.recoveredClients = [{ ...topology.clients[0], previousPid: 100, pid: 200 }];
+    topology.releaseClients = ['releasea', 'releaseb', 'releasec', 'released'].map(
+        /** 为校验器构造四组互异的账号和进程身份。 */ (logical, index) => ({ logical, pid: 500 + index,
+            uid: 10 + index, active: true }));
+    topology.serverRestarts = ['ChatA', 'ChatB'].map(/** 构造已重启的服务进程身份。 */ (logical, index) => ({ logical,
+        previous: { pid: 300 + index, creationTime: '100' }, current: { pid: 400 + index, creationTime: '200' },
+        advertisedPort: topology.servers[index].port }));
+    const restore = /** 恢复完整的校验器输入及清理证据。 */ (requested = true) => {
+        writeReports(root, '3D', requested ? cases : cases.filter(/** 默认报告不包含未请求的真实验收。 */ value =>
+            !value.id.startsWith('E03-RELEASE-')), {
+            groups: reportGroups('3D', requested), manifest: 'phase3d-reports.json', level: 'E2E' });
+        write('topology.json', topology);
+        write('fault-relay.json', { complete: true, droppedAck: true, replayedNotification: true, committedId: '1' });
+        for (const name of ['application-teardown.json', 'process-teardown.json', 'redaction.json', 'teardown.json']) {
+            write(name, { complete: true });
+        }
+        write('real-acceptance.json', { requested, sourceSha: sha,
+            status: requested ? 'passed' : 'not-requested', cleanupComplete: requested });
+    };
+    const check = /** 按已请求的完整真实验收执行验证。 */ () => validate(root, sha, '3D', true);
+    const finalize = /** 执行真实最终门禁入口，不操作 Docker。 */ () => spawnSync(process.execPath,
+        [path.join(__dirname, 'finalizeEvidence.js'), root], {
+            env: { ...process.env, CHAT_SERVICE_SELECTOR: '3D', CHAT_REAL_ACCEPTANCE: '1', GITHUB_ACTIONS: 'false' }, timeout: 3000 });
+    try {
+        process.env.CHAT_CANDIDATE_SHA = sha;
+        assert.equal(realAcceptanceRequested('0'), false);
+        assert.equal(realAcceptanceRequested('1'), true);
+        assert.throws(/** 拒绝拼错开关导致的静默跳过。 */ () => realAcceptanceRequested('true'));
+        assert.throws(/** 非完整选择器不能请求首版验收。 */ () => reportGroups('3D-03', true));
+        restore(); check(); assert.equal(finalize().status, 0);
+        restore(); write('topology.json', { ...topology, releaseClients: [] }); assert.throws(check);
+        for (const key of ['pid', 'uid']) {
+            restore(); write('topology.json', { ...topology, releaseClients: topology.releaseClients.map(
+                /** 合成共享账号或进程，门禁必须拒绝。 */ client => ({ ...client, [key]: 777 })) });
+            assert.throws(check);
+        }
+        restore(false); validate(root, sha, '3D'); assert.throws(check);
+        assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'real-acceptance.json'))).status, 'not-requested');
+        restore(); assert.throws(/** 未请求时不能接受标记通过的专项证据。 */ () => validate(root, sha, '3D'));
+        restore(); fs.unlinkSync(path.join(root, 'linux_first_release.xml')); assert.throws(check);
+        restore(); fs.unlinkSync(path.join(root, 'real-acceptance.json')); assert.throws(check);
+        restore(); write('real-acceptance.json', { requested: true, sourceSha: 'f'.repeat(40),
+            status: 'passed', cleanupComplete: true }); assert.throws(check);
+        restore(); writeReports(root, '3D', cases.slice(0, -1), {
+            groups: selected, manifest: 'phase3d-reports.json', level: 'E2E' }); assert.throws(check);
+        restore(); writeReports(root, '3D', cases.map(/** 将真实验收最后一条合成结果设为失败。 */ (value, index) =>
+            ({ ...value, pass: index !== cases.length - 1 })), {
+            groups: selected, manifest: 'phase3d-reports.json', level: 'E2E' }); assert.throws(check);
+        restore();
+        const reportPath = path.join(root, 'linux_first_release.xml');
+        const skipped = fs.readFileSync(reportPath, 'utf8').replace('</testcase>', '<skipped/></testcase>');
+        fs.writeFileSync(reportPath, skipped);
+        const manifest = JSON.parse(fs.readFileSync(path.join(root, 'phase3d-reports.json')));
+        manifest.reports.at(-1).sha256 = require('node:crypto').createHash('sha256').update(skipped).digest('hex');
+        write('phase3d-reports.json', manifest); assert.throws(check);
+        restore();
+        const skippedCount = fs.readFileSync(reportPath, 'utf8').replace('failures="0"', 'failures="0" skipped="1"');
+        fs.writeFileSync(reportPath, skippedCount);
+        manifest.reports.at(-1).sha256 = require('node:crypto').createHash('sha256').update(skippedCount).digest('hex');
+        write('phase3d-reports.json', manifest); assert.throws(check);
+        for (const name of ['application-teardown.json', 'process-teardown.json', 'teardown.json']) {
+            restore(); write(name, { complete: false }); assert.throws(check);
+            assert.equal(finalize().status, 1);
+            assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'real-acceptance.json'))).status, 'failed');
+        }
     } finally {
         if (previous === undefined) delete process.env.CHAT_CANDIDATE_SHA;
         else process.env.CHAT_CANDIDATE_SHA = previous;

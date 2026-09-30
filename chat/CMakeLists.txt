@@ -293,7 +293,7 @@ if(BUILD_TESTING)
     find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Test)
 
     add_executable(chat_e2e_client tests/session-driver/client_driver.cpp)
-    target_link_libraries(chat_e2e_client PRIVATE chat_client_login)
+    target_link_libraries(chat_e2e_client PRIVATE chat_client_login chat_resource_transfer)
     add_executable(session_driver_tests tests/session-driver/session_driver_tests.cpp)
     target_link_libraries(session_driver_tests PRIVATE
         chat_network_core Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Network)

@@ -180,3 +180,34 @@ test('full Linux CI keeps client coverage and separately builds without Qt', /**
     assert.match(linux, /cmake --build out\/build\/linux-server-only --target GateServer StatusServer ChatServer/);
     assert.match(workflow('windows-ci.yml'), /tests\/build\/server_only_configuration\.cmake/);
 });
+
+
+test('first-release acceptance requires an explicit manual request and preserves normal CI', /** 验证所有普通事件均不启用真实环境首版验收，只有手动布尔开关生效。 */ () => {
+    assert.match(ci, /real_acceptance:\s+description:[^\n]+\s+type: boolean\s+default: false/);
+    const expression = job(ci, 'linux').match(/real_acceptance: \$\{\{ (.+) \}\}/)[1];
+    const requested = new Function('github', 'inputs', `return ${expression};`);
+    for (const event_name of ['push', 'pull_request', 'schedule', 'workflow_dispatch']) {
+        for (const real_acceptance of [false, true, undefined]) {
+            assert.equal(requested({ event_name }, { real_acceptance }),
+                event_name === 'workflow_dispatch' && real_acceptance === true);
+        }
+    }
+    const gate = job(ci, 'real-acceptance');
+    assert.match(gate, /always\(\).*github.event_name == 'workflow_dispatch'.*inputs.real_acceptance == true/);
+    assert.match(gate, /needs: \[windows, linux\]/);
+    assert.match(gate, /test "\$WINDOWS_RESULT" = success && test "\$LINUX_RESULT" = success/);
+    assert.doesNotMatch(gate, /continue-on-error|workflow_dispatch[^\n]*master|release.yml/);
+});
+
+test('requested acceptance builds same-source resources and validates complete evidence', /** 验证可选资源构建、真实服务开关和报告校验连接一致，禁止只开容器就成功。 */ () => {
+    const linux = workflow('linux-ci.yml');
+    assert.match(linux, /real_acceptance:\s+type: boolean\s+default: false/);
+    assert.match(linux, /if: inputs.real_acceptance[\s\S]*CHAT_BUILD_ACCEPTANCE_RESOURCES=ON/);
+    assert.match(linux, /--target ResourceServer resource_http_test_host resource_transfer_tests/);
+    assert.match(job(linux, 'two-server-contract'), /CHAT_REAL_ACCEPTANCE: \$\{\{ inputs.real_acceptance/);
+    assert.match(job(linux, 'downstream-contract'), /CHAT_REAL_ACCEPTANCE: \$\{\{ inputs.real_acceptance/);
+    const verify = fs.readFileSync(path.join(__dirname, '../../scripts/ci/verify-service-reports.js'), 'utf8');
+    assert.match(verify, /validate\(root, sha, '3D', realAcceptanceRequested\(process.env.CHAT_REAL_ACCEPTANCE\)\)/);
+    assert.match(linux, /source-sha.txt\)" = "\$\(git rev-parse HEAD\)"/);
+    assert.match(linux, /widgetEvidence.js/);
+});

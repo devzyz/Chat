@@ -49,11 +49,11 @@ public:
         pipe->flush();
     }
     /** 在四秒内读取一行控制响应，解析后返回对象。 */
-    QJsonObject receive()
+    QJsonObject receive(int timeoutMs = 4000)
     {
         QElapsedTimer elapsed;
         elapsed.start();
-        while (!buffer.contains('\n') && elapsed.elapsed() < 4000) {
+        while (!buffer.contains('\n') && elapsed.elapsed() < timeoutMs) {
             buffer += pipe->readAll();
             if (buffer.contains('\n')) break;
             QEventLoop loop;
@@ -62,7 +62,7 @@ public:
             QObject::connect(pipe.get(), &QLocalSocket::readyRead, &loop, &QEventLoop::quit);
             QObject::connect(pipe.get(), &QLocalSocket::disconnected, &loop, &QEventLoop::quit);
             QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-            timer.start(static_cast<int>(4000 - elapsed.elapsed()));
+            timer.start(static_cast<int>(timeoutMs - elapsed.elapsed()));
             loop.exec();
             buffer += pipe->readAll();
             if (pipe->state() == QLocalSocket::UnconnectedState && buffer.isEmpty()) break;
@@ -120,10 +120,27 @@ public:
             QObject::connect(peer, &QTcpSocket::readyRead, peer, /** 处理登录、心跳及增量同步请求，回送确定性的协议响应。 */ [this, peer, decoder = TcpFrameDecoder()]() mutable {
                 for (const auto &frame : decoder.append(peer->readAll())) {
                     if (frame.messageId == 1020) { ++heartbeats; continue; }
+                    if (frame.messageId == 1034 || frame.messageId == 1038) {
+                        const auto request = QJsonDocument::fromJson(frame.body).object();
+                        QJsonObject result{{"error", 0}, {"request_id", request["request_id"]},
+                            {"chat_id", 71}, {"group_name", "storage lock group"}, {"owner_uid", userId},
+                            {"group_revision", "1"}, {"membership_epoch", "1"}, {"joined_after_id", "0"},
+                            {"group_state", "active"}, {"member_count", 2}};
+                        const auto respond = /** 回送真实 TCP 群业务结果，SQLite 锁仅存在于客户端。 */ [peer, result, id = frame.messageId + 1] {
+                            const auto payload = QJsonDocument(result).toJson(QJsonDocument::Compact);
+                            QByteArray header(4, '\0');
+                            qToBigEndian<quint16>(id, header.data());
+                            qToBigEndian<quint16>(static_cast<quint16>(payload.size()), header.data() + 2);
+                            peer->write(header + payload);
+                        };
+                        if (frame.messageId == 1038 && failGroupSync) QTimer::singleShot(300, peer, respond);
+                        else respond();
+                        continue;
+                    }
                     if (frame.messageId == 1027) {
                         auto result = QJsonDocument::fromJson(frame.body).object();
                         const bool legacy = !result.contains("request_id");
-                        result["error"] = 0;
+                        result["error"] = result["chat_id"].toInt() == 71 && failGroupSync ? 87 : 0;
                         result["msgs"] = QJsonArray{};
                         result["next_cursor"] = result["after_id"];
                         result["load_more"] = false;
@@ -227,6 +244,7 @@ public:
     int heartbeats = 0;
     int sentFrames = 0;
     bool dropNextText = false;
+    bool failGroupSync = false;
 };
 
 /** 验证独立客户端进程的登录隔离、控制协议及生命周期。 */
@@ -335,6 +353,45 @@ private slots:
         QCOMPARE(history.value("messages").toArray().size(), 1);
         QCOMPARE(history.value("messages").toArray().first().toObject()["uuid"].toString(),
                  QString("00000000-0000-4000-8000-000000000083"));
+        alice.send({{"id", nextCommand++}, {"command", "local-history"}, {"chatId", 7}, {"before", "0"}});
+        const auto stored = alice.receive();
+        QCOMPARE(stored["error"].toInt(-1), 0);
+        QVERIFY(!stored["result"].toObject()["messages"].toArray().isEmpty());
+        alice.send({{"id", nextCommand++}, {"command", "search"}, {"chatId", 7}, {"text", "second line"}, {"before", "0"}});
+        const auto search = alice.receive();
+        QCOMPARE(search["error"].toInt(-1), 0);
+        const auto found = search["result"].toObject()["messages"].toArray();
+        QVERIFY(!found.isEmpty());
+        bool hasRecovered = false;
+        for (const auto &row : found) hasRecovered |= row.toObject()["uuid"].toString() == uncertainUuid;
+        QVERIFY(hasRecovered);
+        alice.send({{"id", nextCommand++}, {"command", "directory-find"}, {"kind", "contacts"}, {"text", "accepted alias"}, {"after", 0}});
+        const auto directory = alice.receive();
+        QCOMPARE(directory["error"].toInt(-1), 0);
+        QCOMPARE(directory["result"].toObject()["rows"].toArray().size(), 1);
+        const auto groupUuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        alice.send({{"id", nextCommand++}, {"command", "group-create"}, {"uuid", groupUuid},
+            {"name", "storage lock group"}, {"members", QJsonArray{42}}});
+        QCOMPARE(alice.receive()["error"].toInt(-1), 0);
+        first.failGroupSync = true;
+        const auto manageUuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        const QJsonObject manage{{"command", "group-manage"}, {"chatId", 71}, {"uuid", manageUuid},
+            {"version", "1"}, {"operation", "rename"}, {"params", QJsonObject{{"name", "renamed"}}}};
+        auto locked = manage; locked["id"] = nextCommand++; locked["localSaveFailure"] = true;
+        alice.send(locked);
+        const auto failedSave = alice.receive(15000);
+        QCOMPARE(failedSave["error"].toInt(-1), 0);
+        QVERIFY(failedSave["result"].toObject()["local_save_failed"].toBool());
+        alice.send({{"id", nextCommand++}, {"command", "storage-unlock"}});
+        QCOMPARE(alice.receive()["error"].toInt(-1), 0);
+        first.failGroupSync = false;
+        auto retried = manage; retried["id"] = nextCommand++;
+        alice.send(retried);
+        const auto saved = alice.receive(15000);
+        QCOMPARE(saved["error"].toInt(-1), 0);
+        QVERIFY(!saved["result"].toObject()["local_save_failed"].toBool());
+        alice.send({{"id", nextCommand++}, {"command", "logout"}});
+        QCOMPARE(alice.receive()["status"].toString(), QString("logged-out"));
         QVERIFY(alice.stop(nextCommand++));
         bob.send({{"id", 2}, {"command", "snapshot"}});
         QCOMPARE(bob.receive().value("uid").toInt(), 42);

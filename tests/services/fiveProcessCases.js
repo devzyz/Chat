@@ -22,9 +22,11 @@ const { runFriendshipCases } = require('./friendshipCases');
 const { runMessagingCases, runOfflineMessageCase } = require('./messagingCases');
 const { runHistoryRecoveryCases } = require('./historyRecoveryCases');
 const { runFaultRecoveryCases } = require('./faultRecoveryCases');
+const { realAcceptanceEnabled, runFirstReleaseCases } = require('./firstReleaseCases');
 
 /** 在所属临时环境组装双 Chat 及真实 Qt 客户端，按选择器验证业务并清理全部资源。 */
 async function runFiveProcessCases(coordinator, record, evidenceRoot, selector = '3D-00') {
+    const realAcceptance = realAcceptanceEnabled(selector);
     const bundle = process.env.CHAT_FOUR_BUNDLE;
     const clientBinary = process.env.CHAT_E2E_CLIENT;
     assert.ok(bundle && path.isAbsolute(bundle) && clientBinary && path.isAbsolute(clientBinary));
@@ -104,6 +106,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
     /** 通过真实验证码、注册和登录流程认证用户，可仅注册或复用既有账号。 */
     async function authenticate(instance, user, register = true, registerOnly = false) {
         if (register) {
+            secrets.push(user.password);
             recipients.push(user.email);
             assert.equal((await instance.control.command('verify', { gate: gate(), email: user.email })).error, 0);
             let code;
@@ -256,6 +259,64 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
         });
         if (['3D-02', '3D-03-history', '3D-03', '3D'].includes(selector)) {
             await runMessagingCases({ alice, bob, users, sql, record, chatId, outsider: auxiliaryUsers[0] });
+        }
+        if (realAcceptance) {
+            leases.resource = await reserve();
+            const resourcePort = leases.resource.port;
+            await release('resource');
+            const file = path.join(root, 'ResourceServer.ini');
+            fs.writeFileSync(file, `[ResourceServer]\nHost=127.0.0.1\nPort=${resourcePort}\nStorageRoot=${path.join(root, 'resources')}\n` +
+                `[StatusServer]\nHost=127.0.0.1\nPort=${ports.status}\n` +
+                `[Mysql]\nHost=127.0.0.1\nPort=${coordinator.config.ports.mysql}\nUser=root\nPassword=` +
+                coordinator.password + `\nSchema=${topology.database}\n` +
+                `[Log]\nLogDir=${path.join(root, 'logs')}\nLevel=warn\n`, { mode: 0o600 });
+            start('ResourceServer', path.join(bundle, 'ResourceServer', 'ResourceServer'), ['--config', file]);
+            const resourceUrl = `http://127.0.0.1:${resourcePort}`;
+            env.CHAT_RESOURCE_URL = resourceUrl;
+            await poll(/** 资源健康路由只确认启动，后续专项以真实上传与下载断言业务可用。 */ async () =>
+                (await fetch(`${resourceUrl}/health`, { signal: AbortSignal.timeout(1500) })).status === 200, 30000);
+            topology.releaseClients = await runFirstReleaseCases({ record, client, authenticate, users: auxiliaryUsers, root, resourceUrl, sql,
+                probeGroupSend: /** 经公开 Gate 登录取得本次测试账号身份，用既有原生驱动验证群代次拒绝并恢复 Qt 登录。 */ async (instance, user, chat, epoch) => {
+                    assert.equal((await instance.control.command('logout')).status, 'logged-out');
+                    try {
+                        // Match the existing Qt registration/login encoding for these generated ASCII passwords.
+                        const password =
+                            [...user.password].map(/** 按现有长度异或协议编码测试密码。 */ value =>
+                            String.fromCharCode(value.charCodeAt(0) ^ (user.password.length % 256))).join('');
+                        const login = await (await fetch(`${gate()}/user_login`, { method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email:
+                                user.email, password }), signal: AbortSignal.timeout(5000) })).json();
+                        assert.equal(login.error, 0); assert.equal(login.uid, user.uid);
+                        assert.ok(login.token); secrets.push(password, login.token);
+                        const probeUuid = randomUUID();
+                        const result = JSON.parse(await runCommand(supervisor, ['chat'], { timeout: 15000,
+                            env: { ...env, LD_LIBRARY_PATH: path.dirname(supervisor), CHAT_FOUR_WIRE: JSON.stringify({
+                                port: Number(login.port), login: { uid: user.uid, token:
+                                    login.token,
+                                    capabilities: ['group_membership_v1'] },
+                                requests: [{ id: 1016, body: { from_uid: user.uid, to_uid: 0, chat_id: chat,
+                                    chat_type: 'group', membership_epoch: epoch,
+                                    text_array: [{ msg_uuid: probeUuid, msg_content: 'rejected membership probe' }] } }] }) } }));
+                        assert.equal(result.error, 0);
+                        assert.equal(result.responses.length, 1);
+                        const response = result.responses[0];
+                        assert.ok(Number.isInteger(response.error) && response.error > 0);
+                        assert.equal(response.commit_error, 'InvalidMembership');
+                        assert.equal(await sql.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${probeUuid}'`), '0');
+                        return response;
+                    } finally { await authenticate(instance, user, false); }
+                },
+                keepAlive: /** 在各独立业务步骤之间串行保活，避免并发打断客户端正在执行的控制命令。 */ async () => {
+                    for (const control of controls) if (!control.failed) await control.command('snapshot');
+                },
+                retire: /** 退出新增客户端并释放控制通道，恢复原双账号连接数断言的前置状态。 */ async instance => {
+                    if (!instance.control.failed) assert.equal((await instance.control.command('stop')).status, 'stopped');
+                    await stop(instance.owned);
+                    await instance.control.close();
+                } });
+            await count(topology.servers[0].name, 1);
+            await count(topology.servers[1].name, 1);
         }
         await test('one client exits while the peer retains its independent session', /** 停止 Alice 客户端并等待实例计数归零，确认 Bob 仍在线且消息保留。 */ async () => {
             assert.equal((await alice.control.command('stop')).status, 'stopped');

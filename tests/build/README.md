@@ -225,7 +225,9 @@ This reuses an existing Linux dependency installation; it does not restore packa
 Outside the pinned hosted runner, also set `-DCHAT_ENABLE_HOSTED_PREFLIGHT=OFF`;
 the preset otherwise retains its compiler/CMake/install-root identity checks.
 Windows C++ servers continue to use MSBuild. ResourceServer's published platform
-remains Windows; this change does not claim Linux ResourceServer runtime support.
+remains Windows. The opt-in `CHAT_BUILD_ACCEPTANCE_RESOURCES=ON` adds its existing
+production sources to the Linux acceptance build and builds a resource HTTP test host
+when testing is enabled. This is an acceptance target, not a new Linux release contract.
 
 `cmake -DCHAT_TEST_NINJA=<ninja-path> -P tests/build/server_only_configuration.cmake`
 configures the real root graph with dependency stand-ins and rejects any Qt/GTest

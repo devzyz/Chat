@@ -912,3 +912,9 @@ Q05-STORE-15..17 在 [message-storage](../chat/tests/message-storage/README.md) 
 | T10-MIG-10 / S05-RESOURCE-17 | 有数据的 5→6、2→6、重复迁移及缺失群主用户/成员或角色矛盾拒绝 | 独立临时 MySQL |
 
 当前迁移目标为 MySQL 6、SQLite 4。执行证据与剩余验收只记录在 [Status](../docs/Status.md)。
+
+
+按需真实环境：`real_acceptance=true` 手动输入才启用 `E03-RELEASE-01..14`，在原 33 条 3D
+合同上增加真实四账号群与 ResourceServer 流程；报告及同 SHA/清理门禁见
+[服务验收](services/README.md#按需首版真实环境验收)。`widgetEvidence.js` 单独校验现有
+18 项 Qt 控件及 8 项资源存储报告，保留自动控件与真实服务、人工桌面的证据边界。

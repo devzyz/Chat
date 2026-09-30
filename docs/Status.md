@@ -60,6 +60,23 @@
   三类资源 HTTP/TCP 使用真实 MySQL、生产 Chat/Resource，但 Redis/Status 仍是明确替身。
   上述证据均不能替代完整生产依赖或人工桌面验收。
 
+## 按需真实环境 CI 检查点
+
+- 已实现 `CI` 手动运行参数 `real_acceptance`，默认 `false`；普通提交/PR/定时运行不触发新增专项。
+  显式开启时，Windows 与完整 Linux 同提交通过后才产生 `Real environment acceptance` 成功结果。
+- 在现有 3D 真实服务编排中加入四个独立 Qt 客户端，使用 Docker MySQL/Redis/Mailpit 和生产
+  Gate、Status、双 Chat、Varify、Resource。新增 14 项群管理/历史边界/PNG、十秒视频与文件授权/
+  离线重登/原 UUID 重试/备注搜索验收，与原 33 项合计 47 项；报告缺失、失败、跳过、SHA 不符或清理失败均拒绝。
+- Qt 自动控件与资源存储另有 18/8 项及截图证据；这些自动证据不等同于人工桌面走查。
+  操作入口和产物见 [服务测试入口](../tests/services/README.md)。
+- 本轮实际本地验证：Qt CTest 66/66；CI/报告合同 Node 19/19；Qt 控件 18 项和资源 Store 8 项真实报告校验通过。
+  日志为 `build/client-all-tests-real-acceptance.log`、`build/real-acceptance-contracts-final.log`、
+  `build/acceptance-widget-evidence/`。可选 Resource CMake 配置图检查通过，不代表 Linux 编译通过。
+- 测试驱动修复后台同步错误抢占群管理结果：真实 SQLite 写锁 RED `build/session-lock-red.xml`，
+  GREEN `build/session-lock-green.xml`；释放锁后原 UUID 恢复通过。未改变生产协议或错误过滤。
+- 新增 47 项真实依赖流程尚未在 GitHub 运行；首次远端构建、运行时间预算及业务组合仍须实际验证。
+  强制群成员多页响应、群管理 ACK 丢失的真实环境组合仍不由这 14 项单独证明；已有局部回归与人工缺口继续分别记录。
+
 ## 未完成的验收与下一步
 
 1. 本机完整生产依赖：当前 VMware VM 不在运行，VMware NAT Service 停止；启动服务需要 Windows 管理员。

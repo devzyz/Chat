@@ -15,6 +15,10 @@ on:
         description: Cold-build latest stable Windows tools and approve after Windows checks (default branch only)
         type: boolean
         default: false
+      real_acceptance:
+        description: Run opt-in first-release acceptance with all production services and four accounts
+        type: boolean
+        default: false
       cold_linux:
         description: Verify Linux dependency restoration without binary cache
         type: boolean
@@ -60,6 +64,7 @@ jobs:
     uses: ./.github/workflows/linux-ci.yml
     with:
       cold_build: ${{ github.event_name == 'workflow_dispatch' && inputs.cold_linux == true }}
+      real_acceptance: ${{ github.event_name == 'workflow_dispatch' && inputs.real_acceptance == true }}
 
   regression:
     name: Regression checks
@@ -83,6 +88,22 @@ jobs:
           WINDOWS_RESULT: ${{ needs.windows.result }}
           LINUX_RESULT: ${{ needs.linux.result }}
         run: test "$WINDOWS_RESULT" = success && test "$LINUX_RESULT" = success
+
+  real-acceptance:
+    name: Real environment acceptance
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.real_acceptance == true }}
+    needs: [windows, linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require requested real-service acceptance and both platforms
+        env:
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+          LINUX_RESULT: ${{ needs.linux.result }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          test "$WINDOWS_RESULT" = success && test "$LINUX_RESULT" = success
+          printf 'Real environment acceptance passed for `%s`. See phase3d-contract-evidence and real-acceptance-widgets.\n' "$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
