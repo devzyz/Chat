@@ -8,7 +8,7 @@
 实现分支 `feat/repo/chat-features` 位于独立 managed worktree，基于远端 develop
 `f3d6bd683624100ef22080e1f63f48c4e8c84c7a`（PR #22 基础群聊）。
 原工作区 `feat/chat/basic-groups`、HEAD `1d8d85b` 保留不动；原 HEAD 已被 develop 包含，
-两者文件树相同，原群聊实现已合入。当前新增工作准备提交至 develop 的 PR；尚未合并。
+两者文件树相同，原群聊实现已合入。功能提交 `252b078`（服务端）及 `cde9b88`（客户端）已推送；尚未创建 PR 或合并。
 
 | 阶段 | 实现与当前验收边界 |
 | --- | --- |
@@ -69,7 +69,8 @@
    A 建群并发旧消息 → 添加 D → D 确认旧消息不可见 → 新消息及 PNG/视频/文件 → 移除 D 并重入 →
    转让 B → A 退出 → B 解散。每步核对成员权限和本地历史；穿插离线、重登、超时和本地保存失败，
    再核对备注、筛选、第二页历史定位及独立私聊资源权限。真实隔离账号须在依赖恢复后创建。
-3. 提交并创建 develop PR，核对同提交 Windows 与完整 Linux CI 及产物。
+3. 创建 develop 草稿 PR，核对同提交 Windows 与完整 Linux CI 及产物。
+   分支已推送，但 GitHub 连接器创建 PR 返回 403 `Resource not accessible by integration`；当前没有新 PR 或 CI 运行。
    完整 CI 需 workflow_dispatch（refresh_tools=false、cold_linux=false）；当前 GitHub 内置浏览器尚未登录，
    连接器没有工作流触发入口。不得以仅 Windows PR CI 代替完整 CI。
 
