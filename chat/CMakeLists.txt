@@ -46,6 +46,10 @@ if(NOT TARGET spdlog::spdlog)
     add_subdirectory(packages/spdlog EXCLUDE_FROM_ALL)
 endif()
 
+add_library(chat_list_view STATIC listviewbehavior.h listviewbehavior.cpp)
+target_include_directories(chat_list_view PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(chat_list_view PUBLIC Qt${QT_VERSION_MAJOR}::Widgets)
+
 add_library(chat_network_core STATIC
     tcpframedecoder.h tcpframedecoder.cpp
 )
@@ -248,6 +252,7 @@ target_compile_definitions(chat PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
 target_link_libraries(chat PRIVATE
     chat_client_login
+    chat_list_view
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Network
     spdlog::spdlog
@@ -314,6 +319,12 @@ if(BUILD_TESTING)
             "QT_QPA_PLATFORM_PLUGIN_PATH=${QT_TEST_PLATFORM_PLUGIN_PATH}"
             "PATH=${QT_TEST_RUNTIME_PATH}")
     endif()
+
+    add_executable(list_view_tests tests/list-view/list_view_tests.cpp)
+    target_link_libraries(list_view_tests PRIVATE chat_list_view Qt${QT_VERSION_MAJOR}::Test)
+    add_test(NAME list_view.interaction COMMAND list_view_tests)
+    set_tests_properties(list_view.interaction PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 15)
 
     add_executable(auth_flow_tests
         tests/auth-flow/auth_flow_tests.cpp
@@ -667,5 +678,5 @@ if(BUILD_TESTING)
         chatpage.h chatpage.cpp chatpage.ui chatpageresources.cpp
         chatdetaillist.h chatdetaillist.cpp clickedbtn.h clickedbtn.cpp
         clickedlabel.h clickedlabel.cpp messagetextedit.h messagetextedit.cpp)
-    target_link_libraries(resource_transfer_tests PRIVATE chat_resource_transfer chat_client_login Qt${QT_VERSION_MAJOR}::Test)
+    target_link_libraries(resource_transfer_tests PRIVATE chat_list_view chat_resource_transfer chat_client_login Qt${QT_VERSION_MAJOR}::Test)
 endif()

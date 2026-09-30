@@ -100,9 +100,6 @@ ChatDialog::ChatDialog(QWidget *parent)
     // 连接加载更多聊天列表的信号与槽
     connect(ui->chat_user_list, &ChatUserList::moreChatsRequested, this, &ChatDialog::loadingChatList);
 
-    // 连接加载联系人的信号与槽
-    connect(ui->contact_user_list, &ContactUserList::moreContactsRequested, this, &ChatDialog::loadingContactList);
-
     // 切换当前QListWidget为聊天记录widget
     connect(ui->side_chat_label, &StateWidget::clicked, this, &ChatDialog::midlistToChatList);
 
@@ -867,17 +864,6 @@ void ChatDialog::textChatMsgRspFinish(
 void ChatDialog::textChatMsgFailed(int chat_id, QVector<QString> client_message_ids)
 {
     ui->chat_page->markMessagesFailed(chat_id, client_message_ids);
-}
-
-// 加载更多联系人
-void ChatDialog::loadingMoreContact() {
-    ui->contact_user_list->loadNextPage();
-}
-
-// 加载更多联系人列表槽函数
-void ChatDialog::loadingContactList()
-{
-    loadingMoreContact();
 }
 
 // 别人添加我为好友，好友列表显示逻辑

@@ -57,7 +57,7 @@ $resourceServerExecutable = Join-Path $repoRoot "build\windows-servers\$Configur
 $testResults = Join-Path $repoRoot 'build\test-results'
 $clientTestGroups = @(
     [pscustomobject]@{ Level = 'unit'; Report = (Join-Path $testResults 'client_unit.xml'); ExpectedCount = 24 }
-    [pscustomobject]@{ Level = 'component'; Report = (Join-Path $testResults 'client_component.xml'); ExpectedCount = 13 }
+    [pscustomobject]@{ Level = 'component'; Report = (Join-Path $testResults 'client_component.xml'); ExpectedCount = 14 }
     [pscustomobject]@{ Level = 'integration'; Report = (Join-Path $testResults 'client_integration.xml'); ExpectedCount = 28 }
 )
 $scriptTestGroups = @(
@@ -85,7 +85,7 @@ $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_resource_integration.xml'; ExpectedCount = 8 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 24 }
-    [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 13 }
+    [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 14 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 28 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 33 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 21 }
@@ -657,8 +657,8 @@ function Confirm-RegressionReports {
             -Path (Join-Path $testResults $group.Name) `
             -ExpectedCount $group.ExpectedCount
     }
-    if ($regressionReportGroups.Count -ne 14 -or $total -ne 390) {
-        throw "Regression report baseline mismatch: expected 14 reports and 390 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+    if ($regressionReportGroups.Count -ne 14 -or $total -ne 391) {
+        throw "Regression report baseline mismatch: expected 14 reports and 391 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
     }
     $legacyTotal = 0
     foreach ($legacyGroup in $legacyRegressionReportGroups) {
@@ -1258,6 +1258,7 @@ function Confirm-TestStructure {
         'message_model.multiple_history_pages' = 'unit'
         'message_model.shifted_indexes' = 'unit'
         'message_model.text_and_chat_identity' = 'unit'
+        'list_view.interaction' = 'component'
         'message_model.store_pagination_state' = 'component'
         'message_model.delegate_reflow' = 'component'
         'session_reset.account_state' = 'component'
@@ -1319,7 +1320,7 @@ function Confirm-TestStructure {
             throw "Invalid Qt report mapping: $($group.Level) -> $($group.Report)"
         }
     }
-    $expectedClientCounts = @{ unit = 24; component = 13; integration = 28 }
+    $expectedClientCounts = @{ unit = 24; component = 14; integration = 28 }
     foreach ($group in $clientTestGroups) {
         if ($group.ExpectedCount -ne $expectedClientCounts[$group.Level]) {
             throw "Qt $($group.Level) report must require exactly $($expectedClientCounts[$group.Level]) testcases."
@@ -1449,11 +1450,11 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact fourteen-report/390-testcase baseline.'
+        throw 'RunAllTests must audit the exact fourteen-report/391-testcase baseline.'
     }
     if ($regressionReportGroups.Count -ne 14 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 390) {
-        throw 'The registered regression baseline must remain exactly 14 reports and 390 testcases.'
+        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 391) {
+        throw 'The registered regression baseline must remain exactly 14 reports and 391 testcases.'
     }
     if ($legacyRegressionReportGroups.Count -ne 12 -or
         ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 232) {

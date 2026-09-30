@@ -43,3 +43,5 @@ counts are maintained by `scripts/windows-local.ps1`; `client_integration.xml`
 includes the authenticated retry alongside the existing HTTP/TCP transport cases.
 
 Message persistence uses one component CTest entry (`message_storage.persistence`), covering persistence and receipt contracts in [message-storage](message-storage/README.md). Network-state coverage also checks full-size 1028 responses and the unchanged bound for other frames. The runner owns current aggregate counts.
+
+- [list-view](list-view/README.md)：Foundation / Component；五种列表共用的悬停、原生滚动和底部通知。

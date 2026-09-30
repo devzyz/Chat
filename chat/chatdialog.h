@@ -52,8 +52,6 @@ private:
     // 加载更多聊天记录
     /** @brief 加载更多聊天记录。 */
     void tcpLoadingMoreChatMsg(int chatId, qint64 beforeMessageId);
-    /** @brief 追加一页联系人并推进账号缓存的分页游标。 */
-    void loadingMoreContact();
     // 当搜索到聊天或者是从好友列表点击聊天后，如果在当前item中找不到
     // 则触发tcp请求，去服务器拉取或者创建新的聊天
     /** @brief 发送创建或获取双方私聊会话的请求，附带可选对方资料。 */
@@ -83,9 +81,6 @@ private slots:
     // 加载更多聊天列表
     /** @brief 加载更多聊天列表。 */
     void loadingChatList();
-    // 加载更多联系人列表
-    /** @brief 加载更多联系人列表。 */
-    void loadingContactList();
     // 切换到聊天
     /** @brief 切换到聊天。 */
     void midlistToChatList();
