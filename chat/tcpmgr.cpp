@@ -21,19 +21,24 @@ QJsonObject directoryResponse(ReqId id, const QJsonObject &response, int self)
         applications.append(row);
     }
     for (const auto &value : response["chat_list"].toArray()) {
-        const auto row = value.toObject();
+        auto row = value.toObject();
         if (row["type"].toString() == "group") {
-            conversations.append(QJsonObject{{"id", row["chat_id"]}, {"uid", 0},
-                {"type", "group"}, {"name", row["group_name"]}});
+            row["id"] = row["chat_id"]; row["uid"] = 0; row["name"] = row["group_name"];
+            conversations.append(row);
             continue;
         }
         if (row["type"].toString() != "private") continue;
         const int peer = row["user1_id"].toInt() == self ? row["user2_id"].toInt() : row["user1_id"].toInt();
         conversations.append(QJsonObject{{"id", row["chat_id"]}, {"uid", peer}, {"type", "private"}});
     }
-    if (id == ID_CREATE_GROUP_RSP) {
-        conversations.append(QJsonObject{{"id", response["chat_id"]}, {"uid", 0},
-            {"type", "group"}, {"name", response["group_name"]}});
+    if (id == ID_CREATE_GROUP_RSP || id == ID_GROUP_MANAGE_RSP || id == ID_GROUP_INFO_RSP) {
+        auto row = response;
+        row.remove("members"); row.remove("request_id"); row.remove("error");
+        row["id"] = response["chat_id"]; row["uid"] = 0; row["type"] = "group"; row["name"] = response["group_name"];
+        conversations.append(row);
+    }
+    if (id == ID_FRIEND_REMARK_RSP) {
+        contacts.append(QJsonObject{{"id",response["target_uid"]},{"uid",response["target_uid"]},{"backname",response["name"]}});
     }
     int approved = 0;
     if (id == ID_NOTIFY_ADD_FRIEND_REQ) {
@@ -158,7 +163,7 @@ TcpMgr::TcpMgr() : _host("") {
     connect(&_directoryTimer, &QTimer::timeout, this,
         /** @brief 上轮目录完整加载后重新扫描，发现其他成员建立的群。 */
         [this] {
-            if (!_authenticated || !UserMgr::instance()->isChatListFullyLoaded()) return;
+            if (!_authenticated) return;
             emit sendRequested(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(QJsonObject{
                 {"uid", UserMgr::instance()->uid()}, {"current_chat_id", 0}}).toJson(QJsonDocument::Compact));
         });
@@ -169,6 +174,11 @@ TcpMgr::TcpMgr() : _host("") {
 
 void TcpMgr::initHandlers()
 {
+    for (const auto id : {ID_GROUP_INFO_RSP, ID_GROUP_MANAGE_RSP, ID_FRIEND_REMARK_RSP}) {
+        _handlers.insert(id, /** @brief 发布已落盘的业务操作结果。 */ [this](ReqId id, int, QByteArray bytes) {
+            emit groupResponse(id, QJsonDocument::fromJson(bytes).object());
+        });
+    }
     _handlers.insert(ID_CREATE_GROUP_RSP,
         /** @brief 群目录落盘后发布建群结果，失败也携带请求身份。 */
         [this](ReqId, int, QByteArray data) {
@@ -942,7 +952,7 @@ void TcpMgr::handleMessage(ReqId id, int len, QByteArray data)
         return ;
     }
     const auto response = QJsonDocument::fromJson(data).object();
-    const bool directory = id == ID_CREATE_GROUP_RSP || id == ID_LOAD_CHAT_LIST_RSP || id == ID_NOTIFY_ADD_FRIEND_REQ
+    const bool directory = id == ID_GROUP_INFO_RSP || id == ID_GROUP_MANAGE_RSP || id == ID_FRIEND_REMARK_RSP || id == ID_CREATE_GROUP_RSP || id == ID_LOAD_CHAT_LIST_RSP || id == ID_NOTIFY_ADD_FRIEND_REQ
         || id == ID_AUTH_FRIEND_RSP || id == ID_NOTIFY_AUTH_FRIEND_REQ || id == ID_CREATE_PRIVATE_CHAT_RSP;
     if (directory && response["error"].toInt(-1) == 0) {
         UserMgr::instance()->messages()->saveDirectory(directoryResponse(id, response, UserMgr::instance()->uid()),
@@ -950,6 +960,12 @@ void TcpMgr::handleMessage(ReqId id, int len, QByteArray data)
             [this, id, len, data] {
                 _handlers[id](id, len, data);
                 if (id == ID_AUTH_FRIEND_RSP || id == ID_CREATE_PRIVATE_CHAT_RSP) emit requestCompleted(id, 0);
+            },
+            /** @brief 已知服务端成功而本地保存失败时向管理界面发布明确的恢复提示。 */
+            [this, id, response] {
+                if (id != ID_GROUP_MANAGE_RSP && id != ID_GROUP_INFO_RSP && id != ID_FRIEND_REMARK_RSP) return;
+                auto result = response; result["local_save_failed"] = true;
+                emit groupResponse(id,result);
             });
         return;
     }
@@ -1010,7 +1026,7 @@ void TcpMgr::sendData(ReqId reqId, QByteArray dataBytes)
     }
     if (reqId == ID_CHAT_LOGIN_REQ) {
         auto request = QJsonDocument::fromJson(dataBytes).object();
-        request["capabilities"] = QJsonArray{"message_receipts_v1"};
+        request["capabilities"] = QJsonArray{"message_receipts_v1", "group_membership_v1"};
         dataBytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
     }
     if (!_transport.send(static_cast<quint16>(reqId), dataBytes)) {

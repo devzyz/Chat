@@ -34,6 +34,8 @@ protected:
     bool eventFilter(QObject * watched, QEvent * event) override;
 
 private:
+    /** @brief 打开完整本地联系人和群目录筛选，支持连续分页及会话跳转。 */
+    void openDirectorySearch();
     /** @brief 打开固定成员的建群表单，使用稳定请求 UUID 防止超时重试重复建群。 */
     void openCreateGroup();
     /** @brief 切换搜索结果列表与常规列表的可见状态。 */

@@ -18,9 +18,13 @@ class MessageService final : public QObject {
     Q_OBJECT
 public:
     /** @brief 排队合并目录，提交后发布本地结果并调用完成通知；失败不更新界面。 */
-    void saveDirectory(const QJsonObject &directory, std::function<void()> completion = {});
+    void saveDirectory(const QJsonObject &directory, std::function<void()> completion = {}, std::function<void()> failure = {});
+    /** @brief 在当前目录版本中持久化管理请求，避免并发刷新丢掉待确认身份。 */
+    void saveGroupOperation(int chatId, const QJsonObject &request, std::function<void()> completion = {});
     /** @brief 异步查询本地目录页；额外查询一条以报告是否还有数据。 */
     void loadDirectoryPage(const QString &kind, int after, int limit);
+    /** @brief 异步筛选完整本地联系人或群目录，每页最多50条。 */
+    void findDirectory(const QString &kind, const QString &text, int after = 0);
     /** @brief 初始化对象，用于在所属 Qt 线程协调账号消息，SQLite 操作排队至单一工作线程。 */
     explicit MessageService(QObject *parent = nullptr);
     /** @brief 使账号任务失效，排队关闭数据库及退出工作线程，并等待线程结束。 */
@@ -38,7 +42,7 @@ public:
     /** @brief 验证响应关联、游标及格式后排队落盘，成功才通知模型刷新和后续同步。 */
     void acceptSyncPage(const QJsonObject &response);
     /** @brief 将消息请求排队落盘，持久化完成后再交给发送调度。 */
-    void send(const QJsonObject &request);
+    void send(QJsonObject request);
     /** @brief 将指定 UUID 的服务器 ID 排队合并至当前账号本地存储。 */
     void acknowledge(int chatId, const QString &uuid, qint64 messageId);
     /** @brief 将指定 UUID 的未确认发送状态记为不确定，保留以后对账所需身份。 */
@@ -57,7 +61,15 @@ public:
     void retry(int chatId, const QString &uuid);
     /** @brief 暂停自动发送，保留本地消息及批次供以后恢复。 */
     void pauseOutgoing();
+    /** @brief 返回当前已落盘群状态快照。 */
+    QJsonObject groupState(int chatId) const { return _groupStates.value(chatId); }
+    /** @brief 在存储线程搜索当前会话，结果通过 searchLoaded 返回。 */
+    void search(int chatId, const QString &text, qint64 before = 0);
 signals:
+    /** @brief 返回带搜索身份的联系人或群目录页。 */
+    void directoryFound(QString kind, QString text, int after, QJsonArray rows);
+    /** @brief 返回与查询文本及分页身份关联的本地搜索结果。 */
+    void searchLoaded(int chatId, QString text, qint64 before, QVector<StoredMessage> rows);
     /** @brief 数据库打开后返回已保存目录，恢复当前账号的查询缓存。 */
     void directoryRestored(QJsonObject directory);
     /** @brief 目录事务提交后返回从数据库读取的变更记录。 */
@@ -85,6 +97,8 @@ signals:
     /** @brief 通知指定会话的存储或同步操作失败，旧账号任务不发出此信号。 */
     void failed(int chatId, QString reason);
 private:
+    /** @brief 将已落盘群目录应用于轮询及请求代次，退出群停止同步。 */
+    void applyGroups(const QJsonObject &directory);
     /** @brief 串行读取到期批次，存储完成后发出网络发送请求。 */
     void dispatchOutgoing();
     /** @brief 请求上报指定会话尚未提交的本地回执意图。 */
@@ -103,6 +117,7 @@ private:
     int _pendingOperations = 0;
     QSet<int> _chats;
     QSet<int> _groups;
+    QHash<int, QJsonObject> _groupStates;
     QTimer _groupTimer;
     QSet<int> _recoveringChats;
     QHash<int, QString> _requests;

@@ -30,7 +30,7 @@ public:
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ChatPage();
 
-    /** @brief 切换当前会话并恢复其消息与滚动状态。 */
+    /** @brief 切换当前会话并恢复其消息与滚动状态，丢弃旧会话的导航和提示等待。 */
     void setChatInfo(std::shared_ptr<ChatInfo> chatInfo);
     /** @brief 将旧消息数据转换并追加到当前消息模型。 */
     void appendChatMsg(const std::shared_ptr<ChatDataBase> &message);
@@ -68,6 +68,14 @@ signals:
     void historyRequested(int chatId, qint64 beforeMessageId);
 
 private:
+    /** @brief 打开当前会话的本地历史搜索并定位结果。 */
+    void openHistorySearch();
+    /** @brief 按持久化目录刷新群名称及发送权限。 */
+    void refreshGroupState();
+    qint64 _searchJumpId = 0;
+    QString _uploadEpoch;
+    QString _remarkRequest;
+
     /** @brief 保存稳定消息身份及视口偏移，用于历史插入后恢复阅读位置。 */
     struct ScrollAnchor {
         qint64 messageId = 0;

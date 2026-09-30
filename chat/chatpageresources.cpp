@@ -35,12 +35,13 @@ void ChatPage::initResourceTransfers()
         /** @brief 上传完成后以原 UUID 创建资源消息并提交聊天发送。 */
         [this](QJsonObject descriptor) {
         const QString content = "@resource:v1:" + QString::fromUtf8(QJsonDocument(descriptor).toJson(QJsonDocument::Compact));
-        auto message = std::make_shared<TextChatData>(_uploadUuid, _uploadChat, ChatType::PRIVATE,
+        auto message = std::make_shared<TextChatData>(_uploadUuid, _uploadChat, _uploadRecipient == 0 ? ChatType::GROUP : ChatType::PRIVATE,
             ChatMessageType::TEXT_TYPE, content, UserMgr::instance()->uid(), QTime::currentTime());
         appendChatMsg(message);
         QJsonObject payload{{"from_uid", UserMgr::instance()->uid()}, {"to_uid", _uploadRecipient},
             {"chat_id", _uploadChat}, {"resource_id", descriptor["resource_id"]},
             {"text_array", QJsonArray{QJsonObject{{"msg_uuid", _uploadUuid}, {"msg_content", content}}}}};
+        if (_uploadRecipient == 0) { payload["chat_type"] = "group"; payload["membership_epoch"] = _uploadEpoch; }
         UserMgr::instance()->messages()->send(payload);
         ui->file_label->setToolTip(tr("上传完成"));
     });
@@ -96,7 +97,8 @@ void ChatPage::loadResource(MessageRecord& record)
 
 void ChatPage::selectResource()
 {
-    if (!_chatInfo || _chatInfo->getChatType() != ChatType::PRIVATE) return;
+    if (!_chatInfo) return;
+    if (_chatInfo->getChatType() == ChatType::GROUP && UserMgr::instance()->messages()->groupState(_currentChatId)["group_state"] != "active") return;
     if (_transfer->busy()) {
         _transfer->cancel();
         ui->file_label->setToolTip(tr("上传已暂停；重新选择同一文件继续"));
@@ -106,6 +108,7 @@ void ChatPage::selectResource()
         tr("所有文件 (*);;图片和视频 (*.png *.jpg *.jpeg *.mp4 *.avi)"));
     if (path.isEmpty()) return;
     _uploadChat = _chatInfo->getChatId(); _uploadRecipient = _chatInfo->getUid();
+    _uploadEpoch = UserMgr::instance()->messages()->groupState(_uploadChat)["membership_epoch"].toString();
     _uploadUuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
     _transfer->upload(path);
 }

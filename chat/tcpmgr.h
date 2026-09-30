@@ -31,6 +31,8 @@ public:
     void resetConnection(bool expectedClose);
 
 signals:
+    /** @brief 发布群查询、管理或备注操作的响应。 */
+    void groupResponse(ReqId id, QJsonObject response);
     /** @brief 返回已落盘的建群结果或错误，request_id 对应提交请求。 */
     void groupCreated(QJsonObject result);
     /** @brief 业务状态更新后通知请求结果，error 为服务端或解析错误码。 */

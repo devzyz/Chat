@@ -898,3 +898,17 @@ Q05-STORE-15..17 在 [message-storage](../chat/tests/message-storage/README.md) 
 `session_reset.account_state` 覆盖群目录网络转换及恢复；
 `tests/server/message-sync/integration.py` 覆盖真实 MySQL、双 ChatServer 的建群、成员权限及离线补拉。
 执行与替身边界见 [同步测试入口](server/message-sync/README.md)。
+
+## 动态群及首版功能扩展
+
+沿用现有 owning runner 和聚合入口，不增加平行测试框架：
+
+| 入口 | 增量合同 | 边界 |
+| --- | --- | --- |
+| message-sync | DynamicGroupLifecycleAndResources、ConcurrentGroupVersionsSerialize、MembershipChangesWaitForCommittedMessages、TransferAndLeaveCannotRemoveTheOwner、四账号 TCP 流程 | 真 MySQL/ChatServer；Redis/Status 替身 |
+| message_storage.persistence | groupEpochAndLocalSearch、目录筛选/备注合并 | 真 SQLite，账号级存储 |
+| resource chat_flow_integration | PNG、十秒 AVI、普通文件分别提交/同步/UUID重试/摘要校验；入群边界、移除后拒绝、独立私聊引用在解散后保留权限 | 真 HTTP/TCP/MySQL；Redis/Status 替身；视频解码 250 帧 |
+| resource_transfer_tests | 群资料拒绝提示、权限刷新、完整分页门禁、超时原 UUID 重试及真实 TCP 回包落盘顺序；历史第二页定位、70 联系人/70 群筛选打开、备注结果和三类群资源卡片 | 真实控件、临时 SQLite；备注结果/资源下载完成信号由测试驱动，非完整生产依赖或人工桌面 |
+| T10-MIG-10 / S05-RESOURCE-17 | 有数据的 5→6、2→6、重复迁移及缺失群主用户/成员或角色矛盾拒绝 | 独立临时 MySQL |
+
+当前迁移目标为 MySQL 6、SQLite 4。执行证据与剩余验收只记录在 [Status](../docs/Status.md)。

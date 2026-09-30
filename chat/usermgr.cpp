@@ -366,6 +366,7 @@ void UserMgr::applyDirectory(const QJsonObject &directory)
         const auto row = value.toObject();
         const int chat = row["id"].toInt();
         if (row["type"].toString() == "group") {
+            if (auto existing = chatInfo(chat)) existing->setName(row["name"].toString());
             addChatInfo(chat, std::make_shared<ChatInfo>(0, row["name"].toString(),
                 QString(), QString(), chat, ChatType::GROUP));
             continue;
