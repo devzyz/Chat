@@ -35,10 +35,18 @@ focused option does not claim production Redis/Status or TCP-flow coverage.
   retry, receiver download authorization, relogin/history and same-instance delivery. This is NOT evidence
   of real Redis or production Status adapter behavior.
 - `schema_upgrade.js`: prepares the verified version-2 schema in its own temporary MySQL,
-  applies migrations 3 and 4, verifies old user/message data and repeat application, then proves
+  applies migrations 3 through 6, verifies old user/message data and repeat application, then proves
   a missing avatar table is still rejected by schema verification. Uses `CHAT_MYSQL_BIN`.
 - Qt `resource_transfer_tests`: cancel after an acknowledged prefix, destroy/recreate the transfer manager,
   resume from the persisted task, download and compare bytes; reject unsupported files.
 
 Existing Asio lifecycle, Qt message model and account-reset regressions protect the reused structure.
 Do not count fixture-backed tests as full production dependency E2E or manual GUI acceptance.
+
+The production HTTP/TCP flow separately uploads valid PNG, ten-second MJPG AVI and ordinary file bytes.
+It reuses the stream suite's OpenCV video fixture (250 frames), checks acknowledged chunk offsets,
+commits each media type online and offline with UUID replay, syncs after relogin, verifies downloaded
+SHA-256 and decodes all video frames. A later joiner sees no earlier messages and cannot download
+these resources; a removed member cannot download them either. New private references to the same
+resources restore independent access, which survives group dissolution. This uses the existing
+catalog/transfer paths. These are protocol/media evidence, not Qt card-display or manual desktop evidence.

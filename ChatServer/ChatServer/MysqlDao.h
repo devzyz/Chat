@@ -82,7 +82,7 @@ public:
      */
 	message_commit::Result AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
         int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
-        std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline);
+        std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline, std::int64_t epoch = 0);
     /**
      * @brief 验证 principal_uid 的会话成员资格，按 ID 升序读取 current_msg_id 之后至多 page_size 条。
      * @note 先清空 chat_list，load_more 置 false，last_msg_id 置输入游标；成功输出下一游标与是否还有记录。
@@ -95,6 +95,9 @@ public:
     /** @brief 借连接按 after 游标同步消息到 response；无连接或异常返回 false，失败响应不可使用。 */
     bool SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response);
     /** @brief 原子建立固定成员群；同一创建 UUID 重试返回原群，内容冲突或非好友返回 false。 */
+    /** @brief 执行群资料、成员管理或个人好友备注事务，响应包含稳定业务错误。 */
+    bool GroupRequest(int uid, const Json::Value& request, bool manage, Json::Value& response);
+    /** @brief 原子建群并按不可变创建者与原始成员集合处理重试。 */
     bool CreateGroup(int owner, const std::string& name, const std::string& uuid,
         const std::vector<int>& members, int& chat_id);
 private:

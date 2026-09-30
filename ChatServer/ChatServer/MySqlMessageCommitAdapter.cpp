@@ -1,4 +1,5 @@
 #include "MySqlMessageCommitAdapter.h"
+#include "../../common/message/MessagePersistence.h"
 
 #include <limits>
 #include <regex>
@@ -22,12 +23,8 @@ void CheckDeadline(Deadline deadline) {
 /** @brief 在当前事务锁定私聊双方或群成员所属会话行；无匹配返回 false，SQL 失败抛异常。 */
 bool IsMember(sql::Connection& connection, int sender, int recipient, int chat) {
     if (recipient == 0) {
-        std::unique_ptr<sql::PreparedStatement> group(connection.prepareStatement(
-            "SELECT g.chat_id FROM group_chat g JOIN group_chat_member m ON m.chat_id=g.chat_id "
-            "JOIN chat c ON c.chat_id=g.chat_id WHERE g.chat_id=? AND m.user_id=? AND c.type='group' FOR UPDATE"));
-        group->setInt(1, chat); group->setInt(2, sender);
-        std::unique_ptr<sql::ResultSet> member(group->executeQuery());
-        return member->next();
+        try { messaging::LockGroup(connection, chat, sender); return true; }
+        catch (const std::runtime_error&) { return false; }
     }
     // Serialize ID allocation/commit with resource writers and incremental sync
     // on the private_chat row, so a sync cursor cannot pass an uncommitted ID.
@@ -97,6 +94,10 @@ Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, co
         _connection.setAutoCommit(false);
         has_transaction = true;
         if (!IsMember(_connection, sender, recipient, chat)) { throw Error::INVALID_MEMBERSHIP; }
+        if (recipient == 0 && _group_epoch > 0) {
+            try { messaging::LockGroup(_connection, chat, sender, _group_epoch); }
+            catch (const std::runtime_error&) { throw Error::INVALID_MEMBERSHIP; }
+        }
         CheckDeadline(deadline);
         std::unique_ptr<sql::PreparedStatement> insert(_connection.prepareStatement(
             "INSERT INTO chat_message(chat_id,send_id,recv_id,content,status,client_msg_uuid) VALUES(?,?,?,?,0,?)"));

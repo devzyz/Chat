@@ -22,6 +22,21 @@ def avatar_png(color=(255, 0, 0), size=256):
     return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack("!IIBBBBB", size, size, 8, 2, 0, 0, 0))
             + chunk(b"IDAT", zlib.compress(pixels)) + chunk(b"IEND", b""))
 
+def create_video_fixture(video):
+    """生成供流传输和真实群资源流程复用的十秒可解码视频。"""
+    import cv2
+    import numpy as np
+    writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"MJPG"), 25, (320, 240))
+    if not writer.isOpened():
+        raise RuntimeError("MJPG fixture encoder unavailable")
+    random = np.random.default_rng(42)
+    for frame in range(250):
+        pixels = random.integers(0, 256, (240, 320, 3), dtype=np.uint8)
+        cv2.putText(pixels, str(frame), (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        writer.write(pixels)
+    writer.release()
+
+
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 EXE = ROOT / "build/resource/ResourceTests.exe"
 
@@ -120,16 +135,8 @@ class StreamIntegration(unittest.TestCase):
 
     def test_video_ten_seconds_resume_after_restart(self):
         import cv2
-        import numpy as np
         video = self.path / "ten-seconds.avi"
-        writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"MJPG"), 25, (320, 240))
-        self.assertTrue(writer.isOpened())
-        random = np.random.default_rng(42)
-        for frame in range(250):
-            pixels = random.integers(0, 256, (240, 320, 3), dtype=np.uint8)
-            cv2.putText(pixels, str(frame), (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            writer.write(pixels)
-        writer.release()
+        create_video_fixture(video)
         capture = cv2.VideoCapture(str(video))
         self.assertAlmostEqual(capture.get(cv2.CAP_PROP_FRAME_COUNT) / capture.get(cv2.CAP_PROP_FPS), 10)
         capture.release()

@@ -1,5 +1,6 @@
 #include "../../../common/message/MessageReceipts.h"
 #include "../../../common/message/MessagePersistence.h"
+#include "../../../common/message/GroupMembership.h"
 #include <jdbc/mysql_driver.h>
 #include <jdbc/mysql_connection.h>
 #include <gtest/gtest.h>
@@ -258,4 +259,170 @@ TEST(MessageSync, GroupMembershipAndCommitOrdering) {
     EXPECT_TRUE(blocked);
     ASSERT_EQ(page["msgs"].size(), 2);
     EXPECT_EQ(page["msgs"][1]["content"].asString(), "held group");
+}
+
+/** 验证动态成员的历史边界、权限、幂等及群资源引用授权共用同一事务事实。 */
+TEST(MessageSync, DynamicGroupLifecycleAndResources) {
+    auto db = Connect();
+    messaging::GroupQuery setup(*db, "INSERT INTO chat(chat_id,type) VALUES(302,'group')", {}, false);
+    messaging::GroupQuery group(*db, "INSERT INTO group_chat(chat_id,name,owner_uid,creator_uid,original_name) VALUES(302,'dynamic',7,7,'dynamic')", {}, false);
+    messaging::GroupQuery members(*db, "INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(302,7,1),(302,8,0)", {}, false);
+    messaging::GroupQuery friends(*db, "INSERT IGNORE INTO friend(self_id,other_id,backname) VALUES(7,9,''),(7,10,'')", {}, false);
+    message_commit::MySqlMessageCommitAdapter adapter(*db); adapter.SetGroupEpoch(1);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+    auto send = /** @brief 按当前群成员代次提交不可变 UUID 的文字。 */ [&](const std::string& name) {
+        return message_commit::Commit(adapter,{7},7,0,302,{{Uuid(name),name}},deadline,true);
+    };
+    const auto old = send("before-join"); ASSERT_TRUE(old.IsSuccess());
+    Json::Value add;
+    add["chat_id"]=302; add["request_id"]=Uuid("add-nine"); add["expected_revision"]="1"; add["operation"]="add"; add["members"].append(9);
+    Json::Value result;
+    for (const int actor : {8,10}) for (const auto* operation : {"add","remove","transfer","rename","dissolve"}) {
+        auto denied=add; denied["operation"]=operation; denied["target_uid"]=8; denied["name"]="denied";
+        EXPECT_THROW(messaging::ManageGroup(*db,actor,denied,result),messaging::GroupError);
+    }
+    for (const auto* operation : {"leave","remove","transfer"}) {
+        auto owner=add; owner["operation"]=operation; owner["target_uid"]=7;
+        EXPECT_THROW(messaging::ManageGroup(*db,7,owner,result),messaging::GroupError);
+    }
+    auto overflow=add; overflow["members"].clear();
+    for (int uid=20;uid<39;++uid) overflow["members"].append(uid);
+    EXPECT_THROW(messaging::ManageGroup(*db,7,overflow,result),messaging::GroupError);
+
+    messaging::ManageGroup(*db,7,add,result); EXPECT_EQ(result["group_revision"].asString(),"2");
+    auto atomic=add; atomic["request_id"]=Uuid("partial-add"); atomic["expected_revision"]="2";
+    atomic["members"].clear(); atomic["members"].append(10); atomic["members"].append(11);
+    EXPECT_THROW(messaging::ManageGroup(*db,7,atomic,result),messaging::GroupError);
+    EXPECT_THROW(messaging::GroupDirectory(*db,302,10),messaging::GroupError);
+    auto stale_version=add; stale_version["request_id"]=Uuid("stale-version");
+    EXPECT_THROW(messaging::ManageGroup(*db,7,stale_version,result),messaging::GroupError);
+    messaging::ManageGroup(*db,7,add,result); EXPECT_EQ(result["group_revision"].asString(),"2");
+    auto conflict=add; conflict["members"][0]=10;
+    EXPECT_THROW(messaging::ManageGroup(*db,7,conflict,result),messaging::GroupError);
+    Json::Value history; history["membership_epoch"]="1";
+    messaging::SyncPage(*db,9,302,0,history,65535); EXPECT_TRUE(history["msgs"].empty());
+    auto current=send("after-join"); ASSERT_TRUE(current.IsSuccess());
+    history.clear(); messaging::SyncPage(*db,9,302,0,history,65535);
+    ASSERT_EQ(history["msgs"].size(),1); EXPECT_EQ(history["msgs"][0]["message_id"].asInt(),current.items[0].message_id);
+
+    Json::Value remove; remove["chat_id"]=302; remove["request_id"]=Uuid("remove-nine");
+    remove["expected_revision"]="2"; remove["operation"]="remove"; remove["target_uid"]=9;
+    messaging::ManageGroup(*db,7,remove,result);
+    EXPECT_THROW(messaging::SyncPage(*db,9,302,0,history,65535),std::exception);
+    ASSERT_TRUE(send("while-away").IsSuccess());
+    add["request_id"]=Uuid("rejoin-nine"); add["expected_revision"]="3";
+    messaging::ManageGroup(*db,7,add,result);
+    history.clear(); history["membership_epoch"]="1";
+    EXPECT_THROW(messaging::SyncPage(*db,9,302,0,history,65535),std::exception);
+    history.clear(); history["membership_epoch"]="2";
+    messaging::SyncPage(*db,9,302,0,history,65535); EXPECT_TRUE(history["msgs"].empty());
+    message_commit::MySqlMessageCommitAdapter stale(*db); stale.SetGroupEpoch(1);
+    EXPECT_FALSE(message_commit::Commit(stale,{9},9,0,302,{{Uuid("stale-epoch"),"stale"}},deadline,true).IsSuccess());
+
+    resource::ResourceCatalog catalog(std::getenv("MESSAGE_SYNC_TEST_MYSQL"),"root","","message_sync_test");
+    catalog.Publish("dynamic-resource",7,"file.txt","application/octet-stream",3,std::string(64,'a'));
+    const auto resource=catalog.CommitMessage(7,0,302,Uuid("group-resource"),"dynamic-resource",1);
+    EXPECT_GT(resource.id,0); EXPECT_TRUE(catalog.CanRead(9,"dynamic-resource")); EXPECT_FALSE(catalog.CanRead(10,"dynamic-resource"));
+    EXPECT_EQ(catalog.CommitMessage(7,0,302,Uuid("group-resource"),"dynamic-resource",1).id,resource.id);
+    add["members"][0]=10; add["request_id"]=Uuid("add-ten-late"); add["expected_revision"]="4";
+    messaging::ManageGroup(*db,7,add,result); EXPECT_FALSE(catalog.CanRead(10,"dynamic-resource"));
+    remove["request_id"]=Uuid("remove-nine-again"); remove["expected_revision"]="5";
+    messaging::ManageGroup(*db,7,remove,result); EXPECT_FALSE(catalog.CanRead(9,"dynamic-resource"));
+    Json::Value transfer; transfer["chat_id"]=302; transfer["request_id"]=Uuid("transfer-eight");
+    transfer["expected_revision"]="6"; transfer["operation"]="transfer"; transfer["target_uid"]=8;
+    messaging::ManageGroup(*db,7,transfer,result); EXPECT_EQ(result["owner_uid"].asInt(),8);
+    auto leave=transfer; leave["operation"]="leave"; leave["request_id"]=Uuid("old-owner-leaves"); leave["expected_revision"]="7";
+    messaging::ManageGroup(*db,7,leave,result); EXPECT_EQ(result["group_state"].asString(),"left");
+    auto dissolve=leave; dissolve["operation"]="dissolve"; dissolve["request_id"]=Uuid("dissolve"); dissolve["expected_revision"]="8";
+    EXPECT_THROW(messaging::ManageGroup(*db,7,dissolve,result),messaging::GroupError);
+    messaging::ManageGroup(*db,8,dissolve,result); EXPECT_EQ(result["group_state"].asString(),"dissolved");
+    messaging::ManageGroup(*db,8,dissolve,result); EXPECT_EQ(result["group_revision"].asString(),"9");
+    EXPECT_FALSE(catalog.CanRead(8,"dynamic-resource"));
+    EXPECT_THROW(messaging::SyncPage(*db,8,302,0,history,65535),std::exception);
+    messaging::GroupQuery cleanup(*db,"DELETE FROM friend WHERE self_id=7 AND other_id IN (9,10)",{},false);
+}
+
+/** 验证两个实例同时修改同一群版本时只有一个事务成功，失败者不覆盖成功结果。 */
+TEST(MessageSync, ConcurrentGroupVersionsSerialize) {
+    auto db=Connect();
+    messaging::GroupQuery chat(*db,"INSERT INTO chat(chat_id,type) VALUES(303,'group')",{},false);
+    messaging::GroupQuery group(*db,"INSERT INTO group_chat(chat_id,name,owner_uid,creator_uid,original_name) VALUES(303,'race',7,7,'race')",{},false);
+    messaging::GroupQuery member(*db,"INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(303,7,1)",{},false);
+    Json::Value first; first["chat_id"]=303; first["request_id"]=Uuid("race-first");
+    first["expected_revision"]="1"; first["operation"]="rename"; first["name"]="First";
+    auto second=first; second["request_id"]=Uuid("race-second"); second["name"]="Second";
+    std::promise<void> start; auto ready=start.get_future().share();
+    const auto run=/** @brief 等待共同起点后在独立数据库连接修改同一版本。 */ [ready](Json::Value request) {
+        auto connection=Connect(); ready.wait(); Json::Value result;
+        try { messaging::ManageGroup(*connection,7,request,result); return std::string("success"); }
+        catch (const messaging::GroupError& error) { return std::string(error.what()); }
+    };
+    auto one=std::async(std::launch::async,run,first);
+    auto two=std::async(std::launch::async,run,second);
+    start.set_value();
+    ASSERT_EQ(one.wait_for(std::chrono::seconds(8)),std::future_status::ready);
+    ASSERT_EQ(two.wait_for(std::chrono::seconds(8)),std::future_status::ready);
+    const auto left=one.get(),right=two.get();
+    EXPECT_TRUE((left=="success" && right=="VersionConflict") || (right=="success" && left=="VersionConflict"));
+    EXPECT_EQ(messaging::GroupDirectory(*db,303,7)["group_revision"].asString(),"2");
+}
+
+/** 验证加入和移除等待已持有群锁的发送，边界与后续提交权限保持一致。 */
+TEST(MessageSync, MembershipChangesWaitForCommittedMessages) {
+    auto db=Connect();
+    messaging::GroupQuery chat(*db,"INSERT INTO chat(chat_id,type) VALUES(304,'group')",{},false);
+    messaging::GroupQuery group(*db,"INSERT INTO group_chat(chat_id,name,owner_uid) VALUES(304,'ordering',7)",{},false);
+    messaging::GroupQuery member(*db,"INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(304,7,1),(304,8,0)",{},false);
+    messaging::GroupQuery friendship(*db,"INSERT IGNORE INTO friend(self_id,other_id,backname) VALUES(7,9,'')",{},false);
+    for (const auto* operation : {"add","remove"}) {
+        db->setAutoCommit(false); messaging::LockGroup(*db,304,7);
+        messaging::GroupQuery pending(*db,"INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES(304,7,0,'held',0)",{},false);
+        Json::Value request; request["chat_id"]=304; request["request_id"]=Uuid(std::string("order-")+operation);
+        request["expected_revision"]=std::string(operation)=="add" ? "1" : "2";
+        request["operation"]=operation; request["members"].append(9); request["target_uid"]=9;
+        auto mutation=std::async(std::launch::async,/** @brief 独立连接等待群消息事务后执行成员变更。 */ [request] {
+            auto connection=Connect(); Json::Value result; messaging::ManageGroup(*connection,7,request,result); return result;
+        });
+        auto observer=Connect(); std::unique_ptr<sql::Statement> probe(observer->createStatement());
+        bool blocked=false; const auto end=std::chrono::steady_clock::now()+std::chrono::seconds(3);
+        while (std::chrono::steady_clock::now()<end && !blocked) {
+            std::unique_ptr<sql::ResultSet> rows(probe->executeQuery("SELECT COUNT(*) FROM performance_schema.data_lock_waits"));
+            blocked=rows->next() && rows->getInt(1)>0; std::this_thread::yield();
+        }
+        db->commit(); db->setAutoCommit(true);
+        ASSERT_EQ(mutation.wait_for(std::chrono::seconds(8)),std::future_status::ready);
+        EXPECT_TRUE(blocked); mutation.get();
+        Json::Value page;
+        if (std::string(operation)=="add") {
+            messaging::SyncPage(*db,9,304,0,page,2048); EXPECT_TRUE(page["msgs"].empty());
+        } else {
+            EXPECT_THROW(messaging::SyncPage(*db,9,304,0,page,2048),std::exception);
+            message_commit::MySqlMessageCommitAdapter sender(*db); sender.SetGroupEpoch(1);
+            EXPECT_FALSE(message_commit::Commit(sender,{9},9,0,304,{{Uuid("after-remove"),"denied"}},
+                std::chrono::steady_clock::now()+std::chrono::seconds(5),true).IsSuccess());
+        }
+    }
+    messaging::GroupQuery cleanup(*db,"DELETE FROM friend WHERE self_id=7 AND other_id=9",{},false);
+}
+
+/** 验证转让与目标退出竞争时只有一个成功，始终保留一个有效群主。 */
+TEST(MessageSync, TransferAndLeaveCannotRemoveTheOwner) {
+    auto db=Connect();
+    messaging::GroupQuery chat(*db,"INSERT INTO chat(chat_id,type) VALUES(305,'group')",{},false);
+    messaging::GroupQuery group(*db,"INSERT INTO group_chat(chat_id,name,owner_uid) VALUES(305,'owner race',7)",{},false);
+    messaging::GroupQuery member(*db,"INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(305,7,1),(305,8,0)",{},false);
+    Json::Value transfer; transfer["chat_id"]=305; transfer["request_id"]=Uuid("owner-transfer-race");
+    transfer["expected_revision"]="1"; transfer["operation"]="transfer"; transfer["target_uid"]=8;
+    auto leave=transfer; leave["request_id"]=Uuid("owner-leave-race"); leave["operation"]="leave";
+    std::promise<void> start; auto ready=start.get_future().share();
+    const auto run=/** @brief 共同起点在独立连接按认证身份操作。 */ [ready](int actor,Json::Value request) {
+        auto connection=Connect(); ready.wait(); Json::Value result;
+        try { messaging::ManageGroup(*connection,actor,request,result); return true; }
+        catch (const messaging::GroupError&) { return false; }
+    };
+    auto one=std::async(std::launch::async,run,7,transfer),two=std::async(std::launch::async,run,8,leave);
+    start.set_value(); EXPECT_NE(one.get(),two.get());
+    messaging::GroupQuery owners(*db,"SELECT COUNT(*) FROM group_chat g JOIN group_chat_member m ON m.chat_id=g.chat_id "
+        "WHERE g.chat_id=305 AND m.state='active' AND m.role=1 AND m.user_id=g.owner_uid",{});
+    ASSERT_TRUE(owners.rows->next()); EXPECT_EQ(owners.rows->getInt(1),1);
 }

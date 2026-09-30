@@ -145,24 +145,36 @@ periodic authoritative synchronization and is sent only to a session that negoti
 
 ## 基础文字群聊
 
-固定成员群最多 20 人（含创建者），创建者从自己的好友中选择 1～19 人。
-本版不提供后续加退群、管理、附件、群回执；所有成员可读取该群全部历史。
+群最多 20 人（含群主），创建者从自己的好友中选择 1～19 人。群主可添加自己的好友、
+移除普通成员、转让群主、改名及解散；普通成员可退出。群只剩群主时仍可保留。
 
-- TCP 1034 创建：`name`（非空、最多 60 UTF-8 字节）、`members`（不重复的正整数 UID，
-  不含自己）、`request_id`（规范 UUID）。身份来自已认证 Session，服务端校验成员存在性和好友关系。
-- 1035 返回 `error`、`request_id`，成功增加 `chat_id`、`group_name`。
-  `(owner_uid, creation_uuid)` 幂等；同 UUID 的名称或成员不同则失败。
-  客户端超时重试保持原 UUID 和内容，建群及成员插入一次事务完成。
-- 群文本复用 1016/1017，明确增加 `chat_type:"group"`，`to_uid:0`；零是群消息收件人占位值，
-  不是用户 ID 或群 ID。私聊仍要求正收件人，群目标由数据库群成员关系验证。
-  群资源请求被拒绝。正文只存一份，保留发送者/UUID 唯一约束及原 ACK/attempt 合同。
-- 群历史复用 1027/1028 `sync_v1`，`recv_id:0`；写入及同步均锁定同一群行，
-  非成员无法写入或读取。旧历史入口同样检查成员身份。
-- 群列表沿用登录及 1025/1026 的 `type:"group"`、`group_name`。
-  客户端每 10 秒重新分页扫描目录，每 2 秒同步已知群的新消息，在途同步不会重复提交。
-  完整目录扫描避免并发建群提交顺序与 ID 顺序不同造成漏群。
-  同服、跨服及离线恢复均以共享 MySQL 为权威，不新增 gRPC、Redis key 或广播线程。
+| 请求/响应 | 合同 |
+| --- | --- |
+| 1034/1035 创建 | `name`（非空、最多 60 UTF-8 字节）、`members`（不重复正整数 UID，不含自己）、`request_id`（UUID）；事务校验好友关系 |
+| 1036/1037 资料 | `chat_id`、`after_uid`、`request_id`；返回 `members`、`member_count`、`next_uid`、`load_more`；客户端按同一群版本拼接分页 |
+| 1038/1039 管理 | `chat_id`、`request_id`、`expected_revision`、`operation`；`add` 携带 `members`，`remove/transfer` 携带 `target_uid`，`rename` 携带 `name`，`leave/dissolve` 无附加参数 |
+| 1040/1041 好友备注 | `target_uid`、`name`、`request_id`；只更新认证用户自己的好友备注，空字符串清除备注 |
 
-1034/1035 仍遵守 2048 字节包体限制；仅 1028 允许扩展响应大小。
-部署前应用 migration 005 并同步升级 Gate/Chat/Resource 和客户端；旧服务端拒绝 schema 5，
-旧客户端过滤群会话。迁移方式和恢复边界见 [Data](Data.md)。
+身份只取认证 Session。成功返回 `error:0`；管理结果包含群权威状态和请求身份。
+`group_revision`、`membership_epoch`、`expected_revision` 使用规范正十进制字符串。
+`group_state` 为 `active/left/removed/dissolved`，`joined_after_id` 为本代入群时已提交消息边界。
+业务拒绝通过 `group_error` 区分 `InvalidRequest`、`Forbidden`、`NotFriend`、`NotMember`、
+`MembershipChanged`、`OwnerMustTransfer`、`MemberLimit`、`GroupDissolved`、`VersionConflict`、
+`RequestConflict` 与 `StorageUnavailable`。客户端对版本冲突刷新后重新选择操作；存储不可用及超时保留原请求重试。
+
+- 管理以 `(actor_uid,request_id)` 幂等，原参数和结果与业务变更同事务提交；相同身份不同参数拒绝。
+  重试先读取原成功结果，不因之后退群或解散而重新执行。客户端管理命令先保存到账号 SQLite，
+  超时、关闭资料窗口和重启后仍可重试；已完成终态才清除。群名、群主及成员变化不改变原建群身份：
+  创建幂等使用不可变 `creator_uid`、`original_name`、原成员集合。
+- 登录协商 `group_membership_v1`。群消息复用 1016/1017，携带 `chat_type:"group"`、
+  `to_uid:0`、当前 `membership_epoch`；旧客户端不能绕过成员代次发送。群图片、视频、文件复用
+  既有资源描述和提交链路。私聊正收件人、UUID、ACK/attempt 和回执合同保持不变。
+- 群历史复用 1027/1028 `sync_v1`、`recv_id:0`；同步关联成员代次，旧历史入口也校验当前资格和边界。
+  加入、退出、移除、解散与消息提交锁定同一群行；新成员只读取边界之后消息，重新加入产生新代次。
+  离群后禁止服务端读取和新发送，本地历史保留；群不产生私聊送达/已读事实。
+- 登录及 1025/1026 目录保留用户曾加入的群，显式返回状态，不根据某页缺失推断删除。
+  客户端每 10 秒从起点完整分页，每 2 秒同步有效群；旧版本不覆盖新状态，旧代次响应和 outbox 不重发。
+  同服、跨服及离线恢复以 MySQL 为权威，不新增广播设施。
+
+普通响应遵守 2048 字节包体限制，群资料按实际序列化大小分页；仅 1028 允许扩展响应大小。
+协议需要 migration 006 及相应二进制合同；迁移入口与恢复边界见 [Data](Data.md)。

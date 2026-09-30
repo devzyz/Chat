@@ -27,14 +27,14 @@ async function runCases(createSession, database, record) {
     const routine = migration.manifest.migrations[1].statements.at(-1);
     try {
         await record('T10-MIG-01', 'fresh migration reaches current N', /** 验证空库迁移到当前版本且表集合完整。 */ async () => {
-            assert.equal((await migration.apply()).version, 5);
-            assert.equal((await migration.inspect()).tables.length, 15);
+            assert.equal((await migration.apply()).version, 6);
+            assert.equal((await migration.inspect()).tables.length, 17);
         });
         await record('T10-MIG-02', 'repeat application preserves registered user', /** 验证重复迁移幂等并保留已注册用户。 */ async () => {
             const uid = await registration(session, 'migration_seed', 'migration_seed@example.invalid');
             assert.ok(uid > 0);
             const before = await session.execute('SELECT COUNT(*),MAX(uid) FROM user');
-            assert.equal((await migration.apply()).version, 5);
+            assert.equal((await migration.apply()).version, 6);
             assert.equal(await session.execute('SELECT COUNT(*),MAX(uid) FROM user'), before);
         });
         await record('T10-MIG-03', 'applied checksum drift fails closed', /** 验证已应用校验和漂移拒绝迁移，随后恢复夹具值。 */ async () => {
@@ -106,11 +106,47 @@ async function runCases(createSession, database, record) {
             created = false;
             await session.execute(`CREATE DATABASE ${identifier(auxiliary)}`);
             created = true;
+            const previous = new SchemaMigration(session, auxiliary);
+            previous.manifest.migrations = previous.manifest.migrations.slice(0, 5);
+            await assert.rejects(previous.apply(), /SchemaContractDrift/);
+            await session.execute("INSERT INTO user(uid,name,email,password,description,icon,sex) VALUES(7,'owner','o@example.invalid','','','',0),(8,'member','m@example.invalid','','','',0)");
+            await session.execute('UPDATE user_id SET id=8');
+            await session.execute("INSERT INTO chat(chat_id,type) VALUES(77,'group')");
+            await session.execute("INSERT INTO group_chat(chat_id,name,owner_uid,creation_uuid) VALUES(77,'original',7,'00000000-0000-4000-8000-000000000077')");
+            await session.execute('INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(77,7,1),(77,8,0)');
+            await session.execute("INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES(77,7,0,'old history',0)");
             const fresh = new SchemaMigration(session, auxiliary);
-            assert.equal((await fresh.apply()).version, 5);
+            assert.equal((await fresh.apply()).version, 6);
+            assert.equal(await session.execute("SELECT creator_uid,owner_uid,original_name FROM group_chat WHERE chat_id=77"), '7\t7\toriginal');
+            assert.equal(await session.execute('SELECT COUNT(*) FROM group_creation_member WHERE chat_id=77'), '2');
+            assert.equal(await session.execute("SELECT COUNT(*) FROM group_chat_member WHERE chat_id=77 AND state='active' AND membership_epoch=1 AND joined_after_id=0"), '2');
+            assert.equal(await session.execute("SELECT content FROM chat_message WHERE chat_id=77"), 'old history');
+            assert.equal((await fresh.apply()).version, 6);
             const fingerprint = await fresh.fingerprint();
             await session.execute(`USE ${identifier(database)}`);
             assert.equal(await migration.fingerprint(), fingerprint);
+            // A malformed legacy group fails before any membership columns are added.
+            await session.execute(`DROP DATABASE ${identifier(auxiliary)}`);
+            await session.execute(`CREATE DATABASE ${identifier(auxiliary)}`);
+            const invalid = new SchemaMigration(session, auxiliary);
+            invalid.manifest.migrations = invalid.manifest.migrations.slice(0,5);
+            await assert.rejects(invalid.apply(), /SchemaContractDrift/);
+            await session.execute("INSERT INTO group_chat(chat_id,name) VALUES(99,'no owner')");
+            await assert.rejects(new SchemaMigration(session, auxiliary).apply(), /MysqlError:3819/);
+            assert.equal(await session.execute("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='group_chat_member' AND column_name='state'"), '0');
+            // A role row alone cannot make a nonexistent user a valid group owner.
+            await session.execute(`DROP DATABASE ${identifier(auxiliary)}`);
+            await session.execute(`CREATE DATABASE ${identifier(auxiliary)}`);
+            const orphan = new SchemaMigration(session, auxiliary);
+            orphan.manifest.migrations = orphan.manifest.migrations.slice(0,5);
+            await assert.rejects(orphan.apply(), /SchemaContractDrift/);
+            await session.execute("INSERT INTO group_chat(chat_id,name,owner_uid) VALUES(99,'orphan owner',999)");
+            await session.execute('INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(99,999,1)');
+            await assert.rejects(new SchemaMigration(session, auxiliary).apply(), /MysqlError:3819/);
+            assert.equal(await session.execute("SELECT state FROM schema_version WHERE version=6"), 'failed');
+            assert.equal(await session.execute("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='group_chat_member' AND column_name='state'"), '0');
+            assert.equal(await session.execute('SELECT owner_uid FROM group_chat WHERE chat_id=99'), '999');
+            await session.execute(`USE ${identifier(database)}`);
         });
         await record('T10-MIG-11', 'routine body drift is rejected without repair on startup', /** 验证过程独立注释变化不影响合同而可执行正文变化被拒绝，随后恢复过程。 */ async () => {
             await session.execute('DROP PROCEDURE reg_user');
@@ -118,7 +154,7 @@ async function runCases(createSession, database, record) {
                 await session.execute(routine.replace(
                     '-- All registrations take this one row lock before checking uniqueness.',
                     '-- A different explanatory comment must not change the schema contract.'));
-                assert.equal((await migration.verify()).version, 5);
+                assert.equal((await migration.verify()).version, 6);
                 await session.execute('DROP PROCEDURE reg_user');
                 await session.execute(routine.replace('SET result = next_uid;', 'SET result = 42;'));
                 await assert.rejects(migration.verify(), /SchemaContractDrift/);
@@ -126,7 +162,7 @@ async function runCases(createSession, database, record) {
                 await session.execute('DROP PROCEDURE IF EXISTS reg_user');
                 await session.execute(routine);
             }
-            assert.equal((await migration.verify()).version, 5);
+            assert.equal((await migration.verify()).version, 6);
         });
     } catch (error) { primary = error; throw error; }
     finally {

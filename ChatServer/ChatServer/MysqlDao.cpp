@@ -1,6 +1,7 @@
 #include "../../common/message/MessageReceipts.h"
 #include "../../common/message/MessagePersistence.h"
 #include "MysqlDao.h"
+#include "../../common/message/GroupMembership.h"
 #include <set>
 #include <string>
 #include <chrono>
@@ -500,7 +501,8 @@ bool MysqlDao::GetUserChatList(int uid, int current_chat_id, int page_size,
 		pstmt->setInt(4, uid);
 		pstmt->setInt(5, current_chat_id);
 		// 多取一个用于判断是不是已经取完了
-		pstmt->setInt(6, page_size + 1);
+		page_size = (std::min)(page_size, 4);
+        pstmt->setInt(6, page_size + 1);
 
 		std::unique_ptr<sql::ResultSet> result(pstmt->executeQuery());
 
@@ -518,6 +520,7 @@ bool MysqlDao::GetUserChatList(int uid, int current_chat_id, int page_size,
 			else if (type == "group") {
 				auto info = std::make_shared<GroupChatInfo>();
 				info->_group_name = result->getString("group_name");
+                info->_membership = messaging::GroupDirectory(*connection->_connection, result->getInt("chat_id"), uid);
 				info->_chat_id = result->getInt("chat_id");
 				info->_type = type;
 				temp.push_back(info);
@@ -638,13 +641,13 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 // 插入新的聊天信息
 message_commit::Result MysqlDao::AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
     int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
-    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline) {
+    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline, std::int64_t epoch) {
     chat_msgs.clear();
     /** @brief 将当前借用的 MySQL 连接适配为消息提交端口，连接有效期由调用方租约保证。 */
     class PooledStore final : public message_commit::Store {
     public:
         /** @brief 初始化PooledStore，将当前借用的 MySQL 连接适配为消息提交端口，连接有效期由调用方租约保证。 */
-        explicit PooledStore(MysqlPool& pool) : _pool(pool) {}
+        explicit PooledStore(MysqlPool& pool, std::int64_t epoch) : _pool(pool), _epoch(epoch) {}
         /** @brief 使用本次借用的连接执行文本提交端口，保留事务及幂等错误分类。 */
         message_commit::Result Commit(int sender, int recipient, int chat,
             const message_commit::Batch& batch, message_commit::Deadline end) override {
@@ -655,6 +658,7 @@ message_commit::Result MysqlDao::AddChatMessageList(message_commit::Authenticate
             }
             try {
                 message_commit::MySqlMessageCommitAdapter adapter(*connection->_connection);
+                adapter.SetGroupEpoch(_epoch);
                 auto result = adapter.Commit(sender, recipient, chat, batch, end);
                 if (!adapter.IsReusable()) { connection->_connection.reset(); }
                 _pool.ReturnConnection(std::move(connection));
@@ -669,7 +673,8 @@ message_commit::Result MysqlDao::AddChatMessageList(message_commit::Authenticate
         }
     private:
         MysqlPool& _pool;
-    } store(*_pool);
+        std::int64_t _epoch;
+    } store(*_pool, epoch);
     auto result = message_commit::Commit(store, principal, from_uid, to_uid, chat_id, cache_msgs, deadline, to_uid == 0);
     if (!result.IsSuccess()) { return result; }
     for (std::size_t index = 0; index < result.items.size(); ++index) {
@@ -713,17 +718,9 @@ bool MysqlDao::GetChatMessageList(int principal_uid, int chat_id, int current_ms
 		});
 
 	try {
-        std::unique_ptr<sql::PreparedStatement> membership(connection->_connection->prepareStatement(
-            "SELECT 1 FROM private_chat WHERE chat_id=? AND (user1_id=? OR user2_id=?) "
-            "UNION ALL SELECT 1 FROM group_chat_member WHERE chat_id=? AND user_id=? LIMIT 1"));
-        membership->setInt(1, chat_id);
-        membership->setInt(2, principal_uid);
-        membership->setInt(3, principal_uid);
-        membership->setInt(4, chat_id);
-        membership->setInt(5, principal_uid);
-        std::unique_ptr<sql::ResultSet> allowed(membership->executeQuery());
-        if (!allowed->next()) return false;
-        allowed.reset();
+        messaging::Transaction transaction(*connection->_connection);
+        const auto access = messaging::LockConversation(*connection->_connection, chat_id, principal_uid);
+        current_msg_id = static_cast<int>((std::max)(std::int64_t(current_msg_id), access.boundary));
 
 		// 准备查询
 		std::string sql = "SELECT *,UNIX_TIMESTAMP(created_at) AS created_epoch FROM chat_message "
@@ -764,9 +761,10 @@ bool MysqlDao::GetChatMessageList(int principal_uid, int chat_id, int current_ms
 
 		chat_list = std::move(lists);
 
+		transaction.Commit();
 		return true;
 	}
-	catch (sql::SQLException& e) {
+	catch (const std::exception& e) {
 		SPDLOG_ERROR("mysql GetChatMessageList failed, chat_id={}, current_msg_id={}, page_size={}, error={}", chat_id, current_msg_id, page_size, e.what());
 		return false;
 	}
@@ -812,14 +810,14 @@ bool MysqlDao::CreateGroup(int owner, const std::string& name, const std::string
         if (!owner_row->next()) return false;
         owner_row.reset();
         std::unique_ptr<sql::PreparedStatement> prior(db.prepareStatement(
-            "SELECT chat_id,name FROM group_chat WHERE owner_uid=? AND creation_uuid=?"));
+            "SELECT chat_id,original_name FROM group_chat WHERE creator_uid=? AND creation_uuid=?"));
         prior->setInt(1, owner); prior->setString(2, uuid);
         std::unique_ptr<sql::ResultSet> row(prior->executeQuery());
         if (row->next()) {
             const int existing = row->getInt(1);
             if (row->getString(2).asStdString() != name) return false;
             row.reset();
-            std::unique_ptr<sql::PreparedStatement> query(db.prepareStatement("SELECT user_id FROM group_chat_member WHERE chat_id=?"));
+            std::unique_ptr<sql::PreparedStatement> query(db.prepareStatement("SELECT user_id FROM group_creation_member WHERE chat_id=?"));
             query->setInt(1, existing);
             std::unique_ptr<sql::ResultSet> users(query->executeQuery());
             std::set<int> actual;
@@ -842,8 +840,9 @@ bool MysqlDao::CreateGroup(int owner, const std::string& name, const std::string
         const int created = identity->getInt(1);
         identity.reset();
         std::unique_ptr<sql::PreparedStatement> group(db.prepareStatement(
-            "INSERT INTO group_chat(chat_id,name,owner_uid,creation_uuid) VALUES(?,?,?,?)"));
+            "INSERT INTO group_chat(chat_id,name,owner_uid,creation_uuid,creator_uid,original_name) VALUES(?,?,?,?,?,?)"));
         group->setInt(1, created); group->setString(2, name); group->setInt(3, owner); group->setString(4, uuid);
+        group->setInt(5, owner); group->setString(6, name);
         group->executeUpdate();
         std::unique_ptr<sql::PreparedStatement> member(db.prepareStatement(
             "INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(?,?,?)"));
@@ -851,9 +850,39 @@ bool MysqlDao::CreateGroup(int owner, const std::string& name, const std::string
             member->setInt(1, created); member->setInt(2, uid); member->setInt(3, uid == owner ? 1 : 0);
             member->executeUpdate();
         }
+        messaging::GroupQuery original(db, "INSERT INTO group_creation_member SELECT chat_id,user_id FROM group_chat_member WHERE chat_id=?", {std::to_string(created)}, false);
         transaction.Commit(); chat_id = created; return true;
     } catch (const std::exception&) {
         SPDLOG_WARN("group creation failed");
         return false;
     }
+}
+
+bool MysqlDao::GroupRequest(int uid, const Json::Value& request, bool manage, Json::Value& response) {
+    response["error"] = ErrorCodes::UidInvalid;
+    response["request_id"] = request["request_id"];
+    response["chat_id"] = request["chat_id"];
+    auto connection = _pool->GetConnection();
+    if (!connection) { response["group_error"] = "StorageUnavailable"; return false; }
+    Defer release(/** @brief 归还请求独占借用的连接。 */ [this, &connection] { _pool->ReturnConnection(std::move(connection)); });
+    try {
+        if (request["operation"] == "remark") {
+            if (!request["target_uid"].isInt() || !request["name"].isString() || request["name"].asString().size() > 60)
+                throw messaging::GroupError("InvalidRequest");
+            auto& db = *connection->_connection;
+            messaging::Transaction transaction(db);
+            messaging::GroupQuery row(db, "SELECT 1 FROM friend WHERE self_id=? AND other_id=? FOR UPDATE",
+                {std::to_string(uid),std::to_string(request["target_uid"].asInt())});
+            if (!row.rows->next()) throw messaging::GroupError("NotFriend");
+            messaging::GroupQuery change(db, "UPDATE friend SET backname=? WHERE self_id=? AND other_id=?",
+                {request["name"].asString(),std::to_string(uid),std::to_string(request["target_uid"].asInt())}, false);
+            transaction.Commit(); response["target_uid"] = request["target_uid"]; response["name"] = request["name"]; response["error"] = 0;
+        } else if (manage) {
+            if (!request["request_id"].isString() || !message_commit::IsCanonicalUuid(request["request_id"].asString())) throw messaging::GroupError("InvalidRequest");
+            messaging::ManageGroup(*connection->_connection, uid, request, response);
+        } else messaging::ReadGroup(*connection->_connection, uid, request, response);
+        return true;
+    } catch (const messaging::GroupError& error) { response["group_error"] = error.what(); }
+    catch (const std::exception&) { response["group_error"] = "StorageUnavailable"; }
+    response["error"] = ErrorCodes::UidInvalid; return false;
 }

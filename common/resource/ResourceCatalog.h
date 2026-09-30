@@ -50,7 +50,15 @@ public:
             "AND (m.send_id=? OR m.recv_id=?) AND (p.user1_id=? OR p.user2_id=?) LIMIT 1"));
         statement->setString(1, id);
         for (int index = 2; index <= 5; ++index) statement->setInt(index, uid);
-        std::unique_ptr<sql::ResultSet> rows(statement->executeQuery()); return rows->next();
+        std::unique_ptr<sql::ResultSet> rows(statement->executeQuery());
+        if (rows->next()) return true;
+        rows.reset();
+        std::unique_ptr<sql::PreparedStatement> group(lease->prepareStatement(
+            "SELECT 1 FROM resource_message r JOIN chat_message m ON m.message_id=r.message_id "
+            "JOIN group_chat g ON g.chat_id=m.chat_id JOIN group_chat_member u ON u.chat_id=g.chat_id "
+            "WHERE r.resource_id=? AND u.user_id=? AND u.state='active' AND g.dissolved=0 AND m.message_id>u.joined_after_id LIMIT 1"));
+        group->setString(1, id); group->setInt(2, uid);
+        rows.reset(group->executeQuery()); return rows->next();
     }
     /** @brief 保存已提交资源消息的服务器 ID 与序列化内容。 */
     struct Message { int id; std::string content; };
@@ -81,20 +89,15 @@ public:
             throw std::runtime_error("avatar resource unavailable or not owned");
     }
     /** @brief 在会话行锁事务中校验资源归属并提交消息引用；同 UUID 幂等复用，身份冲突抛异常。 */
-    Message CommitMessage(int sender, int recipient, int chat, const std::string& uuid, const std::string& id) {
+    Message CommitMessage(int sender, int recipient, int chat, const std::string& uuid, const std::string& id, std::int64_t epoch = 0) {
         if (uuid.empty() || uuid.size() > 64) throw std::invalid_argument("invalid message UUID");
         auto lease = Acquire();
         messaging::Transaction transaction(*lease);
         {
-            // Lock the conversation row to serialize duplicate submissions across Chat instances.
-            std::unique_ptr<sql::PreparedStatement> membership(lease->prepareStatement(
-                "SELECT chat_id FROM private_chat WHERE chat_id=? AND "
-                "((user1_id=? AND user2_id=?) OR (user1_id=? AND user2_id=?)) FOR UPDATE"));
-            membership->setInt(1, chat); membership->setInt(2, sender); membership->setInt(3, recipient);
-            membership->setInt(4, recipient); membership->setInt(5, sender);
-            std::unique_ptr<sql::ResultSet> member(membership->executeQuery());
-            if (!member->next()) throw std::runtime_error("not a conversation participant");
-            member.reset();
+            if (recipient == 0) {
+                if (epoch <= 0) throw std::runtime_error("missing membership epoch");
+                messaging::LockGroup(*lease, chat, sender, epoch);
+            } else messaging::LockConversation(*lease, chat, sender, recipient);
             std::unique_ptr<sql::PreparedStatement> existing(lease->prepareStatement(
                 "SELECT m.message_id,m.content,r.resource_id,m.chat_id,m.recv_id FROM resource_message r "
                 "JOIN chat_message m ON m.message_id=r.message_id WHERE r.sender_uid=? AND r.client_uuid=?"));
