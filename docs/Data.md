@@ -30,7 +30,7 @@ recovery descriptions in [`manifest.json`](../schema/manifest.json).
 - `004_message_receipts.sql` adds the per-conversation revision clock and current message receipt rows.
   Revisions are allocated under the same conversation lock as message commits and receipt page reads.
   Unique conversation/revision and message/recipient keys prevent duplicate facts. See [MessageStates](MessageStates.md).
-  All schema-verifying Gate/Chat/Resource binaries must be updated together after migration; old binaries reject schema 4.
+  Schema 4 introduced receipts; the current required schema is 5 (see the group migration below).
 
 ## Operational entry
 
@@ -79,10 +79,13 @@ Before moving an existing development/production database, back it up and create
 reviewed import/adoption plan with duplicate/counter preflight. Nothing here changes
 the user's VM database.
 
-The export's `group_chat_member` has only `chat_id` as its primary key, restricting
-it to one member per group. This pre-existing group-model limitation is preserved,
-not presented as implemented group chat. No unproven foreign keys or triggers were
-invented from DAO queries.
+`005_basic_groups.sql` corrects the exported `group_chat_member` primary key to
+`(chat_id,user_id)` and adds `(user_id,chat_id)` for membership lookup. It adds nullable
+`owner_uid`/`creation_uuid` and their unique index to `group_chat` for idempotent creation.
+Existing rows remain intact. Group text uses `chat_message.recv_id=0` as an explicit
+group sentinel; private messages keep positive recipients. All schema-verifying
+Gate/Chat/Resource binaries must be upgraded together after migration to schema 5.
+The basic fixed-member group protocol is defined in [Protocol](Protocol.md#基础文字群聊).
 
 For executed evidence and follow-up scope use the main workspace `docs/Status.md`.
 The [schema owner tests](../tests/server/schema-migration/README.md) are separate from

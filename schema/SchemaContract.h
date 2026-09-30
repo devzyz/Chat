@@ -41,12 +41,13 @@ SELECT SHA2(GROUP_CONCAT(item ORDER BY item SEPARATOR '\n'),256) FROM (
 ) AS schema_items
 )SQL";
 
-inline constexpr const char* CONTRACT_HASH = "1afbf486452ac37b93237a8bff4f635f7d9ef27fef68c512f9b7718f3fa824d0";
+inline constexpr const char* CONTRACT_HASH = "06af7cfb0c2937ce4a68533a2bbfe9b840d2269b293c17d54f9fd500d784cd16";
 inline constexpr const char* VERSION_ROWS =
     "1:a549039f9846ac8dc5120e3f89481a92934a2d485d054019c6dfb69c9241957d:applied,"
     "2:be6b412a603046f67125d6a3f61aff2bf4054ee5154ca73a25ec7d824f3a2f85:applied,"
     "3:0fba30c1dcf87f8e3fe30deef9d296fe8f64d91dd45a7e70cb36f2acb40d68d0:applied,"
-    "4:04143b2e07a3a64ca77e302f3f64d1380d278655e18ec04e5527b8c60093ce3c:applied";
+    "4:04143b2e07a3a64ca77e302f3f64d1380d278655e18ec04e5527b8c60093ce3c:applied,"
+    "5:ffe7b499c2f751f2da53ef4b7a6589fb87172b92fbe4e741d8b9f01bb066fde8:applied";
 
 /** 校验当前数据库版本、元数据指纹与 UID 计数器；失败统一抛安全错误，不泄露驱动诊断。 */ inline void Verify(sql::Connection& connection) {
     try {

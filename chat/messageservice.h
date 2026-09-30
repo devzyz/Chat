@@ -32,7 +32,7 @@ public:
     /** @brief 查询当前是否关联有效账号，不等同于数据库异步打开成功。 */
     bool isActive() const { return _uid > 0; }
     /** @brief 登记需要同步的会话，首次登记启动消息和回执同步。 */
-    void registerChat(int chatId);
+    void registerChat(int chatId, bool group = false);
     /** @brief 读取已提交游标后请求消息增量；同一会话已有请求时不重复启动。 */
     void synchronize(int chatId);
     /** @brief 验证响应关联、游标及格式后排队落盘，成功才通知模型刷新和后续同步。 */
@@ -102,6 +102,8 @@ private:
     quint64 _generation = 0;
     int _pendingOperations = 0;
     QSet<int> _chats;
+    QSet<int> _groups;
+    QTimer _groupTimer;
     QSet<int> _recoveringChats;
     QHash<int, QString> _requests;
     QSet<int> _committing;

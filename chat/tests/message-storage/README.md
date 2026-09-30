@@ -63,3 +63,8 @@ It does not substitute for the GUI visibility tests or production Redis/Status v
 | Q05-STORE-17 | schemaTwoDirectoryUpgrade | schema 2 升级快照、原消息与游标保留及目录可写 |
 
 网络回包到目录存储的组合由 `session_reset.account_state` 补充验证。
+
+Basic groups additionally cover directory-gated zero recipients, sender-scoped UUIDs,
+restart/cursor preservation, conflict rollback, two-second incremental polling and
+exclusion from private receipt reporting. The account-state regression also exercises
+network group directory conversion and restores the group type after account reset.

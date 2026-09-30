@@ -97,6 +97,8 @@ public:
     /** @brief 删除指定会话消息已无须继续上报的回执意图。 */
     void discardReceipt(int chatId, qint64 messageId);
 private:
+    /** @brief 核对已落盘目录中的群会话身份，仅群消息允许收件人占位值零。 */
+    bool isGroupChat(int chatId);
     /** @brief 在现有事务范围保存待发消息行，供批次与消息原子写入复用。 */
     void saveOutgoingRows(const QVector<StoredMessage> &messages);
     /** @brief 为本地已经落盘的接收消息生成送达意图。 */

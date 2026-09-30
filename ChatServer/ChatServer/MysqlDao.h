@@ -94,6 +94,9 @@ public:
     bool HandleReceiptRequest(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer);
     /** @brief 借连接按 after 游标同步消息到 response；无连接或异常返回 false，失败响应不可使用。 */
     bool SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response);
+    /** @brief 原子建立固定成员群；同一创建 UUID 重试返回原群，内容冲突或非好友返回 false。 */
+    bool CreateGroup(int owner, const std::string& name, const std::string& uuid,
+        const std::vector<int>& members, int& chat_id);
 private:
 	std::unique_ptr<MysqlPool> _pool;
 };

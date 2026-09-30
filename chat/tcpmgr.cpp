@@ -22,9 +22,18 @@ QJsonObject directoryResponse(ReqId id, const QJsonObject &response, int self)
     }
     for (const auto &value : response["chat_list"].toArray()) {
         const auto row = value.toObject();
+        if (row["type"].toString() == "group") {
+            conversations.append(QJsonObject{{"id", row["chat_id"]}, {"uid", 0},
+                {"type", "group"}, {"name", row["group_name"]}});
+            continue;
+        }
         if (row["type"].toString() != "private") continue;
         const int peer = row["user1_id"].toInt() == self ? row["user2_id"].toInt() : row["user1_id"].toInt();
         conversations.append(QJsonObject{{"id", row["chat_id"]}, {"uid", peer}, {"type", "private"}});
+    }
+    if (id == ID_CREATE_GROUP_RSP) {
+        conversations.append(QJsonObject{{"id", response["chat_id"]}, {"uid", 0},
+            {"type", "group"}, {"name", response["group_name"]}});
     }
     int approved = 0;
     if (id == ID_NOTIFY_ADD_FRIEND_REQ) {
@@ -145,12 +154,26 @@ TcpMgr::TcpMgr() : _host("") {
         emit sendRequested(static_cast<ReqId>(id), QJsonDocument(request).toJson(QJsonDocument::Compact));
     });
 
+    _directoryTimer.setInterval(10000);
+    connect(&_directoryTimer, &QTimer::timeout, this,
+        /** @brief 上轮目录完整加载后重新扫描，发现其他成员建立的群。 */
+        [this] {
+            if (!_authenticated || !UserMgr::instance()->isChatListFullyLoaded()) return;
+            emit sendRequested(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(QJsonObject{
+                {"uid", UserMgr::instance()->uid()}, {"current_chat_id", 0}}).toJson(QJsonDocument::Compact));
+        });
+    _directoryTimer.start();
     // 注册回调处理逻辑
     initHandlers();
 }
 
 void TcpMgr::initHandlers()
 {
+    _handlers.insert(ID_CREATE_GROUP_RSP,
+        /** @brief 群目录落盘后发布建群结果，失败也携带请求身份。 */
+        [this](ReqId, int, QByteArray data) {
+            emit groupCreated(QJsonDocument::fromJson(data).object());
+        });
     // 登录请求的回包处理逻辑
     _handlers.insert(ReqId::ID_CHAT_LOGIN_RSP,
         /** @brief 解析聊天登录回复并完成身份和初始数据接入。 */
@@ -919,7 +942,7 @@ void TcpMgr::handleMessage(ReqId id, int len, QByteArray data)
         return ;
     }
     const auto response = QJsonDocument::fromJson(data).object();
-    const bool directory = id == ID_LOAD_CHAT_LIST_RSP || id == ID_NOTIFY_ADD_FRIEND_REQ
+    const bool directory = id == ID_CREATE_GROUP_RSP || id == ID_LOAD_CHAT_LIST_RSP || id == ID_NOTIFY_ADD_FRIEND_REQ
         || id == ID_AUTH_FRIEND_RSP || id == ID_NOTIFY_AUTH_FRIEND_REQ || id == ID_CREATE_PRIVATE_CHAT_RSP;
     if (directory && response["error"].toInt(-1) == 0) {
         UserMgr::instance()->messages()->saveDirectory(directoryResponse(id, response, UserMgr::instance()->uid()),

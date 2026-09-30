@@ -138,12 +138,23 @@ void SessionResetTests::accountStateDoesNotCrossLoginSessions()
     TcpMgr::instance()->handleMessage(ID_AUTH_FRIEND_RSP, response.size(), response);
     QTRY_COMPARE(changed.size(), 3);
     QCOMPARE(userMgr->nextContactPage().size(), size_t(1));
+    const QJsonObject groupPage{{"error", 0}, {"current_chat_id", 402}, {"load_more", false},
+        {"chat_list", QJsonArray{QJsonObject{{"chat_id", 402}, {"type", "group"}, {"group_name", "Friends"}}}}};
+    const auto groupBytes = QJsonDocument(groupPage).toJson(QJsonDocument::Compact);
+    TcpMgr::instance()->handleMessage(ID_LOAD_CHAT_LIST_RSP, groupBytes.size(), groupBytes);
+    QTRY_COMPARE(changed.size(), 4);
+    QVERIFY(userMgr->chatInfo(402));
+    QCOMPARE(userMgr->chatInfo(402)->getChatType(), ChatType::GROUP);
+    QCOMPARE(userMgr->chatInfo(402)->name(), QString("Friends"));
+    QCOMPARE(userMgr->privateChatIdFor(0), -1);
     userMgr->resetSession();
     messages->start(directory.path(), 101);
     QTRY_COMPARE(restored.size(), 2);
     QVERIFY(userMgr->isFriend(301));
     QCOMPARE(userMgr->privateChatIdFor(301), 401);
     std::vector<std::shared_ptr<ApplyInfo>> applications;
+    QVERIFY(userMgr->chatInfo(402));
+    QCOMPARE(userMgr->chatInfo(402)->getChatType(), ChatType::GROUP);
     userMgr->appendFriendApplicationsTo(applications);
     QCOMPARE(applications.size(), size_t(1));
     QCOMPARE(applications.front()->_status, 1);

@@ -80,6 +80,9 @@ void ChatPage::setChatInfo(std::shared_ptr<ChatInfo> chatInfo)
     _chatInfo = std::move(chatInfo);
     _currentChatId = _chatInfo->getChatId();
 
+    ui->title_label->setText(_chatInfo->name());
+    ui->file_label->setEnabled(_chatInfo->getChatType() == ChatType::PRIVATE);
+    ui->file_label->setToolTip(_chatInfo->getChatType() == ChatType::GROUP ? tr("基础群聊暂只支持文字") : tr("发送文件"));
     if (_chatInfo->getChatType() == ChatType::PRIVATE) {
         const auto friendInfo = UserMgr::instance()->friendById(_chatInfo->getUid());
         if (friendInfo) {
@@ -143,6 +146,7 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before,
         const auto sender = record.isSelf ? UserMgr::instance()->userInfo()
                                          : UserMgr::instance()->friendById(stored.senderId);
         if (sender) { record.senderName = sender->_name; record.avatarKey = sender->_icon; }
+        else record.senderName = tr("用户 %1").arg(stored.senderId);
         record.avatar = UserMgr::instance()->avatarFor(stored.senderId, record.avatarKey);
         record.deliveryStatus = !record.isSelf ? DeliveryStatus::None :
             stored.receipt == ReceiptLevel::Read ? DeliveryStatus::Read :
@@ -291,7 +295,9 @@ void ChatPage::on_send_btn_clicked()
         }
         const QByteArray data = clientTextRequest(selfInfo->_uid, _chatInfo->getUid(),
                                                   _chatInfo->getChatId(), textArray);
-        UserMgr::instance()->messages()->send(QJsonDocument::fromJson(data).object());
+        auto request = QJsonDocument::fromJson(data).object();
+        if (_chatInfo->getChatType() == ChatType::GROUP) request["chat_type"] = "group";
+        UserMgr::instance()->messages()->send(request);
         textLength = 0;
         textArray = QJsonArray();
     };

@@ -215,3 +215,47 @@ TEST(MessageSync, ReceiptPageCannotSkipAnUpgrade) {
     EXPECT_FALSE(page["load_more"].asBool());
     EXPECT_EQ(page["next_revision"].asString(), "19");
 }
+
+/** 验证三人群共享单份正文，非成员拒绝且同步不能越过未提交的群消息。 */
+TEST(MessageSync, GroupMembershipAndCommitOrdering) {
+    auto first = Connect();
+    std::unique_ptr<sql::Statement> statement(first->createStatement());
+    statement->execute("INSERT INTO chat(chat_id,type) VALUES(301,'group')");
+    statement->execute("INSERT INTO group_chat(chat_id,name) VALUES(301,'Three members')");
+    statement->execute("INSERT INTO group_chat_member(chat_id,user_id) VALUES(301,7),(301,8),(301,9)");
+    message_commit::MySqlMessageCommitAdapter adapter(*first);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    const message_commit::Batch batch{{Uuid("group-member"), "shared text"}};
+    const auto sent = message_commit::Commit(adapter, {8}, 8, 0, 301, batch, deadline, true);
+    ASSERT_TRUE(sent.IsSuccess());
+    const auto retry = message_commit::Commit(adapter, {8}, 8, 0, 301, batch, deadline, true);
+    ASSERT_TRUE(retry.IsSuccess());
+    EXPECT_EQ(sent.items[0].message_id, retry.items[0].message_id);
+    EXPECT_FALSE(message_commit::Commit(adapter, {10}, 10, 0, 301, batch, deadline, true).IsSuccess());
+    Json::Value denied, third;
+    EXPECT_THROW(messaging::SyncPage(*first, 10, 301, 0, denied, 2048), std::exception);
+    messaging::SyncPage(*first, 9, 301, 0, third, 2048);
+    ASSERT_EQ(third["msgs"].size(), 1);
+    EXPECT_EQ(third["msgs"][0]["send_id"].asInt(), 8);
+    first->setAutoCommit(false);
+    messaging::LockConversation(*first, 301, 8);
+    statement->execute("INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES(301,8,0,'held group',0)");
+    auto reading = std::async(std::launch::async,
+        /** 在另一连接补拉群历史，必须等待当前写事务提交。 */
+        [] { auto second = Connect(); return Page(*second, 301, 0); });
+    auto observer = Connect();
+    std::unique_ptr<sql::Statement> probe(observer->createStatement());
+    bool blocked = false;
+    const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (std::chrono::steady_clock::now() < end && !blocked) {
+        std::unique_ptr<sql::ResultSet> rows(probe->executeQuery("SELECT COUNT(*) FROM performance_schema.data_lock_waits"));
+        blocked = rows->next() && rows->getInt(1) > 0;
+        std::this_thread::yield();
+    }
+    first->commit(); first->setAutoCommit(true);
+    ASSERT_EQ(reading.wait_for(std::chrono::seconds(6)), std::future_status::ready);
+    auto page = reading.get();
+    EXPECT_TRUE(blocked);
+    ASSERT_EQ(page["msgs"].size(), 2);
+    EXPECT_EQ(page["msgs"][1]["content"].asString(), "held group");
+}

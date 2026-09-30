@@ -142,3 +142,27 @@ UUID idempotency identity or the original batch commit semantics. ACK proves Sen
 The client reserves framing metadata space by limiting stored business requests to 1950 bytes.
 `NotifyMessageReceiptChanged` is an additive Chat-only unary RPC; its hint is recoverable through
 periodic authoritative synchronization and is sent only to a session that negotiated receipts.
+
+## 基础文字群聊
+
+固定成员群最多 20 人（含创建者），创建者从自己的好友中选择 1～19 人。
+本版不提供后续加退群、管理、附件、群回执；所有成员可读取该群全部历史。
+
+- TCP 1034 创建：`name`（非空、最多 60 UTF-8 字节）、`members`（不重复的正整数 UID，
+  不含自己）、`request_id`（规范 UUID）。身份来自已认证 Session，服务端校验成员存在性和好友关系。
+- 1035 返回 `error`、`request_id`，成功增加 `chat_id`、`group_name`。
+  `(owner_uid, creation_uuid)` 幂等；同 UUID 的名称或成员不同则失败。
+  客户端超时重试保持原 UUID 和内容，建群及成员插入一次事务完成。
+- 群文本复用 1016/1017，明确增加 `chat_type:"group"`，`to_uid:0`；零是群消息收件人占位值，
+  不是用户 ID 或群 ID。私聊仍要求正收件人，群目标由数据库群成员关系验证。
+  群资源请求被拒绝。正文只存一份，保留发送者/UUID 唯一约束及原 ACK/attempt 合同。
+- 群历史复用 1027/1028 `sync_v1`，`recv_id:0`；写入及同步均锁定同一群行，
+  非成员无法写入或读取。旧历史入口同样检查成员身份。
+- 群列表沿用登录及 1025/1026 的 `type:"group"`、`group_name`。
+  客户端每 10 秒重新分页扫描目录，每 2 秒同步已知群的新消息，在途同步不会重复提交。
+  完整目录扫描避免并发建群提交顺序与 ID 顺序不同造成漏群。
+  同服、跨服及离线恢复均以共享 MySQL 为权威，不新增 gRPC、Redis key 或广播线程。
+
+1034/1035 仍遵守 2048 字节包体限制；仅 1028 允许扩展响应大小。
+部署前应用 migration 005 并同步升级 Gate/Chat/Resource 和客户端；旧服务端拒绝 schema 5，
+旧客户端过滤群会话。迁移方式和恢复边界见 [Data](Data.md)。

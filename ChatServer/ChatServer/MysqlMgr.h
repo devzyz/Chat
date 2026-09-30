@@ -50,6 +50,9 @@ public:
     bool HandleReceiptRequest(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer);
     /** @brief 转交持久化消息增量同步；成功填充 response，false 表示存储或请求处理失败。 */
     bool SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response);
+    /** @brief 原子建立固定成员群；同一创建 UUID 重试返回原群，内容冲突或非好友返回 false。 */
+    bool CreateGroup(int owner, const std::string& name, const std::string& uuid,
+        const std::vector<int>& members, int& chat_id);
 private:
 	/** @brief 初始化MysqlMgr，提供进程内 DAO 访问入口并转发数据库业务操作，不代表跨服务事务。 */
 	MysqlMgr();

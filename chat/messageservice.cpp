@@ -20,6 +20,10 @@ MessageService::MessageService(QObject *parent) : QObject(parent), _worker(new M
     _thread.start();
     _outgoingTimer.setInterval(1000);
     connect(&_outgoingTimer, &QTimer::timeout, this, &MessageService::dispatchOutgoing);
+    _groupTimer.setInterval(2000);
+    connect(&_groupTimer, &QTimer::timeout, this,
+        /** @brief 短周期增量拉取固定成员群，无需新增跨服广播线程。 */
+        [this] { for (int chat : _groups) synchronize(chat); });
     _syncTimer.setInterval(30000);
     connect(&_syncTimer, &QTimer::timeout, this,
         /** @brief 定时为已登记会话同步消息并上报及拉取回执。 */
@@ -109,6 +113,7 @@ void MessageService::start(const QString &accountRoot, int uid, bool receipts)
         dispatchOutgoing();
     });
     _syncTimer.start();
+    _groupTimer.start();
 }
 
 void MessageService::stop()
@@ -118,6 +123,8 @@ void MessageService::stop()
     _accountRoot.clear();
     _failedDrafts.clear();
     _syncTimer.stop();
+    _groupTimer.stop();
+    _groups.clear();
     _outgoingTimer.stop();
     _dispatching = false;
     _receipts = false;
@@ -133,9 +140,10 @@ void MessageService::stop()
         [worker = _worker] { worker->store.close(); }, Qt::QueuedConnection);
 }
 
-void MessageService::registerChat(int chatId)
+void MessageService::registerChat(int chatId, bool group)
 {
     if (!isActive() || chatId <= 0) return;
+    if (group) _groups.insert(chatId);
     if (!_chats.contains(chatId)) {
         _chats.insert(chatId);
         synchronize(chatId);
@@ -369,7 +377,7 @@ void MessageService::acceptSendResponse(const QJsonObject &response)
 
 void MessageService::observeRead(int chatId, const QVector<qint64> &ids)
 {
-    if (!isActive() || !_receipts || !_chats.contains(chatId) || ids.isEmpty()) return;
+    if (!isActive() || !_receipts || _groups.contains(chatId) || !_chats.contains(chatId) || ids.isEmpty()) return;
     execute(chatId,
         /** @brief 在存储线程记录已满足可见性的已读意图。 */
         [chatId, ids](LocalMessageStore &store) { store.observeRead(chatId, ids); },
@@ -396,7 +404,7 @@ void MessageService::receiptRetry(int chatId)
 
 void MessageService::requestReceipts(int chatId, bool report)
 {
-    if (!isActive() || !_receipts || !_chats.contains(chatId)) return;
+    if (!isActive() || !_receipts || _groups.contains(chatId) || !_chats.contains(chatId)) return;
     auto &busy = report ? _receiptReport : _receiptSync;
     if (busy.contains(chatId)) return;
     if (busy.size() >= 8) {

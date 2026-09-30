@@ -13,6 +13,10 @@ class MessageStorageTests : public QObject
 {
     Q_OBJECT
 private slots:
+    /** 验证群目录、零收件人正文、重启和 outbox 保持幂等且不生成私聊回执。 */
+    void groupMessagesPersistWithoutPrivateReceipts();
+    /** 验证群同步不触发私聊回执，并在账号结束后停止轮询。 */
+    void groupServiceSkipsReceipts();
     /** 验证目录事务、重启、本地三页分页及审批状态保持。 */
     void directoryPersistenceAndPagination();
     /** 验证目录异步恢复、失败不发布和切换账号隔离。 */
@@ -48,6 +52,63 @@ private slots:
     /** 验证资源发送意图在重启与重试预算耗尽后仍保留原资源身份。 */
     void resourceIntentSurvivesRecoveryAndRetryBudget();
 };
+
+void MessageStorageTests::groupMessagesPersistWithoutPrivateReceipts()
+{
+    QTemporaryDir directory;
+    LocalMessageStore store;
+    store.open(directory.path(), 7);
+    const QJsonObject request{{"from_uid", 7}, {"to_uid", 0}, {"chat_id", 12}, {"chat_type", "group"},
+        {"text_array", QJsonArray{QJsonObject{{"msg_uuid", "00000000-0000-4000-8000-000000000333"},
+            {"msg_content", "group text"}}}}};
+    QVERIFY_EXCEPTION_THROWN(store.saveOutgoingRequest(request), std::exception);
+    store.mergeDirectory(QJsonObject{{"conversations", QJsonArray{QJsonObject{
+        {"id", 12}, {"type", "group"}, {"name", "Test group"}, {"uid", 0}}}}});
+    store.saveOutgoingRequest(request);
+    store.saveOutgoingRequest(request);
+    StoredMessage sent;
+    sent.chatId = 12; sent.senderId = 7; sent.recipientId = 0;
+    sent.messageId = 100; sent.clientMessageId = request["text_array"].toArray().first().toObject()["msg_uuid"].toString();
+    sent.content = "group text"; sent.sentAt = 1700000000000LL; sent.state = StoredMessage::Confirmed;
+    auto received = sent;
+    received.senderId = 8; received.messageId = 101;
+    // Same UUID from another sender remains a distinct message.
+    store.applySyncPage(12, 0, 101, {sent, received});
+    QVERIFY(store.pendingReceipts(12).isEmpty());
+    store.close(); store.open(directory.path(), 7);
+    QCOMPARE(store.cursor(12), 101);
+    QCOMPARE(store.directory()["conversations"].toArray().first().toObject()["type"].toString(), QString("group"));
+    QCOMPARE(store.history(12, 0, 50).messages.size(), 2);
+    auto conflict = sent; conflict.messageId = 102; conflict.content = "changed";
+    QVERIFY_EXCEPTION_THROWN(store.applySyncPage(12, 101, 102, {conflict}), std::exception);
+    QCOMPARE(store.cursor(12), 101);
+}
+
+void MessageStorageTests::groupServiceSkipsReceipts()
+{
+    QTemporaryDir directory;
+    MessageService service;
+    QSignalSpy restored(&service, &MessageService::directoryRestored);
+    QSignalSpy sync(&service, &MessageService::syncRequested);
+    QSignalSpy receipts(&service, &MessageService::receiptRequested);
+    service.start(directory.path(), 7, true);
+    QTRY_COMPARE(restored.size(), 1);
+    service.registerChat(12, true);
+    QTRY_COMPARE(sync.size(), 1);
+    auto page = sync.first().first().toJsonObject();
+    page["error"] = 0; page["msgs"] = QJsonArray{};
+    page["next_cursor"] = 0; page["load_more"] = false;
+    service.acceptSyncPage(page);
+    QTRY_COMPARE_WITH_TIMEOUT(sync.size(), 2, 3500);
+    service.synchronizeReceipts(12);
+    service.observeRead(12, {100});
+    QCoreApplication::processEvents();
+    QCOMPARE(receipts.size(), 0);
+    service.stop();
+    service.registerChat(13, true);
+    QCoreApplication::processEvents();
+    QCOMPARE(sync.size(), 2);
+}
 
 /** 生成固定会话的存储消息，按服务端编号选择待发或确认状态。 */
 static StoredMessage message(qint64 id, QString uuid = {})

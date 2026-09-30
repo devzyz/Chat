@@ -34,6 +34,8 @@ protected:
     bool eventFilter(QObject * watched, QEvent * event) override;
 
 private:
+    /** @brief 打开固定成员的建群表单，使用稳定请求 UUID 防止超时重试重复建群。 */
+    void openCreateGroup();
     /** @brief 切换搜索结果列表与常规列表的可见状态。 */
     void showSearch(bool bsearch = false);
     // 将stateWidget添加到_label_list组内

@@ -149,6 +149,66 @@ def tcp_flow(directory, mysql_command, mysql_port):
         print("Qt/SQLite receipts: durable report, Read intent, confirmed state and process restart passed")
         print("TCP: offline commit, UUID retry, cross-instance push, incremental sync and relogin passed")
         print("Qt/SQLite: process restart resumes from persisted cursor; no old history requested")
+        # Fixed-member group journey against two production ChatServer instances.
+        receiver = login(1, 8)
+        outsider = login(1, 9)
+        creation = dict(name="Basic group", members=[8], request_id="00000000-0000-4000-8000-000000009001")
+        send(sender, 1034, creation)
+        group = receive(sender, 1035)["chat_id"]
+        send(sender, 1034, creation)
+        assert receive(sender, 1035)["chat_id"] == group
+        send(sender, 1034, dict(creation, name="Conflicting name"))
+        assert receive(sender, 1035, success=False)["error"] != 0
+        send(sender, 1034, dict(creation, members=[10], request_id="00000000-0000-4000-8000-000000009002"))
+        assert receive(sender, 1035, success=False)["error"] != 0
+        send(receiver, 1025, dict(uid=8, current_chat_id=group - 1))
+        listed = receive(receiver, 1026)["chat_list"]
+        assert any(row["chat_id"] == group and row["type"] == "group" for row in listed)
+        text = dict(from_uid=7, to_uid=0, chat_id=group, chat_type="group",
+            text_array=[dict(msg_uuid="00000000-0000-4000-8000-000000009003", msg_content="Hello group")])
+        send(sender, 1016, text)
+        group_message = receive(sender, 1017)["uuid_msgId"][0]["message_id"]
+        send(sender, 1016, text)
+        assert receive(sender, 1017)["uuid_msgId"][0]["message_id"] == group_message
+        send(sender, 1016, dict(text, chat_type="private"))
+        assert receive(sender, 1017, success=False)["error"] != 0
+        send(outsider, 1016, dict(text, from_uid=9))
+        assert receive(outsider, 1017, success=False)["error"] != 0
+        send(outsider, 1027, dict(mode="sync_v1", uid=9, chat_id=group, after_id=0, request_id="outsider"))
+        assert receive(outsider, 1028, success=False)["error"] != 0
+        send(receiver, 1027, dict(mode="sync_v1", uid=8, chat_id=group, after_id=0, request_id="group-sync"))
+        page = receive(receiver, 1028)
+        assert len(page["msgs"]) == 1 and page["msgs"][0]["recv_id"] == 0
+        assert page["msgs"][0]["content"] == "Hello group"
+        send(receiver, 1016, dict(text, from_uid=8))  # UUID identities are sender-scoped.
+        reply = receive(receiver, 1017)["uuid_msgId"][0]["message_id"]
+        assert reply != group_message
+        receiver.close()
+        text["text_array"][0] = dict(msg_uuid="00000000-0000-4000-8000-000000009004", msg_content="While offline")
+        send(sender, 1016, text)
+        offline = receive(sender, 1017)["uuid_msgId"][0]["message_id"]
+        receiver = login(1, 8)
+        send(receiver, 1027, dict(mode="sync_v1", uid=8, chat_id=group, after_id=reply, request_id="group-restart"))
+        page = receive(receiver, 1028)
+        assert [row["message_id"] for row in page["msgs"]] == [offline]
+        # Long UTF-8 names and more than one directory page stay within the TCP frame bound.
+        for index in range(11):
+            send(sender, 1034, dict(name="群" * 20, members=[8],
+                request_id=f"00000000-0000-4000-8000-{9100 + index:012d}"))
+            receive(sender, 1035)
+        found = []
+        cursor = group - 1
+        for _ in range(3):
+            send(receiver, 1025, dict(uid=8, current_chat_id=cursor))
+            result = receive(receiver, 1026)
+            found.extend(row["chat_id"] for row in result["chat_list"])
+            cursor = result["current_chat_id"]
+            if not result["load_more"]:
+                break
+        assert len(found) == 12 and len(set(found)) == 12
+        receiver.close()
+        receiver = login(1, 8)
+        print("Group TCP: atomic creation/retry, membership, cross-instance send/sync and offline recovery passed")
     finally:
         if sys.exc_info()[0] is not None:
             evidence = ROOT / "build/message-sync/failed-flow"

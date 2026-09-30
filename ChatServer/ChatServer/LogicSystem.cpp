@@ -56,6 +56,31 @@ bool LogicSystem::Dispatch(const LogicMessage& message) {
 }
 
 void LogicSystem::RegisterCallbacks() {
+    _fun_callbacks[MSG_CREATE_GROUP_REQ] =
+        /** @brief 校验建群参数，成员与建群身份由数据库事务核对。 */
+        [](std::shared_ptr<CSession> session, const short&, const std::string& body) {
+        Json::Value request, response;
+        Json::Reader reader;
+        response["error"] = ErrorCodes::Error_Json;
+        if (reader.parse(body, request) && request["name"].isString()
+            && request["request_id"].isString() && request["members"].isArray()) {
+            response["request_id"] = request["request_id"].asString().substr(0, 64);
+            std::vector<int> members;
+            bool valid = request["members"].size() > 0 && request["members"].size() <= 19;
+            for (const auto& member : request["members"]) {
+                if (!member.isInt() || member.asInt() <= 0) { valid = false; break; }
+                members.push_back(member.asInt());
+            }
+            int chat = 0;
+            if (valid && MysqlMgr::GetInstance()->CreateGroup(session->AuthenticatedUid(),
+                request["name"].asString(), request["request_id"].asString(), members, chat)) {
+                response["error"] = 0;
+                response["chat_id"] = chat;
+                response["group_name"] = request["name"];
+            } else response["error"] = ErrorCodes::UidInvalid;
+        }
+        session->Send(messaging::CompactJson(response), MSG_CREATE_GROUP_RSP);
+    };
     for (const auto id : {MSG_MESSAGE_RECEIPT_REPORT_REQ, MSG_MESSAGE_RECEIPT_SYNC_REQ}) {
         // 处理回执上报或同步，并在成功上报后提示对端补拉。
         _fun_callbacks[id] = /** @brief 处理回执上报或增量同步并通知另一参与者。 */ [this](std::shared_ptr<CSession> session, const short& request_id,
@@ -242,7 +267,7 @@ void LogicSystem::RegisterCallbacks() {
         // 将会话绑定结果合并到登录响应。
         session->BindAuthenticatedUser(uid, /** @brief 按异步会话绑定结果完成登录响应。 */ [session, response = std::move(return_value)](SessionBindResult result) mutable {
             if (result != SessionBindResult::Bound) response["error"] = ErrorCodes::RPCFailed;
-            session->Send(response.toStyledString(), MSG_CHAT_LOGIN_RSP);
+            session->Send(messaging::CompactJson(response), MSG_CHAT_LOGIN_RSP);
         });
 
 	};
@@ -562,6 +587,7 @@ void LogicSystem::RegisterCallbacks() {
         const int chat_id = root["chat_id"].isInt() ? root["chat_id"].asInt() : 0;
         Json::Value data_array = root["text_array"];
         const bool resource_message = root.isMember("resource_id");
+        const bool group_message = root["chat_type"].isString() && root["chat_type"].asString() == "group";
 
 		Json::Value return_value;
         if (root["attempt_id"].isString() && root["attempt_id"].asString().size() <= 20)
@@ -590,7 +616,8 @@ void LogicSystem::RegisterCallbacks() {
             return_value["commit_error"] = "UnauthorizedSender";
             return;
         }
-        if (!data_array.isArray() || data_array.empty() || to_uid <= 0 || chat_id <= 0) {
+        if (!data_array.isArray() || data_array.empty() || chat_id <= 0
+            || (group_message ? (to_uid != 0 || resource_message) : to_uid <= 0)) {
             return_value["error"] = ErrorCodes::Error_Json;
             return_value["commit_error"] = "InvalidMembership";
             return;
@@ -664,6 +691,8 @@ void LogicSystem::RegisterCallbacks() {
 		}
 
 		return_value["uuid_msgId"] = uuid_msgId;
+        // Fixed-member groups use authoritative short-interval sync, including across instances.
+        if (group_message) return;
 
 		// 查询redis查看对方的ip
 
@@ -805,7 +834,7 @@ void LogicSystem::RegisterCallbacks() {
 		return_value["uid"] = uid;
 
 		Defer defer(/** @brief 在会话列表处理退出时发送分页响应。 */ [this, &return_value, session]() {
-			std::string return_str = return_value.toStyledString();
+			std::string return_str = messaging::CompactJson(return_value);
 			session->Send(return_str, MSG_LOAD_CHAT_LIST_RSP);
 			});
 

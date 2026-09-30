@@ -51,7 +51,9 @@ void ChatUserItem::setChatInfo(std::shared_ptr<ChatInfo> chat_info)
             ui->user_chat_label->setText("");
         }
     }else if (chat_info->getChatType() == ChatType::GROUP) {
-        // todo...
+        ui->user_name_label->setText(tr("群 · %1").arg(chat_info->name()));
+        ui->icon_label->setPixmap(QPixmap(":/res/head_1.jpg"));
+        ui->icon_label->setScaledContents(true);
     }
 }
 

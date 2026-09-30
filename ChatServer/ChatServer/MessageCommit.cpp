@@ -18,9 +18,9 @@ bool IsCanonicalUuid(const std::string& value) {
 }
 
 Result Commit(Store& store, AuthenticatedPrincipal principal, int claimed_sender,
-    int recipient, int chat, const Batch& batch, Deadline deadline) {
+    int recipient, int chat, const Batch& batch, Deadline deadline, bool group) {
     if (principal.uid <= 0 || principal.uid != claimed_sender) { return {Error::UNAUTHORIZED_SENDER, {}}; }
-    if (recipient <= 0 || chat <= 0 || recipient == principal.uid) { return {Error::INVALID_MEMBERSHIP, {}}; }
+    if (chat <= 0 || (group ? recipient != 0 : (recipient <= 0 || recipient == principal.uid))) { return {Error::INVALID_MEMBERSHIP, {}}; }
     if (batch.empty() || batch.size() > 100) { return {Error::INVALID_UUID, {}}; }
     std::unordered_set<std::string> identities;
     for (const auto& message : batch) {
