@@ -83,15 +83,18 @@ void MessageService::start(const QString &accountRoot, int uid, bool receipts)
     _accountRoot = accountRoot;
     _receipts = receipts;
     auto recovering = std::make_shared<QSet<int>>();
+    auto directory = std::make_shared<QJsonObject>();
     execute(0,
         /** @brief 打开账号库、读取待对账会话并恢复发送状态。 */
-        [accountRoot, uid, recovering](LocalMessageStore &store) {
+        [accountRoot, uid, recovering, directory](LocalMessageStore &store) {
         store.open(accountRoot, uid);
+        *directory = store.directory();
         *recovering = store.recoveryChats();
         store.resumeOutgoing();
     },
         /** @brief 登记恢复中的会话并启动发送调度及恢复期限。 */
-        [this, recovering] {
+        [this, recovering, directory] {
+        emit directoryRestored(*directory);
         _recoveringChats = *recovering;
         for (int chat : *recovering) registerChat(chat);
         const auto generation = _generation;
@@ -507,4 +510,40 @@ void MessageService::acceptReceiptResponse(const QJsonObject &response)
         (report ? _receiptReport : _receiptSync).remove(chatId);
         if (report) receiptRetry(chatId);
     });
+}
+
+void MessageService::saveDirectory(const QJsonObject &directory, std::function<void()> completion)
+{
+    if (!isActive()) return;
+    auto saved = std::make_shared<QJsonObject>();
+    execute(-1,
+        /** @brief 在账号工作线程提交目录事务并读取提交结果。 */
+        [directory, saved](LocalMessageStore &store) { *saved = store.mergeDirectory(directory); },
+        /** @brief 当前账号提交成功后才更新缓存和发布业务完成事件。 */
+        [this, saved, completion] {
+            emit directoryChanged(*saved);
+            if (completion) completion();
+        },
+        /** @brief 通知目录写入失败，保留当前界面数据。 */
+        [this] { emit directoryFailed({}); });
+}
+
+void MessageService::loadDirectoryPage(const QString &kind, int after, int limit)
+{
+    if (!isActive()) return;
+    auto rows = std::make_shared<QJsonArray>();
+    execute(-1,
+        /** @brief 本地查询多取一条，以确定下一页是否存在。 */
+        [kind, after, limit, rows](LocalMessageStore &store) {
+            if (limit <= 0 || limit > 1000) throw std::runtime_error("Invalid directory page size");
+            *rows = store.directoryPage(kind, after, limit + 1);
+        },
+        /** @brief 返回原游标和本地分页结果。 */
+        [this, kind, after, limit, rows] {
+            const bool more = rows->size() > limit;
+            if (more) rows->removeLast();
+            emit directoryPageLoaded(kind, after, *rows, more);
+        },
+        /** @brief 查询失败后允许该列表重新加载。 */
+        [this, kind] { emit directoryFailed(kind); });
 }

@@ -40,6 +40,12 @@ struct LocalMessagePage {
 /** @brief 独占账号 SQLite 连接及锁文件；所有方法和析构均在连接所属工作线程执行，存储错误抛异常。 */
 class LocalMessageStore final {
 public:
+    /** @brief 事务合并联系人、会话和申请；缺失记录不代表删除，approved_uid 同时更新已有申请状态。 */
+    QJsonObject mergeDirectory(const QJsonObject &directory);
+    /** @brief 读取账号目录，用于恢复内存查询缓存。 */
+    QJsonObject directory();
+    /** @brief 按固定主键升序读取目录页；kind 为 contacts、conversations 或 applications。 */
+    QJsonArray directoryPage(const QString &kind, int after, int limit);
     /** @brief 默认构造空状态，实际账号或资源在显式初始化时接入。 */
     LocalMessageStore() = default;
     /** @brief 关闭账号数据库并移除本对象的 SQLite 连接。 */

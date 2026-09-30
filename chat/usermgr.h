@@ -93,6 +93,8 @@ public:
 private:
     /** @brief 创建消息和头像服务，并在 Qt 退出前排空消息存储。 */
     UserMgr();
+    /** @brief 使用数据库返回的目录值更新当前账号内存查询缓存。 */
+    void applyDirectory(const QJsonObject &directory);
     MessageService *_messages;
     LocalAvatar *_localAvatar;
     AvatarCache *_remoteAvatars = nullptr;

@@ -5,6 +5,55 @@
 #include "usermgr.h"
 #include "messageservice.h"
 
+namespace {
+/** @brief 将现有目录回包转换为本地值，不保存令牌或无关协议字段。 */
+QJsonObject directoryResponse(ReqId id, const QJsonObject &response, int self)
+{
+    QJsonArray contacts, conversations, applications;
+    for (const auto &value : response["friend_list"].toArray()) {
+        auto row = value.toObject();
+        row["id"] = row.value("uid");
+        contacts.append(row);
+    }
+    for (const auto &value : response["apply_list"].toArray()) {
+        auto row = value.toObject();
+        row["id"] = row.value("fromuid");
+        applications.append(row);
+    }
+    for (const auto &value : response["chat_list"].toArray()) {
+        const auto row = value.toObject();
+        if (row["type"].toString() != "private") continue;
+        const int peer = row["user1_id"].toInt() == self ? row["user2_id"].toInt() : row["user1_id"].toInt();
+        conversations.append(QJsonObject{{"id", row["chat_id"]}, {"uid", peer}, {"type", "private"}});
+    }
+    int approved = 0;
+    if (id == ID_NOTIFY_ADD_FRIEND_REQ) {
+        auto row = response;
+        row.remove("error");
+        row["id"] = row.value("fromuid");
+        row["status"] = 0;
+        applications.append(row);
+    } else if (id == ID_AUTH_FRIEND_RSP || id == ID_NOTIFY_AUTH_FRIEND_REQ) {
+        const bool approving = id == ID_AUTH_FRIEND_RSP;
+        const auto info = response[approving ? "applyinfo" : "authinfo"].toObject();
+        const QString prefix = approving ? "apply" : "auth";
+        const int peer = info[prefix + "uid"].toInt();
+        const QJsonValue backname = response[approving ? "authinfo" : "applyinfo"].toObject().value("backname");
+        contacts.append(QJsonObject{{"id", peer}, {"uid", peer}, {"name", info[prefix + "name"]},
+            {"description", info[prefix + "description"]}, {"icon", info[prefix + "icon"]},
+            {"sex", info[prefix + "sex"]}, {"backname", backname}});
+        conversations.append(QJsonObject{{"id", response["chatid"]}, {"uid", peer}, {"type", "private"}});
+        if (approving) approved = peer;
+    } else if (id == ID_CREATE_PRIVATE_CHAT_RSP) {
+        const auto info = response["other_info"].toObject();
+        conversations.append(QJsonObject{{"id", response["chat_id"]}, {"uid", response["other_id"]},
+            {"type", "private"}, {"name", info["other_name"]}, {"icon", info["other_icon"]}});
+    }
+    return {{"contacts", contacts}, {"conversations", conversations},
+        {"applications", applications}, {"approved_uid", approved}};
+}
+}
+
 TcpMgr::TcpMgr() : _host("") {
 
     // 绑定连接完成信号到lambda槽函数上
@@ -162,62 +211,20 @@ void TcpMgr::initHandlers()
         const bool receipts = jsonObj["capabilities"].toArray().contains("message_receipts_v1");
         UserMgr::instance()->messages()->start(UserMgr::instance()->storageRoot(), uid, receipts);
 
-        // 如果包含好友申请列表，则添加上
-        if (jsonObj.contains("apply_list")) {
-            UserMgr::instance()->addFriendApplications(jsonObj["apply_list"].toArray());
-        }
-
-        // 如果包含好友列表，则添加上
-        if (jsonObj.contains("friend_list")) {
-            UserMgr::instance()->addFriends(jsonObj["friend_list"].toArray());
-        }
-
         emit loginSucceeded();
-
-        // 加载初始化会话列表
-        auto self_id = UserMgr::instance()->uid();
-
-        auto current_chat_id = jsonObj["current_chat_id"].toInt();
-        auto load_more = jsonObj["load_more"].toBool();
-
-        // 更新状态
-        UserMgr::instance()->setChatListCursor(current_chat_id);
-        UserMgr::instance()->setChatListFullyLoaded(!load_more);
-
-        if (jsonObj.contains("chat_list")) {
-            const auto chat_list = jsonObj["chat_list"].toArray();
-            for (const auto & chat : chat_list) {
-                QJsonObject obj = chat.toObject();
-
-                auto chat_id = obj["chat_id"].toInt();
-
-                auto type = obj["type"].toString();
-                if (type == "private") {
-                    auto user1_id = obj["user1_id"].toInt();
-                    auto user2_id = obj["user2_id"].toInt();
-
-                    // 另一个人的uid
-                    auto other_id = (user1_id == self_id) ? user2_id : user1_id;
-
-                    UserMgr::instance()->addPrivateChatMapping(other_id, chat_id);
-                    // 获取到另一个人的uid
-                    auto other_info = UserMgr::instance()->friendById(other_id);
-                    // 通过对方的uid, 会话id, 当前消息的id来构造ChatInfo
-                    auto chat_info = std::make_shared<ChatInfo>(other_id,
-                        other_info ? other_info->_name : QString::number(other_id),
-                        other_info ? other_info->_icon : QString(),
-                        other_info ? other_info->_backname : QString(), chat_id, ChatType::PRIVATE);
-                    UserMgr::instance()->addChatInfo(chat_id, chat_info);
-                }else if (type == "group") {
-                    // todo 群聊
+        UserMgr::instance()->messages()->saveDirectory(directoryResponse(id, jsonObj, uid),
+            /** @brief 首批目录落盘后继续服务端分页，界面分页独立读取本地。 */
+            [this, jsonObj, uid] {
+                const int cursor = jsonObj["current_chat_id"].toInt();
+                const bool more = jsonObj["load_more"].toBool();
+                UserMgr::instance()->setChatListCursor(cursor);
+                UserMgr::instance()->setChatListFullyLoaded(!more);
+                emit chatListLoaded(jsonObj["chat_list"].toArray());
+                if (more && cursor > 0) {
+                    emit sendRequested(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(QJsonObject{
+                        {"uid", uid}, {"current_chat_id", cursor}}).toJson(QJsonDocument::Compact));
                 }
-            }
-            emit chatListLoaded(chat_list);
-            if (load_more && current_chat_id > 0) {
-                QJsonObject next{{"uid", self_id}, {"current_chat_id", current_chat_id}};
-                emit sendRequested(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(next).toJson(QJsonDocument::Compact));
-            }
-        }
+            });
     });
 
     // 搜索用户请求的回包处理逻辑
@@ -430,11 +437,7 @@ void TcpMgr::initHandlers()
 
         auto chat_id = jsonObj["chatid"].toInt();
 
-        auto chat_info = std::make_shared<ChatInfo> (authuid, authname, authicon, backname, chat_id, ChatType::PRIVATE);
-
-        // 更新usermgr
-        UserMgr::instance()->addPrivateChatMapping(authuid, chat_id);
-        UserMgr::instance()->addChatInfo(chat_id, chat_info);
+        auto chat_info = UserMgr::instance()->chatInfo(chat_id);
         // 更新消息记录
         for (const auto & msg : jsonObj["chat_msgs"].toArray()) {
             const auto msg_info = msg.toObject();
@@ -452,8 +455,6 @@ void TcpMgr::initHandlers()
         // 发送认证信息
         auto auth_info = std::make_shared<AuthInfo> (authuid, authname, authdescription, authicon, authsex, backname);
 
-        // 将好友添加上
-        UserMgr::instance()->addFriend(auth_info);
 
         emit friendAdded(auth_info);
         emit friendChatAdded(chat_info);
@@ -514,11 +515,7 @@ void TcpMgr::initHandlers()
 
         auto chat_id = jsonObj["chatid"].toInt();
 
-        auto chat_info = std::make_shared<ChatInfo> (authuid, authname, authicon, backname, chat_id, ChatType::PRIVATE);
-
-        // 更新usermgr
-        UserMgr::instance()->addPrivateChatMapping(authuid, chat_id);
-        UserMgr::instance()->addChatInfo(chat_id, chat_info);
+        auto chat_info = UserMgr::instance()->chatInfo(chat_id);
         // 更新消息记录
         for (const auto & msg : jsonObj["chat_msgs"].toArray()) {
             const auto msg_info = msg.toObject();
@@ -537,8 +534,6 @@ void TcpMgr::initHandlers()
         // 发送认证信息
         auto auth_info = std::make_shared<AuthInfo> (authuid, authname, authdescription, authicon, authsex, backname);
 
-        // 将好友添加上
-        UserMgr::instance()->addFriend(auth_info);
 
         emit friendAdded(auth_info);
         emit friendChatAdded(chat_info);
@@ -773,31 +768,6 @@ void TcpMgr::initHandlers()
         UserMgr::instance()->setChatListFullyLoaded(!load_more);
 
         const auto chat_list = jsonObj["chat_list"].toArray();
-        for (const auto & chat : chat_list) {
-            QJsonObject obj = chat.toObject();
-
-            auto chat_id = obj["chat_id"].toInt();
-
-            auto type = obj["type"].toString();
-            if (type == "private") {
-                auto user1_id = obj["user1_id"].toInt();
-                auto user2_id = obj["user2_id"].toInt();
-
-                // 另一个人的uid
-                auto other_id = (user1_id == self_id) ? user2_id : user1_id;
-
-                UserMgr::instance()->addPrivateChatMapping(other_id, chat_id);
-                // 获取到另一个人的uid
-                auto other_info = UserMgr::instance()->friendById(other_id);
-                // 通过对方的uid, 会话id, 当前消息的id来构造ChatInfo
-                auto chat_info = std::make_shared<ChatInfo> (other_id, other_info->_name, other_info->_icon,
-                                                            other_info->_backname, chat_id, ChatType::PRIVATE);
-                UserMgr::instance()->addChatInfo(chat_id, chat_info);
-            }else if (type == "group") {
-                // todo 群聊
-            }
-        }
-
         emit chatListLoaded(chat_list);
         if (load_more && current_chat_id > 0) {
             QJsonObject next{{"uid", self_id}, {"current_chat_id", current_chat_id}};
@@ -852,11 +822,7 @@ void TcpMgr::initHandlers()
         auto chat_id = jsonObj["chat_id"].toInt();
         auto other_info = jsonObj["other_info"].toObject();
 
-        UserMgr::instance()->addPrivateChatMapping(other_uid, chat_id);
-        auto chat_info = std::make_shared<ChatInfo> (other_uid, other_info["other_name"].toString(),
-                                                    other_info["other_icon"].toString(), "", chat_id, ChatType::PRIVATE);
-
-        UserMgr::instance()->addChatInfo(chat_id, chat_info);
+        auto chat_info = UserMgr::instance()->chatInfo(chat_id);
 
         emit privateChatCreated(chat_info);
     });
@@ -951,6 +917,18 @@ void TcpMgr::handleMessage(ReqId id, int len, QByteArray data)
     if (_handlers.find(id) == _handlers.end()) {
         SPDLOG_WARN("no TCP handler registered for msg_id={}", static_cast<int>(id));
         return ;
+    }
+    const auto response = QJsonDocument::fromJson(data).object();
+    const bool directory = id == ID_LOAD_CHAT_LIST_RSP || id == ID_NOTIFY_ADD_FRIEND_REQ
+        || id == ID_AUTH_FRIEND_RSP || id == ID_NOTIFY_AUTH_FRIEND_REQ || id == ID_CREATE_PRIVATE_CHAT_RSP;
+    if (directory && response["error"].toInt(-1) == 0) {
+        UserMgr::instance()->messages()->saveDirectory(directoryResponse(id, response, UserMgr::instance()->uid()),
+            /** @brief 落盘后保留既有业务完成通知，不重新进入网络分发。 */
+            [this, id, len, data] {
+                _handlers[id](id, len, data);
+                if (id == ID_AUTH_FRIEND_RSP || id == ID_CREATE_PRIVATE_CHAT_RSP) emit requestCompleted(id, 0);
+            });
+        return;
     }
     _handlers[id](id, len, data);
     if (id == ID_CREATE_PRIVATE_CHAT_RSP || id == ID_LOAD_CHAT_MESSAGE_RSP ||

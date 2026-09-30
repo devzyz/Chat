@@ -22,7 +22,7 @@ public:
     explicit ChatDialog(QWidget *parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ChatDialog();
-    /** @brief 按当前账号和分页游标请求会话列表。 */
+    /** @brief 按本地会话游标请求 SQLite 目录页。 */
     void loadChatUserList();
 
 protected:
@@ -65,8 +65,9 @@ private:
     Ui::ChatDialog *ui;
     ChatUIMode _mode; // 当前的模式
     ChatUIMode _state; // 需要切换为的模式
+    int _chatCursor = 0;
+    bool _hasMoreChats = true;
     bool _b_chat_loading; // 是否在加载聊天列表
-    bool _b_contact_loading; // 是否在加载联系人列表
 
     // 用于保存侧边栏中，已添加的StateWidget，因为每次只能选中一个
     QList<StateWidget * > _label_list;

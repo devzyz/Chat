@@ -19,6 +19,8 @@ public:
      * 当有新的请求过来时，调用当前函数，设置红点
      */
     void showRedPoint(bool bshow = true);
+    /** @brief 从账号 SQLite 请求下一页联系人，查询完成前不重复请求。 */
+    void loadNextPage();
 
 protected:
     /** @brief 处理滚动事件，在联系人未全部加载时请求下一页。 */
@@ -28,8 +30,11 @@ private:
     /** @brief 从账号缓存加载一页联系人并推进游标。 */
     void loadContactUserList();
     bool _loading_contact;
-    /** @brief 为通过审批的好友创建联系人列表项。 */
-    void addNewContact(std::shared_ptr<AuthInfo>);
+    bool _hasMore = true;
+    int _cursor = 0;
+    QMap<int, QListWidgetItem*> _items;
+    /** @brief 按 UID 插入或更新本地联系人，保留现有选中项。 */
+    void applyContact(const QJsonObject &row);
 
 public slots:
     /**
@@ -37,11 +42,6 @@ public slots:
      * 当某个item被点击后，触发的槽函数
      */
     void itemClicked(QListWidgetItem * item);
-    /**
-     * @brief slot_tcp_add_auth_friend
-     * 添加对方为好友通知
-     */
-    void tcpAddFriend(std::shared_ptr<AuthInfo> );
 signals:
     /**
      * @brief sig_loading_contact_user

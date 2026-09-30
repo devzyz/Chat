@@ -17,6 +17,10 @@ class MessageStorageWorker;
 class MessageService final : public QObject {
     Q_OBJECT
 public:
+    /** @brief 排队合并目录，提交后发布本地结果并调用完成通知；失败不更新界面。 */
+    void saveDirectory(const QJsonObject &directory, std::function<void()> completion = {});
+    /** @brief 异步查询本地目录页；额外查询一条以报告是否还有数据。 */
+    void loadDirectoryPage(const QString &kind, int after, int limit);
     /** @brief 初始化对象，用于在所属 Qt 线程协调账号消息，SQLite 操作排队至单一工作线程。 */
     explicit MessageService(QObject *parent = nullptr);
     /** @brief 使账号任务失效，排队关闭数据库及退出工作线程，并等待线程结束。 */
@@ -54,6 +58,14 @@ public:
     /** @brief 暂停自动发送，保留本地消息及批次供以后恢复。 */
     void pauseOutgoing();
 signals:
+    /** @brief 数据库打开后返回已保存目录，恢复当前账号的查询缓存。 */
+    void directoryRestored(QJsonObject directory);
+    /** @brief 目录事务提交后返回从数据库读取的变更记录。 */
+    void directoryChanged(QJsonObject directory);
+    /** @brief 返回本地目录页和原始游标；不携带网络分页状态。 */
+    void directoryPageLoaded(QString kind, int after, QJsonArray rows, bool hasMore);
+    /** @brief 本地目录查询或写入失败；调用方结束等待并保留已显示数据。 */
+    void directoryFailed(QString kind);
     /** @brief 通知网络层发送已关联当前账号及请求 ID 的消息同步请求。 */
     void syncRequested(QJsonObject request);
     /** @brief 通知网络层发送已持久化并分配 attempt 的消息批次。 */
