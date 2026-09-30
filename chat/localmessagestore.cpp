@@ -193,7 +193,7 @@ void LocalMessageStore::saveOutgoingRequest(const QJsonObject &request)
     const int recipient = request["to_uid"].toInt();
     const auto items = request["text_array"].toArray();
     const auto bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
-    require(chat > 0 && sender == _uid && recipient > 0 && !items.isEmpty() && bytes.size() <= 1950,
+    require(chat > 0 && sender == _uid && (recipient > 0 || (recipient == 0 && request["chat_type"].toString() == "group" && isGroupChat(chat))) && !items.isEmpty() && bytes.size() <= 1950,
         "Invalid outgoing request");
     QVector<StoredMessage> messages;
     QSet<QString> uuids;
@@ -508,7 +508,7 @@ void LocalMessageStore::applySyncPage(int chatId, qint64 previous, qint64 next,
     qint64 last = previous;
     for (const auto &message : messages) {
         require(message.chatId == chatId && message.messageId > last && message.messageId <= next
-            && message.senderId > 0 && message.recipientId > 0 && message.sentAt > 0,
+            && message.senderId > 0 && (message.recipientId > 0 || (message.recipientId == 0 && isGroupChat(chatId))) && message.sentAt > 0,
             "Invalid synchronization page");
         mergeServerMessage(message);
         last = message.messageId;
@@ -531,7 +531,8 @@ void LocalMessageStore::saveOutgoing(const QVector<StoredMessage> &messages)
 void LocalMessageStore::saveOutgoingRows(const QVector<StoredMessage> &messages)
 {
     for (const auto &message : messages) {
-        require(message.chatId > 0 && message.senderId > 0 && message.recipientId > 0
+        require(message.chatId > 0 && message.senderId > 0
+            && (message.recipientId > 0 || (message.recipientId == 0 && isGroupChat(message.chatId)))
             && !message.clientMessageId.isEmpty(), "Invalid outgoing message");
         auto prior = query(_db, "SELECT chat_id,recipient_id,content FROM messages WHERE sender_id=? AND client_uuid=?",
             {message.senderId, message.clientMessageId});
@@ -672,4 +673,10 @@ QJsonObject LocalMessageStore::mergeDirectory(const QJsonObject &directory)
     }
     transaction.commit();
     return changed;
+}
+
+bool LocalMessageStore::isGroupChat(int chatId)
+{
+    auto row = query(_db, "SELECT data FROM conversations WHERE id=?", {chatId});
+    return row.next() && QJsonDocument::fromJson(row.value(0).toByteArray()).object()["type"].toString() == "group";
 }

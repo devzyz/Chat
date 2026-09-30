@@ -19,8 +19,16 @@ void CheckDeadline(Deadline deadline) {
     if (std::chrono::steady_clock::now() >= deadline) { throw Error::DEADLINE_EXCEEDED; }
 }
 
-/** @brief 在当前事务锁定双方所属私聊行；无匹配返回 false，SQL 失败抛异常。 */
+/** @brief 在当前事务锁定私聊双方或群成员所属会话行；无匹配返回 false，SQL 失败抛异常。 */
 bool IsMember(sql::Connection& connection, int sender, int recipient, int chat) {
+    if (recipient == 0) {
+        std::unique_ptr<sql::PreparedStatement> group(connection.prepareStatement(
+            "SELECT g.chat_id FROM group_chat g JOIN group_chat_member m ON m.chat_id=g.chat_id "
+            "JOIN chat c ON c.chat_id=g.chat_id WHERE g.chat_id=? AND m.user_id=? AND c.type='group' FOR UPDATE"));
+        group->setInt(1, chat); group->setInt(2, sender);
+        std::unique_ptr<sql::ResultSet> member(group->executeQuery());
+        return member->next();
+    }
     // Serialize ID allocation/commit with resource writers and incremental sync
     // on the private_chat row, so a sync cursor cannot pass an uncommitted ID.
     std::unique_ptr<sql::PreparedStatement> query(connection.prepareStatement(

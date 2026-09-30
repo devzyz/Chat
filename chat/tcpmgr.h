@@ -1,5 +1,6 @@
 #ifndef TCPMGR_H
 #define TCPMGR_H
+#include <QTimer>
 #include "global.h"
 #include "singleton.h"
 #include <QObject>
@@ -30,6 +31,8 @@ public:
     void resetConnection(bool expectedClose);
 
 signals:
+    /** @brief 返回已落盘的建群结果或错误，request_id 对应提交请求。 */
+    void groupCreated(QJsonObject result);
     /** @brief 业务状态更新后通知请求结果，error 为服务端或解析错误码。 */
     void requestCompleted(ReqId id, int error);
     /** @brief 通知 TCP 连接尝试结果，尚不表示聊天登录成功。 */
@@ -81,6 +84,7 @@ private:
     void initHandlers();
 
     QMap<ReqId, std::function<void(ReqId id, int len, QByteArray)>> _handlers;
+    QTimer _directoryTimer;
     bool _authenticated = false;
     QSet<int> _legacyHistoryRequests;
     ChatTcpTransport _transport;

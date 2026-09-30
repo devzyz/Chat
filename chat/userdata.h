@@ -187,6 +187,8 @@ public:
     void setLastMsgId(int current_msg_id);
     /** @brief 返回私聊或群聊会话类型。 */
     ChatType getChatType();
+    /** @brief 返回会话展示名称，群聊使用建群时的群名。 */
+    QString name() const { return _name; }
     // 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息
     /** @brief 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息。 */
     std::shared_ptr<ChatDataBase> getChatDataByMsgId(int msg_id);

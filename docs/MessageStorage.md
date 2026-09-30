@@ -2,7 +2,12 @@
 
 ## 目标和数据边界
 
-服务器已提交的消息是权威记录。本地已经同步确认的历史持续保留，后续上线只请求同步游标之后的新增消息，不清空重拉。当前合同针对已有私聊消息；没有新增编辑、撤回或删除同步协议。
+服务器已提交的消息是权威记录。本地已经同步确认的历史持续保留，后续上线只请求同步游标之后的新增消息，不清空重拉。当前合同覆盖私聊和基础文字群聊；没有新增编辑、撤回或删除同步协议。
+
+基础文字群聊也复用此链路。群目录先落盘，群消息使用 `recipient_id=0`，本地仅在目录确认是群时
+允许该值。SQLite 表结构仍为 schema 3。群每 2 秒补拉，不生成私聊送达/已读回执；
+退出账号停止轮询。服务端群写入和同步锁同一 `group_chat` 行，保留游标不越过未提交消息的保证。
+范围及部署见 [基础群聊协议](Protocol.md#基础文字群聊)。
 
 客户端复用账号目录：`data/environments/<环境SHA256>/users/<uid>/messages.sqlite`。
 附件保存原始资源描述符，下载文件仍由现有资源模块管理。SQLite 不是服务端 MySQL 的替代品。
@@ -45,7 +50,7 @@ flowchart LR
 只有响应 1028 可以使用完整 uint16 包长（65535 字节）；其余消息和客户端请求仍为 2048 字节。
 旧历史对象请求保留原有字段、分页和错误回包；顶层非对象请求由认证分发器拒绝处理。新客户端不能把旧服务端的历史响应当作同步成功。
 
-消息状态实现新增 MySQL migration 004（回执及会话 revision），使用 [schema 迁移入口](Data.md#operational-entry) 应用 001～004。Gate、Chat 和 Resource 的 schema 校验合同一同更新；不创建 `text_message_identity` 表。
+消息状态实现新增 MySQL migration 004（回执及会话 revision），使用 [schema 迁移入口](Data.md#operational-entry) 应用 001～005（005 为基础群聊）。Gate、Chat 和 Resource 的 schema 校验合同一同更新；不创建 `text_message_identity` 表。
 升级时停止写入并备份数据库，迁移后更新全部 Gate/Chat/Resource 实例，再部署客户端；旧二进制不能混跑新 schema。
 客户端首次打开时自行创建 SQLite schema；部署需要 Qt SQL 和 QSQLITE 插件，见 [Build](Build.md#message-storage-runtime)。
 

@@ -59,3 +59,8 @@ bool MysqlMgr::SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::
 bool MysqlMgr::HandleReceiptRequest(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer) {
     return _dao.HandleReceiptRequest(uid, request, report, response, peer);
 }
+
+bool MysqlMgr::CreateGroup(int owner, const std::string& name, const std::string& uuid,
+    const std::vector<int>& members, int& chat_id) {
+    return _dao.CreateGroup(owner, name, uuid, members, chat_id);
+}

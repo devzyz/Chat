@@ -1,6 +1,7 @@
 #include "../../common/message/MessageReceipts.h"
 #include "../../common/message/MessagePersistence.h"
 #include "MysqlDao.h"
+#include <set>
 #include <string>
 #include <chrono>
 #include "ConfigMgr.h"
@@ -669,7 +670,7 @@ message_commit::Result MysqlDao::AddChatMessageList(message_commit::Authenticate
     private:
         MysqlPool& _pool;
     } store(*_pool);
-    auto result = message_commit::Commit(store, principal, from_uid, to_uid, chat_id, cache_msgs, deadline);
+    auto result = message_commit::Commit(store, principal, from_uid, to_uid, chat_id, cache_msgs, deadline, to_uid == 0);
     if (!result.IsSuccess()) { return result; }
     for (std::size_t index = 0; index < result.items.size(); ++index) {
         const auto& item = result.items[index];
@@ -787,4 +788,72 @@ bool MysqlDao::HandleReceiptRequest(int uid, const Json::Value& request, bool re
     response.removeMember("items");
     response.removeMember("latest_revision");
     return false;
+}
+
+bool MysqlDao::CreateGroup(int owner, const std::string& name, const std::string& uuid,
+    const std::vector<int>& members, int& chat_id) {
+    chat_id = 0;
+    if (owner <= 0 || name.empty() || name.size() > 60 || members.empty() || members.size() > 19
+        || !message_commit::IsCanonicalUuid(uuid)) return false;
+    std::set<int> expected(members.begin(), members.end());
+    if (expected.size() != members.size() || expected.count(owner) || *expected.begin() <= 0) return false;
+    expected.insert(owner);
+    auto connection = _pool->GetConnection();
+    if (!connection) return false;
+    Defer release(/** @brief 归还本次群创建借用的连接。 */
+        [this, &connection] { _pool->ReturnConnection(std::move(connection)); });
+    try {
+        auto& db = *connection->_connection;
+        messaging::Transaction transaction(db);
+        // Serializes creation UUID retries by the same owner across instances.
+        std::unique_ptr<sql::PreparedStatement> owner_lock(db.prepareStatement("SELECT uid FROM user WHERE uid=? FOR UPDATE"));
+        owner_lock->setInt(1, owner);
+        std::unique_ptr<sql::ResultSet> owner_row(owner_lock->executeQuery());
+        if (!owner_row->next()) return false;
+        owner_row.reset();
+        std::unique_ptr<sql::PreparedStatement> prior(db.prepareStatement(
+            "SELECT chat_id,name FROM group_chat WHERE owner_uid=? AND creation_uuid=?"));
+        prior->setInt(1, owner); prior->setString(2, uuid);
+        std::unique_ptr<sql::ResultSet> row(prior->executeQuery());
+        if (row->next()) {
+            const int existing = row->getInt(1);
+            if (row->getString(2).asStdString() != name) return false;
+            row.reset();
+            std::unique_ptr<sql::PreparedStatement> query(db.prepareStatement("SELECT user_id FROM group_chat_member WHERE chat_id=?"));
+            query->setInt(1, existing);
+            std::unique_ptr<sql::ResultSet> users(query->executeQuery());
+            std::set<int> actual;
+            while (users->next()) actual.insert(users->getInt(1));
+            if (actual != expected) return false;
+            transaction.Commit(); chat_id = existing; return true;
+        }
+        row.reset();
+        std::unique_ptr<sql::PreparedStatement> friends(db.prepareStatement(
+            "SELECT u.uid FROM user u JOIN friend f ON f.other_id=u.uid WHERE f.self_id=? AND u.uid=?"));
+        for (int member : members) {
+            friends->setInt(1, owner); friends->setInt(2, member);
+            std::unique_ptr<sql::ResultSet> found(friends->executeQuery());
+            if (!found->next()) return false;
+        }
+        std::unique_ptr<sql::Statement> insert(db.createStatement());
+        insert->execute("INSERT INTO chat(type) VALUES('group')");
+        std::unique_ptr<sql::ResultSet> identity(insert->executeQuery("SELECT LAST_INSERT_ID()"));
+        if (!identity->next() || identity->getUInt64(1) > 2147483647ULL) return false;
+        const int created = identity->getInt(1);
+        identity.reset();
+        std::unique_ptr<sql::PreparedStatement> group(db.prepareStatement(
+            "INSERT INTO group_chat(chat_id,name,owner_uid,creation_uuid) VALUES(?,?,?,?)"));
+        group->setInt(1, created); group->setString(2, name); group->setInt(3, owner); group->setString(4, uuid);
+        group->executeUpdate();
+        std::unique_ptr<sql::PreparedStatement> member(db.prepareStatement(
+            "INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(?,?,?)"));
+        for (int uid : expected) {
+            member->setInt(1, created); member->setInt(2, uid); member->setInt(3, uid == owner ? 1 : 0);
+            member->executeUpdate();
+        }
+        transaction.Commit(); chat_id = created; return true;
+    } catch (const std::exception&) {
+        SPDLOG_WARN("group creation failed");
+        return false;
+    }
 }

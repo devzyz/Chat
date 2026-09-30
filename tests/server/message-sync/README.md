@@ -49,3 +49,15 @@ not evidence for a production Redis adapter. Non-object requests are dropped by 
 session dispatcher; malformed object history requests retain their error response.
 The Read probe supplies an observation explicitly; real foreground/geometry behavior is covered
 separately by the Qt message-model component test, not claimed as human GUI end-to-end evidence.
+
+## Basic group extension
+
+`integration.py / tcp_flow` also exercises production TCP group creation, creation UUID
+retry/conflict, rejection of non-friend invitations, group directory discovery, sender-scoped
+message UUID deduplication, non-member send/sync denial, cross-instance replies and offline
+incremental recovery. It uses migration 005 in its owned database and the same bounded entry above.
+Group delivery is polling-based; this test does not claim desktop interaction or group receipts.
+
+`MessageSync.GroupMembershipAndCommitOrdering` verifies three members sharing one
+message, UUID retry identity, non-member denial and an observed InnoDB lock wait
+while group synchronization waits for an uncommitted writer.

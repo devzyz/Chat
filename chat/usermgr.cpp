@@ -342,7 +342,7 @@ bool UserMgr::isChatListFullyLoaded()
 
 void UserMgr::addChatInfo(int chat_id, std::shared_ptr<ChatInfo> chat_info)
 {
-    _messages->registerChat(chat_id);
+    _messages->registerChat(chat_id, chat_info->getChatType() == ChatType::GROUP);
     if (_chat_map.find(chat_id) != _chat_map.end()) {
         return;
     }
@@ -365,6 +365,11 @@ void UserMgr::applyDirectory(const QJsonObject &directory)
     for (const auto &value : directory["conversations"].toArray()) {
         const auto row = value.toObject();
         const int chat = row["id"].toInt();
+        if (row["type"].toString() == "group") {
+            addChatInfo(chat, std::make_shared<ChatInfo>(0, row["name"].toString(),
+                QString(), QString(), chat, ChatType::GROUP));
+            continue;
+        }
         const int peer = row["uid"].toInt();
         const auto contact = friendById(peer);
         addPrivateChatMapping(peer, chat);

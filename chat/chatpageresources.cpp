@@ -96,7 +96,7 @@ void ChatPage::loadResource(MessageRecord& record)
 
 void ChatPage::selectResource()
 {
-    if (!_chatInfo) return;
+    if (!_chatInfo || _chatInfo->getChatType() != ChatType::PRIVATE) return;
     if (_transfer->busy()) {
         _transfer->cancel();
         ui->file_label->setToolTip(tr("上传已暂停；重新选择同一文件继续"));

@@ -3,6 +3,12 @@
 #include "logmgr.h"
 #include "ui_chatdialog.h"
 #include <QAction>
+#include <QDialogButtonBox>
+#include <QVBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QUuid>
 #include <QRandomGenerator>
 #include "chatuseritem.h"
 #include "loadingdialog.h"
@@ -25,6 +31,8 @@ ChatDialog::ChatDialog(QWidget *parent)
 
     // 添加按钮的高亮设置
     ui->add_btn->setState("normal", "hover", "press");
+    ui->add_btn->setToolTip(tr("创建群聊"));
+    connect(ui->add_btn, &QPushButton::clicked, this, &ChatDialog::openCreateGroup);
 
     // 搜索框最大长度限制
     ui->search_edit->setMaxLength(15);
@@ -881,4 +889,85 @@ void ChatDialog::tcpAddFriendApply(std::shared_ptr<ApplyInfo> applyInfo)
     ui->contact_user_list->showRedPoint(true);
     // 申请行已由本地目录提交通知刷新。
     Q_UNUSED(applyInfo);
+}
+
+void ChatDialog::openCreateGroup()
+{
+    auto *dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(tr("创建群聊"));
+    dialog->resize(360, 440);
+    auto *layout = new QVBoxLayout(dialog);
+    auto *name = new QLineEdit(dialog);
+    name->setPlaceholderText(tr("群名称（最多 20 个字）"));
+    name->setMaxLength(20);
+    layout->addWidget(name);
+    layout->addWidget(new QLabel(tr("选择 1～19 位好友，建群后成员固定"), dialog));
+    auto *members = new QListWidget(dialog);
+    for (const auto &user : UserMgr::instance()->friends()) {
+        auto *item = new QListWidgetItem(user->_name + QString(" (%1)").arg(user->_uid), members);
+        item->setData(Qt::UserRole, user->_uid);
+        item->setCheckState(Qt::Unchecked);
+    }
+    layout->addWidget(members);
+    auto *status = new QLabel(dialog);
+    status->setWordWrap(true);
+    layout->addWidget(status);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("创建"));
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+    auto request = std::make_shared<QJsonObject>();
+    auto *timeout = new QTimer(dialog);
+    timeout->setSingleShot(true);
+    timeout->setInterval(10000);
+    connect(timeout, &QTimer::timeout, dialog,
+        /** @brief 超时保留原始建群身份和内容，允许安全重试。 */
+        [buttons, status] {
+            status->setText(tr("尚未确认结果，请重试；也可关闭后等待群列表更新。"));
+            buttons->button(QDialogButtonBox::Ok)->setEnabled(true);
+        });
+    connect(buttons, &QDialogButtonBox::accepted, dialog,
+        /** @brief 验证选择后发送一次固定身份的建群请求。 */
+        [this, name, members, status, buttons, timeout, request] {
+            if (request->isEmpty()) {
+                QJsonArray ids;
+                for (int i = 0; i < members->count(); ++i) {
+                    if (members->item(i)->checkState() == Qt::Checked) ids.append(members->item(i)->data(Qt::UserRole).toInt());
+                }
+                const auto title = name->text().trimmed();
+                if (title.isEmpty() || title.toUtf8().size() > 60 || ids.isEmpty() || ids.size() > 19) {
+                    status->setText(tr("请填写群名，并选择 1～19 位好友。"));
+                    return;
+                }
+                *request = {{"name", title}, {"members", ids},
+                    {"request_id", QUuid::createUuid().toString(QUuid::WithoutBraces)}};
+                name->setEnabled(false); members->setEnabled(false);
+            }
+            buttons->button(QDialogButtonBox::Ok)->setEnabled(false);
+            status->setText(tr("正在创建…"));
+            timeout->start();
+            emit TcpMgr::instance()->sendRequested(ID_CREATE_GROUP_REQ, QJsonDocument(*request).toJson(QJsonDocument::Compact));
+        });
+    connect(TcpMgr::instance().get(), &TcpMgr::groupCreated, dialog,
+        /** @brief 对应群落盘后选中会话；失败保留原始内容供幂等重试。 */
+        [this, dialog, request, timeout, buttons, status](const QJsonObject &result) {
+            if (request->isEmpty() || result["request_id"] != (*request)["request_id"]) return;
+            timeout->stop();
+            if (result["error"].toInt(-1) != 0) {
+                status->setText(tr("创建失败，可重试。若需修改成员，请关闭后重新创建。"));
+                buttons->button(QDialogButtonBox::Ok)->setEnabled(true);
+                // Keep UUID even for uncertain storage errors; editing requires reopening the form.
+                return;
+            }
+            const int chat = result["chat_id"].toInt();
+            tcpLoadChatFinish(QJsonArray{QJsonObject{{"chat_id", chat}}});
+            if (_chat_item_map.contains(chat)) {
+                midlistToChatList();
+                ui->chat_user_list->setCurrentItem(_chat_item_map.value(chat));
+                chatItemClicked(_chat_item_map.value(chat));
+            }
+            dialog->accept();
+        });
+    dialog->open();
 }

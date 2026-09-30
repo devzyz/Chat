@@ -50,8 +50,9 @@ bool IsCanonicalUuid(const std::string& value);
 /**
  * @brief 校验认证发送者、目标、1～100 条唯一 UUID 和截止时间后，同步委托存储提交。
  * @note 验证失败不调用 store；空批次或过大批次同样返回 INVALID_UUID。存储异常不在此层捕获。
+ * group 为 true 时仅允许零收件人；存储仍须核对真实群成员，不能仅信任该标志。
  */
 Result Commit(Store& store, AuthenticatedPrincipal principal, int claimed_sender,
-    int recipient, int chat, const Batch& batch, Deadline deadline);
+    int recipient, int chat, const Batch& batch, Deadline deadline, bool group = false);
 
 }

@@ -66,6 +66,8 @@ public:
     void addFriend(std::shared_ptr<AuthInfo>);
     /** @brief 查询缓存中的好友资料，未找到时返回 nullptr。 */
     std::shared_ptr<UserInfo> friendById(int uid);
+    /** @brief 返回当前已恢复的联系人值，用于选择建群成员，不推进列表游标。 */
+    std::vector<std::shared_ptr<UserInfo>> friends() const { return _friend_list; }
     /** @brief 返回当前游标对应的一页联系人，不推进游标。 */
     std::vector<std::shared_ptr<UserInfo>> nextContactPage();
     /** @brief 判断联系人分页游标是否已到列表末尾。 */

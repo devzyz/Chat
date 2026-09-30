@@ -49,13 +49,22 @@ private:
     bool _finished = false;
 };
 
-/** @brief 在当前事务中锁定私聊行并核对参与者，使同会话提交顺序串行化。 */
+/** @brief 在当前事务中锁定私聊或群聊行并核对参与者，使同会话提交顺序串行化。 */
 inline void LockConversation(sql::Connection& connection, int chat, int uid, int recipient = 0) {
     std::unique_ptr<sql::PreparedStatement> statement(connection.prepareStatement(
         "SELECT user1_id,user2_id FROM private_chat WHERE chat_id=? FOR UPDATE"));
     statement->setInt(1, chat);
     std::unique_ptr<sql::ResultSet> row(statement->executeQuery());
-    if (!row->next()) throw std::runtime_error("conversation unavailable");
+    if (!row->next()) {
+        row.reset();
+        std::unique_ptr<sql::PreparedStatement> group(connection.prepareStatement(
+            "SELECT g.chat_id FROM group_chat g JOIN group_chat_member m ON m.chat_id=g.chat_id "
+            "JOIN chat c ON c.chat_id=g.chat_id WHERE g.chat_id=? AND m.user_id=? AND c.type='group' FOR UPDATE"));
+        group->setInt(1, chat); group->setInt(2, uid);
+        std::unique_ptr<sql::ResultSet> member(group->executeQuery());
+        if (recipient != 0 || !member->next()) throw std::runtime_error("conversation unavailable");
+        return;
+    }
     const int first = row->getInt(1), second = row->getInt(2);
     if ((first != uid && second != uid)
         || (recipient > 0 && !((first == uid && second == recipient) || (second == uid && first == recipient))))

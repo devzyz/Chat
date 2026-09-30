@@ -893,3 +893,8 @@ Q05-STORE-15..17 在 [message-storage](../chat/tests/message-storage/README.md) 
 
 `Q01-LIST-01` / `list_view.interaction` 覆盖共享列表交互：原生滚动、键盘/滚动条到底、短列表重试和销毁取消；
 所属 Foundation / Component，入口与边界见 [列表测试](../chat/tests/list-view/README.md)。
+
+基础群聊：`message_storage.persistence` 覆盖群消息落盘、重启、幂等与无私聊回执；
+`session_reset.account_state` 覆盖群目录网络转换及恢复；
+`tests/server/message-sync/integration.py` 覆盖真实 MySQL、双 ChatServer 的建群、成员权限及离线补拉。
+执行与替身边界见 [同步测试入口](server/message-sync/README.md)。
