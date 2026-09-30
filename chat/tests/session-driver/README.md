@@ -153,3 +153,9 @@ This proves the client persistence boundary only; server group transactions are
 covered separately by the real-dependency run. A pre-send storage failure has no
 request-scoped failure callback in the production API, so the driver fails at its
 bounded deadline rather than misattributing a background directory failure.
+
+CTest forces Qt diagnostic output to stderr for this suite, including on Windows
+without an attached console. A missing control reply reports only the command
+name/ID, elapsed time, process/socket state and buffered byte count. Request,
+response and child-process log bodies are omitted because they can contain
+credentials. The existing per-command deadlines remain unchanged.

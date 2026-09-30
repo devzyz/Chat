@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
 const workflow = /** 读取指定工作流的 UTF-8 文本。 */ name => fs.readFileSync(path.join(__dirname, '../../.github/workflows', name), 'utf8');
@@ -195,7 +196,7 @@ test('first-release acceptance requires an explicit manual request and preserves
     const gate = job(ci, 'real-acceptance');
     assert.match(gate, /always\(\).*github.event_name == 'workflow_dispatch'.*inputs.real_acceptance == true/);
     assert.match(gate, /needs: \[windows, linux\]/);
-    assert.match(gate, /test "\$WINDOWS_RESULT" = success && test "\$LINUX_RESULT" = success/);
+    assert.match(gate, /test "\$WINDOWS_RESULT" = success\s+test "\$LINUX_RESULT" = success/);
     assert.doesNotMatch(gate, /continue-on-error|workflow_dispatch[^\n]*master|release.yml/);
 });
 
@@ -210,4 +211,31 @@ test('requested acceptance builds same-source resources and validates complete e
     assert.match(verify, /validate\(root, sha, '3D', realAcceptanceRequested\(process.env.CHAT_REAL_ACCEPTANCE\)\)/);
     assert.match(linux, /source-sha.txt\)" = "\$\(git rev-parse HEAD\)"/);
     assert.match(linux, /widgetEvidence.js/);
+});
+
+
+test('real acceptance shell rejects every unsuccessful dependency before writing success', /** 实际执行工作流脚本，防止 AND 列表失败被后续摘要覆盖。 */ () => {
+    const block = job(ci, 'real-acceptance').split('        run: |')[1];
+    const script = block.split(/\r?\n/).filter(/** 提取工作流实际 Bash 命令。 */ line => line.startsWith('          '))
+        .map(/** 去除 YAML 缩进而保留 shell 语义。 */ line => line.slice(10)).join('\n');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-ci-gate-'));
+    const summary = path.join(root, 'summary.txt');
+    // Git for Windows provides the same Bash semantics without relying on WSL.
+    const git = process.platform === 'win32' ? spawnSync('where.exe', ['git'], { encoding: 'utf8' }) : null;
+    const bash = process.env.CHAT_TEST_BASH || (git ? path.resolve(path.dirname(git.stdout.trim().split(/\r?\n/)[0]),
+        '../bin/bash.exe') : 'bash');
+    try {
+        for (const windows of ['success', 'failure', 'cancelled', 'skipped', '']) {
+            for (const linux of ['success', 'failure', 'cancelled', 'skipped', '']) {
+                fs.writeFileSync(summary, '');
+                const result = spawnSync(bash, ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script], {
+                    env: { ...process.env, WINDOWS_RESULT: windows, LINUX_RESULT: linux,
+                        SOURCE_SHA: 'a'.repeat(40), GITHUB_STEP_SUMMARY: summary }, encoding: 'utf8', timeout: 5000 });
+                assert.ifError(result.error);
+                const pass = windows === 'success' && linux === 'success';
+                assert.equal(result.status === 0, pass, `${windows}/${linux}: ${result.stderr}`);
+                assert.equal(fs.readFileSync(summary, 'utf8').includes('acceptance passed'), pass);
+            }
+        }
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

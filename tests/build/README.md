@@ -234,3 +234,10 @@ configures the real root graph with dependency stand-ins and rejects any Qt/GTes
 discovery or client/test source leakage. It runs in Windows static CI. It proves
 configuration only; full Linux CI also compiles all three targets with real dependencies
 and Qt discovery explicitly disabled. No native compile is claimed by the stand-ins.
+
+The server-only configuration contract configures the same build directory twice,
+including the opt-in ResourceServer graph. It models the pinned JDBC package's
+cached initialization guard and rejects loss of the native MySQL link dependency.
+`ciBudget.test.js` executes the actual real-acceptance Bash gate for all upstream
+success/failure/cancelled/skipped/empty combinations; only two successes may write
+a passing summary. Windows uses the Bash bundled with Git, without WSL.

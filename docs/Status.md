@@ -5,10 +5,10 @@
 
 ## 当前工作：局域网聊天首版功能
 
-实现分支 `feat/repo/chat-features` 位于独立 managed worktree，基于远端 develop
-`f3d6bd683624100ef22080e1f63f48c4e8c84c7a`（PR #22 基础群聊）。
-原工作区 `feat/chat/basic-groups`、HEAD `1d8d85b` 保留不动；原 HEAD 已被 develop 包含，
-两者文件树相同，原群聊实现已合入。功能提交 `252b078`（服务端）及 `cde9b88`（客户端）已推送；尚未创建 PR 或合并。
+PR #23 已合入 develop，合并提交 `e0f927d`。合并后的 Windows CI #65 通过。
+原工作区 `feat/chat/basic-groups`、HEAD `1d8d85b` 保留不动。
+当前在既有 managed worktree 的 `fix/repo/real-acceptance-ci` 修复首次按需验收失败；
+功能基线与验收是否通过分开记录，合并不等于首版全部收口。
 
 | 阶段 | 实现与当前验收边界 |
 | --- | --- |
@@ -74,7 +74,15 @@
   `build/acceptance-widget-evidence/`。可选 Resource CMake 配置图检查通过，不代表 Linux 编译通过。
 - 测试驱动修复后台同步错误抢占群管理结果：真实 SQLite 写锁 RED `build/session-lock-red.xml`，
   GREEN `build/session-lock-green.xml`；释放锁后原 UUID 恢复通过。未改变生产协议或错误过滤。
-- 新增 47 项真实依赖流程尚未在 GitHub 运行；首次远端构建、运行时间预算及业务组合仍须实际验证。
+- 首次按需运行 [36735068842](https://github.com/devzyz/Chat/actions/runs/36735068842) 已实际执行但失败：
+  Linux 第二次 CMake 配置丢失 JDBC 原生依赖，ResourceServer 链接失败；Windows Qt 会话驱动一项失败。
+  真实服务流程未启动，47 项业务不能记为通过；`Real environment acceptance` 当次误绿也不是成功证据。
+- 本轮修复重复配置的 MySQL 包缓存初始化标记，以及汇总 Bash AND 列表被成功摘要覆盖的退出码。
+  配置回归 `build/reconfigure-red.log` → `build/reconfigure-green.log`；门禁真实 Bash 回归
+  `build/ci-gate-red.log` → `build/ci-gate-green.log`（15 项，其中门禁覆盖 25 种上游结果组合）。
+  默认配置、Linux 预检合同及测试注册通过；真实 Linux 链接和完整业务仍须修复分支远端重验。
+- Windows 原失败本地连续 8 次未复现，不能认定已修复。已为会话驱动测试启用 Qt stderr，
+  缺失控制响应仅输出命令名/ID、耗时、进程/管道状态，避免再次丢失失败断言；不输出请求、响应或凭据。
   强制群成员多页响应、群管理 ACK 丢失的真实环境组合仍不由这 14 项单独证明；已有局部回归与人工缺口继续分别记录。
 
 ## 未完成的验收与下一步
@@ -86,10 +94,10 @@
    A 建群并发旧消息 → 添加 D → D 确认旧消息不可见 → 新消息及 PNG/视频/文件 → 移除 D 并重入 →
    转让 B → A 退出 → B 解散。每步核对成员权限和本地历史；穿插离线、重登、超时和本地保存失败，
    再核对备注、筛选、第二页历史定位及独立私聊资源权限。真实隔离账号须在依赖恢复后创建。
-3. 创建 develop 草稿 PR，核对同提交 Windows 与完整 Linux CI 及产物。
-   分支已推送，但 GitHub 连接器创建 PR 返回 403 `Resource not accessible by integration`；当前没有新 PR 或 CI 运行。
-   完整 CI 需 workflow_dispatch（refresh_tools=false、cold_linux=false）；当前 GitHub 内置浏览器尚未登录，
-   连接器没有工作流触发入口。不得以仅 Windows PR CI 代替完整 CI。
+3. 修复首次按需验收并在同一候选提交重跑 Windows 与完整 Linux CI。
+   GitHub PR/合并权限和本机 CLI 已可用，原 403 阻塞已解除；`real_acceptance=true` 可直接触发。
+   尚未完成四账号桌面验收，不能以普通 Windows CI 或误绿的专项汇总替代完整验收。
+
 
 自动竞态覆盖添加/移除等待消息事务、管理版本竞争、转让与目标退出竞争；不代表穷尽所有交错时序。
 未执行或受阻项不记为通过；当前尚未达到“PR 可合并、首版全部收口”的完成条件。

@@ -45,6 +45,8 @@ public:
     /** 把控制命令编码为一行 JSON 并刷新管道。 */
     void send(const QJsonObject &object)
     {
+        lastCommand = object.value("command").toString();
+        lastCommandId = object.value("id").toInteger();
         pipe->write(QJsonDocument(object).toJson(QJsonDocument::Compact) + '\n');
         pipe->flush();
     }
@@ -68,7 +70,13 @@ public:
             if (pipe->state() == QLocalSocket::UnconnectedState && buffer.isEmpty()) break;
         }
         const auto end = buffer.indexOf('\n');
-        if (end < 0) return {};
+        if (end < 0) {
+            // Do not dump command/reply bodies: login commands contain credentials.
+            qWarning() << "control reply missing" << "command" << lastCommand << "id" << lastCommandId
+                       << "elapsedMs" << elapsed.elapsed() << "processState" << process.state()
+                       << "socketState" << pipe->state() << "bufferedBytes" << buffer.size();
+            return {};
+        }
         const auto object = QJsonDocument::fromJson(buffer.left(end)).object();
         buffer.remove(0, end + 1);
         return object;
@@ -89,6 +97,8 @@ public:
     QProcess process;
     std::unique_ptr<QLocalSocket> pipe;
     QByteArray buffer;
+    QString lastCommand = "startup";
+    qint64 lastCommandId = 0;
 };
 
 /** 提供真实回环 Gate 与 Chat 登录对端，记录账号请求和心跳。 */
