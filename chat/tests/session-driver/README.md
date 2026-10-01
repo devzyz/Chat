@@ -157,5 +157,7 @@ bounded deadline rather than misattributing a background directory failure.
 CTest forces Qt diagnostic output to stderr for this suite, including on Windows
 without an attached console. A missing control reply reports only the command
 name/ID, elapsed time, process/socket state and buffered byte count. Request,
-response and child-process log bodies are omitted because they can contain
-credentials. The existing per-command deadlines remain unchanged.
+response and general child-process log bodies are omitted because they can contain
+credentials. Only the driver's fixed storage-error categories are forwarded on a
+missing reply; the fixture also asserts that the create request reached its TCP
+peer. The existing per-command deadlines remain unchanged.

@@ -79,6 +79,17 @@ public:
                 /** 被踢出登录时以对应原因重置会话。 */ [this] { _session.resetSession(SessionResetReason::Kicked); });
         const auto tcp = TcpMgr::instance();
         auto *service = UserMgr::instance()->messages();
+        connect(service, &MessageService::failed, this,
+            /** 只记录固定存储错误分类，不输出动态错误正文或请求数据。 */
+            [](int chatId, const QString &reason) {
+                const QSet<QString> safeReasons{
+                    "Cannot create message directory", "This account's message database is already open",
+                    "Cannot open local message database", "Cannot read database version",
+                    "Cannot prepare local message query", "Local message database operation failed",
+                    "Invalid directory identity"};
+                qWarning().noquote() << "driver-storage-failure" << chatId
+                    << (safeReasons.contains(reason) ? reason : QString("other"));
+            });
         connect(service, &MessageService::messagesChanged, this,
             /** 回执变化后从持久存储刷新所属会话历史。 */ [service](int chatId) { service->loadHistory(chatId); });
         connect(service, &MessageService::historyLoaded, this,

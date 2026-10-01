@@ -75,6 +75,11 @@ public:
             qWarning() << "control reply missing" << "command" << lastCommand << "id" << lastCommandId
                        << "elapsedMs" << elapsed.elapsed() << "processState" << process.state()
                        << "socketState" << pipe->state() << "bufferedBytes" << buffer.size();
+            const auto diagnostics = process.readAllStandardError().split('\n');
+            for (const auto &line : diagnostics) {
+                const auto marker = line.indexOf("driver-storage-failure");
+                if (marker >= 0) qWarning().noquote() << line.mid(marker).trimmed();
+            }
             return {};
         }
         const auto object = QJsonDocument::fromJson(buffer.left(end)).object();
@@ -209,6 +214,7 @@ public:
                     if (frame.messageId == 1023 || frame.messageId == 1016) {
                         const auto request = QJsonDocument::fromJson(frame.body).object();
                         QJsonObject result{{"error", 0}, {"chat_id", 7}, {"self_id", userId}, {"other_id", 42}};
+                        if (frame.messageId == 1023) ++createFrames;
                         if (frame.messageId == 1016) {
                             ++sentFrames;
                             if (dropNextText) { dropNextText = false; peer->abort(); continue; }
@@ -253,6 +259,7 @@ public:
     QHash<QString, int> messageIds;
     int heartbeats = 0;
     int sentFrames = 0;
+    int createFrames = 0;
     bool dropNextText = false;
     bool failGroupSync = false;
 };
@@ -290,7 +297,9 @@ private slots:
         QVERIFY(!bobReply.contains("password"));
         QVERIFY(first.gateBody.value("password").toString() != "fixture-only");
         alice.send({{"id", 2}, {"command", "create"}, {"toUid", 42}});
-        QCOMPARE(alice.receive().value("chatId").toInt(), 7);
+        const auto created = alice.receive();
+        QCOMPARE(first.createFrames, 1);
+        QCOMPARE(created.value("chatId").toInt(), 7);
         const QString uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
         alice.send({{"id", 3}, {"command", "send"}, {"chatId", 7}, {"toUid", 42},
                     {"uuid", uuid}, {"text", QString::fromUtf8("跨实例 🙂\nsecond line")}, {"copies", 2}});
