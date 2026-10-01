@@ -7,6 +7,7 @@
 #include "userdata.h"
 #include "messagerecord.h"
 #include <QListWidgetItem>
+#include <QHash>
 
 namespace Ui {
 class ChatDialog;
@@ -26,14 +27,12 @@ public:
     void loadChatUserList();
 
 protected:
-    /**
-     * @brief eventFilter
-     * @return
-     * 处理点击位置，因为要调用handleGlobalMousePress
-     */
+    /** @brief 处理搜索区外点击及窗口激活后的历史刷新，返回基类事件过滤结果。 */
     bool eventFilter(QObject * watched, QEvent * event) override;
 
 private:
+    /** @brief 将账号提醒快照应用到已创建会话行与聊天入口，未加载行的数量仍保留。 */
+    void refreshConversationAttention();
     /** @brief 打开完整本地联系人和群目录筛选，支持连续分页及会话跳转。 */
     void openDirectorySearch();
     /** @brief 打开固定成员的建群表单，使用稳定请求 UUID 防止超时重试重复建群。 */
@@ -76,6 +75,7 @@ private:
 
     // 保存所有的聊天列表的item key = chat_id
     QMap<int, QListWidgetItem*> _chat_item_map;
+    QHash<int, qint64> _conversationAttention;
 
     // 现在正在聊天的chat_id
     int _cur_chat_id;

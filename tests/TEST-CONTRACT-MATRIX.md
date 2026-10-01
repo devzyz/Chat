@@ -911,10 +911,14 @@ Q05-STORE-15..17 在 [message-storage](../chat/tests/message-storage/README.md) 
 | resource_transfer_tests | 群资料拒绝提示、权限刷新、完整分页门禁、超时原 UUID 重试及真实 TCP 回包落盘顺序；历史第二页定位、70 联系人/70 群筛选打开、备注结果和三类群资源卡片 | 真实控件、临时 SQLite；备注结果/资源下载完成信号由测试驱动，非完整生产依赖或人工桌面 |
 | T10-MIG-10 / S05-RESOURCE-17 | 有数据的 5→6、2→6、重复迁移及缺失群主用户/成员或角色矛盾拒绝 | 独立临时 MySQL |
 
-当前迁移目标为 MySQL 6、SQLite 4。执行证据与剩余验收只记录在 [Status](../docs/Status.md)。
+当前迁移目标为 MySQL 6、SQLite 5。执行证据与剩余验收只记录在 [Status](../docs/Status.md)。
+
+`message_storage.persistence` 的本地提醒用例覆盖存储去重、查看边界、重启、账号隔离及旧库升级。
+`conversation_attention.widgets` 复用资源控件目标，覆盖会话分页与窗口/存储重建后的提醒、打开清除及持久化；
+属于 Business / Component，不使用网络替身证明完整服务链路。
 
 
 按需真实环境：`real_acceptance=true` 手动输入才启用 `E03-RELEASE-01..14`，在原 33 条 3D
 合同上增加真实四账号群与 ResourceServer 流程；报告及同 SHA/清理门禁见
 [服务验收](services/README.md#按需首版真实环境验收)。`widgetEvidence.js` 单独校验现有
-18 项 Qt 控件及 8 项资源存储报告，保留自动控件与真实服务、人工桌面的证据边界。
+Qt 控件及资源存储报告的完整用例集合，保留自动控件与真实服务、人工桌面的证据边界。

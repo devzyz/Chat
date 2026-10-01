@@ -409,8 +409,8 @@ void LocalMessageStore::open(const QString &accountRoot, int uid)
         require(version.next(), "Cannot read database version");
         const int schema = version.value(0).toInt();
         version.finish();
-        require(schema >= 0 && schema <= 4, "Message database requires a newer client");
-        if (schema > 0 && schema < 4) {
+        require(schema >= 0 && schema <= 5, "Message database requires a newer client");
+        if (schema > 0 && schema < 5) {
             auto backup = QDir(accountRoot).filePath(QString("messages.schema%1.sqlite").arg(schema));
             // A previous failed upgrade may leave an incomplete or stale backup. Never overwrite it.
             if (QFile::exists(backup)) backup = QDir(accountRoot).filePath(QString("messages.schema%1.").arg(schema)
@@ -447,6 +447,12 @@ void LocalMessageStore::open(const QString &accountRoot, int uid)
             query(_db, "PRAGMA user_version=3");
         }
         if (schema < 4) query(_db, "PRAGMA user_version=4");
+        if (schema < 5) {
+            query(_db, "CREATE TABLE conversation_attention(chat_id INTEGER PRIMARY KEY,seen_local_id INTEGER NOT NULL)");
+            // 旧版本没有保存查看状态；不把所有历史消息重新当成新消息。
+            if (schema > 0) query(_db, "INSERT INTO conversation_attention SELECT chat_id,MAX(local_id) FROM messages GROUP BY chat_id");
+            query(_db, "PRAGMA user_version=5");
+        }
         query(_db, "UPDATE outgoing_batches SET in_flight=0 WHERE in_flight=1");
         query(_db, "UPDATE messages SET state=? WHERE state=?", {StoredMessage::Uncertain, StoredMessage::Pending});
         transaction.commit();
@@ -454,6 +460,29 @@ void LocalMessageStore::open(const QString &accountRoot, int uid)
         close();
         throw;
     }
+}
+
+QVector<ConversationAttention> LocalMessageStore::conversationAttention(int chatId)
+{
+    require(chatId >= 0, "Invalid conversation identity");
+    auto rows = query(_db,
+        "SELECT m.chat_id,SUM(CASE WHEN m.sender_id<>? AND m.message_id IS NOT NULL "
+        "AND m.local_id>COALESCE(a.seen_local_id,0) THEN 1 ELSE 0 END) "
+        "FROM messages m LEFT JOIN conversation_attention a ON a.chat_id=m.chat_id "
+        "WHERE (?=0 OR m.chat_id=?) GROUP BY m.chat_id", {_uid, chatId, chatId});
+    QVector<ConversationAttention> result;
+    while (rows.next()) result.append({rows.value(0).toInt(), rows.value(1).toLongLong()});
+    if (chatId > 0 && result.isEmpty()) result.append({chatId, 0});
+    return result;
+}
+
+void LocalMessageStore::markConversationSeen(int chatId, qint64 throughLocalId)
+{
+    require(chatId > 0 && throughLocalId >= 0, "Invalid conversation observation");
+    query(_db, "INSERT INTO conversation_attention(chat_id,seen_local_id) "
+        "SELECT ?,COALESCE(MAX(local_id),0) FROM messages WHERE chat_id=? AND local_id<=? "
+        "ON CONFLICT(chat_id) DO UPDATE SET seen_local_id=MAX(seen_local_id,excluded.seen_local_id)",
+        {chatId, chatId, throughLocalId});
 }
 
 void LocalMessageStore::close()

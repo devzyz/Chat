@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const widgetCases = ['initTestCase', 'cleanupTestCase', 'localHistorySearchWidgets', 'localDirectorySearchWidgets',
-    'friendRemarkOutcomeWidgets', 'groupResourceCardWidgets', 'groupMembershipControlsWidgets',
+    'friendRemarkOutcomeWidgets', 'conversationAttentionWidgets', 'groupResourceCardWidgets', 'groupMembershipControlsWidgets',
     'groupPanelRejectionVisible', 'groupPanelExternalRevocation', 'groupPanelSnapshotRequired',
     'groupPanelPaginationFailure', 'groupPanelReopenRetryIdentity', 'groupPanelTcpRefreshRevision',
     'avatarPublicationIsolationAndRestore', 'incomingAttachmentAndPageLifetime',

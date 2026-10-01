@@ -3,6 +3,7 @@
 #include "logmgr.h"
 #include "ui_chatdialog.h"
 #include <QAction>
+#include <QApplication>
 #include <QDialogButtonBox>
 #include <QVBoxLayout>
 #include <QLabel>
@@ -153,12 +154,37 @@ ChatDialog::ChatDialog(QWidget *parent)
     connect(ui->chat_page, &ChatPage::historyRequested,
             this, &ChatDialog::tcpLoadingMoreChatMsg);
     auto *messages = UserMgr::instance()->messages();
+    connect(messages, &MessageService::conversationAttentionChanged, this,
+        /** @brief 缓存绝对数量，分页和控件重建不会丢掉未展示会话的提醒。 */
+        [this](int chatId, qint64 count) {
+            _conversationAttention[chatId] = count;
+            refreshConversationAttention();
+        });
+    connect(ui->chat_page, &ChatPage::conversationOpened, this,
+        /** @brief 所有打开入口统一刷新，包含联系人搜索和群目录跳转。 */
+        [this, messages](int chatId) {
+            _cur_chat_id = chatId;
+            messages->loadHistory(chatId);
+        });
+    connect(ui->stackedWidget, &QStackedWidget::currentChanged, this,
+        /** @brief 从联系人或设置返回聊天时重新读取当前会话。 */
+        [this, messages](int) {
+            if (ui->stackedWidget->currentWidget() == ui->chat_page && _cur_chat_id > 0)
+                messages->loadHistory(_cur_chat_id);
+        });
     connect(messages, &MessageService::historyLoaded, ui->chat_page, &ChatPage::applyStoredHistory);
     connect(messages, &MessageService::sendFailed, ui->chat_page, &ChatPage::markMessagesFailed);
     connect(messages, &MessageService::historyLoaded, this,
         /** @brief 用初始本地历史更新会话列表的最新消息摘要。 */
         [this](int chatId, qint64 before, const QVector<StoredMessage> &rows, bool) {
-            if (before != 0 || rows.isEmpty() || !_chat_item_map.contains(chatId)) return;
+            if (before != 0 || rows.isEmpty()) return;
+            if (_cur_chat_id == chatId && isActiveWindow() && !isMinimized()
+                && ui->chat_page->isVisible() && !QApplication::activeModalWidget()) {
+                qint64 throughLocalId = 0;
+                for (const auto &row : rows) throughLocalId = qMax(throughLocalId, row.localId);
+                UserMgr::instance()->messages()->markConversationSeen(chatId, throughLocalId);
+            }
+            if (!_chat_item_map.contains(chatId)) return;
             auto *item = qobject_cast<ChatUserItem*>(ui->chat_user_list->itemWidget(_chat_item_map.value(chatId)));
             if (!item) return;
             QString summary = rows.back().content;
@@ -171,6 +197,7 @@ ChatDialog::ChatDialog(QWidget *parent)
         /** @brief 消息事实变化后重新加载当前可见范围。 */
         [this, messages](int chatId) {
         messages->loadHistory(chatId, 0, ui->chat_page->oldestLoadedMessageId(chatId));
+        messages->loadConversationAttention(chatId);
     });
     connect(messages, &MessageService::failed, this,
         /** @brief 结束失败的历史加载并显示存储错误。 */
@@ -214,6 +241,7 @@ ChatDialog::ChatDialog(QWidget *parent)
         /** @brief 目录查询失败后恢复加载入口。 */
         [this](const QString &kind) { if (kind.isEmpty() || kind == "conversations") _b_chat_loading = false; });
     loadChatUserList();
+    messages->loadConversationAttention();
 
     // 连接创建私聊请求完成函数
     connect(TcpMgr::instance().get(), &TcpMgr::privateChatCreated,
@@ -255,6 +283,9 @@ void ChatDialog::loadChatUserList()
  */
 bool ChatDialog::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == this && event->type() == QEvent::WindowActivate && _cur_chat_id > 0) {
+        UserMgr::instance()->messages()->loadHistory(_cur_chat_id);
+    }
     if (event->type() == QEvent::MouseButtonPress) {
         QMouseEvent * mouseEvent = static_cast<QMouseEvent*> (event);
         handleGlobalMousePress(mouseEvent);
@@ -351,7 +382,7 @@ void ChatDialog::midlistToChatList()
     SPDLOG_DEBUG("chat navigation selected");
     // 传入聊天StateWidget
     clearLabelState(ui->side_chat_label);
-    ui->side_chat_label->showRedPoint(false); // 选中后取消红点
+    refreshConversationAttention();
     // 设置右面为聊天界面
     ui->stackedWidget->setCurrentWidget(ui->chat_page);
     _state = ChatUIMode::ChatMode;
@@ -410,6 +441,8 @@ void ChatDialog::addNewChat(std::shared_ptr<ChatInfo> chat_info) {
     ui->chat_user_list->setItemWidget(item, chat_user_item);
     // key 为chat_id
     _chat_item_map.insert(chat_info->getChatId(), item);
+    refreshConversationAttention();
+    UserMgr::instance()->messages()->loadConversationAttention(chat_info->getChatId());
 }
 
 /**
@@ -563,7 +596,6 @@ void ChatDialog::chatItemClicked(QListWidgetItem * item)
 
         auto chat_item = qobject_cast<ChatUserItem*> (itembase);
         auto chat_info = chat_item->getChatInfo();
-        chat_item->resetNewMsgCount(); // 被点击后，重置红点的刷新
 
         _cur_chat_id = chat_info->getChatId();
         // 设置右侧的聊天界面
@@ -623,47 +655,20 @@ void ChatDialog::updateTextChatMsg(int from_uid, int to_uid, int chat_id, std::v
         ui->chat_page->appendChatMsg(msg);
     }
 
-    // 如果不在聊天界面，则将聊天界面红点显示出来
-    auto _side_chat_label_isSelect = ui->side_chat_label->getCurState();
-    if (_side_chat_label_isSelect == ClickLabelState::Normal) {
-        ui->side_chat_label->showRedPoint(true);
+    // 提醒以补拉后落盘的消息为准，重复通知不会重复计数。
+    UserMgr::instance()->messages()->loadConversationAttention(chat_id);
+}
+
+void ChatDialog::refreshConversationAttention()
+{
+    bool hasAttention = false;
+    for (auto it = _conversationAttention.cbegin(); it != _conversationAttention.cend(); ++it) {
+        hasAttention = hasAttention || it.value() > 0;
+        if (!_chat_item_map.contains(it.key())) continue;
+        auto *item = qobject_cast<ChatUserItem*>(ui->chat_user_list->itemWidget(_chat_item_map.value(it.key())));
+        if (item) item->setNewMsgCount(it.value());
     }
-
-    // 如果当前正在聊天的人不是发送信息的人，则更新红点，并返回
-    if (_cur_chat_id != chat_id) {
-        // 他发送新消息，不管当前在哪个页面，都把红点显示出来
-        // 找到发送来的那个人，将他的红点显示出来
-        auto find_iter = _chat_item_map.find(chat_id);
-        if (find_iter == _chat_item_map.end()) {
-            return ;
-        }
-
-        // 拿到item内部绑定的自定义item
-        QWidget * widget = ui->chat_user_list->itemWidget(find_iter.value());
-        if (!widget) {
-            return ;
-        }
-
-        // 转换为基类的item
-        ListItemBase * baseItem = qobject_cast<ListItemBase*> (widget);
-        if (!baseItem) {
-            return ;
-        }
-
-        // 如果当前是聊天的item
-        auto itemType = baseItem->getItemType();
-        if (itemType == ListItemType::CHAT_USER_ITEM) {
-            auto * chat_item = qobject_cast<ChatUserItem*> (baseItem);
-            if (!chat_item) {
-                return ;
-            }
-
-            // 更新红点
-            chat_item->updateNewMsgCount(msgs.size());
-            return ;
-        }
-        return ;
-    }
+    ui->side_chat_label->showRedPoint(hasAttention);
 }
 
 void ChatDialog::switchUserInfoPage()
@@ -720,6 +725,7 @@ void ChatDialog::tcpLoadChatFinish(QJsonArray jsonArray)
         setSelectChatItem(0);
         setSelectChatPage(0);
     }
+    refreshConversationAttention();
 }
 
 // 选中当前正在聊天的item
@@ -751,7 +757,6 @@ void ChatDialog::setSelectChatItem(int uid) {
         if (!chatListItem) {
             return;
         }
-        chatListItem->resetNewMsgCount(); // 选中后，将新消息提醒关闭
 
         // 如果当前列表没有加载完，则先加载完
         auto chat_info = chatListItem->getChatInfo();
@@ -781,7 +786,6 @@ void ChatDialog::setSelectChatItem(int uid) {
         return;
     }
 
-    chatListItem->resetNewMsgCount(); // 选中后，将新消息提醒关闭
 }
 
 // 设置右侧详细聊天记录界面
