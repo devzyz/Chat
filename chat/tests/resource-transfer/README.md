@@ -2,10 +2,15 @@
 
 Test IDs: Q04-RESOURCE-01..05, mapped by method in `tests/TEST-CONTRACT-MATRIX.md`.
 
-`resource_transfer_tests` is a local-only CMake target. Set `RESOURCE_TEST_HOST` to the freshly built
+`resource_transfer_tests` is a CMake target. Set `RESOURCE_TEST_HOST` to the freshly built
 `ResourceTests.exe`, then run it with the selected Qt kit DLLs available. The test launches a real
 loopback HTTP/filesystem server with explicit authentication fixtures.
 For headless execution use `-platform minimal -style Fusion`.
+
+`conversation_attention.widgets` 是 Business / Component CTest 入口，复用该目标中
+`conversationAttentionWidgets`，只使用真实 Qt 控件和临时 SQLite，不需要 ResourceServer。
+它验证未加载会话的消息提醒、分页、窗口重建、账号存储重开、点击清除及清除状态持久化。
+已接入默认客户端回归；全部资源传输用例仍需下述独立 HTTP 测试服务。
 
 The resume case creates a real PNG, cancels after 64 KiB is acknowledged, destroys the manager,
 recreates it using the same account cache, resumes, downloads and compares the complete bytes.

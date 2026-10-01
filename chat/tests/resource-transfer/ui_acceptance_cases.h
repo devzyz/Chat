@@ -1,12 +1,83 @@
 #pragma once
 #include "chatdialog.h"
 #include "chatuserlist.h"
+#include "chatuseritem.h"
 #include "contactuserlist.h"
 #include <QComboBox>
+#include <QApplication>
 #include <QInputDialog>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPointer>
+#include <QScopeGuard>
+#include <QElapsedTimer>
+
+/** @brief 验证消息提醒不依赖实时通知和会话行的创建时机。 */
+inline void ResourceTransferTests::conversationAttentionWidgets()
+{
+    QTemporaryDir root;
+    {
+        LocalMessageStore store; store.open(root.path(), 7);
+        QJsonArray chats;
+        for (int id = 1; id <= 30; ++id)
+            chats.append(QJsonObject{{"id", id}, {"uid", id + 100}, {"type", "private"}});
+        store.mergeDirectory({{"conversations", chats}});
+        QVector<StoredMessage> rows;
+        for (int id = 1; id <= 3; ++id) {
+            StoredMessage row;
+            row.messageId = id; row.chatId = 30; row.senderId = id == 3 ? 7 : 130;
+            row.recipientId = id == 3 ? 130 : 7; row.content = "notice";
+            row.clientMessageId = QString("notice-%1").arg(id); row.sentAt = id * 1000;
+            rows.append(row);
+        }
+        store.applySyncPage(30, 0, 3, rows);
+    }
+    const auto user = UserMgr::instance();
+    user->setUserInfo(std::make_shared<UserInfo>(7, "self", ""));
+    auto *service = user->messages();
+    // 断言失败同样先释放账号锁，再让临时目录析构。
+    const auto cleanup = qScopeGuard(/** @brief 即使断言失败也先停止存储并有界等待锁释放。 */ [service, &root] {
+        service->stop();
+        QElapsedTimer elapsed; elapsed.start();
+        while (QFileInfo::exists(root.path() + "/messages.lock") && elapsed.elapsed() < 15000)
+            QTest::qWait(10);
+    });
+    QSignalSpy restored(service, &MessageService::directoryRestored);
+    service->start(root.path(), 7);
+    QTRY_COMPARE(restored.size(), 1);
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        ChatDialog window; window.resize(1000, 650); window.show();
+        auto *list = window.findChild<ChatUserList*>();
+        QTRY_VERIFY(list->count() > 0);
+        QTRY_VERIFY_WITH_TIMEOUT((window.loadChatUserList(), list->count() == 30), 5000);
+        ChatUserItem *target = nullptr;
+        for (auto *item : window.findChildren<ChatUserItem*>())
+            if (item->getChatInfo()->getChatId() == 30) target = item;
+        QVERIFY(target);
+        auto *badge = target->findChild<QLabel*>("new_msg_count_label");
+        QVERIFY(badge);
+        QTRY_COMPARE_WITH_TIMEOUT(badge->text(), attempt == 2 ? QString("0") : QString("2"), 2000);
+        QCOMPARE(badge->isHidden(), attempt == 2);
+        if (attempt == 1) {
+            QApplication::setActiveWindow(&window);
+            QTRY_VERIFY(window.isActiveWindow());
+            QListWidgetItem *row = nullptr;
+            for (int index = 0; index < list->count(); ++index)
+                if (list->itemWidget(list->item(index)) == target) row = list->item(index);
+            QVERIFY(row);
+            list->scrollToItem(row);
+            QTest::mouseClick(list->viewport(), Qt::LeftButton, Qt::NoModifier, list->visualItemRect(row).center());
+            QTRY_COMPARE_WITH_TIMEOUT(badge->text(), QString("0"), 3000);
+            QVERIFY(badge->isHidden());
+        }
+        service->stop();
+        QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(root.path() + "/messages.lock"), 15000);
+        service->start(root.path(), 7);
+        QTRY_COMPARE(restored.size(), attempt + 2);
+    }
+    service->stop();
+    QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(root.path() + "/messages.lock"), 15000);
+}
 
 /** @brief 按用户可见文字取得按钮，避免依赖控件创建顺序。 */
 inline QPushButton *acceptanceButton(QWidget *parent, const QString &text)

@@ -38,15 +38,12 @@ public:
     /** @brief 通过判断_new_msg_count来决定是否显示新消息提醒。 */
     void showNewMsgTip();
     // 更新_new_msg_count的数量
-    /** @brief 更新_new_msg_count的数量。 */
-    void updateNewMsgCount(int);
-    // 重置新消息数量
-    /** @brief 重置新消息数量。 */
-    void resetNewMsgCount();
+    /** @brief 用账号存储返回的绝对数量刷新提醒，不依赖控件收到通知的次数。 */
+    void setNewMsgCount(qint64 count);
 private:
     Ui::ChatUserItem *ui;
     std::shared_ptr<ChatInfo> _chat_info;
-    int _new_msg_count;
+    qint64 _new_msg_count;
 };
 
 #endif // CHATUSERITEM_H

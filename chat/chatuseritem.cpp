@@ -94,16 +94,8 @@ void ChatUserItem::showNewMsgTip()
     }
 }
 
-// 更新新消息数量
-/** @brief 累加新消息数量并刷新提示标签。 */
-void ChatUserItem::updateNewMsgCount(int count)
+void ChatUserItem::setNewMsgCount(qint64 count)
 {
-    _new_msg_count += count;
-    showNewMsgTip();
-}
-
-// 重置新消息
-void ChatUserItem::resetNewMsgCount() {
-    _new_msg_count = 0;
+    _new_msg_count = qMax(qint64(0), count);
     showNewMsgTip();
 }

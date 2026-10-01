@@ -35,11 +35,21 @@ struct LocalMessagePage {
     bool hasMore = false;
 };
 
+/** @brief 保存账号内单个会话的本地新消息数量，与对方已读回执无关。 */
+struct ConversationAttention {
+    int chatId = 0;
+    qint64 count = 0;
+};
+
 // All methods, including destruction, run on the connection's owning thread.
 // Errors throw; a failed transaction never advances a synchronization cursor.
 /** @brief 独占账号 SQLite 连接及锁文件；所有方法和析构均在连接所属工作线程执行，存储错误抛异常。 */
 class LocalMessageStore final {
 public:
+    /** @brief 查询全部或指定会话尚未打开查看的已落盘接收消息数量，chatId 为零时查询全部。 */
+    QVector<ConversationAttention> conversationAttention(int chatId = 0);
+    /** @brief 单调保存已展示的本地消息编号上界，不清除之后落盘的新消息，也不生成已读回执。 */
+    void markConversationSeen(int chatId, qint64 throughLocalId);
     /** @brief 事务合并联系人、会话和申请；缺失记录不代表删除，approved_uid 同时更新已有申请状态。 */
     QJsonObject mergeDirectory(const QJsonObject &directory);
     /** @brief 读取账号目录，用于恢复内存查询缓存。 */

@@ -152,6 +152,7 @@ void ChatPage::setChatInfo(std::shared_ptr<ChatInfo> chatInfo)
     if (!model->hasLoadedInitialPage() && !model->isLoadingHistory()) {
         requestHistory(model);
     }
+    emit conversationOpened(_currentChatId);
 }
 
 qint64 ChatPage::oldestLoadedMessageId(int chatId) const

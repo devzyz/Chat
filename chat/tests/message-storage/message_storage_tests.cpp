@@ -13,6 +13,10 @@ class MessageStorageTests : public QObject
 {
     Q_OBJECT
 private slots:
+    /** @brief 验证私聊/群提醒去重、本人消息排除、查看边界、重启和账号隔离。 */
+    void conversationAttentionPersistence();
+    /** @brief 验证 schema 4 升级备份且不将无法判断的旧历史重新标为新消息。 */
+    void schemaFourAttentionUpgrade();
     /** 验证离群、重新加入时旧请求与页被拒绝，旧历史和分页搜索保留。 */
     void groupEpochAndLocalSearch();
     /** 验证群目录、零收件人正文、重启和 outbox 保持幂等且不生成私聊回执。 */
@@ -56,6 +60,75 @@ private slots:
     /** 验证资源发送意图在重启与重试预算耗尽后仍保留原资源身份。 */
     void resourceIntentSurvivesRecoveryAndRetryBudget();
 };
+
+void MessageStorageTests::conversationAttentionPersistence()
+{
+    QTemporaryDir root, otherRoot;
+    LocalMessageStore store; store.open(root.path(), 7);
+    store.mergeDirectory({{"conversations", QJsonArray{QJsonObject{{"id", 20}, {"type", "group"},
+        {"group_state", "active"}, {"group_revision", "1"}, {"membership_epoch", "1"}}}}});
+    for (int chat : {10, 20}) {
+        QVector<StoredMessage> rows;
+        for (int id = 1; id <= 3; ++id) {
+            StoredMessage row;
+            row.chatId = chat; row.messageId = id; row.senderId = id == 3 ? 7 : 8;
+            row.recipientId = chat == 20 ? 0 : (id == 3 ? 8 : 7);
+            row.content = "notice"; row.sentAt = id * 1000;
+            row.clientMessageId = QString("%1-%2").arg(chat).arg(id);
+            rows.append(row);
+        }
+        const QString epoch = chat == 20 ? "1" : "";
+        store.applySyncPage(chat, 0, 3, rows, epoch);
+        QCOMPARE(store.conversationAttention(chat).first().count, qint64(2));
+        QVERIFY_EXCEPTION_THROWN(store.applySyncPage(chat, 3, 3, rows, epoch), std::exception);
+        QCOMPARE(store.conversationAttention(chat).first().count, qint64(2));
+        const auto before = store.history(chat, 0, 50).messages.back().localId;
+        auto next = rows.front(); next.messageId = 4; next.clientMessageId += "-new";
+        store.applySyncPage(chat, 3, 4, {next}, epoch);
+        store.markConversationSeen(chat, before);
+        QCOMPARE(store.conversationAttention(chat).first().count, qint64(1));
+        store.markConversationSeen(chat, 0);
+        QCOMPARE(store.conversationAttention(chat).first().count, qint64(1));
+    }
+    store.close(); store.open(root.path(), 7);
+    QCOMPARE(store.conversationAttention(10).first().count, qint64(1));
+    QCOMPARE(store.conversationAttention(20).first().count, qint64(1));
+    store.markConversationSeen(10, store.history(10, 0, 50).messages.back().localId);
+    QCOMPARE(store.conversationAttention(10).first().count, qint64(0));
+    QCOMPARE(store.conversationAttention(20).first().count, qint64(1));
+    store.close(); store.open(otherRoot.path(), 9);
+    QVERIFY(store.conversationAttention().isEmpty());
+    QCOMPARE(store.conversationAttention(10).first().count, qint64(0));
+}
+
+void MessageStorageTests::schemaFourAttentionUpgrade()
+{
+    QTemporaryDir root;
+    StoredMessage row;
+    row.chatId = 10; row.messageId = 1; row.senderId = 8; row.recipientId = 7;
+    row.content = "preserved"; row.clientMessageId = "schema-four"; row.sentAt = 1000;
+    {
+        LocalMessageStore store; store.open(root.path(), 7);
+        store.applySyncPage(10, 0, 1, {row});
+    }
+    const auto connection = QStringLiteral("attention-upgrade-fixture");
+    {
+        auto db = QSqlDatabase::addDatabase("QSQLITE", connection);
+        db.setDatabaseName(root.path() + "/messages.sqlite"); QVERIFY(db.open());
+        QSqlQuery query(db);
+        QVERIFY(query.exec("DROP TABLE conversation_attention"));
+        QVERIFY(query.exec("PRAGMA user_version=4"));
+    }
+    QSqlDatabase::removeDatabase(connection);
+    LocalMessageStore store; store.open(root.path(), 7);
+    QVERIFY(QFile::exists(root.path() + "/messages.schema4.sqlite"));
+    QCOMPARE(store.history(10, 0, 50).messages.first().content, QString("preserved"));
+    QCOMPARE(store.cursor(10), qint64(1));
+    QCOMPARE(store.conversationAttention(10).first().count, qint64(0));
+    row.messageId = 2; row.clientMessageId = "after-upgrade";
+    store.applySyncPage(10, 1, 2, {row});
+    QCOMPARE(store.conversationAttention(10).first().count, qint64(1));
+}
 
 void MessageStorageTests::groupEpochAndLocalSearch()
 {
@@ -672,6 +745,7 @@ void MessageStorageTests::schemaTwoDirectoryUpgrade()
         QVERIFY(query.exec("DROP TABLE contacts"));
         QVERIFY(query.exec("DROP TABLE conversations"));
         QVERIFY(query.exec("DROP TABLE applications"));
+        QVERIFY(query.exec("DROP TABLE conversation_attention"));
         QVERIFY(query.exec("PRAGMA user_version=2"));
     }
     QSqlDatabase::removeDatabase(connection);
@@ -686,7 +760,9 @@ void MessageStorageTests::schemaTwoDirectoryUpgrade()
         auto db = QSqlDatabase::addDatabase("QSQLITE", connection);
         db.setDatabaseName(root.path() + "/messages.sqlite");
         QVERIFY(db.open());
-        QSqlQuery query(db); QVERIFY(query.exec("PRAGMA user_version=3"));
+        QSqlQuery query(db);
+        QVERIFY(query.exec("DROP TABLE conversation_attention"));
+        QVERIFY(query.exec("PRAGMA user_version=3"));
     }
     QSqlDatabase::removeDatabase(connection);
     store.open(root.path(),8);

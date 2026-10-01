@@ -21,6 +21,8 @@
 class ResourceTransferTests : public QObject {
     Q_OBJECT
 private slots:
+    /** @brief 验证未加载会话的持久化消息在列表分页和窗口重建后仍显示提醒。 */
+    void conversationAttentionWidgets();
     /** @brief 验证会话历史分页搜索与真实滚动定位。 */
     void localHistorySearchWidgets();
     /** @brief 验证完整本地目录筛选与会话打开。 */

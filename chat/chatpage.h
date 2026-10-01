@@ -61,6 +61,8 @@ private slots:
     void requestOlderHistory();
 
 signals:
+    /** @brief 当前会话已切换，窗口可据此刷新持久化消息和本地提醒。 */
+    void conversationOpened(int chatId);
     // 兼容现有 ChatInfo 缓存；消息显示与状态不再依赖该缓存。
     /** @brief 兼容现有 ChatInfo 缓存；消息显示与状态不再依赖该缓存。 */
     void outgoingTextQueued(QString, std::shared_ptr<ChatDataBase>);

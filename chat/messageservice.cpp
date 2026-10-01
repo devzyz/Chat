@@ -326,6 +326,29 @@ void MessageService::loadHistory(int chatId, qint64 before, qint64 from)
         [this, chatId, before, page] { emit historyLoaded(chatId, before, page->messages, page->hasMore); });
 }
 
+void MessageService::loadConversationAttention(int chatId)
+{
+    if (!isActive() || chatId < 0) return;
+    auto rows = std::make_shared<QVector<ConversationAttention>>();
+    execute(chatId,
+        /** @brief 在同一账号工作队列查询持久化消息与查看边界。 */
+        [chatId, rows](LocalMessageStore &store) { *rows = store.conversationAttention(chatId); },
+        /** @brief 只发布当前账号的提醒快照。 */
+        [this, rows] {
+            for (const auto &row : *rows) emit conversationAttentionChanged(row.chatId, row.count);
+        });
+}
+
+void MessageService::markConversationSeen(int chatId, qint64 throughLocalId)
+{
+    if (!isActive() || chatId <= 0 || throughLocalId <= 0) return;
+    execute(chatId,
+        /** @brief 保存已展示边界，期间新增的消息不会被清除。 */
+        [chatId, throughLocalId](LocalMessageStore &store) { store.markConversationSeen(chatId, throughLocalId); },
+        /** @brief 提交成功后重新读取，失败保留原提醒。 */
+        [this, chatId] { loadConversationAttention(chatId); });
+}
+
 void MessageService::dispatchOutgoing()
 {
     const int waiting = qMin(qsizetype(8), _receiptWaiting.size());

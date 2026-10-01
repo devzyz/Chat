@@ -17,6 +17,10 @@ class MessageStorageWorker;
 class MessageService final : public QObject {
     Q_OBJECT
 public:
+    /** @brief 在存储线程查询全部或指定会话提醒，旧账号结果自动丢弃。 */
+    void loadConversationAttention(int chatId = 0);
+    /** @brief 持久化当前已展示快照的本地查看边界，成功后刷新提醒。 */
+    void markConversationSeen(int chatId, qint64 throughLocalId);
     /** @brief 排队合并目录，提交后发布本地结果并调用完成通知；失败不更新界面。 */
     void saveDirectory(const QJsonObject &directory, std::function<void()> completion = {}, std::function<void()> failure = {});
     /** @brief 在当前目录版本中持久化管理请求，避免并发刷新丢掉待确认身份。 */
@@ -66,6 +70,8 @@ public:
     /** @brief 在存储线程搜索当前会话，结果通过 searchLoaded 返回。 */
     void search(int chatId, const QString &text, qint64 before = 0);
 signals:
+    /** @brief 返回已落盘会话的新消息数量；不是对方已读状态。 */
+    void conversationAttentionChanged(int chatId, qint64 count);
     /** @brief 返回带搜索身份的联系人或群目录页。 */
     void directoryFound(QString kind, QString text, int after, QJsonArray rows);
     /** @brief 返回与查询文本及分页身份关联的本地搜索结果。 */

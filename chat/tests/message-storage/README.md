@@ -74,6 +74,13 @@ network group directory conversion and restores the group type after account res
 既有 `message_storage.persistence` 入口的 `groupEpochAndLocalSearch` 覆盖移除、
 重新加入、旧代次/旧版本拒绝、历史保留和超过一页的本地搜索。
 `directoryPersistenceAndPagination` 同时验证备注部分合并、全目录筛选及稳定分页。
-升级用例目标为 schema 4；既有故障注入、账号隔离和发送/回执恢复用例继续回归。
+升级用例目标为 schema 5；既有故障注入、账号隔离和发送/回执恢复用例继续回归。
+
+## 本地新消息提醒
+
+`conversationAttentionPersistence` 覆盖私聊和群消息提醒、本人消息排除、重复页拒绝后计数不变、
+旧查看快照不清除新消息、查看边界单调、重启及账号隔离。
+`schemaFourAttentionUpgrade` 覆盖 schema 4 快照、原正文和游标保留、历史不重新提醒及新消息正常计数。
+二者复用 `message_storage.persistence`，不增加存储测试聚合入口。
 
 `groupOperationSurvivesRefreshAndRestart` 验证目录刷新与管理命令落盘排队时不丢失原身份，重启后可恢复并清除。`schemaTwoDirectoryUpgrade` 同时覆盖 3→4 快照及数据保留。
