@@ -172,3 +172,8 @@ inactive session, removes only that file, then logs into the same account and
 creates a conversation. This prevents a network-authenticated but storage-unready
 driver from accepting the next business command. No production storage API or
 private worker test hook is added.
+
+The fixture also checks that its newly created account database is removed after
+the owned client exits. Cleanup handles both the original blocking file and the
+directory created by successful relogin, validates the data-root boundary, and
+rejects symbolic links; pre-existing account paths are never taken over.

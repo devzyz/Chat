@@ -281,28 +281,38 @@ private slots:
         QVERIFY(unavailable.listen());
         const auto blockedRoot = UserStoragePaths::accountRoot(UserStoragePaths::dataRoot(),
             unavailable.url(), unavailable.userId);
+        QVERIFY(!QFileInfo::exists(blockedRoot));
         QVERIFY(QDir().mkpath(QFileInfo(blockedRoot).absolutePath()));
-        QFile obstruction(blockedRoot);
-        QVERIFY(obstruction.open(QIODevice::WriteOnly));
-        obstruction.close();
-        const auto removeObstruction = qScopeGuard(/** 清理仅本次创建的阻塞文件，不删除账号目录。 */ [&] {
-            QFile::remove(blockedRoot);
-        });
-        OwnedClient recovering;
-        QVERIFY(recovering.start());
-        const QJsonObject login{{"id", 1}, {"command", "login"}, {"gate", unavailable.url()},
-            {"email", "storage@example.invalid"}, {"password", "fixture-only"}};
-        recovering.send(login);
-        QCOMPARE(recovering.receive(10000).value("status").toString(), QString("login-failed"));
-        recovering.send({{"id", 2}, {"command", "snapshot"}});
-        QVERIFY(!recovering.receive().value("active").toBool());
-        QVERIFY(QFile::remove(blockedRoot));
-        auto retryLogin = login; retryLogin["id"] = 3;
-        recovering.send(retryLogin);
-        QCOMPARE(recovering.receive(10000).value("status").toString(), QString("authenticated"));
-        recovering.send({{"id", 4}, {"command", "create"}, {"toUid", 42}});
-        QCOMPARE(recovering.receive().value("chatId").toInt(), 7);
-        QVERIFY(recovering.stop(5));
+        {
+            QFile obstruction(blockedRoot);
+            QVERIFY(obstruction.open(QIODevice::WriteOnly));
+            obstruction.close();
+            const auto removeObstruction = qScopeGuard(/** @brief 子进程结束后只清理本次新建的账号文件或目录。 */ [&] {
+                const auto path = QDir::cleanPath(blockedRoot);
+                const auto dataRoot = QDir::cleanPath(UserStoragePaths::dataRoot()) + '/';
+                const QFileInfo info(path);
+                QVERIFY2(path.startsWith(dataRoot) && !info.isSymLink(), "Unexpected fixture cleanup path");
+                if (!info.exists()) return;
+                const bool removed = info.isDir() ? QDir(path).removeRecursively() : QFile::remove(path);
+                QVERIFY2(removed, "Cannot remove owned storage recovery fixture");
+            });
+            OwnedClient recovering;
+            QVERIFY(recovering.start());
+            const QJsonObject login{{"id", 1}, {"command", "login"}, {"gate", unavailable.url()},
+                {"email", "storage@example.invalid"}, {"password", "fixture-only"}};
+            recovering.send(login);
+            QCOMPARE(recovering.receive(10000).value("status").toString(), QString("login-failed"));
+            recovering.send({{"id", 2}, {"command", "snapshot"}});
+            QVERIFY(!recovering.receive().value("active").toBool());
+            QVERIFY(QFile::remove(blockedRoot));
+            auto retryLogin = login; retryLogin["id"] = 3;
+            recovering.send(retryLogin);
+            QCOMPARE(recovering.receive(10000).value("status").toString(), QString("authenticated"));
+            recovering.send({{"id", 4}, {"command", "create"}, {"toUid", 42}});
+            QCOMPARE(recovering.receive().value("chatId").toInt(), 7);
+            QVERIFY(recovering.stop(5));
+        }
+        QVERIFY2(!QFileInfo::exists(blockedRoot), "Storage recovery fixture must remove its account database");
 
         LoopbackLogin first(41), second(42);
         QVERIFY(first.listen());
