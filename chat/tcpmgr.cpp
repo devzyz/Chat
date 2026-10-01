@@ -1138,16 +1138,19 @@ void TcpMgr::loadSocialPage(QString kind, QString after)
             directory[kind] = rows; directory["conversations"] = conversations;
         }
         UserMgr::instance()->messages()->saveDirectory(directory,
-            /** @brief 仅在当前页保存后推进，首次完整刷新前阻止旧 outbox 发送。 */
+            /** @brief 仅在当前页保存后推进，首次完整关系目录落盘前阻止旧 outbox 发送。 */
             [this,kind,after,response] {
                 if (response["load_more"].toBool()) {
                     const auto next = response["next"].toString();
                     if (next.toLongLong() <= after.toLongLong()) { _socialRefreshing = false; return; }
                     loadSocialPage(kind,next);
                 } else if (kind == "profile") loadSocialPage("contacts");
-                else if (kind == "contacts") loadSocialPage("applications");
+                else if (kind == "contacts") {
+                    UserMgr::instance()->messages()->setSocialReady();
+                    loadSocialPage("applications");
+                }
                 else {
-                    _socialRefreshing = false; UserMgr::instance()->messages()->setSocialReady();
+                    _socialRefreshing = false;
                     if (_socialRefreshAgain) refreshSocialDirectory();
                 }
             }, /** @brief 写盘失败保留旧目录，下次周期重试读取。 */

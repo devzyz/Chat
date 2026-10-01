@@ -89,7 +89,7 @@ inline void Read(sql::Connection& db, int actor, const Json::Value& request, Jso
         }
         auto candidate = response; candidate["items"].append(item); candidate["next"] = std::to_string(peer);
         candidate["load_more"] = true;
-        if (response["items"].size() >= 50 || messaging::CompactJson(candidate).size() > 2000) {
+        if (response["items"].size() >= 50 || messaging::CompactJson(candidate).size() > 8000) {
             if (response["items"].empty()) throw messaging::GroupError("ResponseTooLarge");
             response["load_more"] = true; break;
         }
@@ -113,7 +113,8 @@ inline void UpdateProfile(sql::Connection& db, int actor, const Json::Value& req
         throw messaging::GroupError("VersionConflict");
     Query update(db, "UPDATE user SET name=TRIM(?),description=?,profile_revision=profile_revision+1 WHERE uid=?",
         {request["name"].asString(),request["description"].asString(),std::to_string(actor)},false);
-    response["profile"] = Profile(db,actor); transaction.Commit();
+    response["profile"]["profile_revision"] = std::to_string(Number(request["expected_revision"]) + 1);
+    transaction.Commit();
 }
 /** @brief 在固定用户锁顺序及会话事务内管理关系，迟到命令不能改变新版本申请或关系。 */
 inline void Manage(sql::Connection& db, int actor, const Json::Value& request, Json::Value& response) {

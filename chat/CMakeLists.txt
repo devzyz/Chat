@@ -597,6 +597,9 @@ if(BUILD_TESTING)
         COMMAND session_reset_tests retryDoesNotCrossAuthenticatedAccounts)
     set_tests_properties(session_reset.retryDoesNotCrossAuthenticatedAccounts PROPERTIES
         ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 10)
+    add_test(NAME session_reset.social_lifecycle COMMAND session_reset_tests socialRequestsRespectSessionLifecycle)
+    set_tests_properties(session_reset.social_lifecycle PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 30)
     add_test(NAME session_reset.authenticated_wire_retry
         COMMAND session_reset_tests reconnectResendsIdenticalWirePayloadAfterAuthentication)
     set_tests_properties(session_reset.authenticated_wire_retry PROPERTIES

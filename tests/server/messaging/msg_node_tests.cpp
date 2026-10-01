@@ -71,6 +71,11 @@ TEST(SendNodeTests, OversizedApplicationBodyIsRejectedBeforeAllocation) {
     EXPECT_EQ(std::memcmp(response._data + HEAD_TOTAL_LEN, history.data(), history.size()), 0);
     EXPECT_THROW(SendNode(std::string(MAX_HISTORY_BODY_LENGTH + 1, 'h'), MSG_LOAD_CHAT_MESSAGE_RSP,
         MAX_HISTORY_BODY_LENGTH + 1), std::length_error);
+    const std::string social(MAX_SOCIAL_BODY_LENGTH, 's');
+    SendNode directory(social, MSG_SOCIAL_DIRECTORY_RSP, social.size());
+    EXPECT_EQ(directory._total_len, social.size() + HEAD_TOTAL_LEN);
+    EXPECT_THROW(SendNode(std::string(MAX_SOCIAL_BODY_LENGTH + 1, 's'), MSG_SOCIAL_DIRECTORY_RSP,
+        MAX_SOCIAL_BODY_LENGTH + 1), std::length_error);
 }
 
 /** 验证声明长度不能超过源字符串实际长度。 */

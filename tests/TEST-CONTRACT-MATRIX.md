@@ -942,6 +942,7 @@ Qt 控件及资源存储报告的完整用例集合，保留自动控件与真�
 | Test ID | 入口 | 保护合同 |
 | --- | --- | --- |
 | Q06-SOCIAL-01 | message_storage.persistence / socialVersionsAndSummaries | 独立资料/关系版本、删除后搜索过滤、旧 outbox 不复活、摘要排序与重启 |
+| Q06-SOCIAL-02 | session_reset.social_lifecycle | 社交请求关联、超时、销毁及账号隔离；关系落盘就绪独立于申请列表 |
 | Q06-DRAFT-01 | composer.interaction / conversationDrafts | 跨会话原生草稿、附件、撤销与重做 |
 | Q06-SUMMARY-01 | conversation_attention.widgets；localHistorySearchWidgets | 最近活动排序、未加载会话提醒与正文复制 |
 | S08-SOCIAL-01 | message-sync/integration.py / tcp_flow | 生产 TCP 资料/好友全生命周期、旧版本拒绝、分页、长正文和安全投影 |

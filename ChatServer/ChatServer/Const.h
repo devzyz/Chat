@@ -4,6 +4,7 @@
 #define MAX_LENGTH 1024 * 2
 // Only server history/sync responses may use the full uint16 wire body length.
 constexpr unsigned int MAX_HISTORY_BODY_LENGTH = 0xffff;
+constexpr unsigned int MAX_SOCIAL_BODY_LENGTH = 8192;
 #define MAX_RECVQUE 10000
 #define MAX_SENDQUE 1000
 #define MAX_DEALQUE 1000
@@ -77,8 +78,16 @@ enum MSG_IDS {
     MSG_GROUP_MANAGE_RSP = 1039,
     MSG_FRIEND_REMARK_REQ = 1040,
     MSG_FRIEND_REMARK_RSP = 1041,
+    MSG_SOCIAL_DIRECTORY_RSP = 1047,
 	MSG_LOAD_CHAT_MESSAGE_RSP = 1028, // 增量加载部分聊天记录回包
 };
+
+/** @brief 历史和社交目录读响应分别允许扩展包长，其余消息仍限 2 KiB。 */
+inline unsigned int ResponseBodyLimit(unsigned short message_id) {
+    if (message_id == MSG_LOAD_CHAT_MESSAGE_RSP) return MAX_HISTORY_BODY_LENGTH;
+    if (message_id == MSG_SOCIAL_DIRECTORY_RSP) return MAX_SOCIAL_BODY_LENGTH;
+    return MAX_LENGTH;
+}
 
 #define USER_IP_PREFIX "uip_"
 #define USER_TOKEN_PREFIX "utoken_"

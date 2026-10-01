@@ -328,6 +328,21 @@ def tcp_flow(directory, mysql_command, mysql_port):
         send(sender,1016,large); committed=receive(sender,1017)["uuid_msgId"][0]["message_id"]
         assert receive(receiver,1018)["chat_id"] == 201
         assert sync(receiver,committed-1)["msgs"][0]["content"] == "z"*1850
+        # Each legal UTF-8 field fits its write frame, their combined read row exceeds the ordinary frame limit.
+        social(sender,1042,name="名"*255,description="述"*255,expected_revision="2")
+        social(receiver,1044,operation="delete",target_uid=7,expected_revision="3")
+        outgoing=social(sender,1046,kind="profile",target_uid=8)["profile"]["outgoing_revision"]
+        social(sender,1044,operation="apply",target_uid=8,expected_revision=outgoing,description="请"*255,backname="备"*255)
+        applications=social(receiver,1046,kind="applications",after="0")["items"]
+        assert applications[0]["description"] == "请"*255 and applications[0]["applydescription"] == "述"*255
+        social(sender,1042,name="名"*255,description="新"*255,expected_revision="3")
+        version=applications[0]["application_revision"]
+        social(receiver,1044,operation="accept",target_uid=7,expected_revision=version,description="",backname="注"*255)
+        relation=social(receiver,1046,kind="profile",target_uid=7)["profile"]
+        assert relation["name"] == "名"*255 and relation["description"] == "新"*255 and relation["backname"] == "注"*255
+        contacts=social(receiver,1046,kind="contacts",after="0")["items"]
+        assert contacts[0]["uid"] == 7 and contacts[0]["backname"] == "注"*255
+        print("Social UTF-8: complete oversized application/contact/profile records passed")
         seeds="USE message_sync_test;"
         for uid in range(20,36):
             seeds+=f"INSERT INTO user(uid,name,email,password,description,icon,sex) VALUES({uid},'page{uid}','page{uid}@example.invalid','','','',0);"

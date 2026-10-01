@@ -253,8 +253,8 @@ ChatDialog::ChatDialog(QWidget *parent)
         _b_chat_loading = false;
         refreshConversationAttention();
     });
-    connect(messages, &MessageService::directoryChanged, this,
-        /** @brief 目录已提交后刷新完整排序，不以旧 ID 分页边界遗漏活跃会话。 */
+    const auto refreshDirectory =
+        /** @brief 目录恢复或提交后统一刷新排序与待处理申请提醒。 */
         [this,messages](const QJsonObject &directory) {
             messages->loadConversationSummaries();
             for (const auto &value : directory["applications"].toArray()) {
@@ -263,18 +263,9 @@ ChatDialog::ChatDialog(QWidget *parent)
                 if (_mode != ChatUIMode::ContactMode) ui->side_user_label->showRedPoint(true);
                 break;
             }
-        });
-    connect(messages, &MessageService::directoryRestored, this,
-        /** @brief 重启恢复的会话采用同一个存储摘要查询。 */
-        [this,messages](const QJsonObject &directory) {
-            messages->loadConversationSummaries();
-            for (const auto &value : directory["applications"].toArray()) {
-                if (value.toObject()["status"].toInt(-1) != 0) continue;
-                ui->contact_user_list->showRedPoint(true);
-                if (_mode != ChatUIMode::ContactMode) ui->side_user_label->showRedPoint(true);
-                break;
-            }
-        });
+        };
+    connect(messages, &MessageService::directoryChanged, this, refreshDirectory);
+    connect(messages, &MessageService::directoryRestored, this, refreshDirectory);
     connect(messages, &MessageService::messagesChanged, messages,
         /** @brief 消息变化触发摘要及时间刷新，回执不修改排序时间。 */
         [messages](int) { messages->loadConversationSummaries(); });

@@ -1,6 +1,7 @@
 #include "clientsession.h"
 #include "messageservice.h"
 #include <QTemporaryDir>
+#include <QScopeGuard>
 #include "global.h"
 #include "tcpmgr.h"
 #include "userdata.h"
@@ -36,6 +37,8 @@ private slots:
     void retryDoesNotCrossAuthenticatedAccounts();
     /** @brief 验证重连认证后沿用原 UUID 和业务载荷，仅递增发送尝试。 */
     void reconnectResendsIdenticalWirePayloadAfterAuthentication();
+    /** @brief 验证社交读取落盘、回包关联、超时与账号生命周期隔离。 */
+    void socialRequestsRespectSessionLifecycle();
 };
 
 void SessionResetTests::initTestCase()
@@ -319,6 +322,99 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
     QCOMPARE(replayBody.take("attempt_id").toString(), QString("2"));
     QCOMPARE(originalBody, replayBody);
     tcp->resetConnection(true);
+}
+
+void SessionResetTests::socialRequestsRespectSessionLifecycle()
+{
+    QTemporaryDir directory;
+    auto tcp = TcpMgr::instance();
+    auto user = UserMgr::instance();
+    const auto oldGate = gate_url_prefix;
+    const auto cleanup = qScopeGuard(/** @brief 失败路径也清理本次账号状态并恢复应用配置。 */ [&] {
+        tcp->resetConnection(true); user->resetSession(); gate_url_prefix = oldGate;
+    });
+    gate_url_prefix.clear(); tcp->resetConnection(true); user->resetSession();
+    QSignalSpy requests(tcp.get(), &TcpMgr::sendRequested);
+    const auto deliver = /** @brief 通过生产业务回包入口注入合成服务响应。 */ [&](ReqId id, QJsonObject row) {
+        const auto bytes = QJsonDocument(row).toJson(QJsonDocument::Compact);
+        tcp->handleMessage(id, bytes.size(), bytes);
+    };
+    const auto latest = /** @brief 读取最近发送的社交请求，跳过消息同步等其他事件。 */ [&] {
+        for (auto it = requests.crbegin(); it != requests.crend(); ++it)
+            if ((*it)[0].value<ReqId>() == ID_SOCIAL_DIRECTORY_REQ)
+                return QJsonDocument::fromJson((*it)[1].toByteArray()).object();
+        return QJsonObject{};
+    };
+    const auto login = /** @brief 协商生产社交能力并将存储限定到临时账号目录。 */ [&](int uid) {
+        tcp->beginSession();
+        deliver(ID_CHAT_LOGIN_RSP, {{"error",0},{"uid",uid},{"capabilities",QJsonArray{"basic_social_v1"}}});
+        user->messages()->start(directory.path() + "/" + QString::number(uid), uid, false, true);
+    };
+    login(101); QVERIFY(tcp->supportsSocial());
+    auto *service = user->messages();
+    QSignalSpy changed(service, &MessageService::directoryChanged);
+    auto profile = latest(); QCOMPARE(profile["kind"].toString(), QString("profile"));
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",profile["request_id"]},{"error",0},
+        {"profile",QJsonObject{{"id",101},{"uid",101},{"name","owner"},{"profile_revision","1"}}}});
+    QTRY_COMPARE(latest()["kind"].toString(), QString("contacts"));
+    QVERIFY(!service->socialReady());
+    auto contacts = latest();
+    const QJsonObject peer{{"id",102},{"uid",102},{"name",QString(255,QChar(0x540d))},
+        {"description",QString(255,QChar(0x8ff0))},{"backname",QString(255,QChar(0x5907))},
+        {"chat_id",501},{"profile_revision","1"},{"relationship_active",true},{"relationship_revision","1"}};
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",contacts["request_id"]},{"error",0},
+        {"items",QJsonArray{peer}},{"load_more",true},{"next","102"}});
+    QTRY_COMPARE(latest()["after"].toString(), QString("102"));
+    QVERIFY(!service->socialReady());
+    contacts = latest();
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",contacts["request_id"]},{"error",0},
+        {"items",QJsonArray{}},{"load_more",false}});
+    QTRY_COMPARE(latest()["kind"].toString(), QString("applications"));
+    QVERIFY(service->socialReady());
+    QCOMPARE(user->friendById(102)->_name, peer["name"].toString());
+    auto applications = latest();
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",applications["request_id"]},{"error",1},{"social_error","StorageUnavailable"}});
+    QVERIFY(service->socialReady()); // An application-list failure must not block authorized chats.
+
+    QObject receiver;
+    int completed = 0;
+    QJsonObject terminal;
+    const auto accept = /** @brief 记录当前接收者看到的唯一终态。 */ [&](QJsonObject response) {
+        ++completed; terminal = response;
+    };
+    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, &receiver, accept);
+    const auto request = latest();
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id","unknown"},{"error",0}});
+    deliver(ID_PROFILE_UPDATE_RSP, {{"request_id",request["request_id"]},{"error",0}});
+    QCOMPARE(completed,0);
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",request["request_id"]},{"error",0}});
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",request["request_id"]},{"error",0}});
+    QCOMPARE(completed,1);
+    int destroyedCallbacks = 0;
+    auto removed = std::make_unique<QObject>();
+    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, removed.get(),
+        /** @brief 已销毁接收者不得收到完成或超时。 */ [&](QJsonObject) { ++destroyedCallbacks; });
+    const auto abandoned = latest(); removed.reset();
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",abandoned["request_id"]},{"error",0}});
+    QCOMPARE(destroyedCallbacks,0);
+    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, &receiver, accept);
+    const auto timedOut = latest();
+    QTRY_COMPARE_WITH_TIMEOUT(completed,2,15000);
+    QCOMPARE(terminal["social_error"].toString(),QString("Timeout"));
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",timedOut["request_id"]},{"error",0}});
+    QCOMPARE(completed,2);
+    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, &receiver, accept);
+    const auto old = latest();
+    tcp->resetConnection(true); tcp->resetConnection(true); user->resetSession();
+    login(202);
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",old["request_id"]},{"error",0}});
+    QCOMPARE(completed,2);
+    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, &receiver, accept);
+    const auto fresh = latest();
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",fresh["request_id"]},{"error",0}});
+    QCOMPARE(completed,3); QCOMPARE(destroyedCallbacks,0);
+    tcp->resetConnection(true);
+    QTRY_VERIFY(!QFileInfo::exists(directory.path() + "/202/messages.lock"));
 }
 
 QTEST_MAIN(SessionResetTests)

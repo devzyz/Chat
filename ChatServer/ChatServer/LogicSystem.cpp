@@ -70,7 +70,7 @@ void LogicSystem::RegisterCallbacks() {
                 if (!session->SupportsSocial()) response["social_error"] = "UpgradeRequired";
                 else MysqlMgr::GetInstance()->SocialRequest(session->AuthenticatedUid(),request,id,response);
             }
-            if (messaging::CompactJson(response).size()>2048) {
+            if (messaging::CompactJson(response).size() > ResponseBodyLimit(id + 1)) {
                 auto key=response["request_id"]; response=Json::Value(); response["request_id"]=key;
                 response["error"]=ErrorCodes::Error_Json; response["social_error"]="ResponseTooLarge";
             }

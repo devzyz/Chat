@@ -103,7 +103,7 @@ def wait_port(value, process):
 
 
 def send(sock, message_id, value):
-    body = json.dumps(value, separators=(",", ":")).encode()
+    body = json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode()
     sock.sendall(struct.pack("!HH", message_id, len(body)) + body)
 
 
@@ -116,7 +116,7 @@ def receive(sock, expected, success=True):
             result += part
         return result
     message_id, length = struct.unpack("!HH", exact(4))
-    assert length <= 2048, (message_id, length)
+    assert length <= (65535 if message_id == 1028 else 8192 if message_id == 1047 else 2048), (message_id, length)
     body = json.loads(exact(length))
     assert message_id == expected, (message_id, expected, body)
     assert (body.get("error", 0) == 0) == success, body

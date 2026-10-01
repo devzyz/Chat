@@ -18,8 +18,9 @@ QVector<DecodedTcpFrame> TcpFrameDecoder::append(const QByteArray &bytes)
         stream >> messageId;
         stream >> bodyLength;
 
-        // History/sync replies may use the full uint16 frame; requests stay bounded.
-        if (messageId != 1028 && bodyLength > maxBodyBytes()) {
+        // Only bounded read replies may exceed the ordinary 2 KiB frame.
+        const qsizetype limit = messageId == 1028 ? 65535 : messageId == 1047 ? 8192 : maxBodyBytes();
+        if (bodyLength > limit) {
             _buffer.clear();
             _error = true;
             break;
