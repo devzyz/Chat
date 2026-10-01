@@ -37,3 +37,9 @@ and destruction with pending work. The model case verifies that attachment updat
 
 `groupPanelTcpRefreshRevision` 经过真实 `TcpMgr::handleMessage` → SQLite → 目录变化 →
 业务回包链路，验证资料从旧版本一次刷新到新版本，且重新入群后的旧代次回包不能恢复操作。
+
+`resumeUploadAndDownload` 同时验证编辑器文本/附件/文本经生产提交控制器、真实 HTTP 和临时 SQLite 依次落盘；`incomingAttachmentAndPageLifetime` 验证发送按钮及 Enter 的实际页面接线。用例数量不变，保留原上传续传/摘要和销毁断言。
+
+提交控制器组合回归在首段文本落盘、附件上传至少一个块后关闭真实 HTTP 服务，再使用同一目录和端口重启；重试必须从已确认偏移继续，最终只产生三条有序消息。测试 host 的可选端口参数仅用于这一隔离恢复场景。
+
+`searchCancellationWidgets` 注册为默认 Component 入口 `user_search.widgets`，保护真实等待窗 Esc 取消、立即重试和账号切换后的旧结果隔离。它只使用临时 SQLite，不启动资源服务。

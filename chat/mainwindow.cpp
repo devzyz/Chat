@@ -2,6 +2,9 @@
 #include "./ui_mainwindow.h"
 #include "tcpmgr.h"
 #include <QMessageBox>
+#include <QCloseEvent>
+#include "usermgr.h"
+#include "submissionexitguard.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -150,6 +153,8 @@ void MainWindow::connectionClose(bool expectedClose)
 
 bool MainWindow::resetSession(SessionResetReason reason)
 {
+    if ((reason == SessionResetReason::Logout || reason == SessionResetReason::SwitchAccount)
+        && !confirmSubmissionExit(this, UserMgr::instance()->hasPendingSubmissions())) return false;
     if (!_session.resetSession(reason)) {
         return false;
     }
@@ -184,4 +189,12 @@ void MainWindow::offlineLogin()
     connect(_login_dlg, &LoginDialog::loginSucceeded,
             this, &MainWindow::loginSwitchChat);
     _ui_status = UIStatus::LOGIN_UI;
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if (!confirmSubmissionExit(this, UserMgr::instance()->hasPendingSubmissions())) {
+        event->ignore(); return;
+    }
+    QMainWindow::closeEvent(event);
 }

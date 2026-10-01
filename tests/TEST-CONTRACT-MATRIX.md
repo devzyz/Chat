@@ -922,3 +922,17 @@ Q05-STORE-15..17 在 [message-storage](../chat/tests/message-storage/README.md) 
 合同上增加真实四账号群与 ResourceServer 流程；报告及同 SHA/清理门禁见
 [服务验收](services/README.md#按需首版真实环境验收)。`widgetEvidence.js` 单独校验现有
 Qt 控件及资源存储报告的完整用例集合，保留自动控件与真实服务、人工桌面的证据边界。
+
+## Qt 草稿与用户搜索修复
+
+| Test ID | 入口 | 保护合同 |
+| --- | --- | --- |
+| Q05-COMPOSER-01 | composer.interaction | 原生粘贴、附件剪切粘贴、后台准备、撤销分支资源释放、落盘失败原 UUID 重试、取消后唯一所有权、退出提示 Cancel 及控件激活 |
+| Q05-COMPOSER-02 | composer.byte_budget | JSON UTF-8 字节预算与 Unicode 无损拆分 |
+| Q05-COMPOSER-03 | composer.upload_failure | 真实 HTTP 连接失败、部分成功后重试/取消、账号停止与重新登录后的旧通知隔离 |
+| Q05-SEARCH-01 | user_search.lifecycle | 超时、取消、断线、旧回包、无编号兼容提示、重复结果及销毁 |
+| Q05-SEARCH-02 | user_search.loopback | 真实 TCP 帧携带请求编号，生产解帧后关联结果 |
+| Q05-SEARCH-03 | user_search.widgets | 真实等待窗 Esc 取消、立即重试、销毁及账号切换后旧结果隔离 |
+| S06-SEARCH-01 | message-sync/integration.py tcp_flow | 生产 ChatServer 搜索编号的成功/错误回传及旧请求兼容 |
+
+既有资源 HTTP 续传用例扩展文本/附件组合提交、服务中断重启后的偏移续传与有序落盘断言；既有页面生命周期用例补发送按钮/快捷键接线。报告计数以 runner 为准，真实服务与替身证据分开记录。

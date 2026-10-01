@@ -15,7 +15,7 @@ LoadingDialog::LoadingDialog(QWidget *parent)
     // 当前窗口的尺寸跟父窗口一样大
     setFixedSize(parent->size());
     // 启动动画
-    QMovie * movie = new QMovie(":/res/loading.gif");
+    QMovie * movie = new QMovie(":/res/loading.gif", QByteArray(), this);
     ui->loading_label->setMovie(movie);
     movie->start();
 }

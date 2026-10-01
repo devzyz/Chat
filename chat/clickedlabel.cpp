@@ -3,6 +3,7 @@
 ClickedLabel::ClickedLabel(QWidget* parent) : QLabel(parent), _curState(ClickLabelState::Normal){
     // 进入后鼠标选中为手
     this->setCursor(Qt::PointingHandCursor);
+    setFocusPolicy(Qt::StrongFocus);
 }
 /**
  * @brief ClickedLabel::mousePressEvent
@@ -10,45 +11,17 @@ ClickedLabel::ClickedLabel(QWidget* parent) : QLabel(parent), _curState(ClickLab
  *
  * 鼠标左键按压处理
  */
-void ClickedLabel::mousePressEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
-        if(_curState == ClickLabelState::Normal){
-            _curState = ClickLabelState::Selected;
-            setProperty("state",_select_press);
-            repolish(this);
-            update();
-        }else{
-            _curState = ClickLabelState::Normal;
-            setProperty("state",_normal_press);
-            repolish(this);
-            update();
-        }
-        return ;
-    }
-
-    // 调用基类的mousePressEvent以保证正常的事件处理
+void ClickedLabel::mousePressEvent(QMouseEvent *event)
+{
+    _activation.press(this, event);
     QLabel::mousePressEvent(event);
 }
 
 // 点击后的释放事件，只需要转换为对应的hover状态即可
 /** @brief 响应鼠标释放，更新选中样式并发出点击信号。 */
-void ClickedLabel::mouseReleaseEvent(QMouseEvent * event)
+void ClickedLabel::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton) {
-        if(_curState == ClickLabelState::Normal){
-            setProperty("state",_normal_hover);
-            repolish(this);
-            update();
-        }else{
-            setProperty("state",_select_hover);
-            repolish(this);
-            update();
-        }
-        emit clicked();
-        return ;
-    }
-
-    // 调用基类的mousePressEvent以保证正常的事件处理
+    if (_activation.release(this, event)) { setCurState(_curState == Normal ? Selected : Normal); emit clicked(); }
     QLabel::mouseReleaseEvent(event);
 }
 
@@ -135,4 +108,19 @@ void ClickedLabel::resetNormalState()
     _curState = ClickLabelState::Normal;
     setProperty("state", _normal_leave);
     repolish(this);
+}
+
+void ClickedLabel::keyPressEvent(QKeyEvent *event)
+{
+    if (_activation.keyPress(event)) { event->accept(); return; }
+    QLabel::keyPressEvent(event);
+}
+void ClickedLabel::keyReleaseEvent(QKeyEvent *event)
+{
+    if (_activation.keyRelease(event)) { setCurState(_curState == Normal ? Selected : Normal); emit clicked(); event->accept(); return; }
+    QLabel::keyReleaseEvent(event);
+}
+void ClickedLabel::focusOutEvent(QFocusEvent *event)
+{
+    _activation.cancel(); QLabel::focusOutEvent(event);
 }

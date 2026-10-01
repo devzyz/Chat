@@ -5,9 +5,12 @@
 
 TimerBtn::TimerBtn(QWidget *parent) : QPushButton(parent), _counter(10){
     _timer = new QTimer(this);
+    connect(this, &QPushButton::clicked, this, /** @brief 有效鼠标或键盘点击后才启动倒计时。 */ [this] {
+        setEnabled(false); setText(QString::number(_counter)); _timer->start(1000);
+    });
 
     // 连接定时器的触发信号，与一个lambda槽函数
-    connect(_timer, &QTimer::timeout,
+    connect(_timer, &QTimer::timeout, this,
         /** @brief 更新验证码倒计时，到时恢复可点击状态。 */
         [this]() {
         _counter --;
@@ -24,18 +27,4 @@ TimerBtn::TimerBtn(QWidget *parent) : QPushButton(parent), _counter(10){
 
 TimerBtn::~TimerBtn() {
     _timer->stop();
-}
-
-void TimerBtn::mouseReleaseEvent(QMouseEvent *e) {
-    if (e->button() == Qt::LeftButton) {
-        // 触发鼠标释放事件
-        SPDLOG_DEBUG("timer button released");
-        this->setEnabled(false);
-        this->setText(QString::number(_counter));
-        _timer->start(1000);
-        emit clicked();
-    }
-
-    // 调用基类的mouseReleaseEvent以确保正常的事件处理（如点击效果）
-    QPushButton::mouseReleaseEvent(e);
 }

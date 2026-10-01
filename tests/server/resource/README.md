@@ -23,6 +23,8 @@ focused option does not claim production Redis/Status or TCP-flow coverage.
 - `stream_integration.py`: real HTTP Keep-Alive, partial request interruption, offset recovery, Range downloads,
   and a generated ten-second AVI (25 fps, 250 frames). Verify source/download SHA-256 and decode every frame.
   Authentication is a deterministic test-host fake, never available in the production executable.
+  `ResourceTests --serve-test <directory> [port]` accepts an optional loopback port so the Qt
+  submission test can restart the same isolated HTTP endpoint and verify resume after failure.
   Also covers generic attachment bytes, avatar owner/reader permissions, incomplete publication,
   malformed PNG, invalid dimensions and preservation of the previous avatar after rejection.
 - `catalog_integration.py`: creates and initializes its own loopback MySQL directory, applies the complete

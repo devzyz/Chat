@@ -2,6 +2,7 @@
 #define CLICKEDLABEL_H
 
 #include <QLabel>
+#include "clickactivation.h"
 #include "global.h"
 #include "QMoveEvent"
 
@@ -47,6 +48,15 @@ private:
 
     ClickLabelState _curState;
 
+protected:
+    /** @brief 记录键盘激活，不在按下时改变业务状态。 */
+    void keyPressEvent(QKeyEvent *event) override;
+    /** @brief 有效键盘释放触发一次操作。 */
+    void keyReleaseEvent(QKeyEvent *event) override;
+    /** @brief 失焦取消未完成的操作。 */
+    void focusOutEvent(QFocusEvent *event) override;
+private:
+    ClickActivation _activation;
 signals:
     /** @brief 通知用户完成一次有效点击。 */
     void clicked();

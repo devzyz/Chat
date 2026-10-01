@@ -1,4 +1,5 @@
 #include "chatpage.h"
+#include "messagesubmissioncontroller.h"
 #include "grouppanel.h"
 #include "clientmessage.h"
 #include "clientrequests.h"
@@ -83,6 +84,34 @@ ChatPage::ChatPage(QWidget *parent)
     _readTracker = new MessageReadTracker(ui->chat_detail_data_list);
     connect(_readTracker, &MessageReadTracker::observed, UserMgr::instance()->messages(), &MessageService::observeRead);
     initResourceTransfers();
+    ui->chat_edit->setAccountRoot(UserMgr::instance()->storageRoot());
+    connect(ui->chat_edit, &MessageTextEdit::send, this, &ChatPage::on_send_btn_clicked);
+    connect(ui->chat_edit, &MessageTextEdit::inputRejected, this,
+        /** @brief 保留草稿并显示输入失败原因。 */ [this](const QString &reason) {
+        QMessageBox::information(this, tr("输入未接收"), reason);
+    });
+    auto *submission = UserMgr::instance()->submissions();
+    auto *status = new QLabel(this);
+    status->setWordWrap(true);
+    auto *retry = new QPushButton(tr("重试提交"), this);
+    auto *cancel = new QPushButton(tr("取消未提交内容"), this);
+    ui->horizontalLayout_3->addWidget(status);
+    ui->horizontalLayout_3->addWidget(retry);
+    ui->horizontalLayout_3->addWidget(cancel);
+    const auto refresh = /** @brief 页面重建时恢复账号任务进度及操作入口。 */ [submission, status, retry, cancel] {
+        status->setText(submission->status());
+        status->setToolTip(submission->pendingSummary());
+        retry->setVisible(submission->isFailed());
+        cancel->setVisible(submission->hasPending());
+    };
+    connect(submission, &MessageSubmissionController::stateChanged, this, refresh);
+    connect(retry, &QPushButton::clicked, submission, &MessageSubmissionController::retry);
+    connect(cancel, &QPushButton::clicked, submission, &MessageSubmissionController::cancel);
+    connect(submission, &MessageSubmissionController::rejected, this,
+        /** @brief 提交拒绝保持编辑器原内容并说明原因。 */ [this](const QString &reason) {
+        QMessageBox::information(this, tr("未提交"), reason);
+    });
+    refresh();
     connect(ui->chat_detail_data_list, &ChatDetailList::viewportResized, this,
         /** @brief 视口变化时清空尺寸缓存并重新布局。 */
         [this]() {
@@ -326,62 +355,11 @@ void ChatPage::paintEvent(QPaintEvent *event)
 
 void ChatPage::on_send_btn_clicked()
 {
-    if (!_chatInfo) {
-        SPDLOG_WARN("send ignored because chat information is empty");
-        return;
-    }
-
-    const auto selfInfo = UserMgr::instance()->userInfo();
-    if (!selfInfo) {
-        return;
-    }
-
-    const QVector<MsgInfo> &messages = ui->chat_edit->getMsgList();
-    int textLength = 0;
-    QJsonArray textArray;
-
-    auto sendTextBatch =
-        /** @brief 同步打包当前文本数组并发送，引用捕获不离开本次函数调用。 */
-        [this, selfInfo, &textArray, &textLength]() {
-        if (textArray.isEmpty()) {
-            return;
-        }
-        const QByteArray data = clientTextRequest(selfInfo->_uid, _chatInfo->getUid(),
-                                                  _chatInfo->getChatId(), textArray);
-        auto request = QJsonDocument::fromJson(data).object();
-        if (_chatInfo->getChatType() == ChatType::GROUP) request["chat_type"] = "group";
-        UserMgr::instance()->messages()->send(request);
-        textLength = 0;
-        textArray = QJsonArray();
-    };
-
-    for (const auto &message : messages) {
-        if (message.msgFlag != QStringLiteral("text") || message.content.isEmpty()
-            || message.content.length() > 1024) {
-            // Image/video/file records are represented by MessageType but upload is not part of this phase.
-            continue;
-        }
-
-        if (textLength + message.content.length() > 1024) {
-            sendTextBatch();
-        }
-
-        const QString uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        QJsonObject payload;
-        payload["msg_content"] = message.content;
-        payload["msg_uuid"] = uuid;
-        textArray.append(payload);
-        textLength += message.content.length();
-
-        auto textMessage = std::make_shared<TextChatData>(
-            uuid, _chatInfo->getChatId(), _chatInfo->getChatType(),
-            ChatMessageType::TEXT_TYPE, message.content, selfInfo->_uid,
-            QTime::currentTime());
-        appendChatMsg(textMessage);
-        emit outgoingTextQueued(uuid, textMessage);
-    }
-
-    sendTextBatch();
+    if (!_chatInfo) return;
+    const auto draft = ui->chat_edit->draft();
+    if (UserMgr::instance()->submissions()->submit(draft, _currentChatId,
+            _chatInfo->getUid(), _chatInfo->getChatType() == ChatType::GROUP))
+        ui->chat_edit->clearAccepted(draft.id);
 }
 
 void ChatPage::requestOlderHistory()

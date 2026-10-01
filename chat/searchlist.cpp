@@ -11,7 +11,7 @@
 #include "usermgr.h"
 
 SearchList::SearchList(QWidget * parent)
-    : QListWidget(parent) , _find_dialog(nullptr), _search_edit(nullptr), _send_pending(false) {
+    : QListWidget(parent) , _find_dialog(nullptr), _send_pending(false) {
     Q_UNUSED(parent);
 
     new ListViewBehavior(this);
@@ -22,25 +22,16 @@ SearchList::SearchList(QWidget * parent)
     addTipItem();
 
     // 连接搜索条目
-    connect(TcpMgr::instance().get(), &TcpMgr::userSearchFinished, this, &SearchList::tcpSearchUserFinish);
+
 }
 
 void SearchList::closeFindDialog()
 {
     if (_find_dialog) {
-        _find_dialog->hide(); // 隐藏如果其他地方没有使用，则会析构
+        _find_dialog->hide();
+        _find_dialog->deleteLater();
         _find_dialog = nullptr;
     }
-}
-
-/**
- * @brief SearchList::setSearchEdit
- * @param edit
- * 设置当前搜索框
- */
-void SearchList::setSearchEdit(QWidget *edit)
-{
-    _search_edit = edit;
 }
 
 /**
@@ -50,16 +41,19 @@ void SearchList::setSearchEdit(QWidget *edit)
  */
 void SearchList::waitPending(bool pending)
 {
+    if (_send_pending == pending) return;
+    _send_pending = pending;
     if (pending) {
         _loadingDialog = new LoadingDialog(this);
-        _loadingDialog->setModal(true);
+        connect(_loadingDialog, &QDialog::rejected, this, &SearchList::cancelSearch);
         _loadingDialog->show();
-        _send_pending = true;
-    }else {
-        _loadingDialog->hide();
-        _loadingDialog->deleteLater();
-        _send_pending = false;
+    } else if (_loadingDialog) {
+        _loadingDialog->hide(); _loadingDialog->deleteLater(); _loadingDialog.clear();
     }
+}
+void SearchList::cancelSearch()
+{
+    emit searchCancelled();
 }
 
 // 添加测试提示
@@ -112,22 +106,7 @@ void SearchList::itemClicked(QListWidgetItem *item)
             return ;
         }
 
-        if (!_search_edit) {
-            return ;
-        }
-
-        // 添加一个正在等待的函数
-        waitPending(true);
-        // 准备发送tcp请求
-        auto search_edit = dynamic_cast<CustomizeEdit*> (_search_edit);
-        // 支持通过uid/name两种方式，当输入全为数字，判定为uid，否则判定为name
-        auto uid_name = search_edit->text();
-        QJsonObject jsonObj;
-        jsonObj["uid_name"] = uid_name;
-        // 将json数据转换为字节流数据
-        QJsonDocument doc(jsonObj);
-        QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-        emit TcpMgr::instance()->sendRequested(ReqId::ID_SEARCH_USER_REQ, jsonData);
+        emit searchRequested();
 
         return ;
     }
@@ -144,9 +123,9 @@ void SearchList::itemClicked(QListWidgetItem *item)
 void SearchList::tcpSearchUserFinish(std::shared_ptr<SearchInfo> si)
 {
     // 网络请求结束，停止等待
-    waitPending(false);
+    closeFindDialog();
     if (si == nullptr) {
-        _find_dialog = std::make_shared<FindFailDialog> (this);
+        _find_dialog = new FindFailDialog(this);
     }else {
         // 搜索到用户，存在三种逻辑，一不是我的好友，二是我的好友，三是我自己
         // 是我自己, 直接返回，不做处理
@@ -163,9 +142,9 @@ void SearchList::tcpSearchUserFinish(std::shared_ptr<SearchInfo> si)
         }
 
         // 不是我的好友逻辑
-        _find_dialog = std::make_shared<FindSuccessDialog> (this);
+        _find_dialog = new FindSuccessDialog(this);
         // 设置一下搜索成功的弹出框的信息
-        std::dynamic_pointer_cast<FindSuccessDialog>(_find_dialog)->setSearchInfo(si);
+        qobject_cast<FindSuccessDialog*>(_find_dialog.data())->setSearchInfo(si);
     }
 
     _find_dialog->show();

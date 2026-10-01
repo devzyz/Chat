@@ -7,6 +7,7 @@
 StateWidget::StateWidget(QWidget *parent) : QWidget(parent), _curState(ClickLabelState::Normal)
 {
     setCursor(Qt::PointingHandCursor);
+    setFocusPolicy(Qt::StrongFocus);
     // 添加红点
     addRedPoint();
 }
@@ -109,17 +110,7 @@ void StateWidget::paintEvent(QPaintEvent *event)
  */
 void StateWidget::mousePressEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton) {
-        if (_curState == ClickLabelState::Normal) {
-            _curState = ClickLabelState::Selected;
-            setProperty("state", _select);
-            repolish(this);
-            update();
-        }
-
-        return ;
-    }
-    // 调用基类的鼠标按压事件
+    _activation.press(this, event);
     QWidget::mousePressEvent(event);
 }
 
@@ -130,12 +121,7 @@ void StateWidget::mousePressEvent(QMouseEvent *event)
  */
 void StateWidget::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton) {
-
-        emit clicked();
-        return ;
-    }
-    // 调用基类的鼠标按压事件
+    if (_activation.release(this, event)) { setSelected(true); emit clicked(); }
     QWidget::mouseReleaseEvent(event);
 }
 
@@ -165,4 +151,19 @@ void StateWidget::leaveEvent(QEvent *event)
         repolish(this);
         update();
     }
+}
+
+void StateWidget::keyPressEvent(QKeyEvent *event)
+{
+    if (_activation.keyPress(event)) { event->accept(); return; }
+    QWidget::keyPressEvent(event);
+}
+void StateWidget::keyReleaseEvent(QKeyEvent *event)
+{
+    if (_activation.keyRelease(event)) { setSelected(true); emit clicked(); event->accept(); return; }
+    QWidget::keyReleaseEvent(event);
+}
+void StateWidget::focusOutEvent(QFocusEvent *event)
+{
+    _activation.cancel(); QWidget::focusOutEvent(event);
 }

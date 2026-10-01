@@ -297,37 +297,43 @@ void LogicSystem::RegisterCallbacks() {
 
 	};
 
-	// 处理搜索用户的请求
-	_fun_callbacks[MSG_SEARCH_USER_REQ] = /** @brief 按查询条件搜索用户并形成响应。 */ [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) -> void{
-		// 解析msg_data对应的json数据
-		Json::Reader reader;
-		Json::Value root;
-		auto err = reader.parse(msg_data, root);
-		if (!err) {
-			SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
-			return;
-		}
+    // 处理搜索用户的请求
+    _fun_callbacks[MSG_SEARCH_USER_REQ] = /** @brief 按查询条件搜索用户并形成响应。 */ [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) -> void{
+        // 解析msg_data对应的json数据
+        Json::Reader reader;
+        Json::Value root;
+        auto err = reader.parse(msg_data, root);
+        if (!err || !root.isObject()) {
+            SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
+            return;
+        }
 
-		auto uid_name = root["uid_name"].asString();
-		SPDLOG_DEBUG("user search request, uid_name={}", uid_name);
+        Json::Value return_value;
+        Defer defer(/** @brief 在搜索处理退出时发送查询响应。 */ [this, &return_value, session, root]() {
+            if (root["request_id"].isString() && root["request_id"].asString().size() <= 64)
+                return_value["request_id"] = root["request_id"];
+            std::string return_str = return_value.toStyledString();
+            session->Send(return_str, MSG_SEARCH_USER_RSP);
+            });
 
-		Json::Value return_value;
-		Defer defer(/** @brief 在搜索处理退出时发送查询响应。 */ [this, &return_value, session]() {
-			std::string return_str = return_value.toStyledString();
-			session->Send(return_str, MSG_SEARCH_USER_RSP);
-			});
+        if (!root["uid_name"].isString() || root["uid_name"].asString().empty()
+            || (root.isMember("request_id") && (!root["request_id"].isString()
+                || root["request_id"].asString().empty() || root["request_id"].asString().size() > 64))) {
+            return_value["error"] = ErrorCodes::Error_Json;
+            return;
+        }
+        auto uid_name = root["uid_name"].asString();
+        // 用户可通过uid/name两种类型搜索，当只有数字时，判定通过uid搜索，否则判定为name搜索
+        bool b_digit = IsOnlyDigit(uid_name);
 
-		// 用户可通过uid/name两种类型搜索，当只有数字时，判定通过uid搜索，否则判定为name搜索
-		bool b_digit = IsOnlyDigit(uid_name);
+        if (b_digit) {
+            GetUserByUid(uid_name, return_value);
+        }
+        else {
+            GetUserByName(uid_name, return_value);
+        }
+    };
 
-		if (b_digit) {
-			GetUserByUid(uid_name, return_value);
-		}
-		else {
-			GetUserByName(uid_name, return_value);
-		}
-	};
-	
 	// 处理申请好友的请求
 	_fun_callbacks[MSG_ADD_FRIEND_REQ] = /** @brief 校验并保存好友申请，必要时通知对端。 */ [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
 		// 解析msg_data对应的json数据

@@ -11,6 +11,8 @@
 #include "avatarcache.h"
 class QLabel;
 class MessageService;
+class MessageSubmissionController;
+class ResourceTransferManager;
 
 /** @brief 管理当前账号的用户、好友与会话缓存，并持有账号级消息和头像服务。 */
 class UserMgr : public QObject, public Singleton<UserMgr>,
@@ -43,6 +45,10 @@ public:
     QString storageRoot() const;
     /** @brief 返回本对象持有的消息服务，调用方不负责释放。 */
     MessageService *messages() const { return _messages; }
+    /** @brief 返回账号提交控制器，首次访问创建；账号结束前有效。 */
+    MessageSubmissionController *submissions();
+    /** @brief 查询是否存在未落盘发送内容，不创建控制器。 */
+    bool hasPendingSubmissions() const;
 signals:
     /** @brief 通知指定用户的头像已变化。 */
     void avatarChanged(int uid);
@@ -93,6 +99,8 @@ public:
     /** @brief 按会话 ID 查询缓存资料，未找到时返回 nullptr。 */
     std::shared_ptr<ChatInfo> chatInfo(int chat_id);
 private:
+    MessageSubmissionController *_submissions = nullptr;
+    ResourceTransferManager *_uploads = nullptr;
     /** @brief 创建消息和头像服务，并在 Qt 退出前排空消息存储。 */
     UserMgr();
     /** @brief 使用数据库返回的目录值更新当前账号内存查询缓存。 */

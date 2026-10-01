@@ -1,4 +1,6 @@
 #include "chatdialog.h"
+#include "usersearchcontroller.h"
+#include <QMessageBox>
 #include "clientrequests.h"
 #include "logmgr.h"
 #include "ui_chatdialog.h"
@@ -83,8 +85,23 @@ ChatDialog::ChatDialog(QWidget *parent)
     // 默认隐藏
     showSearch(false);
 
-    // 将search_edit关联到，search_list中用于搜索逻辑的_search_edit
-    ui->search_list->setSearchEdit(ui->search_edit);
+    // 页面只负责查询输入和网络适配，等待与请求身份由控制器维护。
+    auto *search = new UserSearchController(this);
+    connect(ui->search_list, &SearchList::searchCancelled, search, &UserSearchController::cancel);
+    connect(ui->search_list, &SearchList::searchRequested, this,
+        /** @brief 搜索流程只接收文本，不借用输入控件。 */ [this, search] { search->search(ui->search_edit->text()); });
+    connect(search, &UserSearchController::requestReady, this,
+        /** @brief 适配现有 TCP 发送入口并保留请求编号。 */ [](const QJsonObject &request) {
+        emit TcpMgr::instance()->sendRequested(ID_SEARCH_USER_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
+    });
+    connect(TcpMgr::instance().get(), &TcpMgr::userSearchResponse, search, &UserSearchController::accept);
+    connect(TcpMgr::instance().get(), &TcpMgr::connectionClosed, search, &UserSearchController::disconnected);
+    connect(search, &UserSearchController::busyChanged, ui->search_list, &SearchList::waitPending);
+    connect(search, &UserSearchController::found, ui->search_list, &SearchList::tcpSearchUserFinish);
+    connect(search, &UserSearchController::failed, this,
+        /** @brief 搜索失败解除等待并显示原因。 */ [this](const QString &reason) {
+        QMessageBox::information(this, tr("搜索"), reason);
+    });
 
     // 当需要显示搜索框内的清除图标时，更改为实际的清除图标
     connect(ui->search_edit, &QLineEdit::textChanged,
@@ -301,6 +318,7 @@ bool ChatDialog::eventFilter(QObject *watched, QEvent *event)
  */
 void ChatDialog::showSearch(bool bsearch)
 {
+    if (!bsearch) ui->search_list->cancelSearch();
     if (bsearch) {
         ui->chat_user_list->hide();
         ui->contact_user_list->hide();

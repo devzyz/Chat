@@ -45,3 +45,5 @@ includes the authenticated retry alongside the existing HTTP/TCP transport cases
 Message persistence uses one component CTest entry (`message_storage.persistence`), covering persistence and receipt contracts in [message-storage](message-storage/README.md). Network-state coverage also checks full-size 1028 responses and the unchanged bound for other frames. The runner owns current aggregate counts.
 
 - [list-view](list-view/README.md)：Foundation / Component；五种列表共用的悬停、原生滚动和底部通知。
+
+- [composer](composer/README.md)：输入草稿、提交落盘及搜索请求身份；真实编辑器/SQLite 组件、JSON 字节预算单元和 TCP loopback 集成。

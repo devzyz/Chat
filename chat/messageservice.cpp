@@ -143,6 +143,7 @@ void MessageService::stop()
     QMetaObject::invokeMethod(_worker,
         /** @brief 在存储队列中关闭上一个账号连接。 */
         [worker = _worker] { worker->store.close(); }, Qt::QueuedConnection);
+    emit stopped();
 }
 
 void MessageService::registerChat(int chatId, bool group)
@@ -249,12 +250,16 @@ void MessageService::acceptSyncPage(const QJsonObject &response)
     });
 }
 
-void MessageService::send(QJsonObject request)
+void MessageService::send(QJsonObject request, DraftRetention retention)
 {
     if (request.value("chat_type") == "group" && !request.contains("membership_epoch"))
         request["membership_epoch"] = _groupStates.value(request["chat_id"].toInt())["membership_epoch"];
     const int chatId = request["chat_id"].toInt();
     if (!isActive() || request["from_uid"].toInt() != _uid || chatId <= 0) {
+        QVector<QString> ids;
+        for (const auto &value : request["text_array"].toArray())
+            ids.push_back(value.toObject()["msg_uuid"].toString());
+        emit outgoingPersisted(chatId, ids, false);
         emit failed(chatId, tr("尚未建立消息存储会话"));
         return;
     }
@@ -282,13 +287,17 @@ void MessageService::send(QJsonObject request)
         /** @brief 持久化成功后删除草稿错误并启动发送调度。 */
         [this, chatId, uuids] {
         for (const auto &uuid : uuids) _failedDrafts.remove(uuid);
+        emit outgoingPersisted(chatId, uuids, true);
         _outgoingTimer.start();
         emit messagesChanged(chatId);
         dispatchOutgoing();
     },
         /** @brief 持久化失败时保留草稿供用户重试并通知发送失败。 */
-        [this, chatId, uuids, request] {
-        for (const auto &uuid : uuids) _failedDrafts.insert(uuid, request);
+        [this, chatId, uuids, request, retention] {
+        if (retention == DraftRetention::Service) {
+            for (const auto &uuid : uuids) _failedDrafts.insert(uuid, request);
+        }
+        emit outgoingPersisted(chatId, uuids, false);
         emit sendFailed(chatId, uuids);
     });
 }

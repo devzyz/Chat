@@ -23,27 +23,8 @@ void ChatPage::initResourceTransfers()
     connect(_transfer, &ResourceTransferManager::failed, this,
         /** @brief 展示资源失败和续传提示并恢复文件按钮。 */
         [this](const QString& reason) {
-        ui->file_label->setToolTip(reason + tr("；重新选择同一文件可续传，双击消息可重试下载"));
+        ui->file_label->setToolTip(reason + tr("；双击消息可重试下载"));
         ui->file_label->resetNormalState();
-    });
-    connect(_transfer, &ResourceTransferManager::progress, this,
-        /** @brief 按已确认字节更新上传进度提示。 */
-        [this](qint64 done, qint64 total) {
-        ui->file_label->setToolTip(tr("上传 %1 / %2 字节；再次点击可暂停").arg(done).arg(total));
-    });
-    connect(_transfer, &ResourceTransferManager::uploaded, this,
-        /** @brief 上传完成后以原 UUID 创建资源消息并提交聊天发送。 */
-        [this](QJsonObject descriptor) {
-        const QString content = "@resource:v1:" + QString::fromUtf8(QJsonDocument(descriptor).toJson(QJsonDocument::Compact));
-        auto message = std::make_shared<TextChatData>(_uploadUuid, _uploadChat, _uploadRecipient == 0 ? ChatType::GROUP : ChatType::PRIVATE,
-            ChatMessageType::TEXT_TYPE, content, UserMgr::instance()->uid(), QTime::currentTime());
-        appendChatMsg(message);
-        QJsonObject payload{{"from_uid", UserMgr::instance()->uid()}, {"to_uid", _uploadRecipient},
-            {"chat_id", _uploadChat}, {"resource_id", descriptor["resource_id"]},
-            {"text_array", QJsonArray{QJsonObject{{"msg_uuid", _uploadUuid}, {"msg_content", content}}}}};
-        if (_uploadRecipient == 0) { payload["chat_type"] = "group"; payload["membership_epoch"] = _uploadEpoch; }
-        UserMgr::instance()->messages()->send(payload);
-        ui->file_label->setToolTip(tr("上传完成"));
     });
     connect(_transfer, &ResourceTransferManager::downloaded, this,
         /** @brief 下载完成后生成预览并更新对应消息资源路径。 */
@@ -99,16 +80,6 @@ void ChatPage::selectResource()
 {
     if (!_chatInfo) return;
     if (_chatInfo->getChatType() == ChatType::GROUP && UserMgr::instance()->messages()->groupState(_currentChatId)["group_state"] != "active") return;
-    if (_transfer->busy()) {
-        _transfer->cancel();
-        ui->file_label->setToolTip(tr("上传已暂停；重新选择同一文件继续"));
-        return;
-    }
-    const auto path = QFileDialog::getOpenFileName(this, tr("发送文件"), {},
-        tr("所有文件 (*);;图片和视频 (*.png *.jpg *.jpeg *.mp4 *.avi)"));
-    if (path.isEmpty()) return;
-    _uploadChat = _chatInfo->getChatId(); _uploadRecipient = _chatInfo->getUid();
-    _uploadEpoch = UserMgr::instance()->messages()->groupState(_uploadChat)["membership_epoch"].toString();
-    _uploadUuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    _transfer->upload(path);
+    const auto path = QFileDialog::getOpenFileName(this, tr("添加附件"), {}, tr("所有文件 (*)"));
+    if (!path.isEmpty()) ui->chat_edit->addAttachment(path);
 }

@@ -2,6 +2,8 @@
 #include "resourcetransfermanager.h"
 #include "messagelistmodel.h"
 #include "chatpage.h"
+#include "messagetextedit.h"
+#include "messagesubmissioncontroller.h"
 #include "grouppanel.h"
 #include <QTextEdit>
 #include "chatdetaillist.h"
@@ -16,11 +18,51 @@
 #include <QImage>
 #include <QRandomGenerator>
 #include <QFile>
+#include "chatdialog.h"
+#include "searchlist.h"
+#include "usersearchcontroller.h"
 
 /** @brief 验证资源传输、账号隔离和消息页面生命周期。 */
 class ResourceTransferTests : public QObject {
     Q_OBJECT
 private slots:
+    /** @brief 关闭真实搜索等待窗立即取消请求，迟到结果无效且可以重新搜索。 */
+    void searchCancellationWidgets() {
+        QTemporaryDir directory;
+        const auto user = UserMgr::instance();
+        user->setUserInfo(std::make_shared<UserInfo>(7, "owner", ""));
+        QSignalSpy restored(user->messages(), &MessageService::directoryRestored);
+        user->messages()->start(directory.path(), 7); QTRY_COMPARE(restored.size(), 1);
+        auto page = std::make_unique<ChatDialog>();
+        auto *search = page->findChild<UserSearchController *>(); QVERIFY(search);
+        auto *list = page->findChild<SearchList *>(); QVERIFY(list);
+        QSignalSpy busy(search, &UserSearchController::busyChanged);
+        QSignalSpy requests(search, &UserSearchController::requestReady);
+        QSignalSpy found(search, &UserSearchController::found);
+        search->search("fixture");
+        auto *waiting = list->findChild<LoadingDialog *>(); QVERIFY(waiting);
+        QTest::keyClick(waiting, Qt::Key_Escape);
+        QVERIFY(!busy.last()[0].toBool());
+        const auto oldId = requests.first()[0].toJsonObject().value("request_id");
+        search->search("retry");
+        search->accept({{"request_id", oldId}, {"error", 0}, {"uid", 9}, {"name", "late"}});
+        QVERIFY(found.isEmpty()); QVERIFY(busy.last()[0].toBool());
+        QPointer<UserSearchController> previousSearch(search);
+        const auto previousId = requests.last()[0].toJsonObject().value("request_id");
+        page.reset(); QVERIFY(previousSearch.isNull());
+        user->messages()->stop();
+        QTRY_VERIFY(!QFileInfo::exists(directory.path() + "/messages.lock"));
+        user->setUserInfo(std::make_shared<UserInfo>(8, "next", ""));
+        user->messages()->start(directory.path() + "/next", 8); QTRY_COMPARE(restored.size(), 2);
+        page = std::make_unique<ChatDialog>(); search = page->findChild<UserSearchController *>();
+        QSignalSpy nextBusy(search, &UserSearchController::busyChanged);
+        QSignalSpy nextFound(search, &UserSearchController::found);
+        search->search("new-account");
+        emit TcpMgr::instance()->userSearchResponse({{"request_id", previousId}, {"error", 0}, {"uid", 9}, {"name", "old"}});
+        QVERIFY(nextFound.isEmpty()); QVERIFY(nextBusy.last()[0].toBool());
+        search->cancel(); page.reset(); user->messages()->stop();
+        QTRY_VERIFY(!QFileInfo::exists(directory.path() + "/next/messages.lock"));
+    }
     /** @brief 验证未加载会话的持久化消息在列表分页和窗口重建后仍显示提醒。 */
     void conversationAttentionWidgets();
     /** @brief 验证会话历史分页搜索与真实滚动定位。 */
@@ -231,6 +273,10 @@ private slots:
     void incomingAttachmentAndPageLifetime() {
         UserMgr::instance()->setUserInfo(std::make_shared<UserInfo>(8, "receiver", ""));
         UserMgr::instance()->setToken("fixture-token");
+        QTemporaryDir account;
+        auto *messages = UserMgr::instance()->messages();
+        QSignalSpy ready(messages, &MessageService::directoryRestored);
+        messages->start(account.path(), 8); QTRY_COMPARE(ready.size(), 1);
         ChatPage page;
         QCOMPARE(page.findChildren<ResourceTransferManager*>().size(), 1);
         page.resize(600, 400);
@@ -250,6 +296,19 @@ private slots:
         QCOMPARE(model->rowCount(), 1);
         QCOMPARE(model->index(0, 0).data(MessageListModel::ResourceIdRole).toString(), QString("incoming-resource"));
         QCOMPARE(model->index(0, 0).data(MessageListModel::MessageTypeRole).toInt(), int(MessageType::Image));
+        auto *editor = page.findChild<MessageTextEdit*>("chat_edit");
+        auto *sendButton = page.findChild<QPushButton*>("send_btn");
+        QVERIFY(editor); QVERIFY(sendButton);
+        QSignalSpy persisted(messages, &MessageService::outgoingPersisted);
+        editor->setPlainText(QString::fromUtf8("页面发送😄"));
+        QTest::mouseClick(sendButton, Qt::LeftButton);
+        QVERIFY(editor->toPlainText().isEmpty()); QTRY_COMPARE(persisted.size(), 1);
+        QCOMPARE(persisted.first()[0].toInt(), 1); QVERIFY(persisted.first()[2].toBool());
+        QTRY_VERIFY(!UserMgr::instance()->hasPendingSubmissions());
+        editor->setPlainText("keyboard"); QTest::keyClick(editor, Qt::Key_Return);
+        QTRY_COMPARE(persisted.size(), 2);
+        messages->stop();
+        QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(account.path() + "/messages.lock"), 15000);
         // Destruction cancels pending attachment work before its widgets are released.
     }
     /** 验证设置附件缓存不会改变普通文本消息的展示角色。 */
@@ -316,6 +375,46 @@ private slots:
         QFile actual(downloaded.first()[1].toString()), expected(source);
         QVERIFY(actual.open(QIODevice::ReadOnly)); QVERIFY(expected.open(QIODevice::ReadOnly));
         QCOMPARE(actual.readAll(), expected.readAll());
+        // The production composer uploads attachments and only clears an accepted snapshot.
+        MessageService messages;
+        QSignalSpy ready(&messages, &MessageService::directoryRestored);
+        messages.start(directory.path() + "/messages", 7);
+        QTRY_COMPARE(ready.size(), 1);
+        ResourceTransferManager composerUploads(endpoint, 7, "fixture-token", directory.path() + "/composer-cache");
+        MessageSubmissionController submission(&messages, &composerUploads, 7);
+        MessageTextEdit editor;
+        editor.insertPlainText("before"); QVERIFY(editor.addAttachment(source)); editor.insertPlainText("after");
+        QTRY_VERIFY(!editor.hasPendingAttachments());
+        const auto draft = editor.draft();
+        QSignalSpy saved(&messages, &MessageService::outgoingPersisted);
+        QSignalSpy uploadedByComposer(&composerUploads, &ResourceTransferManager::uploaded);
+        bool interrupted = false;
+        const auto interruption = connect(&composerUploads, &ResourceTransferManager::progress, &messages,
+            /** @brief 已确认首块后关闭真实服务，下一次 HTTP 请求必须产生可恢复失败。 */
+            [&host, &interrupted](qint64 offset, qint64) {
+            if (!interrupted && offset >= 65536) {
+                interrupted = true; host.kill(); host.waitForFinished(5000);
+            }
+        });
+        QVERIFY(submission.submit(draft, 12, 8, false)); editor.clearAccepted(draft.id);
+        QTRY_VERIFY_WITH_TIMEOUT(submission.isFailed(), 15000);
+        QVERIFY(interrupted); QCOMPARE(saved.size(), 1); QVERIFY(submission.hasPending());
+        disconnect(interruption);
+        host.start(qEnvironmentVariable("RESOURCE_TEST_HOST"), {"--serve-test", directory.path() + "/store", port});
+        QVERIFY(host.waitForStarted(5000)); QVERIFY(host.waitForReadyRead(5000));
+        QCOMPARE(QString::fromUtf8(host.readLine()).trimmed(), port);
+        QSignalSpy resumedProgress(&composerUploads, &ResourceTransferManager::progress);
+        submission.retry();
+        QTRY_VERIFY_WITH_TIMEOUT(!submission.hasPending() || submission.isFailed(), 20000);
+        QVERIFY2(!submission.isFailed(), qPrintable(submission.status()));
+        QVERIFY(!resumedProgress.isEmpty()); QVERIFY(resumedProgress.first()[0].toLongLong() >= 65536);
+        QCOMPARE(saved.size(), 3); QCOMPARE(uploadedByComposer.size(), 1);
+        QSignalSpy history(&messages, &MessageService::historyLoaded);
+        messages.loadHistory(12); QTRY_COMPARE(history.size(), 1);
+        const auto rows = qvariant_cast<QVector<StoredMessage>>(history.first()[2]);
+        QCOMPARE(rows.size(), 3); QCOMPARE(rows[0].content, QString("before"));
+        QVERIFY(rows[1].content.startsWith("@resource:v1:")); QCOMPARE(rows[2].content, QString("after"));
+
         host.kill(); QVERIFY(host.waitForFinished(5000));
     }
     /** 验证空文件被同步拒绝且传输器不进入忙状态。 */

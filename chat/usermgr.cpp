@@ -1,4 +1,6 @@
 #include "usermgr.h"
+#include "messagesubmissioncontroller.h"
+#include "resourcetransfermanager.h"
 #include "global.h"
 #include "avatarcrop.h"
 #include <QStandardPaths>
@@ -53,6 +55,8 @@ QString UserMgr::token() const
 
 void UserMgr::setUserInfo(std::shared_ptr<UserInfo> user_info)
 {
+    delete _submissions; _submissions = nullptr;
+    delete _uploads; _uploads = nullptr;
     delete _remoteAvatars;
     _remoteAvatars = nullptr;
     _user_info = user_info;
@@ -138,6 +142,8 @@ QPixmap UserMgr::selfAvatar() const
 void UserMgr::resetSession()
 {
     _messages->stop();
+    delete _submissions; _submissions = nullptr;
+    delete _uploads; _uploads = nullptr;
     delete _remoteAvatars;
     _remoteAvatars = nullptr;
     _user_info.reset();
@@ -379,4 +385,19 @@ void UserMgr::applyDirectory(const QJsonObject &directory)
             contact ? contact->_icon : row["icon"].toString(),
             contact ? contact->_backname : QString(), chat, ChatType::PRIVATE));
     }
+}
+
+MessageSubmissionController *UserMgr::submissions()
+{
+    if (!_submissions) {
+        QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
+        _uploads = new ResourceTransferManager(QUrl(settings.value("ResourceServer/Url", "http://127.0.0.1:8090").toString()),
+            uid(), token(), storageRoot(), this);
+        _submissions = new MessageSubmissionController(_messages, _uploads, uid(), this);
+    }
+    return _submissions;
+}
+bool UserMgr::hasPendingSubmissions() const
+{
+    return _submissions && _submissions->hasPending();
 }

@@ -3,6 +3,7 @@
 
 #include <QListWidget>
 #include <QWidget>
+#include <QPointer>
 #include "loadingdialog.h"
 #include "userdata.h"
 
@@ -18,21 +19,27 @@ public:
      * 关闭搜索弹出框
      */
     void closeFindDialog();
-    /** @brief 借用搜索输入控件，调用期间要求控件仍由页面持有。 */
-    void setSearchEdit(QWidget * edit);
+    /** @brief 展示搜索结果，页面根据业务身份决定跳转。 */
+    void tcpSearchUserFinish(std::shared_ptr<SearchInfo> si);
+    /** @brief 根据搜索流程状态显示或销毁等待提示。 */
+    void waitPending(bool pending);
+    /** @brief 用户关闭等待窗或离开搜索界面时请求取消当前查询。 */
+    void cancelSearch();
 
 private:
-    /** @brief 进入等待时创建提示并锁定搜索，结束时销毁提示并允许下一次搜索。 */
-    void waitPending(bool pending = true);
+
     /** @brief 添加不可选间隔项及添加用户入口。 */
     void addTipItem();
 
     bool _send_pending;
-    std::shared_ptr<QDialog> _find_dialog;
-    QWidget * _search_edit;
-    LoadingDialog * _loadingDialog;
+    QPointer<QDialog> _find_dialog;
+    QPointer<LoadingDialog> _loadingDialog;
 
 signals:
+    /** @brief 用户取消当前查询，控制器应终止等待并使编号失效。 */
+    void searchCancelled();
+    /** @brief 用户请求查找，查询文本由页面提供。 */
+    void searchRequested();
     /**
      * @brief chatRequested
      * 搜索后，如果搜索到的是自己的好友，则进行跳转
@@ -42,8 +49,7 @@ signals:
 private slots:
     /** @brief 根据点击条目类型发起搜索或关闭结果对话框。 */
     void itemClicked(QListWidgetItem * item);
-    /** @brief 展示查询结果；已是好友时允许跳转私聊。 */
-    void tcpSearchUserFinish(std::shared_ptr<SearchInfo> si);
+
 };
 
 #endif // SEARCHLIST_H

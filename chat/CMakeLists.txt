@@ -111,6 +111,9 @@ target_include_directories(chat_message_storage PUBLIC ${CMAKE_CURRENT_SOURCE_DI
 target_link_libraries(chat_message_storage PUBLIC Qt${QT_VERSION_MAJOR}::Sql chat_storage)
 
 add_library(chat_session_core STATIC
+    usersearchcontroller.h usersearchcontroller.cpp
+    messagesubmissioncontroller.h messagesubmissioncontroller.cpp messagedraft.h
+    draftattachment.h draftattachment.cpp
     clientsession.h clientsession.cpp
     chattcptransport.h
     global.h global.cpp
@@ -704,6 +707,29 @@ if(BUILD_TESTING)
         avatarcropwidget.h avatarcropwidget.cpp)
     target_link_libraries(resource_transfer_tests PRIVATE chat_list_view chat_resource_transfer chat_client_login Qt${QT_VERSION_MAJOR}::Test)
     add_test(NAME conversation_attention.widgets COMMAND resource_transfer_tests conversationAttentionWidgets)
+    add_test(NAME user_search.widgets COMMAND resource_transfer_tests searchCancellationWidgets)
+    set_tests_properties(user_search.widgets PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 30)
     set_tests_properties(conversation_attention.widgets PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 45)
+endif()
+if(BUILD_TESTING)
+    add_executable(composer_tests tests/composer/composer_tests.cpp
+        messagetextedit.cpp messagetextedit.h customizeedit.cpp customizeedit.h
+        clickedlabel.cpp clickedlabel.h statewidget.cpp statewidget.h
+        clickedoncelabel.cpp clickedoncelabel.h timerbtn.cpp timerbtn.h)
+    target_link_libraries(composer_tests PRIVATE chat_session_core Qt${QT_VERSION_MAJOR}::Test)
+    add_test(NAME composer.interaction COMMAND composer_tests pasteText unicodeLength releaseOutside
+        attachmentDraft attachmentClipboard discardedAttachment preparationIsAsynchronous preparationCapacity
+        clipboardLifetime submissionPersistence storageFailureRetry storageFailureCancel keyboardControls)
+    add_test(NAME composer.upload_failure COMMAND composer_tests uploadFailureCancel)
+    set_tests_properties(composer.upload_failure PROPERTIES ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 20)
+    add_test(NAME composer.byte_budget COMMAND composer_tests byteBudget)
+    add_test(NAME user_search.lifecycle COMMAND composer_tests searchLifecycle)
+    add_test(NAME user_search.loopback COMMAND composer_tests searchLoopback)
+    set_tests_properties(composer.byte_budget PROPERTIES ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "unit" TIMEOUT 20)
+    set_tests_properties(user_search.lifecycle PROPERTIES ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 20)
+    set_tests_properties(user_search.loopback PROPERTIES ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 20)
+    set_tests_properties(composer.interaction PROPERTIES
         ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 45)
 endif()

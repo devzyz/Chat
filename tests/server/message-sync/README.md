@@ -77,3 +77,5 @@ All tests retain the real-MySQL/fixture-Status/fixture-Redis boundary described 
 add/remove behind a message transaction, then verifies the join boundary and revoked
 send/sync permission. `TransferAndLeaveCannotRemoveTheOwner` races transfer against
 the target's leave and requires exactly one success and one active owner.
+
+用户搜索协议扩展：`tcp_flow` 验证生产 ChatServer 1007/1008 的成功、未知 UID、参数类型错误均保留请求编号，同时兼容不携带编号的旧客户端。
