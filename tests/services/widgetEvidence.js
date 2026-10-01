@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const widgetCases = ['initTestCase', 'cleanupTestCase', 'localHistorySearchWidgets', 'localDirectorySearchWidgets',
+const widgetCases = ['initTestCase', 'cleanupTestCase', 'searchCancellationWidgets', 'localHistorySearchWidgets', 'localDirectorySearchWidgets',
     'friendRemarkOutcomeWidgets', 'conversationAttentionWidgets', 'groupResourceCardWidgets', 'groupMembershipControlsWidgets',
     'groupPanelRejectionVisible', 'groupPanelExternalRevocation', 'groupPanelSnapshotRequired',
     'groupPanelPaginationFailure', 'groupPanelReopenRetryIdentity', 'groupPanelTcpRefreshRevision',

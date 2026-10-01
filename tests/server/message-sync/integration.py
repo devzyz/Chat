@@ -74,6 +74,22 @@ def tcp_flow(directory, mysql_command, mysql_port):
             return response
 
         sender = login(0, 7)
+        # Search identity is optional for legacy clients, mandatory for safe new-client retry.
+        search_id = "00000000-0000-4000-8000-000000000701"
+        send(sender, 1007, {"uid_name": "8", "request_id": search_id})
+        searched = receive(sender, 1008)
+        assert searched["uid"] == 8 and searched["request_id"] == search_id
+        send(sender, 1007, {"uid_name": "8"})
+        legacy_search = receive(sender, 1008)
+        assert legacy_search["uid"] == 8 and "request_id" not in legacy_search
+        send(sender, 1007, {"uid_name": [], "request_id": search_id})
+        rejected_search = receive(sender, 1008, success=False)
+        assert rejected_search["error"] != 0 and rejected_search["request_id"] == search_id
+        send(sender, 1007, {"uid_name": "2147483647", "request_id": search_id})
+        missing_search = receive(sender, 1008, success=False)
+        assert missing_search["error"] != 0 and missing_search["request_id"] == search_id
+        print("Search: correlated success/error responses and legacy request compatibility passed")
+
         # Authenticated object requests with missing history fields get a bounded error.
         send(sender, 1027, {})
         malformed = receive(sender, 1028, success=False)

@@ -75,7 +75,6 @@ private:
     /** @brief 按持久化目录刷新群名称及发送权限。 */
     void refreshGroupState();
     qint64 _searchJumpId = 0;
-    QString _uploadEpoch;
     QString _remarkRequest;
 
     /** @brief 保存稳定消息身份及视口偏移，用于历史插入后恢复阅读位置。 */
@@ -107,16 +106,13 @@ private:
 
     /** @brief 创建账号资源传输管理器并连接上传下载事件。 */
     void initResourceTransfers();
-    /** @brief 选择附件并为当前私聊启动资源上传。 */
+    /** @brief 选择附件并加入编辑器草稿。 */
     void selectResource();
     /** @brief 根据消息资源描述请求下载，并将校验后的本地文件用于展示。 */
     void loadResource(MessageRecord& record);
     ResourceTransferManager* _transfer = nullptr;
     QHash<QString, QJsonObject> _resourceDescriptors;
     QSet<int> _resourceChats;
-    int _uploadChat = 0;
-    int _uploadRecipient = 0;
-    QString _uploadUuid;
     Ui::ChatPage *ui;
     std::shared_ptr<ChatInfo> _chatInfo;
     MessageModelStore _messageStore;

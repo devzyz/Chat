@@ -270,6 +270,7 @@ void TcpMgr::initHandlers()
 
         // 将字节流转换为json
         QJsonDocument jsonDoc = QJsonDocument::fromJson(data);
+        emit userSearchResponse(jsonDoc.object());
 
         // 字节流转换失败
         if (jsonDoc.isNull()) {

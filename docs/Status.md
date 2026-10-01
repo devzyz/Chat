@@ -1,7 +1,44 @@
 # 项目当前状态
 
-更新：2026-10-01。此页维护当前进度、下一步和验证边界。历史计划与报告保留，
+更新：2026-10-02。此页维护当前进度、下一步和验证边界。历史计划与报告保留，
 不作为本轮已经验收的证据。目标仍为先完成基础功能及必要正确性，再另行安排性能优化。
+
+## 当前补充：前端输入与搜索正确性修复
+
+本轮完成基础功能与必要封装修复，以及复核发现的相关缺陷；不进行群管理整体拆分、全量组件改名或性能专项。
+账号级 MessageSubmissionController 固定发送目标和 UUID，串行上传并按明确落盘通知移交 outbox；
+失败草稿由控制器独占保留，取消不留消息服务中的第二份重试副本。长文本按最终 JSON UTF-8 字节预算拆分。
+编辑器读取无副作用，内部剪切/复制/粘贴保留附件身份；文档、可达撤销记录、剪贴板和任务共享临时文件。
+图片准备移入有界后台队列，满载明确拒绝，无引用任务跳过准备；不可恢复的撤销分支释放附件。
+主动退出/关闭提示未落盘提交，Cancel 保留任务。未落盘草稿仍不支持跨进程恢复。
+
+UserSearchController 管理编号、十秒超时和取消；真实等待窗 Esc 以及离开搜索界面均使当前请求失效。
+1007/1008 保留旧客户端兼容，新客户端遇到无编号响应提示更新服务器；迟到、重复和旧账号结果不进入新查询。
+基础控件恢复字符长度、有效鼠标释放、键盘激活及正确的动画对象所有权。
+
+本轮实际证据（本地执行，不代表远端 CI 或人工桌面）：
+
+- 原输入/控件 RED：`build/composer-red-isolated.txt`。复核新增 RED：
+  `build/composer-review-red.txt`（附件剪切粘贴降为文本）、`build/composer-cancel-red.txt`（取消后旧服务重新提交）、
+  `build/search-cancel-red.txt`（Esc 未终止等待）、`build/preparation-capacity-red.txt`（后台队列无上限）。
+- 最终 `RunClientTests -Configuration Release`：73/73 CTest（25 Unit、18 Component、30 Integration），
+  `build/review-client-final.log`；报告注册及数量由 runner 校验。新增搜索控件回归进入默认 Component。
+- 真实资源/群/查找 Qt 套件：20/20、零失败/跳过，`build/review-resource-final.xml` 与 `.txt`。
+  其中混合提交在首段落盘、附件首块确认后关闭真实 HTTP 服务；同目录同端口重启后从确认偏移恢复，
+  最终只产生三条有序消息。另覆盖页面按钮/Enter 和搜索弹窗取消、换账号后的旧结果隔离。
+- `build/preparation-capacity-green.txt`：有界后台准备、无引用取消，以及真正排入旧账号 SQLite 队列后
+  stop/start 的迟到回调隔离通过；退出提示 Cancel 与写盘失败取消已纳入默认组件回归。
+- `BuildServers -Configuration Release`：通过，`build/review-server-build.log`；使用现有只读依赖，未恢复依赖。
+  资源测试 host 的可选重启端口构建通过，`build/review-resource-host-build.log`。
+- `tests/server/message-sync/integration.py`：通过，`build/review-search-server.log`；
+  临时 MySQL 原生 6/6、生产双 ChatServer TCP、搜索成功/错误编号回传和旧客户端兼容。
+  Redis/Status 沿用隔离替身，没有访问个人数据库。
+- 增量规范检查通过：`build/review-conventions-final.log`。Python 协议回归另经源码复核和实际执行。
+  `build/review-widget-evidence.txt` 的报告校验测试通过，实际 20 项 Qt 报告与校验器名称集合一致。
+- 提交前 Standards/Spec 两轴复核提出的队列容量及旧存储回调证据问题均已补齐，复核未留阻断项。
+
+任务分支为 `fix/client/preserve-drafts-and-cancellation`。远端 CI 状态以本轮 PR 为准；人工桌面验收继续后置。
+以下保留基础聊天收口的历史证据及边界。
 
 ## 当前工作：基础聊天软件功能收口
 

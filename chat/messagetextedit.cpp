@@ -1,243 +1,210 @@
 #include "messagetextedit.h"
-#include "logmgr.h"
-#include <QDebug>
-#include <QMessageBox>
+#include <QMimeData>
+#include <QKeyEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QTextBlock>
+#include <QTextFragment>
+#include <QTextImageFormat>
+#include <QFileInfo>
+#include <QDir>
+#include <QImageReader>
+#include <QUuid>
+#include <QTextDocumentFragment>
+#include <QFutureWatcher>
 
-
-MessageTextEdit::MessageTextEdit(QWidget *parent)
-    : QTextEdit(parent), _file_uid(0)
+/** @brief 进程内剪贴板保存原始片段和附件，避免把对象占位符当成文本发送。 */
+class DraftMimeData final : public QMimeData {
+public:
+    QTextDocumentFragment fragment;
+    QHash<QString, std::shared_ptr<DraftAttachment>> attachments;
+    QString accountRoot;
+};
+MessageTextEdit::MessageTextEdit(QWidget *parent) : QTextEdit(parent)
 {
-    this->setMaximumHeight(60);
+    setMaximumHeight(100);
+    setAcceptRichText(false);
+    _draftId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    connect(this, &QTextEdit::textChanged, this, /** @brief 每次编辑产生新提交身份。 */ [this] {
+        _draftId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        reconcileAttachments();
+    });
 }
-
-MessageTextEdit::~MessageTextEdit()
+QMimeData *MessageTextEdit::createMimeDataFromSelection() const
 {
-
-}
-
-QVector<MsgInfo> MessageTextEdit::getMsgList()
-{
-    _mGetMsgList.clear();
-    // 获取输入框的纯文本
-    QString doc = this->document()->toPlainText();
-    QString text = ""; //存储文本信息
-    int indexUrl = 0;
-    int count = _mMsgList.size();
-
-    // 枚举所有的字符
-    for(int index = 0; index < doc.size(); index++)
-    {
-       // 如果当前字符不是纯文本，代表这里有一个图片或者文件
-        if(doc[index] == QChar::ObjectReplacementCharacter)
-        {
-            if(!text.isEmpty())
-            {
-                // text非空，则将纯文本插入进去
-                QPixmap pix; // 空的pix，因为插入的是纯文本
-                insertMsgList(_mGetMsgList, "text", text, pix);
-                text.clear();
-            }
-
-            // 从mMstList中查找是否有这个数据，按照顺序插入的，按照顺序转换
-            if (indexUrl < _mMsgList.size()) {
-                _mMsgList[indexUrl].content = _mMsgList[indexUrl].content.split('_').at(0);
-                _mGetMsgList.append(_mMsgList[indexUrl]);
-                indexUrl ++;
-            }
-        }
-        else
-        {
-            // 是纯文本，插入到末尾
-            text.append(doc[index]);
+    auto *mime = new DraftMimeData;
+    std::unique_ptr<QMimeData> standard(QTextEdit::createMimeDataFromSelection());
+    for (const auto &format : standard->formats()) mime->setData(format, standard->data(format));
+    mime->fragment = QTextDocumentFragment(textCursor());
+    mime->accountRoot = _accountRoot;
+    QTextDocument selected;
+    QTextCursor(&selected).insertFragment(mime->fragment);
+    for (auto block = selected.begin(); block.isValid(); block = block.next()) {
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const auto id = it.fragment().charFormat().toImageFormat().name();
+            if (_attachments.contains(id)) mime->attachments.insert(id, _attachments.value(id));
         }
     }
-
-    if(!text.isEmpty())
-    {
-        QPixmap pix;
-        insertMsgList(_mGetMsgList, "text", text, pix);
+    return mime;
+}
+void MessageTextEdit::reconcileAttachments()
+{
+    const int step = document()->availableUndoSteps();
+    if (!document()->isRedoAvailable()) {
+        auto it = _attachmentHistory.upperBound(step);
+        while (it != _attachmentHistory.end()) it = _attachmentHistory.erase(it);
+    }
+    QSet<QString> current;
+    for (auto block = document()->begin(); block.isValid(); block = block.next()) {
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const auto format = it.fragment().charFormat();
+            if (format.isImageFormat()) current.insert(format.toImageFormat().name());
+        }
+    }
+    _attachmentHistory[step] = current;
+    QSet<QString> reachable;
+    for (const auto &ids : _attachmentHistory) reachable.unite(ids);
+    for (auto it = _attachments.begin(); it != _attachments.end();) {
+        if (!reachable.contains(it.key())) it = _attachments.erase(it);
+        else ++it;
+    }
+}
+MessageDraft MessageTextEdit::draft() const
+{
+    MessageDraft result{_draftId, {}};
+    QString text;
+    const auto flush = /** @brief 将相邻文本合为一项并保留换行。 */ [&] {
+        if (!text.isEmpty()) result.entries.push_back({DraftEntry::Kind::Text, {}, text, {}});
         text.clear();
-    }
-    _mMsgList.clear();
-    this->clear(); // 清空输入框的内容
-    _file_uid = 0;
-    return _mGetMsgList;
-}
-
-// 拖拽进入事件
-void MessageTextEdit::dragEnterEvent(QDragEnterEvent *event)
-{
-    // 在输入框内部拖拽，禁止
-    if(event->source() == this)
-        event->ignore();
-    else
-        event->accept();
-}
-
-/**
- * @brief MessageTextEdit::dropEvent
- * @param event
- * 拖拽的放下事件，将图片缩放后进行插入，并将原始图片路径保存到mMsgList内
- */
-void MessageTextEdit::dropEvent(QDropEvent *event)
-{
-    insertFromMimeData(event->mimeData());
-    event->accept();
-}
-
-// 通过enter的发送事件
-/**
- * @brief MessageTextEdit::keyPressEvent
- * @param e
- *
- * 不允许鼠标选中，且不需要支持 Delete 键
- */
-void MessageTextEdit::keyPressEvent(QKeyEvent * e)
-{
-    // 表示单独按下主键盘的enter或者小键盘的enter，同时没有按下shift建
-    if((e->key() == Qt::Key_Enter || e->key() == Qt::Key_Return) && !(e->modifiers() & Qt::ShiftModifier))
-    {
-        emit send();
-        return;
-    }
-
-    // 按下退格键
-    if (e->key() == Qt::Key_Backspace) {
-        QTextCursor cursor = textCursor();
-
-        // 解析选中的内容，如果为图片，则额外进行一步删除
-        QTextCharFormat fmt = cursor.charFormat();
-        if (fmt.isImageFormat()) {
-            QTextImageFormat imgFmt = fmt.toImageFormat();
-            QString deletedName = imgFmt.name();
-
-            // 从_mMsgList内删除
-            auto it = std::find_if(_mMsgList.begin(), _mMsgList.end(),
-                /** @brief 从消息缓存中定位已从编辑器删除的图片资源。 */
-                [&](const MsgInfo& info) {
-                return info.content == deletedName;
-            });
-
-            if (it != _mMsgList.end()) {
-                _mMsgList.erase(it);
-            }
+    };
+    for (auto block = document()->begin(); block.isValid(); block = block.next()) {
+        if (block != document()->begin()) text += '\n';
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const auto fragment = it.fragment();
+            if (!fragment.isValid()) continue;
+            const auto format = fragment.charFormat();
+            if (format.isImageFormat()) {
+                flush();
+                const auto id = format.toImageFormat().name();
+                const auto attachment = _attachments.value(id);
+                if (!attachment) result.error = tr("附件身份无法恢复，请删除后重新添加");
+                else if (!attachment->future.isFinished()) result.error = tr("附件正在准备，请稍后发送");
+                else {
+                    const auto prepared = attachment->future.result();
+                    if (!prepared.error.isEmpty()) result.error = prepared.error;
+                    else for (qsizetype i = 0; i < fragment.length(); ++i) result.entries.push_back(prepared.entry);
+                }
+            } else text += fragment.text();
         }
-
-        // 如果不是图片，则不需要更新_mMsgList的内容
-        QTextEdit::keyPressEvent(e);
-        return;
     }
-    QTextEdit::keyPressEvent(e);
+    flush();
+    return result;
 }
-
-// 插入图片
-void MessageTextEdit::insertImages(const QString &url)
+void MessageTextEdit::clearAccepted(const QString &id)
 {
-    QImage image(url);
-    //按比例缩放图片
-    if(image.width()> 120 || image.height() > 80)
-    {
-        image = image.scaled(120, 80, Qt::KeepAspectRatio);
-    }
-    // 获取当前的光标位置
-    QTextCursor cursor = this->textCursor();
-    cursor.movePosition(QTextCursor::End);
-    QString new_url = url + "_" + QString::number(_file_uid);
-    _file_uid ++;
-
-    SPDLOG_DEBUG(
-        "URL inserted into message editor, url_length={}",
-        new_url.size());
-
-    // 插入到输入框中
-    cursor.insertImage(image, new_url);
-    setTextCursor(cursor);
-    insertMsgList(_mMsgList, "image" , new_url, QPixmap::fromImage(image));
+    if (id != _draftId) return;
+    clear();
+    document()->clearUndoRedoStacks();
+    _attachments.clear();
+    _attachmentHistory.clear();
 }
-
-// 判断当前框是否愿意接受输入当前类型的数据
-bool MessageTextEdit::canInsertFromMimeData(const QMimeData *source) const
+void MessageTextEdit::setAccountRoot(const QString &root) { _accountRoot = root; }
+bool MessageTextEdit::addAttachment(const QString &path)
 {
-    return QTextEdit::canInsertFromMimeData(source);
+    if (path.isEmpty()) { emit inputRejected(tr("附件路径为空")); return false; }
+    insertAttachment(prepareDraftAttachment(path, {}, _accountRoot));
+    return true;
 }
-
-/**
- * @brief MessageTextEdit::insertFromMimeData
- * @param source
- * 将拖拽的内容插入
- */
-void MessageTextEdit::insertFromMimeData(const QMimeData *source)
+bool MessageTextEdit::hasPendingAttachments() const
 {
-    // 取出url的内容
-    QStringList urls = getUrl(source->text());
-
-    SPDLOG_DEBUG(
-        "message editor received dropped URLs, count={}",
-        urls.size());
-
-    if(urls.isEmpty())
-        return;
-
-    // 枚举所有的urls
-    foreach (QString url, urls)
-    {
-        if(isImage(url))
-            insertImages(url);
-    }
-}
-
-// 判断是否是图片
-bool MessageTextEdit::isImage(QString url)
-{
-    QString imageFormat = "bmp,jpg,png,tif,gif,pcx,tga,exif,fpx,svg,psd,cdr,pcd,dxf,ufo,eps,ai,raw,wmf,webp";
-    QStringList imageFormatList = imageFormat.split(",");
-    // 获取后缀名
-    QFileInfo fileInfo(url);
-    QString suffix = fileInfo.suffix();
-    // 判断后缀是否包含在里面
-    if(imageFormatList.contains(suffix, Qt::CaseInsensitive)){
-        return true;
+    for (auto block = document()->begin(); block.isValid(); block = block.next()) {
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const auto attachment = _attachments.value(it.fragment().charFormat().toImageFormat().name());
+            if (attachment && !attachment->future.isFinished()) return true;
+        }
     }
     return false;
 }
-// 插入文本
-void MessageTextEdit::insertMsgList(QVector<MsgInfo> &list, QString flag, QString text, QPixmap pix)
+void MessageTextEdit::observeAttachment(const std::shared_ptr<DraftAttachment> &attachment)
 {
-    MsgInfo msg;
-    msg.msgFlag = flag;
-    msg.content = text;
-    msg.pixmap = pix;
-    list.append(msg);
-}
-
-// 从拖拽的文件路径中获取到对应的url
-/**
- * @brief MessageTextEdit::getUrl
- * @param text
- * @return
- * file:///C:/photo.jpg
- * file:///C:/document.pdf
- * 可能存在多行，因此通过\n分割
- * 然后通过///分割出前后两个
- * 取at(1)取到后面的那一部分
- */
-QStringList MessageTextEdit::getUrl(QString text)
-{
-    QStringList urls;
-    if(text.isEmpty()) return urls;
-
-    QStringList list = text.split("\n");
-    foreach (QString url, list) {
-        if(!url.isEmpty()){
-            QStringList str = url.split("///");
-            if(str.size() >= 2)
-                urls.append(str.at(1));
+    auto *watcher = new QFutureWatcher<DraftAttachmentResult>(this);
+    connect(watcher, &QFutureWatcher<DraftAttachmentResult>::finished, this,
+        /** @brief 后台完成只刷新仍被该文档持有的预览，不改变位置或撤销栈。 */
+        [this, watcher, id = attachment->id] {
+        const auto result = watcher->result();
+        watcher->deleteLater();
+        if (!_attachments.contains(id)) return;
+        if (!result.error.isEmpty()) emit inputRejected(result.error);
+        else {
+            document()->addResource(QTextDocument::ImageResource, QUrl(id), result.preview);
+            document()->markContentsDirty(0, document()->characterCount());
+            viewport()->update();
         }
-    }
-    return urls;
+        _draftId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    });
+    watcher->setFuture(attachment->future);
 }
-
-void MessageTextEdit::textEditChanged()
+void MessageTextEdit::insertAttachment(const std::shared_ptr<DraftAttachment> &attachment)
 {
-
+    QImage preview(120, 80, QImage::Format_RGB32); preview.fill(Qt::lightGray);
+    document()->addResource(QTextDocument::ImageResource, QUrl(attachment->id), preview);
+    QTextImageFormat format;
+    format.setName(attachment->id);
+    format.setWidth(preview.width()); format.setHeight(preview.height());
+    format.setToolTip(tr("附件：准备完成后可发送；准备失败请删除后重新添加"));
+    _attachments.insert(attachment->id, attachment);
+    auto cursor = textCursor(); cursor.insertImage(format); setTextCursor(cursor);
+    observeAttachment(attachment);
+}
+bool MessageTextEdit::canInsertFromMimeData(const QMimeData *source) const
+{
+    return source->hasImage() || source->hasUrls() || QTextEdit::canInsertFromMimeData(source);
+}
+void MessageTextEdit::insertFromMimeData(const QMimeData *source)
+{
+    if (const auto *internal = dynamic_cast<const DraftMimeData *>(source)) {
+        if (!internal->attachments.isEmpty() && internal->accountRoot != _accountRoot) {
+            emit inputRejected(tr("不能粘贴其他账号的附件")); return;
+        }
+        for (auto it = internal->attachments.begin(); it != internal->attachments.end(); ++it) {
+            _attachments.insert(it.key(), it.value());
+            observeAttachment(it.value());
+        }
+        auto cursor = textCursor(); cursor.insertFragment(internal->fragment); setTextCursor(cursor);
+        return;
+    }
+    if (source->hasUrls()) {
+        for (const auto &url : source->urls()) {
+            if (url.isLocalFile()) addAttachment(url.toLocalFile());
+            else emit inputRejected(tr("仅支持拖入本地文件"));
+        }
+        return;
+    }
+    if (source->hasImage()) {
+        const QImage image = qvariant_cast<QImage>(source->imageData());
+        if (_accountRoot.isEmpty() || image.isNull()) {
+            emit inputRejected(tr("无法保存剪贴板图片，请检查账号目录")); return;
+        }
+        insertAttachment(prepareDraftAttachment({}, image, _accountRoot));
+        return;
+    }
+    if (source->hasText()) QTextEdit::insertFromMimeData(source);
+    else emit inputRejected(tr("不支持此剪贴板内容"));
+}
+void MessageTextEdit::keyPressEvent(QKeyEvent *event)
+{
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
+        && !(event->modifiers() & Qt::ShiftModifier)) { emit send(); return; }
+    QTextEdit::keyPressEvent(event);
+}
+void MessageTextEdit::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (canInsertFromMimeData(event->mimeData())) event->acceptProposedAction();
+    else event->ignore();
+}
+void MessageTextEdit::dropEvent(QDropEvent *event)
+{
+    if (event->source() == this) { QTextEdit::dropEvent(event); return; }
+    setTextCursor(cursorForPosition(event->position().toPoint()));
+    insertFromMimeData(event->mimeData()); event->acceptProposedAction();
 }

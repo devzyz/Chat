@@ -62,6 +62,9 @@ public slots:
     void notifyOffline();
     /** @brief 处理连接结束，仅异常断线触发账号会话重置。 */
     void connectionClose(bool expectedClose);
+protected:
+    /** @brief 主动关闭前允许保留未落盘任务并取消退出。 */
+    void closeEvent(QCloseEvent *event) override;
 private:
     /** @brief 重新创建并展示登录页，恢复页面切换连接。 */
     void offlineLogin();

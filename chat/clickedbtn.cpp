@@ -5,7 +5,7 @@ ClickedBtn::ClickedBtn(QWidget * parent) : QPushButton(parent){
     // 光标设置
     setCursor(Qt::PointingHandCursor);
     // 把确定按钮的enter事件滞后
-    setFocusPolicy(Qt::NoFocus);
+    setFocusPolicy(Qt::StrongFocus);
 }
 
 ClickedBtn::~ClickedBtn() {

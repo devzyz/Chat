@@ -31,6 +31,8 @@ public:
     void resetConnection(bool expectedClose);
 
 signals:
+    /** @brief 发布搜索原始响应，由搜索流程核对编号与格式。 */
+    void userSearchResponse(QJsonObject response);
     /** @brief 发布群查询、管理或备注操作的响应。 */
     void groupResponse(ReqId id, QJsonObject response);
     /** @brief 返回已落盘的建群结果或错误，request_id 对应提交请求。 */

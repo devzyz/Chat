@@ -17,6 +17,8 @@ class MessageStorageWorker;
 class MessageService final : public QObject {
     Q_OBJECT
 public:
+    /** @brief 写盘失败时由服务兼容旧入口保留请求，或由提交控制器独占保留。 */
+    enum class DraftRetention { Service, Caller };
     /** @brief 在存储线程查询全部或指定会话提醒，旧账号结果自动丢弃。 */
     void loadConversationAttention(int chatId = 0);
     /** @brief 持久化当前已展示快照的本地查看边界，成功后刷新提醒。 */
@@ -45,8 +47,8 @@ public:
     void synchronize(int chatId);
     /** @brief 验证响应关联、游标及格式后排队落盘，成功才通知模型刷新和后续同步。 */
     void acceptSyncPage(const QJsonObject &response);
-    /** @brief 将消息请求排队落盘，持久化完成后再交给发送调度。 */
-    void send(QJsonObject request);
+    /** @brief 将请求排队落盘，成功后交给 outbox；retention 指定失败时的唯一草稿所有者。 */
+    void send(QJsonObject request, DraftRetention retention = DraftRetention::Service);
     /** @brief 将指定 UUID 的服务器 ID 排队合并至当前账号本地存储。 */
     void acknowledge(int chatId, const QString &uuid, qint64 messageId);
     /** @brief 将指定 UUID 的未确认发送状态记为不确定，保留以后对账所需身份。 */
@@ -70,6 +72,10 @@ public:
     /** @brief 在存储线程搜索当前会话，结果通过 searchLoaded 返回。 */
     void search(int chatId, const QString &text, qint64 before = 0);
 signals:
+    /** @brief 当前账号已停止，调用方取消未落盘任务。 */
+    void stopped();
+    /** @brief 指定 UUID 已落盘或保存失败，不表示服务器提交。 */
+    void outgoingPersisted(int chatId, QVector<QString> uuids, bool success);
     /** @brief 返回已落盘会话的新消息数量；不是对方已读状态。 */
     void conversationAttentionChanged(int chatId, qint64 count);
     /** @brief 返回带搜索身份的联系人或群目录页。 */

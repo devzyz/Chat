@@ -11,8 +11,6 @@ public:
     TimerBtn(QWidget *parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~TimerBtn();
-    /** @brief 处理鼠标释放并按控件状态触发点击或结束拖动。 */
-    void mouseReleaseEvent(QMouseEvent *e) override;
 private:
     int _counter;
     QTimer* _timer;
