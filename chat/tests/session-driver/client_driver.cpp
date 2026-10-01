@@ -32,7 +32,10 @@ public:
         _socket.setReadBufferSize(8193);
         _watchdog.setSingleShot(true);
         _commandDeadline.setSingleShot(true);
-        connect(&_commandDeadline, &QTimer::timeout, this, /** 看门狗到期后终止失去进展的驱动进程。 */ [this] { finish(2); });
+        connect(&_commandDeadline, &QTimer::timeout, this, /** 登录共用十秒总预算，其他业务超时终止驱动。 */ [this] {
+            if (_pendingLogin) failLogin(-1);
+            else finish(2);
+        });
         connect(&_accounts, &GateHttpTransport::finished, this, /** 只结算当前控制命令对应的 HTTP 流程，并返回安全业务状态。 */ [this](const GateHttpResult &result) {
             if (!_pendingId || static_cast<quint64>(_pendingId) != result.flowId) return;
             const auto object = QJsonDocument::fromJson(result.body).object();
@@ -48,7 +51,7 @@ public:
             send(QJsonObject{{"event", "ready"}, {"pid", QCoreApplication::applicationPid()}, {"format", 1}});
         });
         connect(&_socket, &QLocalSocket::readyRead, this, /** 控制管道有数据时读取并处理命令。 */ [this] { read(); });
-        connect(&_login, &ClientLoginFlow::authenticated, this, /** 登录成功后隔离账号模型，开始会话并回复已认证状态。 */ [this](AuthFlowId) {
+        connect(&_login, &ClientLoginFlow::authenticated, this, /** 网络认证成功后隔离账号模型并开始会话，等待存储恢复再回复。 */ [this](AuthFlowId) {
             const int uid = UserMgr::instance()->uid();
             if (_lastUid && _lastUid != uid) {
                 _messages = MessageModelStore{};
@@ -57,12 +60,10 @@ public:
             }
             _lastUid = uid;
             _session.beginSession();
-            reply(_pendingId, "authenticated");
-            _pendingId = 0;
+            _loginAuthenticated = true;
         });
         connect(&_login, &ClientLoginFlow::failed, this, /** 登录失败后返回结构化错误并清除待处理命令。 */ [this](AuthFlowId, AuthError error) {
-            send(QJsonObject{{"id", _pendingId}, {"status", "login-failed"}, {"error", static_cast<int>(error)}});
-            _pendingId = 0;
+            failLogin(static_cast<int>(error));
         });
         connect(TcpMgr::instance().get(), &TcpMgr::connectionClosed, this, /** 非预期断连时重置会话并终止正在等待响应的控制命令。 */ [this](bool expected) {
             if (!expected && _session.isActive()) {
@@ -79,6 +80,21 @@ public:
                 /** 被踢出登录时以对应原因重置会话。 */ [this] { _session.resetSession(SessionResetReason::Kicked); });
         const auto tcp = TcpMgr::instance();
         auto *service = UserMgr::instance()->messages();
+        connect(service, &MessageService::directoryRestored, this,
+            /** 当前代数据库恢复成功后才允许控制器提交后续业务，旧代回调由MessageService隔离。 */
+            [this](const QJsonObject &) {
+                if (!_pendingLogin || !_loginAuthenticated) return;
+                _commandDeadline.stop();
+                _pendingLogin = false;
+                _loginAuthenticated = false;
+                reply(_pendingId, "authenticated");
+                _pendingId = 0;
+            });
+        connect(service, &MessageService::failed, this,
+            /** 初始化失败结算登录，不将其他会话的后台同步失败误判为登录结果。 */
+            [this](int chatId, const QString &) {
+                if (_pendingLogin && _loginAuthenticated && chatId == 0) failLogin(-1);
+            });
         connect(service, &MessageService::failed, this,
             /** 只记录固定存储错误分类，不输出动态错误正文或请求数据。 */
             [](int chatId, const QString &reason) {
@@ -189,11 +205,28 @@ public:
     }
 
 private:
+    /** 取消尚未就绪的登录并清理当前账号，允许同一控制连接重新尝试。 */
+    void failLogin(int error)
+    {
+        if (!_pendingLogin) return;
+        const auto id = _pendingId;
+        _pendingLogin = false;
+        _loginAuthenticated = false;
+        _pendingId = 0;
+        _commandDeadline.stop();
+        _login.cancel();
+        _session.resetSession(SessionResetReason::Logout);
+        TcpMgr::instance()->resetConnection(true);
+        UserMgr::instance()->resetSession();
+        send(QJsonObject{{"id", id}, {"status", "login-failed"}, {"error", error}});
+    }
     /** 幂等取消认证、重置账号和会话、关闭控制管道并退出事件循环。 */
     void finish(int code)
     {
         if (_finished) return;
         _finished = true;
+        _pendingLogin = false;
+        _loginAuthenticated = false;
         _pendingId = 0;
         if (_storageLock.isOpen()) { _storageLock.rollback(); _storageLock.close(); }
         _login.cancel();
@@ -535,10 +568,16 @@ private:
                     finish(2); return;
                 }
                 _pendingId = _lastId;
+                _pendingLogin = true;
+                _loginAuthenticated = false;
+                _commandDeadline.start(10000);
                 gate_url_prefix = gate.toString();
                 _login.login(gate, object.value("email").toString(), object.value("password").toString());
             } else if (command == "stop" && object.size() == 2) {
                 _stopping = true;
+                _pendingLogin = false;
+                _loginAuthenticated = false;
+                _commandDeadline.stop();
                 _pendingId = 0;
                 _login.cancel();
                 _accounts.reset();
@@ -581,6 +620,8 @@ private:
     QByteArray _input;
     qint64 _lastId = 0;
     qint64 _pendingId = 0;
+    bool _pendingLogin = false;
+    bool _loginAuthenticated = false;
     bool _stopping = false;
     bool _finished = false;
 };

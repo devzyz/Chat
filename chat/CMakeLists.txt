@@ -296,7 +296,7 @@ if(BUILD_TESTING)
     target_link_libraries(chat_e2e_client PRIVATE chat_client_login chat_resource_transfer)
     add_executable(session_driver_tests tests/session-driver/session_driver_tests.cpp)
     target_link_libraries(session_driver_tests PRIVATE
-        chat_network_core Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Network)
+        chat_network_core chat_storage Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Network)
     add_dependencies(session_driver_tests chat_e2e_client)
     add_executable(message_storage_tests tests/message-storage/message_storage_tests.cpp)
     add_executable(message_sync_probe tests/message-storage/message_sync_probe.cpp)

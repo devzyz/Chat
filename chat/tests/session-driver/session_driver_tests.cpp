@@ -1,4 +1,9 @@
 #include "tcpframedecoder.h"
+#include "userstoragepaths.h"
+#include <QDir>
+#include <QFile>
+#include <QRandomGenerator>
+#include <QScopeGuard>
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QEventLoop>
@@ -272,6 +277,33 @@ private slots:
     /** 验证两个真实客户端分别保持所属账号与端点。 */
     void productionLoginKeepsAccountsAndEndpointsSeparate()
     {
+        LoopbackLogin unavailable(QRandomGenerator::global()->bounded(100000, 2000000000));
+        QVERIFY(unavailable.listen());
+        const auto blockedRoot = UserStoragePaths::accountRoot(UserStoragePaths::dataRoot(),
+            unavailable.url(), unavailable.userId);
+        QVERIFY(QDir().mkpath(QFileInfo(blockedRoot).absolutePath()));
+        QFile obstruction(blockedRoot);
+        QVERIFY(obstruction.open(QIODevice::WriteOnly));
+        obstruction.close();
+        const auto removeObstruction = qScopeGuard(/** 清理仅本次创建的阻塞文件，不删除账号目录。 */ [&] {
+            QFile::remove(blockedRoot);
+        });
+        OwnedClient recovering;
+        QVERIFY(recovering.start());
+        const QJsonObject login{{"id", 1}, {"command", "login"}, {"gate", unavailable.url()},
+            {"email", "storage@example.invalid"}, {"password", "fixture-only"}};
+        recovering.send(login);
+        QCOMPARE(recovering.receive(10000).value("status").toString(), QString("login-failed"));
+        recovering.send({{"id", 2}, {"command", "snapshot"}});
+        QVERIFY(!recovering.receive().value("active").toBool());
+        QVERIFY(QFile::remove(blockedRoot));
+        auto retryLogin = login; retryLogin["id"] = 3;
+        recovering.send(retryLogin);
+        QCOMPARE(recovering.receive(10000).value("status").toString(), QString("authenticated"));
+        recovering.send({{"id", 4}, {"command", "create"}, {"toUid", 42}});
+        QCOMPARE(recovering.receive().value("chatId").toInt(), 7);
+        QVERIFY(recovering.stop(5));
+
         LoopbackLogin first(41), second(42);
         QVERIFY(first.listen());
         QVERIFY(second.listen());
@@ -282,8 +314,8 @@ private slots:
                     {"email", "alice@example.invalid"}, {"password", "fixture-only"}});
         bob.send({{"id", 1}, {"command", "login"}, {"gate", second.url()},
                   {"email", "bob@example.invalid"}, {"password", "fixture-only"}});
-        const auto aliceReply = alice.receive();
-        const auto bobReply = bob.receive();
+        const auto aliceReply = alice.receive(10000);
+        const auto bobReply = bob.receive(10000);
         QCOMPARE(aliceReply.value("status").toString(), QString("authenticated"));
         QCOMPARE(bobReply.value("status").toString(), QString("authenticated"));
         QCOMPARE(aliceReply.value("uid").toInt(), 41);
@@ -357,7 +389,7 @@ private slots:
         QCOMPARE(alice.receive().value("status").toString(), QString("disconnected"));
         alice.send({{"id", nextCommand++}, {"command", "login"}, {"gate", first.url()},
                     {"email", "alice@example.invalid"}, {"password", "fixture-only"}});
-        QCOMPARE(alice.receive().value("status").toString(), QString("authenticated"));
+        QCOMPARE(alice.receive(10000).value("status").toString(), QString("authenticated"));
         QTRY_COMPARE_WITH_TIMEOUT(first.sentFrames, 5, 3000);
         alice.send({{"id", nextCommand++}, {"command", "snapshot"}, {"chatId", 7}});
         const auto recovered = alice.receive().value("messages").toArray();
