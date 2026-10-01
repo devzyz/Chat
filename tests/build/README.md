@@ -5,7 +5,8 @@ registration are documented in [conventions/README.md](conventions/README.md).
 
 ## CI routing and budgets
 
-`node --test tests/build/ciBudget.test.js` checks develop quick regression, master/weekly/manual full regression,
+`node --test tests/build/ciPolicy.test.js tests/build/ciBudget.test.js` checks develop quick regression, master/weekly full regression,
+manual quick/full selection (default full), optional-flag promotion to full,
 master-only publication, failure dependencies and the observed cold Windows build budget.
 It also checks that server compilation has one owner, registration is checked once before
 CI test lanes, the local check bypass is rejected, and only full lanes generate application packages.
@@ -16,18 +17,39 @@ but no longer exposes an unused status output. Protocol/schema compatibility tes
 `powershell -NoProfile -File scripts/ci/test-vcpkg-github-asset.ps1` checks Release API authentication
 using a synthetic `GH_TOKEN`, anonymous access, codeload token isolation, asset identity and SHA512 failure handling.
 CI supplies its read-only `github.token` only to steps that download tools or dependency assets.
+The lightweight `plan` job computes mode and normalized flags without GitHub API queries. Windows and Linux
+consume this one policy independently; only the Server job selects historical Windows tools after Node setup,
+before installation and dependency restoration. Tool selection failure does not block Qt, Node or Linux.
+Both required gates reject policy failure; the full gate remains active even when policy outputs are missing.
 There is no cross-workflow check poller. The main workflow uses job dependencies and two stable required checks.
 
-`node --test tests/build/ciScope.test.js tests/build/ciBudget.test.js` also checks the conservative
+`node --test tests/build/ciPolicy.test.js tests/build/ciScope.test.js tests/build/ciBudget.test.js` also checks the conservative
 documentation route, obsolete-run cancellation, explicit Linux cold restore and report failure propagation.
 Only develop PR/push changes entirely within root README.md, WINDOWS_BUILD.md or docs/**/*.md use static-only
 Windows checks. Missing Git objects, unknown paths, renames involving code and mixed changes retain builds.
-PR classification uses the complete merge-base range, not the latest commit. Full lanes always build.
+PR classification uses the complete merge-base range, not the latest commit. Full lanes and manual quick always build.
 No workflow-level path filter or additional Required Check is introduced. Static check failure still blocks merging.
 PR metadata edits retain the normal scope so a metadata-only success cannot replace unverified code results.
 Develop push runs cancel obsolete develop push runs; master, scheduled and manual runs remain independent.
 Service evidence validation runs even after failed upstream/download steps and independently of business validation,
 so upstream business failure no longer prevents the service gate from writing its failure report.
+
+### Manual modes and hosted verification
+
+```sh
+gh workflow run ci.yml --ref develop -f mode=quick
+gh workflow run ci.yml --ref develop -f mode=full
+gh workflow run ci.yml --ref develop -f mode=quick -f real_acceptance=true
+```
+
+The last command runs full plus acceptance. `cold_linux=true` and `refresh_tools=true` also promote quick
+to full; refresh is allowed only on the default branch. Manual runs never publish, including quick on master.
+PR metadata edits still rerun CI and retain the existing cancellation policy. No Required Check migration is needed.
+Policy tests exercise automatic/manual events, boolean combinations, invalid inputs and CLI output; gate tests
+execute the actual Bash checks with failed, cancelled, skipped and missing dependency results.
+
+After changing routing, hosted validation must cover develop quick, documentation-only quick, manual full,
+and a default-branch refresh followed by ordinary toolchain reuse. Local fixtures do not establish hosted success.
 
 ## CI binary dependency cache
 
@@ -44,7 +66,7 @@ completed scheduled or explicit refresh run of `ci.yml` on the repository defaul
 after verifying all four Windows jobs succeeded. A Linux failure does not invalidate that
 Windows result. Missing, failed, skipped or duplicate Windows jobs cannot approve a lock.
 PRs, other workflows, cancelled/in-progress runs and other branches cannot supply the lock.
-Selection happens once per run. API/download/validation failures fail closed. Before the
+Selection happens once in each Server job; documentation-only runs do not query toolchains. API/download/validation failures fail closed. Before the
 first promotion, `scripts/ci/windows-toolchain.json` supplies the bootstrap identity.
 Candidate records and native snapshots are retained 90 days; an expired approved record requires a new
 default-branch refresh rather than silently upgrading. A refresh does not depend on an
@@ -59,9 +81,10 @@ manual `cold_linux=true` input to exercise Linux cold restoration independently.
 are cached on both platforms; application source is still built and tested. All Windows checks must succeed before approval;
 native dependency archives have already been saved on the default branch. A failed Windows
 refresh leaves the previous approved record active. Linux remains required for full checks
-and release, independently of Windows toolchain approval. The promotion job still publishes
-`ci-toolchain-approved` as a human-readable record; selection verifies the candidate's actual
-Windows jobs, including legacy runs where Linux failures prevented that publication.
+and release, independently of Windows toolchain approval. Candidate artifacts and the four actual Windows
+job results are the sole approval mechanism; no separate promotion job or `ci-toolchain-approved` display
+artifact is produced. Existing candidate records remain compatible. The caller ID `windows` and the four
+Windows job IDs/display names remain stable because historical selection uses those identities.
 
 Every Windows build uses the approved exact tool catalog with
 `VCPKG_FORCE_DOWNLOADED_BINARIES=1`, fetches each tool, and verifies its executable version

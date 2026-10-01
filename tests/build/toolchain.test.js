@@ -130,11 +130,20 @@ test('tool selection precedes restore; cold refresh skips caches and Windows app
     const ci = read('.github/workflows/ci.yml');
     const windows = read('.github/workflows/windows-ci.yml');
     const linux = read('.github/workflows/linux-ci.yml');
-    assert.match(ci, /needs: \[toolchain, windows\]/);
-    assert.match(ci, /needs\.toolchain\.outputs\.refresh == 'true' && needs\.windows\.result == 'success'/);
-    assert.match(ci, /needs: \[windows, linux\]/);
+    assert.doesNotMatch(ci, /promote-toolchain|ci-toolchain-approved|toolchain_lock|toolchain_run/);
+    assert.match(ci, /needs: \[plan, windows, linux\]/);
     assert.match(ci, /needs: full/);
-    assert.match(ci, /name: ci-toolchain-approved/);
+    const server = windows.split('  servers-release:')[1].split('  client-release:')[0];
+    assert.ok(server.indexOf('actions/setup-node@') < server.indexOf('node scripts/ci/toolchain.js select'));
+    assert.ok(server.indexOf('node scripts/ci/toolchain.js select') < server.indexOf('install-windows-toolchain.ps1'));
+    assert.match(server, /CHAT_TOOLCHAIN_LOCK: \$\{\{ steps\.toolchain\.outputs\.lock \}\}/);
+    assert.match(server, /CHAT_TOOLCHAIN_RUN: \$\{\{ steps\.toolchain\.outputs\.run_id \}\}/);
+    assert.equal((windows.match(/node scripts\/ci\/toolchain.js select/g) || []).length, 1);
+    for (const [id, name] of [['static-check', 'Static configuration checks'], ['servers-release', 'Server Release build'],
+        ['client-release', 'Qt client Release'], ['varify-release', 'VarifyServer dependency and package check']]) {
+        assert.ok(windows.includes(`  ${id}:\n    name: ${name}\n`));
+    }
+    assert.match(ci, /  windows:\s+needs: plan\s+uses: \.\/\.github\/workflows\/windows-ci.yml/);
     assert.ok(windows.indexOf('install-windows-toolchain.ps1') < windows.indexOf('- name: Prepare layered binary cache keys'));
     assert.match(windows, /id: vcpkg-binary-cache\s+if: \$\{\{ !inputs\.refresh_tools \}\}/);
     assert.match(linux, /id: vcpkg-binary-cache\s+if: \$\{\{ !inputs\.cold_build \}\}/);

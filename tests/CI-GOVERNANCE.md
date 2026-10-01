@@ -10,21 +10,28 @@
 
 | 事件 | 必需验证 | 发布 |
 | --- | --- | --- |
-| develop PR / push | Windows 全部单元、确定性组件、loopback/进程集成、编译和静态检查 | 否 |
+| develop PR / push（quick） | Windows 全部单元、确定性组件、loopback/进程集成、编译和静态检查 | 否 |
 | 每周一北京时间 03:17 | 默认分支 develop 的 Windows 回归和 Linux 全量集成/E2E | 否 |
 | master PR | 同上全量检查，成功才允许合并 | 否 |
 | master push | 实际合并 SHA 的全量检查、Windows 包启动冒烟 | 成功后自动发布 |
-| workflow_dispatch | 所选分支全量检查 | 否 |
+| workflow_dispatch | 所选分支可选 quick / full，默认 full | 否 |
+
+入口的轻量 `plan` 作业通过 `scripts/ci/ciPolicy.js` 统一选择模式，不查询历史运行或工具链工件。
+`quick` 保留完整 Windows 静态、构建和既有测试，不运行 Linux、不生成应用 ZIP；`full` 增加
+Linux 集成/E2E 和应用打包。master PR/push 与周检固定 full；手动 quick 即使选择 master 也不发布。
+手动 `real_acceptance`、`cold_linux`、`refresh_tools` 任一启用都将模式提升为 full，并在摘要说明。
+Windows 接收 `build_packages`、`refresh_tools`，Linux 接收归一化专项输入；不各自重复解释事件。
+策略失败时两个必需汇总都必须失败；全量门禁不得因为缺少模式输出而被跳过。
 
 develop PR/push 若完整变更范围仅包含根目录 `README.md`、`WINDOWS_BUILD.md` 或 `docs/**/*.md`，
 只运行既有 Windows 静态检查，不恢复原生工具链快照、不编译应用。范围判断复用静态作业已有的 Git 历史；混合改动、未知路径、空差异或无法取得
 比较提交均保留正常回归；PR 比较整个分支差异，不只看最后一条提交。master、周检和手动运行不使用文档豁免。
-`Regression checks` 仍要求 Windows 工作流成功，静态检查失败不能放行。PR 元数据编辑仍复查，
+`Regression checks` 仍要求策略与 Windows 工作流成功，静态检查失败不能放行。PR 元数据编辑仍复查，
 不使用独立的轻量成功结果覆盖代码回归。PR 和 develop push 取消各自过时运行；master、周检和手动运行不互相取消。
 
 GitHub schedule 使用默认分支，可能延迟。默认分支须配置为 develop。
 develop Required Check 为 `Regression checks`；master 为 `Regression checks` 和 `Full regression checks`。
-两者都是汇总真实 job 结果，失败或非预期 skipped 不算通过；只有上述明确的 develop 纯文档范围允许跳过应用构建。
+两者都是汇总策略与真实 job 结果，失败或非预期 skipped 不算通过；只有上述明确的 develop 纯文档范围允许跳过应用构建。
 master 禁止直接推送、强推和删除，不要求人工审批。
 切换保护检查须在新工作流出现并验证后完成，避免只改名称导致合并失去保护或永久等待。
 
@@ -51,11 +58,15 @@ Linux 正常复用经 ABI 校验的二进制依赖缓存；需要验证冷恢复
 Qt 安装缓存只复用固定版本工具，业务源码仍重新构建和测试。
 只有四个 Windows 作业全部成功且依赖缓存已保存，才批准新的不可变 Windows 工具链记录供日常 CI 选择。
 Linux 失败不否定 Windows 工具链验证，但 `Full regression checks` 与发布仍必须双平台成功。
-选择器逐一核对默认分支刷新运行中的四个 Windows 作业，可恢复旧版因 Linux 失败而未发布批准工件的候选记录；
+选择器逐一核对默认分支刷新运行中的四个 Windows 作业，以候选工件及实际结果作为唯一批准依据；
+不再生成仅供展示的 `ci-toolchain-approved` 工件，旧候选记录继续兼容。
 Windows 失败、缺项、跳过、取消或运行未结束均不能批准。
 显式手动刷新仅允许默认分支的 `refresh_tools=true`。PR、其他分支或其他 workflow 的记录不可被采用。
 本次调整由用户要求的“每周升级、日常固定”策略授权；不升级业务依赖、Qt、Node、GCC 或 vcpkg baseline。
-周检保存完整 MSVC 工具集及版本化 SDK 的 SHA256 快照；日常在依赖恢复前还原临时 runner 的对应版本目录，
+周检保存完整 MSVC 工具集及版本化 SDK 的 SHA256 快照。
+工具链选择只在 Server job 的 Node 准备完成后执行，安装与依赖恢复前完成选择；
+静态检查、Qt、Node、Linux 不依赖工具链选择，纯文档分流不查询工具链。
+日常在依赖恢复前还原临时 runner 的对应版本目录，
 再校验编译器版本和摘要，不依赖 runner 镜像保留旧版本。旧记录无快照时仍严格校验预装版本，下一次周检生成快照。
 该恢复只限 GitHub 临时环境，不修改本机 Visual Studio 或 vcpkg。首次引导、缓存和记录保留期
 见 [构建测试入口](build/README.md#validated-weekly-windows-toolchain)。本机 DG-25 边界不变。
@@ -111,7 +122,7 @@ Windows 静态 job 统一执行一次 `CheckTestStructure`；其成功后，各�
 `-SkipTestStructureCheck` 复用同一提交的检查结果。该参数仅允许 GitHub CI 的四个测试入口使用，
 本地独立运行默认保留检查，`RunAllTests` 在同一进程内只检查一次。测试执行和报告校验不跳过。
 Server 由 `RunServerTests` 一次构建生产与测试目标，不先单独调用 `BuildServers`。
-develop PR/push 保留所有测试及报告上传，不生成或上传应用 ZIP；master、每周和手动全量保留打包。
+quick 保留所有 Windows 测试及报告上传，不生成或上传应用 ZIP（develop 纯文档例外如上）；full 保留打包。
 
 - 测输入输出、状态与错误行为，不绑定私有容器、文件排列和内部调用顺序。
 - 修复缺陷时补能复现问题的回归；重构不改变行为预期。功能确需改变旧行为，在变更说明中说明并更新相关测试。
@@ -123,7 +134,7 @@ develop PR/push 保留所有测试及报告上传，不生成或上传应用 ZIP
 ### 2.1 比例化执行合同
 
 文档修改检查事实、链接和 diff；行为修改运行所属模块回归；网络或数据修改补相关集成。
-跨流程修改验证触发、失败传播和受影响入口；全量运行用于 master、周检和明确的全量验收。
+跨流程修改验证触发、失败传播和受影响入口；全量运行用于 master、周检、手动 full 和明确的全量验收。
 不要求普通修改另写计划、威胁模型、多份总结或重复 mutation。已有业务测试不因流程精简而删除。
 
 ## 3. 发布

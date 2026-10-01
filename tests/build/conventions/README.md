@@ -23,7 +23,7 @@ vcpkg 或全局 Python 环境。无兼容 wheel 时安装失败，不自动从�
 `CheckConventions` 默认比较 HEAD 与整个工作区，包含未暂存及未跟踪代码；指定基线可检查整个任务。
 CI 从事件 JSON 读取 PR/push 的 SHA、来源分支及标题，使用共同祖先定位源码增量，
 commit 范围排除目标分支已包含的提交及固定历史祖先。缺失对象、依赖或解析失败均返回非零。
-标题 `edited` 事件会重跑。schedule/手动事件明确报告没有新增 Git 范围，仍运行检查器回归及既有全量流程。
+标题 `edited` 事件会重跑。schedule/手动事件明确报告没有新增 Git 范围，仍运行检查器回归及所选 CI 模式（定时固定 full，手动默认 full）。
 
 `AuditConventions` 输出 `build/conventions/audit.json`，含每目录文件/对象数、每项路径/行号/原因、
 解析失败及未支持文件清单。其退出 0 只表示审计文件生成成功，输出为 `AUDIT (not a pass)`，

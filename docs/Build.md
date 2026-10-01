@@ -9,6 +9,10 @@
 | Qt 客户端 | Qt 6.5.3 MinGW、CMake、Ninja | Qt kit 与仓库内 spdlog | `windeployqt` 后独立 ZIP |
 | VarifyServer | Node.js 22（CI） | `package-lock.json` + `npm ci` | JS/JSON/proto 与 `node_modules` 独立 ZIP |
 
+CI 使用 quick/full 两种模式：quick 保留 Windows 构建和全部既有测试（develop 纯文档仅静态检查），
+full 增加 Linux 集成/E2E 与应用打包；手动默认 full，可选 quick，专项开关启用时提升为 full。
+触发与失败规则见 [CI 治理](../tests/CI-GOVERNANCE.md)。
+
 Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环境说明见仓库根目录 `WINDOWS_BUILD.md`。
 
 ## C++ Server
@@ -39,7 +43,9 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 - Windows CI 日常使用已通过全部 Windows 检查的精确工具链；每周以新版 PowerShell/CMake/Ninja 和 runner 提供的最新 MSVC 2022/SDK 冷构建。
   此精确工具链用于 Server 原生构建；Qt 的 CMake/Ninja、其他作业的 PowerShell 仍按各自安装与最低版本合同选择。
   Linux 周检正常复用 ABI 校验的依赖缓存，显式手动 `cold_linux=true` 才跳过缓存恢复；固定 Qt kit 允许安装缓存。
-  Windows 回归成功、缓存预热完成后才批准工具链记录；Linux 失败仍阻止完整回归和发布，但不阻止 Windows 工具链批准。
+  工具链选择只在 Server job 执行，不阻塞 Qt、Node、静态检查或 Linux。
+  Windows 回归成功、缓存预热完成后，选择器核对四个 Windows 作业才采用候选记录；不再另存展示用批准工件。
+  Linux 失败仍阻止完整回归和发布，但不阻止 Windows 工具链批准。
   日常先恢复并校验已验证 MSVC/SDK 快照，再恢复依赖缓存；快照缺失或摘要不符必须失败，不静默换用预装编译器。
   首次引导、手动刷新、保留期及升级边界见 [构建测试入口](../tests/build/README.md#validated-weekly-windows-toolchain)。
 - Windows vcpkg 的 GitHub archive 下载适配器使用官方 codeload 路径，并以 port 固定的 SHA-512 校验。
