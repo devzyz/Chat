@@ -1,3 +1,5 @@
+#include "../../common/social/SocialDirectory.h"
+#include "../../common/message/PrivateSendAccess.h"
 #include "../../common/message/MessagePersistence.h"
 #include "../../common/message/MessageReceipts.h"
 #include "../../common/message/GroupMembership.h"
@@ -57,6 +59,25 @@ bool LogicSystem::Dispatch(const LogicMessage& message) {
 }
 
 void LogicSystem::RegisterCallbacks() {
+    for (const short request_id : {1042,1044,1046}) {
+        _fun_callbacks[request_id] = /** @brief 社交请求使用当前认证身份和安全错误信封。 */
+            [](std::shared_ptr<CSession> session, const short& id, const std::string& body) {
+            Json::Value request,response; Json::Reader reader;
+            response["error"] = ErrorCodes::Error_Json;
+            if (reader.parse(body,request) && request.isObject() && request["request_id"].isString()
+                && !request["request_id"].asString().empty() && request["request_id"].asString().size()<=64) {
+                response["request_id"] = request["request_id"];
+                if (!session->SupportsSocial()) response["social_error"] = "UpgradeRequired";
+                else MysqlMgr::GetInstance()->SocialRequest(session->AuthenticatedUid(),request,id,response);
+            }
+            if (messaging::CompactJson(response).size()>2048) {
+                auto key=response["request_id"]; response=Json::Value(); response["request_id"]=key;
+                response["error"]=ErrorCodes::Error_Json; response["social_error"]="ResponseTooLarge";
+            }
+            session->Send(messaging::CompactJson(response),id+1);
+        };
+    }
+
     for (const auto id : {MSG_GROUP_INFO_REQ, MSG_GROUP_MANAGE_REQ, MSG_FRIEND_REMARK_REQ}) {
         _fun_callbacks[id] = /** @brief 从认证会话取得操作身份并返回有界群业务响应。 */
             [](std::shared_ptr<CSession> session, const short& id, const std::string& body) {
@@ -289,6 +310,11 @@ void LogicSystem::RegisterCallbacks() {
             if (value.isString() && value.asString() == "group_membership_v1") groups = true;
         session->EnableGroups(groups);
         if (groups) return_value["capabilities"].append("group_membership_v1");
+        bool social = false;
+        if (root["capabilities"].isArray()) for (const auto& value : root["capabilities"])
+            if (value.isString() && value.asString()=="basic_social_v1") social=true;
+        session->EnableSocial(social);
+        if (social) return_value["capabilities"].append("basic_social_v1");
         // 将会话绑定结果合并到登录响应。
         session->BindAuthenticatedUser(uid, /** @brief 按异步会话绑定结果完成登录响应。 */ [session, response = std::move(return_value)](SessionBindResult result) mutable {
             if (result != SessionBindResult::Bound) response["error"] = ErrorCodes::RPCFailed;
@@ -548,7 +574,7 @@ void LogicSystem::RegisterCallbacks() {
 				}
 
 				// 通过session发送
-				std::string notify_str = notify.toStyledString();
+				std::string notify_str = messaging::BoundedNotification(notify);
 				session->Send({MSG_NOTIFY_AUTH_FRIEND_REQ, notify_str});
 			}
 
@@ -653,6 +679,11 @@ void LogicSystem::RegisterCallbacks() {
             return_value["commit_error"] = "InvalidMembership";
             return;
         }
+        std::int64_t relationship = 0;
+        if (!group_message && root.isMember("relationship_revision")) {
+            try { relationship = social::Number(root["relationship_revision"]); }
+            catch (const std::exception&) { return_value["error"]=ErrorCodes::UidInvalid; return_value["commit_error"]="InvalidMembership"; return; }
+        }
         std::int64_t group_epoch = 0;
         if (group_message) {
             try {
@@ -676,6 +707,7 @@ void LogicSystem::RegisterCallbacks() {
 			_cache_msgs.push_back({ msg_uuid, msg_content });
 		}
 
+        bool resource_existing = false;
         message_commit::Result result;
         if (resource_message) {
             try {
@@ -688,10 +720,14 @@ void LogicSystem::RegisterCallbacks() {
                 static resource::ResourceCatalog catalog(config["Mysql"]["Host"] + ":" + config["Mysql"]["Port"],
                     config["Mysql"]["User"], config["Mysql"]["Password"], config["Mysql"]["Schema"]);
                 auto saved = catalog.CommitMessage(from_uid, to_uid, chat_id,
-                    data_array[0]["msg_uuid"].asString(), root["resource_id"].asString(), group_epoch);
+                    data_array[0]["msg_uuid"].asString(), root["resource_id"].asString(), group_epoch, relationship);
+                resource_existing = saved.existing;
                 data_array[0]["msg_content"] = saved.content;
                 _chat_msgs.push_back(std::make_shared<ChatMessage>(saved.id,
                     data_array[0]["msg_uuid"].asString(), chat_id, from_uid, to_uid, saved.content, 0));
+            } catch (const messaging::PrivateSendDenied&) {
+                return_value["error"] = ErrorCodes::UidInvalid;
+                return_value["commit_error"] = "InvalidMembership"; return;
             } catch (const std::exception&) {
                 return_value["error"] = ErrorCodes::UidInvalid;
                 return_value["commit_error"] = "StorageUnavailable";
@@ -707,7 +743,7 @@ void LogicSystem::RegisterCallbacks() {
             }
             result = MysqlMgr::GetInstance()->AddChatMessageList(
                 message_commit::AuthenticatedPrincipal{principal_uid}, from_uid, to_uid, chat_id,
-                _cache_msgs, _chat_msgs, std::chrono::steady_clock::now() + std::chrono::seconds(5), group_epoch);
+                _cache_msgs, _chat_msgs, std::chrono::steady_clock::now() + std::chrono::seconds(5), group_epoch, relationship);
         }
         if (!result.IsSuccess()) {
 			return_value["error"] = ErrorCodes::UidInvalid;
@@ -733,7 +769,18 @@ void LogicSystem::RegisterCallbacks() {
 
 		return_value["uuid_msgId"] = uuid_msgId;
         // Fixed-member groups use authoritative short-interval sync, including across instances.
-        if (group_message) return;
+        if (group_message || resource_existing) return;
+        if (!resource_message) {
+            Json::Value created(Json::arrayValue);
+            std::vector<std::shared_ptr<ChatMessage>> messages;
+            for (std::size_t index = 0; index < result.items.size(); ++index) {
+                if (result.items[index].disposition != message_commit::Disposition::CREATED) continue;
+                created.append(data_array[static_cast<Json::ArrayIndex>(index)]);
+                messages.push_back(_chat_msgs[index]);
+            }
+            if (messages.empty()) return;
+            data_array = std::move(created); _chat_msgs = std::move(messages);
+        }
 
 		// 查询redis查看对方的ip
 
@@ -773,7 +820,7 @@ void LogicSystem::RegisterCallbacks() {
 				notify["notify_msgs"] = notify_msgs;
 
 				// 直接在这里通知
-				std::string notify_str = notify.toStyledString();
+				std::string notify_str = messaging::BoundedNotification(notify);
 				session->Send({MSG_NOTIFY_CHAT_MSG_REQ, notify_str});
 			}
 			
@@ -997,131 +1044,19 @@ void LogicSystem::RegisterCallbacks() {
 	};
 }
 
-void LogicSystem::GetUserByUid(std::string uid, Json::Value& value) {
-	std::string key = USER_BASE_INFO + uid;
-	// 从redis中查询用户信息
-	std::string info_str = "";
-	bool b_info = RedisMgr::GetInstance()->Get(key, info_str);
-	// 查询到用户信息
-	if (b_info) {
-		Json::Reader reader;
-		Json::Value root;
-		reader.parse(info_str, root);
-
-		auto uid = root["uid"].asInt();
-		auto name = root["name"].asString();
-		auto password = root["password"].asString();
-		auto email = root["email"].asString();
-		auto description = root["description"].asString();
-		auto icon = root["icon"].asString();
-		auto sex = root["sex"].asInt();
-
-		SPDLOG_DEBUG("search user cache hit by uid, uid={}", uid);
-		
-		value["error"] = ErrorCodes::Success;
-		value["uid"] = uid;
-		value["name"] = name;
-		value["password"] = password;
-		value["email"] = email;
-		value["description"] = description;
-		value["icon"] = icon;
-		value["sex"] = sex;
-		return;
-	}
-	// redis中不存在，则查询数据库
-	auto uid_int = std::stoi(uid);
-	std::shared_ptr<UserInfo> user_info = nullptr;
-	user_info = MysqlMgr::GetInstance()->GetUserByUid(uid_int);
-	if (user_info == nullptr) {
-		value["error"] = ErrorCodes::UidInvalid;
-		return;
-	}
-
-	// 更新redis
-	Json::Value redis_value;
-	redis_value["uid"] = user_info->_uid;
-	redis_value["name"] = user_info->_name;
-	redis_value["password"] = user_info->_password;
-	redis_value["email"] = user_info->_email;
-	redis_value["description"] = user_info->_description;
-	redis_value["icon"] = user_info->_icon;
-	redis_value["sex"] = user_info->_sex;
-	// 更新到redis中
-	RedisMgr::GetInstance()->Set(key, redis_value.toStyledString());
-
-	value["error"] = ErrorCodes::Success;
-	value["uid"] = user_info->_uid;
-	value["name"] = user_info->_name;
-	value["password"] = user_info->_password;
-	value["email"] = user_info->_email;
-	value["description"] = user_info->_description;
-	value["icon"] = user_info->_icon;
-	value["sex"] = user_info->_sex;
-
-	return;
+/** @brief 只投影可公开用户字段；登录与搜索共享数据库权威资料。 */
+static void PublicUser(const std::shared_ptr<UserInfo>& user, Json::Value& value) {
+    value["error"] = user ? ErrorCodes::Success : ErrorCodes::UidInvalid;
+    if (!user) return;
+    value["uid"]=user->_uid; value["name"]=user->_name; value["description"]=user->_description;
+    value["icon"]=user->_icon; value["sex"]=user->_sex;
 }
-
+void LogicSystem::GetUserByUid(std::string uid, Json::Value& value) {
+    try { PublicUser(MysqlMgr::GetInstance()->GetUserByUid(std::stoi(uid)),value); }
+    catch (const std::exception&) { value["error"]=ErrorCodes::UidInvalid; }
+}
 void LogicSystem::GetUserByName(std::string name, Json::Value& value) {
-	std::string key = USER_NAME_INFO + name;
-	// 从redis中查询用户信息
-	std::string info_str = "";
-	bool b_info = RedisMgr::GetInstance()->Get(key, info_str);
-	// 查询到用户信息
-	if (b_info) {
-		Json::Reader reader;
-		Json::Value root;
-		reader.parse(info_str, root);
-
-		auto uid = root["uid"].asInt();
-		auto name = root["name"].asString();
-		auto password = root["password"].asString();
-		auto email = root["email"].asString();
-		auto description = root["description"].asString();
-		auto icon = root["icon"].asString();
-		auto sex = root["sex"].asInt();
-
-		SPDLOG_DEBUG("search user cache hit by name, uid={}", uid);
-
-		value["error"] = ErrorCodes::Success;
-		value["uid"] = uid;
-		value["name"] = name;
-		value["password"] = password;
-		value["email"] = email;
-		value["description"] = description;
-		value["icon"] = icon;
-		value["sex"] = sex;
-		return;
-	}
-	// redis中不存在，则查询数据库
-	std::shared_ptr<UserInfo> user_info = nullptr;
-	user_info = MysqlMgr::GetInstance()->GetUserByName(name);
-	if (user_info == nullptr) {
-		value["error"] = ErrorCodes::UidInvalid;
-		return;
-	}
-
-	// 更新redis
-	Json::Value redis_value;
-	redis_value["uid"] = user_info->_uid;
-	redis_value["name"] = user_info->_name;
-	redis_value["password"] = user_info->_password;
-	redis_value["email"] = user_info->_email;
-	redis_value["description"] = user_info->_description;
-	redis_value["icon"] = user_info->_icon;
-	redis_value["sex"] = user_info->_sex;
-	// 更新到redis中
-	RedisMgr::GetInstance()->Set(key, redis_value.toStyledString());
-
-	value["error"] = ErrorCodes::Success;
-	value["uid"] = user_info->_uid;
-	value["name"] = user_info->_name;
-	value["password"] = user_info->_password;
-	value["email"] = user_info->_email;
-	value["description"] = user_info->_description;
-	value["icon"] = user_info->_icon;
-	value["sex"] = user_info->_sex;
-
-	return;
+    PublicUser(MysqlMgr::GetInstance()->GetUserByName(name),value);
 }
 
 bool LogicSystem::IsOnlyDigit(std::string& uid_name) {
@@ -1133,48 +1068,10 @@ bool LogicSystem::IsOnlyDigit(std::string& uid_name) {
 	return true;
 }
 
-bool LogicSystem::GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared_ptr<UserInfo>& userinfo) {
-	// 先在redis中查询
-	std::string info_str = "";
-	bool success = RedisMgr::GetInstance()->Get(baseinfo_key, info_str);
-
-	// redis中查询成功
-	if (success) {
-		Json::Reader reader;
-		Json::Value root;
-		reader.parse(info_str, root);
-
-		userinfo->_uid = root["uid"].asInt();
-		userinfo->_name = root["name"].asString();
-		userinfo->_password = root["password"].asString();
-		userinfo->_email = root["email"].asString();
-		userinfo->_description = root["description"].asString();
-		userinfo->_icon = root["icon"].asString();
-		userinfo->_sex = root["sex"].asInt();
-	}
-	else {
-		// redis中没有，则去mysql中查询
-		std::shared_ptr<UserInfo> user_info = nullptr;
-		user_info = MysqlMgr::GetInstance()->GetUserByUid(uid);
-		if (user_info == nullptr) {
-			return false;
-		}
-		userinfo = user_info;
-		// 将结果写入redis
-		Json::Value redis_root;
-		redis_root["uid"] = userinfo->_uid;
-		redis_root["name"] = userinfo->_name;
-		redis_root["password"] = userinfo->_password;
-		redis_root["description"] = userinfo->_description;
-		redis_root["icon"] = userinfo->_icon;
-		redis_root["email"] = userinfo->_email;
-		redis_root["sex"] = userinfo->_sex;
-
-		// json数据序列化，并写入redis
-		RedisMgr::GetInstance()->Set(baseinfo_key, redis_root.toStyledString());
-	}
-
-	return true;
+/** @brief 从权威数据库读取公开用户模型，避免旧缓存覆盖资料更新。 */
+bool LogicSystem::GetUserBaseInfo(std::string, int uid, std::shared_ptr<UserInfo>& userinfo) {
+    userinfo = MysqlMgr::GetInstance()->GetUserByUid(uid);
+    return userinfo != nullptr;
 }
 
 bool LogicSystem::GetApplyFriendList(int uid, std::vector<std::shared_ptr<ApplyInfo>>& applylist) {

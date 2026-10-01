@@ -28,8 +28,11 @@ public:
     const SessionId& Id() const noexcept { return _id; }
     /** @brief 返回已绑定 UID 的原子快照；未绑定或进入关闭时为 0。 */
     int AuthenticatedUid() const noexcept { return _authenticated_uid.load(); }
-    /** @brief 查询客户端是否启用送达及已读回执能力。 */
-    /** @brief 返回此连接是否协商动态群成员协议。 */
+    /** @brief 返回此连接是否协商资料与好友管理协议。 */
+    bool SupportsSocial() const noexcept { return _social.load(); }
+    /** @brief 登录协商是否支持版本化资料和好友关系。 */
+    void EnableSocial(bool enabled) noexcept { _social.store(enabled); }
+    /** @brief 查询已协商的群能力。 */
     bool SupportsGroups() const noexcept { return _groups.load(); }
     /** @brief 保存登录协商结果。 */
     void EnableGroups(bool enabled) noexcept { _groups.store(enabled); }
@@ -86,6 +89,7 @@ private:
     std::optional<SessionCloseReason> _close_reason;
     std::atomic<bool> _receipts{false};
     std::atomic<bool> _groups{false};
+    std::atomic<bool> _social{false};
     std::atomic<int> _authenticated_uid{0}; // Read-only snapshot for business threads.
     int _binding_uid = 0;
     bool _binding = false;

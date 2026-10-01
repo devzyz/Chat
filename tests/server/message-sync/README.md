@@ -79,3 +79,8 @@ send/sync permission. `TransferAndLeaveCannotRemoveTheOwner` races transfer agai
 the target's leave and requires exactly one success and one active owner.
 
 用户搜索协议扩展：`tcp_flow` 验证生产 ChatServer 1007/1008 的成功、未知 UID、参数类型错误均保留请求编号，同时兼容不携带编号的旧客户端。
+
+基础社交扩展使用迁移 007。`tcp_flow` 覆盖能力协商、资料更新/重名/版本冲突、公开投影、双向删除、
+删除后的历史与旧 UUID 确认、拒绝/重新申请/接受、复用原 chat_id、旧版本发送拒绝、在线大正文通知与同步、
+申请目录按字节连续分页以及重新登录恢复。`IncrementalByteBoundedPagesAndResourceIdentity` 进一步验证删除后
+资源引用仍可读、旧 UUID 仍可确认、旧版本不能创建引用而当前版本可提交。仍只使用自建临时 MySQL 与 Redis/Status 替身。

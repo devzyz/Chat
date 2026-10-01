@@ -936,3 +936,15 @@ Qt 控件及资源存储报告的完整用例集合，保留自动控件与真�
 | S06-SEARCH-01 | message-sync/integration.py tcp_flow | 生产 ChatServer 搜索编号的成功/错误回传及旧请求兼容 |
 
 既有资源 HTTP 续传用例扩展文本/附件组合提交、服务中断重启后的偏移续传与有序落盘断言；既有页面生命周期用例补发送按钮/快捷键接线。报告计数以 runner 为准，真实服务与替身证据分开记录。
+
+## 基础聊天易用性与社交版本
+
+| Test ID | 入口 | 保护合同 |
+| --- | --- | --- |
+| Q06-SOCIAL-01 | message_storage.persistence / socialVersionsAndSummaries | 独立资料/关系版本、删除后搜索过滤、旧 outbox 不复活、摘要排序与重启 |
+| Q06-DRAFT-01 | composer.interaction / conversationDrafts | 跨会话原生草稿、附件、撤销与重做 |
+| Q06-SUMMARY-01 | conversation_attention.widgets；localHistorySearchWidgets | 最近活动排序、未加载会话提醒与正文复制 |
+| S08-SOCIAL-01 | message-sync/integration.py / tcp_flow | 生产 TCP 资料/好友全生命周期、旧版本拒绝、分页、长正文和安全投影 |
+| S08-SOCIAL-02 | MessageSync.IncrementalByteBoundedPagesAndResourceIdentity | 真实 MySQL 删除后资源读取及新提交关系校验 |
+
+复用现有测试目标与 CTest 报告分组；本轮人工桌面验收后置，不把接口或控件回归当成完整人工验收。

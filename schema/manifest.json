@@ -49,6 +49,14 @@
       "checksum": "33ded568bb131213224a26cf5929286820e8a4809be1641c4f5ceaab4fbabc77",
       "reversible": false,
       "recovery": "Restore a verified pre-migration backup; for an owned empty bootstrap database only, explicitly recreate it and reapply. Never retry partially applied DDL."
+    },
+    {
+      "id": 7,
+      "version": "7",
+      "file": "migrations/007_basic_social.sql",
+      "checksum": "b54d0422dd3feb6f189e2740fa563bc58defbca04e43cd7fdba14e709f2ed7d3",
+      "reversible": false,
+      "recovery": "Restore a verified pre-migration backup; for an owned empty bootstrap database only, explicitly recreate it and reapply. Never retry partially applied DDL."
     }
   ]
 }

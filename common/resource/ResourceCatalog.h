@@ -1,4 +1,5 @@
 #pragma once
+#include "../message/PrivateSendAccess.h"
 #include "../mysql/ConnectionPool.h"
 #include "../message/MessagePersistence.h"
 #include <jdbc/mysql_driver.h>
@@ -61,7 +62,7 @@ public:
         rows.reset(group->executeQuery()); return rows->next();
     }
     /** @brief 保存已提交资源消息的服务器 ID 与序列化内容。 */
-    struct Message { int id; std::string content; };
+    struct Message { int id; std::string content; bool existing = false; };
     /** @brief 查询用户当前已发布头像的资源 ID，不存在时返回空字符串。 */
     std::string GetAvatar(int uid) {
         auto lease = Acquire();
@@ -89,7 +90,7 @@ public:
             throw std::runtime_error("avatar resource unavailable or not owned");
     }
     /** @brief 在会话行锁事务中校验资源归属并提交消息引用；同 UUID 幂等复用，身份冲突抛异常。 */
-    Message CommitMessage(int sender, int recipient, int chat, const std::string& uuid, const std::string& id, std::int64_t epoch = 0) {
+    Message CommitMessage(int sender, int recipient, int chat, const std::string& uuid, const std::string& id, std::int64_t epoch = 0, std::int64_t relationship = 0) {
         if (uuid.empty() || uuid.size() > 64) throw std::invalid_argument("invalid message UUID");
         auto lease = Acquire();
         messaging::Transaction transaction(*lease);
@@ -106,10 +107,11 @@ public:
             if (prior->next()) {
                 if (prior->getString(3) != id || prior->getInt(4) != chat || prior->getInt(5) != recipient)
                     throw std::runtime_error("message UUID conflict");
-                Message message{prior->getInt(1), prior->getString(2)};
+                Message message{prior->getInt(1), prior->getString(2), true};
                 transaction.Commit(); return message;
             }
             prior.reset();
+            if (recipient > 0) messaging::CheckPrivateSend(*lease,chat,relationship);
             std::unique_ptr<sql::PreparedStatement> resource(lease->prepareStatement(
                 "SELECT name,media_type,size_bytes,sha256 FROM resource_file WHERE resource_id=? AND owner_uid=?"));
             resource->setString(1, id); resource->setInt(2, sender);

@@ -13,6 +13,8 @@ class MessageStorageTests : public QObject
 {
     Q_OBJECT
 private slots:
+    /** @brief 验证关系墓碑和版本拒绝旧重试，资料单调合并及摘要跨重启保持。 */
+    void socialVersionsAndSummaries();
     /** @brief 验证私聊/群提醒去重、本人消息排除、查看边界、重启和账号隔离。 */
     void conversationAttentionPersistence();
     /** @brief 验证 schema 4 升级备份且不将无法判断的旧历史重新标为新消息。 */
@@ -812,6 +814,57 @@ void MessageStorageTests::schemaTwoDirectoryUpgrade()
     QVERIFY(QFile::exists(root.path()+"/messages.schema3.sqlite"));
     QCOMPARE(store.cursor(12),10);
     QCOMPARE(store.directory()["contacts"].toArray().size(),1);
+}
+
+
+void MessageStorageTests::socialVersionsAndSummaries()
+{
+    QTemporaryDir root; LocalMessageStore store; store.open(root.path(),7);
+    QJsonObject relation{{"id",12},{"uid",8},{"type","private"},{"relationship_active",true},{"relationship_revision","1"}};
+    store.mergeDirectory({{"conversations",QJsonArray{relation}}, {"contacts",QJsonArray{QJsonObject{
+        {"id",8},{"uid",8},{"name","new name"},{"description","new description"},{"profile_revision","3"},
+        {"relationship_active",true},{"relationship_revision","1"}}}}});
+    QJsonObject request{{"chat_id",12},{"from_uid",7},{"to_uid",8},{"relationship_revision","1"},
+        {"text_array",QJsonArray{QJsonObject{{"msg_uuid","00000000-0000-4000-8000-000000000991"},{"msg_content","retained"}}}}};
+    store.saveOutgoingRequest(request);
+    relation["relationship_active"] = false; relation["relationship_revision"] = "2";
+    store.mergeDirectory({{"conversations",QJsonArray{relation}},{"contacts",QJsonArray{QJsonObject{
+        {"id",8},{"name","old name"},{"profile_revision","1"},{"relationship_active",false},{"relationship_revision","2"}}}}});
+    QVERIFY(store.dispatchDue(QDateTime::currentMSecsSinceEpoch()+60000).isEmpty());
+    QVERIFY_EXCEPTION_THROWN(store.saveOutgoingRequest(request),std::exception);
+    QCOMPARE(store.directory()["contacts"].toArray().first().toObject()["name"].toString(),QString("new name"));
+    QVERIFY(store.findDirectory("contacts","",0,50).isEmpty());
+    relation["relationship_active"] = true; relation["relationship_revision"] = "3";
+    store.mergeDirectory({{"conversations",QJsonArray{relation}}});
+    store.resumeOutgoing();
+    QVERIFY(store.dispatchDue(QDateTime::currentMSecsSinceEpoch()+120000).isEmpty());
+    QCOMPARE(store.history(12,0,50).messages.size(),1);
+    store.close(); store.open(root.path(),7);
+    QVERIFY(store.dispatchDue(QDateTime::currentMSecsSinceEpoch()+180000).isEmpty());
+    // New explicit submissions use the current version, while stale directory data cannot revive old work.
+    relation["relationship_revision"] = "1";
+    store.mergeDirectory({{"conversations",QJsonArray{relation}}});
+    request["relationship_revision"] = "3";
+    request["text_array"] = QJsonArray{QJsonObject{{"msg_uuid","00000000-0000-4000-8000-000000000992"},{"msg_content","current"}}};
+    store.saveOutgoingRequest(request);
+    QCOMPARE(store.dispatchDue(QDateTime::currentMSecsSinceEpoch()+240000).size(),1);
+    for (int id=20;id<40;++id) {
+        store.mergeDirectory({{"conversations",QJsonArray{QJsonObject{{"id",id},{"type","private"}}}}});
+        StoredMessage row; row.chatId=id; row.senderId=8; row.recipientId=7; row.messageId=id;
+        row.content=QString("message %1").arg(id); row.sentAt=id*1000;
+        store.applySyncPage(id,0,id,{row});
+    }
+    auto summaries = store.conversationSummaries();
+    QCOMPARE(summaries.size(),21);
+    QCOMPARE(summaries[1].toObject()["chat_id"].toInt(),39);
+    auto row = message(50); row.chatId=20; row.sentAt=QDateTime::currentMSecsSinceEpoch()+10000;
+    row.content="@resource:v1:{\"name\":\"photo.png\"}";
+    store.applySyncPage(20,20,50,{row});
+    summaries=store.conversationSummaries();
+    QCOMPARE(summaries.first().toObject()["chat_id"].toInt(),20);
+    QCOMPARE(summaries.first().toObject()["summary"].toString(),QString("photo.png"));
+    store.close(); store.open(root.path(),7);
+    QCOMPARE(store.conversationSummaries().first().toObject()["chat_id"].toInt(),20);
 }
 
 QTEST_GUILESS_MAIN(MessageStorageTests)

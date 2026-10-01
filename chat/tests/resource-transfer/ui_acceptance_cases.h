@@ -4,6 +4,7 @@
 #include "chatuseritem.h"
 #include "contactuserlist.h"
 #include <QComboBox>
+#include <QClipboard>
 #include <QApplication>
 #include <QInputDialog>
 #include <QLabel>
@@ -31,6 +32,12 @@ inline void ResourceTransferTests::conversationAttentionWidgets()
             rows.append(row);
         }
         store.applySyncPage(30, 0, 3, rows);
+        // 更近的本人消息使待验证的未读会话仍在第一页之外，避免自动展示清除其提醒。
+        for (int chat=1;chat<30;++chat) {
+            StoredMessage recent; recent.chatId=chat; recent.messageId=1; recent.senderId=7;
+            recent.recipientId=chat+100; recent.content=QString("recent-%1").arg(chat); recent.sentAt=4000+chat;
+            store.applySyncPage(chat,0,1,{recent});
+        }
     }
     const auto user = UserMgr::instance();
     user->setUserInfo(std::make_shared<UserInfo>(7, "self", ""));
@@ -50,6 +57,9 @@ inline void ResourceTransferTests::conversationAttentionWidgets()
         ChatDialog window; window.resize(1000, 650); window.show();
         auto *list = window.findChild<ChatUserList*>();
         QTRY_VERIFY(list->count() > 0);
+        auto *first = qobject_cast<ChatUserItem*>(list->itemWidget(list->item(0)));
+        QVERIFY(first); QCOMPARE(first->getChatInfo()->getChatId(),29);
+        QCOMPARE(first->findChild<QLabel*>("user_chat_label")->text(),QString("recent-29"));
         QTRY_VERIFY_WITH_TIMEOUT((window.loadChatUserList(), list->count() == 30), 5000);
         ChatUserItem *target = nullptr;
         for (auto *item : window.findChildren<ChatUserItem*>())
@@ -161,6 +171,9 @@ inline void ResourceTransferTests::localHistorySearchWidgets()
         [service](int chat,qint64 before) { service->loadHistory(chat,before); });
     page.setChatInfo(std::make_shared<ChatInfo>(8,"peer",QString(),QString(),870,ChatType::PRIVATE));
     auto *view=page.findChild<ChatDetailList*>(); QTRY_VERIFY(view->model()->rowCount()>0);
+    view->setCurrentIndex(view->model()->index(0,0));
+    QTest::keyClick(view,Qt::Key_C,Qt::ControlModifier);
+    QCOMPARE(QApplication::clipboard()->text(),view->currentIndex().data(MessageListModel::TextRole).toString());
     QTest::mouseClick(acceptanceButton(&page,QStringLiteral("查找历史")),Qt::LeftButton);
     auto *dialog=page.findChild<QDialog*>(); QVERIFY(dialog);
     auto *input=dialog->findChild<QLineEdit*>(); auto *list=dialog->findChild<QListWidget*>();

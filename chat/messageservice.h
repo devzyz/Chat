@@ -17,6 +17,8 @@ class MessageStorageWorker;
 class MessageService final : public QObject {
     Q_OBJECT
 public:
+    /** @brief 在原存储线程查询排序后的会话摘要。 */
+    void loadConversationSummaries();
     /** @brief 写盘失败时由服务兼容旧入口保留请求，或由提交控制器独占保留。 */
     enum class DraftRetention { Service, Caller };
     /** @brief 在存储线程查询全部或指定会话提醒，旧账号结果自动丢弃。 */
@@ -36,7 +38,7 @@ public:
     /** @brief 使账号任务失效，排队关闭数据库及退出工作线程，并等待线程结束。 */
     ~MessageService() override;
     /** @brief 结束旧账号代并异步打开新账号存储；uid 或路径无效则保持停用，receipts 控制回执协商能力。 */
-    void start(const QString &accountRoot, int uid, bool receipts = false);
+    void start(const QString &accountRoot, int uid, bool receipts = false, bool social = false);
     /** @brief 停止定时任务并递增账号代号，丢弃旧账号完成回调；关闭存储按工作队列顺序执行。 */
     void stop();
     /** @brief 查询当前是否关联有效账号，不等同于数据库异步打开成功。 */
@@ -69,9 +71,17 @@ public:
     void pauseOutgoing();
     /** @brief 返回当前已落盘群状态快照。 */
     QJsonObject groupState(int chatId) const { return _groupStates.value(chatId); }
+    /** @brief 返回已落盘的私聊关系版本。 */
+    QJsonObject privateState(int chatId) const { return _privateStates.value(chatId); }
+    /** @brief 首轮目录完整落盘后允许持久化批次调度。 */
+    void setSocialReady() { _socialReady = true; dispatchOutgoing(); }
+    /** @brief 返回本轮关系目录是否已验证，供提交入口阻止过早发送。 */
+    bool socialReady() const { return _socialReady; }
     /** @brief 在存储线程搜索当前会话，结果通过 searchLoaded 返回。 */
     void search(int chatId, const QString &text, qint64 before = 0);
 signals:
+    /** @brief 返回当前账号全部会话的轻量摘要和稳定顺序。 */
+    void conversationSummariesLoaded(QJsonArray rows);
     /** @brief 当前账号已停止，调用方取消未落盘任务。 */
     void stopped();
     /** @brief 指定 UUID 已落盘或保存失败，不表示服务器提交。 */
@@ -139,6 +149,8 @@ private:
     QTimer _syncTimer;
     QTimer _outgoingTimer;
     bool _dispatching = false;
+    bool _socialReady = true;
+    QHash<int,QJsonObject> _privateStates;
     bool _receipts = false;
     QHash<QString, QJsonObject> _receiptRequests;
     QSet<int> _receiptSync;

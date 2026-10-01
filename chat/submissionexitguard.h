@@ -5,6 +5,6 @@
 inline bool confirmSubmissionExit(QWidget *parent, bool hasPending)
 {
     return !hasPending || QMessageBox::question(parent, QObject::tr("未提交内容"),
-        QObject::tr("仍有未落盘的消息或附件。退出将丢弃这些内容，是否退出？"),
+        QObject::tr("仍有未发送草稿、消息或附件。退出将丢弃尚未保存的内容，是否退出？"),
         QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Yes;
 }

@@ -37,7 +37,7 @@ void ChatUserItem::setChatInfo(std::shared_ptr<ChatInfo> chat_info)
         UserMgr::instance()->bindAvatar(ui->icon_label, chat_info->getUid(), info ? info->_icon : QString(":/res/head_1.jpg"));
         ui->icon_label->setScaledContents(true);
         // 更新用户名和上次聊天记录
-        ui->user_name_label->setText(info ? (info->_backname.isEmpty() ? info->_name : info->_backname) : QString::number(chat_info->getUid()));
+        ui->user_name_label->setText(info ? (info->_backname.isEmpty() ? info->_name : info->_backname) : chat_info->name());
 
         auto last_msg_id = chat_info->getLastMsgId();
 
@@ -81,6 +81,14 @@ std::shared_ptr<ChatInfo> ChatUserItem::getChatInfo()
 void ChatUserItem::setLastTextChatMsg(QString last_text_msg)
 {
     ui->user_chat_label->setText(last_text_msg);
+}
+
+void ChatUserItem::setSummary(const QString &text, qint64 sentAt)
+{
+    ui->user_chat_label->setText(text);
+    const auto time = QDateTime::fromMSecsSinceEpoch(sentAt);
+    ui->time_label->setText(sentAt <= 0 ? QString() : time.toString(
+        time.date() == QDate::currentDate() ? "HH:mm" : "yyyy-MM-dd HH:mm"));
 }
 
 // 根据_new_msg_count来判断是否显示新消息提醒

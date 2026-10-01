@@ -1,6 +1,33 @@
 <!-- generated-by: gsd-doc-writer -->
 # 协议与数据契约规范
 
+## 基础资料与好友管理
+
+登录协商 `basic_social_v1`；未协商时 1042/1044/1046 返回 `UpgradeRequired`，
+客户端禁用新管理入口。身份始终取当前认证会话，不信任请求中的操作者 UID。
+
+| 请求/响应 | 参数与结果 |
+| --- | --- |
+| 1042/1043 | `name`、`description`、`expected_revision`，更新本人资料并返回 `profile` |
+| 1044/1045 | `operation=apply/accept/reject/delete`、`target_uid`、`expected_revision`；申请/接受附 `description` 和 `backname` |
+| 1046/1047 | `kind=profile/contacts/applications`；profile 可指定 `target_uid`，目录使用 `after`，返回 `items/next/load_more` |
+
+请求携带 1～64 字节 `request_id`，响应原样回传。版本及游标用规范十进制字符串，零仅代表尚不存在；
+资料比较 `profile_revision`，申请比较 `application_revision`（发起者通过 profile 的 `outgoing_revision` 取得），
+删除比较 `relationship_revision`。过期写命令返回 `VersionConflict`，不会自动采用最新版本重放。
+客户端请求上限 16，十秒超时；超时保留输入并提示重新读取结果。每十秒完整分页刷新资料、关系及申请，
+写操作完成后立即触发读取，超时由周期目录恢复，账号切换丢弃旧请求和回调。
+
+用户名、描述和备注最多 255 个字符，用户名去除首尾 SQL 空格且不能为空；重名返回 `NameExists`。
+请求仍受 2048 字节 TCP 帧限制。目录每页最多 50 条并按完整响应字节预算截断，无法容纳单条时
+返回 `ResponseTooLarge`。所有公开资料查询直接投影数据库中的公开字段，不返回密码、邮箱或令牌。
+
+删除双向好友边，同时将原私聊标记为失效并递增关系版本，取消双方申请。历史、回执和已有资源引用保留；
+重新申请并接受后复用原 chat_id，递增关系版本。1016 文本/资源新提交携带 `relationship_revision`，
+失效或不匹配时拒绝；未携带版本仅兼容初始版本 1。已提交且身份完全相同的 UUID 仍返回原确认，
+不重新推送；旧版审批仅能处理初始申请版本 1，不能批准后续重新申请。
+实时通知统一使用紧凑 JSON，超过 2048 字节时发送空正文的同步提示，接收端复用增量同步取正文。
+
 ## 头像与资源传输扩展
 
 ResourceServer HTTP、头像权限、用户目录和资源消息合同见 [Resources](Resources.md)

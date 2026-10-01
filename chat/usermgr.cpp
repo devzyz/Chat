@@ -151,6 +151,7 @@ void UserMgr::resetSession()
     _token.clear();
     _contact_load_count = 0;
     _apply_map.clear();
+    _socialProfiles.clear(); _applicationRevisions.clear();
     _friend_map.clear();
     _friend_list.clear();
     _chat_map.clear();
@@ -181,6 +182,7 @@ void UserMgr::addFriendApplications(QJsonArray list) {
     // 遍历数据，添加数据
     for (const QJsonValue& value : list) {
         auto fromuid = value["fromuid"].toInt();
+        _applicationRevisions[fromuid] = value["application_revision"].toString();
         auto applyname = value["applyname"].toString();
         auto applydescription = value["applydescription"].toString();
         auto applyicon = value["applyicon"].toString();
@@ -201,6 +203,21 @@ void UserMgr::addFriends(QJsonArray list)
     // 遍历数据，添加数据
     for (const QJsonValue& value : list) {
         auto uid = value["uid"].toInt();
+        _socialProfiles[uid] = value.toObject();
+        if (value["is_self"].toBool()) {
+            if (_user_info && uid == _user_info->_uid) {
+                _user_info->_name = value["name"].toString(); _user_info->_description = value["description"].toString();
+                emit profileChanged();
+            }
+            continue;
+        }
+        if (value.toObject().contains("relationship_active") && !value["relationship_active"].toBool()) {
+            _friend_map.remove(uid);
+            _friend_list.erase(std::remove_if(_friend_list.begin(),_friend_list.end(),
+                /** @brief 解除好友只移除联系人，不触碰历史会话。 */
+                [uid](const std::shared_ptr<UserInfo> &row) { return row->_uid == uid; }),_friend_list.end());
+            continue;
+        }
         auto name = value["name"].toString();
         auto description = value["description"].toString();
         auto icon = value["icon"].toString();
@@ -379,6 +396,7 @@ void UserMgr::applyDirectory(const QJsonObject &directory)
         }
         const int peer = row["uid"].toInt();
         const auto contact = friendById(peer);
+        if (auto existing = chatInfo(chat)) existing->setName(contact ? contact->_name : row["name"].toString(existing->name()));
         addPrivateChatMapping(peer, chat);
         addChatInfo(chat, std::make_shared<ChatInfo>(peer,
             contact ? contact->_name : row["name"].toString(QString::number(peer)),

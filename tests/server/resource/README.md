@@ -52,3 +52,5 @@ SHA-256 and decodes all video frames. A later joiner sees no earlier messages an
 these resources; a removed member cannot download them either. New private references to the same
 resources restore independent access, which survives group dissolution. This uses the existing
 catalog/transfer paths. These are protocol/media evidence, not Qt card-display or manual desktop evidence.
+
+基础社交扩展后的 UUID 重试只确认原消息，不再次推送。`chat_flow_integration.py` 在重试 ACK 后使用接收方心跳响应作为有序边界，确认没有插入重复通知，并对所有收到的帧检查 2048 字节上限。

@@ -193,7 +193,7 @@ void LocalMessageStore::saveOutgoingRequest(const QJsonObject &request)
     const int recipient = request["to_uid"].toInt();
     const auto items = request["text_array"].toArray();
     const auto bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
-    require(canSendGroup(request), "Group membership changed; cannot send");
+    require(canSendGroup(request) && canSendPrivate(request), "Group membership changed; cannot send");
     require(chat > 0 && sender == _uid && (recipient > 0 || (recipient == 0 && request["chat_type"].toString() == "group" && isGroupChat(chat))) && !items.isEmpty() && bytes.size() <= 1950,
         "Invalid outgoing request");
     QVector<StoredMessage> messages;
@@ -260,7 +260,7 @@ QVector<QJsonObject> LocalMessageStore::dispatchDue(qint64 now, const QSet<int> 
         const auto facts = MessageStateReducer::reduce({SendPhase::Uncertain, ReceiptLevel::None, 0, priorAttempt},
             MessageStateReducer::Event::Dispatch, priorAttempt + 1);
         auto request = QJsonDocument::fromJson(rows.value(1).toByteArray()).object();
-        if (!canSendGroup(request)) {
+        if (!canSendGroup(request) || !canSendPrivate(request)) {
             query(_db, "UPDATE outgoing_batches SET paused=1,in_flight=0 WHERE batch_key=?", {key});
             query(_db, "UPDATE messages SET state=? WHERE message_id IS NULL AND state=? AND client_uuid IN "
                 "(SELECT uuid FROM outgoing_items WHERE batch_key=?)", {StoredMessage::Uncertain, StoredMessage::Pending, key});
@@ -409,8 +409,8 @@ void LocalMessageStore::open(const QString &accountRoot, int uid)
         require(version.next(), "Cannot read database version");
         const int schema = version.value(0).toInt();
         version.finish();
-        require(schema >= 0 && schema <= 5, "Message database requires a newer client");
-        if (schema > 0 && schema < 5) {
+        require(schema >= 0 && schema <= 6, "Message database requires a newer client");
+        if (schema > 0 && schema < 6) {
             auto backup = QDir(accountRoot).filePath(QString("messages.schema%1.sqlite").arg(schema));
             // A previous failed upgrade may leave an incomplete or stale backup. Never overwrite it.
             if (QFile::exists(backup)) backup = QDir(accountRoot).filePath(QString("messages.schema%1.").arg(schema)
@@ -451,8 +451,8 @@ void LocalMessageStore::open(const QString &accountRoot, int uid)
             query(_db, "CREATE TABLE conversation_attention(chat_id INTEGER PRIMARY KEY,seen_local_id INTEGER NOT NULL)");
             // 旧版本没有保存查看状态；不把所有历史消息重新当成新消息。
             if (schema > 0) query(_db, "INSERT INTO conversation_attention SELECT chat_id,MAX(local_id) FROM messages GROUP BY chat_id");
-            query(_db, "PRAGMA user_version=5");
         }
+        if (schema < 6) query(_db, "PRAGMA user_version=6");
         query(_db, "UPDATE outgoing_batches SET in_flight=0 WHERE in_flight=1");
         query(_db, "UPDATE messages SET state=? WHERE state=?", {StoredMessage::Uncertain, StoredMessage::Pending});
         transaction.commit();
@@ -656,6 +656,22 @@ LocalMessagePage LocalMessageStore::history(int chatId, qint64 before, int limit
     return page;
 }
 
+QJsonArray LocalMessageStore::conversationSummaries()
+{
+    auto rows = query(_db, "SELECT c.id,m.content,m.sent_at FROM conversations c LEFT JOIN messages m "
+        "ON m.local_id=(SELECT local_id FROM messages WHERE chat_id=c.id ORDER BY sent_at DESC,local_id DESC LIMIT 1) "
+        "ORDER BY m.sent_at DESC,m.local_id DESC,c.id DESC");
+    QJsonArray result;
+    while (rows.next()) {
+        auto text = rows.value(1).toString();
+        if (text.startsWith("@resource:v1:"))
+            text = QJsonDocument::fromJson(text.mid(13).toUtf8()).object()["name"].toString();
+        result.append(QJsonObject{{"chat_id",rows.value(0).toInt()},{"summary",text},
+            {"sent_at",QString::number(rows.value(2).toLongLong())}});
+    }
+    return result;
+}
+
 QJsonArray LocalMessageStore::directoryPage(const QString &kind, int after, int limit)
 {
     require(kind == "contacts" || kind == "conversations" || kind == "applications", "Invalid directory kind");
@@ -684,22 +700,35 @@ QJsonObject LocalMessageStore::mergeDirectory(const QJsonObject &directory)
             auto row = value.toObject();
             const int id = row["id"].toInt();
             require(id > 0, "Invalid directory identity");
-            if (kind == "conversations" || kind == "contacts") {
+            if (kind == "conversations" || kind == "contacts" || kind == "applications") {
                 auto previous = query(_db, "SELECT data FROM " + kind + " WHERE id=?", {id});
                 if (previous.next()) {
                     auto merged = QJsonDocument::fromJson(previous.value(0).toByteArray()).object();
                     if (kind == "conversations" && merged["type"] == "group" && merged.contains("group_revision")
                         && row["group_revision"].toString().toLongLong() < merged["group_revision"].toString().toLongLong()) continue;
+                    for (const auto &version : {QString("profile_revision"),QString("relationship_revision"),QString("application_revision")}) {
+                        if (!merged.contains(version) || row[version].toString().toLongLong() >= merged[version].toString().toLongLong()) continue;
+                        const QStringList fields = version == "profile_revision"
+                            ? (kind == "applications" ? QStringList{"name","icon","sex","profile_revision","applyname","applyicon","applysex","applydescription"}
+                                : QStringList{"name","description","icon","sex","profile_revision"})
+                            : version == "relationship_revision"
+                            ? QStringList{"relationship_active","relationship_revision"}
+                            : QStringList{"status","description","application_revision"};
+                        for (const auto &field : fields) row.remove(field);
+                    }
                     for (auto field = row.begin(); field != row.end(); ++field) merged[field.key()] = field.value();
                     row = merged;
                 }
             }
             query(_db, "INSERT INTO " + kind + "(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
                 {id, QJsonDocument(row).toJson(QJsonDocument::Compact)});
-            if (kind == "conversations" && row["type"] == "group") {
+            if (kind == "conversations") {
                 auto batches=query(_db,"SELECT batch_key,payload FROM outgoing_batches WHERE chat_id=?",{id});
                 QStringList invalid;
-                while (batches.next()) if (!canSendGroup(QJsonDocument::fromJson(batches.value(1).toByteArray()).object())) invalid.append(batches.value(0).toString());
+                while (batches.next()) {
+                    const auto request = QJsonDocument::fromJson(batches.value(1).toByteArray()).object();
+                    if (!canSendGroup(request) || !canSendPrivate(request)) invalid.append(batches.value(0).toString());
+                }
                 batches.finish();
                 for (const auto &key:invalid) {
                     query(_db,"UPDATE outgoing_batches SET paused=1,in_flight=0 WHERE batch_key=?",{key});
@@ -746,6 +775,7 @@ QJsonArray LocalMessageStore::findDirectory(const QString &kind, const QString &
     while (rows.next() && result.size() < limit) {
         const auto row = QJsonDocument::fromJson(rows.value(1).toByteArray()).object();
         if (kind == "conversations" && row["type"] != "group") continue;
+        if (kind == "contacts" && (row["is_self"].toBool() || (row.contains("relationship_active") && !row["relationship_active"].toBool()))) continue;
         if (row["name"].toString().contains(text,Qt::CaseInsensitive)
             || row["backname"].toString().contains(text,Qt::CaseInsensitive)
             || QString::number(rows.value(0).toInt()).contains(text)) result.append(row);
@@ -782,4 +812,15 @@ QVector<StoredMessage> LocalMessageStore::search(int chatId, const QString &text
         if (visible.contains(text,Qt::CaseInsensitive)) result.push_back(message);
     }
     return result;
+}
+
+bool LocalMessageStore::canSendPrivate(const QJsonObject &request)
+{
+    if (request["chat_type"] == "group") return true;
+    auto stored = query(_db,"SELECT data FROM conversations WHERE id=?",{request["chat_id"].toInt()});
+    if (!stored.next()) return true;
+    const auto state = QJsonDocument::fromJson(stored.value(0).toByteArray()).object();
+    if (!state.contains("relationship_revision")) return true;
+    const auto version = request["relationship_revision"].toString("1");
+    return state["relationship_active"].toBool() && version == state["relationship_revision"].toString();
 }

@@ -87,3 +87,7 @@ network group directory conversion and restores the group type after account res
 二者复用 `message_storage.persistence`，不增加存储测试聚合入口。
 
 `groupOperationSurvivesRefreshAndRestart` 验证目录刷新与管理命令落盘排队时不丢失原身份，重启后可恢复并清除。`schemaTwoDirectoryUpgrade` 同时覆盖 3→4 快照及数据保留。
+
+`socialVersionsAndSummaries` 复用默认 persistence 入口，验证真实 SQLite 中资料版本单调合并、
+失效联系人不出现在搜索、旧 outbox 在删除/重新加回/重启后均不重发、新版本显式提交成功，
+以及超过一页会话的摘要、附件名称与最近活动顺序持久化。

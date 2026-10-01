@@ -98,6 +98,14 @@ inline std::string CompactJson(const Json::Value& value) {
 
 // response already contains the request envelope. Size the complete serialized
 // response against the existing transport limit, not merely a message count.
+/** @brief 实时通知超过帧上限时只保留同步提示，正文由既有增量同步取得。 */
+inline std::string BoundedNotification(Json::Value response) {
+    auto bytes = CompactJson(response);
+    if (bytes.size() <= 2048) return bytes;
+    response["notify_msgs"] = Json::Value(Json::arrayValue);
+    return CompactJson(response);
+}
+
 /** @brief 读取指定游标之后的消息增量并形成同步响应。 */
 inline void SyncPage(sql::Connection& connection, int uid, int chat, std::int64_t after,
                      Json::Value& response, std::size_t maximum_body) {

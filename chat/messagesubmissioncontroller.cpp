@@ -104,6 +104,13 @@ bool MessageSubmissionController::submit(const MessageDraft &draft, int chatId, 
         if (state["group_state"] != "active") { emit rejected(tr("当前群不可发送")); return false; }
         context["chat_type"] = "group"; context["membership_epoch"] = state["membership_epoch"];
     }
+    if (!group) {
+        const auto state = _messages->privateState(chatId);
+        if (!_messages->socialReady() || (!state.isEmpty() && !state["relationship_active"].toBool())) {
+            emit rejected(tr("好友关系尚未确认或已解除，草稿已保留")); return false;
+        }
+        if (state.contains("relationship_revision")) context["relationship_revision"] = state["relationship_revision"];
+    }
     for (const auto &entry : draft.entries) {
         if (entry.kind == DraftEntry::Kind::Attachment) {
             const QFileInfo file(entry.content);

@@ -58,6 +58,7 @@ void ApplyFriendItem::showAddBtn(bool bshow)
         _added = false;
     }else {
         ui->apply_friend_add_friend_btn->hide();
+        ui->apply_friend_already_add_label->setText(_apply_info && _apply_info->_status == 2 ? tr("已拒绝或失效") : tr("已添加"));
         ui->apply_friend_already_add_label->show();
         _added = true;
     }
