@@ -105,6 +105,16 @@ PR #23 已合入 develop，合并提交 `e0f927d`。合并后的 Windows CI #65 
   `build/driver-deadline-green.txt` 分别验证 4.5 秒恢复后建聊、等待中停止、超过十秒失败后重登，均通过；
   探针未加入生产入口。完整 Qt CTest 66/66 通过（`build/client-readiness-all.log`），测试注册与增量规范通过。最终候选提交远端 CI 仍需复核，不将一次重跑绿灯当作间歇失败根因的证明。
 
+- 候选 `fa2a134` 的 Windows Qt 远端报告 66/66、0 失败/跳过；完整运行
+  [36808745816](https://github.com/devzyz/Chat/actions/runs/36808745816) 的 Linux 编译链接通过，
+  四账号群聊/三类资源 14/14 通过，但在第四个验收客户端 `released` 退出时失败，后续恢复用例缺失。
+  `build/ci-fa2a134-evidence/` 的清理为失败，不能记为完整真实环境通过。
+- 退出路径存在协议停止 ACK 后立即 SIGTERM 的竞态。现在仅已确认协议退出的 Qt 客户端先等待自然退出五秒；
+  超时再用剩余十秒清理，并继续判失败。普通服务保持原主动停止逻辑，异常退出和升级终止仍拒绝通过。
+  监督器替身回归在旧实现产生 `exit-143`（`build/ci-stop-red.log`），修复后相关 9/9，
+  含证据合同的本地回归 27/27（`build/client-shutdown-contracts.log`），0 失败/跳过。
+  历史 CI 未保留具体退出码，因此不能把模拟的 143 当作历史事实；本轮增加固定分类诊断，仍待真实重跑确认。
+
 ## 未完成的验收与下一步
 
 1. 本机完整生产依赖：当前 VMware VM 不在运行，VMware NAT Service 停止；启动服务需要 Windows 管理员。

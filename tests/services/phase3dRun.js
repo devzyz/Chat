@@ -17,6 +17,7 @@ async function run(root) {
     const cases = [];
     let coordinator;
     let primaryFailure;
+    let primaryDiagnostic;
     let cleanup = { complete: false };
     const record = /** 记录用例耗时与真实结果，失败时以稳定 Test ID 中断。 */ async (id, name, action) => {
         const started = performance.now();
@@ -36,11 +37,12 @@ async function run(root) {
         await runFiveProcessCases(coordinator, record, root, selector);
     } catch (error) {
         primaryFailure = /^E03-(?:CONTRACT|JOURNEY|XMSG|RECOVER|RELEASE)-\d\d$/.test(error.message) ? error.message : 'setup';
+        primaryDiagnostic = caseDiagnostic(error);
     } finally {
         if (coordinator) {
             try { cleanup = await coordinator.teardown(); } catch { cleanup = { complete: false }; }
         }
-        fs.writeFileSync(path.join(root, 'teardown.json'), JSON.stringify({ ...cleanup, primaryFailure }));
+        fs.writeFileSync(path.join(root, 'teardown.json'), JSON.stringify({ ...cleanup, primaryFailure, primaryDiagnostic }));
         writeReports(root, selector, cases, { groups, manifest: 'phase3d-reports.json', level: 'E2E' });
         const complete = !primaryFailure && cleanup.complete === true &&
             cases.length === groups.reduce(/** 汇总全部必需用例，缺项不能通过。 */ (sum, group) => sum + group.expected, 0) &&
