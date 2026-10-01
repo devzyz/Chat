@@ -29,6 +29,9 @@ Additional state-control methods remain inside the same component CTest entry:
 
 Q05-STORE-06 also verifies retrying an unsaved original request after local storage recovers.
 
+`committedSyncPageRemainsVisibleAfterFailure` 验证非末页提交后立即刷新消息，
+后续页失败仍可读到已提交正文，恢复从已提交游标继续，最后空页不重复刷新。
+
 Run the owning entry:
 
 ```powershell

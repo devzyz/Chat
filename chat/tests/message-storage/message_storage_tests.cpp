@@ -41,6 +41,8 @@ private slots:
     void accountsAndLocalPagination();
     /** 验证消息服务同步流程并拒绝旧会话结果污染新账号。 */
     void serviceSyncAndSessionIsolation();
+    /** @brief 验证分页补拉中已提交的正文不被后一页失败或空页阻止刷新。 */
+    void committedSyncPageRemainsVisibleAfterFailure();
     /** 验证待发消息必须先持久化，存储失败不得发送。 */
     void outgoingRequiresDurableStorage();
     /** 验证增量刷新补全已展示区间，不截断为固定页长。 */
@@ -405,6 +407,47 @@ void MessageStorageTests::serviceSyncAndSessionIsolation()
     const auto priorRequests = requests.size();
     QTRY_VERIFY_WITH_TIMEOUT((service.synchronize(12), requests.size() > priorRequests), 5000);
     QCOMPARE(requests.last().at(0).toJsonObject()["after_id"].toInteger(), 0);
+}
+
+void MessageStorageTests::committedSyncPageRemainsVisibleAfterFailure()
+{
+    QTemporaryDir directory;
+    MessageService service;
+    QSignalSpy requests(&service, &MessageService::syncRequested);
+    QSignalSpy changed(&service, &MessageService::messagesChanged);
+    QSignalSpy failed(&service, &MessageService::failed);
+    QSignalSpy loaded(&service, &MessageService::historyLoaded);
+    service.start(directory.path(), 7);
+    service.registerChat(12);
+    QTRY_COMPARE(requests.size(), 1);
+    auto response = requests.takeFirst()[0].toJsonObject();
+    response["error"] = 0;
+    response["msgs"] = QJsonArray{QJsonObject{{"message_id", 10}, {"send_id", 8}, {"recv_id", 7},
+        {"content", "committed first page"}, {"created_at", 1700000000}, {"msg_uuid", "first-page"}}};
+    response["next_cursor"] = 10;
+    response["load_more"] = true;
+    service.acceptSyncPage(response);
+    QTRY_COMPARE(requests.size(), 1);
+    auto next = requests.takeFirst()[0].toJsonObject();
+    next["error"] = 1;
+    service.acceptSyncPage(next);
+    QTRY_COMPARE(failed.size(), 1);
+    // 第二页失败前，已落盘的第一页必须已通知 UI 刷新。
+    QCOMPARE(changed.size(), 1);
+    service.loadHistory(12);
+    QTRY_COMPARE(loaded.size(), 1);
+    QCOMPARE(qvariant_cast<QVector<StoredMessage>>(loaded.first()[2]).first().content,
+        QString("committed first page"));
+    service.synchronize(12);
+    QTRY_COMPARE(requests.size(), 1);
+    next = requests.takeFirst()[0].toJsonObject();
+    QCOMPARE(next["after_id"].toInteger(), qint64(10));
+    next["error"] = 0; next["msgs"] = QJsonArray{};
+    next["next_cursor"] = 10; next["load_more"] = false;
+    QSignalSpy synchronized(&service, &MessageService::synchronized);
+    service.acceptSyncPage(next);
+    QTRY_COMPARE(synchronized.size(), 1);
+    QCOMPARE(changed.size(), 1);
 }
 
 void MessageStorageTests::outgoingRequiresDurableStorage()

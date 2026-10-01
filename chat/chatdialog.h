@@ -27,11 +27,7 @@ public:
     void loadChatUserList();
 
 protected:
-    /**
-     * @brief eventFilter
-     * @return
-     * 处理点击位置，因为要调用handleGlobalMousePress
-     */
+    /** @brief 处理搜索区外点击及窗口激活后的历史刷新，返回基类事件过滤结果。 */
     bool eventFilter(QObject * watched, QEvent * event) override;
 
 private:

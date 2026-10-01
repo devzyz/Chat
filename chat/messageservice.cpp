@@ -234,11 +234,11 @@ void MessageService::acceptSyncPage(const QJsonObject &response)
         _committing.remove(chatId);
         _requests.remove(chatId);
         sendReceipts(chatId);
+        if (changed) emit messagesChanged(chatId);
         if (more) synchronize(chatId);
         else {
             _recoveringChats.remove(chatId);
             dispatchOutgoing();
-            if (changed) emit messagesChanged(chatId);
             emit synchronized(chatId, next);
         }
     }, /** @brief 写入失败后释放同步标记，后续周期可以重试且游标未推进。 */

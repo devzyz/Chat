@@ -6,6 +6,7 @@
 ## 当前工作：基础聊天软件功能收口
 
 本轮按用户目标只收口基础软件功能，不将性能优化、认证重构、自动服务发现或运维体系作为完成门槛。
+用户明确要求本阶段通过自动化自查，人工操作验收留到主体功能完成后，不作为本轮提交 PR 的阻塞条件。
 PR #23、#24 均已合入 develop，当前任务分支 `fix/client/basic-chat-completion` 基于 `aa868c8`。
 PR #24 最终提交 `39b35f1` 的 [完整 CI](https://github.com/devzyz/Chat/actions/runs/36810440438)
 已通过 Windows、Linux 和真实环境验收；下载核验真实服务 47 项、Qt 控件 18 项、资源存储 8 项均无失败/跳过，
@@ -16,6 +17,9 @@ PR #24 最终提交 `39b35f1` 的 [完整 CI](https://github.com/devzyz/Chat/act
 不把本地清除当成对方已读回执。SQLite 升到 5，旧库先备份，保留正文/目录/outbox/回执；旧历史不重新提醒。
 新增实际控件回归已观察 RED（期望 2、实际 0），修复后通过，且纳入默认客户端 Component 回归。
 本轮完整回归结果见下方“本轮验证”；四账号人工桌面仍与自动验证分开记录。
+
+继续自查修复分页补拉的刷新遗漏：每个非空页提交后立即发布消息变化，后续页失败不再隐藏已保存消息。
+补齐隐藏/最小化/模态遮挡期间的提醒自动回归，并修复测试客户端恢复登录后遗留账号数据库的清理缺口。
 
 | 阶段 | 实现与当前验收边界 |
 | --- | --- |
@@ -126,17 +130,20 @@ PR #24 最终提交 `39b35f1` 的 [完整 CI](https://github.com/devzyz/Chat/act
 
 - 新提醒控件回归：修复前 `build/attention-red.txt` 失败，修复后 `build/attention-widget-green.txt` 通过。
 - 私聊/群提醒存储和 SQLite 4 升级：`build/attention-store-green.txt` 通过。
+- 分页补拉回归：`build/sync-page-red.txt` 复现已提交页未通知刷新，`build/sync-page-green.txt` 通过。
+- 后台提醒控件回归：`build/attention-background-ctest.log` 通过。
+- 临时账号清理：`build/session-cleanup-red.txt` 复现目录残留，`build/session-cleanup-green.txt` 通过。
 - `RunClientTests -Configuration Release` 构建生产 Qt 客户端并通过 67/67 CTest（24 Unit、15 Component、28 Integration），
-  日志 `build/basic-chat-client-tests.log`，报告 `build/test-results/client_*.xml`；新增提醒进入默认 Component 入口。
-- 完整 Qt 资源/群管理/本地查找控件套件 19/19，0 失败/跳过：`build/basic-chat-widgets.xml`、
-  `build/basic-chat-widgets.txt`。资源 HTTP 使用既有 `ResourceTests.exe` 隔离服务，非本轮完整生产服务重跑。
-- 增量规范零违规、测试注册检查、控件证据校验器回归通过；`build/basic-chat-conventions.log`、
-  `build/basic-chat-evidence-tests.log`。本轮未提交或运行新的远端 CI，不借用此前 PR 的通过结果。
+  日志 `build/basic-chat-client-tests-final.log`，报告 `build/test-results/client_*.xml`；新增提醒进入默认 Component 入口。
+- 完整 Qt 资源/群管理/本地查找控件套件 19/19，0 失败/跳过：`build/basic-chat-widgets-final.xml`、
+  `build/basic-chat-widgets-final.txt`。资源 HTTP 使用既有 `ResourceTests.exe` 隔离服务，非本轮完整生产服务重跑。
+- 增量规范零违规、测试注册检查、控件证据校验器等 Node 回归 5/5 通过；`build/basic-chat-conventions-final.log`、
+  `build/basic-chat-evidence-final.log`。远端 CI 以本任务 PR 的实际运行结果为准，不借用此前 PR 的通过结果。
 
 ## 下一步与边界
 
 基础账号、好友、私聊、群管理、附件、历史和重登恢复均已有实现及自动验证。
 当前接受 20 人群、2 秒群补拉、手动配置地址及单账号单在线会话；性能与架构专项另行安排。
-四账号人工桌面走查尚未执行：登录/加好友/私聊/群聊/附件/断网重登/历史/切换账号，
-只对发现的实际使用问题做局部修复。自动 Qt 控件和真实服务结果不冒充人工跨机器验收。
+人工桌面走查按用户要求后置到主体功能完成后：登录/加好友/私聊/群聊/附件/断网重登/历史/切换账号。
+本轮以自动 Qt 控件、存储、协议和 CI 验证提交；不要求用户现在操作，也不把自动结果冒充人工跨机器验收。
 此前本机 VMware/依赖恢复问题不作为新增架构任务；本轮未访问或迁移个人服务数据库。

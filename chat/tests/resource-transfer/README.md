@@ -10,6 +10,7 @@ For headless execution use `-platform minimal -style Fusion`.
 `conversation_attention.widgets` 是 Business / Component CTest 入口，复用该目标中
 `conversationAttentionWidgets`，只使用真实 Qt 控件和临时 SQLite，不需要 ResourceServer。
 它验证未加载会话的消息提醒、分页、窗口重建、账号存储重开、点击清除及清除状态持久化。
+同一用例还通过真实异步补拉验证隐藏、最小化及模态窗口遮挡期间的新消息保留提醒，恢复前台后再清除。
 已接入默认客户端回归；全部资源传输用例仍需下述独立 HTTP 测试服务。
 
 The resume case creates a real PNG, cancels after 64 KiB is acknowledged, destroys the manager,

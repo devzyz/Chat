@@ -43,6 +43,7 @@ inline void ResourceTransferTests::conversationAttentionWidgets()
             QTest::qWait(10);
     });
     QSignalSpy restored(service, &MessageService::directoryRestored);
+    QSignalSpy syncRequests(service, &MessageService::syncRequested);
     service->start(root.path(), 7);
     QTRY_COMPARE(restored.size(), 1);
     for (int attempt = 0; attempt < 3; ++attempt) {
@@ -74,6 +75,47 @@ inline void ResourceTransferTests::conversationAttentionWidgets()
         QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(root.path() + "/messages.lock"), 15000);
         service->start(root.path(), 7);
         QTRY_COMPARE(restored.size(), attempt + 2);
+    }
+    {
+        ChatDialog window; window.resize(1000, 650); window.show();
+        auto *list = window.findChild<ChatUserList*>();
+        QTRY_VERIFY_WITH_TIMEOUT((window.loadChatUserList(), list->count() == 30), 5000);
+        ChatUserItem *target = nullptr;
+        for (auto *item : window.findChildren<ChatUserItem*>())
+            if (item->getChatInfo()->getChatId() == 30) target = item;
+        QVERIFY(target);
+        auto *badge = target->findChild<QLabel*>("new_msg_count_label");
+        window.findChild<ChatPage*>()->setChatInfo(target->getChatInfo());
+        QApplication::setActiveWindow(&window);
+        QTRY_COMPARE(badge->text(), QString("0"));
+        for (int mode = 0; mode < 3; ++mode) {
+            QDialog modal(&window); modal.setModal(true);
+            if (mode == 0) window.hide();
+            else if (mode == 1) { window.showMinimized(); QTRY_VERIFY(window.isMinimized()); }
+            else { modal.show(); QTRY_COMPARE(QApplication::activeModalWidget(), &modal); }
+            service->synchronize(30);
+            QJsonObject request;
+            QTRY_VERIFY_WITH_TIMEOUT((/** @brief 查找当前会话和已提交游标对应的真实同步请求。 */ [&] {
+                for (const auto &entry : syncRequests)
+                    if (entry[0].toJsonObject()["chat_id"].toInt() == 30
+                        && entry[0].toJsonObject()["after_id"].toInteger() == mode + 3)
+                        request = entry[0].toJsonObject();
+                return !request.isEmpty();
+            }()), 3000);
+            request["error"] = 0; request["load_more"] = false; request["next_cursor"] = mode + 4;
+            request["msgs"] = QJsonArray{QJsonObject{{"message_id", mode + 4}, {"send_id", 130},
+                {"recv_id", 7}, {"content", "background arrival"}, {"created_at", 1700000000},
+                {"msg_uuid", QString("background-%1").arg(mode)}}};
+            QSignalSpy loaded(service, &MessageService::historyLoaded);
+            service->acceptSyncPage(request);
+            QTRY_VERIFY(!loaded.isEmpty());
+            QTRY_COMPARE(badge->text(), QString("1"));
+            modal.hide(); window.showNormal(); QApplication::setActiveWindow(&window);
+            QTRY_VERIFY(window.isActiveWindow());
+            // 模态退出时平台可能复用活动窗口；显式重开同一会话也必须正确清除。
+            window.findChild<ChatPage*>()->setChatInfo(target->getChatInfo());
+            QTRY_COMPARE(badge->text(), QString("0"));
+        }
     }
     service->stop();
     QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(root.path() + "/messages.lock"), 15000);
