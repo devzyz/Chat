@@ -296,7 +296,7 @@ if(BUILD_TESTING)
     target_link_libraries(chat_e2e_client PRIVATE chat_client_login chat_resource_transfer)
     add_executable(session_driver_tests tests/session-driver/session_driver_tests.cpp)
     target_link_libraries(session_driver_tests PRIVATE
-        chat_network_core Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Network)
+        chat_network_core chat_storage Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Network)
     add_dependencies(session_driver_tests chat_e2e_client)
     add_executable(message_storage_tests tests/message-storage/message_storage_tests.cpp)
     add_executable(message_sync_probe tests/message-storage/message_sync_probe.cpp)
@@ -339,7 +339,7 @@ if(BUILD_TESTING)
         add_test(NAME session_driver.${SESSION_DRIVER_CASE}
             COMMAND session_driver_tests ${SESSION_DRIVER_CASE})
         set_tests_properties(session_driver.${SESSION_DRIVER_CASE} PROPERTIES
-            ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT};QT_PLUGIN_PATH=${QT_TEST_PLUGIN_PATH}" LABELS "integration" TIMEOUT 20)
+            ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT};QT_PLUGIN_PATH=${QT_TEST_PLUGIN_PATH};QT_FORCE_STDERR_LOGGING=1" LABELS "integration" TIMEOUT 20)
     endforeach()
     add_executable(local_avatar_tests
         tests/local-avatar/local_avatar_tests.cpp

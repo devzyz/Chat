@@ -21,6 +21,13 @@ function(find_package name)
             add_library(${target} INTERFACE IMPORTED GLOBAL)
         endif()
     endforeach()
+    # Model the pinned package's persistent initialization guard: imported target
+    # properties disappear between configure processes, but CACHE variables survive.
+    if(name STREQUAL "unofficial-mysql-connector-cpp" AND NOT UNOFFICIAL_MYSQL_CONNECTOR_CPP_INITIALIZED)
+        set_property(TARGET unofficial::mysql-connector-cpp::connector-jdbc PROPERTY
+            INTERFACE_LINK_LIBRARIES mysql_client_runtime)
+        set(UNOFFICIAL_MYSQL_CONNECTOR_CPP_INITIALIZED 1 CACHE INTERNAL "")
+    endif()
     foreach(target IN ITEMS protobuf::protoc gRPC::grpc_cpp_plugin)
         if(NOT TARGET ${target})
             add_executable(${target} IMPORTED GLOBAL)
@@ -31,20 +38,25 @@ endfunction()
 ]=])
 # Forced compiler metadata avoids SDK discovery and never invokes a compiler.
 # Only generation is tested here; hosted CI separately compiles with real packages.
-execute_process(COMMAND "${CMAKE_COMMAND}" -S "${repo_root}" -B "${CHAT_TEST_BINARY_DIR}/configured"
-    -G "Ninja"
-    "-DCMAKE_MAKE_PROGRAM=${CHAT_TEST_NINJA}"
-    "-DCMAKE_CXX_COMPILER=${CMAKE_COMMAND}"
-    -DCMAKE_CXX_COMPILER_FORCED=TRUE -DCMAKE_CXX_COMPILER_ID=GNU
-    -DCMAKE_CXX_COMPILER_VERSION=13.3.0 -DCMAKE_CXX_ABI_COMPILED=TRUE
-    -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_BUILD_TYPE=Release
-    "-DCMAKE_PROJECT_ChatServices_INCLUDE_BEFORE=${CHAT_TEST_BINARY_DIR}/dependencies.cmake"
-    -DCHAT_BUILD_CLIENT=OFF "-DCHAT_BUILD_ACCEPTANCE_RESOURCES=${CHAT_TEST_ACCEPTANCE_RESOURCES}" -DBUILD_TESTING=OFF -DCHAT_ENABLE_HOSTED_PREFLIGHT=OFF
-    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
-if(NOT result EQUAL 0)
-    message(FATAL_ERROR "Headless configuration failed (${result}):\n${output}\n${error}")
-endif()
-file(READ "${CHAT_TEST_BINARY_DIR}/configured/build.ninja" graph)
+foreach(configure_pass RANGE 1 2)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -S "${repo_root}" -B "${CHAT_TEST_BINARY_DIR}/configured"
+        -G "Ninja"
+        "-DCMAKE_MAKE_PROGRAM=${CHAT_TEST_NINJA}"
+        "-DCMAKE_CXX_COMPILER=${CMAKE_COMMAND}"
+        -DCMAKE_CXX_COMPILER_FORCED=TRUE -DCMAKE_CXX_COMPILER_ID=GNU
+        -DCMAKE_CXX_COMPILER_VERSION=13.3.0 -DCMAKE_CXX_ABI_COMPILED=TRUE
+        -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_BUILD_TYPE=Release
+        "-DCMAKE_PROJECT_ChatServices_INCLUDE_BEFORE=${CHAT_TEST_BINARY_DIR}/dependencies.cmake"
+        -DCHAT_BUILD_CLIENT=OFF "-DCHAT_BUILD_ACCEPTANCE_RESOURCES=${CHAT_TEST_ACCEPTANCE_RESOURCES}" -DBUILD_TESTING=OFF -DCHAT_ENABLE_HOSTED_PREFLIGHT=OFF
+        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
+    if(NOT result EQUAL 0)
+        message(FATAL_ERROR "Headless configuration failed (${result}):\n${output}\n${error}")
+    endif()
+    file(READ "${CHAT_TEST_BINARY_DIR}/configured/build.ninja" graph)
+    if(NOT graph MATCHES "-lmysql_client_runtime")
+        message(FATAL_ERROR "Configure pass ${configure_pass} lost the JDBC native client dependency")
+    endif()
+endforeach()
 foreach(server IN ITEMS GateServer StatusServer ChatServer)
     if(NOT graph MATCHES "build ${server}:")
         message(FATAL_ERROR "Missing server build target: ${server}")

@@ -8,7 +8,7 @@ const { spawn } = require('node:child_process');
 const { randomUUID, createHash } = require('node:crypto');
 const { createRequire } = require('node:module');
 const { reserve, stop } = require('./fourProcessCases');
-const { poll, runCommand, contractStep } = require('./dependencyCoordinator');
+const { poll, runCommand, contractStep, caseDiagnostic } = require('./dependencyCoordinator');
 const { createTopology, nativeConfig, assertConnectedClients } = require('./twoServerTopology');
 const { ClientControl } = require('./clientControl');
 const { waitForConnectionCount } = require('./connectionCount');
@@ -95,6 +95,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
         controls.push(control);
         await control.listen();
         const owned = start(name, clientBinary, ['--control', control.endpoint]);
+        owned.control = control;
         const ready = await control.ready();
         return { control, owned, pid: ready.pid };
     }
@@ -311,8 +312,12 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
                     for (const control of controls) if (!control.failed) await control.command('snapshot');
                 },
                 retire: /** 退出新增客户端并释放控制通道，恢复原双账号连接数断言的前置状态。 */ async instance => {
-                    if (!instance.control.failed) assert.equal((await instance.control.command('stop')).status, 'stopped');
-                    await stop(instance.owned);
+                    let acknowledged = false;
+                    if (!instance.control.failed) {
+                        assert.equal((await instance.control.command('stop')).status, 'stopped');
+                        acknowledged = true;
+                    }
+                    await stop(instance.owned, 0, { graceful: acknowledged });
                     await instance.control.close();
                 } });
             await count(topology.servers[0].name, 1);
@@ -320,7 +325,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
         }
         await test('one client exits while the peer retains its independent session', /** 停止 Alice 客户端并等待实例计数归零，确认 Bob 仍在线且消息保留。 */ async () => {
             assert.equal((await alice.control.command('stop')).status, 'stopped');
-            await stop(alice.owned);
+            await stop(alice.owned, 0, { graceful: true });
             await alice.control.close();
             await count(topology.servers[0].name, 0);
             const remaining = await bob.control.command('snapshot');
@@ -414,7 +419,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
                     restartBob: /** 重启 Chat B 并观察 Bob 连接失活。 */ () => restart('ChatB', bob),
                     invalidHistory: /** 停止恢复客户端后以原生驱动验证非法历史游标被拒绝。 */ async () => {
                         assert.equal((await recoveredAlice.control.command('stop')).status, 'stopped');
-                        await stop(recoveredAlice.owned);
+                        await stop(recoveredAlice.owned, 0, { graceful: true });
                         await recoveredAlice.control.close();
                         const redis = await coordinator.redis();
                         let token;
@@ -439,13 +444,24 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
     } catch (error) { primary = error; }
     finally {
         const failures = [];
+        const diagnostics = [];
         for (const control of [...controls].reverse()) {
-            try { if (!control.failed) assert.equal((await control.command('stop')).status, 'stopped'); }
+            try {
+                if (!control.failed) {
+                    assert.equal((await control.command('stop')).status, 'stopped');
+                    control.stopAcknowledged = true;
+                }
+            }
             catch { failures.push('client-stop'); }
             try { await control.close(); } catch { failures.push('control-close'); }
         }
         for (const owned of [...children].reverse()) {
-            try { await stop(owned); } catch { failures.push(`stop-${owned.name}`); }
+            try { await stop(owned, 0, { graceful: owned.control?.stopAcknowledged === true }); }
+            catch (error) {
+                failures.push(`stop-${owned.name}`);
+                const diagnostic = caseDiagnostic(error);
+                if (diagnostic) diagnostics.push(diagnostic);
+            }
         }
         for (const lease of Object.values(leases)) {
             try { await lease.release(); } catch { failures.push('lease-close'); }
@@ -477,7 +493,8 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
         const encoded = JSON.stringify(evidence);
         const redacted = secrets.every(/** 确认编码后的证据不含本次生成的敏感值。 */ secret => !encoded.includes(secret));
         fs.writeFileSync(path.join(evidenceRoot, 'topology.json'), JSON.stringify(evidence.topology, null, 2));
-        fs.writeFileSync(path.join(evidenceRoot, 'application-teardown.json'), JSON.stringify({ complete: evidence.complete, failures }));
+        fs.writeFileSync(path.join(evidenceRoot, 'application-teardown.json'), JSON.stringify({
+            complete: evidence.complete, failures, diagnostics, primaryDiagnostic: primary && caseDiagnostic(primary) }));
         fs.writeFileSync(path.join(evidenceRoot, 'redaction.json'), JSON.stringify({ complete: redacted }));
         try {
             await record('E03-CONTRACT-12', 'reverse client service data and control cleanup', /** 断言所有清理步骤成功，且最终证据已脱敏。 */ async () => {

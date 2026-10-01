@@ -102,7 +102,8 @@ jobs:
           LINUX_RESULT: ${{ needs.linux.result }}
           SOURCE_SHA: ${{ github.sha }}
         run: |
-          test "$WINDOWS_RESULT" = success && test "$LINUX_RESULT" = success
+          test "$WINDOWS_RESULT" = success
+          test "$LINUX_RESULT" = success
           printf 'Real environment acceptance passed for `%s`. See phase3d-contract-evidence and real-acceptance-widgets.\n' "$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
 
   release:

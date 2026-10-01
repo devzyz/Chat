@@ -54,6 +54,18 @@ credentials. Each child has a 600-second lifetime deadline, graceful shutdown
 has ten seconds, and escalation fails the case. The outer coordinator has a
 680-second execution window, with CTest and shell deadlines of 690/720 seconds.
 
+For Qt clients that already acknowledged the control-channel `stop` command,
+the Node owner first allows five seconds for the supervised process to exit
+naturally. Signalling the supervisor immediately would race the Qt client's
+asynchronous shutdown. If that wait expires, ownership cleanup sends SIGTERM
+and allows the remaining ten seconds, but still fails as `graceful-timeout`.
+The total Node wait remains fifteen seconds; ordinary service shutdown retains
+its existing immediate SIGTERM behavior. Nonzero exits, missing reports and
+escalation still fail. `fourProcess.test.js` models the early-signal race and
+the timeout path; it is a lifecycle contract test, not real Linux process evidence.
+Application and overall teardown reports retain allowlisted process names and
+failure categories even when failure occurs between business test records.
+
 | IDs | Contracts |
 | --- | --- |
 | 01..05 | Fresh migration and Varify/Status/Chat/Gate protocol readiness |

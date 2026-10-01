@@ -32,7 +32,11 @@ Newline-delimited JSON commands require strictly increasing positive integer
 - `verify`: `gate`, `email`; `register`: also `name`, `password`, `code`.
   Uses production Gate HTTP transport and registration password transformation.
 - `login`: requires `gate` (`http://127.0.0.1:<port>`), `email` and `password`.
-  Runs shared production login; replies `authenticated` or `login-failed`.
+  Runs shared production login; replies `authenticated` only after the current
+  account's real message database has opened and restored its directory.
+  Authentication and storage readiness share one ten-second budget; storage
+  failure replies `login-failed`, resets the session, and permits a fresh login.
+  Business command deadlines (including create) remain unchanged.
   Credentials travel only in the private pipe and production transports;
   no Chat endpoint/token override is accepted.
 - `stop`: cancels login, resets the session, replies `stopped`, flushes the
@@ -153,3 +157,18 @@ This proves the client persistence boundary only; server group transactions are
 covered separately by the real-dependency run. A pre-send storage failure has no
 request-scoped failure callback in the production API, so the driver fails at its
 bounded deadline rather than misattributing a background directory failure.
+
+CTest forces Qt diagnostic output to stderr for this suite, including on Windows
+without an attached console. A missing control reply reports only the command
+name/ID, elapsed time, process/socket state and buffered byte count. Request,
+response and general child-process log bodies are omitted because they can contain
+credentials. Only the driver's fixed storage-error categories are forwarded on a
+missing reply; the fixture also asserts that the create request reached its TCP
+peer. The existing per-command deadlines remain unchanged.
+
+The process regression obstructs an isolated account directory with a file to
+force a real database initialization failure. It requires `login-failed` and an
+inactive session, removes only that file, then logs into the same account and
+creates a conversation. This prevents a network-authenticated but storage-unready
+driver from accepting the next business command. No production storage API or
+private worker test hook is added.

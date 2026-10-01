@@ -24,7 +24,7 @@ class ServiceStepFailure extends Error {
 /** 从已知错误提取白名单诊断，未知错误不写入证据。 */
 function caseDiagnostic(error) {
     if (error instanceof ServiceStepFailure) return error.diagnostic;
-    const processFailure = /^FourProcess:(GateServer|StatusServer|ChatServer|VarifyServer):(stop-timeout|report-unavailable|stop-escalated|exit-[0-9]{1,10}|harness-incomplete|exit-unavailable|expected-failure)$/.exec(error.message);
+    const processFailure = /^FourProcess:(GateServer|StatusServer|ChatServer|VarifyServer|ResourceServer|ChatA|ChatB|alice|bob|alicerecovered|release[a-d]|FrameFaultRelay):(stop-timeout|graceful-timeout|report-unavailable|stop-escalated|exit-[0-9]{1,10}|harness-incomplete|exit-unavailable|expected-failure)$/.exec(error.message);
     if (processFailure) return { stage: `stop-${processFailure[1]}`, category: processFailure[2] };
     const safeMysqlErrors = ['MysqlDeadlineExceeded', 'MysqlSessionUnavailable',
         'MysqlUnavailable', 'MysqlOutputLimit', 'MysqlSessionClosed'];

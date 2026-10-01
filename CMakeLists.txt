@@ -24,6 +24,10 @@ find_package(gRPC CONFIG REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
 find_package(hiredis CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
+# The pinned package caches its initialization guard, while imported target
+# link properties are recreated each configure. Reset the guard so a second
+# configure retains the JDBC native client and its transitive dependencies.
+unset(UNOFFICIAL_MYSQL_CONNECTOR_CPP_INITIALIZED CACHE)
 find_package(unofficial-mysql-connector-cpp CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(spdlog CONFIG REQUIRED)

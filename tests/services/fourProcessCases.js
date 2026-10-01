@@ -21,15 +21,26 @@ async function reserve() {
     return { port: server.address().port, release: /** 释放本对象保留的监听端口并返回完成等待。 */ () => new Promise(/** 把端口释放回调转换为 Promise。 */ resolve => server.close(resolve)) };
 }
 
-/** 有界停止所属进程，核对监督报告与预期退出码，成功后标记已停止。 */
-async function stop(owned, expected = 0) {
+/** 有界停止所属进程；Qt 已确认协议停止时先等自然退出，服务仍主动发信号，总等待不超过十五秒。 */
+async function stop(owned, expected = 0, { graceful = false } = {}) {
     if (owned.stopped) return;
     const fail = /** 用稳定的服务名和分类抛出停止失败。 */ category => { throw new Error(`FourProcess:${owned.name}:${category}`); };
-    owned.child.kill('SIGTERM');
-    let timer;
-    const result = await Promise.race([owned.exited, new Promise(/** 建立十五秒停止截止等待。 */ resolve => { timer = setTimeout(/** 停止期限到达后返回超时标记。 */ () => resolve('timeout'), 15000); })]);
-    clearTimeout(timer);
+    const wait = /** 在给定剩余期限内等待监督器退出，不遗留计时器。 */ async milliseconds => {
+        let timer;
+        try {
+            return await Promise.race([owned.exited, new Promise(/** 建立有界退出等待。 */ resolve => {
+                timer = setTimeout(/** 期限到达时返回超时标记。 */ () => resolve('timeout'), milliseconds);
+            })]);
+        } finally { clearTimeout(timer); }
+    };
+    let result = graceful ? await wait(5000) : 'timeout';
+    const gracefulTimedOut = graceful && result === 'timeout';
+    if (result === 'timeout') {
+        owned.child.kill('SIGTERM');
+        result = await wait(graceful ? 10000 : 15000);
+    }
     if (result === 'timeout') fail('stop-timeout');
+    if (gracefulTimedOut) fail('graceful-timeout');
     let report;
     try { report = JSON.parse(fs.readFileSync(owned.report)); }
     catch { fail('report-unavailable'); }
