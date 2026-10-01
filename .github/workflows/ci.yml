@@ -11,6 +11,11 @@ on:
     - cron: '17 19 * * 0'
   workflow_dispatch:
     inputs:
+      mode:
+        description: Validation scope (optional acceptance or maintenance flags require full)
+        type: choice
+        options: [quick, full]
+        default: full
       refresh_tools:
         description: Cold-build latest stable Windows tools and approve after Windows checks (default branch only)
         type: boolean
@@ -33,75 +38,78 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 jobs:
-  toolchain:
-    name: Select validated toolchain
+  plan:
+    name: Select CI mode
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      lock: ${{ steps.select.outputs.lock }}
-      refresh: ${{ steps.select.outputs.refresh }}
-      run_id: ${{ steps.select.outputs.run_id }}
+      mode: ${{ steps.policy.outputs.mode }}
+      refresh_tools: ${{ steps.policy.outputs.refresh_tools }}
+      cold_linux: ${{ steps.policy.outputs.cold_linux }}
+      real_acceptance: ${{ steps.policy.outputs.real_acceptance }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Resolve approved weekly toolchain or committed bootstrap
-        id: select
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REFRESH_TOOLS: ${{ inputs.refresh_tools == true }}
-        run: node scripts/ci/toolchain.js select "$RUNNER_TEMP/toolchain"
+      - name: Resolve validation scope without toolchain or artifact queries
+        id: policy
+        run: node scripts/ci/ciPolicy.js
 
   windows:
-    needs: toolchain
+    needs: plan
     uses: ./.github/workflows/windows-ci.yml
     with:
-      toolchain_lock: ${{ needs.toolchain.outputs.lock }}
-      toolchain_run: ${{ needs.toolchain.outputs.run_id }}
-      refresh_tools: ${{ needs.toolchain.outputs.refresh == 'true' }}
+      build_packages: ${{ needs.plan.outputs.mode == 'full' }}
+      refresh_tools: ${{ needs.plan.outputs.refresh_tools == 'true' }}
 
   linux:
-    needs: toolchain
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.base_ref == 'master'
+    needs: plan
+    if: needs.plan.outputs.mode == 'full'
     uses: ./.github/workflows/linux-ci.yml
     with:
-      cold_build: ${{ github.event_name == 'workflow_dispatch' && inputs.cold_linux == true }}
-      real_acceptance: ${{ github.event_name == 'workflow_dispatch' && inputs.real_acceptance == true }}
+      cold_build: ${{ needs.plan.outputs.cold_linux == 'true' }}
+      real_acceptance: ${{ needs.plan.outputs.real_acceptance == 'true' }}
 
   regression:
     name: Regression checks
     if: ${{ always() }}
-    needs: windows
+    needs: [plan, windows]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every Windows build and regression job
         env:
+          PLAN_RESULT: ${{ needs.plan.result }}
           RESULT: ${{ needs.windows.result }}
-        run: test "$RESULT" = success
+        run: test "$PLAN_RESULT" = success && test "$RESULT" = success
 
   full:
     name: Full regression checks
-    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.base_ref == 'master') }}
-    needs: [windows, linux]
+    if: ${{ always() && (needs.plan.result != 'success' || needs.plan.outputs.mode == 'full') }}
+    needs: [plan, windows, linux]
     runs-on: ubuntu-24.04
     steps:
       - name: Require both platforms and all integration tests
         env:
+          PLAN_RESULT: ${{ needs.plan.result }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
           LINUX_RESULT: ${{ needs.linux.result }}
-        run: test "$WINDOWS_RESULT" = success && test "$LINUX_RESULT" = success
+        run: test "$PLAN_RESULT" = success && test "$WINDOWS_RESULT" = success && test "$LINUX_RESULT" = success
 
   real-acceptance:
     name: Real environment acceptance
-    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.real_acceptance == true }}
-    needs: [windows, linux]
+    # Keep an explicitly requested gate visible even when policy selection fails.
+    # Keep an explicitly requested gate visible even when policy selection fails.
+    if: ${{ always() && (needs.plan.outputs.real_acceptance == 'true' || (github.event_name == 'workflow_dispatch' && inputs.real_acceptance == true)) }}
+    needs: [plan, windows, linux]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Require requested real-service acceptance and both platforms
         env:
+          PLAN_RESULT: ${{ needs.plan.result }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
           LINUX_RESULT: ${{ needs.linux.result }}
           SOURCE_SHA: ${{ github.sha }}
         run: |
+          test "$PLAN_RESULT" = success
           test "$WINDOWS_RESULT" = success
           test "$LINUX_RESULT" = success
           printf 'Real environment acceptance passed for `%s`. See phase3d-contract-evidence and real-acceptance-widgets.\n' "$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
@@ -112,22 +120,3 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/release.yml
-
-  promote-toolchain:
-    name: Promote Windows-validated weekly toolchain
-    needs: [toolchain, windows]
-    if: ${{ always() && needs.toolchain.outputs.refresh == 'true' && needs.windows.result == 'success' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: windows-toolchain-candidate
-          path: toolchain
-      - name: Publish version record after Windows regression and cache warming
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: ci-toolchain-approved
-          path: toolchain/windows-toolchain.json
-          if-no-files-found: error
-          retention-days: 90

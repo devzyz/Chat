@@ -78,12 +78,13 @@ reports, and `RunAllTests` audits the full set. Missing reports, failed/skipped 
 nonzero test exits fail the entry point.
 
 Windows CI checks registration once in the static job; local entries retain the default check.
-Quick develop runs upload test reports; application ZIPs are generated only in full runs.
+Quick runs upload Windows test reports; application ZIPs are generated only in full runs.
 
 ## CI 门禁
 
 CI 用于回归保护。develop PR/push 运行现有 Windows 单元、组件、loopback/进程测试和构建；
-master PR/push、每周 develop 与手动执行增加 Linux 真实依赖和完整 E2E。
+master PR/push、每周 develop 与手动 full 增加 Linux 真实依赖和完整 E2E。
+手动默认 full，也可选 quick；专项开关启用时提升为 full。
 master 合并后实际 SHA 的全量与包启动冒烟成功，自动发布同一个包，不需要人工审批。
 
 Required Checks、运行时机和失败规则统一见 [CI 治理](../tests/CI-GOVERNANCE.md)。

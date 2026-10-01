@@ -29,7 +29,7 @@ test('documentation builds skip only behind successful scope and static checks',
     const windows = workflow('windows-ci.yml');
     assert.match(job(windows, 'static-check'), /docs_only: \$\{\{ steps\.scope\.outputs\.docs_only \}\}/);
     assert.match(job(windows, 'static-check'), /run: node scripts\/ci\/ciScope\.js/);
-    assert.match(job(ci, 'windows'), /needs: toolchain/);
+    assert.match(job(ci, 'windows'), /needs: plan/);
     assert.doesNotMatch(job(windows, 'static-check'), /if:.*docs_only/);
     for (const name of ['servers-release', 'client-release', 'varify-release']) {
         assert.match(job(windows, name), /needs: static-check\s+if: needs\.static-check\.outputs\.docs_only != 'true'/);
@@ -39,11 +39,7 @@ test('documentation builds skip only behind successful scope and static checks',
 });
 
 test('Linux cold restore is explicit and report validation still runs after upstream failure', /** 验证冷恢复与周检升级解耦，业务失败不阻止生成服务失败报告。 */ () => {
-    const condition = job(ci, 'linux').match(/cold_build: \$\{\{ (.+) \}\}/)[1];
-    const cold = new Function('github', 'inputs', `return ${condition};`);
-    assert.equal(cold({ event_name: 'schedule' }, { refresh_tools: true }), false);
-    assert.equal(cold({ event_name: 'workflow_dispatch' }, { refresh_tools: true }), false);
-    assert.equal(cold({ event_name: 'workflow_dispatch' }, { cold_linux: true }), true);
+    assert.match(job(ci, 'linux'), /cold_build: \$\{\{ needs\.plan\.outputs\.cold_linux == 'true' \}\}/);
     const downstream = job(workflow('linux-ci.yml'), 'downstream-contract');
     const service = downstream.split('- name: Check service reports and cleanup')[1].split('- name:')[0];
     const business = downstream.split('- name: Check business reports and cleanup')[1].split('- name:')[0];
@@ -55,20 +51,20 @@ test('Linux cold restore is explicit and report validation still runs after upst
     assert.match(business, /verify-service-reports\.js/);
 });
 
-test('develop uses quick regression; master, weekly and manual runs use full regression', /** 验证 develop 使用快速回归，master、每周及手动任务执行完整回归。 */ () => {
-    const condition = job(ci, 'linux').match(/^    if: (.+)$/m)[1];
-    const full = new Function('github', `return ${condition};`);
-    for (const [event_name, ref, base_ref, expected] of [
-        ['pull_request', 'refs/pull/7/merge', 'develop', false],
-        ['push', 'refs/heads/develop', '', false],
-        ['pull_request', 'refs/pull/7/merge', 'master', true],
-        ['push', 'refs/heads/master', '', true],
-        ['schedule', 'refs/heads/develop', '', true],
-        ['workflow_dispatch', 'refs/heads/feature', '', true]
-    ]) assert.equal(full({ event_name, ref, base_ref }), expected);
+test('platforms consume one policy and remain independent of Windows tools', /** 验证平台只依赖统一策略，不重复解释事件或依赖原生工具链。 */ () => {
+    assert.match(job(ci, 'plan'), /run: node scripts\/ci\/ciPolicy\.js/);
+    assert.doesNotMatch(job(ci, 'plan'), /toolchain\.js|GH_TOKEN|gh api/);
+    for (const name of ['windows', 'linux']) {
+        assert.match(job(ci, name), /needs: plan/);
+        assert.doesNotMatch(job(ci, name), /github\.event_name|github\.ref|github\.base_ref|needs: toolchain/);
+    }
+    assert.match(job(ci, 'linux'), /if: needs\.plan\.outputs\.mode == 'full'/);
+    assert.match(job(ci, 'windows'), /build_packages: \$\{\{ needs\.plan\.outputs\.mode == 'full' \}\}/);
     assert.match(ci, /cron: '17 19 \* \* 0'/);
     assert.match(ci, /push:\s+branches: \[develop, master\]/);
     assert.match(ci, /pull_request:\s+branches: \[develop, master\]/);
+    assert.match(ci, /types: \[opened, synchronize, reopened, edited, ready_for_review\]/);
+    assert.match(ci, /mode:\s+description:[^\n]+\s+type: choice\s+options: \[quick, full\]\s+default: full/);
 });
 
 test('publication requires master push and all full checks; failed smoke cannot publish', /** 验证仅 master 推送且完整检查成功后可发布，冒烟失败不能绕过。 */ () => {
@@ -81,12 +77,61 @@ test('publication requires master push and all full checks; failed smoke cannot 
     }
     assert.equal(publish({ event_name: 'push', ref: 'refs/heads/develop' }), false);
     assert.match(release, /needs: full/);
-    assert.match(job(ci, 'full'), /needs: \[windows, linux\]/);
+    assert.match(job(ci, 'full'), /needs: \[plan, windows, linux\]/);
     const releaseWorkflow = workflow('release.yml');
     assert.match(job(releaseWorkflow, 'smoke'), /needs: package/);
     assert.match(job(releaseWorkflow, 'publish'), /needs: smoke/);
     assert.doesNotMatch(job(releaseWorkflow, 'publish'), /always\(\)|environment:/);
     assert.doesNotMatch(releaseWorkflow, /BuildCandidate|RestoreServers|settings_receipt/);
+});
+
+test('full gate stays active when policy fails and optional acceptance cannot become a false pass', /** 验证策略失败或输出缺失时全量门禁仍执行失败检查。 */ () => {
+    const expression = job(ci, 'full').match(/if: \$\{\{ (.+) \}\}/)[1];
+    const enabled = new Function('needs', 'always', `return ${expression};`);
+    for (const result of ['success', 'failure', 'cancelled', 'skipped', '']) {
+        for (const mode of ['quick', 'full', undefined]) {
+            assert.equal(enabled({ plan: { result, outputs: { mode } } }, /** 模拟汇总始终执行。 */ () => true),
+                result !== 'success' || mode === 'full');
+        }
+    }
+    assert.match(job(ci, 'regression'), /needs: \[plan, windows\]/);
+    assert.match(job(ci, 'full'), /needs: \[plan, windows, linux\]/);
+    const acceptance = new Function('needs', 'github', 'inputs', 'always',
+        `return ${job(ci, 'real-acceptance').match(/if: \$\{\{ (.+) \}\}/)[1]};`);
+    assert.equal(acceptance({ plan: { outputs: {} } }, { event_name: 'workflow_dispatch' },
+        { real_acceptance: true }, /** 策略失败仍需给出专项失败状态。 */ () => true), true);
+});
+
+test('required gate shells reject failed policy and every unsuccessful platform result', /** 执行真实汇总脚本，验证失败、取消、跳过与空结果不会放行。 */ () => {
+    const git = process.platform === 'win32' ? spawnSync('where.exe', ['git'], { encoding: 'utf8' }) : null;
+    const bash = process.env.CHAT_TEST_BASH || (git ? path.resolve(path.dirname(git.stdout.trim().split(/\r?\n/)[0]),
+        '../bin/bash.exe') : 'bash');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-ci-results-'));
+    try {
+        for (const name of ['regression', 'full', 'real-acceptance']) {
+            const run = job(ci, name).split('        run: ')[1];
+            const script = run.startsWith('|') ? run.split(/\r?\n/).filter(
+                /** 仅提取 YAML 中实际执行的脚本。 */ line => line.startsWith('          ')).map(
+                /** 去除脚本的 YAML 缩进。 */ line => line.slice(10)).join('\n') : run.trim();
+            const fields = name === 'regression' ? ['PLAN_RESULT', 'RESULT'] : ['PLAN_RESULT', 'WINDOWS_RESULT', 'LINUX_RESULT'];
+            const baseline = Object.fromEntries(fields.map(/** 建立所有依赖成功的基线。 */ field => [field, 'success']));
+            for (const field of fields) {
+                for (const value of ['success', 'failure', 'cancelled', 'skipped', '']) {
+                    const summary = path.join(root, 'summary');
+                    fs.writeFileSync(summary, '');
+                    const result = spawnSync(bash, ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script], {
+                        env: { ...process.env, ...baseline, [field]: value, SOURCE_SHA: 'a'.repeat(40), GITHUB_STEP_SUMMARY: summary },
+                        encoding: 'utf8', timeout: 5000
+                    });
+                    assert.ifError(result.error);
+                    assert.equal(result.status === 0, value === 'success', `${name}/${field}/${value}: ${result.stderr}`);
+                    if (name === 'real-acceptance') {
+                        assert.equal(fs.readFileSync(summary, 'utf8').includes('acceptance passed'), value === 'success');
+                    }
+                }
+            }
+        }
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('cold Windows restore and Linux business steps retain setup and cleanup time', /** 验证冷恢复和业务步骤保留足够的启动、执行与清理时间。 */ () => {
@@ -127,16 +172,7 @@ test('structure-check bypass is rejected outside the prerequisite CI lanes', { s
 
 test('quick regression omits packages while every full lane retains all release inputs', /** 验证候选打包仅在规定事件启用，快速回归不重复打包。 */ () => {
     const windows = workflow('windows-ci.yml');
-    const expression = windows.match(/BUILD_PACKAGES: \$\{\{ (.+) \}\}/)[1];
-    const packageEnabled = new Function('github', `return ${expression};`);
-    for (const [event_name, ref, base_ref, expected] of [
-        ['pull_request', 'refs/pull/7/merge', 'develop', false],
-        ['push', 'refs/heads/develop', '', false],
-        ['pull_request', 'refs/pull/7/merge', 'master', true],
-        ['push', 'refs/heads/master', '', true],
-        ['schedule', 'refs/heads/develop', '', true],
-        ['workflow_dispatch', 'refs/heads/develop', '', true]
-    ]) assert.equal(packageEnabled({ event_name, ref, base_ref }), expected);
+    assert.match(windows, /BUILD_PACKAGES: \$\{\{ inputs\.build_packages \}\}/);
     for (const name of ['Create independent server ZIP packages', 'Upload server release directories',
         'Deploy and package Qt client', 'Upload Qt client ZIP', 'Package VarifyServer', 'Upload VarifyServer ZIP']) {
         const step = windows.split(`- name: ${name}`)[1]?.split(/\r?\n      - /)[0];
@@ -185,17 +221,10 @@ test('full Linux CI keeps client coverage and separately builds without Qt', /**
 
 test('first-release acceptance requires an explicit manual request and preserves normal CI', /** 验证所有普通事件均不启用真实环境首版验收，只有手动布尔开关生效。 */ () => {
     assert.match(ci, /real_acceptance:\s+description:[^\n]+\s+type: boolean\s+default: false/);
-    const expression = job(ci, 'linux').match(/real_acceptance: \$\{\{ (.+) \}\}/)[1];
-    const requested = new Function('github', 'inputs', `return ${expression};`);
-    for (const event_name of ['push', 'pull_request', 'schedule', 'workflow_dispatch']) {
-        for (const real_acceptance of [false, true, undefined]) {
-            assert.equal(requested({ event_name }, { real_acceptance }),
-                event_name === 'workflow_dispatch' && real_acceptance === true);
-        }
-    }
+    assert.match(job(ci, 'linux'), /real_acceptance: \$\{\{ needs\.plan\.outputs\.real_acceptance == 'true' \}\}/);
     const gate = job(ci, 'real-acceptance');
     assert.match(gate, /always\(\).*github.event_name == 'workflow_dispatch'.*inputs.real_acceptance == true/);
-    assert.match(gate, /needs: \[windows, linux\]/);
+    assert.match(gate, /needs: \[plan, windows, linux\]/);
     assert.match(gate, /test "\$WINDOWS_RESULT" = success\s+test "\$LINUX_RESULT" = success/);
     assert.doesNotMatch(gate, /continue-on-error|workflow_dispatch[^\n]*master|release.yml/);
 });
@@ -229,7 +258,7 @@ test('real acceptance shell rejects every unsuccessful dependency before writing
             for (const linux of ['success', 'failure', 'cancelled', 'skipped', '']) {
                 fs.writeFileSync(summary, '');
                 const result = spawnSync(bash, ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script], {
-                    env: { ...process.env, WINDOWS_RESULT: windows, LINUX_RESULT: linux,
+                    env: { ...process.env, PLAN_RESULT: 'success', WINDOWS_RESULT: windows, LINUX_RESULT: linux,
                         SOURCE_SHA: 'a'.repeat(40), GITHUB_STEP_SUMMARY: summary }, encoding: 'utf8', timeout: 5000 });
                 assert.ifError(result.error);
                 const pass = windows === 'success' && linux === 'success';

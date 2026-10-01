@@ -3,12 +3,9 @@ name: Windows CI
 on:
   workflow_call:
     inputs:
-      toolchain_lock:
-        type: string
+      build_packages:
+        type: boolean
         required: true
-      toolchain_run:
-        type: string
-        default: ''
       refresh_tools:
         type: boolean
         default: false
@@ -18,7 +15,7 @@ permissions:
   actions: read
 
 env:
-  BUILD_PACKAGES: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/master' || github.base_ref == 'master' }}
+  BUILD_PACKAGES: ${{ inputs.build_packages }}
 
 jobs:
   static-check:
@@ -165,7 +162,7 @@ jobs:
 
       - name: Verify CI triggers and execution budgets
         shell: pwsh
-        run: node --test tests/build/ciBudget.test.js tests/build/ciScope.test.js tests/services/phase3dEvidence.test.js tests/services/widgetEvidence.test.js tests/services/firstReleaseCases.test.js
+        run: node --test tests/build/ciPolicy.test.js tests/build/ciBudget.test.js tests/build/ciScope.test.js tests/services/phase3dEvidence.test.js tests/services/widgetEvidence.test.js tests/services/firstReleaseCases.test.js
 
       - name: Test release packaging
         shell: pwsh
@@ -233,6 +230,19 @@ jobs:
           cache: npm
           cache-dependency-path: VarifyServer/package-lock.json
 
+      - name: Resolve validated Windows toolchain
+        id: toolchain
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REFRESH_TOOLS: ${{ inputs.refresh_tools }}
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          node scripts/ci/toolchain.js select (Join-Path $env:RUNNER_TEMP 'toolchain')
+          if ($LASTEXITCODE -ne 0) { throw 'Windows toolchain selection failed.' }
+
       - name: Free ephemeral runner disk space
         shell: pwsh
         run: |
@@ -279,9 +289,9 @@ jobs:
       - name: Select and verify locked Windows toolchain before dependency restoration
         shell: pwsh
         env:
-          CHAT_TOOLCHAIN_LOCK: ${{ inputs.toolchain_lock }}
+          CHAT_TOOLCHAIN_LOCK: ${{ steps.toolchain.outputs.lock }}
           CHAT_REFRESH_TOOLS: ${{ inputs.refresh_tools }}
-          CHAT_TOOLCHAIN_RUN: ${{ inputs.toolchain_run }}
+          CHAT_TOOLCHAIN_RUN: ${{ steps.toolchain.outputs.run_id }}
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/ci/install-windows-toolchain.ps1 -VcpkgRoot $env:VCPKG_ROOT -Refresh:($env:CHAT_REFRESH_TOOLS -eq 'true')
 
