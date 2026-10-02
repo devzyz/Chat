@@ -28,8 +28,14 @@ test('history requires strictly advancing pages and unique message identities', 
         { msgs: [], next_cursor: 0, load_more: true },
         { msgs: [{ message_id: 0, msg_uuid: 'bad' }], next_cursor: 0, load_more: false },
         { msgs: [{ message_id: 1, msg_uuid: 'same' }, { message_id: 2, msg_uuid: 'same' }], next_cursor: 2, load_more: false },
+        { msgs: [{ message_id: 2, msg_uuid: 'first' }, { message_id: 1, msg_uuid: 'second' }], next_cursor: 1, load_more: false },
         { msgs: [{ message_id: 1, msg_uuid: 'bad' }], next_cursor: 2, load_more: false }
     ]) {
         await assert.rejects(sync({ uid: 1, /** 返回受控非法页面。 */ async correlated() { return page; } }, 1));
     }
+    const systemHistory = await sync({ uid: 1,
+        /** 返回生产好友建立时创建的无 UUID 系统历史。 */ async correlated() {
+            return { msgs: [{ message_id: 1, msg_uuid: '' }, { message_id: 2, msg_uuid: '' }], next_cursor: 2, load_more: false };
+        } }, 1);
+    assert.equal(systemHistory.rows.length, 2);
 });

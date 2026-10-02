@@ -80,7 +80,9 @@ async function sync(client, chatId, cursor = 0, epoch, observe = null) {
         for (const row of result.msgs) {
             assert.ok(Number.isSafeInteger(row.message_id) && row.message_id > previousId, 'invalid-cursor');
             previousId = row.message_id;
-            assert.ok(!seen.has(row.msg_uuid), 'duplicate-history'); seen.add(row.msg_uuid);
+            // Server-generated friendship history predates client UUIDs and legitimately has empty UUIDs.
+            // Its strictly increasing message_id remains the identity; new client messages retain UUID checks.
+            if (row.msg_uuid) { assert.ok(!seen.has(row.msg_uuid), 'duplicate-history'); seen.add(row.msg_uuid); }
             rows.push(row); if (observe) observe(row);
         }
         assert.ok(Number.isSafeInteger(result.next_cursor) && result.next_cursor >= cursor, 'invalid-cursor');
