@@ -19,7 +19,10 @@ function verify(report, sha) {
     const expected = Array.from({ length: profiles[report.profile].repeats },
         /** 为每轮展开唯一场景集合。 */ (_, index) => scenarios.map(/** 生成场景结果键。 */ name => `${index + 1}:${name}`)).flat().sort();
     assert.deepEqual(report.results.map(/** 提取实际场景结果键。 */ row => `${row.round}:${row.name}`).sort(), expected);
-    for (const row of report.results) { validate(row.metrics); if (row.resources) validate(row.resources); }
+    for (const row of report.results) {
+        validate(row.metrics);
+        if (row.name === 'mixed') { assert.ok(row.resources, 'missing-mixed-resource-evidence'); validate(row.resources); }
+    }
 }
 /** 写入机器报告、JUnit 和简明中文报告；失败与未执行状态均保留。 */
 function write(root, report) {
@@ -29,12 +32,18 @@ function write(root, report) {
         const m = row.metrics;
         return `| ${row.round} / ${row.name} | ${m.completed}/${m.planned} | ${number(m.throughput)} | ${number(m.latencyMs.p95)} | ${number(m.latencyMs.p99)} | ${number(m.deliveryMs?.p95)} | ${m.pass ? '通过' : '失败'} |`;
     });
+    const resourceRows = report.results.filter(/** 筛选含资源吞吐的场景。 */ row => row.metrics.bytes !== undefined || row.resources)
+        .map(/** 呈现资源吞吐并保留混合场景独立结果。 */ row => {
+            const value = row.resources || row.metrics;
+            return `- 第 ${row.round} 轮 ${row.name}：${number(value.mibPerSecond)} MiB/s，${value.completed}/${value.planned} 次，${value.pass ? '通过' : '失败'}。`;
+        });
     const markdown = `# 性能测试报告\n\n状态：${report.status}；档位：${report.profile}。\n\n` +
         `提交：\`${report.sha}\`。运行：[GitHub Actions](${report.url})。\n\n` +
         `环境：GitHub Ubuntu 24.04，同机正式服务与临时依赖；${report.environment?.cpus || '?'} vCPU，` +
         `${number((report.environment?.memoryBytes || 0) / 1073741824)} GiB RAM，Node ${report.environment?.node || '?' }。\n\n` +
         '| 轮次 / 场景 | 完成/计划 | 业务完成/秒 | p95 ms | p99 ms | 接收 p95 ms | 结果 |\n' +
         '|---|---:|---:|---:|---:|---:|---|\n' + rows.join('\n') + '\n\n' +
+        resourceRows.join('\n') + '\n\n' +
         `清理：${report.cleanup?.complete ? '通过' : '未完成'}。失败分类：${report.failures.map(/** 只列安全阶段和类别。 */ item => `${item.stage}: ${item.category}`).join('；') || '无'}。\n\n` +
         'JSON 工件包含提交确认/接收百分位、未发送数量、事件循环延迟、资源字节吞吐、各进程 CPU/RSS 与各阶段计时。\n\n' +
         '此结果为 Linux 共享运行器同机基线，不代表公网体验、Windows 性能或生产容量。群聊包含两秒补拉等待。' +

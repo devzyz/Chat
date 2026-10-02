@@ -76,8 +76,10 @@ async function sync(client, chatId, cursor = 0, epoch, observe = null) {
         const result = await client.correlated(1027, { mode: 'sync_v1', uid: client.uid, chat_id: chatId,
             after_id: cursor, ...(epoch ? { chat_type: 'group', membership_epoch: epoch } : {}) });
         assert.ok(Array.isArray(result.msgs), 'missing-history');
+        let previousId = cursor;
         for (const row of result.msgs) {
-            assert.ok(Number.isSafeInteger(row.message_id) && row.message_id > cursor, 'invalid-cursor');
+            assert.ok(Number.isSafeInteger(row.message_id) && row.message_id > previousId, 'invalid-cursor');
+            previousId = row.message_id;
             assert.ok(!seen.has(row.msg_uuid), 'duplicate-history'); seen.add(row.msg_uuid);
             rows.push(row); if (observe) observe(row);
         }
@@ -123,12 +125,12 @@ async function prepare(env, clients) {
 async function privateMessages(env, pairs, clients, profile, seconds) {
     const messages = new Messages(clients);
     try {
-        const result = await measure({ seconds, rate: profile.rate, maxPending: clients.length,
+        const result = await measure({ seconds, rate: profile.rate, maxPending: clients.length, signal: env.signal,
             action: /** 将每次计划发送均匀分配给会话。 */ index => {
                 const pair = pairs[index % pairs.length]; return messages.send(pair.first, pair.chatId, [pair.second]);
             } });
         result.ackMs = distribution(messages.ack); result.deliveryMs = distribution(messages.delivery);
-        await messages.audit(env.sql); return result;
+        await auditResult(messages, env.sql, result); return result;
     } finally { messages.close(); }
 }
 
@@ -148,14 +150,14 @@ async function groupMessages(env, groups, profile, seconds) {
             } catch { errors.push('group-poll-failed'); }
         }));
     try {
-        const result = await measure({ seconds, rate: groups.length, maxPending: groups.length * 16,
+        const result = await measure({ seconds, rate: groups.length, maxPending: groups.length * 16, signal: env.signal,
             action: /** 每个二十人群每秒一条消息。 */ index => {
                 const group = groups[index % groups.length];
                 return messages.send(group.members[0], group.chatId, group.members.slice(1), group.epochs[0]);
             } });
         result.ackMs = distribution(messages.ack); result.deliveryMs = distribution(messages.delivery);
         stopped = true; await Promise.all(pollers); assert.equal(errors.length, 0, 'group-poll-failed');
-        await messages.audit(env.sql); return result;
+        await auditResult(messages, env.sql, result); return result;
     } finally { stopped = true; await Promise.all(pollers); messages.close(); }
 }
 
@@ -163,13 +165,16 @@ async function groupMessages(env, groups, profile, seconds) {
 async function offline(env, pairs, seconds) {
     const messages = new Messages([]); const expected = new Map();
     for (const pair of pairs) {
+        env.signal?.throwIfAborted();
         pair.second.close();
         const prior = await sync(pair.first, pair.chatId);
         const ids = [];
-        for (let index = 0; index < 100; index++) ids.push(await messages.send(pair.first, pair.chatId, [pair.second], null, false));
+        for (let index = 0; index < 100; index++) {
+            env.signal?.throwIfAborted(); ids.push(await messages.send(pair.first, pair.chatId, [pair.second], null, false));
+        }
         expected.set(pair.chatId, { cursor: prior.cursor, ids });
     }
-    const result = await measure({ seconds, rate: pairs.length / seconds, maxPending: pairs.length,
+    const result = await measure({ seconds, rate: pairs.length / seconds, plannedCount: pairs.length, maxPending: pairs.length, signal: env.signal,
         action: /** 测量重新认证及一百条离线消息的完整补拉。 */ async index => {
             const pair = pairs[index];
             const account = env.accounts.find(/** 用稳定 UID 查找原账号。 */ value => value.uid === pair.second.uid);
@@ -179,7 +184,7 @@ async function offline(env, pairs, seconds) {
             assert.deepEqual(restored.rows.map(/** 提取补拉消息身份。 */ row => row.msg_uuid), fixture.ids);
             assert.ok(restored.rows.every(/** 核对消息内容没有损坏。 */ row => row.content === text));
         } });
-    await messages.audit(env.sql); return result;
+    await auditResult(messages, env.sql, result); return result;
 }
 
 /** 使用固定有效 PNG 和确定性附件，不依赖外部文件或网络。 */
@@ -192,7 +197,7 @@ function resourceFixture(index) {
 /** 完整上传、提交聊天资源引用并由接收者下载校验，整个动作受六十秒期限约束。 */
 async function transfer(env, pair, index) {
     const fixture = resourceFixture(index); const sha256 = createHash('sha256').update(fixture.bytes).digest('hex');
-    const signal = AbortSignal.timeout(60000);
+    const signal = env.signal ? AbortSignal.any([env.signal, AbortSignal.timeout(60000)]) : AbortSignal.timeout(60000);
     const request = /** 发送具备真实 Status 鉴权的资源 HTTP 请求。 */ async (client, route, method, body, extra = {}) => {
         const response = await fetch(`${env.resource}${route}`, { method, body, redirect: 'error', signal,
             headers: { 'X-User-Id': String(client.uid), Authorization: `Bearer ${client.token}`, ...extra } });
@@ -221,8 +226,13 @@ async function transfer(env, pair, index) {
 /** 有限并发与固定节奏测量完整资源传输，不向磁盘无限灌入数据。 */
 async function resources(env, pairs, profile, seconds) {
     let bytes = 0;
-    const result = await measure({ seconds, rate: profile.resourceConcurrency / 5, maxPending: profile.resourceConcurrency,
+    const result = await measure({ seconds, rate: profile.resourceConcurrency / 5, maxPending: profile.resourceConcurrency, signal: env.signal,
         action: /** 每个并发槽约五秒尝试一个不同大小资源。 */ async index => { bytes += await transfer(env, pairs[index % pairs.length], index); } });
     return { ...result, bytes, mibPerSecond: bytes / 1048576 / result.elapsedSeconds };
+}
+/** 审计失败保留原始吞吐与延迟，附加明确失败分类。 */
+async function auditResult(messages, sql, result) {
+    try { await messages.audit(sql); }
+    catch { result.pass = false; result.errors['persistence-or-content-audit'] = 1; }
 }
 module.exports = { Messages, sync, prepare, privateMessages, groupMessages, offline, resources, resourceFixture };

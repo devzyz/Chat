@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chat 性能测试"
+  short_description: "在 GitHub 触发服务端性能基线并取回真实报告"
+  default_prompt: "使用 $chat-performance 对 develop 运行 baseline，并下载性能报告。"

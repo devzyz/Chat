@@ -16,7 +16,8 @@ test('frames preserve fragmentation and coalescing and reject malformed lengths'
     assert.deepEqual(frames, [[1006, { error: 0 }], [1021, { error: 0 }]]);
     const combined = []; new Decoder().feed(input, /** 收集合包帧。 */ id => combined.push(id));
     assert.deepEqual(combined, [1006, 1021]);
-    assert.throws(/** 零长度报文不能被接收。 */ () => new Decoder().feed(Buffer.from([3, 238, 0, 0]), () => {}));
+    assert.throws(/** 零长度报文不能被接收。 */ () => new Decoder().feed(Buffer.from([3, 238, 0, 0]),
+        /** 非法帧不得抵达此回调。 */ () => {}));
     assert.throws(/** 超限请求必须在写 socket 前拒绝。 */ () => encode(1016, { body: 'x'.repeat(2048) }));
 });
 
@@ -83,12 +84,15 @@ test('report rejects missing scenes, duplicate scenes, wrong SHA and incomplete 
     const sha = 'a'.repeat(40);
     const metric = { pass: true, completed: 1, planned: 1, unsent: 0, errors: {}, latencyMs: { count: 1 } };
     const report = { sha, status: 'passed', profile: 'smoke', cleanup: { complete: true }, failures: [],
-        results: scenarios.map(/** 创建完整唯一场景证据。 */ name => ({ round: 1, name, metrics: metric })) };
+        results: scenarios.map(/** 创建完整唯一场景证据。 */ name => ({ round: 1, name, metrics: metric,
+            ...(name === 'mixed' ? { resources: metric } : {}) })) };
     verify(report, sha);
     assert.throws(/** 源码身份不符拒绝。 */ () => verify(report, 'b'.repeat(40)));
     assert.throws(/** 缺场景拒绝。 */ () => verify({ ...report, results: report.results.slice(1) }, sha));
     assert.throws(/** 重复场景拒绝。 */ () => verify({ ...report, results: [...report.results, report.results[0]] }, sha));
     assert.throws(/** 清理缺失拒绝。 */ () => verify({ ...report, cleanup: null }, sha));
+    assert.throws(/** 混合场景资源证据缺失拒绝。 */ () => verify({ ...report,
+        results: report.results.map(/** 注入混合场景子报告缺失。 */ row => ({ ...row, resources: undefined })) }, sha));
 });
 
 test('performance is manually isolated from full, quick, maintenance and publication', /** 验证性能选择与已有 CI 路由兼容。 */ () => {
@@ -101,4 +105,23 @@ test('performance is manually isolated from full, quick, maintenance and publica
     }
     assert.throws(/** 未知负载档位必须失败。 */ () => selectPolicy('workflow_dispatch', 'refs/heads/develop',
         { ...event, inputs: { mode: 'performance', performance_profile: 'unknown' } }));
+});
+
+
+test('cancellation drains in-flight work before returning and does not launch more', /** 取消后等待已有动作退出且停止后续投递。 */ async () => {
+    const controller = new AbortController(); let launched = 0, active = 0;
+    const result = measure({ seconds: 0.1, rate: 100, maxPending: 1, signal: controller.signal,
+        action: /** 在动作内触发取消并模拟异步收敛。 */ async () => {
+            launched++; active++; controller.abort(new Error('cancelled')); await delay(10); active--;
+        } });
+    await assert.rejects(result, /cancelled/); assert.equal(launched, 1); assert.equal(active, 0);
+});
+
+test('explicit operation count and separate warmup cannot distort measurements', /** 有限账号集合不受浮点误差影响，预热样本不混入下一窗口。 */ async () => {
+    const warmup = await measure({ seconds: 0.01, rate: 500 / 60, plannedCount: 1, maxPending: 1,
+        action: /** 制造预热失败。 */ async () => { throw new Error('warmup-failure'); } });
+    assert.equal(warmup.pass, false);
+    const measured = await measure({ seconds: 0.01, rate: 500 / 60, plannedCount: 1, maxPending: 1,
+        action: /** 正式窗口成功动作。 */ async () => {} });
+    assert.equal(measured.planned, 1); assert.equal(measured.completed, 1); assert.deepEqual(measured.errors, {});
 });

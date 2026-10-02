@@ -26,6 +26,10 @@ on:
         description: Unique performance request identity (optional)
         type: string
         default: ''
+      performance_source_sha:
+        description: Expected measured commit (optional; checked before building)
+        type: string
+        default: ''
       refresh_tools:
         description: Cold-build latest stable Windows tools and approve after Windows checks (default branch only)
         type: boolean
@@ -63,6 +67,11 @@ jobs:
       - name: Resolve validation scope without toolchain or artifact queries
         id: policy
         run: node scripts/ci/ciPolicy.js
+      - name: Pin requested performance source
+        if: steps.policy.outputs.mode == 'performance'
+        env:
+          EXPECTED_SHA: ${{ inputs.performance_source_sha }}
+        run: test -z "$EXPECTED_SHA" || test "$EXPECTED_SHA" = "$GITHUB_SHA"
 
   windows:
     needs: plan

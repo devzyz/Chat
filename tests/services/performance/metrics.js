@@ -13,17 +13,20 @@ function distribution(samples) {
 }
 
 /** 使用固定计划时刻投递负载；超出积压上限时记录未发送，不补发突发流量。 */
-async function measure({ seconds, rate, maxPending, action }) {
+async function measure({ seconds, rate, maxPending, action, signal, plannedCount }) {
     const start = performance.now();
     const pending = new Set();
     const latency = [], lag = [], errors = {};
     let sent = 0, completed = 0, unsent = 0;
     const loop = monitorEventLoopDelay({ resolution: 20 }); loop.enable();
-    const total = Math.ceil(seconds * rate);
+    const total = plannedCount ?? Math.ceil(seconds * rate);
+    assert.ok(Number.isSafeInteger(total) && total > 0);
     for (let index = 0; index < total; index++) {
+        if (signal?.aborted) break;
         const due = start + index * 1000 / rate;
         const wait = due - performance.now();
         if (wait > 0) await delay(wait);
+        if (signal?.aborted) break;
         const late = Math.max(0, performance.now() - due); lag.push(late);
         if (pending.size >= maxPending || late > Math.max(100, 1000 / rate)) { unsent++; continue; }
         sent++;
@@ -37,7 +40,10 @@ async function measure({ seconds, rate, maxPending, action }) {
         pending.add(operation);
     }
     await Promise.all(pending);
+    const remainder = start + seconds * 1000 - performance.now();
+    if (remainder > 0 && !signal?.aborted) await delay(remainder);
     const end = performance.now(); loop.disable();
+    signal?.throwIfAborted();
     const elapsedSeconds = Math.max(seconds, (end - start) / 1000);
     return { planned: total, sent, completed, unsent, errors, seconds, elapsedSeconds,
         throughput: completed / elapsedSeconds, latencyMs: distribution(latency), schedulingLagMs: distribution(lag),

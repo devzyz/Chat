@@ -23,25 +23,34 @@ async function run() {
         url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
         environment: { cpus: os.cpus().length, cpuModel: os.cpus()[0].model, memoryBytes: os.totalmem(),
             node: process.version, kernel: os.release(), cpuTicksPerSecond: Number(execFileSync('getconf', ['CLK_TCK'], { encoding: 'utf8' })) },
-        status: 'running', results: [], failures: [], phases: [], samples: [] };
-    let env, sampler, stage = 'setup', round = 0;
+        status: 'running', results: [], warmups: [], failures: [], phases: [], samples: [] };
+    const controller = new AbortController();
+    let env, sampler, previousSample, stage = 'setup', round = 0;
     const started = performance.now();
     const phase = /** 为准备、预热和测量分别保存耗时。 */ async (name, action) => {
+        if (name !== 'cleanup') controller.signal.throwIfAborted();
         const begin = performance.now(); stage = `${round}-${name}`;
         try { return await action(); }
         finally { report.phases.push({ round, name, seconds: (performance.now() - begin) / 1000 }); }
     };
-    let abort;
-    const interrupted = new Promise(/** 为外部截止信号建立失败通知。 */ (_, reject) => { abort = reject; });
     const onSignal = /** GitHub 超时预留清理窗口。 */ () => {
-        for (const client of env?.clients || []) client.close(); abort(new Error('run-interrupted'));
+        controller.abort(new Error('run-interrupted'));
+        for (const client of env?.clients || []) client.close();
     };
     process.once('SIGTERM', onSignal); process.once('SIGINT', onSignal);
     try {
-        env = new Environment();
+        env = new Environment(controller.signal);
         await phase('setup', /** 启动真实隔离环境。 */ () => env.setup());
         sampler = setInterval(/** 采样每个正式服务的资源使用，采样失败可见。 */ () => {
-            try { report.samples.push({ elapsedSeconds: (performance.now() - started) / 1000, stage, processes: env.sample() }); }
+            try {
+                const sample = { elapsedSeconds: (performance.now() - started) / 1000, stage, processes: env.sample() };
+                for (const item of sample.processes) {
+                    const previous = previousSample?.processes.find(/** 仅比较相同真实 PID。 */ value => value.pid === item.pid);
+                    item.cpuPercent = previous ? (item.cpuTicks - previous.cpuTicks) / report.environment.cpuTicksPerSecond /
+                        (sample.elapsedSeconds - previousSample.elapsedSeconds) * 100 : null;
+                }
+                report.samples.push(sample); previousSample = sample;
+            }
             catch { report.failures.push({ stage, category: 'process-sample-failed' }); }
         }, 1000);
         const execute = /** 执行多轮独立账号数据的完整场景集合。 */ async () => {
@@ -52,16 +61,19 @@ async function run() {
                 });
                 const scenario = /** 先预热再测量，原始失败指标立即保存。 */ async (name, action) => {
                     const warmup = await phase(`${name}-warmup`, /** 使用相同业务路径预热。 */ () => action(profile.warmupSeconds));
+                    report.warmups.push({ round, name, result: warmup }); write(root, report);
                     validate(warmup.metrics || warmup);
+                    if (name === 'mixed') validate(warmup.resources);
                     const result = await phase(`${name}-measure`, /** 运行所选档位的正式测量窗口。 */ () => action(profile.seconds));
                     const row = { round, name, ...(result.metrics ? result : { metrics: result }) };
                     report.results.push(row); write(root, report);
                     // Continue other scenes to preserve diagnostic coverage; final verification fails closed.
                 };
                 await scenario('login', /** 固定账号集合登录一次，登录包含 Gate/Status 与 Chat 认证。 */ seconds => measure({
-                    seconds, rate: accounts.length / seconds, maxPending: accounts.length,
+                    seconds, rate: accounts.length / seconds, plannedCount: accounts.length, maxPending: accounts.length, signal: controller.signal,
                     action: /** 保持每账号单会话语义。 */ async index => { accounts[index].client?.close(); await env.login(accounts[index]); }
                 }));
+                await phase('instance-publication', /** 通过真实连接数发布及选服形成双实例负载。 */ () => env.balance(accounts));
                 const clients = accounts.map(/** 取正式认证客户端。 */ account => account.client);
                 assert.ok(clients.every(/** 所有连接必须真正认证且仍存活。 */ client => client && !client.closed), 'missing-connections');
                 const topology = await phase('relationships', /** 建立生产好友及群聊关系。 */ () => prepare(env, clients));
@@ -70,8 +82,10 @@ async function run() {
                 await scenario('group', /** 测量群提交和二十人成员补拉。 */ seconds => groupMessages(env, topology.groups, profile, seconds));
                 await scenario('resources', /** 测量图片及附件传输。 */ seconds => resources(env, topology.cross, profile, seconds));
                 await scenario('mixed', /** 同时测量跨服文本和资源传输的互相影响。 */ async seconds => {
-                    const [messages, files] = await Promise.all([privateMessages(env, topology.cross, clients, profile, seconds),
+                    const outcomes = await Promise.allSettled([privateMessages(env, topology.cross, clients, profile, seconds),
                         resources(env, topology.cross, profile, seconds)]);
+                    for (const outcome of outcomes) if (outcome.status === 'rejected') throw outcome.reason;
+                    const [messages, files] = outcomes.map(/** 读取已完整收敛的业务结果。 */ outcome => outcome.value);
                     return { metrics: messages, resources: files };
                 });
                 // Offline seeding is intentionally outside the measured recovery action.
@@ -80,14 +94,17 @@ async function run() {
                 for (const account of accounts) account.client.close();
             }
         };
-        await Promise.race([execute(), interrupted]);
+        await execute();
     } catch (error) {
-        report.failures.push({ stage, category: /^[a-z][a-z0-9-]{0,70}$/.test(error.message) ? error.message : 'assertion-or-operation',
-            location: error.stack?.split('\n')[1]?.trim().replaceAll(process.cwd(), '<repo>') });
+        const firstLine = error.message.split('\n')[0];
+        report.failures.push({ stage, category: /^[a-z][a-z0-9-]{0,70}$/.test(firstLine) ? firstLine : 'assertion-or-operation',
+            actualNumber: typeof error.actual === 'number' ? error.actual : undefined,
+            expectedNumber: typeof error.expected === 'number' ? error.expected : undefined,
+            location: error.stack?.split('\n').find(/** 只保存栈位置，不输出断言对象。 */ line => /^\s+at /.test(line))?.trim() });
     } finally {
         clearInterval(sampler);
         if (env) {
-            try { report.cleanup = await phase('cleanup', /** 收集全部资源的最终清理证据。 */ () => env.teardown()); }
+            try { report.cleanup = await phase('cleanup', /** 收集全部资源的最终清理证据。 */ () => env.teardown(root)); }
             catch { report.cleanup = { complete: false }; }
         }
         if (!report.cleanup?.complete) report.failures.push({ stage: 'cleanup', category: 'cleanup-incomplete' });
