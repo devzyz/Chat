@@ -149,7 +149,7 @@ class Environment {
         const selected = this.topology.servers.find(/** 查找当前承载实例。 */ server => server.port === existing);
         const migrating = accounts.slice(accounts.length / 2);
         for (const account of migrating) account.client.close();
-        await waitForConnectionCount(this.coordinator, selected.name, accounts.length - migrating.length, []);
+        await waitForConnectionCount(this.coordinator, selected.name, accounts.length - migrating.length, [], this.signal);
         for (const account of migrating) await this.login(account);
         assert.equal(new Set(accounts.map(/** 核对真实分配的端点。 */ account => account.client.port)).size, 2, 'two-live-instances');
     }

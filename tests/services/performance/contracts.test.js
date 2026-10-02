@@ -84,6 +84,8 @@ test('report rejects missing scenes, duplicate scenes, wrong SHA and incomplete 
     const sha = 'a'.repeat(40);
     const metric = { pass: true, completed: 1, planned: 1, unsent: 0, errors: {}, latencyMs: { count: 1 } };
     const report = { sha, status: 'passed', profile: 'smoke', cleanup: { complete: true }, failures: [],
+        warmups: scenarios.map(/** 为每个场景建立独立预热证据。 */ name => ({ round: 1, name,
+            result: name === 'mixed' ? { metrics: metric, resources: metric } : metric })),
         results: scenarios.map(/** 创建完整唯一场景证据。 */ name => ({ round: 1, name, metrics: metric,
             ...(name === 'mixed' ? { resources: metric } : {}) })) };
     verify(report, sha);
@@ -91,6 +93,7 @@ test('report rejects missing scenes, duplicate scenes, wrong SHA and incomplete 
     assert.throws(/** 缺场景拒绝。 */ () => verify({ ...report, results: report.results.slice(1) }, sha));
     assert.throws(/** 重复场景拒绝。 */ () => verify({ ...report, results: [...report.results, report.results[0]] }, sha));
     assert.throws(/** 清理缺失拒绝。 */ () => verify({ ...report, cleanup: null }, sha));
+    assert.throws(/** 缺少预热证据拒绝。 */ () => verify({ ...report, warmups: [] }, sha));
     assert.throws(/** 混合场景资源证据缺失拒绝。 */ () => verify({ ...report,
         results: report.results.map(/** 注入混合场景子报告缺失。 */ row => ({ ...row, resources: undefined })) }, sha));
 });

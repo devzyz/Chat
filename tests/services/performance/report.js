@@ -19,6 +19,11 @@ function verify(report, sha) {
     const expected = Array.from({ length: profiles[report.profile].repeats },
         /** 为每轮展开唯一场景集合。 */ (_, index) => scenarios.map(/** 生成场景结果键。 */ name => `${index + 1}:${name}`)).flat().sort();
     assert.deepEqual(report.results.map(/** 提取实际场景结果键。 */ row => `${row.round}:${row.name}`).sort(), expected);
+    assert.deepEqual(report.warmups.map(/** 检查独立预热证据完整性。 */ row => `${row.round}:${row.name}`).sort(), expected);
+    for (const row of report.warmups) {
+        validate(row.result.metrics || row.result);
+        if (row.name === 'mixed') validate(row.result.resources);
+    }
     for (const row of report.results) {
         validate(row.metrics);
         if (row.name === 'mixed') { assert.ok(row.resources, 'missing-mixed-resource-evidence'); validate(row.resources); }

@@ -11,6 +11,7 @@
 
 CI 使用 quick/full 两种模式：quick 保留 Windows 构建和全部既有测试（develop 纯文档仅静态检查），
 full 增加 Linux 集成/E2E 与应用打包；手动默认 full，可选 quick，专项开关启用时提升为 full。
+另有仅手动触发的 performance 模式，在 GitHub Ubuntu 独立构建和测量服务端，不生成发布包。
 触发与失败规则见 [CI 治理](../tests/CI-GOVERNANCE.md)。
 
 Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环境说明见仓库根目录 `WINDOWS_BUILD.md`。

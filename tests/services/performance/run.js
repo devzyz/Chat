@@ -8,7 +8,7 @@ const { execFileSync } = require('node:child_process');
 const { Environment } = require('./environment');
 const profiles = require('./profiles.json');
 const { measure, validate } = require('./metrics');
-const { prepare, privateMessages, groupMessages, offline, resources } = require('./scenarios');
+const { prepare, privateMessages, groupMessages, prepareOffline, recoverOffline, resources } = require('./scenarios');
 const { write, verify } = require('./report');
 
 /** 运行完整性能矩阵，逐场景保留证据，任何失败都不绕过最终清理。 */
@@ -59,12 +59,16 @@ async function run() {
                 await phase('accounts', /** 准备独立账号，不将注册邮件吞吐混入登录指标。 */ async () => {
                     for (let index = 0; index < profile.connections; index++) accounts.push(await env.register(round * 10000 + index));
                 });
-                const scenario = /** 先预热再测量，原始失败指标立即保存。 */ async (name, action) => {
-                    const warmup = await phase(`${name}-warmup`, /** 使用相同业务路径预热。 */ () => action(profile.warmupSeconds));
+                const scenario = /** 先预热再测量，数据准备独立计时，原始失败指标立即保存。 */ async (name, action, prepareAction) => {
+                    const warmupFixture = prepareAction ? await phase(`${name}-warmup-prepare`, prepareAction) : undefined;
+                    const warmup = await phase(`${name}-warmup`, /** 使用相同业务路径预热。 */ () => action(profile.warmupSeconds, warmupFixture));
                     report.warmups.push({ round, name, result: warmup }); write(root, report);
-                    validate(warmup.metrics || warmup);
-                    if (name === 'mixed') validate(warmup.resources);
-                    const result = await phase(`${name}-measure`, /** 运行所选档位的正式测量窗口。 */ () => action(profile.seconds));
+                    try {
+                        validate(warmup.metrics || warmup);
+                        if (name === 'mixed') validate(warmup.resources);
+                    } catch { report.failures.push({ stage: `${round}-${name}-warmup`, category: 'warmup-business-failed' }); }
+                    const fixture = prepareAction ? await phase(`${name}-prepare`, prepareAction) : undefined;
+                    const result = await phase(`${name}-measure`, /** 运行所选档位的正式测量窗口。 */ () => action(profile.seconds, fixture));
                     const row = { round, name, ...(result.metrics ? result : { metrics: result }) };
                     report.results.push(row); write(root, report);
                     // Continue other scenes to preserve diagnostic coverage; final verification fails closed.
@@ -88,9 +92,9 @@ async function run() {
                     const [messages, files] = outcomes.map(/** 读取已完整收敛的业务结果。 */ outcome => outcome.value);
                     return { metrics: messages, resources: files };
                 });
-                // Offline seeding is intentionally outside the measured recovery action.
-                const recovery = await phase('offline-prepare-and-measure', /** 测量每个会话的一百条离线消息恢复。 */ () => offline(env, topology.cross, profile.seconds));
-                report.results.push({ round, name: 'offline', metrics: recovery }); write(root, report);
+                await scenario('offline', /** 测量每个会话的一百条离线消息恢复。 */ (seconds, fixture) =>
+                    recoverOffline(env, topology.cross, seconds, fixture),
+                /** 为预热及正式测量各自重新生成一百条离线积压。 */ () => prepareOffline(env, topology.cross));
                 for (const account of accounts) account.client.close();
             }
         };

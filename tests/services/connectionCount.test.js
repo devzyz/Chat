@@ -54,3 +54,16 @@ test('connection count waits for a production refresh while keeping both control
     assert.equal(disconnected, true);
     await stalled;
 });
+
+
+test('connection publication cancellation releases Redis before the refresh deadline', /** 取消无需等待六十秒生产发布周期，Redis 必须释放。 */ async () => {
+    const { waitForConnectionCount } = require('./connectionCount');
+    const controller = new AbortController(); let disconnected = false;
+    controller.abort(new Error('cancelled'));
+    const coordinator = { /** 提供独立查询连接。 */ async redis() { return {
+        /** 取消时不应查询生产计数。 */ async hget() { throw new Error('unexpected-query'); },
+        /** 记录释放结果。 */ disconnect() { disconnected = true; }
+    }; } };
+    await assert.rejects(waitForConnectionCount(coordinator, 'owned-server', 1, [], controller.signal), /cancelled/);
+    assert.equal(disconnected, true);
+});

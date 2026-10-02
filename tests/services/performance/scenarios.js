@@ -158,13 +158,14 @@ async function groupMessages(env, groups, profile, seconds) {
                 return messages.send(group.members[0], group.chatId, group.members.slice(1), group.epochs[0]);
             } });
         result.ackMs = distribution(messages.ack); result.deliveryMs = distribution(messages.delivery);
-        stopped = true; await Promise.all(pollers); assert.equal(errors.length, 0, 'group-poll-failed');
+        stopped = true; await Promise.all(pollers);
+        if (errors.length) { result.pass = false; result.errors['group-poll-failed'] = errors.length; }
         await auditResult(messages, env.sql, result); return result;
     } finally { stopped = true; await Promise.all(pollers); messages.close(); }
 }
 
-/** 对每个接收方先离线积压一百条，再经登录和分页恢复核对完整内容。 */
-async function offline(env, pairs, seconds) {
+/** 为每个接收方离线积压一百条，准备阶段独立计时。 */
+async function prepareOffline(env, pairs) {
     const messages = new Messages([]); const expected = new Map();
     for (const pair of pairs) {
         env.signal?.throwIfAborted();
@@ -176,6 +177,10 @@ async function offline(env, pairs, seconds) {
         }
         expected.set(pair.chatId, { cursor: prior.cursor, ids });
     }
+    return { messages, expected };
+}
+/** 经登录和分页恢复核对已准备的完整离线消息，计时不含积压生成。 */
+async function recoverOffline(env, pairs, seconds, { messages, expected }) {
     const result = await measure({ seconds, rate: pairs.length / seconds, plannedCount: pairs.length, maxPending: pairs.length, signal: env.signal,
         action: /** 测量重新认证及一百条离线消息的完整补拉。 */ async index => {
             const pair = pairs[index];
@@ -237,4 +242,4 @@ async function auditResult(messages, sql, result) {
     try { await messages.audit(sql); }
     catch { result.pass = false; result.errors['persistence-or-content-audit'] = 1; }
 }
-module.exports = { Messages, sync, prepare, privateMessages, groupMessages, offline, resources, resourceFixture };
+module.exports = { Messages, sync, prepare, privateMessages, groupMessages, prepareOffline, recoverOffline, resources, resourceFixture };

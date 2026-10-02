@@ -122,7 +122,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
       - name: Verify performance contracts
-        run: node --test tests/services/performance/*.test.js tests/build/ciPolicy.test.js
+        run: node --test tests/services/performance/*.test.js tests/services/connectionCount.test.js tests/build/ciPolicy.test.js
       - name: Build only production servers and their supervisor
         timeout-minutes: 30
         run: |
