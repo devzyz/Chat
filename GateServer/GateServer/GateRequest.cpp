@@ -33,9 +33,9 @@ public:
                 };
             if (!text("email", 254) || request["email"].asString().find('@') == std::string::npos)
                 return {ErrorCodes::Error_Json};
-            if (endpoint == Endpoint::UserRegister && (!text("user", 255) || !text("passwd", 255)
+            if (endpoint == Endpoint::UserRegister && (!text("user", 1020) || !text("passwd", 255)
                 || !text("confirm", 255) || !text("varifycode", 64))) return {ErrorCodes::Error_Json};
-            if (endpoint == Endpoint::ResetPassword && (!text("user", 255) || !text("password", 255)
+            if (endpoint == Endpoint::ResetPassword && (!text("user", 1020) || !text("password", 255)
                 || !text("varify", 64))) return {ErrorCodes::Error_Json};
             if (endpoint == Endpoint::UserLogin && !text("password", 255)) return {ErrorCodes::Error_Json};
             if (endpoint == Endpoint::GetVarifyCode) {

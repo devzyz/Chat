@@ -91,7 +91,7 @@ PR #30 已合并为 `2db7f55`，修复以该最新 develop 为基线。
   发布包版本化迁移入口与 Resource schema/就绪检查。
 - 已补实例/会话租约、过期 Token、服务端随机盐口令派生、验证码原子消费/并发合并、输入验证、
   LAN 监听与内部 RPC 边界、资源预算及过载关闭诊断。
-- 本地第二轮 Server 回归与 Varify 完整测试通过；后续改动仍需最终复跑。发布包合同 12 项通过。
+- 本地最终 Server 259 项、Varify 55 项、发布包合同 12 项通过；增量规范零违规，104 个相对文档路径有效。
   真实 MySQL/Redis/SMTP、双实例业务、包启动及性能基线安排 GitHub full/real_acceptance/performance；
   尚未完成的 run 不计为通过。本机没有恢复依赖或迁移个人数据库。
 

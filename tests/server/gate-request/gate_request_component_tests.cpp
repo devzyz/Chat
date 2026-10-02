@@ -399,6 +399,15 @@ TEST_F(GateRequestComponentTests, ResetSuccessUsesCodeIdentityThenPasswordUpdate
 
 	ExpectResult(result, kSuccess);
 	EXPECT_EQ(*calls, (std::vector<std::string>{"code.read", "user.identity", "user.update"}));
+    calls->clear();
+    std::string unicode_name;
+    for (int index = 0; index < 255; ++index) unicode_name += u8"名";
+    request["user"] = unicode_name;
+    ExpectResult(module->Handle(gate::Endpoint::ResetPassword, request), kSuccess);
+    EXPECT_EQ(*calls, (std::vector<std::string>{"code.read", "user.identity", "user.update"}));
+    calls->clear(); request["user"] = std::string(1021, 'x');
+    ExpectResult(module->Handle(gate::Endpoint::ResetPassword, request), kJsonError);
+    EXPECT_TRUE(calls->empty());
 }
 
 /** 验证登录凭据失败时不调用选服。 */
