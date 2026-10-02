@@ -29,3 +29,5 @@ node --test tests/services/performance/*.test.js tests/services/connectionCount.
 
 消息提交失败保留服务器白名单 `commit_error` 分类（权限、UUID、冲突、期限或存储），
 未知字段不进入报告；预热失败和未发送请求仍会使整次运行失败，不自动重试消息或放宽负载。
+诊断工件包含顶层和一层服务子目录中的日志，最多 20 个文件、每个尾部 64 KiB；跳过符号链接、
+配置及更深目录，截断的不完整首行丢弃，敏感协议/SQL 行和本次所有新旧会话凭据脱敏。

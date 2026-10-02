@@ -13,6 +13,7 @@ const { SchemaMigration } = require('../../../schema/SchemaMigration');
 const { MysqlSession, mysqlArgs } = require('../../../schema/MysqlSession');
 const { Client, post } = require('./client');
 const { waitForConnectionCount } = require('../connectionCount');
+const { preserveLogs } = require('./evidence');
 
 /** 管理本次正式服务、临时数据、客户端及监督器，复用既有隔离实现。 */
 class Environment {
@@ -219,21 +220,9 @@ class Environment {
                 if (fs.existsSync(source)) fs.copyFileSync(source, path.join(destination, `${owned.name}${suffix}.json`));
             }
         }
-        const logRoot = path.join(this.root, 'logs');
-        if (!fs.existsSync(logRoot)) return;
-        const secrets = [this.coordinator.password, ...this.accounts.flatMap(/** 汇集本次账号及会话凭据。 */ account =>
-            [account.password, account.email, account.client?.token])].filter(Boolean);
-        for (const name of fs.readdirSync(logRoot).slice(0, 20)) {
-            const file = path.join(logRoot, name); const info = fs.lstatSync(file);
-            if (!info.isFile() || info.isSymbolicLink()) continue;
-            const handle = fs.openSync(file, 'r'); let bytes;
-            try { bytes = Buffer.alloc(Math.min(info.size, 65536)); fs.readSync(handle, bytes, 0, bytes.length, Math.max(0, info.size - bytes.length)); }
-            finally { fs.closeSync(handle); }
-            let text = bytes.toString('utf8').split('\n').filter(/** 敏感协议与查询整行剔除，避免输出完整报文。 */ line =>
-                !/token|passwd|password|验证码|varify|verifycode|SELECT |INSERT |UPDATE /i.test(line)).join('\n');
-            for (const secret of secrets) text = text.replaceAll(secret, '<redacted>');
-            fs.writeFileSync(path.join(destination, name), text);
-        }
+        const secrets = [this.coordinator.password, ...this.accounts.flatMap(/** 汇集本次账号凭据。 */ account =>
+            [account.password, account.email]), ...this.clients.map(/** 包含已关闭或被替换会话的旧令牌。 */ client => client.token)];
+        preserveLogs(path.join(this.root, 'logs'), destination, secrets);
     }
 }
 module.exports = { Environment };
