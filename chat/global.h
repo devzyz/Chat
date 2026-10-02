@@ -20,7 +20,7 @@
 extern std::function<void(QWidget*)> repolish;
 
 /**
- * @brief xorString 用于对密码进行哈希，简单哈希
+ * @brief 保留旧协议的可逆异或转换，不提供密码哈希或传输保护。
  */
 extern std::function<QString(QString)> xorString;
 

@@ -5,6 +5,14 @@ registration are documented in [conventions/README.md](conventions/README.md).
 
 ## CI routing and budgets
 
+`node --test tests/build/regressionReports.test.js` executes the production PowerShell report
+validator against disposable XML fixtures on Windows. It checks that adding a testcase changes
+only its row in `$regressionReportGroups`, while missing/duplicate inventory, incorrect counts,
+failed/skipped cases, missing cleanup evidence and credential-shaped output still fail.
+Server, Qt, Varify and script runners read expected counts from that one inventory; Qt counts
+are additionally compared with actual CMake registrations. Historical minimum floors and
+required named contracts remain independent checks. This test runs in Windows static-check.
+
 `node --test tests/build/ciPolicy.test.js tests/build/ciBudget.test.js` checks develop quick regression, master/weekly full regression,
 manual quick/full selection (default full), optional-flag promotion to full,
 master-only publication, failure dependencies and the observed cold Windows build budget.

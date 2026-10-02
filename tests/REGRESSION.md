@@ -128,7 +128,8 @@ registration gate ensures the test is not silently omitted.
 Local message persistence and file/resource transfer already exist; their rows
 describe continuing regression requirements, not unimplemented modules. See
 [MessageStorage](../docs/MessageStorage.md) and [Resources](../docs/Resources.md).
-Group chat, voice messages, calls and LAN entries are future design guidance,
+Group membership, management and resources also exist; their row describes continuing
+regression requirements. Voice messages, calls and LAN entries remain future design guidance,
 not claims of implemented or accepted capabilities.
 
 | Capability | Recommended module Interface and Seam | Unit/Component regression | Integration/E2E regression |

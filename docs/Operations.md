@@ -167,8 +167,8 @@ ChatServer 已具有较完整的 fail-fast 配置和异常清理。GateServer、
 
 ## 资源服务启用
 
-按 [Data 的迁移入口](Data.md#operational-entry) 应用全部待执行迁移，当前为 schema 4；
-migration 003 提供资源表，004 提供回执表。升级前备份并停止写入，迁移后更新全部
+按 [Data 的迁移入口](Data.md#operational-entry) 应用 manifest 中全部待执行迁移；
+资源服务校验完整业务 schema，不能仅应用资源表迁移。升级前备份并停止写入，迁移后更新全部
 Gate/Chat/Resource 实例，再配置 ResourceServer 的 MySQL、Status 和存储根目录。
 构建和本地验证命令见 [资源服务说明](../ResourceServer/README.md)，
 目录、头像发布与失败语义见 [Resources](Resources.md)。

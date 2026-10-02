@@ -79,8 +79,7 @@ owns exact standalone/full selector registration, real-process boundaries and
 timeouts. These Linux contracts supplement, not replace, the Windows baseline;
 registration alone is not PASS evidence.
 
-状态：Phase 3B Plan 3B-05 本地 closeout 基线清单；远端 clean PR / post-merge develop evidence pending
-基线日期：2026-09-06
+本矩阵维护当前合同与阶段引入记录；实际完成度、远端验证与下一步见 [Status](../docs/Status.md)。
 治理规则：[`CI-GOVERNANCE.md`](CI-GOVERNANCE.md)
 
 ## 1. 统计口径
@@ -882,8 +881,8 @@ and the quick Server Unit report; 03..06 are opt-in MySQL/TCP/Qt contracts in
 SQLite component CTest entry. Existing model, delegate, session-reset and session-driver
 cases additionally cover monotonic facts, real widget observation, original-payload retry,
 pre-retry synchronization and logout/account boundaries. Report totals remain owned by the runner.
-Migration contracts now target schema 4; the managed schema-2 fixture upgrades through 3 and 4,
-preserving prior rows and rejecting schema drift. No personal database or promoted N-1 is implied.
+This phase introduced migration 004. The managed schema-2 fixture now applies all pending
+manifest migrations, preserving prior rows and rejecting schema drift. No personal database or promoted N-1 is implied.
 
 ## 本地目录持久化
 
@@ -909,9 +908,10 @@ Q05-STORE-15..17 在 [message-storage](../chat/tests/message-storage/README.md) 
 | message_storage.persistence | groupEpochAndLocalSearch、目录筛选/备注合并 | 真 SQLite，账号级存储 |
 | resource chat_flow_integration | PNG、十秒 AVI、普通文件分别提交/同步/UUID重试/摘要校验；入群边界、移除后拒绝、独立私聊引用在解散后保留权限 | 真 HTTP/TCP/MySQL；Redis/Status 替身；视频解码 250 帧 |
 | resource_transfer_tests | 群资料拒绝提示、权限刷新、完整分页门禁、超时原 UUID 重试及真实 TCP 回包落盘顺序；历史第二页定位、70 联系人/70 群筛选打开、备注结果和三类群资源卡片 | 真实控件、临时 SQLite；备注结果/资源下载完成信号由测试驱动，非完整生产依赖或人工桌面 |
-| T10-MIG-10 / S05-RESOURCE-17 | 有数据的 5→6、2→6、重复迁移及缺失群主用户/成员或角色矛盾拒绝 | 独立临时 MySQL |
+| T10-MIG-10 / S05-RESOURCE-17 | 有数据的旧库升级到 manifest 目标版本、重复迁移及缺失群主用户/成员或角色矛盾拒绝 | 独立临时 MySQL |
 
-当前迁移目标为 MySQL 6、SQLite 5。执行证据与剩余验收只记录在 [Status](../docs/Status.md)。
+MySQL 目标由 schema manifest 定义，SQLite 合同见 [MessageStorage](../docs/MessageStorage.md)。
+执行证据与剩余验收只记录在 [Status](../docs/Status.md)。
 
 `message_storage.persistence` 的本地提醒用例覆盖存储去重、查看边界、重启、账号隔离及旧库升级。
 `conversation_attention.widgets` 复用资源控件目标，覆盖会话分页与窗口/存储重建后的提醒、打开清除及持久化；
