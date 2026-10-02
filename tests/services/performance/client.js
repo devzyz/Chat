@@ -63,7 +63,14 @@ class Client extends EventEmitter {
         for (const [key, item] of this.pending) {
             if (item.id === id && item.match(value)) {
                 clearTimeout(item.timer); this.pending.delete(key);
-                if (value.error !== 0) item.reject(new Error(`business-${id}-${Number(value.error)}`));
+                if (value.error !== 0) {
+                    const commitErrors = { UnauthorizedSender: 'unauthorized-sender', InvalidMembership: 'invalid-membership',
+                        InvalidUuid: 'invalid-uuid', Conflict: 'conflict', DeadlineExceeded: 'deadline-exceeded',
+                        StorageUnavailable: 'storage-unavailable' };
+                    const detail = id === 1017 && Object.hasOwn(commitErrors, value.commit_error)
+                        ? `-${commitErrors[value.commit_error]}` : '';
+                    item.reject(new Error(`business-${id}-${Number(value.error)}${detail}`));
+                }
                 else item.resolve(value);
                 return;
             }

@@ -26,3 +26,6 @@ node --test tests/services/performance/*.test.js tests/services/connectionCount.
 每次运行在所有负载轮次之前执行一次正确性回归：Gate 空闲超过 60 秒后的首个请求、255 字中文名称与描述修改后
 重新登录及目录完整性、20 条 UUID 批量确认和幂等重试、真实 Redis 的 Token/在线租约 TTL 与验证码消费。
 这部分属于准备阶段，不计入性能样本；任何断言失败仍使整次运行失败。Resource 就绪使用 `/ready`。
+
+消息提交失败保留服务器白名单 `commit_error` 分类（权限、UUID、冲突、期限或存储），
+未知字段不进入报告；预热失败和未发送请求仍会使整次运行失败，不自动重试消息或放宽负载。
