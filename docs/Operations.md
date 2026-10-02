@@ -157,7 +157,7 @@ getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超�
   可选，默认各 1000，合法范围为整数 1..60000；密码仍仅由
   `CHAT_VARIFY_REDIS_PASSWORD` 提供。Node 连接总期限为两者之和，包含异步解析和 AUTH。
 - ioredis 关闭离线队列、自动重发与自动重连；失败命令保留 null/false 旧映射，
-  后续独立操作才创建新连接。验证码写入为单条 `SET key value EX seconds`，不再分步 EXPIRE。
+  后续独立操作才创建新连接。验证码写入为单条 `SET key value EX seconds NX`，不再分步 EXPIRE。
   Node adapter 的 `close()` 直接断开并取消等待，不发送可能阻塞的 QUIT；入口绑定失败与 SIGINT/SIGTERM
   都关闭 Redis/SMTP adapter，gRPC 排空最多 10 秒后强制关闭。
 - 测试只使用本次 RunContext 的动态地址、合成密码和 key prefix；真实服务验收状态见
