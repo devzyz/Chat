@@ -16,7 +16,7 @@ function distribution(samples) {
 async function measure({ seconds, rate, maxPending, action, signal, plannedCount }) {
     const start = performance.now();
     const pending = new Set();
-    const latency = [], lag = [], errors = {};
+    const latency = [], lag = [], errors = {}, errorDetails = [];
     let sent = 0, completed = 0, unsent = 0;
     const loop = monitorEventLoopDelay({ resolution: 20 }); loop.enable();
     const total = plannedCount ?? Math.ceil(seconds * rate);
@@ -34,8 +34,13 @@ async function measure({ seconds, rate, maxPending, action, signal, plannedCount
         const operation = Promise.resolve().then(/** 启动一个真实业务动作。 */ () => action(index))
             .then(/** 保存成功完成的业务延迟。 */ () => { completed++; latency.push(performance.now() - begin); })
             .catch(/** 聚合固定错误分类，避免记录凭据及报文。 */ error => {
-                const category = /^[a-z][a-z0-9-]{0,70}$/.test(error.message) ? error.message : 'assertion-or-operation';
+                const firstLine = error.message.split('\n')[0];
+                const category = /^[a-z][a-z0-9-]{0,70}$/.test(firstLine) ? firstLine : 'assertion-or-operation';
                 errors[category] = (errors[category] || 0) + 1;
+                if (errorDetails.length < 20) errorDetails.push({ operationIndex: index, category,
+                    location: error.stack?.split('\n').find(/** 只保留调用位置，不记录业务数据。 */ line => /^\s+at /.test(line))?.trim(),
+                    actualNumber: typeof error.actual === 'number' ? error.actual : undefined,
+                    expectedNumber: typeof error.expected === 'number' ? error.expected : undefined });
             }).finally(/** 从有界在途集合移除完成动作。 */ () => pending.delete(operation));
         pending.add(operation);
     }
@@ -45,7 +50,7 @@ async function measure({ seconds, rate, maxPending, action, signal, plannedCount
     const end = performance.now(); loop.disable();
     signal?.throwIfAborted();
     const elapsedSeconds = Math.max(seconds, (end - start) / 1000);
-    return { planned: total, sent, completed, unsent, errors, seconds, elapsedSeconds,
+    return { planned: total, sent, completed, unsent, errors, errorDetails, seconds, elapsedSeconds,
         throughput: completed / elapsedSeconds, latencyMs: distribution(latency), schedulingLagMs: distribution(lag),
         eventLoopMs: { p95: loop.percentile(95) / 1e6, max: loop.max / 1e6 },
         pass: completed === total && Object.keys(errors).length === 0 && unsent === 0 };

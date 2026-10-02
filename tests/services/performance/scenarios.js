@@ -188,8 +188,9 @@ async function recoverOffline(env, pairs, seconds, { messages, expected }) {
             pair.second = await env.login(account);
             const fixture = expected.get(pair.chatId);
             const restored = await sync(pair.second, pair.chatId, fixture.cursor);
-            assert.deepEqual(restored.rows.map(/** 提取补拉消息身份。 */ row => row.msg_uuid), fixture.ids);
-            assert.ok(restored.rows.every(/** 核对消息内容没有损坏。 */ row => row.content === text));
+              assert.equal(restored.rows.length, fixture.ids.length, 'offline-count');
+              assert.deepEqual(restored.rows.map(/** 提取补拉消息身份。 */ row => row.msg_uuid), fixture.ids, 'offline-identities');
+              assert.ok(restored.rows.every(/** 核对消息内容没有损坏。 */ row => row.content === text), 'offline-content');
         } });
     await auditResult(messages, env.sql, result); return result;
 }

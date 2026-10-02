@@ -78,6 +78,13 @@ test('fixed rate accounts for successful, failed and unsent operations', /** 通
     assert.ok(slow.unsent > 0); assert.equal(slow.pass, false);
     const bad = await measure({ seconds: 0.01, rate: 100, maxPending: 1, action: /** 注入业务失败。 */ async () => { throw new Error('fixture-failure'); } });
     assert.equal(bad.errors['fixture-failure'], 1); assert.equal(bad.pass, false);
+    const mismatch = await measure({ seconds: 0.01, rate: 100, maxPending: 1,
+        action: /** 模拟带敏感业务正文的断言，报告只保留安全类别和位置。 */ async () => {
+            assert.equal('private-content', 'other-content', 'offline-content');
+        } });
+    assert.equal(mismatch.errors['offline-content'], 1);
+    assert.equal(mismatch.errorDetails[0].operationIndex, 0);
+    assert.ok(!JSON.stringify(mismatch).includes('private-content'));
 });
 
 test('report rejects missing scenes, duplicate scenes, wrong SHA and incomplete cleanup', /** 用完整夹具及受控损坏验证证据门禁。 */ () => {
