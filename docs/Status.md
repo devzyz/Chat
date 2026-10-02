@@ -64,3 +64,14 @@
 3. 首版交付前核实迁移、安装和发布流程；当前未发布 GitHub Release，master 仍是旧发布基线，保留该长期分支。
 4. 后续按 [能力缺口](plans/CapabilityGaps.md) 安排认证、实例失效和恢复演练，按
    [工程简化](plans/EngineeringSimplification.md) 逐步处理大文件与源码文本耦合；本轮不改消息/权限保护语义。
+
+## 当前性能测试实施
+
+新增 GitHub 手动 performance 模式及 smoke/baseline/stress 档位，入口见
+[性能测试](../tests/services/performance/README.md)。代码基于已合并 PR #29；后续 Qt UI 提交
+4bde00d 已静态核对，原分支保留，不混入本次服务端实现。
+
+已完成首次远端框架合同与 Release 构建；[首次 smoke](https://github.com/devzyz/Chat/actions/runs/37007934357)
+登录场景通过，但业务准备发现六十秒实例连接数发布延迟，未完成整套测试，不记为性能通过。
+正在通过真实发布等待与重新登录修正双实例负载准备，并补充取消、原始证据和技能身份校验。
+本地只执行语法、格式检查，未启动业务服务、恢复依赖或运行压测。最终基线待远端真实结果补充。
