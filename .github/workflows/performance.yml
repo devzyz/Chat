@@ -188,13 +188,13 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Run selected bounded performance profile
         env:
-        CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
-        CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
-        CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
-        CHAT_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
-        CHAT_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
-        CHAT_SMTP_PORT: ${{ job.services.mailpit.ports['1025'] }}
-        CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports['8025'] }}
+          CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
+          CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+          CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
+          CHAT_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
+          CHAT_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
+          CHAT_SMTP_PORT: ${{ job.services.mailpit.ports['1025'] }}
+          CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports['8025'] }}
         run: timeout --signal=TERM --kill-after=90s 41m node tests/services/performance/run.js
       - name: Verify complete report
         if: always()
