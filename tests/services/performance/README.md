@@ -17,7 +17,7 @@ GitHub CI 手动选择 `mode=performance`，`performance_profile=smoke|baseline|
 框架验证由 GitHub 性能构建作业执行：
 
 ```sh
-node --test tests/services/performance/*.test.js tests/build/ciPolicy.test.js
+node --test tests/services/performance/*.test.js tests/services/connectionCount.test.js tests/build/ciPolicy.test.js
 ```
 
 实际压测只在 GitHub 临时环境执行。run.js 要求同次源码工件、临时容器身份及 SHA。
