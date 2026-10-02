@@ -37,8 +37,9 @@ Qt Client ------HTTP------> ResourceServer
 ```
 
 图示生产通信主路径；Gate/Chat 的数据访问也使用 MySQL/Redis。Status 当前选服与 Token 路径使用 Redis，
-遗留 MySQL DAO 和配置要求仍在仓库中，不能据此称其参与生产认证。图不代表所有链路已完成真实依赖验收；
-当前 Linux 根构建包含 Gate/Status/Chat，ResourceServer 的统一构建与发布基线为 Windows。
+旧 MySQL DAO、链接和必填配置已移除。图不代表所有链路已完成当前版本的真实依赖验收；
+Linux 根构建默认包含 Gate/Status/Chat，`CHAT_BUILD_ACCEPTANCE_RESOURCES=ON` 增加生产 ResourceServer
+及资源验收目标。统一可分发包仍以 Windows 为基线。
 
 ## 发布单元
 

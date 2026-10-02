@@ -39,7 +39,8 @@ recovery descriptions in [`manifest.json`](../schema/manifest.json).
 - `004_message_receipts.sql` adds the per-conversation revision clock and current message receipt rows.
   Revisions are allocated under the same conversation lock as message commits and receipt page reads.
   Unique conversation/revision and message/recipient keys prevent duplicate facts. See [MessageStates](MessageStates.md).
-  Schema 4 introduced receipts; the current required schema is 6 (see the group migration below).
+  Schema 4 introduced receipts; the complete required version is defined by the manifest,
+  including the group and basic-social migrations described here.
 
 ## Operational entry
 

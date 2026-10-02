@@ -57,12 +57,13 @@ Chat TCP 和跨服 gRPC 通道发送资源描述。图片在消息列表展示�
 
 ## 本地运行
 
-1. 按 [Data 的迁移入口](../docs/Data.md#operational-entry) 应用全部待执行迁移，当前为 schema 4。资源表来自 migration 003，回执表来自 004；当前二进制校验完整结构，不能只应用 003。升级前备份并停止写入，迁移后更新全部 Gate/Chat/Resource 实例。不要直接执行旧工作树的独立 SQL。
+1. 按 [Data 的迁移入口](../docs/Data.md#operational-entry) 应用 manifest 中全部待执行迁移。当前二进制校验完整业务结构，不能只应用资源表 migration 003；目标版本以 manifest 为准。升级前备份并停止写入，迁移后更新全部 Gate/Chat/Resource 实例。不要直接执行旧工作树的独立 SQL。
 2. 复制示例 INI，填写本机 MySQL/Status 配置和存储目录，不提交真实凭据。
 3. 编译后运行 `ResourceServer.exe --config <配置路径>`。
 4. 客户端 `config.ini` 可设置 `[ResourceServer] Url=http://127.0.0.1:8090`，默认即此地址。
-5. 登录后点击文件按钮上传；再次点击暂停，重新选择同一内容文件继续。消息发送失败时双击重试。
-   下载中断时双击消息继续。退出账号取消任务；头像、附件及续传信息保存在安装目录的 `data/` 内，按环境和账号隔离。
+5. 登录后通过附件按钮、拖入文件或粘贴图片加入草稿，点击发送或 Enter 后上传并提交。
+   未落盘任务在提交面板重试或取消，已经落盘的待核实消息双击重试；下载中断时双击消息继续。
+   退出账号对未保存内容提示确认；已保存的头像、附件及续传信息保存在安装目录的 `data/` 内，按环境和账号隔离。
 
 统一构建和常规回归入口为 `scripts/windows-local.ps1 -Task BuildServers` / `RunServerTests`。
 Windows CI 构建资源服务、执行八项文件存储合同，并在完整运行中提供独立 ResourceServer.zip。

@@ -162,7 +162,7 @@ jobs:
 
       - name: Verify CI triggers and execution budgets
         shell: pwsh
-        run: node --test tests/build/ciPolicy.test.js tests/build/ciBudget.test.js tests/build/ciScope.test.js tests/services/phase3dEvidence.test.js tests/services/widgetEvidence.test.js tests/services/firstReleaseCases.test.js
+        run: node --test tests/build/ciPolicy.test.js tests/build/ciBudget.test.js tests/build/ciScope.test.js tests/build/regressionReports.test.js tests/services/phase3dEvidence.test.js tests/services/widgetEvidence.test.js tests/services/firstReleaseCases.test.js
 
       - name: Test release packaging
         shell: pwsh

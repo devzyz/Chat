@@ -56,9 +56,9 @@ if ($Configuration -eq 'Debug') { $resourceTestExecutable = Join-Path $repoRoot 
 $resourceServerExecutable = Join-Path $repoRoot "build\windows-servers\$Configuration\ResourceServer\ResourceServer.exe"
 $testResults = Join-Path $repoRoot 'build\test-results'
 $clientTestGroups = @(
-    [pscustomobject]@{ Level = 'unit'; Report = (Join-Path $testResults 'client_unit.xml'); ExpectedCount = 25 }
-    [pscustomobject]@{ Level = 'component'; Report = (Join-Path $testResults 'client_component.xml'); ExpectedCount = 19 }
-    [pscustomobject]@{ Level = 'integration'; Report = (Join-Path $testResults 'client_integration.xml'); ExpectedCount = 30 }
+    [pscustomobject]@{ Level = 'unit'; Report = (Join-Path $testResults 'client_unit.xml') }
+    [pscustomobject]@{ Level = 'component'; Report = (Join-Path $testResults 'client_component.xml') }
+    [pscustomobject]@{ Level = 'integration'; Report = (Join-Path $testResults 'client_integration.xml') }
 )
 $scriptTestGroups = @(
     [pscustomobject]@{
@@ -66,14 +66,12 @@ $scriptTestGroups = @(
         Report = (Join-Path $testResults 'script_component.xml')
         Script = 'tests\scripts\validation\chatserver-instances.tests.ps1'
         TestIdPattern = '^A02-VAL-\d{2}$'
-        ExpectedCount = 9
     }
     [pscustomobject]@{
         Level = 'integration'
         Report = (Join-Path $testResults 'script_integration.xml')
         Script = 'tests\scripts\lifecycle\chatserver-instances.tests.ps1'
         TestIdPattern = '^A02-LIFE-\d{2}$'
-        ExpectedCount = 4
     }
 )
 $regressionReportGroups = @(
@@ -449,14 +447,14 @@ function Run-ServerTests {
     $chatGrpcClientBinary = Require-File $chatGrpcClientTestExecutable 'Build the ChatGrpcClientTests target first.'
 
     $executions = @(
-        @{ Binary = $testBinary; Report = $reports[0]; ExpectedCount = 77 }
-        @{ Binary = $componentBinary; Report = $reports[1]; ExpectedCount = 58 }
-        @{ Binary = $integrationBinary; Report = $reports[2]; ExpectedCount = 107 }
-        @{ Binary = $chatGrpcClientBinary; Report = $reports[3]; ExpectedCount = 4 }
-        @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4]; ExpectedCount = 2 }
-        @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5]; ExpectedCount = 2 }
+        @{ Binary = $testBinary; Report = $reports[0] }
+        @{ Binary = $componentBinary; Report = $reports[1] }
+        @{ Binary = $integrationBinary; Report = $reports[2] }
+        @{ Binary = $chatGrpcClientBinary; Report = $reports[3] }
+        @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4] }
+        @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5] }
     )
-    $executions += @{ Binary = (Require-File $resourceTestExecutable 'Build ResourceTests first.'); Report = $reports[6]; ExpectedCount = 8; Filter = 'StoreTest.*' }
+    $executions += @{ Binary = (Require-File $resourceTestExecutable 'Build ResourceTests first.'); Report = $reports[6]; Filter = 'StoreTest.*' }
     $failures = @()
     foreach ($execution in $executions) {
         & $vcpkg.Exe z-applocal "--target-binary=$($execution.Binary)" "--installed-bin-dir=$installedBin"
@@ -487,7 +485,7 @@ function Run-ServerTests {
         if (-not (Test-Path -LiteralPath $execution.Report -PathType Leaf)) {
             throw "Server test report was not created: $($execution.Report)"
         }
-        [void](Assert-RegressionReport -Path $execution.Report -ExpectedCount $execution.ExpectedCount)
+        [void](Assert-RegressionReport -Path $execution.Report -ExpectedCount (Get-RegressionExpectedCount -Report $execution.Report))
         if ($exitCode -ne 0) {
             $failures += "$($execution.Binary) (exit $exitCode)"
         }
@@ -569,7 +567,7 @@ function Run-ClientTests {
         if (-not (Test-Path -LiteralPath $group.Report -PathType Leaf)) {
             throw "Qt client $($group.Level) test report was not created: $($group.Report)"
         }
-        [void](Assert-RegressionReport -Path $group.Report -ExpectedCount $group.ExpectedCount)
+        [void](Assert-RegressionReport -Path $group.Report -ExpectedCount (Get-RegressionExpectedCount -Report $group.Report))
         if ($testExitCode -ne 0) {
             $failures += "$($group.Level) (exit $testExitCode)"
         }
@@ -577,6 +575,21 @@ function Run-ClientTests {
     if ($failures.Count -gt 0) {
         throw "Qt client tests failed: $($failures -join '; ')"
     }
+}
+
+<#
+.SYNOPSIS
+按报告文件名读取唯一注册数量；未知、重复或无效注册明确失败。
+#>
+function Get-RegressionExpectedCount {
+    param([Parameter(Mandatory = $true)][string]$Report)
+
+    $name = Split-Path -Leaf $Report
+    $registered = @($regressionReportGroups | Where-Object <# 按报告名定位唯一注册。 #> { $_.Name -eq $name })
+    if ($registered.Count -ne 1 -or $registered[0].ExpectedCount -le 0) {
+        throw "Regression report must have one positive expected count: $name"
+    }
+    return $registered[0].ExpectedCount
 }
 
 <#
@@ -593,11 +606,11 @@ function Assert-RegressionReport {
         throw "Required regression report was not created: $Path"
     }
     try {
-        [xml]$reportXml = Get-Content -LiteralPath $Path -Raw
+        $reportText = Get-Content -LiteralPath $Path -Raw
+        [xml]$reportXml = $reportText
     } catch {
         throw "Regression report is not valid XML: $Path. $($_.Exception.Message)"
     }
-    $reportText = Get-Content -LiteralPath $Path -Raw
     $testcases = @($reportXml.SelectNodes('//testcase'))
     $failures = @($reportXml.SelectNodes('//failure'))
     $errors = @($reportXml.SelectNodes('//error'))
@@ -651,14 +664,14 @@ function Assert-RegressionCleanupEvidence {
 逐组检查所有公开回归报告及清理证据。
 #>
 function Confirm-RegressionReports {
+    foreach ($requiredReport in @('client_integration.xml', 'server_resource_integration.xml')) {
+        [void](Get-RegressionExpectedCount -Report $requiredReport)
+    }
     $total = 0
     foreach ($group in $regressionReportGroups) {
         $total += Assert-RegressionReport `
             -Path (Join-Path $testResults $group.Name) `
-            -ExpectedCount $group.ExpectedCount
-    }
-    if ($regressionReportGroups.Count -ne 14 -or $total -ne 399) {
-        throw "Regression report baseline mismatch: expected 14 reports and 399 testcases; found $($regressionReportGroups.Count) reports and $total testcases."
+            -ExpectedCount (Get-RegressionExpectedCount -Report $group.Name)
     }
     $legacyTotal = 0
     foreach ($legacyGroup in $legacyRegressionReportGroups) {
@@ -1289,6 +1302,8 @@ function Confirm-TestStructure {
         'auth_flow.duplicate_and_late' = 'unit'
         'auth_flow.abnormal_disconnect_reset' = 'component'
     }
+    $registeredClientCounts = @{ unit = 0; component = 0; integration = (
+        $registeredHttpTransportCases.Count + $registeredTcpTransportCases.Count + $registeredDriverCases.Count) }
     foreach ($target in $ctestTargets) {
         $properties = [regex]::Match(
             $clientCMake,
@@ -1304,6 +1319,7 @@ function Confirm-TestStructure {
         if (-not $properties.Success -or -not $label.Success) {
             throw "CTest target '$target' must declare a Unit/Component/Integration/E2E label."
         }
+        $registeredClientCounts[$label.Groups['level'].Value]++
         if ($expectedClientLevels.ContainsKey($target) -and
             $label.Groups['level'].Value -ne $expectedClientLevels[$target]) {
             throw "CTest target '$target' must be $($expectedClientLevels[$target]); found $($label.Groups['level'].Value)."
@@ -1328,10 +1344,9 @@ function Confirm-TestStructure {
             throw "Invalid Qt report mapping: $($group.Level) -> $($group.Report)"
         }
     }
-    $expectedClientCounts = @{ unit = 25; component = 19; integration = 30 }
     foreach ($group in $clientTestGroups) {
-        if ($group.ExpectedCount -ne $expectedClientCounts[$group.Level]) {
-            throw "Qt $($group.Level) report must require exactly $($expectedClientCounts[$group.Level]) testcases."
+        if ((Get-RegressionExpectedCount -Report $group.Report) -ne $registeredClientCounts[$group.Level]) {
+            throw "Qt $($group.Level) report count does not match its CTest registrations."
         }
     }
 
@@ -1425,11 +1440,6 @@ function Confirm-TestStructure {
             throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
         }
     }
-    foreach ($requiredCount in @(77, 58, 107, 4)) {
-        if ($runServerTests.Groups['body'].Value -notmatch "ExpectedCount\s*=\s*$requiredCount") {
-            throw "RunServerTests is missing the exact current Server testcase count $requiredCount."
-        }
-    }
     foreach ($requiredProperty in @('VcpkgManifestInstall=false', 'VcpkgInstalledDir=')) {
         if ($runServerTests.Groups['body'].Value -notmatch [regex]::Escape($requiredProperty)) {
             throw "RunServerTests must enforce DG-25 property $requiredProperty on its solution build."
@@ -1458,11 +1468,10 @@ function Confirm-TestStructure {
         }
     }
     if ($runAllTests.Groups['body'].Value -notmatch '(?m)^\s*Confirm-RegressionReports\s*$') {
-        throw 'RunAllTests must audit the exact fourteen-report/399-testcase baseline.'
+        throw 'RunAllTests must audit every registered report.'
     }
-    if ($regressionReportGroups.Count -ne 14 -or
-        ($regressionReportGroups | Measure-Object -Property ExpectedCount -Sum).Sum -ne 399) {
-        throw 'The registered regression baseline must remain exactly 14 reports and 399 testcases.'
+    foreach ($group in $regressionReportGroups) {
+        [void](Get-RegressionExpectedCount -Report $group.Name)
     }
     if ($legacyRegressionReportGroups.Count -ne 12 -or
         ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 232) {
@@ -1590,8 +1599,9 @@ function Confirm-TestStructure {
                 "Invoke-(?:ExpectedValidationFailure|TestCase)\s+'(?<id>A02-(?:VAL|LIFE)-\d{2})'"
             ) | ForEach-Object <# 提取 PowerShell 用例的合同标识。 #> { $_.Groups['id'].Value }
         )
-        if ($ids.Count -ne $group.ExpectedCount -or @($ids | Sort-Object -Unique).Count -ne $ids.Count) {
-            throw "PowerShell test registration count mismatch for $($group.Script): expected $($group.ExpectedCount), found $($ids.Count)."
+        $expectedCount = Get-RegressionExpectedCount -Report $group.Report
+        if ($ids.Count -ne $expectedCount -or @($ids | Sort-Object -Unique).Count -ne $ids.Count) {
+            throw "PowerShell test registration count mismatch for $($group.Script): expected $expectedCount, found $($ids.Count)."
         }
         foreach ($id in $ids) {
             if ($id -notmatch $group.TestIdPattern) {
@@ -1628,7 +1638,7 @@ function Run-ScriptTests {
         if (-not (Test-Path -LiteralPath $group.Report -PathType Leaf)) {
             throw "PowerShell $($group.Level) test report was not created: $($group.Report)"
         }
-        [void](Assert-RegressionReport -Path $group.Report -ExpectedCount $group.ExpectedCount)
+        [void](Assert-RegressionReport -Path $group.Report -ExpectedCount (Get-RegressionExpectedCount -Report $group.Report))
         $reportXml = [xml](Get-Content -LiteralPath $group.Report -Raw)
         $testcases = @($reportXml.SelectNodes('//testcase'))
         foreach ($testcase in $testcases) {
@@ -1661,7 +1671,6 @@ function Run-VarifyTests {
         @{
             Level = 'unit'
             Report = (Join-Path $testResults 'varify_unit.xml')
-            ExpectedCount = 33
             Files = @(
                 Require-File (Join-Path $varifySource 'test\protocol\protocol.test.js') `
                     'The VarifyServer protocol unit tests are missing.'
@@ -1678,7 +1687,6 @@ function Run-VarifyTests {
         @{
             Level = 'integration'
             Report = (Join-Path $testResults 'varify_integration.xml')
-            ExpectedCount = 21
             Files = @(
                 Require-File (Join-Path $varifySource 'test\config\config.test.js') `
                     'The VarifyServer configuration process tests are missing.'
@@ -1707,7 +1715,7 @@ function Run-VarifyTests {
             if (-not (Test-Path -LiteralPath $group.Report -PathType Leaf)) {
                 throw "VarifyServer $($group.Level) test report was not created: $($group.Report)"
             }
-            [void](Assert-RegressionReport -Path $group.Report -ExpectedCount $group.ExpectedCount)
+            [void](Assert-RegressionReport -Path $group.Report -ExpectedCount (Get-RegressionExpectedCount -Report $group.Report))
             if ($testExitCode -ne 0) {
                 $failures += "$($group.Level) (exit $testExitCode)"
             }
