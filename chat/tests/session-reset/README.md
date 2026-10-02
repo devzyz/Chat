@@ -45,3 +45,5 @@ RED evidence was recorded for the missing owning Module/User reset, retained own
 `session_reset.social_lifecycle`（Q06-SOCIAL-02，Component）通过生产 `TcpMgr::handleMessage` 与临时 SQLite
 验证带版本资料/联系人多页落盘、关系就绪不受申请目录失败阻断、错误编号及类型、重复回包、真实十秒超时、
 接收者销毁、重复重置及换账号后的迟到结果隔离。该回归使用合成服务响应，不冒充真实网络端到端。
+
+社交能力协商后，旧好友审批响应仍须准确发出一次 `requestCompleted`，同时刷新权威目录；成功和失败均有 Component 回归，真实双实例旅程验证模型最终一致。
