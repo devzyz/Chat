@@ -66,8 +66,8 @@ class RedisHandler(socketserver.StreamRequestHandler):
                             if data.get(keys[1]) == argv[1]:
                                 data.pop(keys[1], None); hashes.get(keys[0], {}).pop(argv[0], None)
                             result = b"*0\r\n"
-                        elif b"NX" in script:
-                            if keys[1] in data: result = b"*0\r\n"
+                        elif b"registered" in script:
+                            if keys[1] in data and not data[keys[1]].startswith(argv[2]): result = b"*0\r\n"
                             else:
                                 data[keys[1]] = argv[1]; hashes.setdefault(keys[0], {})[argv[0]] = b"0"
                                 result = b"*1\r\n" + self.bulk(b"registered")

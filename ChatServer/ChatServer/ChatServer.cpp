@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
     std::unique_ptr<ChatServiceImpl> service;
     std::unique_ptr<grpc::Server> rpc;
     std::string server_id;
-    const auto lease_owner = boost::uuids::to_string(boost::uuids::random_generator()());
+    std::string lease_owner = boost::uuids::to_string(boost::uuids::random_generator()());
     bool registered = false;
     bool stopping = false;
     bool tcp_stopped = false;
@@ -99,13 +99,19 @@ int main(int argc, char* argv[]) {
         builder.RegisterService(service.get());
         rpc = builder.BuildAndStart();
         if (!rpc) throw std::runtime_error("failed to listen on gRPC address");
+        // 已独占绑定同机 TCP 端点，可接管该端点旧进程遗留的租约；其他端点仍拒绝同名注册。
+        const auto lease_endpoint = "[" + bind_host + "]:" + port_text + "/[" + rpc_host + "]:"
+            + config["SelfServer"]["RPCPort"] + "|";
+        lease_owner = lease_endpoint + lease_owner;
         redis = RedisMgr::GetInstance();
         presence->AttachRedis(redis);
         pool = AsioIOServicePool::GetInstance();
         const auto registration = redis->Eval(
-            "if not redis.call('SET',KEYS[2],ARGV[2],'EX',90,'NX') then return {} end; "
+            "local old=redis.call('GET',KEYS[2]); "
+            "if old and string.sub(old,1,string.len(ARGV[3]))~=ARGV[3] then return {} end; "
+            "redis.call('SET',KEYS[2],ARGV[2],'EX',90); "
             "redis.call('HSET',KEYS[1],ARGV[1],0); return {'registered'}",
-            {LOGIN_COUNT, "chatlease_" + server_id}, {server_id, lease_owner});
+            {LOGIN_COUNT, "chatlease_" + server_id}, {server_id, lease_owner, lease_endpoint});
         registered = registration && registration->size() == 1 && (*registration)[0] == "registered";
         if (!registered) throw std::runtime_error("instance registration failed or name already leased");
         tcp->Start();
