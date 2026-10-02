@@ -43,3 +43,7 @@ and destruction with pending work. The model case verifies that attachment updat
 提交控制器组合回归在首段文本落盘、附件上传至少一个块后关闭真实 HTTP 服务，再使用同一目录和端口重启；重试必须从已确认偏移继续，最终只产生三条有序消息。测试 host 的可选端口参数仅用于这一隔离恢复场景。
 
 `searchCancellationWidgets` 注册为默认 Component 入口 `user_search.widgets`，保护真实等待窗 Esc 取消、立即重试和账号切换后的旧结果隔离。它只使用临时 SQLite，不启动资源服务。
+
+基础易用性补充：`conversationAttentionWidgets` 使用多页且时间不等于 ID 的目录，验证最近活动排序仍保留
+未加载会话的提醒边界；`localHistorySearchWidgets` 通过真实 Ctrl+C 检查单条正文复制。提醒夹具中的更近本人消息
+用于保持被测未读会话在第一页之外，避免默认打开该会话后正确清除提醒而改变原测试前提。

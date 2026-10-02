@@ -27,11 +27,21 @@
 #include <QJsonDocument>
 #include <QByteArray>
 
+/** @brief 保留原生列表与控件，以持久化摘要排名进行稳定排序。 */
+class ConversationListItem final : public QListWidgetItem {
+public:
+    /** @brief 将存储给出的顺序作为唯一列表排序键。 */
+    bool operator<(const QListWidgetItem &other) const override {
+        return data(Qt::UserRole).toInt() < other.data(Qt::UserRole).toInt();
+    }
+};
+
 ChatDialog::ChatDialog(QWidget *parent)
     : QDialog(parent), _mode(ChatUIMode::ChatMode), _state(ChatUIMode::ChatMode)
     , ui(new Ui::ChatDialog), _b_chat_loading(false), _cur_chat_id(0)
 {
     ui->setupUi(this);
+    connect(ui->user_info_page, &UserInfoPage::logoutRequested, this, &ChatDialog::logoutRequested);
 
     // 添加按钮的高亮设置
     ui->add_btn->setState("normal", "hover", "press");
@@ -42,7 +52,7 @@ ChatDialog::ChatDialog(QWidget *parent)
     connect(findLocal,&QPushButton::clicked,this,&ChatDialog::openDirectorySearch);
 
     // 搜索框最大长度限制
-    ui->search_edit->setMaxLength(15);
+    ui->search_edit->setMaxLength(255);
     // 搜索框配置左侧的图标和右侧的清除
     QAction *searchAction = new QAction(ui->search_edit);
     searchAction->setIcon(QIcon(":/res/search.png"));
@@ -192,7 +202,7 @@ ChatDialog::ChatDialog(QWidget *parent)
     connect(messages, &MessageService::historyLoaded, ui->chat_page, &ChatPage::applyStoredHistory);
     connect(messages, &MessageService::sendFailed, ui->chat_page, &ChatPage::markMessagesFailed);
     connect(messages, &MessageService::historyLoaded, this,
-        /** @brief 用初始本地历史更新会话列表的最新消息摘要。 */
+        /** @brief 当前前台会话历史展示后推进本地查看边界。 */
         [this](int chatId, qint64 before, const QVector<StoredMessage> &rows, bool) {
             if (before != 0 || rows.isEmpty()) return;
             if (_cur_chat_id == chatId && isActiveWindow() && !isMinimized()
@@ -201,19 +211,12 @@ ChatDialog::ChatDialog(QWidget *parent)
                 for (const auto &row : rows) throughLocalId = qMax(throughLocalId, row.localId);
                 UserMgr::instance()->messages()->markConversationSeen(chatId, throughLocalId);
             }
-            if (!_chat_item_map.contains(chatId)) return;
-            auto *item = qobject_cast<ChatUserItem*>(ui->chat_user_list->itemWidget(_chat_item_map.value(chatId)));
-            if (!item) return;
-            QString summary = rows.back().content;
-            if (summary.startsWith("@resource:v1:")) {
-                summary = QJsonDocument::fromJson(summary.mid(13).toUtf8()).object()["name"].toString();
-            }
-            item->setLastTextChatMsg(summary);
+
         });
     connect(messages, &MessageService::messagesChanged, this,
         /** @brief 消息事实变化后重新加载当前可见范围。 */
         [this, messages](int chatId) {
-        messages->loadHistory(chatId, 0, ui->chat_page->oldestLoadedMessageId(chatId));
+        if (chatId == _cur_chat_id) messages->loadHistory(chatId, 0, ui->chat_page->oldestLoadedMessageId(chatId));
         messages->loadConversationAttention(chatId);
     });
     connect(messages, &MessageService::failed, this,
@@ -228,32 +231,44 @@ ChatDialog::ChatDialog(QWidget *parent)
     connect(TcpMgr::instance().get(), &TcpMgr::chatMessagesReceived,
             this, &ChatDialog::updateTextChatMsg);
 
-    connect(messages, &MessageService::directoryPageLoaded, this,
-        /** @brief 展示 SQLite 会话页，界面游标与网络同步游标独立。 */
-        [this](const QString &kind, int after, const QJsonArray &rows, bool more) {
-            if (kind != "conversations" || after != _chatCursor) return;
-            QJsonArray chats;
-            for (const auto &value : rows) chats.append(QJsonObject{{"chat_id", value.toObject()["id"]}});
-            tcpLoadChatFinish(chats);
-            if (!rows.isEmpty()) _chatCursor = rows.last().toObject()["id"].toInt();
-            _hasMoreChats = more;
-            _b_chat_loading = false;
-        });
-    connect(messages, &MessageService::directoryChanged, this,
-        /** @brief 本地提交后更新已展示行，未展示会话保持可分页读取。 */
-        [this](const QJsonObject &directory) {
-            const bool wasComplete = !_hasMoreChats;
-            for (const auto &value : directory["conversations"].toArray()) {
-                const int id = value.toObject()["id"].toInt();
-                if (id <= _chatCursor) tcpLoadChatFinish(QJsonArray{QJsonObject{{"chat_id", id}}});
-                else _hasMoreChats = true;
+    connect(messages, &MessageService::conversationSummariesLoaded, this,
+        /** @brief 创建已展开范围的会话，并按全部本地会话的稳定排名排序。 */
+        [this](const QJsonArray &rows) {
+        QJsonArray page;
+        for (int i = 0; i < qMin(_visibleChatCount, int(rows.size())); ++i) page.append(rows[i]);
+        tcpLoadChatFinish(page);
+        for (int i = 0; i < rows.size(); ++i) {
+            const auto row = rows[i].toObject();
+            auto *item = _chat_item_map.value(row["chat_id"].toInt(), nullptr);
+            if (!item) continue;
+            item->setData(Qt::UserRole, i);
+            auto *widget = qobject_cast<ChatUserItem*>(ui->chat_user_list->itemWidget(item));
+            if (widget) {
+                widget->setChatInfo(UserMgr::instance()->chatInfo(row["chat_id"].toInt()));
+                widget->setSummary(row["summary"].toString(), row["sent_at"].toString().toLongLong());
             }
-            for (const auto &value : directory["contacts"].toArray()) {
-                const int chat = UserMgr::instance()->privateChatIdFor(value.toObject()["id"].toInt());
-                if (_chat_item_map.contains(chat)) tcpLoadChatFinish(QJsonArray{QJsonObject{{"chat_id", chat}}});
+        }
+        ui->chat_user_list->sortItems();
+        _hasMoreChats = _chat_item_map.size() < rows.size();
+        _b_chat_loading = false;
+        refreshConversationAttention();
+    });
+    const auto refreshDirectory =
+        /** @brief 目录恢复或提交后统一刷新排序与待处理申请提醒。 */
+        [this,messages](const QJsonObject &directory) {
+            messages->loadConversationSummaries();
+            for (const auto &value : directory["applications"].toArray()) {
+                if (value.toObject()["status"].toInt(-1) != 0) continue;
+                ui->contact_user_list->showRedPoint(true);
+                if (_mode != ChatUIMode::ContactMode) ui->side_user_label->showRedPoint(true);
+                break;
             }
-            if (_chat_item_map.isEmpty() || wasComplete) loadChatUserList();
-        });
+        };
+    connect(messages, &MessageService::directoryChanged, this, refreshDirectory);
+    connect(messages, &MessageService::directoryRestored, this, refreshDirectory);
+    connect(messages, &MessageService::messagesChanged, messages,
+        /** @brief 消息变化触发摘要及时间刷新，回执不修改排序时间。 */
+        [messages](int) { messages->loadConversationSummaries(); });
     connect(messages, &MessageService::directoryFailed, this,
         /** @brief 目录查询失败后恢复加载入口。 */
         [this](const QString &kind) { if (kind.isEmpty() || kind == "conversations") _b_chat_loading = false; });
@@ -277,6 +292,8 @@ ChatDialog::ChatDialog(QWidget *parent)
             this, &ChatDialog::textChatMsgFailed);
 }
 
+bool ChatDialog::hasDrafts() const { return ui->chat_page->hasDrafts(); }
+
 ChatDialog::~ChatDialog()
 {
     delete ui;
@@ -286,8 +303,9 @@ ChatDialog::~ChatDialog()
 void ChatDialog::loadChatUserList()
 {
     if (_b_chat_loading || !_hasMoreChats) return;
+    if (!_chat_item_map.isEmpty()) _visibleChatCount += LOADING_STEP_LENGTH;
     _b_chat_loading = true;
-    UserMgr::instance()->messages()->loadDirectoryPage("conversations", _chatCursor, LOADING_STEP_LENGTH);
+    UserMgr::instance()->messages()->loadConversationSummaries();
 }
 
 /**
@@ -451,7 +469,7 @@ void ChatDialog::addNewChat(std::shared_ptr<ChatInfo> chat_info) {
     chat_user_item->setChatInfo(chat_info);
 
     // 创建一个能够往QListWidget内部填充的Item
-    QListWidgetItem * item = new QListWidgetItem();
+    QListWidgetItem * item = new ConversationListItem();
     // 将item的大小设置为自定义的widget的大小
     item->setSizeHint(chat_user_item->sizeHint());
     // 将这个item插入到最上面
@@ -712,7 +730,6 @@ void ChatDialog::tcpLoadChatFinish(QJsonArray jsonArray)
         if (_chat_item_map.contains(chat_id)) {
             auto *widget = qobject_cast<ChatUserItem*>(ui->chat_user_list->itemWidget(_chat_item_map.value(chat_id)));
             if (widget) widget->setChatInfo(UserMgr::instance()->chatInfo(chat_id));
-            UserMgr::instance()->messages()->loadHistory(chat_id);
             continue;
         }
 
@@ -727,7 +744,7 @@ void ChatDialog::tcpLoadChatFinish(QJsonArray jsonArray)
         chat_user_item->setItemType(ListItemType::CHAT_USER_ITEM);
 
         // 创建一个能够往QListWidget内部填充的Item
-        QListWidgetItem * item = new QListWidgetItem();
+        QListWidgetItem * item = new ConversationListItem();
         // 将item的大小设置为自定义的widget的大小
         item->setSizeHint(chat_user_item->sizeHint());
         // 将这个item放到QListWidget内部，然后将这个item设置成我自定义的widget
@@ -735,7 +752,6 @@ void ChatDialog::tcpLoadChatFinish(QJsonArray jsonArray)
         ui->chat_user_list->setItemWidget(item, chat_user_item);
 
         _chat_item_map.insert(chat_id, item);
-        UserMgr::instance()->messages()->loadHistory(chat_id);
     }
 
     // 如果当前ui哪一个都没有选中，则选中第一个

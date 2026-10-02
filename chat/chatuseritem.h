@@ -34,6 +34,8 @@ public:
     // 设置上一次聊天数据
     /** @brief 设置上一次聊天数据。 */
     void setLastTextChatMsg(QString last_text_msg);
+    /** @brief 从存储摘要同时更新内容和日期，空会话清除旧时间。 */
+    void setSummary(const QString &text, qint64 sentAt);
     // 通过判断_new_msg_count来决定是否显示新消息提醒
     /** @brief 通过判断_new_msg_count来决定是否显示新消息提醒。 */
     void showNewMsgTip();

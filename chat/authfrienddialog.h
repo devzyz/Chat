@@ -33,7 +33,11 @@ private slots:
     void authApplySure();
 
 private:
+    /** @brief 使用打开表单时的版本执行同意或拒绝。 */
+    void manageApplication(const QString &operation);
     Ui::AuthFriendDialog *ui;
+    QString _revision;
+    bool _busy = false;
     // 用于保存申请人的信息
     std::shared_ptr<ApplyInfo> _apply_info;
 };

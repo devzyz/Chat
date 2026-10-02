@@ -13,6 +13,8 @@ public:
 
     /** @brief 判断滚动位置是否接近消息列表底部，供自动滚动策略使用。 */
     bool isNearBottom(int tolerance = 24) const;
+    /** @brief 复制当前文字或附件文件名，不暴露内部资源描述。 */
+    void copyCurrentMessage();
 
 signals:
     /** @brief 通知视口接近列表顶部，可以请求较早历史。 */
@@ -23,6 +25,10 @@ signals:
 protected:
     /** @brief 响应控件尺寸变化并更新布局或通知视口变化。 */
     void resizeEvent(QResizeEvent *event) override;
+    /** @brief 处理标准复制快捷键，其余按键交给原生列表。 */
+    void keyPressEvent(QKeyEvent *event) override;
+    /** @brief 为鼠标指向的消息提供复制入口。 */
+    void contextMenuEvent(QContextMenuEvent *event) override;
 };
 
 #endif // CHATDETAILLIST_H

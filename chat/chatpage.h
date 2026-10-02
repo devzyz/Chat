@@ -29,6 +29,8 @@ public:
     explicit ChatPage(QWidget *parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ChatPage();
+    /** @brief 返回账号内各会话是否存在尚未提交的编辑内容。 */
+    bool hasDrafts() const;
 
     /** @brief 切换当前会话并恢复其消息与滚动状态，丢弃旧会话的导航和提示等待。 */
     void setChatInfo(std::shared_ptr<ChatInfo> chatInfo);

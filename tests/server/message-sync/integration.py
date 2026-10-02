@@ -59,11 +59,12 @@ def tcp_flow(directory, mysql_command, mysql_port):
                     (directory / f"chat-{index}.stdout").read_text(errors="replace"))
                 raise
 
-        def login(index, uid):
+        def login(index, uid, social=False):
             sock = socket.create_connection(("127.0.0.1", tcp_ports[index]), timeout=10)
             sockets.append(sock)
-            send(sock, 1005, {"uid": uid, "token": "fixture-token", "capabilities": ["message_receipts_v1", "group_membership_v1"]})
-            assert receive(sock, 1006)["capabilities"] == ["message_receipts_v1", "group_membership_v1"]
+            capabilities = ["message_receipts_v1", "group_membership_v1"] + (["basic_social_v1"] if social else [])
+            send(sock, 1005, {"uid": uid, "token": "fixture-token", "capabilities": capabilities})
+            assert receive(sock, 1006)["capabilities"] == capabilities
             return sock
 
         def sync(sock, after):
@@ -270,6 +271,93 @@ def tcp_flow(directory, mysql_command, mysql_port):
         verify=subprocess.run(mysql_command+["-N","-B","-e","USE message_sync_test; SELECT backname FROM friend WHERE self_id=7 AND other_id=8; SELECT backname FROM friend WHERE self_id=8 AND other_id=7;"],capture_output=True,text=True,check=True,timeout=10)
         assert verify.stdout.splitlines()==["Local nickname", ""]
         print("Dynamic group TCP: four accounts, version conflict, membership epochs, history boundary, transfer/leave/dissolve, replay and personal remark passed")
+
+        sender.close(); receiver.close()
+        sender, receiver = login(0,7,True), login(1,8,True)
+
+        def social(sock, code, success=True, **request):
+            request["request_id"] = str(uuid.uuid4())
+            send(sock,code,request)
+            result = receive(sock,code+1,success=success)
+            assert result["request_id"] == request["request_id"]
+            return result
+
+        profile = social(sender,1046,kind="profile")["profile"]
+        assert not {"password","pwd","email","token"}.intersection(profile)
+        updated = social(sender,1042,name="sender updated",description="current profile",expected_revision=profile["profile_revision"])
+        assert updated["profile"]["profile_revision"] == "2"
+        assert social(sender,1042,False,name="stale",description="",expected_revision="1")["social_error"] == "VersionConflict"
+        assert social(sender,1042,False,name="receiver",description="",expected_revision="2")["social_error"] == "NameExists"
+        send(receiver,1007,dict(uid_name="sender updated",request_id="profile-search"))
+        found = receive(receiver,1008)
+        assert found["uid"] == 7 and found["description"] == "current profile"
+        assert not {"password","pwd","email","token"}.intersection(found)
+        social(sender,1044,operation="delete",target_uid=8,expected_revision="1")
+        for sock,peer in [(sender,8),(receiver,7)]:
+            relation = social(sock,1046,kind="profile",target_uid=peer)["profile"]
+            assert not relation["relationship_active"] and relation["relationship_revision"] == "2"
+        stale = dict(from_uid=7,to_uid=8,chat_id=201,relationship_revision="1",
+            text_array=[dict(msg_uuid=str(uuid.uuid4()),msg_content="must not be sent")])
+        send(sender,1016,stale); assert receive(sender,1017,success=False)["error"] != 0
+        confirmed = dict(from_uid=7,to_uid=8,chat_id=201,relationship_revision="1",
+            text_array=[dict(msg_uuid="00000000-0000-4000-8000-000000000201",msg_content="x"*1850)])
+        send(sender,1016,confirmed); assert receive(sender,1017)["uuid_msgId"][0]["message_id"] == first
+        assert sync(receiver,0)["msgs"][0]["message_id"] == first
+        outgoing = social(sender,1046,kind="profile",target_uid=8)["profile"]["outgoing_revision"]
+        social(sender,1044,operation="apply",target_uid=8,expected_revision=outgoing,description="again",backname="receiver")
+        applications = social(receiver,1046,kind="applications",after="0")["items"]
+        version = next(row["application_revision"] for row in applications if row["fromuid"] == 7)
+        social(receiver,1044,operation="reject",target_uid=7,expected_revision=version)
+        assert social(receiver,1044,False,operation="accept",target_uid=7,expected_revision=version,description="",backname="")["social_error"] == "VersionConflict"
+        outgoing = social(sender,1046,kind="profile",target_uid=8)["profile"]["outgoing_revision"]
+        social(sender,1044,operation="apply",target_uid=8,expected_revision=outgoing,description="new application",backname="receiver")
+        version = social(receiver,1046,kind="applications",after="0")["items"][0]["application_revision"]
+        social(receiver,1044,operation="accept",target_uid=7,expected_revision=version,description="accepted",backname="my sender")
+        relation = social(receiver,1046,kind="profile",target_uid=7)["profile"]
+        assert relation["chat_id"] == 201 and relation["relationship_revision"] == "3" and relation["relationship_active"]
+        send(sender,1016,stale); assert receive(sender,1017,success=False)["error"] != 0
+        stale["relationship_revision"] = "3"
+        stale["text_array"][0] = dict(msg_uuid=str(uuid.uuid4()),msg_content="fresh explicit send")
+        send(sender,1016,stale); receive(sender,1017)
+        receiver.close(); receiver=login(1,8,True)
+        contacts=social(receiver,1046,kind="contacts",after="0")["items"]
+        assert any(row["uid"] == 7 and row["relationship_revision"] == "3" for row in contacts)
+        assert social(sender,1042,False,name="x"*256,description="",expected_revision="2")["social_error"] == "InvalidRequest"
+        large=dict(from_uid=7,to_uid=8,chat_id=201,relationship_revision="3",
+            text_array=[dict(msg_uuid=str(uuid.uuid4()),msg_content="z"*1850)])
+        send(sender,1016,large); committed=receive(sender,1017)["uuid_msgId"][0]["message_id"]
+        assert receive(receiver,1018)["chat_id"] == 201
+        assert sync(receiver,committed-1)["msgs"][0]["content"] == "z"*1850
+        # Each legal UTF-8 field fits its write frame, their combined read row exceeds the ordinary frame limit.
+        social(sender,1042,name="名"*255,description="述"*255,expected_revision="2")
+        social(receiver,1044,operation="delete",target_uid=7,expected_revision="3")
+        outgoing=social(sender,1046,kind="profile",target_uid=8)["profile"]["outgoing_revision"]
+        social(sender,1044,operation="apply",target_uid=8,expected_revision=outgoing,description="请"*255,backname="备"*255)
+        applications=social(receiver,1046,kind="applications",after="0")["items"]
+        assert applications[0]["description"] == "请"*255 and applications[0]["applydescription"] == "述"*255
+        social(sender,1042,name="名"*255,description="新"*255,expected_revision="3")
+        version=applications[0]["application_revision"]
+        social(receiver,1044,operation="accept",target_uid=7,expected_revision=version,description="",backname="注"*255)
+        relation=social(receiver,1046,kind="profile",target_uid=7)["profile"]
+        assert relation["name"] == "名"*255 and relation["description"] == "新"*255 and relation["backname"] == "注"*255
+        contacts=social(receiver,1046,kind="contacts",after="0")["items"]
+        assert contacts[0]["uid"] == 7 and contacts[0]["backname"] == "注"*255
+        print("Social UTF-8: complete oversized application/contact/profile records passed")
+        seeds="USE message_sync_test;"
+        for uid in range(20,36):
+            seeds+=f"INSERT INTO user(uid,name,email,password,description,icon,sex) VALUES({uid},'page{uid}','page{uid}@example.invalid','','','',0);"
+            seeds+=f"INSERT INTO apply_friend(from_uid,to_uid,description,backname) VALUES({uid},8,REPEAT('x',255),'');"
+        subprocess.run(mysql_command+["-e",seeds],capture_output=True,text=True,check=True,timeout=10)
+        after="0"; seen=set(); pages=0
+        while True:
+            result=social(receiver,1046,kind="applications",after=after); pages+=1
+            for row in result["items"]:
+                assert row["fromuid"] not in seen; seen.add(row["fromuid"])
+            if not result["load_more"]: break
+            assert int(result["next"]) > int(after); after=result["next"]
+            assert pages < 25
+        assert pages > 1 and seen == {7,*range(20,36)}
+        print("Basic social TCP: profile conflict, safe projection, bilateral deletion, history/UUID confirmation, reject/reapply/accept and stale-send denial passed")
 
     finally:
         if sys.exc_info()[0] is not None:

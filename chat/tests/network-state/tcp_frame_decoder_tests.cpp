@@ -87,6 +87,13 @@ int main(int argc, char *argv[])
     passed &= expect(historyFrames.size() == 1 && historyFrames[0].body == historyBody,
                      "history response did not preserve the full uint16 body");
     TcpFrameDecoder bounded;
+    TcpFrameDecoder social;
+    const QByteArray socialBody(8192, 's');
+    const auto socialFrames = social.append(frame(1047, socialBody));
+    passed &= expect(socialFrames.size() == 1 && socialFrames[0].body == socialBody,
+                     "social directory response did not preserve its bounded body");
+    passed &= expect(social.append(frame(1047, QByteArray(8193, 's'))).isEmpty()
+                     && social.hasError(), "social directory accepted an oversized body");
     passed &= expect(bounded.append(frame(1018, QByteArray(2049, 'x'))).isEmpty()
                      && bounded.hasError(), "non-history response exceeded its existing bound");
     return passed ? 0 : 1;

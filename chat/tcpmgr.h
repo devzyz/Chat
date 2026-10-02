@@ -1,6 +1,7 @@
 #ifndef TCPMGR_H
 #define TCPMGR_H
 #include <QTimer>
+#include <QPointer>
 #include "global.h"
 #include "singleton.h"
 #include <QObject>
@@ -17,6 +18,13 @@ class TcpMgr : public QObject, public Singleton<TcpMgr>,
 {
     Q_OBJECT
 public:
+    /** @brief 返回当前连接是否协商了带版本的资料与好友管理。 */
+    bool supportsSocial() const { return _social; }
+    /** @brief 发送有编号和十秒期限的社交请求，接收者销毁或换账号后丢弃回调。 */
+    void socialRequest(ReqId id, QJsonObject request, QObject *context,
+                       std::function<void(QJsonObject)> callback);
+    /** @brief 串行分页刷新资料、关系和申请；已有刷新时合并请求。 */
+    void refreshSocialDirectory();
     /** @brief 复位底层传输并释放连接资源。 */
     ~TcpMgr();
 
@@ -88,6 +96,18 @@ private:
     void initHandlers();
 
     QMap<ReqId, std::function<void(ReqId id, int len, QByteArray)>> _handlers;
+    /** @brief 保存一次有界社交请求的接收对象与回复类型。 */
+    struct SocialPending {
+        ReqId response;
+        QPointer<QObject> context;
+        std::function<void(QJsonObject)> callback;
+    };
+    /** @brief 在同一刷新轮次继续下一页，落盘后才推进游标。 */
+    void loadSocialPage(QString kind, QString after = "0");
+    QHash<QString, SocialPending> _socialPending;
+    bool _social = false;
+    bool _socialRefreshing = false;
+    bool _socialRefreshAgain = false;
     QTimer _directoryTimer;
     bool _authenticated = false;
     QSet<int> _legacyHistoryRequests;

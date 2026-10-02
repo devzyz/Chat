@@ -82,13 +82,14 @@ void MessageService::execute(int chatId, std::function<void(LocalMessageStore &)
     }, Qt::QueuedConnection);
 }
 
-void MessageService::start(const QString &accountRoot, int uid, bool receipts)
+void MessageService::start(const QString &accountRoot, int uid, bool receipts, bool social)
 {
     stop();
     if (uid <= 0 || accountRoot.isEmpty()) return;
     _uid = uid;
     _accountRoot = accountRoot;
     _receipts = receipts;
+    _socialReady = !social;
     auto recovering = std::make_shared<QSet<int>>();
     auto directory = std::make_shared<QJsonObject>();
     execute(0,
@@ -130,6 +131,7 @@ void MessageService::stop()
     _groupTimer.stop();
     _groups.clear();
     _groupStates.clear();
+    _privateStates.clear(); _socialReady = true;
     _outgoingTimer.stop();
     _dispatching = false;
     _receipts = false;
@@ -335,6 +337,17 @@ void MessageService::loadHistory(int chatId, qint64 before, qint64 from)
         [this, chatId, before, page] { emit historyLoaded(chatId, before, page->messages, page->hasMore); });
 }
 
+void MessageService::loadConversationSummaries()
+{
+    auto rows = std::make_shared<QJsonArray>();
+    execute(0, /** @brief 只在工作线程读取会话摘要。 */
+        [rows](LocalMessageStore &store) { *rows = store.conversationSummaries(); },
+        /** @brief 原账号查询完成后才允许界面刷新。 */
+        [this, rows] { emit conversationSummariesLoaded(*rows); },
+        /** @brief 读取失败恢复列表的加载入口。 */
+        [this] { emit directoryFailed("conversations"); });
+}
+
 void MessageService::loadConversationAttention(int chatId)
 {
     if (!isActive() || chatId < 0) return;
@@ -366,7 +379,7 @@ void MessageService::dispatchOutgoing()
         _receiptQueued.remove(qint64(work.first) * 2 + work.second);
         requestReceipts(work.first, work.second);
     }
-    if (!isActive() || _dispatching) return;
+    if (!isActive() || _dispatching || !_socialReady) return;
     _dispatching = true;
     auto requests = std::make_shared<QVector<QJsonObject>>();
     auto changed = std::make_shared<QSet<int>>();
@@ -637,6 +650,10 @@ void MessageService::loadDirectoryPage(const QString &kind, int after, int limit
 
 void MessageService::applyGroups(const QJsonObject &directory)
 {
+    for (const auto &value : directory["conversations"].toArray()) {
+        const auto row = value.toObject();
+        if (row["type"] == "private" && row.contains("relationship_revision")) _privateStates[row["id"].toInt()] = row;
+    }
     for (const auto &value : directory["conversations"].toArray()) {
         const auto row = value.toObject();
         if (row["type"] != "group") continue;

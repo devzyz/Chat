@@ -28,7 +28,7 @@ The decoder's old-half-frame isolation is T07-FRM-04 in the adjacent network-sta
 ctest --test-dir build/windows-client/Release -R "^session_reset\\." --output-on-failure
 ```
 
-State cases are written to `build/test-results/client_component.xml`; the real retry case goes to `client_integration.xml`. Counts are defined by the public runner. Every case has a 10-second hard timeout and uses `QT_QPA_PLATFORM=minimal`.
+State cases are written to `build/test-results/client_component.xml`; the real retry case goes to `client_integration.xml`. Counts are defined by the public runner. The social lifecycle case has a 30-second hard timeout to exercise the production ten-second deadline; other cases have a 10-second hard timeout and uses `QT_QPA_PLATFORM=minimal`.
 
 RED evidence was recorded for the missing owning Module/User reset, retained owned UI, retained pending batch, and unsafe no-user UID read. GREEN uses the same `chat_session_core` library linked by the production executable. The regression mutation removes the `ClientSession` reset call from `MainWindow`; `CheckTestStructure` and the session wiring gate must reject it.
 
@@ -41,3 +41,7 @@ RED evidence was recorded for the missing owning Module/User reset, retained own
 `session_reset.account_state` 同时通过生产 `TcpMgr::handleMessage` 处理好友申请与审批回包，
 验证目录提交后缓存更新、重复审批不重复联系人，以及清空内存后从原账号库恢复申请状态和会话。
 该场景使用临时 SQLite，不访问真实服务。
+
+`session_reset.social_lifecycle`（Q06-SOCIAL-02，Component）通过生产 `TcpMgr::handleMessage` 与临时 SQLite
+验证带版本资料/联系人多页落盘、关系就绪不受申请目录失败阻断、错误编号及类型、重复回包、真实十秒超时、
+接收者销毁、重复重置及换账号后的迟到结果隔离。该回归使用合成服务响应，不冒充真实网络端到端。

@@ -1,6 +1,7 @@
 #include "chatpage.h"
 #include "messagesubmissioncontroller.h"
 #include "grouppanel.h"
+#include "applyfrienddialog.h"
 #include "clientmessage.h"
 #include "clientrequests.h"
 #include "messageservice.h"
@@ -28,6 +29,16 @@ ChatPage::ChatPage(QWidget *parent)
     : QWidget(parent), ui(new Ui::ChatPage)
 {
     ui->setupUi(this);
+    auto *reapply = new QPushButton(tr("重新申请好友"),this); reapply->setObjectName("reapplyFriendButton");
+    ui->horizontalLayout_3->addWidget(reapply); reapply->hide();
+    connect(reapply,&QPushButton::clicked,this,/** @brief 复用好友申请表单，重新读取申请版本。 */ [this] {
+        if (!_chatInfo || _chatInfo->getChatType() != ChatType::PRIVATE) return;
+        auto *dialog = new ApplyFriendDialog(this);
+        const auto profile = UserMgr::instance()->socialProfile(_chatInfo->getUid());
+        dialog->setSearchInfo(std::make_shared<SearchInfo>(_chatInfo->getUid(),profile["name"].toString(),
+            profile["description"].toString(),profile["icon"].toString(),profile["sex"].toInt()));
+        dialog->show();
+    });
     auto *details = new QPushButton(tr("资料 / 备注"), this);
     auto *search = new QPushButton(tr("查找历史"), this);
     ui->horizontalLayout_3->addWidget(details); ui->horizontalLayout_3->addWidget(search);
@@ -147,6 +158,7 @@ void ChatPage::setChatInfo(std::shared_ptr<ChatInfo> chatInfo)
     }
     _chatInfo = std::move(chatInfo);
     _currentChatId = _chatInfo->getChatId();
+    ui->chat_edit->setConversation(_currentChatId);
 
     ui->title_label->setText(_chatInfo->name());
     refreshGroupState();
@@ -189,6 +201,8 @@ qint64 ChatPage::oldestLoadedMessageId(int chatId) const
     const auto *model = _messageStore.find(chatId);
     return model && model->hasLoadedInitialPage() ? model->oldestMessageId() : 0;
 }
+
+bool ChatPage::hasDrafts() const { return ui->chat_edit->hasDrafts(); }
 
 void ChatPage::applyStoredHistory(int chatId, qint64 before,
                                  const QVector<StoredMessage> &messages, bool hasMore)
@@ -496,12 +510,15 @@ void ChatPage::refreshGroupState()
     if (!_chatInfo) return;
     const auto state = UserMgr::instance()->messages()->groupState(_currentChatId);
     const bool group = _chatInfo->getChatType() == ChatType::GROUP;
-    const bool active = !group || state["group_state"] == "active";
+    const auto relation = UserMgr::instance()->messages()->privateState(_currentChatId);
+    const bool active = group ? state["group_state"] == "active" : relation.isEmpty() || relation["relationship_active"].toBool();
+    findChild<QPushButton*>("reapplyFriendButton")->setVisible(!group && !active && TcpMgr::instance()->supportsSocial());
     ui->send_btn->setEnabled(active); ui->file_label->setEnabled(active); ui->chat_edit->setEnabled(active);
     if (group) ui->title_label->setText(state["name"].toString(_chatInfo->name()) + (active ? QString() : tr("（已离群或解散，只读）")));
     else if (const auto contact=UserMgr::instance()->friendById(_chatInfo->getUid()))
         ui->title_label->setText(contact->_backname.isEmpty() ? contact->_name : contact->_backname);
-    ui->file_label->setToolTip(active ? tr("发送图片、视频或文件") : tr("当前群只读"));
+    if (!group && !active) ui->title_label->setText(_chatInfo->name() + tr("（已解除好友，只读）"));
+    ui->file_label->setToolTip(active ? tr("发送图片、视频或文件") : tr("当前会话只读"));
 }
 
 void ChatPage::openHistorySearch()

@@ -19,6 +19,9 @@ public:
     explicit UserInfoPage(QWidget *parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~UserInfoPage();
+signals:
+    /** @brief 请求退出当前账号，true 表示切换账号。 */
+    void logoutRequested(bool switchAccount);
 
 private slots:
     /** @brief 打开头像编辑入口并将结果交给当前账号头像流程。 */
@@ -26,6 +29,10 @@ private slots:
 
 private:
     Ui::UserInfoPage *ui;
+    QString _profileRevision;
+    bool _profileBusy = false;
+    /** @brief 等待操作结果期间固定表单输入，结束后恢复编辑。 */
+    void setProfileBusy(bool busy);
     QPointer<EditAvatarDialog> _edit_avatar_dialog;
 };
 

@@ -41,14 +41,15 @@ SELECT SHA2(GROUP_CONCAT(item ORDER BY item SEPARATOR '\n'),256) FROM (
 ) AS schema_items
 )SQL";
 
-inline constexpr const char* CONTRACT_HASH = "8f54182e5ea268a0185a1c768a935e0b8654d76352701f56e039103060e72c81";
+inline constexpr const char* CONTRACT_HASH = "7b0a7ab342c54afdfa86174612b69b87a44224b7b9d67009e7e650dd5e89fe91";
 inline constexpr const char* VERSION_ROWS =
     "1:a549039f9846ac8dc5120e3f89481a92934a2d485d054019c6dfb69c9241957d:applied,"
     "2:be6b412a603046f67125d6a3f61aff2bf4054ee5154ca73a25ec7d824f3a2f85:applied,"
     "3:0fba30c1dcf87f8e3fe30deef9d296fe8f64d91dd45a7e70cb36f2acb40d68d0:applied,"
     "4:04143b2e07a3a64ca77e302f3f64d1380d278655e18ec04e5527b8c60093ce3c:applied,"
     "5:ffe7b499c2f751f2da53ef4b7a6589fb87172b92fbe4e741d8b9f01bb066fde8:applied,"
-    "6:33ded568bb131213224a26cf5929286820e8a4809be1641c4f5ceaab4fbabc77:applied";
+    "6:33ded568bb131213224a26cf5929286820e8a4809be1641c4f5ceaab4fbabc77:applied,"
+    "7:b54d0422dd3feb6f189e2740fa563bc58defbca04e43cd7fdba14e709f2ed7d3:applied";
 
 /** 校验当前数据库版本、元数据指纹与 UID 计数器；失败统一抛安全错误，不泄露驱动诊断。 */ inline void Verify(sql::Connection& connection) {
     try {

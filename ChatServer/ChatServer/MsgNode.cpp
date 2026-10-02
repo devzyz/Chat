@@ -8,7 +8,7 @@ namespace {
 
 /** @brief 检查消息长度和协议限制后计算包含帧头的缓冲大小，非法输入抛异常。 */
 std::size_t CheckedSendTotalLength(const char* message, std::size_t message_length, std::uint16_t message_id) {
-    const auto limit = message_id == MSG_LOAD_CHAT_MESSAGE_RSP ? MAX_HISTORY_BODY_LENGTH : MAX_LENGTH;
+    const auto limit = ResponseBodyLimit(message_id);
     if (message_length > limit) {
         throw std::length_error("message body exceeds send limit");
 	}
@@ -20,7 +20,7 @@ std::size_t CheckedSendTotalLength(const char* message, std::size_t message_leng
 
 /** @brief 检查消息长度和协议限制后计算包含帧头的缓冲大小，非法输入抛异常。 */
 std::size_t CheckedSendTotalLength(const std::string& message, std::size_t message_length, std::uint16_t message_id) {
-    const auto limit = message_id == MSG_LOAD_CHAT_MESSAGE_RSP ? MAX_HISTORY_BODY_LENGTH : MAX_LENGTH;
+    const auto limit = ResponseBodyLimit(message_id);
     if (message_length > limit) {
         throw std::length_error("message body exceeds send limit");
 	}

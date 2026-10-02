@@ -23,7 +23,13 @@ public:
     explicit ChatDialog(QWidget *parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ChatDialog();
-    /** @brief 按本地会话游标请求 SQLite 目录页。 */
+    /** @brief 返回聊天页所有会话是否有未提交草稿。 */
+    bool hasDrafts() const;
+signals:
+    /** @brief 用户请求结束账号，true 表示切换到其他账号。 */
+    void logoutRequested(bool switchAccount);
+public:
+    /** @brief 按最近消息顺序展开下一页本地会话。 */
     void loadChatUserList();
 
 protected:
@@ -66,7 +72,7 @@ private:
     Ui::ChatDialog *ui;
     ChatUIMode _mode; // 当前的模式
     ChatUIMode _state; // 需要切换为的模式
-    int _chatCursor = 0;
+    int _visibleChatCount = LOADING_STEP_LENGTH;
     bool _hasMoreChats = true;
     bool _b_chat_loading; // 是否在加载聊天列表
 

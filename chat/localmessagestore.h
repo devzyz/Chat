@@ -46,6 +46,8 @@ struct ConversationAttention {
 /** @brief 独占账号 SQLite 连接及锁文件；所有方法和析构均在连接所属工作线程执行，存储错误抛异常。 */
 class LocalMessageStore final {
 public:
+    /** @brief 读取全部会话的最新消息摘要并按活动时间排序，不加载历史正文页。 */
+    QJsonArray conversationSummaries();
     /** @brief 查询全部或指定会话尚未打开查看的已落盘接收消息数量，chatId 为零时查询全部。 */
     QVector<ConversationAttention> conversationAttention(int chatId = 0);
     /** @brief 单调保存已展示的本地消息编号上界，不清除之后落盘的新消息，也不生成已读回执。 */
@@ -117,6 +119,8 @@ public:
 private:
     /** @brief 核对已落盘目录中的群会话身份，仅群消息允许收件人占位值零。 */
     bool isGroupChat(int chatId);
+    /** @brief 保留旧版初始关系兼容，关系变化后仅接受完全匹配的版本。 */
+    bool canSendPrivate(const QJsonObject &request);
     /** @brief 在现有事务范围保存待发消息行，供批次与消息原子写入复用。 */
     void saveOutgoingRows(const QVector<StoredMessage> &messages);
     /** @brief 为本地已经落盘的接收消息生成送达意图。 */

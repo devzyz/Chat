@@ -6,6 +6,15 @@ and its former AUTO_INCREMENT counters are not shipped. Executable ownership is
 [`schema/migrations`](../schema/migrations), with ordered SHA-256 checksums and
 recovery descriptions in [`manifest.json`](../schema/manifest.json).
 
+## 基础社交迁移 007
+
+`007_basic_social.sql` 增加 `user.profile_revision`、`apply_friend.revision`、
+`private_chat.relationship_active/relationship_revision`。不新建平行用户、关系或消息表。
+已有私聊默认有效、版本 1，保留原参与者私聊权限；删除只作关系墓碑，不删除消息及资源。
+资料与关系写入按行锁、预期版本和数据库事务提交；创建/恢复关系按用户编号顺序锁定双方。
+新消息与删除共用私聊行锁；旧 UUID 先确认身份，新 UUID 再核对当前关系。
+迁移前备份、失败后的恢复边界及显式执行命令沿用下方 Operational entry；应用不会自动迁移运行库。
+
 ## Current schema
 
 - `001_baseline.sql` preserves the exported table shapes, indexes, InnoDB engines,
@@ -84,7 +93,7 @@ the user's VM database.
 `owner_uid`/`creation_uuid` and their unique index to `group_chat` for idempotent creation.
 Existing rows remain intact. Group text uses `chat_message.recv_id=0` as an explicit
 group sentinel; private messages keep positive recipients. All schema-verifying
-Gate/Chat/Resource binaries must be upgraded together after migration to schema 6.
+Gate/Chat/Resource binaries must be upgraded together after migration to schema 7.
 The group protocol is defined in [Protocol](Protocol.md#基础文字群聊).
 
 `006_group_membership.sql` adds group revision/dissolved state and member state,

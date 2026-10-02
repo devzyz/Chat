@@ -1,3 +1,4 @@
+#include "../../common/social/SocialDirectory.h"
 #include "../../common/message/MessageReceipts.h"
 #include "../../common/message/MessagePersistence.h"
 #include "MysqlDao.h"
@@ -238,7 +239,7 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 		{
 			// 准备修改语句
 			std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-				prepareStatement("SELECT id FROM apply_friend WHERE from_uid = ? AND to_uid = ? AND status = 0 FOR UPDATE"));
+				prepareStatement("SELECT id FROM apply_friend WHERE from_uid = ? AND to_uid = ? AND status = 0 AND revision = 1 FOR UPDATE"));
 
 			pstmt->setInt(1, apply_uid);
 			pstmt->setInt(2, auth_uid);
@@ -641,13 +642,13 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 // 插入新的聊天信息
 message_commit::Result MysqlDao::AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
     int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
-    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline, std::int64_t epoch) {
+    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline, std::int64_t epoch, std::int64_t relationship) {
     chat_msgs.clear();
     /** @brief 将当前借用的 MySQL 连接适配为消息提交端口，连接有效期由调用方租约保证。 */
     class PooledStore final : public message_commit::Store {
     public:
         /** @brief 初始化PooledStore，将当前借用的 MySQL 连接适配为消息提交端口，连接有效期由调用方租约保证。 */
-        explicit PooledStore(MysqlPool& pool, std::int64_t epoch) : _pool(pool), _epoch(epoch) {}
+        explicit PooledStore(MysqlPool& pool, std::int64_t epoch, std::int64_t relationship) : _pool(pool), _epoch(epoch), _relationship(relationship) {}
         /** @brief 使用本次借用的连接执行文本提交端口，保留事务及幂等错误分类。 */
         message_commit::Result Commit(int sender, int recipient, int chat,
             const message_commit::Batch& batch, message_commit::Deadline end) override {
@@ -659,6 +660,7 @@ message_commit::Result MysqlDao::AddChatMessageList(message_commit::Authenticate
             try {
                 message_commit::MySqlMessageCommitAdapter adapter(*connection->_connection);
                 adapter.SetGroupEpoch(_epoch);
+                adapter.SetRelationshipRevision(_relationship);
                 auto result = adapter.Commit(sender, recipient, chat, batch, end);
                 if (!adapter.IsReusable()) { connection->_connection.reset(); }
                 _pool.ReturnConnection(std::move(connection));
@@ -674,7 +676,8 @@ message_commit::Result MysqlDao::AddChatMessageList(message_commit::Authenticate
     private:
         MysqlPool& _pool;
         std::int64_t _epoch;
-    } store(*_pool, epoch);
+        std::int64_t _relationship;
+    } store(*_pool, epoch, relationship);
     auto result = message_commit::Commit(store, principal, from_uid, to_uid, chat_id, cache_msgs, deadline, to_uid == 0);
     if (!result.IsSuccess()) { return result; }
     for (std::size_t index = 0; index < result.items.size(); ++index) {
@@ -884,5 +887,24 @@ bool MysqlDao::GroupRequest(int uid, const Json::Value& request, bool manage, Js
         return true;
     } catch (const messaging::GroupError& error) { response["group_error"] = error.what(); }
     catch (const std::exception&) { response["group_error"] = "StorageUnavailable"; }
+    response["error"] = ErrorCodes::UidInvalid; return false;
+}
+
+bool MysqlDao::SocialRequest(int uid, const Json::Value& request, int kind, Json::Value& response) {
+    auto connection = _pool->GetConnection();
+    response["error"] = ErrorCodes::UidInvalid;
+    response["request_id"] = request.get("request_id", "");
+    if (!connection) { response["social_error"] = "StorageUnavailable"; return false; }
+    Defer release(/** @brief 无论查询或写入结果均归还本次连接。 */
+        [this, &connection] { _pool->ReturnConnection(std::move(connection)); });
+    try {
+        response["error"] = 0;
+        if (kind == 1042) social::UpdateProfile(*connection->_connection,uid,request,response);
+        else if (kind == 1044) social::Manage(*connection->_connection,uid,request,response);
+        else social::Read(*connection->_connection,uid,request,response);
+        return true;
+    } catch (const messaging::GroupError& error) { response["social_error"] = error.what(); }
+    catch (const sql::SQLException& error) { response["social_error"] = error.getErrorCode() == 1062 ? "NameExists" : "StorageUnavailable"; }
+    catch (const std::exception&) { response["social_error"] = "InvalidRequest"; }
     response["error"] = ErrorCodes::UidInvalid; return false;
 }

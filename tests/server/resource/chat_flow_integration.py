@@ -103,7 +103,7 @@ def wait_port(value, process):
 
 
 def send(sock, message_id, value):
-    body = json.dumps(value, separators=(",", ":")).encode()
+    body = json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode()
     sock.sendall(struct.pack("!HH", message_id, len(body)) + body)
 
 
@@ -116,6 +116,7 @@ def receive(sock, expected, success=True):
             result += part
         return result
     message_id, length = struct.unpack("!HH", exact(4))
+    assert length <= (65535 if message_id == 1028 else 8192 if message_id == 1047 else 2048), (message_id, length)
     body = json.loads(exact(length))
     assert message_id == expected, (message_id, expected, body)
     assert (body.get("error", 0) == 0) == success, body
@@ -207,12 +208,14 @@ def run_flow(directory, mysql_command, mysql_port):
         assert resource_id in notification["notify_msgs"][0]["msg_content"]
         assert request_resource("GET", "/resources/" + resource_id, uid=8) == (200, data)
         assert request_resource("GET", "/resources/" + resource_id, uid=9)[0] == 403
-        send(sender, 1016, payload); retry = receive(sender, 1017); receive(receiver, 1018)
+        send(sender, 1016, payload); retry = receive(sender, 1017)
+        send(receiver, 1020, dict(uid=8)); receive(receiver, 1021)  # No duplicate push before this ordered response.
         assert retry["uuid_msgId"] == acknowledgement["uuid_msgId"]
         text = dict(from_uid=7, to_uid=8, chat_id=1, text_array=[dict(
             msg_uuid="33333333-3333-4333-8333-333333333333", msg_content="text after resource integration")])
         send(sender, 1016, text); text_ack = receive(sender, 1017); receive(receiver, 1018)
-        send(sender, 1016, text); text_retry = receive(sender, 1017); receive(receiver, 1018)
+        send(sender, 1016, text); text_retry = receive(sender, 1017)
+        send(receiver, 1020, dict(uid=8)); receive(receiver, 1021)
         assert text_ack["uuid_msgId"] == text_retry["uuid_msgId"]
         forged_text = dict(text, text_array=[dict(msg_uuid="44444444-4444-4444-8444-444444444444",
                                                 msg_content="@resource:v1:{}")])

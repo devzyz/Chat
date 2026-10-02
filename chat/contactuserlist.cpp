@@ -162,8 +162,12 @@ void ContactUserList::applyContact(const QJsonObject &row)
 {
     const int uid = row["id"].toInt();
     auto info = UserMgr::instance()->friendById(uid);
-    if (!info) return;
     auto *item = _items.value(uid, nullptr);
+    if (row["is_self"].toBool() || (row.contains("relationship_active") && !row["relationship_active"].toBool())) {
+        if (item) { _items.remove(uid); delete takeItem(this->row(item)); }
+        return;
+    }
+    if (!info) return;
     if (!item) {
         auto *widget = new ContactUserItem();
         item = new QListWidgetItem();

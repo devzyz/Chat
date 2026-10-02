@@ -31,15 +31,18 @@ public:
      * 优先于随后超时或清理失败；错误结果也可能对应提交结果未知，重试需保留 UUID。
      */
     Result Commit(int sender, int recipient, int chat, const Batch& batch, Deadline deadline) override;
-    /** @brief 查询连接是否仍可归还池；false 时调用方必须丢弃连接，不能重新借出。 */
     /** @brief 设置群发送请求绑定的成员资格代次。 */
     void SetGroupEpoch(std::int64_t epoch) { _group_epoch = epoch; }
+    /** @brief 固定新增私聊消息使用的关系版本，零只兼容初始关系。 */
+    void SetRelationshipRevision(std::int64_t revision) { _relationship = revision; }
+    /** @brief 查询连接是否仍可归还池，失败连接由调用方丢弃。 */
     bool IsReusable() const { return _is_reusable; }
 private:
     sql::Connection& _connection;
     TransactionCommit* _commit = nullptr;
     bool _is_reusable = true;
     std::int64_t _group_epoch = 0;
+    std::int64_t _relationship = 0;
 };
 
 /**

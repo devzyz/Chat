@@ -6,12 +6,19 @@
 #include <QJsonDocument>
 #include "tcpmgr.h"
 #include "clientrequests.h"
+#include "socialui.h"
+#include <QPushButton>
+#include <QLabel>
 
 AuthFriendDialog::AuthFriendDialog(QWidget *parent)
     : QDialog(parent)
     , ui(new Ui::AuthFriendDialog)
 {
     ui->setupUi(this);
+    auto *status = new QLabel(this); status->setObjectName("socialStatus"); status->setWordWrap(true); layout()->addWidget(status);
+    auto *reject = new QPushButton(tr("拒绝申请"),this); reject->setObjectName("rejectApplicationButton"); layout()->addWidget(reject);
+    connect(reject,&QPushButton::clicked,this,/** @brief 拒绝与取消表单是独立操作。 */ [this] { manageApplication("reject"); });
+    ui->send_auth_user_description_edit->setMaxLength(255); ui->send_auth_user_back_edit->setMaxLength(255);
 
     // 隐藏对话框标题栏
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
@@ -34,6 +41,10 @@ AuthFriendDialog::~AuthFriendDialog()
 void AuthFriendDialog::setApplyInfo(std::shared_ptr<ApplyInfo> applyinfo)
 {
     _apply_info = applyinfo;
+    _revision = UserMgr::instance()->applicationRevision(applyinfo->_apply_uid);
+    const bool enabled = TcpMgr::instance()->supportsSocial() && !_revision.isEmpty();
+    ui->sure_btn->setEnabled(enabled); findChild<QPushButton*>("rejectApplicationButton")->setEnabled(enabled);
+    if (!enabled) findChild<QLabel*>("socialStatus")->setText(tr("请等待最新申请目录；旧服务器需要更新"));
 }
 
 void AuthFriendDialog::authApplyCancel()
@@ -48,24 +59,22 @@ void AuthFriendDialog::authApplyCancel()
  */
 void AuthFriendDialog::authApplySure()
 {
-    SPDLOG_DEBUG("friend authentication confirmation submitted");
-    // 准备tcp请求，发送认证信息
-    const auto self_info = UserMgr::instance()->userInfo();
-    QString description = ui->send_auth_user_description_edit->text();
-    if (description.isEmpty()) {
-        description = "你好！";
-    }
-
-    QString back_name = ui->send_auth_user_back_edit->text();
-    if (back_name.isEmpty()) {
-        back_name = _apply_info->_apply_name;
-    }
-
-    const auto jsonData = clientAcceptFriendRequest(*self_info, *_apply_info, description, back_name);
-
-    emit TcpMgr::instance()->sendRequested(ReqId::ID_AUTH_FRIEND_REQ, jsonData);
-
-    this->hide();
-    this->deleteLater();
+    manageApplication("accept");
 }
 
+void AuthFriendDialog::manageApplication(const QString &operation)
+{
+    if (_busy || !_apply_info || _revision.isEmpty()) return;
+    _busy = true; ui->sure_btn->setEnabled(false);
+    for (auto *edit : {ui->send_auth_user_description_edit,ui->send_auth_user_back_edit}) edit->setEnabled(false); findChild<QPushButton*>("rejectApplicationButton")->setEnabled(false);
+    TcpMgr::instance()->socialRequest(ID_FRIEND_MANAGE_REQ, {{"operation",operation},{"target_uid",_apply_info->_apply_uid},
+        {"expected_revision",_revision},{"description",ui->send_auth_user_description_edit->text()},
+        {"backname",ui->send_auth_user_back_edit->text()}}, this,
+        /** @brief 失败保留审批内容，成功由后续目录刷新更新列表。 */
+        [this](QJsonObject response) {
+            _busy = false; ui->sure_btn->setEnabled(true);
+            for (auto *edit : {ui->send_auth_user_description_edit,ui->send_auth_user_back_edit}) edit->setEnabled(true); findChild<QPushButton*>("rejectApplicationButton")->setEnabled(true);
+            findChild<QLabel*>("socialStatus")->setText(socialResultText(response));
+            if (response["error"].toInt(-1) == 0) { accept(); deleteLater(); }
+        });
+}

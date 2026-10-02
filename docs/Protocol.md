@@ -1,6 +1,34 @@
 <!-- generated-by: gsd-doc-writer -->
 # 协议与数据契约规范
 
+## 基础资料与好友管理
+
+登录协商 `basic_social_v1`；未协商时 1042/1044/1046 返回 `UpgradeRequired`，
+客户端禁用新管理入口。身份始终取当前认证会话，不信任请求中的操作者 UID。
+
+| 请求/响应 | 参数与结果 |
+| --- | --- |
+| 1042/1043 | `name`、`description`、`expected_revision`，更新本人资料并返回 `profile.profile_revision` |
+| 1044/1045 | `operation=apply/accept/reject/delete`、`target_uid`、`expected_revision`；申请/接受附 `description` 和 `backname` |
+| 1046/1047 | `kind=profile/contacts/applications`；profile 可指定 `target_uid`，目录使用 `after`，返回 `items/next/load_more` |
+
+请求携带 1～64 字节 `request_id`，响应原样回传。版本及游标用规范十进制字符串，零仅代表尚不存在；
+资料比较 `profile_revision`，申请比较 `application_revision`（发起者通过 profile 的 `outgoing_revision` 取得），
+删除比较 `relationship_revision`。过期写命令返回 `VersionConflict`，不会自动采用最新版本重放。
+客户端请求上限 16，十秒超时；超时保留输入并提示重新读取结果。每十秒完整分页刷新资料、关系及申请，
+写操作完成后立即触发读取，超时由周期目录恢复，账号切换丢弃旧请求和回调。
+
+用户名、描述和备注最多 255 个字符，用户名去除首尾 SQL 空格且不能为空；重名返回 `NameExists`。
+请求仍受 2048 字节 TCP 帧限制。仅已协商能力的目录响应 1047 允许最多 8192 字节，
+每页最多 50 条并按完整响应 8000 字节预算分页，足以容纳组合的 255 字符姓名、描述和备注。
+无法容纳异常旧记录时返回 `ResponseTooLarge`。联系人关系目录完整落盘后即允许发送，申请目录失败不阻断聊天。所有公开资料查询直接投影数据库中的公开字段，不返回密码、邮箱或令牌。
+
+删除双向好友边，同时将原私聊标记为失效并递增关系版本，取消双方申请。历史、回执和已有资源引用保留；
+重新申请并接受后复用原 chat_id，递增关系版本。1016 文本/资源新提交携带 `relationship_revision`，
+失效或不匹配时拒绝；未携带版本仅兼容初始版本 1。已提交且身份完全相同的 UUID 仍返回原确认，
+不重新推送；旧版审批仅能处理初始申请版本 1，不能批准后续重新申请。
+实时通知统一使用紧凑 JSON，超过 2048 字节时发送空正文的同步提示，接收端复用增量同步取正文。
+
 ## 头像与资源传输扩展
 
 ResourceServer HTTP、头像权限、用户目录和资源消息合同见 [Resources](Resources.md)
@@ -122,7 +150,7 @@ Session ID。查询区分 Found、NotFound、Unavailable；发布失败不报告
 
 Request 1027 adds `mode: "sync_v1"`, authenticated `uid`, `chat_id`, nonnegative `after_id`, and `request_id` (at most 64 bytes). Response 1028 echoes the envelope and returns `error`, `msgs`, `next_cursor`, `load_more`. Each row has `message_id`, `send_id`, `recv_id`, raw `content`, epoch-seconds `created_at`, and `msg_uuid`.
 
-Rows are ordered by increasing server ID; only IDs greater than `after_id` are returned. A page contains at most 50 rows and fits the complete encoded response. Only response 1028 permits a body up to 65535 bytes; other messages and client requests retain the 2048-byte bound. Legacy history keeps its existing serializer and fields. Old clients cannot consume large sync responses; update all ChatServer writers before deploying the new client.
+Rows are ordered by increasing server ID; only IDs greater than `after_id` are returned. A page contains at most 50 rows and fits the complete encoded response. Response 1028 permits a body up to 65535 bytes; social directory response 1047 permits 8192 bytes. Other messages and client requests retain the 2048-byte bound. Legacy history keeps its existing serializer and fields. Old clients cannot consume large sync responses; update all ChatServer writers before deploying the new client.
 
 The client atomically commits a whole page and its cursor; ACKs/pushes never advance it. Existing committed local history is trusted. Synchronization and deployment details: [MessageStorage](MessageStorage.md).
 
@@ -176,7 +204,7 @@ periodic authoritative synchronization and is sent only to a session that negoti
   客户端每 10 秒从起点完整分页，每 2 秒同步有效群；旧版本不覆盖新状态，旧代次响应和 outbox 不重发。
   同服、跨服及离线恢复以 MySQL 为权威，不新增广播设施。
 
-普通响应遵守 2048 字节包体限制，群资料按实际序列化大小分页；仅 1028 允许扩展响应大小。
+普通响应遵守 2048 字节包体限制，群资料按实际序列化大小分页；1028 和已协商的社交目录 1047 按各自读响应上限处理。
 协议需要 migration 006 及相应二进制合同；迁移入口与恢复边界见 [Data](Data.md)。
 
 ## 用户搜索请求关联

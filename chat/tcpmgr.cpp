@@ -1,6 +1,7 @@
 #include "tcpmgr.h"
 #include <QJsonDocument>
 #include <QSet>
+#include <QUuid>
 #include "logmgr.h"
 #include "usermgr.h"
 #include "messageservice.h"
@@ -97,6 +98,7 @@ TcpMgr::TcpMgr() : _host("") {
         _expectedClose = false;
         _acceptingSends = false;
         _authenticated = false;
+        _social = false; _socialRefreshing = false; _socialPending.clear();
         _legacyHistoryRequests.clear();
         if (expectedClose && !_retainingPending) UserMgr::instance()->messages()->pauseOutgoing();
         UserMgr::instance()->messages()->stop();
@@ -164,6 +166,7 @@ TcpMgr::TcpMgr() : _host("") {
         /** @brief 上轮目录完整加载后重新扫描，发现其他成员建立的群。 */
         [this] {
             if (!_authenticated) return;
+            refreshSocialDirectory();
             emit sendRequested(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(QJsonObject{
                 {"uid", UserMgr::instance()->uid()}, {"current_chat_id", 0}}).toJson(QJsonDocument::Compact));
         });
@@ -242,7 +245,9 @@ void TcpMgr::initHandlers()
         UserMgr::instance()->startResourceSession();
         _authenticated = true;
         const bool receipts = jsonObj["capabilities"].toArray().contains("message_receipts_v1");
-        UserMgr::instance()->messages()->start(UserMgr::instance()->storageRoot(), uid, receipts);
+        _social = jsonObj["capabilities"].toArray().contains("basic_social_v1");
+        UserMgr::instance()->messages()->start(UserMgr::instance()->storageRoot(), uid, receipts, _social);
+        refreshSocialDirectory();
 
         emit loginSucceeded();
         UserMgr::instance()->messages()->saveDirectory(directoryResponse(id, jsonObj, uid),
@@ -948,6 +953,19 @@ void TcpMgr::initHandlers()
 // 回包处理函数，根据id调用不同的回调函数
 void TcpMgr::handleMessage(ReqId id, int len, QByteArray data)
 {
+    if (id == ID_PROFILE_UPDATE_RSP || id == ID_FRIEND_MANAGE_RSP || id == ID_SOCIAL_DIRECTORY_RSP) {
+        const auto response = QJsonDocument::fromJson(data).object();
+        const auto key = response["request_id"].toString();
+        auto it = _socialPending.find(key);
+        if (it == _socialPending.end() || it->response != id) return;
+        const auto pending = *it; _socialPending.erase(it);
+        if (pending.context) pending.callback(response);
+        if (id != ID_SOCIAL_DIRECTORY_RSP) refreshSocialDirectory();
+        return;
+    }
+    if (_social && (id == ID_NOTIFY_ADD_FRIEND_REQ || id == ID_NOTIFY_AUTH_FRIEND_REQ || id == ID_AUTH_FRIEND_RSP)) {
+        refreshSocialDirectory(); return;
+    }
     if (_handlers.find(id) == _handlers.end()) {
         SPDLOG_WARN("no TCP handler registered for msg_id={}", static_cast<int>(id));
         return ;
@@ -994,6 +1012,7 @@ void TcpMgr::resetConnection(bool expectedClose)
 {
     _acceptingSends = false;
     _authenticated = false;
+    _social = false; _socialRefreshing = false; _socialPending.clear();
     _legacyHistoryRequests.clear();
     if (expectedClose) {
         UserMgr::instance()->messages()->pauseOutgoing();
@@ -1027,7 +1046,7 @@ void TcpMgr::sendData(ReqId reqId, QByteArray dataBytes)
     }
     if (reqId == ID_CHAT_LOGIN_REQ) {
         auto request = QJsonDocument::fromJson(dataBytes).object();
-        request["capabilities"] = QJsonArray{"message_receipts_v1", "group_membership_v1"};
+        request["capabilities"] = QJsonArray{"message_receipts_v1", "group_membership_v1", "basic_social_v1"};
         dataBytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
     }
     if (!_transport.send(static_cast<quint16>(reqId), dataBytes)) {
@@ -1065,4 +1084,76 @@ void TcpMgr::connectToServer(ServerInfo si)
 
 TcpMgr::~TcpMgr() {
     _transport.reset();
+}
+
+void TcpMgr::socialRequest(ReqId id, QJsonObject request, QObject *context,
+                           std::function<void(QJsonObject)> callback)
+{
+    const auto key = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    request["request_id"] = key;
+    const auto bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
+    if (!_social || !_authenticated || _socialPending.size() >= 16 || bytes.size() > 2048) {
+        QTimer::singleShot(0, context, /** @brief 在接收者仍存活时报告本地拒绝。 */
+            [callback, supported = _social] { callback({{"error", 1}, {"social_error", supported ? "RequestUnavailable" : "UpgradeRequired"}}); });
+        return;
+    }
+    _socialPending.insert(key, {ReqId(int(id) + 1), context, std::move(callback)});
+    QTimer::singleShot(10000, this, /** @brief 超时只结束当前请求，不自动重放写命令。 */ [this,key] {
+        auto it = _socialPending.find(key); if (it == _socialPending.end()) return;
+        auto pending = *it; _socialPending.erase(it);
+        if (pending.context) pending.callback({{"error", 1}, {"social_error", "Timeout"}});
+    });
+    emit sendRequested(id, bytes);
+}
+
+void TcpMgr::refreshSocialDirectory()
+{
+    if (!_social || !_authenticated) return;
+    if (_socialRefreshing) { _socialRefreshAgain = true; return; }
+    _socialRefreshing = true; _socialRefreshAgain = false; loadSocialPage("profile");
+}
+
+void TcpMgr::loadSocialPage(QString kind, QString after)
+{
+    socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind",kind},{"after",after}}, this,
+        /** @brief 将版本目录转换为既有存储格式，成功落盘后继续分页。 */
+        [this,kind,after](QJsonObject response) {
+        if (response["error"].toInt(-1) != 0) { _socialRefreshing = false; return; }
+        QJsonObject directory;
+        if (kind == "profile") {
+            auto row = response["profile"].toObject(); row["is_self"] = true;
+            directory["contacts"] = QJsonArray{row};
+        } else {
+            QJsonArray rows, conversations;
+            for (const auto &value : response["items"].toArray()) {
+                auto row = value.toObject();
+                if (kind == "applications") {
+                    row["applyname"] = row["name"]; row["applyicon"] = row["icon"]; row["applysex"] = row["sex"];
+                } else if (row["chat_id"].toInt() > 0) {
+                    auto chat = row; chat["id"] = row["chat_id"]; chat["type"] = "private";
+                    conversations.append(chat);
+                }
+                rows.append(row);
+            }
+            directory[kind] = rows; directory["conversations"] = conversations;
+        }
+        UserMgr::instance()->messages()->saveDirectory(directory,
+            /** @brief 仅在当前页保存后推进，首次完整关系目录落盘前阻止旧 outbox 发送。 */
+            [this,kind,after,response] {
+                if (response["load_more"].toBool()) {
+                    const auto next = response["next"].toString();
+                    if (next.toLongLong() <= after.toLongLong()) { _socialRefreshing = false; return; }
+                    loadSocialPage(kind,next);
+                } else if (kind == "profile") loadSocialPage("contacts");
+                else if (kind == "contacts") {
+                    UserMgr::instance()->messages()->setSocialReady();
+                    loadSocialPage("applications");
+                }
+                else {
+                    _socialRefreshing = false;
+                    if (_socialRefreshAgain) refreshSocialDirectory();
+                }
+            }, /** @brief 写盘失败保留旧目录，下次周期重试读取。 */
+            [this] { _socialRefreshing = false; });
+    });
 }

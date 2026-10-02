@@ -3,6 +3,60 @@
 更新：2026-10-02。此页维护当前进度、下一步和验证边界。历史计划与报告保留，
 不作为本轮已经验收的证据。目标仍为先完成基础功能及必要正确性，再另行安排性能优化。
 
+## 当前实施：基础聊天易用性与好友管理
+
+任务分支 `feat/repo/basic-chat-usability` 基于最新 `develop` 的 `45a93b0`，包含已合并 PR #27
+及其前置 PR #25/#26；实施前与收尾时均核对远端，创建本 PR 前没有其他面向 develop 的未合并 PR。
+实现和复核修复均已完成本地验证，已提交 [PR #28](https://github.com/devzyz/Chat/pull/28) 至 `develop`。
+以下是本轮本地证据，远端 CI 结果以本轮 PR 为准，
+不宣称已合并验收。
+
+已实现：按会话保留进程内草稿、附件、光标与撤销；退出/切换账号入口和统一未提交内容提示；
+单条正文/附件名称复制；按最新本地消息排序的摘要与时间；修改本人用户名/描述；好友申请、同意、
+拒绝、双向删除与重新申请。失效会话只读并保留历史/资源，重新加回复用原会话且旧待发请求不会复活。
+隐藏未实现的语音/视频入口。复用既有 TCP、存储线程、目录 JSON、编辑器文档和提交控制器；
+仅提取社交结果提示、版本目录 SQL 与新增私聊校验，没有另建消息或资源体系。
+
+MySQL 007、SQLite 6 和 `basic_social_v1` 协商合同已同步文档。迁移仅在自建临时 MySQL 验证，
+未迁移个人数据库，未恢复或安装依赖。部署前需要按 [Data](Data.md#operational-entry) 备份并显式迁移，
+同步更新 Gate/Chat/Resource；客户端本地升级前备份旧库。
+
+本轮自动证据：
+
+- 草稿切换旧实现 RED / GREEN：`build/usability-drafts-red.txt`、`build/usability-drafts-green.txt`。
+- 私聊权限负向控制移除校验后，新回归明确失败；已恢复生产源并通过：
+  `build/usability-social-red.txt`、`build/usability-social-green.txt`。
+- `RunClientTests -Configuration Release`：74/74（25 Unit、19 Component、30 Integration），
+  `build/usability-review-client.log`；新增生命周期用例最终复跑 `build/usability-review-lifecycle-final.log`。草稿、存储与摘要回归已进入现有默认入口。
+- `RunServerTests -Configuration Release`：7 份报告、258 项，零失败/跳过，
+  `build/usability-review-server.log` 和 `build/test-results/server*.xml`。
+- 真实 MySQL 原生 10/10 与双生产 ChatServer TCP、Qt/SQLite 重启回归通过：
+  `build/usability-review-social-green.log`。包含资料冲突/重名、好友全生命周期、按字节多页目录、旧版本拒绝、
+  资源引用保留及大正文通知。Redis/Status 为隔离替身，不代表全生产依赖验收。
+- 真实 Qt 资源/群/查找控件 20/20，零失败/跳过：`build/usability-resource-widgets.xml` 和 `.txt`。
+  HTTP/文件系统为真实本机服务，认证为测试替身。
+- 真实资源 catalog 4/4、生产 Resource/双 Chat 的图片/视频/文件流程通过：
+  `build/usability-resource-integration.log`；包含 250 帧视频解码、续传、摘要及重复消息不再推送。
+- MySQL 2→7 保留旧数据、重复应用和漂移拒绝通过：`build/usability-schema-upgrade.log`。
+- 迁移合同 12/12、Node owner 3/3：`build/usability-schema-tests.log`、`build/usability-schema-owner.log`。
+- 增量规范零违规：`build/usability-review-conventions.log`；Python TCP 流程已复核并真实执行。
+  文档相对链接及 `git diff --check` 已通过。
+
+过程中实际修复两处回归：会话展开入口保持原分页调用语义；已提交的大消息重试不重复推送，
+本机/跨服通知统一按帧上限降为同步提示。通知断连 RED 位于 `build/usability-social-integration.log`，
+最终大正文 TCP 回归已通过。提醒测试保持“第一页之外的未读会话”前提，没有降低未读合同。
+
+提交前双轴复核发现并修复：合法长中文字段组合导致目录超限并阻塞发送；社交异步生命周期测试缺口；
+资料查询的过时 Redis 注释和目录刷新重复回调。长字段缺陷真实 RED 为 `build/usability-review-long-red.log`，
+GREEN 为上述真实 TCP 回归；仅社交目录读响应 1047 复用现有按类型限长机制放宽至 8192 字节，
+写请求仍为 2048 字节。关系完整落盘即就绪，申请目录失败不阻断发送；没有增加分段协议或新依赖。
+客户端新增 `session_reset.social_lifecycle`，公共 runner 基线相应增加至 14 份/399 项；本轮仍按所属模块验证，
+不把注册总数记为全仓执行数。脚本回归 13/13，证据为 `build/test-results/script_component.xml` 和 `script_integration.xml`。
+
+下一步是 PR #28 远端 CI、评审及主体功能完成后的人工桌面验收。按本轮范围，跨进程草稿、自动重连、
+系统通知、拉黑、撤回、通话、多设备和性能专项仍未实现；这些不是本次计划的完成条件。
+以下章节保留此前已合并工作的历史证据。
+
 ## 当前补充：前端输入与搜索正确性修复
 
 本轮完成基础功能与必要封装修复，以及复核发现的相关缺陷；不进行群管理整体拆分、全量组件改名或性能专项。

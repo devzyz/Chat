@@ -112,6 +112,15 @@ TEST(MessageSync, IncrementalByteBoundedPagesAndResourceIdentity) {
     auto resource = Page(*connection, 103, 0);
     ASSERT_EQ(resource["msgs"].size(), 1);
     EXPECT_EQ(resource["msgs"][0]["msg_uuid"].asString(), Uuid("resource"));
+    std::unique_ptr<sql::Statement> state(connection->createStatement());
+    state->execute("UPDATE private_chat SET relationship_active=FALSE,relationship_revision=2 WHERE chat_id=103");
+    EXPECT_TRUE(catalog.CanRead(10,resourceId));
+    EXPECT_EQ(catalog.CommitMessage(7,10,103,Uuid("resource"),resourceId).id,resource["msgs"][0]["message_id"].asInt());
+    EXPECT_THROW(catalog.CommitMessage(7,10,103,Uuid("resource-deleted"),resourceId),messaging::PrivateSendDenied);
+    state->execute("UPDATE private_chat SET relationship_active=TRUE,relationship_revision=3 WHERE chat_id=103");
+    EXPECT_THROW(catalog.CommitMessage(7,10,103,Uuid("resource-deleted"),resourceId,0,1),messaging::PrivateSendDenied);
+    EXPECT_GT(catalog.CommitMessage(7,10,103,Uuid("resource-current"),resourceId,0,3).id,0);
+    EXPECT_TRUE(catalog.CanRead(10,resourceId));
 }
 
 /** 验证同步读取等待尚未提交的写事务，游标不能越过它。 */

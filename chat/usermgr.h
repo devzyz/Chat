@@ -49,7 +49,13 @@ public:
     MessageSubmissionController *submissions();
     /** @brief 查询是否存在未落盘发送内容，不创建控制器。 */
     bool hasPendingSubmissions() const;
+    /** @brief 返回本人或联系人的版本资料。 */
+    QJsonObject socialProfile(int uid) const { return _socialProfiles.value(uid); }
+    /** @brief 返回当前申请版本，供显式审批命令使用。 */
+    QString applicationRevision(int uid) const { return _applicationRevisions.value(uid); }
 signals:
+    /** @brief 已落盘的本人资料变化后刷新展示。 */
+    void profileChanged();
     /** @brief 通知指定用户的头像已变化。 */
     void avatarChanged(int uid);
 public:
@@ -115,6 +121,8 @@ private:
 
     // 申请添加我为好友的列表，key为uid
     QMap<int, std::shared_ptr<ApplyInfo>> _apply_map;
+    QHash<int,QJsonObject> _socialProfiles;
+    QHash<int,QString> _applicationRevisions;
     // 保存所有的好友，key为uid
     QMap<int, std::shared_ptr<UserInfo>> _friend_map;
     // 保存所有的好友

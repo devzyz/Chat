@@ -24,6 +24,8 @@ protected:
 
 private:
     Ui::ApplyFriendDialog *ui;
+    QString _revision;
+    bool _busy = false;
 
     // 保存查询到的人的信息
     std::shared_ptr<SearchInfo> _si;

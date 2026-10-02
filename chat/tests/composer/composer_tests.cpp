@@ -29,6 +29,32 @@
 class ComposerTests : public QObject {
     Q_OBJECT
 private slots:
+    /** @brief 切换会话保留各自原生文档和附件撤销记录，后台完成不污染当前输入。 */
+    void conversationDrafts() {
+        QTemporaryDir root;
+        MessageTextEdit editor; editor.setAccountRoot(root.path());
+        editor.setConversation(10);
+        editor.insertPlainText("first");
+        QImage image(20, 20, QImage::Format_RGB32); image.fill(Qt::red);
+        QApplication::clipboard()->setImage(image); editor.paste();
+        auto *first = editor.document();
+        editor.setConversation(20);
+        QVERIFY(editor.toPlainText().isEmpty());
+        editor.insertPlainText("second");
+        auto *second = editor.document();
+        editor.setConversation(10);
+        QCOMPARE(editor.document(), first);
+        QTRY_VERIFY(!editor.hasPendingAttachments());
+        QCOMPARE(editor.draft().entries.size(), 2);
+        editor.undo(); QCOMPARE(editor.toPlainText(), QString("first"));
+        editor.redo(); QCOMPARE(editor.draft().entries.size(), 2);
+        editor.clearAccepted(editor.draft().id);
+        editor.setConversation(20);
+        QCOMPARE(editor.document(), second); QCOMPARE(editor.toPlainText(), QString("second"));
+        editor.undo(); QVERIFY(editor.toPlainText().isEmpty());
+        editor.redo(); QCOMPARE(editor.toPlainText(), QString("second"));
+        QApplication::clipboard()->clear();
+    }
     /** @brief 自动控件回归不使用系统原生对话框，避免依赖桌面主题。 */
     void initTestCase() {
         QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs);

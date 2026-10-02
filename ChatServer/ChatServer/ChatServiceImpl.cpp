@@ -1,3 +1,4 @@
+#include "../../common/message/MessagePersistence.h"
 #include "ChatServiceImpl.h"
 #include "UserSessionDirectory.h"
 #include "SessionLifecycleCoordinator.h"
@@ -128,7 +129,7 @@ Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const Auth
 
 	SPDLOG_DEBUG("auth friend notify prepared, applyuid={}, authuid={}, chatid={}", applyuid, authuid, chatid);
 
-	std::string notify_str = notify.toStyledString();
+	std::string notify_str = messaging::BoundedNotification(notify);
 	session->Send({MSG_NOTIFY_AUTH_FRIEND_REQ, notify_str});
 	return Status::OK;
 }
@@ -171,7 +172,7 @@ Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, co
 	notify["notify_msgs"] = notify_msgs;
 
 	// 通知对方服务器
-	std::string notify_str = notify.toStyledString();
+	std::string notify_str = messaging::BoundedNotification(notify);
 	session->Send({MSG_NOTIFY_CHAT_MSG_REQ, notify_str});
 	return Status::OK;
 }

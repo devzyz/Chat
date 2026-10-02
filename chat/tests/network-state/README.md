@@ -34,8 +34,8 @@ RED was recorded by temporarily expecting message id `0x1235` from a `0x1234` fr
 
 ## Known gaps
 
-- No maximum client frame length is implemented, so this module does not invent a rejection policy. Malformed/oversized-frame handling remains a production-policy gap.
+- The decoder enforces response-specific bounds; semantic JSON validation belongs to business handlers.
 - Real `QTcpSocket` loopback, connection/error timing, and `HttpMgr` outcomes remain outside this Unit module. Authenticated state and pending-batch reset are owned by the adjacent `session-reset` Component module.
 - The earlier `message-model` suite owns model/delegate behavior and is not repeated here.
 
-The decoder regression additionally accepts 65535-byte history response 1028 and rejects a 2049-byte non-history response. Existing case counts are unchanged.
+The decoder regression additionally accepts 65535-byte history response 1028 accepts an 8192-byte social directory response 1047, rejects its 8193-byte overflow, and rejects a 2049-byte ordinary response. Existing case counts are unchanged.

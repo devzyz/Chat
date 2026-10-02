@@ -44,8 +44,8 @@ bool MysqlMgr::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 
 message_commit::Result MysqlMgr::AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
     int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
-    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline, std::int64_t epoch) {
-    return _dao.AddChatMessageList(principal, from_uid, to_uid, chat_id, cache_msgs, chat_msgs, deadline, epoch);
+    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline, std::int64_t epoch, std::int64_t relationship) {
+    return _dao.AddChatMessageList(principal, from_uid, to_uid, chat_id, cache_msgs, chat_msgs, deadline, epoch, relationship);
 }
 
 bool MysqlMgr::GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
@@ -67,4 +67,8 @@ bool MysqlMgr::CreateGroup(int owner, const std::string& name, const std::string
 
 bool MysqlMgr::GroupRequest(int uid, const Json::Value& request, bool manage, Json::Value& response) {
     return _dao.GroupRequest(uid, request, manage, response);
+}
+
+bool MysqlMgr::SocialRequest(int uid, const Json::Value& request, int kind, Json::Value& response) {
+    return _dao.SocialRequest(uid, request, kind, response);
 }

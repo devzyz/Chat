@@ -1,4 +1,5 @@
 #include "MySqlMessageCommitAdapter.h"
+#include "../../common/message/PrivateSendAccess.h"
 #include "../../common/message/MessagePersistence.h"
 
 #include <limits>
@@ -26,18 +27,8 @@ bool IsMember(sql::Connection& connection, int sender, int recipient, int chat) 
         try { messaging::LockGroup(connection, chat, sender); return true; }
         catch (const std::runtime_error&) { return false; }
     }
-    // Serialize ID allocation/commit with resource writers and incremental sync
-    // on the private_chat row, so a sync cursor cannot pass an uncommitted ID.
-    std::unique_ptr<sql::PreparedStatement> query(connection.prepareStatement(
-        "SELECT c.chat_id FROM chat c JOIN private_chat p ON p.chat_id=c.chat_id "
-        "JOIN user s ON s.uid=? JOIN user r ON r.uid=? "
-        "WHERE c.chat_id=? AND c.type='private' AND "
-        "((p.user1_id=s.uid AND p.user2_id=r.uid) OR (p.user1_id=r.uid AND p.user2_id=s.uid)) FOR UPDATE"));
-    query->setInt(1, sender);
-    query->setInt(2, recipient);
-    query->setInt(3, chat);
-    std::unique_ptr<sql::ResultSet> result(query->executeQuery());
-    return result->next();
+    try { messaging::LockConversation(connection, chat, sender, recipient); return true; }
+    catch (const std::runtime_error&) { return false; }
 }
 
 /** @brief 锁定发送者 UUID 对应记录并核对会话、接收者及正文；不一致抛 CONFLICT。 */
@@ -103,6 +94,19 @@ Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, co
             "INSERT INTO chat_message(chat_id,send_id,recv_id,content,status,client_msg_uuid) VALUES(?,?,?,?,0,?)"));
         for (const auto& message : batch) {
             CheckDeadline(deadline);
+            if (recipient > 0) {
+                std::unique_ptr<sql::PreparedStatement> prior(_connection.prepareStatement(
+                    "SELECT message_id FROM chat_message WHERE send_id=? AND client_msg_uuid=? FOR UPDATE"));
+                prior->setInt(1,sender); prior->setString(2,message.first);
+                std::unique_ptr<sql::ResultSet> existing(prior->executeQuery());
+                if (existing->next()) {
+                    existing.reset();
+                    result.items.push_back(ReadIdentity(_connection,sender,recipient,chat,message,Disposition::EXISTING));
+                    continue;
+                }
+                try { messaging::CheckPrivateSend(_connection,chat,_relationship); }
+                catch (const messaging::PrivateSendDenied&) { throw Error::INVALID_MEMBERSHIP; }
+            }
             insert->setInt(1, chat);
             insert->setInt(2, sender);
             insert->setInt(3, recipient);

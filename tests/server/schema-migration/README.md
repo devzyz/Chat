@@ -17,7 +17,7 @@ C++ DAO or four-process workflow proof.
 
 | ID | Real contract |
 | --- | --- |
-| 01 | Empty database reaches current version 6 and complete schema, including avatar/resource and message receipt tables |
+| 01 | Empty database reaches current version 7 and complete schema, including avatar/resource and message receipt tables |
 | 02 | Reapply is a no-op preserving registered data |
 | 03..04 | Applied checksum drift and unknown version fail closed |
 | 05..06 | Missing UUID unique index or stored procedure fails verification |
@@ -65,7 +65,7 @@ preserving indentation and newlines: MySQL 8.0 omits that text from
 checksummed migration on either version, and T10-MIG-11 distinguishes explanatory
 comment changes from executable routine drift. Migration file checksums stay exact.
 
-Current target is schema 6. T10-MIG-10 additionally upgrades a seeded schema-5
+Current target is schema 7. T10-MIG-10 additionally upgrades a seeded schema-5
 group with existing messages and checks immutable creation identity, active epoch 1,
 boundary 0 and repeat safety. An ownerless legacy group, including an owner role whose user no longer exists, must fail the migration
 preflight without adding membership-state columns. Only owned temporary databases are used.

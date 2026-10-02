@@ -8,4 +8,5 @@ Full TCP partial/sticky packet, peer disconnect, and session-close behavior rema
 
 `OversizedApplicationBodyIsRejectedBeforeAllocation` also checks the 1028 history/sync
 response exception: up to 65535 bytes, with overflow rejected before allocation.
+Social directory response 1047 accepts 8192 bytes and rejects 8193 bytes.
 Other message types keep the 2048-byte limit; inbound validation is unchanged.

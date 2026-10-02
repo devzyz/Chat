@@ -113,6 +113,10 @@ void MainWindow::resetSwitchLogin() {
 void MainWindow::loginSwitchChat(AuthFlowId flowId) {
     _activeAuthFlowId = flowId;
     _chat_dlg = new ChatDialog(this);
+    connect(_chat_dlg, &ChatDialog::logoutRequested, this,
+        /** @brief 账号按钮复用统一退出保护及完整会话清理。 */ [this](bool change) {
+        resetSession(change ? SessionResetReason::SwitchAccount : SessionResetReason::Logout);
+    });
     _chat_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     setCentralWidget(_chat_dlg);
 
@@ -154,7 +158,8 @@ void MainWindow::connectionClose(bool expectedClose)
 bool MainWindow::resetSession(SessionResetReason reason)
 {
     if ((reason == SessionResetReason::Logout || reason == SessionResetReason::SwitchAccount)
-        && !confirmSubmissionExit(this, UserMgr::instance()->hasPendingSubmissions())) return false;
+        && !confirmSubmissionExit(this, UserMgr::instance()->hasPendingSubmissions()
+            || (_chat_dlg && _chat_dlg->hasDrafts()))) return false;
     if (!_session.resetSession(reason)) {
         return false;
     }
@@ -193,7 +198,8 @@ void MainWindow::offlineLogin()
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    if (!confirmSubmissionExit(this, UserMgr::instance()->hasPendingSubmissions())) {
+    if (!confirmSubmissionExit(this, UserMgr::instance()->hasPendingSubmissions()
+        || (_chat_dlg && _chat_dlg->hasDrafts()))) {
         event->ignore(); return;
     }
     QMainWindow::closeEvent(event);

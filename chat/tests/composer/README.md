@@ -17,3 +17,6 @@
 .\scripts\windows-local.ps1 -Task RunClientTests -Configuration Release
 ctest --test-dir build/windows-client/Release -R '^(composer|user_search)\.' --output-on-failure
 ```
+
+`composer.interaction` 增加 `conversationDrafts`：真实编辑器跨会话保留文本、附件、原生文档、撤销与重做，
+后台附件准备回到原文档，清空一个会话不影响另一个。旧实现 RED 通过元对象缺少切换入口观察；正式用例直接调用生产接口。
