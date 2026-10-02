@@ -34,7 +34,7 @@ test('documentation builds skip only behind successful scope and static checks',
     for (const name of ['servers-release', 'client-release', 'varify-release']) {
         assert.match(job(windows, name), /needs: static-check\s+if: needs\.static-check\.outputs\.docs_only != 'true'/);
     }
-    assert.match(job(ci, 'regression'), /if: \$\{\{ always\(\) \}\}/);
+    assert.match(job(ci, 'regression'), /if: \$\{\{ always\(\) && needs\.plan\.outputs\.mode != 'performance' \}\}/);
     assert.match(job(ci, 'regression'), /test "\$RESULT" = success/);
 });
 
@@ -64,7 +64,7 @@ test('platforms consume one policy and remain independent of Windows tools', /**
     assert.match(ci, /push:\s+branches: \[develop, master\]/);
     assert.match(ci, /pull_request:\s+branches: \[develop, master\]/);
     assert.match(ci, /types: \[opened, synchronize, reopened, edited, ready_for_review\]/);
-    assert.match(ci, /mode:\s+description:[^\n]+\s+type: choice\s+options: \[quick, full\]\s+default: full/);
+    assert.match(ci, /mode:\s+description:[^\n]+\s+type: choice\s+options: \[quick, full, performance\]\s+default: full/);
 });
 
 test('publication requires master push and all full checks; failed smoke cannot publish', /** 验证仅 master 推送且完整检查成功后可发布，冒烟失败不能绕过。 */ () => {

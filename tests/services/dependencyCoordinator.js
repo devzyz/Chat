@@ -121,9 +121,10 @@ function runCommand(executable, args, options = {}) {
 }
 
 /** 在单调截止时间内轮询异步探针，临时失败可重试，到期抛出健康检查失败。 */
-async function poll(probe, timeoutMs) {
+async function poll(probe, timeoutMs, signal) {
     const deadline = performance.now() + timeoutMs;
     while (performance.now() < deadline) {
+        signal?.throwIfAborted();
         try { if (await probe()) return; } catch { /* Recheck bounded dependency readiness. */ }
         const remaining = deadline - performance.now();
         if (remaining > 0) await delay(Math.min(100, remaining));

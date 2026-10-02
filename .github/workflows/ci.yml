@@ -1,4 +1,5 @@
 name: CI
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('CI {0} {1}', inputs.mode, inputs.performance_request_id) || github.event.head_commit.message || github.event.pull_request.title || 'CI' }}
 
 on:
   push:
@@ -14,8 +15,21 @@ on:
       mode:
         description: Validation scope (optional acceptance or maintenance flags require full)
         type: choice
-        options: [quick, full]
+        options: [quick, full, performance]
         default: full
+      performance_profile:
+        description: Manual performance load profile
+        type: choice
+        options: [smoke, baseline, stress]
+        default: baseline
+      performance_request_id:
+        description: Unique performance request identity (optional)
+        type: string
+        default: ''
+      performance_source_sha:
+        description: Expected measured commit (optional; checked before building)
+        type: string
+        default: ''
       refresh_tools:
         description: Cold-build latest stable Windows tools and approve after Windows checks (default branch only)
         type: boolean
@@ -47,14 +61,21 @@ jobs:
       refresh_tools: ${{ steps.policy.outputs.refresh_tools }}
       cold_linux: ${{ steps.policy.outputs.cold_linux }}
       real_acceptance: ${{ steps.policy.outputs.real_acceptance }}
+      performance_profile: ${{ steps.policy.outputs.performance_profile }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Resolve validation scope without toolchain or artifact queries
         id: policy
         run: node scripts/ci/ciPolicy.js
+      - name: Pin requested performance source
+        if: steps.policy.outputs.mode == 'performance'
+        env:
+          EXPECTED_SHA: ${{ inputs.performance_source_sha }}
+        run: test -z "$EXPECTED_SHA" || test "$EXPECTED_SHA" = "$GITHUB_SHA"
 
   windows:
     needs: plan
+    if: needs.plan.outputs.mode != 'performance'
     uses: ./.github/workflows/windows-ci.yml
     with:
       build_packages: ${{ needs.plan.outputs.mode == 'full' }}
@@ -70,7 +91,7 @@ jobs:
 
   regression:
     name: Regression checks
-    if: ${{ always() }}
+    if: ${{ always() && needs.plan.outputs.mode != 'performance' }}
     needs: [plan, windows]
     runs-on: ubuntu-24.04
     steps:
@@ -120,3 +141,12 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/release.yml
+
+  performance:
+    name: Manual performance baseline
+    needs: plan
+    if: needs.plan.outputs.mode == 'performance'
+    uses: ./.github/workflows/performance.yml
+    with:
+      profile: ${{ needs.plan.outputs.performance_profile }}
+      request_id: ${{ inputs.performance_request_id }}

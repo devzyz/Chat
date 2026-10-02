@@ -117,7 +117,10 @@ int Supervise(int argc, char** argv) {
     Require(argc >= 5);
     std::signal(SIGTERM, StopSignal);
     std::signal(SIGINT, StopSignal);
-    auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 600s);
+    // Performance runs retain the same owner/cleanup contract with a bounded longer lease.
+    const auto* profile = std::getenv("CHAT_PERFORMANCE_PROFILE");
+    if (profile) Require(std::string(profile) == "smoke" || std::string(profile) == "baseline" || std::string(profile) == "stress");
+    auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + (profile ? 2640s : 600s));
     integration::ProcessSpec spec;
     spec.executable = std::filesystem::absolute(argv[2]);
     Require(std::filesystem::is_directory(std::filesystem::absolute(argv[3])));

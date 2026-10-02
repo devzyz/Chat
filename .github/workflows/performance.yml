@@ -1,0 +1,209 @@
+name: Server performance baseline
+on:
+  workflow_call:
+    inputs:
+      profile:
+        type: string
+        required: true
+      request_id:
+        type: string
+        default: ''
+permissions:
+  contents: read
+jobs:
+  build:
+    name: Build performance runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
+      VCPKG_DISABLE_METRICS: '1'
+      VCPKG_FORCE_DOWNLOADED_BINARIES: '1'
+      CHAT_EXPECTED_GNU_VERSION: '13.3.0'
+    steps:
+      - name: Check out candidate source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Acquire locked CMake
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/install-linux-tools.sh
+
+      - name: Select locked Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.18.0"
+          cache: npm
+          cache-dependency-path: VarifyServer/package-lock.json
+
+      - name: Check out repository-pinned vcpkg
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: microsoft/vcpkg
+          ref: fc3be1ebea7eaeb3071fe716ac65713af1f3a146
+          path: .ci/vcpkg
+          fetch-depth: 0
+
+      - name: Bootstrap run-owned vcpkg
+        run: bash "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+
+      - name: Reject compiler drift before installing dependencies
+        run: |
+          test "$(gcc -dumpfullversion)" = "$CHAT_EXPECTED_GNU_VERSION"
+          test "$(g++ -dumpfullversion)" = "$CHAT_EXPECTED_GNU_VERSION"
+
+      - name: Install MySQL native RPC prerequisite
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libtirpc-dev
+          pkg-config --exists libtirpc
+          test -f /usr/include/tirpc/rpc/rpc.h
+
+      - name: Prepare layered binary cache keys
+        id: binary-cache-key
+        run: |
+          node scripts/ci/vcpkgBinaryCache.js prepare "$RUNNER_TEMP/vcpkg-binary-cache" x64-linux-chat-release
+          echo "VCPKG_BINARY_SOURCES=clear;files,$RUNNER_TEMP/vcpkg-binary-cache,readwrite" >> "$GITHUB_ENV"
+
+      - name: Restore vcpkg binary archives
+        id: vcpkg-binary-cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.binary-cache-key.outputs.key }}
+          restore-keys: |
+            ${{ steps.binary-cache-key.outputs.prefix }}
+            ${{ steps.binary-cache-key.outputs.fallback }}
+            ${{ steps.binary-cache-key.outputs.legacy }}
+
+      - name: Record restored binary archives
+        id: binary-cache-before
+        run: node scripts/ci/vcpkgBinaryCache.js snapshot "$RUNNER_TEMP/vcpkg-binary-cache"
+
+      - name: Restore dependencies before project configuration
+        id: dependency-restore
+        timeout-minutes: 170
+        run: |
+          set -o pipefail
+          "$VCPKG_ROOT/vcpkg" install \
+            --triplet x64-linux-chat-release \
+            --host-triplet x64-linux-chat-release \
+            --overlay-triplets="$GITHUB_WORKSPACE/triplets" \
+            --x-manifest-root="$GITHUB_WORKSPACE" \
+            --x-install-root="$GITHUB_WORKSPACE/.ci/vcpkg_installed" \
+            2>&1 | tee "$RUNNER_TEMP/vcpkg-restore.log"
+
+      - name: Report actual binary package reuse
+        id: binary-cache-after
+        if: always() && steps.binary-cache-before.outcome == 'success'
+        env:
+          CACHE_RESTORED_KEY: ${{ steps.vcpkg-binary-cache.outputs.cache-matched-key }}
+          CACHE_PRIMARY_PREFIX: ${{ steps.binary-cache-key.outputs.prefix }}
+        run: node scripts/ci/vcpkgBinaryCache.js report "$RUNNER_TEMP/vcpkg-binary-cache" "$RUNNER_TEMP/vcpkg-restore.log"
+
+      - name: Save new binary packages under an immutable key
+        if: success() && steps.binary-cache-after.outputs.changed == 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.binary-cache-key.outputs.key }}
+
+      - name: Retain dependency ABI and compiler diagnostics
+        if: always() && steps.dependency-restore.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-vcpkg-diagnostics
+          include-hidden-files: true
+          path: |
+            ${{ runner.temp }}/vcpkg-restore.log
+            .ci/vcpkg_installed/x64-linux-chat-release/share/*/vcpkg_abi_info.txt
+            .ci/vcpkg/buildtrees/detect_compiler/**/*.log
+            .ci/vcpkg/buildtrees/detect_compiler/**/*.txt
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Verify performance contracts
+        run: node --test tests/services/performance/*.test.js tests/services/connectionCount.test.js tests/build/ciPolicy.test.js
+      - name: Build only production servers and their supervisor
+        timeout-minutes: 30
+        run: |
+          cmake --preset linux-x64-release -B out/build/performance \
+            -DCHAT_BUILD_CLIENT=OFF -DCHAT_ENABLE_HOSTED_PREFLIGHT=OFF \
+            -DCHAT_BUILD_ACCEPTANCE_RESOURCES=ON -DVCPKG_MANIFEST_INSTALL=OFF
+          cmake --build out/build/performance --target GateServer StatusServer ChatServer ResourceServer FourProcessDriver --parallel 2
+          CHAT_REAL_ACCEPTANCE=1 node tests/services/fourRuntime.js pack out/build/performance/bin out/performance-runtime .ci/vcpkg_installed
+          git rev-parse HEAD > out/performance-runtime/source-sha.txt
+          (cd out/performance-runtime && find . -type f ! -name manifest.sha256 -print0 | sort -z | xargs -0 sha256sum > manifest.sha256)
+      - name: Upload same-source runtime
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: performance-runtime
+          path: out/performance-runtime/
+          if-no-files-found: error
+          retention-days: 30
+
+  measure:
+    name: Measure real service performance
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      redis:
+        image: redis:7.4.2@sha256:fbdbaea47b9ae4ecc2082ecdb4e1cea81e32176ffb1dcf643d422ad07427e5d9
+        ports: ['127.0.0.1::6379']
+      mysql:
+        image: mysql:8.4.4@sha256:23818b7d7de427096ab1427b2e3d9d5e14a5b933f9a4431a482d6414bc879091
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_INITDB_SKIP_TZINFO: 'yes'
+        ports: ['127.0.0.1::3306']
+      mailpit:
+        image: axllent/mailpit:v1.24.1@sha256:4873e5a441ed368f1e98a832f61257a033859f5e829542cd03fb772d2282ea4e
+        ports: ['127.0.0.1::1025', '127.0.0.1::8025']
+    env:
+      CHAT_PERFORMANCE_PROFILE: ${{ inputs.profile }}
+      CHAT_PERFORMANCE_REQUEST_ID: ${{ inputs.request_id }}
+      CHAT_FOUR_BUNDLE: ${{ github.workspace }}/out/performance-runtime
+      CHAT_PERFORMANCE_OUTPUT: ${{ github.workspace }}/out/performance
+    steps:
+      - name: Check out measured source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Select locked Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.18.0'
+      - name: Download this run's runtime
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: performance-runtime
+          path: out/performance-runtime
+      - name: Verify exact runtime identity
+        run: |
+          test "$(cat out/performance-runtime/source-sha.txt)" = "$GITHUB_SHA"
+          (cd out/performance-runtime && sha256sum --check manifest.sha256)
+          find out/performance-runtime -type f -name '*Server' -exec chmod u+x {} +
+          chmod u+x out/performance-runtime/driver/FourProcessDriver
+          CHAT_REAL_ACCEPTANCE=1 node tests/services/fourRuntime.js verify out/performance-runtime
+      - name: Restore locked service libraries
+        working-directory: VarifyServer
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run selected bounded performance profile
+        env:
+          CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
+          CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+          CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
+          CHAT_REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
+          CHAT_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
+          CHAT_SMTP_PORT: ${{ job.services.mailpit.ports['1025'] }}
+          CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports['8025'] }}
+        run: timeout --signal=TERM --kill-after=90s 41m node tests/services/performance/run.js
+      - name: Verify complete report
+        if: always()
+        run: node tests/services/performance/report.js out/performance "$GITHUB_SHA"
+      - name: Preserve performance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: performance-results
+          path: out/performance/
+          if-no-files-found: error
+          retention-days: 30

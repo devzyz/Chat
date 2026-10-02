@@ -440,3 +440,7 @@ node --test tests/build/ciBudget.test.js tests/services/phase3dEvidence.test.js 
 
 这些合同单测不替代托管环境真实运行。人工视觉可用性、真实局域网特性与个人旧库兼容性仍单独验证。
 当前执行证据与尚未覆盖项只维护在 [Status](../../docs/Status.md)。
+
+## 性能专项
+
+手动性能基线见 [performance/README.md](performance/README.md)，独立生成指标与正确性报告。

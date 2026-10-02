@@ -143,7 +143,7 @@ test('tool selection precedes restore; cold refresh skips caches and Windows app
         ['client-release', 'Qt client Release'], ['varify-release', 'VarifyServer dependency and package check']]) {
         assert.ok(windows.includes(`  ${id}:\n    name: ${name}\n`));
     }
-    assert.match(ci, /  windows:\s+needs: plan\s+uses: \.\/\.github\/workflows\/windows-ci.yml/);
+    assert.match(ci, /  windows:\s+needs: plan\s+if: needs\.plan\.outputs\.mode != 'performance'\s+uses: \.\/\.github\/workflows\/windows-ci.yml/);
     assert.ok(windows.indexOf('install-windows-toolchain.ps1') < windows.indexOf('- name: Prepare layered binary cache keys'));
     assert.match(windows, /id: vcpkg-binary-cache\s+if: \$\{\{ !inputs\.refresh_tools \}\}/);
     assert.match(linux, /id: vcpkg-binary-cache\s+if: \$\{\{ !inputs\.cold_build \}\}/);

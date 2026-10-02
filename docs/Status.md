@@ -64,3 +64,20 @@
 3. 首版交付前核实迁移、安装和发布流程；当前未发布 GitHub Release，master 仍是旧发布基线，保留该长期分支。
 4. 后续按 [能力缺口](plans/CapabilityGaps.md) 安排认证、实例失效和恢复演练，按
    [工程简化](plans/EngineeringSimplification.md) 逐步处理大文件与源码文本耦合；本轮不改消息/权限保护语义。
+
+## 当前性能测试实施
+
+新增 GitHub 手动 performance 模式及 smoke/baseline/stress 档位，入口见
+[性能测试](../tests/services/performance/README.md)。代码基于已合并 PR #29；后续 Qt UI 提交
+4bde00d 已静态核对，原分支保留，不混入本次服务端实现。
+
+远端框架合同与 Release 构建通过；[完整 smoke](https://github.com/devzyz/Chat/actions/runs/37012646624)
+七个正式场景通过，但离线预热首次 HTTP 登录失败（9/10），整场按合同判失败。
+Gate 在接受连接前创建六十秒期限，空闲超过期限后首个请求可能立即被关闭；这是静态确认的
+高可信根因，尚未做独立缺陷复现，不在本轮修改生产实现。
+[baseline](https://github.com/devzyz/Chat/actions/runs/37013592301) 已在相同提交 a192754 完成三轮，
+21 个正式结果中 20 个通过，清理通过。第 1 轮离线预热及正式恢复各发生一次 TCP 断连，
+与 smoke 的 HTTP 失败分开记录，整场判失败。完整指标与证据限制见 [测试报告](../测试.md)。
+同提交的[普通 PR 回归](https://github.com/devzyz/Chat/actions/runs/37012645572)全部通过。
+后续应修复 Gate 期限并定位离线登录断连；当前性能证据不能标记为通过或用于容量承诺。
+本地只执行语法、格式检查，未启动业务服务、恢复依赖或运行压测；stress 未执行。

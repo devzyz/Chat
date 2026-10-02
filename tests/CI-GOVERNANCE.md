@@ -175,3 +175,11 @@ Windows 冒烟仅为 ResourceServer 启动临时 MySQL，先核验服务端及�
 6. GitHub 托管 runner 使用与本机隔离的 run-owned 临时 install root。已审查并合并的 workflow 可按固定
    manifest/baseline/triplet 正常恢复依赖；若要改变 CI install root、manifest、baseline、triplet 或 tool identity，
    仍须先取得批准并按 D-04 更新计划、workflow 与供应链证据。
+
+## 手动性能模式
+
+CI 的 workflow_dispatch 支持 `mode=performance`，档位为 smoke/baseline/stress（默认 baseline）。
+该模式只执行性能合同、Linux 服务构建和真实负载，不能混用 refresh_tools、cold_linux、real_acceptance。
+自动事件仍按 quick/full 执行；性能结果不作为无条件 required check，也不触发发布。
+使用同次 SHA 与摘要校验的服务工件，运行预算四十五分钟，失败仍保留三十天证据。
+测试细节见 [性能入口](services/performance/README.md)。

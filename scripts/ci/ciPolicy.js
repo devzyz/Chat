@@ -13,7 +13,16 @@ function selectPolicy(eventName, ref, event) {
     const manual = eventName === 'workflow_dispatch';
     const inputs = manual ? (event.inputs || {}) : {};
     const requested = inputs.mode === undefined ? 'full' : inputs.mode;
-    if (!['quick', 'full'].includes(requested)) throw new Error('CI mode must be quick or full');
+    if (!['quick', 'full', 'performance'].includes(requested)) throw new Error('CI mode must be quick, full or performance');
+    if (requested === 'performance') {
+        if (!manual || ['refresh_tools', 'cold_linux', 'real_acceptance'].some(/** 拒绝性能模式混用其他专项。 */ key => readBoolean(inputs[key]))) {
+            throw new Error('Performance requires an isolated manual request');
+        }
+        const profile = inputs.performance_profile || 'baseline';
+        if (!['smoke', 'baseline', 'stress'].includes(profile)) throw new Error('Invalid performance profile');
+        return { mode: 'performance', performance_profile: profile, refresh_tools: false,
+            cold_linux: false, real_acceptance: false, promoted: false };
+    }
     const refreshTools = eventName === 'schedule' || readBoolean(inputs.refresh_tools);
     const coldLinux = readBoolean(inputs.cold_linux);
     const realAcceptance = readBoolean(inputs.real_acceptance);
