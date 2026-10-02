@@ -2,12 +2,30 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const net = require('node:net');
+const http = require('node:http');
 const { once } = require('node:events');
 const { setTimeout: delay } = require('node:timers/promises');
-const { encode, Decoder, Client } = require('./client');
+const { encode, Decoder, Client, post } = require('./client');
 const { distribution, measure, validate } = require('./metrics');
 const { verify, scenarios } = require('./report');
 const { selectPolicy } = require('../../../scripts/ci/ciPolicy');
+
+test('Gate HTTP uses independent connections and preserves errors without retry', /** 验证短连接、业务错误和总期限。 */ async () => {
+    let requests = 0; const ports = new Set();
+    const server = http.createServer(/** 提供受控 Gate 响应。 */ (request, response) => {
+        requests++; ports.add(request.socket.remotePort); assert.equal(request.headers.connection, 'close');
+        if (request.url === '/timeout') return;
+        response.end(JSON.stringify({ error: request.url === '/error' ? 1001 : 0 }));
+    });
+    server.listen(0, '127.0.0.1'); await once(server, 'listening');
+    const url = `http://127.0.0.1:${server.address().port}`;
+    try {
+        await post(url, {}); await post(url, {}); assert.equal(ports.size, 2);
+        await assert.rejects(post(`${url}/error`, {}), /gate-1001/);
+        await assert.rejects(post(`${url}/timeout`, {}, 30), /http-timeout/);
+        assert.equal(requests, 4);
+    } finally { server.closeAllConnections(); await new Promise(/** 等待测试监听器关闭。 */ resolve => server.close(resolve)); }
+});
 
 test('frames preserve fragmentation and coalescing and reject malformed lengths', /** 使用真实编码字节验证增量解析。 */ () => {
     const decoder = new Decoder(), frames = [];

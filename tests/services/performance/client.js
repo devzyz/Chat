@@ -1,5 +1,6 @@
 'use strict';
 const net = require('node:net');
+const http = require('node:http');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { randomUUID } = require('node:crypto');
@@ -107,10 +108,32 @@ class Client extends EventEmitter {
 /** 执行 loopback JSON HTTP 请求并验证真实业务结果。 */
 async function post(url, value, timeoutMs = 10000) {
     assert.equal(new URL(url).hostname, '127.0.0.1');
-    const response = await fetch(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(timeoutMs),
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
-    if (!response.ok) throw new Error(`http-${response.status}`);
-    const result = await response.json();
+    const body = Buffer.from(JSON.stringify(value));
+    // Gate closes every response. A one-shot connection avoids idle speculative pool sockets; never retry a login.
+    const result = await new Promise(/** 每次请求拥有单独连接和完整响应期限。 */ (resolve, reject) => {
+        const request = http.request(url, { method: 'POST', agent: false,
+            headers: { 'Content-Type': 'application/json', 'Content-Length': body.length, Connection: 'close' } },
+        /** 累积有界 JSON 响应，拒绝重定向和不完整正文。 */ response => {
+            const chunks = []; let size = 0;
+            response.on('data', /** 限制响应内存占用。 */ chunk => {
+                size += chunk.length;
+                if (size > 1048576) request.destroy(new Error('http-response-size'));
+                else chunks.push(chunk);
+            });
+            response.on('error', /** 提前断开不可计为成功。 */ () => reject(new Error('http-response-incomplete')));
+            response.on('end', /** HTTP 与 JSON 合同全部满足后才完成请求。 */ () => {
+                clearTimeout(timer);
+                if (response.statusCode !== 200) { reject(new Error(`http-${response.statusCode}`)); return; }
+                try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
+                catch { reject(new Error('http-invalid-json')); }
+            });
+        });
+        const timer = setTimeout(/** 总期限包含连接及响应读取。 */ () => request.destroy(new Error('http-timeout')), timeoutMs);
+        request.on('error', /** 只输出安全网络错误类别，不包含账号正文。 */ error => {
+            clearTimeout(timer); reject(new Error(error.message === 'http-timeout' ? 'http-timeout' : 'http-transport'));
+        });
+        request.end(body);
+    });
     if (result.error !== 0) throw new Error(`gate-${Number(result.error)}`);
     return result;
 }
