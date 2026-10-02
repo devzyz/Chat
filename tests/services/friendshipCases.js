@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { poll } = require('./dependencyCoordinator');
+const { poll, contractStep } = require('./dependencyCoordinator');
 
 /** 通过真实客户端与数据库验证好友申请、接受、重复操作和会话一致性。 */
 async function runFriendshipCases({ alice, bob, users, sql, record }) {
@@ -31,12 +31,14 @@ async function runFriendshipCases({ alice, bob, users, sql, record }) {
     });
     let chatId;
     await record('E03-JOURNEY-04', 'recipient acceptance links both models and reciprocal durable friends', /** 验证接受申请后双方成为好友，并关联同一私聊会话。 */ async () => {
-        assert.equal((await bob.control.command('accept', fields(first.uid))).error, 0);
+        await contractStep('client-friend-accept', /** 保留审批响应的数值错误分类，不输出账号资料。 */ async () => {
+            assert.equal((await bob.control.command('accept', fields(first.uid))).error, 0);
+        });
         let a, b;
-        await poll(/** 等待双方关系和会话标识达到一致。 */ async () => {
+        await contractStep('client-friend-models', /** 区分审批成功后的模型同步失败。 */ () => poll(/** 等待双方关系和会话标识达到一致。 */ async () => {
             a = await relation(alice, second.uid); b = await relation(bob, first.uid);
             return a.friend === true && b.friend === true && a.chatId > 0 && a.chatId === b.chatId;
-        }, 10000);
+        }, 10000));
         chatId = a.chatId;
         assert.equal(await query(`SELECT COUNT(*) FROM friend WHERE (self_id=${first.uid} AND other_id=${second.uid}) OR (self_id=${second.uid} AND other_id=${first.uid})`), '2');
         assert.equal(await query('SELECT COUNT(*) FROM friend'), '2');

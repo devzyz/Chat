@@ -217,6 +217,7 @@ periodic authoritative synchronization and is sent only to a session that negoti
 
 协商 `basic_social_v1` 的登录不内嵌全量好友、申请及会话目录，返回空 `chat_list`、
 `current_chat_id=0`、`load_more=true`；客户端从游标 0 拉取分页，并通过 1046 获取社交目录。
+申请目录同时返回 `fromuid`、`touid` 和申请时的 `backname`，保留旧审批请求所需的完整身份及备注。
 旧登录响应超过上限时返回 `login_error=UpgradeRequired`，不提交会话绑定。
 1017 使用紧凑 JSON，消息入库前以最大消息 ID 预估完整 ACK，超限批次整体拒绝。
 请求上限仍为 2048 字节；客户端与 ChatServer 必须同步升级。

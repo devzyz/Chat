@@ -86,3 +86,4 @@ the target's leave and requires exactly one success and one active owner.
 资源引用仍可读、旧 UUID 仍可确认、旧版本不能创建引用而当前版本可提交。仍只使用自建临时 MySQL 与 Redis/Status 替身。
 
 社交长字段回归通过真实 TCP 组合 255 字符中文姓名、个人描述、申请说明和备注，验证申请、联系人及资料响应完整可读，目录仍按 8000 字节分页。
+申请分页还验证接收者 UID 与备注字段完整，避免目录刷新后旧审批请求丢失内嵌身份。

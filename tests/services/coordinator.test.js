@@ -29,6 +29,14 @@ test('business substeps retain only fixed stages and numeric response diagnostic
     }
     await assert.rejects(contractStep('private-user', /** 不应执行非法阶段的回调。 */ async () => {}), /Unknown/);
     assert.equal(await contractStep('gate-login', /** 验证正常结果原样返回。 */ async () => 42), 42);
+    for (const stage of ['client-friend-accept', 'client-friend-models']) {
+        await assert.rejects(contractStep(stage, /** 注入好友链路失败以核对安全阶段分类。 */ async () => {
+            throw new assert.AssertionError({ actual: 1010, expected: 0 });
+        }), /** 只允许固定阶段和业务错误码进入证据。 */ failure => {
+            assert.deepEqual(caseDiagnostic(failure), { stage, category: 'response-1010' });
+            return true;
+        });
+    }
 });
 
 test('client libraries may come from Qt and vcpkg but not adjacent or unlisted roots', /** 验证客户端运行库仅允许显式 Qt/vcpkg 安装树，不接受相邻同名前缀目录。 */ () => {

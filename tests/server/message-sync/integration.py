@@ -306,6 +306,7 @@ def tcp_flow(directory, mysql_command, mysql_port):
         outgoing = social(sender,1046,kind="profile",target_uid=8)["profile"]["outgoing_revision"]
         social(sender,1044,operation="apply",target_uid=8,expected_revision=outgoing,description="again",backname="receiver")
         applications = social(receiver,1046,kind="applications",after="0")["items"]
+        assert all(row["touid"] == 8 and "backname" in row for row in applications)
         version = next(row["application_revision"] for row in applications if row["fromuid"] == 7)
         social(receiver,1044,operation="reject",target_uid=7,expected_revision=version)
         assert social(receiver,1044,False,operation="accept",target_uid=7,expected_revision=version,description="",backname="")["social_error"] == "VersionConflict"
