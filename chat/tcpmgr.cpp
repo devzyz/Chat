@@ -258,7 +258,7 @@ void TcpMgr::initHandlers()
                 UserMgr::instance()->setChatListCursor(cursor);
                 UserMgr::instance()->setChatListFullyLoaded(!more);
                 emit chatListLoaded(jsonObj["chat_list"].toArray());
-                if (more && cursor > 0) {
+                if (more && cursor >= 0) {
                     emit sendRequested(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(QJsonObject{
                         {"uid", uid}, {"current_chat_id", cursor}}).toJson(QJsonDocument::Compact));
                 }

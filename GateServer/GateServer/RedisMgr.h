@@ -31,6 +31,8 @@ public:
 	~RedisMgr();
 	/** @brief 读取 Redis 字符串至输出 value，缺失、类型不符或命令失败返回 false。 */
 	bool Get(const std::string& key, std::string& value);
+    /** @brief 执行单键 Lua 并返回整数；依赖失败抛异常，不自动重放写操作。 */
+    long long EvalNumber(const std::string& script, const std::string& key, const std::string& value);
 	/** @brief 写入 Redis 字符串并验证 OK 响应，失败返回 false。 */
 	bool Set(const std::string& key, const std::string& value);
 	/** @brief 向 Redis 列表左端压入数据，并核对返回的列表长度。 */

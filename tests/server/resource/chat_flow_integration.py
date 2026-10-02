@@ -61,10 +61,25 @@ class RedisHandler(socketserver.StreamRequestHandler):
                 elif command == b"EVAL":
                     script, count, *parameters = args
                     keys, argv = parameters[:int(count)], parameters[int(count):]
-                    if len(keys) == 2:
+                    if b"chatlease_" in b" ".join(keys):
+                        if b"HDEL" in script:
+                            if data.get(keys[1]) == argv[1]:
+                                data.pop(keys[1], None); hashes.get(keys[0], {}).pop(argv[0], None)
+                            result = b"*0\r\n"
+                        elif b"NX" in script:
+                            if keys[1] in data: result = b"*0\r\n"
+                            else:
+                                data[keys[1]] = argv[1]; hashes.setdefault(keys[0], {})[argv[0]] = b"0"
+                                result = b"*1\r\n" + self.bulk(b"registered")
+                        else:
+                            data[keys[1]] = argv[2]; hashes.setdefault(keys[0], {})[argv[0]] = argv[1]
+                            result = b"*1\r\n" + self.bulk(b"renewed")
+                    elif len(keys) == 2:
                         # Production RedisUserPresenceStore uses atomic two-key presence operations.
                         previous = [data.get(key, b"") for key in keys]
-                        if b"MSET" in script:
+                        if b"return {'current'}" in script:
+                            result = b"*1\r\n" + self.bulk(b"current") if previous[1] == argv[0] and previous[0] else b"*0\r\n"
+                        elif b"MSET" in script:
                             data.update(zip(keys, argv))
                             result = b"*2\r\n" + b"".join(self.bulk(value) for value in previous)
                         elif b"DEL" in script:
@@ -116,7 +131,7 @@ def receive(sock, expected, success=True):
             result += part
         return result
     message_id, length = struct.unpack("!HH", exact(4))
-    assert length <= (65535 if message_id == 1028 else 8192 if message_id == 1047 else 2048), (message_id, length)
+    assert length <= (65535 if message_id == 1028 else 8192 if message_id in (1006, 1017, 1047) else 2048), (message_id, length)
     body = json.loads(exact(length))
     assert message_id == expected, (message_id, expected, body)
     assert (body.get("error", 0) == 0) == success, body

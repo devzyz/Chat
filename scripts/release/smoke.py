@@ -71,6 +71,14 @@ def resource_database(root, diagnostics=None):
             wait_until(ready, database, timeout=45)
             subprocess.run([*client, '--execute=CREATE DATABASE resource_smoke'], env=environment,
                            check=True, capture_output=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
+            migration_env = {**environment, 'CHAT_MYSQL_CLIENT': str(mysql),
+                             'CHAT_MYSQL_HOST': '127.0.0.1', 'CHAT_MYSQL_PORT': str(port),
+                             'CHAT_MYSQL_USER': 'root', 'CHAT_MYSQL_PASSWORD': '',
+                             'CHAT_MYSQL_DATABASE': 'resource_smoke'}
+            for action in ('apply', 'verify'):
+                subprocess.run([str(root / 'VarifyServer/node.exe'), str(root / 'migrations/migrate.js'), action],
+                               env=migration_env, check=True, stdout=log, stderr=log, timeout=75,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
             yield port
         finally:
             if database.poll() is None:

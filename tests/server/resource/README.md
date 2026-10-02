@@ -54,3 +54,6 @@ resources restore independent access, which survives group dissolution. This use
 catalog/transfer paths. These are protocol/media evidence, not Qt card-display or manual desktop evidence.
 
 基础社交扩展后的 UUID 重试只确认原消息，不再次推送。`chat_flow_integration.py` 在重试 ACK 后使用接收方心跳响应作为有序边界，确认没有插入重复通知，并对所有收到的帧检查 2048 字节上限。
+
+本轮存储回归补充账号/总量预算隔离与超限拒绝；ResourceCatalog 在建连时核验完整 schema，
+部署 smoke 必须先运行发布包内版本化迁移。`/ready` 与真实 Status/MySQL 的组合由 hosted 测试核验。

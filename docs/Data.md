@@ -63,7 +63,7 @@ partial history, and unversioned nonempty databases. `apply` uses a bounded advi
 lock on a single real session, records applying/applied/failed states in
 `schema_version`, then verifies semantic table/column/index/routine/trigger metadata.
 `verify` is read-only apart from session settings and fails on missing or altered
-objects. Native Gate/Chat startup calls `chat_schema::Verify` from the same metadata
+objects. Native Gate/Chat/Resource startup calls `chat_schema::Verify` from the same metadata
 contract; it does not run DDL or require Node in the server runtime. Failure must
 propagate before accepting application traffic.
 
@@ -138,3 +138,12 @@ Private-chat creation normalizes both query and insert participant order. Friend
 confirmation, private-chat creation and resource-message writes use the existing
 rollback-on-exit transaction helper, so exception cleanup cannot commit partial work.
 No schema, dependency version, protocol or session-state transition changes are required.
+
+## 服务端口令记录
+
+新注册/改密保存带版本的 `pbkdf2-sha256$600000$<salt>$<derived>`，由 OpenSSL
+PBKDF2-HMAC-SHA256 派生，盐为 16 字节安全随机值的十六进制编码，结果为 32 字节。
+仍接受客户端现有不透明口令值作为输入，不改变传输编码，也不能将其视为传输加密。
+旧记录只在匹配成功后按 UID 与原记录条件更新；损坏或未知哈希版本拒绝认证。
+无需修改 schema；首次登录升级会写库。重置密码更新同时约束用户名与邮箱，避免检查后改名竞态。
+发布包的 `migrations/` 包含可运行的版本化迁移入口，不得仅顺序执行 SQL 绕过版本和校验和登记。

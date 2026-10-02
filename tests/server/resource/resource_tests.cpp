@@ -97,6 +97,12 @@ TEST_F(StoreTest, DeclaredLengthAndBufferAreBounded) {
     EXPECT_THROW(store.Create(7, "x", "image/png", 1000001, digest), resource::Error);
     Write(store, item.id);
     EXPECT_THROW(store.Append(item.id, 7, bytes.size(), bytes.data(), 1), resource::Error);
+    resource::ResourceStore limited(root / "quota", 1000000, bytes.size() * 2, bytes.size());
+    const auto first = Create(limited);
+    EXPECT_THROW(Create(limited), resource::Error);
+    EXPECT_NO_THROW(limited.Create(8, "picture.png", "image/png", bytes.size(), digest));
+    EXPECT_THROW(limited.Create(9, "picture.png", "image/png", 1, digest), resource::Error);
+    EXPECT_EQ(limited.Owned(first.id, 7).offset, 0u);
 }
 /** 验证资源标识不能穿越存储目录。 */
 TEST_F(StoreTest, PathTraversalRejected) {

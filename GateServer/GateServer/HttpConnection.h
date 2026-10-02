@@ -10,7 +10,8 @@ class HttpConnection : public std::enable_shared_from_this<HttpConnection>
 	friend class CServer;
 public:
 	/** @brief 初始化HttpConnection，拥有一个 HTTP 连接、请求缓冲和期限计时器，异步操作以共享引用保持存活。 */
-	HttpConnection(boost::asio::io_context& ioc, std::shared_ptr<LogicSystem> logic);
+	HttpConnection(boost::asio::io_context& ioc, std::shared_ptr<LogicSystem> logic,
+        std::chrono::steady_clock::duration request_timeout = std::chrono::seconds(60));
 	/**
 	 * @brief 与客户端通信，读取客户端发来的数据
 	 */
@@ -40,10 +41,11 @@ private:
 	http::request<http::dynamic_body> _request;
 	http::response<http::dynamic_body> _response;
 	net::steady_timer deadline_{
-		_socket.get_executor(), std::chrono::seconds(60)
+		_socket.get_executor()
 	};
 
 	std::string _get_url;
 	std::unordered_map<std::string, std::string> _get_params;
 	std::shared_ptr<LogicSystem> _logic;
+    std::chrono::steady_clock::duration _request_timeout;
 };

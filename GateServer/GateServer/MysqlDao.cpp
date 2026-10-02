@@ -1,6 +1,7 @@
 #include "MysqlDao.h"
 #include "ConfigMgr.h"
 #include "../../schema/SchemaContract.h"
+#include "../../common/auth/PasswordHash.h"
 
 namespace {
 /** @brief 使用有限连接和读写期限建立 JDBC 连接，禁止自动重连重放写操作。 */
@@ -73,7 +74,7 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
 		// 设置输入参数
 		stmt->setString(1, name);
 		stmt->setString(2, email);
-		stmt->setString(3, pwd);
+		stmt->setString(3, authentication::HashPassword(pwd));
 
 		stmt->execute();
 
@@ -135,7 +136,7 @@ bool MysqlDao::CheckEmail(const std::string& username, const std::string& email)
 	}
 }
 
-bool MysqlDao::UpdatePassword(const std::string& username, const std::string& password) {
+bool MysqlDao::UpdatePassword(const std::string& username, const std::string& password, const std::string& email) {
 	auto con = _pool->GetConnection();
 	if (con == nullptr) {
 		return false;
@@ -146,17 +147,18 @@ bool MysqlDao::UpdatePassword(const std::string& username, const std::string& pa
 
 	try {
 		// 准备查询语句
-		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("UPDATE user SET password = ? WHERE name = ?"));
+		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("UPDATE user SET password = ? WHERE name = ? AND email = ? "));
 
 		// 绑定参数
-		pstmt->setString(1, password);
+		pstmt->setString(1, authentication::HashPassword(password));
 		pstmt->setString(2, username);
+        pstmt->setString(3, email);
 
 		// 执行查询
 		int updateCount =  pstmt->executeUpdate();
 
 		SPDLOG_DEBUG("mysql password update completed, username={}, updated_rows={}", username, updateCount);
-		return true;
+		return updateCount == 1;
 	}
 	catch (sql::SQLException& e) {
 		SPDLOG_ERROR("mysql UpdatePassword failed, username={}, error={}", username, e.what());
@@ -191,7 +193,7 @@ bool MysqlDao::CheckPassword(const std::string& email, const std::string& passwo
 		}
 
 		// 密码错误
-		if (password != origin_password) {
+		if (!authentication::VerifyPassword(password, origin_password)) {
 			return false;
 		}
 
@@ -200,6 +202,15 @@ bool MysqlDao::CheckPassword(const std::string& email, const std::string& passwo
 		userinfo.email = email;
 		userinfo.pwd = password;
 		userinfo.uid = res->getInt("uid");
+        res.reset();
+        if (!authentication::IsPasswordHash(origin_password)) {
+            std::unique_ptr<sql::PreparedStatement> upgrade(con->_con->prepareStatement(
+                "UPDATE user SET password=? WHERE uid=? AND BINARY password=? "));
+            upgrade->setString(1, authentication::HashPassword(password));
+            upgrade->setInt(2, userinfo.uid);
+            upgrade->setString(3, origin_password);
+            if (upgrade->executeUpdate() != 1) return false;
+        }
 
 		return true;
 	}

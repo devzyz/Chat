@@ -24,3 +24,6 @@ The normal runner registers 33 Unit and 21 Integration cases.
 
 Successful default-process readiness, full real-dependency composition, signals, cross-language
 C++ calls, and C++ deadline behavior remain gaps.
+
+本轮 handler 回归覆盖同邮箱 12 个并发请求只生成/发送一次、冷却复用与消费后重发；
+Redis 单元及真实服务合同覆盖 `SET EX NX` 不覆盖已有验证码。默认监听收敛到 loopback。

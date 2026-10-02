@@ -75,7 +75,7 @@ $scriptTestGroups = @(
     }
 )
 $regressionReportGroups = @(
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 77 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 78 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 58 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 107 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
@@ -85,7 +85,7 @@ $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 25 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 19 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 30 }
-    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 33 }
+    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 34 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 21 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_component.xml'; ExpectedCount = 9 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_integration.xml'; ExpectedCount = 4 }

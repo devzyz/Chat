@@ -2,6 +2,7 @@
 #include "../message/PrivateSendAccess.h"
 #include "../mysql/ConnectionPool.h"
 #include "../message/MessagePersistence.h"
+#include "../../schema/SchemaContract.h"
 #include <jdbc/mysql_driver.h>
 #include <jdbc/mysql_connection.h>
 #include <jdbc/cppconn/prepared_statement.h>
@@ -23,8 +24,12 @@ public:
             options["OPT_CONNECT_TIMEOUT"] = 3; options["OPT_READ_TIMEOUT"] = 5; options["OPT_WRITE_TIMEOUT"] = 5;
             options["OPT_RECONNECT"] = false;
             std::unique_ptr<sql::Connection> connection(sql::mysql::get_mysql_driver_instance()->connect(options));
-            connection->setSchema(schema); return connection;
-        }) {}
+            connection->setSchema(schema);
+            chat_schema::Verify(*connection);
+            return connection;
+        }) { auto lease = Acquire(); }
+    /** @brief 检查当前连接的完整 schema；仅用于管理就绪探测，异常向调用方传播。 */
+    bool IsReady() { auto lease = Acquire(); chat_schema::Verify(*lease); return true; }
     /** @brief 把已就绪资源元数据登记到共享目录，重复资源 ID 不覆盖既有元数据。 */
     void Publish(const std::string& id, int owner, const std::string& name,
                  const std::string& type, std::uint64_t size, const std::string& digest) {

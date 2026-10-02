@@ -30,13 +30,15 @@ public:
 	virtual int RequestCode(const std::string& email) = 0;
 };
 
-/** @brief 提供验证码读取，不在读取时消费或删除验证码。 */
+/** @brief 提供验证码读取与原子消费，成功消费后才允许账号写入。 */
 class CodeStore {
 public:
     /** @brief 允许通过端口销毁验证码存储适配器。 */
 	virtual ~CodeStore() = default;
     /** @brief 返回验证码副本；nullopt 由编排层按过期处理，异常映射为依赖失败。 */
 	virtual std::optional<std::string> ReadCode(const std::string& email) = 0;
+    /** @brief 仅当缓存仍匹配该验证码时原子删除；并发重复消费返回 false。 */
+    virtual bool ConsumeCode(const std::string& email, const std::string& code) = 0;
 };
 
 /** @brief 提供同步账号持久化操作，调用时不拥有请求编排器的锁。 */
@@ -56,7 +58,8 @@ public:
     /** @brief 更新指定用户名的密码；false 由编排层映射为 PasswdUpFailed。 */
 	virtual bool UpdatePassword(
 		const std::string& username,
-		const std::string& password) = 0;
+		const std::string& password,
+        const std::string& email) = 0;
     /** @brief 校验邮箱和密码；无匹配返回 nullopt，成功返回用户标识副本。 */
 	virtual std::optional<UserRecord> CheckCredentials(
 		const std::string& email,

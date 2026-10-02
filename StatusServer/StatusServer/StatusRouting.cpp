@@ -26,6 +26,7 @@ public:
     /** @brief 按有效计数和名称选服，Token 持久化成功才返回地址；所有异常返回空失败结果。 */
 	AssignmentResult Assign(int uid) override {
 		try {
+            if (uid <= 0) return {};
 			const RoutingServer* selected = nullptr;
 			std::optional<unsigned long long> selected_count;
 			for (const auto& server : servers_) {
@@ -39,6 +40,7 @@ public:
 						count = parsed;
 					}
 				}
+                if (!count) continue;
 				const bool better = selected == nullptr ||
 					(count.has_value() && !selected_count.has_value()) ||
 					(count.has_value() == selected_count.has_value() &&
@@ -69,6 +71,8 @@ public:
     /** @brief 对照存储 Token 校验，区分 UID 缺失、Token 不匹配和依赖异常。 */
 	LoginResult Validate(int uid, const std::string& token) override {
 		try {
+            if (uid <= 0) return {ErrorCodes::UidInvalid, 0, {}};
+            if (token.empty()) return {ErrorCodes::TokenInvalid, 0, {}};
 			const auto stored_token = store_->GetToken(uid);
 			if (!stored_token.has_value()) {
 				return {ErrorCodes::UidInvalid, 0, {}};

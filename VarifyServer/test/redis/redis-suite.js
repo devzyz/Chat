@@ -38,6 +38,7 @@ const { stableProxy, restartRedis, restoreRedis } = require('../../../tests/serv
             const adapter = adapterFor(coordinator);
             try {
                 assert.equal(await adapter.setRedisExpire(key, 'synthetic-value', 1), true);
+                assert.equal(await adapter.setRedisExpire(key, 'replacement', 600, true), false);
                 assert.equal(await adapter.getRedis(key), 'synthetic-value');
                 assert.equal(await adapter.queryRedis(key), 1);
                 await withAdmin(coordinator, /** 核对毫秒 TTL 有界并等待键真实过期。 */ async (client) => {

@@ -102,11 +102,11 @@ function createRedisAdapter(configuration, dependencies = {}) {
             /** 执行 EXISTS 并将零结果映射为 null。 */
             async (active) => (await active.exists(key)) || null, null); },
         /** 原子执行 SET EX；seconds 必须为正安全整数，失败返回 false。 */
-        setRedisExpire(key, value, seconds) {
+        setRedisExpire(key, value, seconds, onlyAbsent = false) {
             if (!Number.isSafeInteger(seconds) || seconds <= 0) return Promise.resolve(false);
             return execute(
                 /** 将原子写入的 OK 回复转换为成功布尔值。 */
-                async (active) => (await active.set(key, value, 'EX', seconds)) === 'OK', false);
+                async (active) => (await active.set(key, value, 'EX', seconds, ...(onlyAbsent ? ['NX'] : []))) === 'OK', false);
         },
         /** 幂等标记关闭并断开连接，不等待网络 QUIT；以后操作返回失败哨兵。 */
         async close() {

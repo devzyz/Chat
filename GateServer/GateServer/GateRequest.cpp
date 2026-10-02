@@ -24,8 +24,21 @@ public:
 
     /** @brief 执行业务校验及依赖调用；首个失败立即返回，异常统一映射为 RPCFailed。 */
 	Result Handle(Endpoint endpoint, const Json::Value& request) override {
-		try {
-			if (endpoint == Endpoint::GetVarifyCode) {
+        try {
+            if (!request.isObject()) return {ErrorCodes::Error_Json};
+            const auto text = /** @brief 校验字符串类型、非空和编码字节上限，不读取无关字段。 */
+                [&request](const char* key, std::size_t limit) {
+                    return request[key].isString() && !request[key].asString().empty()
+                        && request[key].asString().size() <= limit;
+                };
+            if (!text("email", 254) || request["email"].asString().find('@') == std::string::npos)
+                return {ErrorCodes::Error_Json};
+            if (endpoint == Endpoint::UserRegister && (!text("user", 255) || !text("passwd", 255)
+                || !text("confirm", 255) || !text("varifycode", 64))) return {ErrorCodes::Error_Json};
+            if (endpoint == Endpoint::ResetPassword && (!text("user", 255) || !text("password", 255)
+                || !text("varify", 64))) return {ErrorCodes::Error_Json};
+            if (endpoint == Endpoint::UserLogin && !text("password", 255)) return {ErrorCodes::Error_Json};
+            if (endpoint == Endpoint::GetVarifyCode) {
 				if (!request.isMember("email")) {
 					return {ErrorCodes::Error_Json};
 				}
@@ -42,6 +55,7 @@ public:
 				if (*code != request["varifycode"].asString()) {
 					return {ErrorCodes::VarifyCodeErr};
 				}
+                if (!code_store_->ConsumeCode(request["email"].asString(), *code)) return {ErrorCodes::VarifyExpired};
 				const auto uid = user_store_->CreateUser(
 					request["user"].asString(),
 					request["email"].asString(),
@@ -63,8 +77,9 @@ public:
 						request["user"].asString(), request["email"].asString())) {
 					return {ErrorCodes::EmailNotMatch};
 				}
+                if (!code_store_->ConsumeCode(request["email"].asString(), *code)) return {ErrorCodes::VarifyExpired};
 				if (!user_store_->UpdatePassword(
-						request["user"].asString(), request["password"].asString())) {
+						request["user"].asString(), request["password"].asString(), request["email"].asString())) {
 					return {ErrorCodes::PasswdUpFailed};
 				}
 				return {ErrorCodes::Success};

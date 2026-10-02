@@ -82,10 +82,11 @@ enum MSG_IDS {
 	MSG_LOAD_CHAT_MESSAGE_RSP = 1028, // 增量加载部分聊天记录回包
 };
 
-/** @brief 历史和社交目录读响应分别允许扩展包长，其余消息仍限 2 KiB。 */
+/** @brief 历史响应上限 64 KiB，登录、提交确认和目录上限 8 KiB，其余响应 2 KiB。 */
 inline unsigned int ResponseBodyLimit(unsigned short message_id) {
     if (message_id == MSG_LOAD_CHAT_MESSAGE_RSP) return MAX_HISTORY_BODY_LENGTH;
-    if (message_id == MSG_SOCIAL_DIRECTORY_RSP) return MAX_SOCIAL_BODY_LENGTH;
+    if (message_id == MSG_SOCIAL_DIRECTORY_RSP || message_id == MSG_CHAT_LOGIN_RSP
+        || message_id == MSG_TEXT_CHAT_MSG_RSP) return MAX_SOCIAL_BODY_LENGTH;
     return MAX_LENGTH;
 }
 

@@ -202,13 +202,13 @@ void Integration() {
     test(19, /** 验证锁等待在有界时间内失败，且不遗留待提交消息。 */ [&] {
         auto blocking = Connect();
         blocking->setAutoCommit(false);
-        Execute(*blocking, "UPDATE user SET description='locked' WHERE uid=1");
+        Execute(*blocking, "SELECT chat_id FROM private_chat WHERE chat_id=100 FOR UPDATE");
         auto waiting = Connect();
         MySqlMessageCommitAdapter adapter(*waiting);
         const auto before = std::chrono::steady_clock::now();
         auto result = Send(adapter, {{Uuid(19), "blocked"}});
         blocking->rollback(); blocking->setAutoCommit(true);
-        Require(!result.IsSuccess());
+        Require(result.error == Error::DEADLINE_EXCEEDED || result.error == Error::STORAGE_UNAVAILABLE);
         Require(std::chrono::steady_clock::now() - before < std::chrono::seconds(6));
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='" + Uuid(19) + "'") == 0);
     });

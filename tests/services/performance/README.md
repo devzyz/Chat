@@ -22,3 +22,7 @@ node --test tests/services/performance/*.test.js tests/services/connectionCount.
 
 实际压测只在 GitHub 临时环境执行。run.js 要求同次源码工件、临时容器身份及 SHA。
 日常使用 `$chat-performance`，无需本地恢复依赖或运行服务。
+
+每轮负载前额外执行正确性回归：Gate 空闲超过 60 秒后的首个请求、255 字中文名称与描述修改后
+重新登录及目录完整性、20 条 UUID 批量确认和幂等重试、真实 Redis 的 Token/在线租约 TTL 与验证码消费。
+这部分属于准备阶段，不计入性能样本；任何断言失败仍使整轮失败。Resource 就绪使用 `/ready`。

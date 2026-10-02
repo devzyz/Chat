@@ -6,8 +6,10 @@ const { v4: uuidv4 } = require('uuid');
 
 /** 创建注入 Redis、SMTP、UUID 和日志依赖的验证码处理器，不启动监听。 */
 function createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail, generateUuid = uuidv4, logger = console }) {
+    const pending = new Map();
+    const delivered = new Map();
     /** 处理外部 GetVarifyCode RPC；复用或缓存验证码后发送邮件，通过 callback 返回业务码，依赖回调不得抛异常。 */
-    return async function GetVarifyCode(call, callback) {
+    const execute = async function GetVarifyCode(call, callback) {
         logger.log('verification request received');
 
         try {
@@ -16,12 +18,13 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail, gen
             let uniqueId = queryResult;
             if (queryResult == null) {
                 uniqueId = generateUuid();
-                if (uniqueId.length > 4) {
-                    uniqueId = uniqueId.substring(0, 4);
+                if (uniqueId.length > 8) {
+                    uniqueId = uniqueId.substring(0, 8);
                 }
-                const stored = await redisModule.setRedisExpire(key, uniqueId, 600);
+                const stored = await redisModule.setRedisExpire(key, uniqueId, 600, true);
 
-                if (!stored) {
+                if (!stored) uniqueId = await redisModule.getRedis(key);
+                if (!uniqueId) {
                     callback(null, {
                         email: call.request.email,
                         error: constModule.Errors.RedisErr
@@ -57,6 +60,40 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail, gen
                 error: constModule.Errors.Exception
             });
         }
+    };
+    /** 同邮箱并发请求共享一次生成及邮件；成功后一分钟内不重复发送，限制内存与并发。 */
+    return async function GetVarifyCode(call, callback) {
+        const email =
+            call.request.email;
+        if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            callback(null, { email:
+                '', error: constModule.Errors.Exception }); return;
+        }
+        const now = Date.now();
+        for (const [key, time] of delivered) if (now - time >= 60000) delivered.delete(key);
+        if (delivered.has(email)) {
+            let cached;
+            try { cached = await redisModule.getRedis(constModule.code_prefix + email); }
+            catch { callback(null, { email, error: constModule.Errors.Exception }); return; }
+            if (cached) { callback(null, { email, error: constModule.Errors.Success }); return; }
+            delivered.delete(email);
+        }
+        if (!pending.has(email)) {
+            if (pending.size >= 32 || delivered.size >= 1024) {
+                callback(null, { email, error: constModule.Errors.Exception }); return;
+            }
+            const operation = new Promise(/** 将一次处理结果共享给相同邮箱的等待者。 */ resolve => {
+                execute(call, /** 保存唯一业务响应。 */ (_, response) => resolve(response)).catch(
+                    /** 未预期异常仍完成所有等待者，防止悬挂请求。 */ () => resolve({ email, error: constModule.Errors.Exception }));
+            });
+            pending.set(email, operation);
+        }
+        const operation = pending.get(email);
+        try {
+            const response = await operation;
+            if (response.error === constModule.Errors.Success) delivered.set(email, Date.now());
+            callback(null, response);
+        } finally { if (pending.get(email) === operation) pending.delete(email); }
     };
 }
 
@@ -107,7 +144,7 @@ function startServer({ server, address, credentials, logger = console }) {
 
 /** 读取并验证 IPv4 监听地址及端口，非法值抛异常。 */
 function getBindAddress(environment = process.env) {
-    const address = environment.CHAT_VARIFY_BIND_ADDRESS ?? '0.0.0.0:50051';
+    const address = environment.CHAT_VARIFY_BIND_ADDRESS ?? '127.0.0.1:50051';
     const match = /^(\d+\.\d+\.\d+\.\d+):(\d+)$/.exec(address);
     if (!match || !net.isIPv4(match[1]) || Number(match[2]) < 1 || Number(match[2]) > 65535) {
         throw new Error('Invalid CHAT_VARIFY_BIND_ADDRESS; expected IPv4:port (1..65535)');

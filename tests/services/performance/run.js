@@ -41,6 +41,7 @@ async function run() {
     try {
         env = new Environment(controller.signal);
         await phase('setup', /** 启动真实隔离环境。 */ () => env.setup());
+        await phase('audit-regressions', /** 在负载采样前验证审查发现的生产边界。 */ () => env.auditRegressions());
         sampler = setInterval(/** 采样每个正式服务的资源使用，采样失败可见。 */ () => {
             try {
                 const sample = { elapsedSeconds: (performance.now() - started) / 1000, stage, processes: env.sample() };

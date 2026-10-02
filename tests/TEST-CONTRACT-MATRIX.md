@@ -956,3 +956,15 @@ Qt 控件及资源存储报告的完整用例集合，保留自动控件与真�
 各档位重复轮数由 profiles.json 声明；报告门禁逐场景检查完整性、成功样本、SHA 及清理。
 框架合同验证帧分片/合包、关联、截止、断连、背压、统计及报告拒绝路径。
 这些报告不计入 Windows regressionReportGroups。覆盖边界见 [性能入口](services/performance/README.md)。
+
+## 2026-10 LAN 服务端回归补充
+
+- Gate HTTP 既有就绪用例增加 accept 前空闲超过请求期限的回归，仍须新请求返回 200。
+- Gate 请求组件验证非法字段和一次性消费拒绝；口令 Unit 检查随机盐、错误/损坏/旧格式。
+- Status 无有效候选时失败关闭；Resource Store 既有边界用例增加账号与全局声明容量预算。
+- GitHub performance 准备阶段使用生产依赖验证 60 秒 Gate 空闲、长中文资料重登、20 条 ACK、
+  幂等重试、Redis Token/在线/实例 TTL 与验证码消费；不计入吞吐样本。
+- MySQL 消息提交真实锁等待必须映射为可重试存储错误，不能变成成员权限拒绝。
+- 发布包合同核对迁移脚本及 schema 合同文件；启动 smoke 先执行包内版本化迁移。
+
+这些新增/扩充断言的实际运行状态见 [Status](../docs/Status.md)，不能由登记推断通过。

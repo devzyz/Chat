@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
+const { setTimeout: delay } = require('node:timers/promises');
 const { DependencyCoordinator, loadConfiguration, poll } = require('../dependencyCoordinator');
 const { reserve, stop } = require('../fourProcessCases');
 const { createTopology, nativeConfig } = require('../twoServerTopology');
@@ -96,7 +97,7 @@ class Environment {
             `[Log]\nLogDir=${this.root}/logs\nLevel=warn\n`, { mode: 0o600 });
         this.start('ResourceServer', path.join(this.bundle, 'ResourceServer', 'ResourceServer'), ['--config', file]);
         this.gate = `http://127.0.0.1:${ports.gate}`; this.resource = `http://127.0.0.1:${resource.port}`;
-        for (const url of [`${this.gate}/get_test`, `${this.resource}/health`]) {
+        for (const url of [`${this.gate}/get_test`, `${this.resource}/ready`]) {
             await poll(/** 等待真实 HTTP 服务就绪。 */ async () => {
                 const result = await fetch(url, { signal: AbortSignal.timeout(1000) }); await result.text(); return result.ok;
             }, 30000);
@@ -121,6 +122,35 @@ class Environment {
         await post(`${this.gate}/user_register`, { email: account.email, user: account.name,
             passwd: account.password, confirm: account.password, varifycode: code });
         this.accounts.push(account); return account;
+    }
+    /** 在隔离生产组合中验证空闲 Gate、长资料重登、完整批量确认和 Redis 有效期。 */
+    async auditRegressions() {
+        // This wait exercises the real former sixty-second pre-accept deadline, not a readiness guess.
+        await delay(61000, undefined, { signal: this.signal });
+        const first = await this.register(-2);
+        const second = await this.register(-1);
+        let sender = await this.login(first);
+        let receiver = await this.login(second);
+        const chatId = await this.befriend(sender, receiver);
+        const profile = await sender.request(1042, 1043, { request_id: randomUUID(),
+            name: '名'.repeat(255), description: '述'.repeat(255), expected_revision: '1' });
+        assert.equal(profile.error, 0);
+        sender.close(); receiver.close();
+        sender = await this.login(first); receiver = await this.login(second);
+        const contacts = await receiver.request(1046, 1047, { request_id: randomUUID(), kind: 'contacts', after: '0' });
+        assert.ok(contacts.items.some(/** 核对长字段完整保留。 */ item => item.uid === sender.uid && item.name === '名'.repeat(255)));
+        const request = { from_uid: sender.uid, to_uid: receiver.uid, chat_id: chatId,
+            text_array: Array.from({ length: 20 }, /** 形成合法但 ACK 大于旧上限的消息批次。 */ () => ({ msg_uuid: randomUUID(), msg_content: 'x' })) };
+        const ack = await sender.request(1016, 1017, request);
+        assert.equal(ack.uuid_msgId.length, 20);
+        assert.deepEqual((await sender.request(1016, 1017, request)).uuid_msgId, ack.uuid_msgId);
+        const redis = await this.coordinator.redis();
+        try {
+            assert.ok(await redis.ttl(String(sender.uid)) > 0, 'token-expiry');
+            assert.ok(await redis.ttl(`usessionid_${sender.uid}`) > 0, 'presence-expiry');
+            assert.equal(await redis.exists(`code_${first.email}`), 0, 'verification-consumed');
+            for (const server of this.topology.servers) assert.ok(await redis.ttl(`chatlease_${server.name}`) > 0, 'instance-expiry');
+        } finally { redis.disconnect(); sender.close(); receiver.close(); }
     }
     /** 经 Gate/Status 服务发现建立真实 TCP 会话，验证返回端点属于本次拓扑。 */
     async login(account) {

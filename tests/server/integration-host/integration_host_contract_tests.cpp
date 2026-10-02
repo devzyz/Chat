@@ -31,6 +31,9 @@ public:
 /** 提供始终缺失验证码的存储替身。 */
 class InMemoryCodeStore final : public gate::internal::CodeStore {
 public:
+    /** @brief 模拟验证码原子消费；真实 Redis 并发语义由集成测试覆盖。 */
+    bool ConsumeCode(const std::string&, const std::string&) override { return true; }
+
 	/** 返回空验证码，避免依赖真实 Redis。 */
 	std::optional<std::string> ReadCode(const std::string&) override {
 		return std::nullopt;
@@ -51,7 +54,7 @@ public:
 	}
 
 	/** 拒绝密码更新，不产生持久化副作用。 */
-	bool UpdatePassword(const std::string&, const std::string&) override {
+	bool UpdatePassword(const std::string&, const std::string&, const std::string&) override {
 		return false;
 	}
 

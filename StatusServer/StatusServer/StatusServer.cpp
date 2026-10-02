@@ -33,6 +33,8 @@ void RunServer() {
 	auto& configMgr = ConfigMgr::GetInstance();
 
 	std::string host = configMgr["StatusServer"]["Host"];
+    if (!boost::asio::ip::make_address(host).is_loopback())
+        throw std::invalid_argument("unauthenticated Status RPC must bind loopback");
 	std::string port = configMgr["StatusServer"]["Port"];
 	std::string server_address = host + ":" + port;
 

@@ -42,6 +42,9 @@ class ReleaseContracts(unittest.TestCase):
         metadata = package.verify(archive, destination, self.sha)
         self.assertEqual(metadata['version'], package.read_version(ROOT))
         self.assertTrue((destination / 'proto/varify.proto').is_file())
+        for name in ('migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'):
+            self.assertEqual((destination / 'migrations' / name).read_bytes(),
+                             (ROOT / 'schema' / name).read_bytes())
         self.assertFalse((destination / 'GateServer/config.ini').exists())
         self.assertNotIn('fixture-value', (destination / 'GateServer/config.ini.template').read_text())
         self.assertNotIn('private-example', (destination / 'VarifyServer/config.json.template').read_text())

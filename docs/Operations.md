@@ -173,3 +173,22 @@ Gate/Chat/Resource 实例，再配置 ResourceServer 的 MySQL、Status 和存�
 构建和本地验证命令见 [资源服务说明](../ResourceServer/README.md)，
 目录、头像发布与失败语义见 [Resources](Resources.md)。
 自动集成测试仅初始化自己的临时 MySQL，不修改个人数据库。
+
+## 局域网单机服务部署边界
+
+首版拓扑是同一台机器运行全部服务，局域网客户端连接 Gate/Chat/Resource。
+Gate `[GateServer] Host` 可选，默认 `0.0.0.0`；Chat `[SelfServer] Host` 是对客户端公布的地址，
+可另设 `BindHost` 作为监听地址。Status 配置中的 Chat 地址须为客户端可达的局域网 IP。
+Chat `[SelfServer] RpcHost` 默认 `127.0.0.1`，与 Status 监听地址都只允许数值 loopback；
+Varify 默认 `127.0.0.1:50051`。不得向客户端开放内部 RPC、MySQL 或 Redis。
+现有外部 HTTP/TCP 仍为明文，只适用于受控可信局域网；TLS 尚未实施。
+
+Chat 每实例最多接收 1024 个 TCP 会话，业务队列满时关闭连接并记录原因。
+实例以随机启动身份取得 `chatlease_<name>` 的 90 秒租约，60 秒更新连接数；
+同名活动实例启动失败，关闭只清理自己仍持有的租约。Status 跳过无租约或无有效计数的实例。
+会话路由双键也有 90 秒 TTL，当前会话每次业务消息/心跳原子确认归属并续租；
+失去归属或 Redis 不可用时关闭会话。客户端需保持既有心跳，断网恢复仍需手动重登。
+租约是请求入口保护，不能把已经开始的数据库事务解释为全局即时撤销。
+
+Resource `/health` 仅报告进程 HTTP 存活；`/ready` 在有界工作执行器核验 MySQL schema 和
+Status RPC，可用返回 200，否则 503。二者不要求用户凭据；不能把 `/health` 当业务就绪。

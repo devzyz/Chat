@@ -54,6 +54,10 @@ private:
 /** 模拟验证码读取缺失、匹配或异常并记录访问顺序。 */
 class CodeStoreAdapter final : public gate::internal::CodeStore {
 public:
+    /** @brief 模拟验证码原子消费；真实 Redis 并发语义由集成测试覆盖。 */
+    bool ConsumeCode(const std::string&, const std::string&) override { return consume_result; }
+    bool consume_result = true;
+
 	/** 共享调用顺序记录器。 */
 	explicit CodeStoreAdapter(std::shared_ptr<std::vector<std::string>> calls)
 		: calls_(std::move(calls)) {
@@ -98,7 +102,7 @@ public:
 	}
 
 	/** 记录密码更新并返回预设写入结果。 */
-	bool UpdatePassword(const std::string&, const std::string&) override {
+	bool UpdatePassword(const std::string&, const std::string&, const std::string&) override {
 		calls_->push_back("user.update");
 		MaybeThrow();
 		return update_result;
@@ -215,6 +219,11 @@ TEST_F(GateRequestComponentTests, VerificationWithoutEmailFailsBeforeAdapters) {
 	const auto result = module->Handle(gate::Endpoint::GetVarifyCode, Json::Value{});
 	ExpectResult(result, kJsonError);
 	EXPECT_TRUE(calls->empty());
+    for (const auto& invalid : {Json::Value(7), Json::Value(""), Json::Value(std::string(255, 'x'))}) {
+        auto request = LoginRequest(); request["email"] = invalid;
+        ExpectResult(module->Handle(gate::Endpoint::UserLogin, request), kJsonError);
+        EXPECT_TRUE(calls->empty());
+    }
 }
 
 /** 验证验证码请求成功仅调用一次 RPC。 */
@@ -321,6 +330,10 @@ TEST_F(GateRequestComponentTests, RegistrationSuccessUsesCodeBeforeUserCreate) {
 
 	ExpectResult(result, kSuccess);
 	EXPECT_EQ(*calls, (std::vector<std::string>{"code.read", "user.create"}));
+    calls->clear(); code_store->consume_result = false;
+    ExpectResult(module->Handle(gate::Endpoint::UserRegister, request), kExpired);
+    EXPECT_EQ(*calls, std::vector<std::string>{"code.read"});
+
 }
 
 /** 验证重置验证码过期时不核对用户身份。 */

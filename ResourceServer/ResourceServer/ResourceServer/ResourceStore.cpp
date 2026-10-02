@@ -11,10 +11,34 @@
 #include <sstream>
 
 namespace resource {
-ResourceStore::ResourceStore(std::filesystem::path root, std::uint64_t max_size)
-    : _root(std::filesystem::absolute(std::move(root))), _max_size(max_size) {
-    if (!max_size) throw Error(400, "invalid maximum size");
+ResourceStore::ResourceStore(std::filesystem::path root, std::uint64_t max_size,
+    std::uint64_t total_limit, std::uint64_t owner_limit)
+    : _root(std::filesystem::absolute(std::move(root))), _max_size(max_size),
+      _total_limit(total_limit), _owner_limit(owner_limit) {
+    if (!max_size || !total_limit || !owner_limit) throw Error(400, "invalid maximum size");
     std::filesystem::create_directories(_root);
+}
+void ResourceStore::CheckQuota(int owner, std::uint64_t requested) const {
+    std::uint64_t total = 0, owned = 0;
+    std::size_t pending = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(_root)) {
+        if (entry.path().extension() != ".json") continue;
+        if (!entry.is_regular_file() || entry.is_symlink() || entry.file_size() > 8192)
+            throw Error(507, "resource metadata requires repair");
+        const auto metadata = Inspect(entry.path().stem().string());
+        if (metadata.size > _total_limit - total) throw Error(507, "storage quota exceeded");
+        total += metadata.size;
+        if (metadata.owner == owner) {
+            if (metadata.size > _owner_limit - owned) throw Error(507, "owner quota exceeded");
+            owned += metadata.size;
+            if (!metadata.ready) ++pending;
+        }
+    }
+    if (requested > _total_limit - total || requested > _owner_limit - owned || pending >= 32)
+        throw Error(507, "upload quota exceeded");
+    const auto available = std::filesystem::space(_root).available;
+    constexpr std::uint64_t RESERVE = 64ull * 1024 * 1024;
+    if (available < RESERVE || requested > available - RESERVE) throw Error(507, "insufficient storage space");
 }
 std::filesystem::path ResourceStore::Path(const std::string& id, const char* suffix) const {
     if (id.size() != 36 || !std::all_of(id.begin(), id.end(), /** @brief 只接受资源 ID 所允许的十六进制字符与连字符。 */ [](char c) {
@@ -32,6 +56,7 @@ Metadata ResourceStore::Create(int owner, const std::string& name, const std::st
     if (sha256.size() != 64 || !std::all_of(sha256.begin(), sha256.end(), /** @brief 只接受 SHA256 文本的小写十六进制字符。 */ [](char c) {
         return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
     })) throw Error(400, "SHA-256 required");
+    CheckQuota(owner, size);
     const auto id = boost::uuids::to_string(boost::uuids::random_generator()());
     Json::Value value;
     value["id"] = id; value["owner"] = owner; value["name"] = name;

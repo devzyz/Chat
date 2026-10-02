@@ -15,6 +15,12 @@
 #include <algorithm>
 
 namespace messaging {
+/** @brief 表示会话或成员资格确实不存在；与数据库故障区分，避免永久拒绝可重试消息。 */
+class MembershipDenied : public std::runtime_error {
+public:
+    /** @brief 保存领域拒绝原因；不用于包装 SQL 或网络异常。 */
+    explicit MembershipDenied(const char* reason) : std::runtime_error(reason) {}
+};
 /** @brief 保存当前群成员资格及本次加入后的消息边界。 */
 struct GroupAccess {
     std::int64_t epoch = 0;
@@ -26,13 +32,13 @@ inline GroupAccess LockGroup(sql::Connection& connection, int chat, int uid, std
         "SELECT dissolved FROM group_chat WHERE chat_id=? FOR UPDATE"));
     group->setInt(1, chat);
     std::unique_ptr<sql::ResultSet> row(group->executeQuery());
-    if (!row->next() || row->getBoolean(1)) throw std::runtime_error("GroupUnavailable");
+    if (!row->next() || row->getBoolean(1)) throw MembershipDenied("GroupUnavailable");
     row.reset();
     std::unique_ptr<sql::PreparedStatement> member(connection.prepareStatement(
         "SELECT membership_epoch,joined_after_id FROM group_chat_member WHERE chat_id=? AND user_id=? AND state='active'"));
     member->setInt(1, chat); member->setInt(2, uid);
     row.reset(member->executeQuery());
-    if (!row->next() || (epoch > 0 && epoch != row->getInt64(1))) throw std::runtime_error("MembershipChanged");
+    if (!row->next() || (epoch > 0 && epoch != row->getInt64(1))) throw MembershipDenied("MembershipChanged");
     return {row->getInt64(1), row->getInt64(2)};
 }
 /** @brief 借用 JDBC 连接关闭自动提交，显式提交或在析构时回滚并恢复会话状态。 */
@@ -78,13 +84,13 @@ inline GroupAccess LockConversation(sql::Connection& connection, int chat, int u
     std::unique_ptr<sql::ResultSet> row(statement->executeQuery());
     if (!row->next()) {
         row.reset();
-        if (recipient != 0) throw std::runtime_error("conversation unavailable");
+        if (recipient != 0) throw MembershipDenied("conversation unavailable");
         return LockGroup(connection, chat, uid);
     }
     const int first = row->getInt(1), second = row->getInt(2);
     if ((first != uid && second != uid)
         || (recipient > 0 && !((first == uid && second == recipient) || (second == uid && first == recipient))))
-        throw std::runtime_error("not a conversation participant");
+        throw MembershipDenied("not a conversation participant");
     return {};
 }
 

@@ -100,7 +100,7 @@ test('mail uses the sender supplied by runtime configuration', /** 验证邮件�
 });
 
 // V06-HDL-02
-test('missing code generates four characters and stores a 600 second TTL', /** 验证缓存未命中时生成并写入新验证码。 */ async () => {
+test('missing code generates eight characters and stores a 600 second TTL', /** 验证缓存未命中时生成并写入新验证码。 */ async () => {
     // Arrange
     const writes = [];
     const sentMessages = [];
@@ -122,7 +122,7 @@ test('missing code generates four characters and stores a 600 second TTL', /** �
     const handler = createGetVarifyCodeHandler({
         redisModule,
         emailModule,
-        generateUuid: /** 提供固定 UUID 前缀以断言新验证码生成。 */ () => 'WXYZ-extra',
+        generateUuid: /** 提供固定 UUID 前缀以断言新验证码生成。 */ () => 'WXYZABCD-extra',
         logger: silentLogger
     });
 
@@ -133,11 +133,36 @@ test('missing code generates four characters and stores a 600 second TTL', /** �
     assert.equal(response.error, constModule.Errors.Success);
     assert.deepEqual(writes, [{
         key: constModule.code_prefix + recipient,
-        value: 'WXYZ',
+        value: 'WXYZABCD',
         ttlSeconds: 600
     }]);
     assert.equal(sentMessages.length, 1);
     assert.match(sentMessages[0].text, /WXYZ/);
+});
+
+test('concurrent requests share one code and consumed codes can be replaced', /** 验证并发邮件去重及验证码消费后的重新申请。 */ async () => {
+    let cached = null;
+    let generated = 0;
+    const mails = [];
+    const handler = createGetVarifyCodeHandler({
+        redisModule: {
+            /** 返回当前缓存快照。 */ async getRedis() { return cached; },
+            /** 模拟 SET NX，已有值不能被覆盖。 */ async setRedisExpire(key, value, ttl, onlyAbsent) {
+                assert.equal(ttl, 600); assert.equal(onlyAbsent, true);
+                if (cached) return false;
+                cached = value; return true;
+            }
+        },
+        emailModule: { /** 记录真实处理器形成的邮件。 */ async sendMail(mail) { mails.push(mail); return true; } },
+        /** 生成不同候选以暴露覆盖竞态。 */ generateUuid() { return `${++generated}abcdefg-rest`; },
+        logger: silentLogger
+    });
+    const replies = await Promise.all(Array.from({ length: 12 }, /** 同时申请相同邮箱验证码。 */ () => invoke(handler)));
+    assert.ok(replies.every(/** 每个等待者均收到成功业务结果。 */ reply => reply.error === 0));
+    assert.equal(generated, 1); assert.equal(mails.length, 1);
+    await invoke(handler); assert.equal(mails.length, 1);
+    cached = null;
+    await invoke(handler); assert.equal(mails.length, 2); assert.equal(generated, 2);
 });
 
 // V06-HDL-03
@@ -151,7 +176,7 @@ test('failed Redis write returns RedisErr without sending mail', /** 验证缓�
             },
             /** 核对失败写入的键、验证码及期限并模拟 Redis 拒绝。 */ async setRedisExpire(key, value, ttlSeconds) {
                 assert.equal(key, constModule.code_prefix + recipient);
-                assert.equal(value, 'R3D1');
+                assert.equal(value, 'R3D12345');
                 assert.equal(ttlSeconds, 600);
                 return false;
             }
@@ -162,7 +187,7 @@ test('failed Redis write returns RedisErr without sending mail', /** 验证缓�
                 return 'accepted';
             }
         },
-        generateUuid: /** 提供固定 UUID 前缀以复现缓存写失败。 */ () => 'R3D1-extra',
+        generateUuid: /** 提供固定 UUID 前缀以复现缓存写失败。 */ () => 'R3D12345-extra',
         logger: silentLogger
     });
 

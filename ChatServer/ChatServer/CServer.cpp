@@ -12,7 +12,7 @@ CServer::CServer(boost::asio::io_context& io, std::string address, unsigned shor
       _address(std::move(address)), _port(port) {
     if (!_lifecycle || !_directory || !_submit) throw std::invalid_argument("Chat transport dependencies required");
     const auto bind_address = boost::asio::ip::make_address(_address);
-    if (!bind_address.is_loopback()) throw std::invalid_argument("Chat transport address must be numeric loopback");
+    if (bind_address.is_multicast()) throw std::invalid_argument("Chat transport address cannot be multicast");
     boost::asio::ip::tcp::endpoint endpoint(bind_address, port);
     _acceptor.open(endpoint.protocol());
 #ifdef _WIN32
@@ -43,7 +43,7 @@ void CServer::Accept() {
     _acceptor.async_accept(session->Socket(), boost::asio::bind_executor(_strand,
         /** @brief 接收完成后登记有效会话并继续接受连接。 */ [self = shared_from_this(), session](boost::system::error_code error) {
             self->_accept_pending = false;
-            if (!error && !self->_stopping) {
+            if (!error && !self->_stopping && self->_sessions.size() < 1024) {
                 self->_sessions.emplace(session->Id(), session);
                 self->_connection_count.store(self->_sessions.size());
                 session->Start();

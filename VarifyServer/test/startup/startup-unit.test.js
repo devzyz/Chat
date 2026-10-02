@@ -8,7 +8,7 @@ const { startServer, getBindAddress, main } = require('../../server');
 
 // V07-START-01
 test('bind failure rejects startup and never starts the server', /** 验证默认及显式绑定地址，并在非法地址时拒绝启动。 */ async (t) => {
-    assert.equal(getBindAddress({}), '0.0.0.0:50051');
+    assert.equal(getBindAddress({}), '127.0.0.1:50051');
     assert.equal(getBindAddress({ CHAT_VARIFY_BIND_ADDRESS: '127.0.0.1:32123' }), '127.0.0.1:32123');
     for (const address of ['', 'localhost:1234', '999.0.0.1:1234', '127.0.0.1:0', '127.0.0.1:65536']) {
         assert.throws(/** 以当前非法地址调用配置校验。 */ () => getBindAddress({ CHAT_VARIFY_BIND_ADDRESS: address }), /Invalid CHAT_VARIFY_BIND_ADDRESS/);
