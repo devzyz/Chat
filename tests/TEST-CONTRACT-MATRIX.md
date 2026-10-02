@@ -949,3 +949,10 @@ Qt 控件及资源存储报告的完整用例集合，保留自动控件与真�
 | S08-SOCIAL-02 | MessageSync.IncrementalByteBoundedPagesAndResourceIdentity | 真实 MySQL 删除后资源读取及新提交关系校验 |
 
 复用现有测试目标与 CTest 报告分组；本轮人工桌面验收后置，不把接口或控件回归当成完整人工验收。
+
+## 性能基线合同
+
+独立可选性能 lane：PERF-LOGIN、PERF-SAME、PERF-CROSS、PERF-GROUP、PERF-RESOURCE、PERF-MIXED、PERF-OFFLINE。
+各档位重复轮数由 profiles.json 声明；报告门禁逐场景检查完整性、成功样本、SHA 及清理。
+框架合同验证帧分片/合包、关联、截止、断连、背压、统计及报告拒绝路径。
+这些报告不计入 Windows regressionReportGroups。覆盖边界见 [性能入口](services/performance/README.md)。

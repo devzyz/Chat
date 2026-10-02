@@ -1,0 +1,5 @@
+{
+  "smoke": { "connections": 20, "rate": 10, "warmupSeconds": 5, "seconds": 15, "repeats": 1, "resourceConcurrency": 1 },
+  "baseline": { "connections": 100, "rate": 50, "warmupSeconds": 15, "seconds": 60, "repeats": 3, "resourceConcurrency": 2 },
+  "stress": { "connections": 500, "rate": 250, "warmupSeconds": 15, "seconds": 60, "repeats": 3, "resourceConcurrency": 4 }
+}
