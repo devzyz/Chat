@@ -55,7 +55,7 @@ public slots:
     /** @brief 从密码重置页面返回登录页面。 */
     void resetSwitchLogin();
     // 登录转聊天槽函数
-    /** @brief 登录转聊天槽函数。 */
+    /** @brief 切换聊天页并按当前屏幕可用区域调整窗口，保留缩放和最大化能力。 */
     void loginSwitchChat(AuthFlowId flowId);
     // 服务器通知下线槽函数
     /** @brief 服务器通知下线槽函数。 */

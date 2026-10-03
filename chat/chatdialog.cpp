@@ -769,11 +769,9 @@ void ChatDialog::setSelectChatItem(int uid) {
         return ;
     }
 
-    // 如果uid小于等于0，则表示非法，默认选中第一个
+    // UID 0 表示未指定会话，是登录和目录加载后的正常默认选择。
     if (uid <= 0) {
-        SPDLOG_WARN(
-            "invalid chat uid={}, selecting first row",
-            uid);
+        if (uid < 0) SPDLOG_WARN("invalid chat uid={}, selecting first row", uid);
         ui->chat_user_list->setCurrentRow(0);
 
         // 设置_cur_chat_uid为第0行的
