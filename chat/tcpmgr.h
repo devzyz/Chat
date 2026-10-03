@@ -37,6 +37,10 @@ public:
     void beginSession();
     /** @brief 停止消息服务并重置连接；expectedClose 为 true 时暂停待发送消息。 */
     void resetConnection(bool expectedClose);
+    /** @brief 返回当前认证标志，用于退出失败后判断是否需要恢复连接。 */
+    bool isAuthenticated() const { return _authenticated; }
+    /** @brief 复制当前账号的恢复端点与 Token，仅存于当前进程内存。 */
+    ServerInfo connectionInfo() const;
 
 signals:
     /** @brief 发布搜索原始响应，由搜索流程核对编号与格式。 */

@@ -53,6 +53,7 @@ struct GateHttpTransport::Impl
         }
 
         QNetworkRequest networkRequest(request.url);
+        networkRequest.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
         networkRequest.setHeader(QNetworkRequest::ContentTypeHeader,
                                  QByteArrayLiteral("application/json"));
         networkRequest.setHeader(QNetworkRequest::ContentLengthHeader,

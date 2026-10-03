@@ -160,14 +160,18 @@ void CSession::ArmHeartbeat() {
             self->ArmHeartbeat();
         }));
 }
-void CSession::BindAuthenticatedUser(int uid, BindCompletion completion) {
-    boost::asio::post(_strand, /** @brief 在会话执行器校验身份绑定前置状态，再交给生命周期协调器。 */ [self = shared_from_this(), uid, completion = std::move(completion)]() mutable {
+void CSession::BindAuthenticatedUser(int uid, BindCompletion completion, std::string authentication_token) {
+    boost::asio::post(_strand, /** @brief 在会话执行器校验身份绑定前置状态，再交给生命周期协调器。 */ [self = shared_from_this(), uid,
+        completion = std::move(completion), authentication_token =
+        std::move(authentication_token)]() mutable {
         if (self->_state != SessionState::Active) { completion(SessionBindResult::NotActive); return; }
         if (uid <= 0 || self->_binding || self->_authenticated_uid.load()) {
             completion(SessionBindResult::AlreadyBound); return;
         }
         self->_binding = true;
         self->_binding_uid = uid;
+        self->_authentication_token =
+            std::move(authentication_token);
         self->_lifecycle->OnAuthenticated(self, uid, std::move(completion));
     });
 }

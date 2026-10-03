@@ -3,6 +3,7 @@
 #include "tcpmgr.h"
 #include <QMessageBox>
 #include <QCloseEvent>
+#include <QStatusBar>
 #include "usermgr.h"
 #include "submissionexitguard.h"
 
@@ -12,6 +13,25 @@ MainWindow::MainWindow(QWidget *parent)
     , _session(this)
 {
     ui->setupUi(this);
+    connect(&_session, &ClientSession::reconnectChanged, this, /** @brief 保留会话页面并显示自动恢复提示。 */ [this](bool active) {
+        if (active) statusBar()->showMessage(tr("连接中断，正在重新连接…"));
+        else statusBar()->clearMessage();
+    });
+    connect(&_session, &ClientSession::reconnectFailed, this, /** @brief 恢复被拒绝或尝试耗尽后明确返回登录页。 */ [this] {
+        resetSession(SessionResetReason::UnexpectedDisconnect);
+        QMessageBox::information(this, tr("连接已断开"), tr("无法恢复当前会话，请重新登录。"));
+    });
+    connect(&_session, &ClientSession::logoutFinished, this, /** @brief 撤销成功才结束账号；失败保留界面并允许重试。 */ [this](bool success) {
+        setEnabled(true);
+        if (!success) {
+            _closeAfterLogout = false;
+            QMessageBox::warning(this, tr("退出未完成"), tr("服务器尚未确认退出，请检查连接后重试。"));
+            return;
+        }
+        _chat_dlg.clear(); _activeAuthFlowId = 0;
+        if (_closeAfterLogout) { _closeAfterLogout = false; close(); }
+        else offlineLogin();
+    });
 
     _login_dlg = new LoginDialog(_authFlow, this);
     _login_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
@@ -131,6 +151,7 @@ void MainWindow::loginSwitchChat(AuthFlowId flowId) {
 
 void MainWindow::notifyOffline()
 {
+    if (_session.isLoggingOut()) return;
     if (!_session.isActive()) {
         return;
     }
@@ -141,7 +162,7 @@ void MainWindow::notifyOffline()
 
 void MainWindow::connectionClose(bool expectedClose)
 {
-    if (expectedClose || !_session.isActive()) {
+    if (expectedClose || !_session.isActive() || _session.isReconnecting() || _session.isLoggingOut()) {
         return;
     }
     AuthOutcome outcome;
@@ -160,6 +181,10 @@ bool MainWindow::resetSession(SessionResetReason reason)
     if ((reason == SessionResetReason::Logout || reason == SessionResetReason::SwitchAccount)
         && !confirmSubmissionExit(this, UserMgr::instance()->hasPendingSubmissions()
             || (_chat_dlg && _chat_dlg->hasDrafts()))) return false;
+    if (reason == SessionResetReason::Logout || reason == SessionResetReason::SwitchAccount) {
+        if (!_session.requestLogout(reason)) return false;
+        setEnabled(false); return true;
+    }
     if (!_session.resetSession(reason)) {
         return false;
     }
@@ -201,6 +226,12 @@ void MainWindow::closeEvent(QCloseEvent *event)
     if (!confirmSubmissionExit(this, UserMgr::instance()->hasPendingSubmissions()
         || (_chat_dlg && _chat_dlg->hasDrafts()))) {
         event->ignore(); return;
+    }
+    if (_session.isActive()) {
+        event->ignore(); _closeAfterLogout = true;
+        if (_session.requestLogout(SessionResetReason::Logout)) setEnabled(false);
+        else _closeAfterLogout = false;
+        return;
     }
     QMainWindow::closeEvent(event);
 }

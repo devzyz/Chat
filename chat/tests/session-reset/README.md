@@ -47,3 +47,11 @@ RED evidence was recorded for the missing owning Module/User reset, retained own
 接收者销毁、重复重置及换账号后的迟到结果隔离。该回归使用合成服务响应，不冒充真实网络端到端。
 
 社交能力协商后，旧好友审批响应仍须准确发出一次 `requestCompleted`，同时刷新权威目录；成功和失败均有 Component 回归，真实双实例旅程验证模型最终一致。
+
+## Authentication recovery and revocation
+
+Q02-SESSION-09 now drives ClientSession's automatic reconnect after an actual TCP disconnect,
+verifies reauthentication, preserved draft ownership, and replay of the original message UUID.
+Q02-SESSION-10 (`session_reset.logout_revocation`) uses real loopback HTTP to verify that failed
+revocation preserves account state, retry remains possible, and only confirmed revocation resets
+it. Server-side revocation, renewal and reset races are owned by the hosted four-process suite.

@@ -1,3 +1,4 @@
+#include "AuthenticatedRecipient.h"
 #include "../../common/message/MessagePersistence.h"
 #include "ChatServiceImpl.h"
 #include "UserSessionDirectory.h"
@@ -12,14 +13,14 @@
 #include "LogMgr.h"
 
 ChatServiceImpl::ChatServiceImpl(std::shared_ptr<UserSessionDirectory> directory,
-    std::shared_ptr<SessionLifecycleCoordinator> lifecycle)
-    : _directory(std::move(directory)), _lifecycle(std::move(lifecycle)) {}
+    std::shared_ptr<SessionLifecycleCoordinator> lifecycle, std::shared_ptr<UserPresenceStore> presence)
+    : _directory(std::move(directory)), _lifecycle(std::move(lifecycle)), _presence(std::move(presence)) {}
 
 Status ChatServiceImpl::NotifyOtherAddFriend(ServerContext* context, const AddFriendReq* request, AddFriendRsp* response) {
 	// 查看是否在本服务器，因为有可能已经离线了
 	auto touid = request->touid();
 	auto sessions = _directory;
-	auto session = sessions->FindCurrent(touid);
+	auto session = FindAuthorizedRecipient(*sessions, *_presence, touid);
 
 	// 设置返回值
 	response->set_error(ErrorCodes::Success);
@@ -64,7 +65,7 @@ Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const Auth
 	auto chatid = request->chatid();
 	// 由认证人发送到申请人
 	auto sessions = _directory;
-	auto session = sessions->FindCurrent(applyuid);
+	auto session = FindAuthorizedRecipient(*sessions, *_presence, applyuid);
 
 	// 设置返回值
 	response->set_error(ErrorCodes::Success);
@@ -141,7 +142,7 @@ Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, co
 	// 查看是否在本服务器，因为有可能已经离线了
 	auto touid = request->touid();
 	auto sessions = _directory;
-	auto session = sessions->FindCurrent(touid);
+	auto session = FindAuthorizedRecipient(*sessions, *_presence, touid);
 
 	// 设置返回值
 	response->set_error(ErrorCodes::Success);
@@ -243,7 +244,7 @@ Status ChatServiceImpl::NotifyMessageReceiptChanged(ServerContext*, const messag
         response->set_error(ErrorCodes::UidInvalid);
         return Status::OK;
     }
-    auto session = _directory->FindCurrent(request->uid());
+    auto session = FindAuthorizedRecipient(*_directory, *_presence, request->uid());
     if (session && session->SupportsReceipts()) {
         Json::Value hint;
         hint["chat_id"] = request->chat_id();

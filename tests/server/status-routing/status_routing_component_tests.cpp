@@ -33,7 +33,7 @@ public:
 	}
 
 	/** 按故障模式失败或在锁内保存 Token。 */
-	bool PutToken(int uid, const std::string& token) override {
+	bool PutToken(int uid, const std::string& token, long long) override {
 		if (put_behavior_ == PutBehavior::Throw) {
 			throw std::runtime_error("SYNTHETIC_INTERNAL_EXCEPTION_3A02");
 		}

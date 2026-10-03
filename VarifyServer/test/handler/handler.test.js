@@ -7,6 +7,45 @@ const { createGetVarifyCodeHandler } = require('../../server');
 const recipient = 'recipient@example.test';
 const silentLogger = { /** 丢弃测试日志，避免适配器输出干扰断言。 */ log() {} };
 
+test('registration and reset codes have independent storage, cooldown and delivery',
+    /** 验证同邮箱跨用途不会共享验证码或冷却，非法用途不调用依赖。 */ async () => {
+        const cache = new Map();
+        const mails = [];
+        let sequence = 0;
+        const handler = createGetVarifyCodeHandler({
+            redisModule: {
+                /** 读取测试缓存中的用途专属记录。 */ async getRedis(key) { return cache.get(key); },
+                /** 模拟首次写入且保留既有验证码。 */ async setRedisExpire(key, value) {
+                    if (cache.has(key)) return false;
+                    cache.set(key, value); return true;
+                }
+            },
+            emailModule: { /** 收集发送用途对应的邮件。 */ async sendMail(mail) { mails.push(mail); return 'accepted'; } },
+            /** 生成可区分的合成验证码。 */ generateUuid() { return String(++sequence).padStart(8, '0'); },
+            logger: silentLogger
+        });
+        const invokePurpose = /** 使用真实生产 handler 调用指定用途。 */ async (purpose) => {
+            let result;
+            await handler({ request: { email:
+                recipient, purpose } },
+                /** 保存单次业务结果。 */ (_, response) => { result = response; });
+            return result;
+        };
+        assert.equal((await invokePurpose('register')).error, constModule.Errors.Success);
+        assert.equal((await invokePurpose('reset_password')).error, constModule.Errors.Success);
+        assert.equal(cache.size, 2);
+        assert.notEqual(cache.get('code_' + recipient), cache.get('code_reset_' + recipient));
+        assert.equal(mails.length, 2);
+        assert.match(mails[0].text, /注册/);
+        assert.match(mails[1].text, /重置密码/);
+        assert.equal((await invokePurpose('reset_password')).error, constModule.Errors.Success);
+        assert.equal(mails.length, 2);
+        assert.notEqual((await invokePurpose('unknown')).error, constModule.Errors.Success);
+        assert.notEqual((await invokePurpose(42)).error, constModule.Errors.Success);
+        assert.equal(cache.size, 2);
+        assert.equal(mails.length, 2);
+    });
+
 /** 调用验证码处理器并要求 gRPC 回调恰好完成一次，返回业务响应。 */ async function invoke(handler) {
     const callbackCalls = [];
     await handler({ request: { email: recipient } }, /** 收集处理器的回调错误及响应供次数断言。 */ (error, response) => {

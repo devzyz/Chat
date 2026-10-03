@@ -120,6 +120,7 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
 inline constexpr GetChatServerReq::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        auth_version_{::int64_t{0}},
         uid_{0} {}
 
 template <typename>
@@ -151,8 +152,10 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::message::GetChatServerReq, _impl_._has_bits_),
-        4, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::message::GetChatServerReq, _impl_.uid_),
+        PROTOBUF_FIELD_OFFSET(::message::GetChatServerReq, _impl_.auth_version_),
+        1,
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::message::GetChatServerRsp, _impl_._has_bits_),
@@ -186,9 +189,9 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::message::GetChatServerReq)},
-        {5, sizeof(::message::GetChatServerRsp)},
-        {16, sizeof(::message::LoginReq)},
-        {23, sizeof(::message::LoginRsp)},
+        {7, sizeof(::message::GetChatServerRsp)},
+        {18, sizeof(::message::LoginReq)},
+        {25, sizeof(::message::LoginRsp)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::message::_GetChatServerReq_default_instance_._instance,
@@ -198,22 +201,22 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
 };
 const char descriptor_table_protodef_status_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\014status.proto\022\007message\"\037\n\020GetChatServer"
-    "Req\022\013\n\003uid\030\001 \001(\005\"L\n\020GetChatServerRsp\022\r\n\005"
-    "error\030\001 \001(\005\022\014\n\004host\030\002 \001(\t\022\014\n\004port\030\003 \001(\t\022"
-    "\r\n\005token\030\004 \001(\t\"&\n\010LoginReq\022\013\n\003uid\030\001 \001(\005\022"
-    "\r\n\005token\030\002 \001(\t\"5\n\010LoginRsp\022\r\n\005error\030\001 \001("
-    "\005\022\013\n\003uid\030\002 \001(\005\022\r\n\005token\030\003 \001(\t2\211\001\n\rStatus"
-    "Service\022G\n\rGetChatServer\022\031.message.GetCh"
-    "atServerReq\032\031.message.GetChatServerRsp\"\000"
-    "\022/\n\005Login\022\021.message.LoginReq\032\021.message.L"
-    "oginRsp\"\000b\006proto3"
+    "\n\014status.proto\022\007message\"5\n\020GetChatServer"
+    "Req\022\013\n\003uid\030\001 \001(\005\022\024\n\014auth_version\030\002 \001(\003\"L"
+    "\n\020GetChatServerRsp\022\r\n\005error\030\001 \001(\005\022\014\n\004hos"
+    "t\030\002 \001(\t\022\014\n\004port\030\003 \001(\t\022\r\n\005token\030\004 \001(\t\"&\n\010"
+    "LoginReq\022\013\n\003uid\030\001 \001(\005\022\r\n\005token\030\002 \001(\t\"5\n\010"
+    "LoginRsp\022\r\n\005error\030\001 \001(\005\022\013\n\003uid\030\002 \001(\005\022\r\n\005"
+    "token\030\003 \001(\t2\211\001\n\rStatusService\022G\n\rGetChat"
+    "Server\022\031.message.GetChatServerReq\032\031.mess"
+    "age.GetChatServerRsp\"\000\022/\n\005Login\022\021.messag"
+    "e.LoginReq\032\021.message.LoginRsp\"\000b\006proto3"
 };
 static ::absl::once_flag descriptor_table_status_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_status_2eproto = {
     false,
     false,
-    377,
+    399,
     descriptor_table_protodef_status_2eproto,
     "status.proto",
     &descriptor_table_status_2eproto_once,
@@ -264,7 +267,12 @@ PROTOBUF_NDEBUG_INLINE GetChatServerReq::Impl_::Impl_(
 
 inline void GetChatServerReq::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.uid_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_version_),
+           0,
+           offsetof(Impl_, uid_) -
+               offsetof(Impl_, auth_version_) +
+               sizeof(Impl_::uid_));
 }
 GetChatServerReq::~GetChatServerReq() {
   // @@protoc_insertion_point(destructor:message.GetChatServerReq)
@@ -323,16 +331,16 @@ GetChatServerReq::GetClassData() const {
   return GetChatServerReq_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 1, 0, 0, 2>
+const ::_pbi::TcParseTable<1, 2, 0, 0, 2>
 GetChatServerReq::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(GetChatServerReq, _impl_._has_bits_),
     0, // no _extensions_
-    1, 0,  // max_field_number, fast_idx_mask
+    2, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967294,  // skipmap
+    4294967292,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    1,  // num_field_entries
+    2,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     GetChatServerReq_class_data_.base(),
@@ -342,15 +350,21 @@ GetChatServerReq::_table_ = {
     ::_pbi::TcParser::GetTable<::message::GetChatServerReq>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    // int64 auth_version = 2;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetChatServerReq, _impl_.auth_version_), 0>(),
+     {16, 0, 0,
+      PROTOBUF_FIELD_OFFSET(GetChatServerReq, _impl_.auth_version_)}},
     // int32 uid = 1;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetChatServerReq, _impl_.uid_), 0>(),
-     {8, 0, 0,
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetChatServerReq, _impl_.uid_), 1>(),
+     {8, 1, 0,
       PROTOBUF_FIELD_OFFSET(GetChatServerReq, _impl_.uid_)}},
   }}, {{
     65535, 65535
   }}, {{
     // int32 uid = 1;
-    {PROTOBUF_FIELD_OFFSET(GetChatServerReq, _impl_.uid_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+    {PROTOBUF_FIELD_OFFSET(GetChatServerReq, _impl_.uid_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+    // int64 auth_version = 2;
+    {PROTOBUF_FIELD_OFFSET(GetChatServerReq, _impl_.auth_version_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
   }},
   // no aux_entries
   {{
@@ -363,7 +377,12 @@ PROTOBUF_NOINLINE void GetChatServerReq::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  _impl_.uid_ = 0;
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.auth_version_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.uid_) -
+        reinterpret_cast<char*>(&_impl_.auth_version_)) + sizeof(_impl_.uid_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -388,11 +407,20 @@ PROTOBUF_NOINLINE void GetChatServerReq::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // int32 uid = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_uid() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<1>(
               stream, this_._internal_uid(), target);
+    }
+  }
+
+  // int64 auth_version = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_auth_version() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<2>(
+              stream, this_._internal_auth_version(), target);
     }
   }
 
@@ -419,10 +447,18 @@ PROTOBUF_NOINLINE void GetChatServerReq::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
-    // int32 uid = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // int64 auth_version = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_auth_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_auth_version());
+      }
+    }
+    // int32 uid = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_uid() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_uid());
@@ -447,9 +483,16 @@ void GetChatServerReq::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (from._internal_uid() != 0) {
-      _this->_impl_.uid_ = from._impl_.uid_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_auth_version() != 0) {
+        _this->_impl_.auth_version_ = from._impl_.auth_version_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_uid() != 0) {
+        _this->_impl_.uid_ = from._impl_.uid_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -469,7 +512,12 @@ void GetChatServerReq::InternalSwap(GetChatServerReq* PROTOBUF_RESTRICT PROTOBUF
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  swap(_impl_.uid_, other->_impl_.uid_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetChatServerReq, _impl_.uid_)
+      + sizeof(GetChatServerReq::_impl_.uid_)
+      - PROTOBUF_FIELD_OFFSET(GetChatServerReq, _impl_.auth_version_)>(
+          reinterpret_cast<char*>(&_impl_.auth_version_),
+          reinterpret_cast<char*>(&other->_impl_.auth_version_));
 }
 
 ::google::protobuf::Metadata GetChatServerReq::GetMetadata() const {

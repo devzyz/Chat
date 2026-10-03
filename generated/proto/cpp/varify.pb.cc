@@ -62,6 +62,9 @@ inline constexpr GetVarifyReq::Impl_::Impl_(
       : _cached_size_{0},
         email_(
             &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        purpose_(
+            &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()) {}
 
 template <typename>
@@ -93,9 +96,11 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::message::GetVarifyReq, _impl_._has_bits_),
-        4, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::message::GetVarifyReq, _impl_.email_),
+        PROTOBUF_FIELD_OFFSET(::message::GetVarifyReq, _impl_.purpose_),
         0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::message::GetVarifyRsp, _impl_._has_bits_),
         6, // hasbit index offset
@@ -110,7 +115,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::message::GetVarifyReq)},
-        {5, sizeof(::message::GetVarifyRsp)},
+        {7, sizeof(::message::GetVarifyRsp)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::message::_GetVarifyReq_default_instance_._instance,
@@ -118,18 +123,18 @@ static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
 };
 const char descriptor_table_protodef_varify_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\014varify.proto\022\007message\"\035\n\014GetVarifyReq\022"
-    "\r\n\005email\030\001 \001(\t\":\n\014GetVarifyRsp\022\r\n\005error\030"
-    "\001 \001(\005\022\r\n\005email\030\002 \001(\t\022\014\n\004code\030\003 \001(\t2P\n\rVa"
-    "rifyService\022\?\n\rGetVarifyCode\022\025.message.G"
-    "etVarifyReq\032\025.message.GetVarifyRsp\"\000b\006pr"
-    "oto3"
+    "\n\014varify.proto\022\007message\".\n\014GetVarifyReq\022"
+    "\r\n\005email\030\001 \001(\t\022\017\n\007purpose\030\002 \001(\t\":\n\014GetVa"
+    "rifyRsp\022\r\n\005error\030\001 \001(\005\022\r\n\005email\030\002 \001(\t\022\014\n"
+    "\004code\030\003 \001(\t2P\n\rVarifyService\022\?\n\rGetVarif"
+    "yCode\022\025.message.GetVarifyReq\032\025.message.G"
+    "etVarifyRsp\"\000b\006proto3"
 };
 static ::absl::once_flag descriptor_table_varify_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_varify_2eproto = {
     false,
     false,
-    204,
+    221,
     descriptor_table_protodef_varify_2eproto,
     "varify.proto",
     &descriptor_table_varify_2eproto_once,
@@ -168,7 +173,8 @@ PROTOBUF_NDEBUG_INLINE GetVarifyReq::Impl_::Impl_(
     [[maybe_unused]] const ::message::GetVarifyReq& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        email_(arena, from.email_) {}
+        email_(arena, from.email_),
+        purpose_(arena, from.purpose_) {}
 
 GetVarifyReq::GetVarifyReq(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -190,7 +196,8 @@ PROTOBUF_NDEBUG_INLINE GetVarifyReq::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        email_(arena) {}
+        email_(arena),
+        purpose_(arena) {}
 
 inline void GetVarifyReq::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -207,6 +214,7 @@ inline void GetVarifyReq::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.email_.Destroy();
+  this_._impl_.purpose_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -253,16 +261,16 @@ GetVarifyReq::GetClassData() const {
   return GetVarifyReq_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<0, 1, 0, 34, 2>
+const ::_pbi::TcParseTable<1, 2, 0, 41, 2>
 GetVarifyReq::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(GetVarifyReq, _impl_._has_bits_),
     0, // no _extensions_
-    1, 0,  // max_field_number, fast_idx_mask
+    2, 8,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967294,  // skipmap
+    4294967292,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    1,  // num_field_entries
+    2,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     GetVarifyReq_class_data_.base(),
@@ -272,6 +280,10 @@ GetVarifyReq::_table_ = {
     ::_pbi::TcParser::GetTable<::message::GetVarifyReq>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    // string purpose = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 1, 0,
+      PROTOBUF_FIELD_OFFSET(GetVarifyReq, _impl_.purpose_)}},
     // string email = 1;
     {::_pbi::TcParser::FastUS1,
      {10, 0, 0,
@@ -281,12 +293,15 @@ GetVarifyReq::_table_ = {
   }}, {{
     // string email = 1;
     {PROTOBUF_FIELD_OFFSET(GetVarifyReq, _impl_.email_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string purpose = 2;
+    {PROTOBUF_FIELD_OFFSET(GetVarifyReq, _impl_.purpose_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
   }},
   // no aux_entries
   {{
-    "\24\5\0\0\0\0\0\0"
+    "\24\5\7\0\0\0\0\0"
     "message.GetVarifyReq"
     "email"
+    "purpose"
   }},
 };
 PROTOBUF_NOINLINE void GetVarifyReq::Clear() {
@@ -297,8 +312,13 @@ PROTOBUF_NOINLINE void GetVarifyReq::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.email_.ClearNonDefaultToEmpty();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.email_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.purpose_.ClearNonDefaultToEmpty();
+    }
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -333,6 +353,16 @@ PROTOBUF_NOINLINE void GetVarifyReq::Clear() {
     }
   }
 
+  // string purpose = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_purpose().empty()) {
+      const ::std::string& _s = this_._internal_purpose();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "message.GetVarifyReq.purpose");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -356,13 +386,21 @@ PROTOBUF_NOINLINE void GetVarifyReq::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // string email = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_email().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_email());
+      }
+    }
+    // string purpose = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_purpose().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_purpose());
       }
     }
   }
@@ -384,12 +422,23 @@ void GetVarifyReq::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (!from._internal_email().empty()) {
-      _this->_internal_set_email(from._internal_email());
-    } else {
-      if (_this->_impl_.email_.IsDefault()) {
-        _this->_internal_set_email("");
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_email().empty()) {
+        _this->_internal_set_email(from._internal_email());
+      } else {
+        if (_this->_impl_.email_.IsDefault()) {
+          _this->_internal_set_email("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_purpose().empty()) {
+        _this->_internal_set_purpose(from._internal_purpose());
+      } else {
+        if (_this->_impl_.purpose_.IsDefault()) {
+          _this->_internal_set_purpose("");
+        }
       }
     }
   }
@@ -413,6 +462,7 @@ void GetVarifyReq::InternalSwap(GetVarifyReq* PROTOBUF_RESTRICT PROTOBUF_NONNULL
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.email_, &other->_impl_.email_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.purpose_, &other->_impl_.purpose_, arena);
 }
 
 ::google::protobuf::Metadata GetVarifyReq::GetMetadata() const {

@@ -31,6 +31,12 @@ public:
                     return request[key].isString() && !request[key].asString().empty()
                         && request[key].asString().size() <= limit;
                 };
+            if (endpoint == Endpoint::Logout) {
+                if (!request["uid"].isInt() || request["uid"].asInt() <= 0 || !text("token", 128))
+                    return {ErrorCodes::Error_Json};
+                return {status_->Revoke(request["uid"].asInt(), request["token"].asString())
+                    ? ErrorCodes::Success : ErrorCodes::TokenInvalid};
+            }
             if (!text("email", 254) || request["email"].asString().find('@') == std::string::npos)
                 return {ErrorCodes::Error_Json};
             if (endpoint == Endpoint::UserRegister && (!text("user", 1020) || !text("passwd", 255)
@@ -38,24 +44,30 @@ public:
             if (endpoint == Endpoint::ResetPassword && (!text("user", 1020) || !text("password", 255)
                 || !text("varify", 64))) return {ErrorCodes::Error_Json};
             if (endpoint == Endpoint::UserLogin && !text("password", 255)) return {ErrorCodes::Error_Json};
+            std::string purpose = endpoint == Endpoint::ResetPassword ? "reset_password" : "register";
+            if (endpoint == Endpoint::GetVarifyCode && request.isMember("purpose")) {
+                if (!request["purpose"].isString()) return {ErrorCodes::Error_Json};
+                purpose = request["purpose"].asString();
+                if (purpose != "register" && purpose != "reset_password") return {ErrorCodes::Error_Json};
+            }
             if (endpoint == Endpoint::GetVarifyCode) {
 				if (!request.isMember("email")) {
 					return {ErrorCodes::Error_Json};
 				}
-				return {verification_->RequestCode(request["email"].asString())};
+				return {verification_->RequestCode(request["email"].asString(), purpose)};
 			}
 			if (endpoint == Endpoint::UserRegister) {
 				if (request["passwd"].asString() != request["confirm"].asString()) {
 					return {ErrorCodes::PasswdErr};
 				}
-				const auto code = code_store_->ReadCode(request["email"].asString());
+				const auto code = code_store_->ReadCode(request["email"].asString(), purpose);
 				if (!code.has_value()) {
 					return {ErrorCodes::VarifyExpired};
 				}
 				if (*code != request["varifycode"].asString()) {
 					return {ErrorCodes::VarifyCodeErr};
 				}
-                if (!code_store_->ConsumeCode(request["email"].asString(), *code)) return {ErrorCodes::VarifyExpired};
+                if (!code_store_->ConsumeCode(request["email"].asString(), *code, purpose)) return {ErrorCodes::VarifyExpired};
 				const auto uid = user_store_->CreateUser(
 					request["user"].asString(),
 					request["email"].asString(),
@@ -66,7 +78,7 @@ public:
 				return {ErrorCodes::Success};
 			}
 			if (endpoint == Endpoint::ResetPassword) {
-				const auto code = code_store_->ReadCode(request["email"].asString());
+				const auto code = code_store_->ReadCode(request["email"].asString(), purpose);
 				if (!code.has_value()) {
 					return {ErrorCodes::VarifyExpired};
 				}
@@ -77,7 +89,7 @@ public:
 						request["user"].asString(), request["email"].asString())) {
 					return {ErrorCodes::EmailNotMatch};
 				}
-                if (!code_store_->ConsumeCode(request["email"].asString(), *code)) return {ErrorCodes::VarifyExpired};
+                if (!code_store_->ConsumeCode(request["email"].asString(), *code, purpose)) return {ErrorCodes::VarifyExpired};
 				if (!user_store_->UpdatePassword(
 						request["user"].asString(), request["password"].asString(), request["email"].asString())) {
 					return {ErrorCodes::PasswdUpFailed};
@@ -90,7 +102,7 @@ public:
 				if (!user.has_value()) {
 					return {ErrorCodes::PasswdInvalid};
 				}
-				const auto assignment = status_->Assign(user->uid);
+				const auto assignment = status_->Assign(user->uid, user->auth_version);
 				if (assignment.error != ErrorCodes::Success) {
 					return {ErrorCodes::RPCFailed};
 				}

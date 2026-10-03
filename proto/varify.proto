@@ -9,6 +9,8 @@ service VarifyService {
 
 message GetVarifyReq {
   string email = 1;
+  // Empty retains registration behavior; reset_password is a distinct credential.
+  string purpose = 2;
 }
 
 message GetVarifyRsp {

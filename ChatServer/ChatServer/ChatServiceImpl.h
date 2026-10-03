@@ -25,6 +25,7 @@ using message::KickUserRsp;
 using grpc::ClientContext;
 
 class UserSessionDirectory;
+class UserPresenceStore;
 class SessionLifecycleCoordinator;
 /** @brief 接收跨 ChatServer 的好友、消息、回执和替换登录通知并路由到本地会话。 */
 class ChatServiceImpl final : public ChatService::Service
@@ -35,7 +36,7 @@ public:
         message::ReceiptChangedRsp* response) override;
 	/** @brief 初始化ChatServiceImpl，保存构造参数及依赖引用。 */
 	ChatServiceImpl(std::shared_ptr<UserSessionDirectory> directory,
-        std::shared_ptr<SessionLifecycleCoordinator> lifecycle);
+        std::shared_ptr<SessionLifecycleCoordinator> lifecycle, std::shared_ptr<UserPresenceStore> presence);
 	/** @brief 接收跨实例好友申请，向本实例接收方在线会话推送通知。 */
 	virtual Status NotifyOtherAddFriend(ServerContext* context, const AddFriendReq* request, AddFriendRsp* response) override;
 	/** @brief 接收跨实例好友审批及会话资料，向本实例目标会话推送。 */
@@ -49,4 +50,5 @@ public:
 private:
 	std::shared_ptr<UserSessionDirectory> _directory;
     std::shared_ptr<SessionLifecycleCoordinator> _lifecycle;
+    std::shared_ptr<UserPresenceStore> _presence;
 };

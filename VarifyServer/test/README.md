@@ -20,10 +20,12 @@ From `VarifyServer`, run `npm run test:unit`, `npm run test:integration`, or
 report is an error. Normal tests use no external Redis or public SMTP; the SMTP
 Integration suite opens only its own dynamic loopback fault peers. Hosted
 `varify_smtp.xml` and `varify_redis.xml` separately record the disposable adapter selectors.
-The normal runner registers 33 Unit and 21 Integration cases.
-
-Successful default-process readiness, full real-dependency composition, signals, cross-language
-C++ calls, and C++ deadline behavior remain gaps.
+The normal runner registry owns the report counts.
 
 本轮 handler 回归覆盖同邮箱 12 个并发请求只生成/发送一次、冷却复用与消费后重发；
 Redis 单元及真实服务合同覆盖 `SET EX NX` 不覆盖已有验证码。默认监听收敛到 loopback。
+
+`handler` also checks independent registration/reset keys, cooling and consumption namespaces,
+and invalid purpose inputs. `tls` tests real TLS on all client channels, unknown CA and hostname
+rejection, complete large responses under backpressure, bounded cleanup and bind-failure rollback.
+Certificates are generated in an owned temporary directory and are never installed as trusted roots.

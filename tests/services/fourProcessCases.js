@@ -10,6 +10,7 @@ const { randomUUID } = require('node:crypto');
 const { createRequire } = require('node:module');
 const { SchemaMigration } = require('../../schema/SchemaMigration');
 const { MysqlSession, mysqlArgs } = require('../../schema/MysqlSession');
+const { verifySessionLifecycle } = require('./sessionLifecycleCases');
 const requireVarify = createRequire(path.resolve(__dirname, '../../VarifyServer/package.json'));
 const grpc = requireVarify('@grpc/grpc-js');
 const loader = requireVarify('@grpc/proto-loader');
@@ -198,7 +199,10 @@ async function runFourProcessCases(coordinator, record) {
             await poll(/** 检查 Chat 已能处理并拒绝非法登录。 */ async () => (await wire({ uid: -1, token: 'invalid' })).error !== 0, 30000);
         });
         await test('Gate production HTTP ready', /** 启动 Gate 并等待公开测试路由响应。 */ async () => { await native('GateServer'); await poll(/** 检查 Gate 测试路由返回非空响应。 */ async () => Boolean(await http('/get_test')), 30000); });
-        await test('mail registration login and server selection', /** 通过真实入口注册两个测试用户。 */ async () => { await register(1); await register(2); });
+        await test('mail registration login and server selection', /** 通过真实入口注册两个用户并验证完整凭据生命周期。 */ async () => {
+            await register(1); await register(2);
+            await verifySessionLifecycle({ coordinator, http, rpcReady, user: users[0], port: ports.ChatServer });
+        });
         let chat;
         await test('TCP authentication and public private-chat creation', /** 通过 Chat 协议创建双方私聊并核对正的会话标识。 */ async () => {
             const result = await wire(users[0], [{ id: 1023, body: { self_id: users[0].uid, other_id: users[1].uid } }]);
@@ -291,8 +295,9 @@ async function runFourProcessCases(coordinator, record) {
         try {
             const client = await coordinator.redis();
             try {
-                const keys = recipients.map(/** 映射本次收件人的验证码键以定向清理。 */ email => `code_${email}`);
-                for (const user of users) for (const prefix of ['utoken_', 'uip_', 'ubaseinfo_', 'usessionid_', 'lock_']) keys.push(`${prefix}${user.uid}`);
+                const keys = recipients.flatMap(/** 定向清理本次收件人的验证码和尝试预算。 */ email =>
+                    ['code_', 'code_reset_', 'code_attempt_', 'code_attempt_reset_'].map(/** 组合当前测试收件人键。 */ prefix => prefix + email));
+                for (const user of users) for (const prefix of ['', 'auth_version_', 'utoken_', 'uip_', 'ubaseinfo_', 'usessionid_', 'usessiontoken_', 'lock_']) keys.push(`${prefix}${user.uid}`);
                 if (keys.length) { await client.del(...keys); assert.equal(await client.exists(...keys), 0); }
                 assert.equal(await client.hexists('logincount', runName), 0);
             } finally { client.disconnect(); }

@@ -444,3 +444,5 @@ node --test tests/build/ciBudget.test.js tests/services/phase3dEvidence.test.js 
 ## 性能专项
 
 手动性能基线见 [performance/README.md](performance/README.md)，独立生成指标与正确性报告。
+
+The existing `T10-4PROC-06` additionally runs `sessionLifecycleCases.js` against real Gate/Status/Chat/MySQL/Redis/SMTP: purpose separation, password reset and logout revocation, stale issuance epoch rejection, and heartbeat renewal. It owns all client sockets; the parent suite removes its account, code, epoch and presence keys. This is separate from TLS and GUI loopback tests.

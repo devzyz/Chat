@@ -6,6 +6,9 @@
 #include <QApplication>
 #include <QFile>
 #include <QMessageBox>
+#include <QHostAddress>
+#include <QSslConfiguration>
+#include <QSslSocket>
 
 /** @brief 加载客户端配置和日志，创建主窗口并运行 Qt 事件循环。 */
 int main(int argc, char *argv[])
@@ -39,7 +42,37 @@ int main(int argc, char *argv[])
     QSettings settings(config_path, QSettings::IniFormat);
     QString gate_host = settings.value("GateServer/host").toString();
     QString gate_port = settings.value("GateServer/port").toString();
-    gate_url_prefix = "http://" + gate_host + ":" + gate_port;
+    const auto scheme = settings.value("GateServer/scheme", "http").toString();
+    const QUrl resources(settings.value("ResourceServer/Url", "http://127.0.0.1:8090").toString());
+    const bool loopback = (gate_host == "localhost" || QHostAddress(gate_host).isLoopback())
+        && (resources.host() == "localhost" || QHostAddress(resources.host()).isLoopback());
+    bool portOk = false;
+    const auto gatePort = gate_port.toInt(&portOk);
+    if (!portOk || gatePort < 1 || gatePort > 65535 || gate_host.isEmpty() || !resources.isValid()
+        || resources.host().isEmpty() || (scheme != "http" && scheme != "https") || (scheme == "http" && !loopback)
+        || (scheme == "https" && (resources.scheme() != "https" || !QSslSocket::supportsSsl()))) {
+        QMessageBox::critical(nullptr, QObject::tr("连接配置错误"),
+            QObject::tr("局域网连接必须为 Gate 和 Resource 配置 HTTPS，并安装可用的 TLS 运行库。"));
+        return EXIT_FAILURE;
+    }
+    if (scheme == "https") {
+        auto security = QSslConfiguration::defaultConfiguration();
+        const auto caFile = settings.value("Security/CAFile").toString();
+        if (!caFile.isEmpty()) {
+            const auto certificates = QSslCertificate::fromPath(QDir(app_path).absoluteFilePath(caFile));
+            if (certificates.isEmpty()) {
+                QMessageBox::critical(nullptr, QObject::tr("证书配置错误"), QObject::tr("无法读取受信任的 CA 证书。"));
+                return EXIT_FAILURE;
+            }
+            auto authorities = security.caCertificates(); authorities.append(certificates);
+            security.setCaCertificates(authorities);
+        }
+        security.setProtocol(QSsl::TlsV1_2OrLater);
+        security.setPeerVerifyMode(QSslSocket::VerifyPeer);
+        QSslConfiguration::setDefaultConfiguration(security);
+    }
+    QUrl gateUrl; gateUrl.setScheme(scheme); gateUrl.setHost(gate_host); gateUrl.setPort(gatePort);
+    gate_url_prefix = gateUrl.toString();
 
     int exitCode = 0;
     {

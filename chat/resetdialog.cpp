@@ -308,6 +308,7 @@ void ResetDialog::on_get_code_btn_clicked()
     // 发送http请求获取验证码
     QJsonObject json_obj;
     json_obj["email"] = email;
+    json_obj["purpose"] = "reset_password";
     AuthOutcome begin;
     begin.kind = AuthOutcomeKind::BeginHttp;
     begin.module = static_cast<int>(Modules::RESETMOD);

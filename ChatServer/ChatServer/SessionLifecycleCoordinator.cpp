@@ -17,8 +17,11 @@ void SessionLifecycleCoordinator::OnAuthenticated(std::shared_ptr<CSession> sess
         std::lock_guard<std::mutex> lock(_binding_mutex);
         _binding_sessions.emplace(session->Id(), std::make_pair(uid, session));
     }
-    boost::asio::post(_worker, /** @brief 在存储执行器登记用户归属并协调旧会话替换。 */ [this, session, uid, completion = std::move(completion)]() mutable {
-        const chat_session::UserPresence current{_server_id, session->Id()};
+    const auto authentication_token =
+        session->_authentication_token;
+    boost::asio::post(_worker, /** @brief 在存储执行器登记用户归属并协调旧会话替换。 */ [this, session, uid,
+        authentication_token, completion = std::move(completion)]() mutable {
+        const chat_session::UserPresence current{_server_id, session->Id(), authentication_token};
         PresenceResult result;
         try { result = _presence->Publish(uid, current); }
         catch (const std::exception& error) { SPDLOG_ERROR("presence publish failed: {}", error.what()); }

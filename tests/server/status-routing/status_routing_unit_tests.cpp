@@ -35,7 +35,7 @@ public:
 	}
 
 	/** 在锁内保存用户 Token 并模拟写入成功。 */
-	bool PutToken(int uid, const std::string& token) override {
+	bool PutToken(int uid, const std::string& token, long long) override {
 		std::lock_guard<std::mutex> lock(mutex_);
 		tokens_[uid] = token;
 		return true;

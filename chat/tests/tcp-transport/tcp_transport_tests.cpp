@@ -7,10 +7,33 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTest>
+#include <QProcess>
+#include <QTemporaryDir>
+#include <QFile>
+#include <QSslConfiguration>
+#include <QSslSocket>
+#include <QSignalSpy>
 
 #include <memory>
 
 namespace {
+
+/** @brief 作用域退出时恢复全局信任配置，避免测试污染其余连接。 */
+struct RestoreSslConfiguration {
+    QSslConfiguration previous = QSslConfiguration::defaultConfiguration();
+    /** @brief 恢复测试前的证书信任集合。 */
+    ~RestoreSslConfiguration() { QSslConfiguration::setDefaultConfiguration(previous); }
+};
+
+/** @brief 只拥有本测试启动的子进程，失败提前返回时也完成有界清理。 */
+struct TlsFixtureProcess : QProcess {
+    /** @brief 优先发送协议停止，超时才强制结束自有进程并等待回收。 */
+    ~TlsFixtureProcess() {
+        if (state() == QProcess::NotRunning) return;
+        write("stop\n");
+        if (!waitForFinished(2000)) { kill(); waitForFinished(3000); }
+    }
+};
 
 /** 按大端协议编码消息编号、正文长度及正文。 */
 QByteArray frame(quint16 messageId, const QByteArray &body)
@@ -122,6 +145,8 @@ class TcpTransportTests final : public QObject
     Q_OBJECT
 
 private slots:
+    /** @brief TLS 仅在证书与主机名有效时发布连接事件，随后按原协议收发帧。 */
+    void tlsRequiresTrustedMatchingCertificate();
     /** 验证 TCP 连接成功保持连接代次及认证流程标识。 */
     void connectPreservesGenerationAndFlowIdentity();
     /** 验证发送字节与生产帧格式一致。 */
@@ -147,6 +172,42 @@ private slots:
     /** 验证主动关闭及销毁释放所有传输资源。 */
     void closeAndDeleteReleaseOwnedResources();
 };
+
+void TcpTransportTests::tlsRequiresTrustedMatchingCertificate()
+{
+    QVERIFY(QSslSocket::supportsSsl());
+    RestoreSslConfiguration restore;
+    QTemporaryDir directory; QVERIFY(directory.isValid());
+    TlsFixtureProcess peer;
+    peer.start("node", {QFINDTESTDATA("../../../VarifyServer/test/tls/fixture.js"), directory.path()});
+    QVERIFY(peer.waitForStarted(2000));
+    QVERIFY2(peer.waitForReadyRead(10000), peer.readAllStandardError().constData());
+    const auto port = peer.readLine().trimmed().toUShort(); QVERIFY(port > 0);
+    ChatTcpTransport transport;
+    QSignalSpy connected(&transport, &ChatTcpTransport::connected);
+    QSignalSpy finished(&transport, &ChatTcpTransport::finished);
+    QSignalSpy received(&transport, &ChatTcpTransport::frameReceived);
+    auto target = endpoint(port, 101, 2000); target.tls = true; target.host = "localhost";
+    transport.connectTo(target);
+    QVERIFY(!transport.send(1001, "must-not-leak"));
+    QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 3000); QCOMPARE(connected.size(), 0);
+    QCOMPARE(qvariant_cast<ChatTcpOutcome>(finished.first()[0]).terminal, ChatTcpTerminal::Refused);
+    auto configuration = QSslConfiguration::defaultConfiguration();
+    configuration.setCaCertificates(QSslCertificate::fromPath(directory.path() + "/cert.pem"));
+    configuration.setProtocol(QSsl::TlsV1_2OrLater);
+    configuration.setPeerVerifyMode(QSslSocket::VerifyPeer);
+    QSslConfiguration::setDefaultConfiguration(configuration);
+    finished.clear(); target.host = "127.0.0.1"; transport.connectTo(target);
+    QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 3000); QCOMPARE(connected.size(), 0);
+    QCOMPARE(qvariant_cast<ChatTcpOutcome>(finished.first()[0]).terminal, ChatTcpTerminal::Refused);
+    finished.clear(); target.host = "localhost"; transport.connectTo(target);
+    QTRY_COMPARE_WITH_TIMEOUT(connected.size(), 1, 3000);
+    QVERIFY(transport.send(1001, "encrypted-fixture"));
+    QTRY_COMPARE_WITH_TIMEOUT(received.size(), 1, 3000);
+    QCOMPARE(qvariant_cast<ChatTcpFrame>(received.first()[0]).body, QByteArray("encrypted-fixture"));
+    transport.close(); peer.write("stop\n"); QVERIFY(peer.waitForFinished(3000));
+    QCOMPARE(peer.exitCode(), 0);
+}
 
 void TcpTransportTests::connectPreservesGenerationAndFlowIdentity()
 {

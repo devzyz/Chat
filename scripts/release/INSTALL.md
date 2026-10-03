@@ -29,3 +29,17 @@
 
 CI 对同一源码运行完整 Linux 真实依赖业务 E2E，并对下载解压后的 Windows 包检查
 文件、运行库、配置处理与应用启动。Windows 包启动检查不等同于真实数据库业务 E2E。
+
+## LAN TLS
+
+LAN 客户端需通过 TLS 入口访问三类业务服务。复制 `VarifyServer/tls.config.example.json`
+为本机配置，提供包含实际主机名/IP SAN 的证书链和私钥，然后用包内 Node 运行：
+
+```powershell
+.\VarifyServer\node.exe .\VarifyServer\tlsGateway.js --config .\VarifyServer\tls.config.json
+```
+
+Gate/Resource/Chat 明文监听必须改为 loopback；仅对外开放
+示例中的 8443、8444、8445、8446。Status 公布的是外部 Chat TLS 端口，Chat 自身监听内部端口。
+客户端需 `GateServer/scheme=https`、HTTPS Resource URL，并信任对应 CA；不得关闭证书验证。
+完整字段、端口映射与关闭规则见仓库 `docs/Operations.md`。升级时同步替换全部服务和客户端，断开旧会话。

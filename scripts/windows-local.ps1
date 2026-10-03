@@ -76,7 +76,7 @@ $scriptTestGroups = @(
 )
 $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 78 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 58 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 59 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 107 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
@@ -84,9 +84,9 @@ $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_resource_integration.xml'; ExpectedCount = 8 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 25 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 19 }
-    [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 30 }
-    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 34 }
-    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 21 }
+    [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 32 }
+    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 35 }
+    [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 22 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_component.xml'; ExpectedCount = 9 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_integration.xml'; ExpectedCount = 4 }
 )
@@ -989,7 +989,7 @@ function Confirm-TestStructure {
         @([regex]::Matches($statusGrpcTests, 'T09-SGRPC-(?:0[1-9]|1[0-2])')).Count -ne 12) {
         throw 'Status gRPC transport tests must register exactly T09-SGRPC-01..12 as twelve Server Integration testcases.'
     }
-    if ($statusRoutingHeader -notmatch 'AssignmentResult\s+Assign\s*\(int uid\)' -or
+    if ($statusRoutingHeader -notmatch 'AssignmentResult\s+Assign\s*\(int uid, long long auth_version = 0\)' -or
         $statusRoutingHeader -notmatch 'LoginResult\s+Validate\s*\(int uid, const std::string& token\)' -or
         $statusServiceSource -notmatch 'routing_\.Assign\s*\(' -or
         $statusServiceSource -notmatch 'routing_\.Validate\s*\(' -or
@@ -1017,8 +1017,8 @@ function Confirm-TestStructure {
     $gateLogic = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\LogicSystem.cpp') -Raw
     $gateRequestHeader = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\GateRequest.h') -Raw
     $gateRequestTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\gate-request\gate_request_component_tests.cpp') -Raw
-    if (@([regex]::Matches($gateRequestTests, 'TEST_F\(GateRequestComponentTests,')).Count -ne 16) {
-        throw 'Gate request orchestration tests must register exactly sixteen Server Component testcases.'
+    if (@([regex]::Matches($gateRequestTests, 'TEST_F\(GateRequestComponentTests,')).Count -ne 17) {
+        throw 'Gate request orchestration tests must register the sixteen original contracts and session revocation.'
     }
     foreach ($gateRequestId in 1..16) {
         $testId = 'T08-GATE-{0:D2}' -f $gateRequestId
@@ -1214,6 +1214,7 @@ function Confirm-TestStructure {
         throw 'Qt HTTP transport must register exactly ten frozen Integration CTest cases through the production target.'
     }
     $expectedTcpTransportCases = @(
+        'tlsRequiresTrustedMatchingCertificate'
         'connectPreservesGenerationAndFlowIdentity'
         'sendWritesProductionFrame'
         'fragmentedFrameDecodedOnce'
@@ -1238,7 +1239,7 @@ function Confirm-TestStructure {
     if (-not $tcpTransportBlock.Success -or
         ($registeredTcpTransportCases -join ',') -ne ($expectedTcpTransportCases -join ',') -or
         $tcpTransportBlock.Groups['properties'].Value -notmatch 'LABELS\s+"?integration"?') {
-        throw 'Qt TCP transport must register exactly twelve frozen Integration CTest cases through the production target.'
+        throw 'Qt TCP transport must register the twelve original contracts and the TLS Integration case through the production target.'
     }
     $driverCases = @('productionLoginKeepsAccountsAndEndpointsSeparate',
         'twoProcessesHaveIndependentLifetimes', 'malformedAndReplayedCommandsFailClosed',
@@ -1289,6 +1290,7 @@ function Confirm-TestStructure {
         'session_reset.retryDoesNotCrossAuthenticatedAccounts' = 'component'
         'session_reset.social_lifecycle' = 'component'
         'session_reset.authenticated_wire_retry' = 'integration'
+        'session_reset.logout_revocation' = 'integration'
         'auth_flow.register_network_error' = 'unit'
         'auth_flow.reset_network_error' = 'unit'
         'auth_flow.login_network_error' = 'unit'
@@ -1698,6 +1700,8 @@ function Run-VarifyTests {
                     'The VarifyServer SMTP integration tests are missing.'
                 Require-File (Join-Path $varifySource 'test\redis\redis-integration.test.js') `
                     'The VarifyServer Redis integration tests are missing.'
+                Require-File (Join-Path $varifySource 'test\tls\tls.test.js') `
+                    'The TLS gateway integration tests are missing.'
             )
         }
     )

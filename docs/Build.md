@@ -126,3 +126,7 @@ Varify 携带 Node runtime/锁定依赖，并由合并包的相邻 proto 目录�
 ## Message storage runtime
 
 The Qt client requires Qt SQL and the kit QSQLITE plugin. CMake checks the Windows driver and copies QtSql plus `sqldrivers/qsqlite.dll` beside the local application; existing windeployqt packaging remains responsible for the release bundle. See [MessageStorage](MessageStorage.md).
+
+TLS 网关使用现有 Node 运行时，无新增 npm 依赖。发布包必须包含 `VarifyServer/tlsGateway.js`
+与 `tls.config.example.json`，证书和私钥由部署方提供。TLS 测试仅在临时目录生成一天有效的测试证书：
+Windows 使用 PowerShell 7/.NET CertificateRequest，Linux 使用 OpenSSL；不提交私钥或安装测试 CA。

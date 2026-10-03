@@ -24,9 +24,9 @@ public:
 	}
 
     /** @brief 按有效计数和名称选服，Token 持久化成功才返回地址；所有异常返回空失败结果。 */
-	AssignmentResult Assign(int uid) override {
+	AssignmentResult Assign(int uid, long long auth_version) override {
 		try {
-            if (uid <= 0) return {};
+            if (uid <= 0 || auth_version < 0) return {};
 			const RoutingServer* selected = nullptr;
 			std::optional<unsigned long long> selected_count;
 			for (const auto& server : servers_) {
@@ -58,7 +58,7 @@ public:
 			if (token.empty()) {
 				return {};
 			}
-			if (!store_->PutToken(uid, token)) {
+			if (!store_->PutToken(uid, token, auth_version)) {
 				return {};
 			}
 			return {ErrorCodes::Success, selected->host, selected->port, token};

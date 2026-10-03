@@ -181,15 +181,52 @@ Gate `[GateServer] Host` 可选，默认 `0.0.0.0`；Chat `[SelfServer] Host` �
 可另设 `BindHost` 作为监听地址。Status 配置中的 Chat 地址须为客户端可达的局域网 IP。
 Chat `[SelfServer] RpcHost` 默认 `127.0.0.1`，与 Status 监听地址都只允许数值 loopback；
 Varify 默认 `127.0.0.1:50051`。不得向客户端开放内部 RPC、MySQL 或 Redis。
-现有外部 HTTP/TCP 仍为明文，只适用于受控可信局域网；TLS 尚未实施。
+外部入口统一使用下述 TLS 网关，业务服务只监听本机；禁止在 LAN 暴露解密后的业务端口。
 
 Chat 每实例最多接收 1024 个 TCP 会话，业务队列满时关闭连接并记录原因。
 实例以随机启动身份取得 `chatlease_<name>` 的 90 秒租约，60 秒更新连接数；
 不同监听端点的同名活动实例启动失败，关闭只清理自己仍持有的租约。
 成功独占绑定同一 TCP/RPC 端点的新进程可接管该端点的残留租约，避免 Redis 端口变更后旧进程无法清理而阻塞重启。Status 跳过无租约或无有效计数的实例。
 会话路由双键也有 90 秒 TTL，当前会话每次业务消息/心跳原子确认归属并续租；
-失去归属或 Redis 不可用时关闭会话。客户端需保持既有心跳，断网恢复仍需手动重登。
+失去归属或 Redis 不可用时关闭会话。客户端保持十秒心跳；暂时断线自动有限重连，凭据失效则回到登录。
 租约是请求入口保护，不能把已经开始的数据库事务解释为全局即时撤销。
 
 Resource `/health` 仅报告进程 HTTP 存活；`/ready` 在有界工作执行器核验 MySQL schema 和
 Status RPC，可用返回 200，否则 503。二者不要求用户凭据；不能把 `/health` 当业务就绪。
+
+### TLS 入口配置
+
+复用发布包中的 Node 运行时，以独立进程运行 `VarifyServer/tlsGateway.js`。
+复制 `tls.config.example.json` 为本机 `tls.config.json`，配置证书链和私钥文件；相对路径以
+配置文件目录为准。私钥只留在服务端并限制文件权限，不放入仓库或客户端包。
+证书 SAN 必须包含客户端使用的真实 DNS 名称或 IP；客户端校验信任链、主机名及有效期。
+
+```powershell
+node VarifyServer/tlsGateway.js --config VarifyServer/tls.config.json
+```
+
+示例端口映射为 8443→Gate 8080、8444→Resource 8090、8445/8446→Chat 8091/8092。
+必须同时提供 `gate`、`resource` 和至少一个 `chat-*` 入口。TLS 最低 1.2，握手十秒、上游建连五秒、
+通道空闲两分钟超时，每个入口最多 1024 连接。上游只允许数值 loopback；握手失败不转发应用数据。
+先启动业务服务，再启动网关；SIGINT/SIGTERM 关闭所属监听和连接，证书更新需重启网关。
+
+部署时将 Gate `Host`、Resource `Host` 和 Chat `BindHost` 配置为 `127.0.0.1`，
+Chat `Port` 保留内部 8091/8092；Status 的 Chat 节点 `Host/Port` 则公布证书覆盖的外部主机名及
+8445/8446，节点名称与 Chat 保持一致。防火墙只开放网关端口，RPC/MySQL/Redis 保持本机。
+客户端配置如下（地址为文档示例，须替换为自己的证书名称）：
+
+```ini
+[GateServer]
+scheme=https
+host=chat.example.invalid
+port=8443
+[ResourceServer]
+Url=https://chat.example.invalid:8444
+[Security]
+CAFile=certificates/lan-ca.pem
+```
+
+`CAFile` 相对客户端可执行文件目录；使用系统受信任 CA 时可留空。禁止忽略 SSL 错误。
+Gate 使用 HTTPS 时 Chat 自动使用 TLS。HTTP 开发模式只允许 Gate 和 Resource 都使用 loopback；
+不能将远程地址改为 HTTP 绕过证书。Qt 包须带可用 TLS 后端，实际目标机器需验证证书链。
+此入口只支持所有服务同机的拓扑，多机后端需要另行设计端到端加密与内部认证。

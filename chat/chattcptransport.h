@@ -16,6 +16,7 @@ struct ChatTcpEndpoint
     quint64 flowId = 0;
     int connectDeadlineMs = 0;
     int writeDeadlineMs = 0;
+    bool tls = false;
 };
 
 enum class ChatTcpTerminal

@@ -13,7 +13,8 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail, gen
         logger.log('verification request received');
 
         try {
-            const key = constModule.code_prefix + call.request.email;
+            const purpose = call.request.purpose || 'register';
+            const key = (purpose === 'reset_password' ? 'code_reset_' : constModule.code_prefix) + call.request.email;
             const queryResult = await redisModule.getRedis(key);
             let uniqueId = queryResult;
             if (queryResult == null) {
@@ -32,7 +33,8 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail, gen
                     return;
                 }
             }
-            const text = '您的验证码为' + uniqueId + '请十分钟内完成注册';
+            const text = '您的验证码为' + uniqueId + '请十分钟内完成'
+                + (purpose === 'reset_password' ? '重置密码' : '注册');
             const mailOptions = {
                 from: senderEmail,
                 to: call.request.email,
@@ -65,20 +67,24 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail, gen
     return async function GetVarifyCode(call, callback) {
         const email =
             call.request.email;
-        if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        const purpose = call.request.purpose === undefined || call.request.purpose === ''
+            ? 'register' : call.request.purpose;
+        const key = (purpose === 'reset_password' ? 'code_reset_' : constModule.code_prefix) + email;
+        if (!['register', 'reset_password'].includes(purpose) || typeof email !== 'string'
+            || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
             callback(null, { email:
                 '', error: constModule.Errors.Exception }); return;
         }
         const now = Date.now();
         for (const [key, time] of delivered) if (now - time >= 60000) delivered.delete(key);
-        if (delivered.has(email)) {
+        if (delivered.has(key)) {
             let cached;
-            try { cached = await redisModule.getRedis(constModule.code_prefix + email); }
+            try { cached = await redisModule.getRedis(key); }
             catch { callback(null, { email, error: constModule.Errors.Exception }); return; }
             if (cached) { callback(null, { email, error: constModule.Errors.Success }); return; }
-            delivered.delete(email);
+            delivered.delete(key);
         }
-        if (!pending.has(email)) {
+        if (!pending.has(key)) {
             if (pending.size >= 32 || delivered.size >= 1024) {
                 callback(null, { email, error: constModule.Errors.Exception }); return;
             }
@@ -86,14 +92,14 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail, gen
                 execute(call, /** 保存唯一业务响应。 */ (_, response) => resolve(response)).catch(
                     /** 未预期异常仍完成所有等待者，防止悬挂请求。 */ () => resolve({ email, error: constModule.Errors.Exception }));
             });
-            pending.set(email, operation);
+            pending.set(key, operation);
         }
-        const operation = pending.get(email);
+        const operation = pending.get(key);
         try {
             const response = await operation;
-            if (response.error === constModule.Errors.Success) delivered.set(email, Date.now());
+            if (response.error === constModule.Errors.Success) delivered.set(key, Date.now());
             callback(null, response);
-        } finally { if (pending.get(email) === operation) pending.delete(email); }
+        } finally { if (pending.get(key) === operation) pending.delete(key); }
     };
 }
 

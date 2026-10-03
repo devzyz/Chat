@@ -42,7 +42,7 @@ public:
     /** @brief 销毁持有的 stub 池；调用方须先结束所有并发 RPC 与借用。 */
     ~StatusGrpcClient() = default;
     /** @brief 请求 Status 选择聊天服务器并颁发登录信息，返回协议响应及失败映射。 */
-    GetChatServerRsp GetChatServer(int uid);
+    GetChatServerRsp GetChatServer(int uid, long long auth_version = 0);
     /** @brief 按显式端点、策略和容量建立 Status stub 池，不发起业务 RPC。 */
     StatusGrpcClient(
         const std::string& host,

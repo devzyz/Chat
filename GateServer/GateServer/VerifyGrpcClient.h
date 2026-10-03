@@ -40,7 +40,7 @@ class VerifyGrpcClient : public Singleton<VerifyGrpcClient> {
 
 public:
     /** @brief 调用外部验证码 RPC 并返回其业务响应；保留协议方法名，不自动重试发信。 */
-    GetVarifyRsp GetVarifyCode(std::string email);
+    GetVarifyRsp GetVarifyCode(std::string email, const std::string& purpose = "register");
     /** @brief 按显式端点、策略和容量建立验证码 stub 池，不触发发信。 */
     VerifyGrpcClient(
         const std::string& host,

@@ -24,3 +24,5 @@ Domain is Business/Architecture. T08-STATUS-01..07/14 are Unit cases in `server_
 The internal `StatusStore` port has a production `RedisMgr` Adapter and scoped in-memory test Adapters. The token-source seam has a production UUID Adapter and deterministic test Adapter. Neither internal seam is exposed through the gRPC caller Interface, and tests observe results only through `Assign/Validate`.
 
 RED covered the missing Interface/empty-list case and ignored store false. GREEN links one `StatusRouting` static library into StatusServer, ServerUnitTests, and ServerComponentTests. Ignoring `PutToken(false)` made T08-STATUS-09 fail and was restored. Real Redis command/disconnect/TTL behavior remains Phase 3C; real Status process/business transport composition remains Phase 3B/3C.
+
+Assignments carry the Gate credential epoch. The production Redis adapter rejects stale epochs atomically; hosted four-process tests verify that delayed pre-reset issuance cannot restore a revoked token. Component stores do not prove Redis atomicity.

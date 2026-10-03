@@ -55,6 +55,9 @@ QString UserMgr::token() const
 
 void UserMgr::setUserInfo(std::shared_ptr<UserInfo> user_info)
 {
+    if (_user_info && user_info && _user_info->_uid == user_info->_uid) {
+        _user_info = std::move(user_info); return;
+    }
     delete _submissions; _submissions = nullptr;
     delete _uploads; _uploads = nullptr;
     delete _remoteAvatars;

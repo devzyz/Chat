@@ -891,8 +891,19 @@ class GetChatServerReq final : public ::google::protobuf::Message
 
   // accessors -------------------------------------------------------
   enum : int {
+    kAuthVersionFieldNumber = 2,
     kUidFieldNumber = 1,
   };
+  // int64 auth_version = 2;
+  void clear_auth_version() ;
+  ::int64_t auth_version() const;
+  void set_auth_version(::int64_t value);
+
+  private:
+  ::int64_t _internal_auth_version() const;
+  void _internal_set_auth_version(::int64_t value);
+
+  public:
   // int32 uid = 1;
   void clear_uid() ;
   ::int32_t uid() const;
@@ -907,7 +918,7 @@ class GetChatServerReq final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 1,
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
                                    0, 0,
                                    2>
       _table_;
@@ -929,6 +940,7 @@ class GetChatServerReq final : public ::google::protobuf::Message
         const GetChatServerReq& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::int64_t auth_version_;
     ::int32_t uid_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -959,7 +971,7 @@ inline void GetChatServerReq::clear_uid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.uid_ = 0;
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000001U);
+                  0x00000002U);
 }
 inline ::int32_t GetChatServerReq::uid() const {
   // @@protoc_insertion_point(field_get:message.GetChatServerReq.uid)
@@ -967,7 +979,7 @@ inline ::int32_t GetChatServerReq::uid() const {
 }
 inline void GetChatServerReq::set_uid(::int32_t value) {
   _internal_set_uid(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:message.GetChatServerReq.uid)
 }
 inline ::int32_t GetChatServerReq::_internal_uid() const {
@@ -977,6 +989,31 @@ inline ::int32_t GetChatServerReq::_internal_uid() const {
 inline void GetChatServerReq::_internal_set_uid(::int32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.uid_ = value;
+}
+
+// int64 auth_version = 2;
+inline void GetChatServerReq::clear_auth_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_version_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline ::int64_t GetChatServerReq::auth_version() const {
+  // @@protoc_insertion_point(field_get:message.GetChatServerReq.auth_version)
+  return _internal_auth_version();
+}
+inline void GetChatServerReq::set_auth_version(::int64_t value) {
+  _internal_set_auth_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:message.GetChatServerReq.auth_version)
+}
+inline ::int64_t GetChatServerReq::_internal_auth_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.auth_version_;
+}
+inline void GetChatServerReq::_internal_set_auth_version(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.auth_version_ = value;
 }
 
 // -------------------------------------------------------------------

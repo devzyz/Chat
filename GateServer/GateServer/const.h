@@ -33,6 +33,7 @@ enum ErrorCodes {
 	EmailNotMatch = 1007, // 邮箱不匹配
 	PasswdUpFailed = 1008, // 更新密码失败
 	PasswdInvalid = 1009, // 密码更新失败
+    TokenInvalid = 1011, // 当前凭据已被替换
 };
 
 // 用于实现在defer类析构时，自动执行构造传递的lambda或者function函数
