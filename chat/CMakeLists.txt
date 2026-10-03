@@ -150,6 +150,7 @@ set(PROJECT_SOURCES
         mainwindow.cpp
         mainwindow.h
         mainwindow.ui
+        chatwindowplacement.h
 )
 
 if(WIN32)
@@ -715,7 +716,7 @@ if(BUILD_TESTING)
         editavatardialog.h editavatardialog.cpp editavatardialog.ui
         avatarcropwidget.h avatarcropwidget.cpp)
     target_link_libraries(resource_transfer_tests PRIVATE chat_list_view chat_resource_transfer chat_client_login Qt${QT_VERSION_MAJOR}::Test)
-    add_test(NAME conversation_attention.widgets COMMAND resource_transfer_tests conversationAttentionWidgets)
+    add_test(NAME conversation_attention.widgets COMMAND resource_transfer_tests conversationAttentionWidgets chatWindowPlacement)
     add_test(NAME user_search.widgets COMMAND resource_transfer_tests searchCancellationWidgets)
     set_tests_properties(user_search.widgets PROPERTIES
         ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 30)

@@ -21,11 +21,42 @@
 #include "chatdialog.h"
 #include "searchlist.h"
 #include "usersearchcontroller.h"
+#include "chatwindowplacement.h"
+#include <QMainWindow>
 
 /** @brief 验证资源传输、账号隔离和消息页面生命周期。 */
 class ResourceTransferTests : public QObject {
     Q_OBJECT
 private slots:
+    /** @brief 验证登录位置扩为聊天窗口后，编辑器和发送按钮仍位于各种逻辑屏幕区域内。 */
+    void chatWindowPlacement() {
+        for (const QRect available : {QRect(0, 0, 1536, 832), QRect(0, 0, 1280, 680),
+                QRect(-1536, 80, 1536, 832), QRect(1920, -180, 1280, 900)}) {
+            QMainWindow window;
+            window.setFixedSize(300, 500);
+            window.move(available.center());
+            auto *page = new ChatDialog(&window);
+            page->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
+            window.setCentralWidget(page);
+            page->show();
+            window.show();
+            QCoreApplication::processEvents();
+            placeChatWindow(window, available);
+            QCoreApplication::processEvents();
+            QVERIFY2(available.contains(window.frameGeometry()), "chat frame escapes available desktop");
+            QVERIFY(window.minimumHeight() < 900);
+            QVERIFY(window.maximumHeight() > window.height());
+            QVERIFY(window.windowFlags().testFlag(Qt::WindowMaximizeButtonHint));
+            QVERIFY(window.windowFlags().testFlag(Qt::CustomizeWindowHint));
+            auto *send = page->findChild<QPushButton*>("send_btn");
+            auto *editor = page->findChild<QTextEdit*>("chat_edit");
+            QVERIFY(send); QVERIFY(editor);
+            QVERIFY(send->isVisible()); QVERIFY(editor->isVisible());
+            QVERIFY(available.contains(QRect(send->mapToGlobal(QPoint()), send->size())));
+            QVERIFY(available.contains(QRect(editor->mapToGlobal(QPoint()), editor->size())));
+            QVERIFY(editor->height() > 0);
+        }
+    }
     /** @brief 关闭真实搜索等待窗立即取消请求，迟到结果无效且可以重新搜索。 */
     void searchCancellationWidgets() {
         QTemporaryDir directory;

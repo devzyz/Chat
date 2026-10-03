@@ -49,7 +49,7 @@
 - gRPC handler MUST 在所有路径上只调用一次 callback。
 - Redis、SMTP、UUID 和时钟 SHOULD 通过可注入边界访问，使 handler 可在无外部服务时测试。
 - 捕获错误后不得只 `console.log` 并继续返回成功。
-- `bindAsync` MUST 检查 error 和实际端口后再 `server.start()`。
+- `bindAsync` MUST 检查 error 和实际端口后才报告就绪；当前锁定的 grpc-js 在绑定后自动服务，MUST NOT 调用已弃用的 `server.start()`。
 - 验证码、邮件密码和 Redis 密码 MUST NOT 输出到控制台。
 
 ### 配置与测试

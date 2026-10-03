@@ -6,6 +6,8 @@
 #include <QStatusBar>
 #include "usermgr.h"
 #include "submissionexitguard.h"
+#include "chatwindowplacement.h"
+#include <QScreen>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -143,8 +145,7 @@ void MainWindow::loginSwitchChat(AuthFlowId flowId) {
     _login_dlg->hide();
     _chat_dlg->show();
 
-    this->setMinimumSize(QSize(1050, 900));
-    this->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+    placeChatWindow(*this, screen()->availableGeometry());
     _ui_status = UIStatus::CHAT_UI;
     _session.beginSession(_chat_dlg);
 }
@@ -207,9 +208,10 @@ void MainWindow::offlineLogin()
     setCentralWidget(_login_dlg);
 
     // 设置当前minwindow的最大值与最小值
-    this->setMaximumSize(300,500);
-    this->setMinimumSize(300,500);
-    this->resize(300, 500);
+    if (isMaximized()) showNormal();
+    setFixedSize(300, 500);
+    setWindowFlag(Qt::CustomizeWindowHint, false);
+    show();
 
     _login_dlg->show();
     // 连接登录界面和注册界面

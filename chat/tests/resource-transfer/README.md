@@ -7,6 +7,12 @@ Test IDs: Q04-RESOURCE-01..05, mapped by method in `tests/TEST-CONTRACT-MATRIX.m
 loopback HTTP/filesystem server with explicit authentication fixtures.
 For headless execution use `-platform minimal -style Fusion`.
 
+`conversation_attention.widgets` 同时运行 `chatWindowPlacement`：将真实 ChatDialog
+放入具有登录页固定尺寸的主窗口，调用生产 `placeChatWindow`，检查 125%/150% 缩放下的
+逻辑可用区域、负坐标副屏及有偏移的屏幕中，窗口边框、编辑器和发送按钮均在区域内，
+且聊天页解除固定尺寸并保留最大化能力。该测试不依赖实际显示器。
+`conversationAttentionWidgets` 另检查默认首项选择（UID 0）不产生错误警告。
+
 `conversation_attention.widgets` 是 Business / Component CTest 入口，复用该目标中
 `conversationAttentionWidgets`，只使用真实 Qt 控件和临时 SQLite，不需要 ResourceServer。
 它验证未加载会话的消息提醒、分页、窗口重建、账号存储重开、点击清除及清除状态持久化。
