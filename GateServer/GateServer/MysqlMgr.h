@@ -12,9 +12,10 @@ public:
 	int RegUser(const std::string& name, const std::string& email, const std::string& pwd);
 	/** @brief 核对用户名与邮箱是否属于同一用户，返回校验结果。 */
 	bool CheckEmail(const std::string& username, const std::string& email);
-	/** @brief 更新指定用户密码并返回数据库操作结果，不在此处完成验证码校验。 */
-	bool UpdatePassword(const std::string& username, const std::string& password, const std::string& email);
-	/** @brief 按邮箱核验密码，成功时填充用户资料，失败结果不得作为已认证身份使用。 */
+    /** @brief 账号锁内撤销凭据再更新密码，传播存储或撤销失败。 */
+    bool UpdatePassword(const std::string& username, const std::string& password, const std::string& email,
+        const std::function<bool(int)>& revoke);
+    /** @brief 核验凭据并返回持有账号锁的资料；调用方保持租约直至发布 Token 结束。 */
 	bool CheckPassword(const std::string& email, const std::string& password, UserInfo& userinfo);
 private:
 	/** @brief 初始化MysqlMgr，提供进程内 DAO 访问入口并转发数据库业务操作，不代表跨服务事务。 */

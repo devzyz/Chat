@@ -11,6 +11,8 @@ service StatusService {
 
 message GetChatServerReq {
   int32 uid = 1;
+  // Credential generation read under the Gate account lock; stale requests cannot republish a token.
+  int64 auth_version = 2;
 }
 
 message GetChatServerRsp {

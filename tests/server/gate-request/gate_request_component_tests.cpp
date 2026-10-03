@@ -36,7 +36,8 @@ public:
 	}
 
 	/** 记录调用后返回指定验证码结果或抛测试异常。 */
-	int RequestCode(const std::string&) override {
+	int RequestCode(const std::string&, const std::string& purpose) override {
+        last_purpose = purpose;
 		calls_->push_back("verification");
 		if (throw_on_call) {
 			throw std::runtime_error("synthetic verification failure");
@@ -45,6 +46,7 @@ public:
 	}
 
 	int result = kSuccess;
+    std::string last_purpose;
 	bool throw_on_call = false;
 
 private:
@@ -55,7 +57,10 @@ private:
 class CodeStoreAdapter final : public gate::internal::CodeStore {
 public:
     /** @brief 模拟验证码原子消费；真实 Redis 并发语义由集成测试覆盖。 */
-    bool ConsumeCode(const std::string&, const std::string&) override { return consume_result; }
+    bool ConsumeCode(const std::string&, const std::string&, const std::string& purpose) override {
+        consumed_purpose = purpose; return consume_result;
+    }
+    std::string read_purpose, consumed_purpose;
     bool consume_result = true;
 
 	/** 共享调用顺序记录器。 */
@@ -64,7 +69,8 @@ public:
 	}
 
 	/** 记录验证码读取后返回预设值或抛异常。 */
-	std::optional<std::string> ReadCode(const std::string&) override {
+	std::optional<std::string> ReadCode(const std::string&, const std::string& purpose) override {
+        read_purpose = purpose;
 		calls_->push_back("code.read");
 		if (throw_on_call) {
 			throw std::runtime_error("synthetic code-store failure");
@@ -142,7 +148,8 @@ public:
 	}
 
 	/** 记录选服调用后返回预设结果或抛异常。 */
-	gate::internal::StatusAssignment Assign(int) override {
+	gate::internal::StatusAssignment Assign(int, long long version) override {
+        assigned_version = version;
 		calls_->push_back("status.assign");
 		if (throw_on_call) {
 			throw std::runtime_error("synthetic status failure");
@@ -151,6 +158,14 @@ public:
 	}
 
 	gate::internal::StatusAssignment assignment;
+    long long assigned_version = -1;
+    bool revoked = true;
+    /** @brief 记录撤销调用并允许模拟依赖错误。 */
+    bool Revoke(int, const std::string&) override {
+        calls_->push_back("status.revoke");
+        if (throw_on_call) throw std::runtime_error("synthetic revoke failure");
+        return revoked;
+    }
 	bool throw_on_call = false;
 
 private:
@@ -213,6 +228,23 @@ protected:
 	std::unique_ptr<gate::GateRequest> module;
 };
 
+/** @brief 撤销必须提供有效 UID 和非空 Token；依赖失败不伪装成退出成功。 */
+TEST_F(GateRequestComponentTests, LogoutRequiresCredentialsAndPropagatesRevocationFailure) {
+    Json::Value request;
+    request["uid"] = 42; request["token"] = "synthetic-session-fixture";
+    ExpectResult(module->Handle(gate::Endpoint::Logout, request), kSuccess);
+    EXPECT_EQ(*calls, std::vector<std::string>{"status.revoke"});
+    calls->clear(); status->revoked = false;
+    ExpectResult(module->Handle(gate::Endpoint::Logout, request), 1011);
+    status->throw_on_call = true;
+    ExpectResult(module->Handle(gate::Endpoint::Logout, request), kRpcFailed);
+    calls->clear(); request["uid"] = "42";
+    ExpectResult(module->Handle(gate::Endpoint::Logout, request), kJsonError);
+    request["uid"] = 42; request["token"] = "";
+    ExpectResult(module->Handle(gate::Endpoint::Logout, request), kJsonError);
+    EXPECT_TRUE(calls->empty());
+}
+
 /** 验证缺少邮箱在调用任何依赖前被拒绝。 */
 TEST_F(GateRequestComponentTests, VerificationWithoutEmailFailsBeforeAdapters) {
 	// T08-GATE-01
@@ -237,6 +269,15 @@ TEST_F(GateRequestComponentTests, VerificationSuccessReturnsAfterOneRpcCall) {
 
 	ExpectResult(result, kSuccess);
 	EXPECT_EQ(*calls, std::vector<std::string>{"verification"});
+    EXPECT_EQ(verification->last_purpose, "register");
+    request["purpose"] = "reset_password";
+    ExpectResult(module->Handle(gate::Endpoint::GetVarifyCode, request), kSuccess);
+    EXPECT_EQ(verification->last_purpose, "reset_password");
+    for (const auto& invalid : {Json::Value("login"), Json::Value(42), Json::Value("")}) {
+        calls->clear(); request["purpose"] = invalid;
+        ExpectResult(module->Handle(gate::Endpoint::GetVarifyCode, request), kJsonError);
+        EXPECT_TRUE(calls->empty());
+    }
 }
 
 /** 验证验证码 RPC 失败和异常均只调用一次并失败关闭。 */
@@ -311,6 +352,8 @@ TEST_F(GateRequestComponentTests, RegistrationExistingUserFailsAfterOrderedCheck
 
 	ExpectResult(result, kUserExists);
 	EXPECT_EQ(*calls, (std::vector<std::string>{"code.read", "user.create"}));
+    EXPECT_EQ(code_store->read_purpose, "register");
+    EXPECT_EQ(code_store->consumed_purpose, "register");
 
 	calls->clear();
 	user_store->throw_on_call = true;
@@ -385,6 +428,8 @@ TEST_F(GateRequestComponentTests, ResetUpdateFailureReturnsStableBusinessError) 
 
 	ExpectResult(result, kPasswordUpdateFailed);
 	EXPECT_EQ(*calls, (std::vector<std::string>{"code.read", "user.identity", "user.update"}));
+    EXPECT_EQ(code_store->read_purpose, "reset_password");
+    EXPECT_EQ(code_store->consumed_purpose, "reset_password");
 }
 
 /** 验证重置成功遵循验证码、身份、更新的顺序。 */

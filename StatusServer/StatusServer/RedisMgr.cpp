@@ -2,13 +2,17 @@
 #include "../../common/redis/Reply.h"
 #include "ConfigMgr.h"
 
-bool RedisMgr::PutExpiringToken(const std::string& key, const std::string& field, const std::string& value) {
+bool RedisMgr::PutExpiringToken(const std::string& key, const std::string& field, const std::string& value, long long auth_version) {
     auto* connection = _pool->GetConnection();
     if (!connection) return false;
     Defer release(/** @brief 归还独占 Redis 连接。 */ [this, connection] { _pool->ReturnConnection(connection); });
-    const std::string script = "redis.call('HSET',KEYS[1],ARGV[1],ARGV[2]); return redis.call('EXPIRE',KEYS[1],86400)";
-    auto* reply = static_cast<redisReply*>(redisCommand(connection, "EVAL %b 1 %b %b %b",
-        script.data(), script.size(), key.data(), key.size(), field.data(), field.size(), value.data(), value.size()));
+    const std::string script = "if (redis.call('GET',KEYS[2]) or '0')~=ARGV[3] then return 0 end; "
+        "redis.call('HSET',KEYS[1],ARGV[1],ARGV[2]); return redis.call('EXPIRE',KEYS[1],86400)";
+    const auto version_key = "auth_version_" + key;
+    const auto version = std::to_string(auth_version);
+    auto* reply = static_cast<redisReply*>(redisCommand(connection, "EVAL %b 2 %b %b %b %b %b",
+        script.data(), script.size(), key.data(), key.size(), version_key.data(), version_key.size(),
+        field.data(), field.size(), value.data(), value.size(), version.data(), version.size()));
     Defer free_reply(/** @brief 释放命令回复。 */ [reply] { if (reply) freeReplyObject(reply); });
     return reply && reply->type == REDIS_REPLY_INTEGER && reply->integer == 1;
 }

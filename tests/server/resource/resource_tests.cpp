@@ -103,6 +103,41 @@ TEST_F(StoreTest, DeclaredLengthAndBufferAreBounded) {
     EXPECT_NO_THROW(limited.Create(8, "picture.png", "image/png", bytes.size(), digest));
     EXPECT_THROW(limited.Create(9, "picture.png", "image/png", 1, digest), resource::Error);
     EXPECT_EQ(limited.Owned(first.id, 7).offset, 0u);
+
+    // 失联上传只保留七天；完成资源、仍活跃的续传和其他账号不受回收影响。
+    const auto abandoned_root = root / "abandoned";
+    resource::ResourceStore abandoned(abandoned_root, 1000000);
+    std::vector<std::string> abandoned_ids;
+    for (int index = 0; index < 32; ++index) abandoned_ids.push_back(Create(abandoned).id);
+    EXPECT_THROW(Create(abandoned), resource::Error);
+    const auto old = std::filesystem::file_time_type::clock::now() - std::chrono::hours(24 * 8);
+    for (const auto& id : abandoned_ids) {
+        std::filesystem::last_write_time(abandoned_root / (id + ".json"), old);
+        std::filesystem::last_write_time(abandoned_root / (id + ".part"), old);
+    }
+    // 查询续传位置延长本任务保留期，不能被另一个新上传清理。
+    EXPECT_EQ(abandoned.Owned(abandoned_ids.front(), 7).offset, 0u);
+    EXPECT_NO_THROW(Create(abandoned));
+    EXPECT_NO_THROW(abandoned.Inspect(abandoned_ids.front()));
+    EXPECT_THROW(abandoned.Inspect(abandoned_ids.back()), resource::Error);
+
+    const auto complete = Create(abandoned);
+    Write(abandoned, complete.id);
+    abandoned.Complete(complete.id, 7);
+    std::filesystem::last_write_time(abandoned_root / (complete.id + ".json"), old);
+    std::filesystem::last_write_time(abandoned_root / (complete.id + ".data"), old);
+    EXPECT_NO_THROW(Create(abandoned));
+    EXPECT_TRUE(abandoned.Inspect(complete.id).ready);
+    EXPECT_EQ(resource::ResourceStore::Digest(abandoned_root / (complete.id + ".data")), digest);
+
+    // 回收中断后重新打开存储，删除标记完成剩余清理且不占用配额。
+    const auto interrupted = Create(abandoned);
+    std::filesystem::rename(abandoned_root / (interrupted.id + ".json"),
+        abandoned_root / (interrupted.id + ".discard"));
+    resource::ResourceStore recovered(abandoned_root, 1000000);
+    EXPECT_NO_THROW(Create(recovered));
+    EXPECT_FALSE(std::filesystem::exists(abandoned_root / (interrupted.id + ".part")));
+    EXPECT_FALSE(std::filesystem::exists(abandoned_root / (interrupted.id + ".discard")));
 }
 /** 验证资源标识不能穿越存储目录。 */
 TEST_F(StoreTest, PathTraversalRejected) {

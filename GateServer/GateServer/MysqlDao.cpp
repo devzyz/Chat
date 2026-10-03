@@ -4,6 +4,50 @@
 #include "../../common/auth/PasswordHash.h"
 
 namespace {
+/** @brief 持有账号级 MySQL 咨询锁及独占连接，登录发布结束前阻止并发改密；池须晚于请求析构。 */
+class CredentialLease {
+public:
+    /** @brief 接管池连接；无效连接拒绝认证。 */
+    CredentialLease(MysqlConnectionPool& pool, std::unique_ptr<SqlConnection> connection)
+        : pool_(pool), connection_(std::move(connection)) {
+        if (!connection_) throw std::runtime_error("credential storage unavailable");
+    }
+    /** @brief 查询账号 UID 后取得跨 Gate 实例共享的锁；邮箱大小写由数据库规则解析。 */
+    int Lock(const std::string& email) {
+        std::unique_ptr<sql::PreparedStatement> lookup(Db().prepareStatement("SELECT uid FROM user WHERE email" "=?"));
+        lookup->setString(1, email);
+        std::unique_ptr<sql::ResultSet> user(lookup->executeQuery());
+        if (!user->next()) return 0;
+        const int uid = user->getInt(1); user.reset(); lookup.reset();
+        lock_ = "chat-auth-" + std::to_string(uid);
+        std::unique_ptr<sql::PreparedStatement> acquire(Db().prepareStatement("SELECT GET_LOCK(?,1)"));
+        acquire->setString(1, lock_);
+        std::unique_ptr<sql::ResultSet> result(acquire->executeQuery());
+        if (!result->next() || result->getInt(1) != 1) throw std::runtime_error("credential lock unavailable");
+        locked_ = true;
+        return uid;
+    }
+    /** @brief 仅在租约存活期间借出独占 SQL 连接。 */
+    sql::Connection& Db() { return *connection_->_con; }
+    /** @brief 释放账号锁后归还连接；不确定锁状态时销毁连接，不向池泄漏会话锁。 */
+    ~CredentialLease() {
+        try {
+            if (!lock_.empty()) {
+                std::unique_ptr<sql::PreparedStatement> release(Db().prepareStatement("SELECT RELEASE_LOCK(?)"));
+                release->setString(1, lock_);
+                std::unique_ptr<sql::ResultSet> result(release->executeQuery());
+                if (!result->next() || (locked_ && result->getInt(1) != 1)) connection_->_con.reset();
+            }
+        } catch (...) { connection_->_con.reset(); }
+        pool_.ReturnConnection(std::move(connection_));
+    }
+private:
+    MysqlConnectionPool& pool_;
+    std::unique_ptr<SqlConnection> connection_;
+    std::string lock_;
+    bool locked_ = false;
+};
+
 /** @brief 使用有限连接和读写期限建立 JDBC 连接，禁止自动重连重放写操作。 */
 std::unique_ptr<sql::Connection> ConnectGateMysql(const std::string& url, const std::string& user,
     const std::string& password, const std::string& schema) {
@@ -136,18 +180,17 @@ bool MysqlDao::CheckEmail(const std::string& username, const std::string& email)
 	}
 }
 
-bool MysqlDao::UpdatePassword(const std::string& username, const std::string& password, const std::string& email) {
-	auto con = _pool->GetConnection();
-	if (con == nullptr) {
-		return false;
-	}
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &con]() {
-		_pool->ReturnConnection(std::move(con));
-		});
-
+bool MysqlDao::UpdatePassword(const std::string& username, const std::string& password, const std::string& email,
+    const std::function<bool(int)>& revoke) {
 	try {
+        CredentialLease lease(*_pool, _pool->GetConnection());
+        const int uid = lease.Lock(email);
+        if (uid <= 0) return false;
+
+        // 锁覆盖 Token 撤销和密码写入；撤销先失败则密码保持原值，SQL 失败则保守地保持已撤销。
+        if (!revoke(uid)) return false;
 		// 准备查询语句
-		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("UPDATE user SET password = ? WHERE name = ? AND email = ? "));
+		std::unique_ptr<sql::PreparedStatement> pstmt(lease.Db().prepareStatement("UPDATE user SET password = ? WHERE name = ? AND email = ? "));
 
 		// 绑定参数
 		pstmt->setString(1, authentication::HashPassword(password));
@@ -167,18 +210,10 @@ bool MysqlDao::UpdatePassword(const std::string& username, const std::string& pa
 }
 
 bool MysqlDao::CheckPassword(const std::string& email, const std::string& password, UserInfo& userinfo) {
-	auto con = _pool->GetConnection();
-
-	if (con == nullptr) {
-		return false;
-	}
-
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &con] {
-		_pool->ReturnConnection(std::move(con));
-		});
-
 	try {
-		std::unique_ptr<sql::PreparedStatement> pstmt(con->_con->prepareStatement("SELECT * FROM user WHERE email = ?"));
+        auto lease = std::make_shared<CredentialLease>(*_pool, _pool->GetConnection());
+        if (lease->Lock(email) <= 0) return false;
+		std::unique_ptr<sql::PreparedStatement> pstmt(lease->Db().prepareStatement("SELECT * FROM user WHERE email = ?"));
 
 		pstmt->setString(1, email); // 绑定参数
 
@@ -204,14 +239,14 @@ bool MysqlDao::CheckPassword(const std::string& email, const std::string& passwo
 		userinfo.uid = res->getInt("uid");
         res.reset();
         if (!authentication::IsPasswordHash(origin_password)) {
-            std::unique_ptr<sql::PreparedStatement> upgrade(con->_con->prepareStatement(
+            std::unique_ptr<sql::PreparedStatement> upgrade(lease->Db().prepareStatement(
                 "UPDATE user SET password=? WHERE uid=? AND BINARY password=? "));
             upgrade->setString(1, authentication::HashPassword(password));
             upgrade->setInt(2, userinfo.uid);
             upgrade->setString(3, origin_password);
             if (upgrade->executeUpdate() != 1) return false;
         }
-
+        userinfo.credential_lease = std::move(lease);
 		return true;
 	}
 	catch (sql::SQLException& e) {

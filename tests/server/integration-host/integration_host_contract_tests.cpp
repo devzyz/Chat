@@ -23,7 +23,7 @@ using namespace std::chrono_literals;
 class InMemoryVerification final : public gate::internal::VerificationPort {
 public:
 	/** 返回验证码请求成功，不执行外部操作。 */
-	int RequestCode(const std::string&) override {
+	int RequestCode(const std::string&, const std::string&) override {
 		return 0;
 	}
 };
@@ -32,10 +32,10 @@ public:
 class InMemoryCodeStore final : public gate::internal::CodeStore {
 public:
     /** @brief 模拟验证码原子消费；真实 Redis 并发语义由集成测试覆盖。 */
-    bool ConsumeCode(const std::string&, const std::string&) override { return true; }
+    bool ConsumeCode(const std::string&, const std::string&, const std::string&) override { return true; }
 
 	/** 返回空验证码，避免依赖真实 Redis。 */
-	std::optional<std::string> ReadCode(const std::string&) override {
+	std::optional<std::string> ReadCode(const std::string&, const std::string&) override {
 		return std::nullopt;
 	}
 };
@@ -68,8 +68,10 @@ public:
 /** 提供默认失败的选服端口替身。 */
 class InMemoryStatusPort final : public gate::internal::StatusPort {
 public:
+    /** @brief 为宿主路由测试返回合成撤销成功结果。 */
+    bool Revoke(int, const std::string&) override { return true; }
 	/** 返回默认分配结果，不发起外部 RPC。 */
-	gate::internal::StatusAssignment Assign(int) override {
+	gate::internal::StatusAssignment Assign(int, long long) override {
 		return {};
 	}
 };
@@ -83,7 +85,7 @@ public:
 	}
 
 	/** 接受 Token 写入但不持久化，仅满足宿主装配接口。 */
-	bool PutToken(int, const std::string&) override {
+	bool PutToken(int, const std::string&, long long) override {
 		return true;
 	}
 

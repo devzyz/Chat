@@ -34,9 +34,10 @@ StatusGrpcClient::StatusGrpcClient(
           policy.acquire_timeout)),
       _policy(policy) {}
 
-GetChatServerRsp StatusGrpcClient::GetChatServer(int uid) {
+GetChatServerRsp StatusGrpcClient::GetChatServer(int uid, long long auth_version) {
     GetChatServerReq request;
     request.set_uid(uid);
+    request.set_auth_version(auth_version);
     auto result = rpc::InvokeUnary<RPCConnection, GetChatServerReq, GetChatServerRsp>(
         *_pool,
         request,

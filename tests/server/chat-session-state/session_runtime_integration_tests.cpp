@@ -1,3 +1,4 @@
+#include "AuthenticatedRecipient.h"
 #include "session_test_support.h"
 using namespace session_test;
 
@@ -92,6 +93,17 @@ TEST(SessionRuntimeIntegrationTests, AuthenticationReplacementCannotDeleteNewPre
     EXPECT_EQ(h.presence->Find(42).presence->session_id, b.session->Id());
     EXPECT_EQ(a.session->AuthenticatedUid(), 0);
     EXPECT_EQ(h.Bind(b.session, 43), SessionBindResult::AlreadyBound);
+    EXPECT_EQ(FindAuthorizedRecipient(*h.directory, *h.presence, 42), b.session);
+    // 不依赖接收方再发送心跳：凭据/归属已失效时，推送入口必须失败关闭。
+    h.presence->Publish(42, {"remote", "new-session"});
+    EXPECT_FALSE(FindAuthorizedRecipient(*h.directory, *h.presence, 42));
+    EXPECT_EQ(h.Snapshot(b.session).second, SessionCloseReason::Replaced);
+    Connected c(h);
+    ASSERT_EQ(h.Bind(c.session, 43), SessionBindResult::Bound);
+    h.presence->unavailable = true;
+    EXPECT_FALSE(FindAuthorizedRecipient(*h.directory, *h.presence, 43));
+    EXPECT_EQ(h.Snapshot(c.session).second, SessionCloseReason::Replaced);
+    h.presence->unavailable = false;
 }
 // T09-SESSION-07
 /** 验证发布在线状态期间关闭会话会回滚，不能完成认证。 */

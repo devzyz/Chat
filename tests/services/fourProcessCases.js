@@ -10,9 +10,21 @@ const { randomUUID } = require('node:crypto');
 const { createRequire } = require('node:module');
 const { SchemaMigration } = require('../../schema/SchemaMigration');
 const { MysqlSession, mysqlArgs } = require('../../schema/MysqlSession');
+const { verifySessionLifecycle } = require('./sessionLifecycleCases');
 const requireVarify = createRequire(path.resolve(__dirname, '../../VarifyServer/package.json'));
 const grpc = requireVarify('@grpc/grpc-js');
 const loader = requireVarify('@grpc/proto-loader');
+
+/** 对同机 Status 或 Varify 执行有界 gRPC 请求，成功与错误路径都关闭本次客户端。 */
+async function rpcRequest(port, service, method, request) {
+    const file = service === 'StatusService' ? 'status.proto' : 'varify.proto';
+    const definition = grpc.loadPackageDefinition(loader.loadSync(path.resolve(__dirname, '../../proto', file), { defaults: true }));
+    const client = new definition.message[service](`127.0.0.1:${port}`, grpc.credentials.createInsecure());
+    try {
+        return await new Promise(/** 将有截止时间的 gRPC 调用结果接入 Promise。 */ (resolve, reject) => client[method](request,
+            { deadline: Date.now() + 2000 }, /** 传播 RPC 错误或返回响应值。 */ (error, value) => error ? reject(error) : resolve(value)));
+    } finally { client.close(); }
+}
 
 /** 保留一个临时 loopback 端口，并返回带释放操作的所有权对象。 */
 async function reserve() {
@@ -137,14 +149,9 @@ async function runFourProcessCases(coordinator, record) {
                 CHAT_FOUR_WIRE: JSON.stringify({ port: ports.ChatServer, login, requests }) }, timeout: 20000
         }));
     }
-    /** 对 Status 或 Varify 执行有界 gRPC 就绪请求，始终关闭客户端。 */
+    /** 根据服务名选择本次隔离端口，复用有界 RPC 调用。 */
     async function rpcReady(service, method, request) {
-        const file = service === 'StatusService' ? 'status.proto' : 'varify.proto';
-        const definition = grpc.loadPackageDefinition(loader.loadSync(path.resolve(__dirname, '../../proto', file)));
-        const client = new definition.message[service](`127.0.0.1:${ports[service === 'StatusService' ? 'StatusServer' : 'VarifyServer']}`, grpc.credentials.createInsecure());
-        try {
-            return await new Promise(/** 将有截止时间的 gRPC 调用结果接入 Promise。 */ (resolve, reject) => client[method](request, { deadline: Date.now() + 2000 }, /** 传播 RPC 错误或返回响应值。 */ (error, value) => error ? reject(error) : resolve(value)));
-        } finally { client.close(); }
+        return rpcRequest(ports[service === 'StatusService' ? 'StatusServer' : 'VarifyServer'], service, method, request);
     }
     /** 通过真实邮件验证码注册并登录本次唯一用户，保存后续协议身份。 */
     async function register(index) {
@@ -198,7 +205,10 @@ async function runFourProcessCases(coordinator, record) {
             await poll(/** 检查 Chat 已能处理并拒绝非法登录。 */ async () => (await wire({ uid: -1, token: 'invalid' })).error !== 0, 30000);
         });
         await test('Gate production HTTP ready', /** 启动 Gate 并等待公开测试路由响应。 */ async () => { await native('GateServer'); await poll(/** 检查 Gate 测试路由返回非空响应。 */ async () => Boolean(await http('/get_test')), 30000); });
-        await test('mail registration login and server selection', /** 通过真实入口注册两个测试用户。 */ async () => { await register(1); await register(2); });
+        await test('mail registration login and server selection', /** 通过真实入口注册两个用户并验证完整凭据生命周期。 */ async () => {
+            await register(1); await register(2);
+            await verifySessionLifecycle({ coordinator, http, rpcReady, user: users[0], port: ports.ChatServer });
+        });
         let chat;
         await test('TCP authentication and public private-chat creation', /** 通过 Chat 协议创建双方私聊并核对正的会话标识。 */ async () => {
             const result = await wire(users[0], [{ id: 1023, body: { self_id: users[0].uid, other_id: users[1].uid } }]);
@@ -291,8 +301,9 @@ async function runFourProcessCases(coordinator, record) {
         try {
             const client = await coordinator.redis();
             try {
-                const keys = recipients.map(/** 映射本次收件人的验证码键以定向清理。 */ email => `code_${email}`);
-                for (const user of users) for (const prefix of ['utoken_', 'uip_', 'ubaseinfo_', 'usessionid_', 'lock_']) keys.push(`${prefix}${user.uid}`);
+                const keys = recipients.flatMap(/** 定向清理本次收件人的验证码和尝试预算。 */ email =>
+                    ['code_', 'code_reset_', 'code_attempt_', 'code_attempt_reset_'].map(/** 组合当前测试收件人键。 */ prefix => prefix + email));
+                for (const user of users) for (const prefix of ['', 'auth_version_', 'utoken_', 'uip_', 'ubaseinfo_', 'usessionid_', 'usessiontoken_', 'lock_']) keys.push(`${prefix}${user.uid}`);
                 if (keys.length) { await client.del(...keys); assert.equal(await client.exists(...keys), 0); }
                 assert.equal(await client.hexists('logincount', runName), 0);
             } finally { client.disconnect(); }
@@ -318,4 +329,4 @@ async function runFourProcessCases(coordinator, record) {
     if (primary) throw primary;
 }
 
-module.exports = { reserve, stop, runFourProcessCases };
+module.exports = { reserve, stop, runFourProcessCases, rpcRequest };

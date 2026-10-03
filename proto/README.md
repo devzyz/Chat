@@ -56,3 +56,10 @@ reserving both the old number and name.
 The request contains recipient `uid`, `chat_id` and signed-64-bit `revision`; it is a hint,
 not a delivery/read acknowledgement. Existing fields and RPCs are unchanged. See
 [message state protocol](../docs/MessageStates.md#回执与同步).
+
+`varify.proto` adds `GetVarifyReq.purpose` (field 2): empty means registration;
+`reset_password` uses an independent code namespace. `status.proto` adds
+`GetChatServerReq.auth_version` (field 2): Status atomically compares the current
+revocation epoch before issuing a token. These additive fields preserve the wire
+schema but require coordinated Gate/Status/Chat/Varify/client deployment for the
+new authentication contract; see [Protocol](../docs/Protocol.md).

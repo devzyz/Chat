@@ -10,7 +10,7 @@ StatusServiceImpl::StatusServiceImpl(StatusRouting& routing)
 Status StatusServiceImpl::GetChatServer(
 	ServerContext*, const GetChatServerReq* request, GetChatServerRsp* reply) {
 	SPDLOG_DEBUG("chat server selection request received, uid={}", request->uid());
-	const auto result = routing_.Assign(request->uid());
+	const auto result = routing_.Assign(request->uid(), request->auth_version());
 	reply->set_error(result.error);
 	reply->set_host(result.host);
 	reply->set_port(result.port);

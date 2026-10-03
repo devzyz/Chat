@@ -4,7 +4,7 @@ Production entry: `gate::GateRequest::Handle(Endpoint, Json::Value)` in
 `GateServer/GateServer/GateRequest.h`. The GateServer executable and Component
 tests link the same `GateRequest.vcxproj` production library.
 
-Implemented Component contracts are T08-GATE-01..16. The Module owns the four POST
+Implemented Component contracts are T08-GATE-01..17. The Module owns the five POST
 business sequences, early returns, and stable dependency-error mapping. Its four
 internal ports have production Adapters for the existing Gate managers/clients
 and scoped in-memory test Adapters that only inject outcomes and record calls.
@@ -21,14 +21,11 @@ returned `Result`. Dependency false/error/exception paths fail closed through th
 existing public `ErrorCodes`. The scoped in-memory Adapters record calls and inject
 results or exceptions; they do not reproduce orchestration decisions.
 
-Runner/report: `RunServerTests` / `server_component.xml` (16 of 56 Component cases,
-166 Server cases total). Each case is synchronous and bounded by the focused
-process's two-second hard limit. Fixtures use synthetic markers and scope cleanup;
-no real Redis, MySQL, gRPC, SMTP, socket, credential, or public endpoint is used.
-
-Real Gate HTTP composition remains Phase 3B. Real Redis/MySQL/Varify/Status/SMTP
-Adapters remain Phase 3C. Existing T06-GATE response allowlist contracts remain
-the sole parser/envelope/secret-field coverage.
+Runner/report: `RunServerTests` / `server_component.xml`; counts come from the runner registry.
+The adapters are scoped test doubles; real Redis/MySQL/Status behavior is covered by the
+hosted four-process acceptance, not inferred from these component cases.
+T08-GATE-17 covers logout input, current-credential revocation, and dependency failure.
+Verification cases also enforce registration/reset purpose separation.
 
 本轮补充非法输入、一次性消费失败与用户名/邮箱联合更新参数断言；口令测试验证随机盐、
 正确/错误输入、嵌入 NUL、损坏哈希与旧格式判定。真实数据库迁移认证由 GitHub 服务组合验证，

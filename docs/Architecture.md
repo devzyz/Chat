@@ -124,3 +124,11 @@ ChatServer 负责资源消息的参与者权限、事务提交及现有 TCP/gRPC
 ## Local message persistence
 
 `UserMgr` owns `MessageService`; its worker owns the SQLite connection. UI models consume stored value objects; TCP requests and callbacks enter through the service. Server sync uses the existing MySQL pool and locks the same conversation row as text/resource writers. See [MessageStorage](MessageStorage.md) and [message states and receipts](MessageStates.md).
+
+### 局域网 TLS 与客户端会话
+
+同机部署通过 VarifyServer 发布单元附带的独立 Node TLS 入口转发 Gate HTTP、Resource HTTP 与 Chat TCP。
+它只负责 TLS 和有界转发；账号校验仍在业务服务，内部 RPC 和明文上游只监听 loopback。
+配置及端口映射见 [Operations](Operations.md#tls-入口配置)。
+ClientSession 持有有限重连与退出撤销流程：暂时断线保留账号状态；主动退出及切换账号等待 Gate
+撤销成功后才调用 resetSession。强制退出仍只能做本地清理，不能保证远端即时撤销。

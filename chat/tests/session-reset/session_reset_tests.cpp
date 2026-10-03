@@ -37,6 +37,8 @@ private slots:
     void retryDoesNotCrossAuthenticatedAccounts();
     /** @brief 验证重连认证后沿用原 UUID 和业务载荷，仅递增发送尝试。 */
     void reconnectResendsIdenticalWirePayloadAfterAuthentication();
+    /** @brief 退出只有收到撤销确认才清理账号，失败仍可重试。 */
+    void logoutWaitsForRevocationAndPreservesStateOnFailure();
     /** @brief 验证社交读取落盘、回包关联、超时与账号生命周期隔离。 */
     void socialRequestsRespectSessionLifecycle();
 };
@@ -283,8 +285,12 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
     QTRY_COMPARE_WITH_TIMEOUT(connected.size(), 1, 2000);
     QTRY_VERIFY_WITH_TIMEOUT(peer.hasPendingConnections(), 2000);
     std::unique_ptr<QTcpSocket> first(peer.nextPendingConnection());
-    const QByteArray login = QJsonDocument(QJsonObject{{"error", 0}, {"uid", 101}}).toJson();
+    const QByteArray login = QJsonDocument(QJsonObject{{"error", 0}, {"uid", 101}, {"token", "synthetic-resume-fixture"}}).toJson();
     tcp->handleMessage(ReqId::ID_CHAT_LOGIN_RSP, login.size(), login);
+    ClientSession session;
+    QPointer<QObject> draft = new QObject(&session); draft->setProperty("draft", "unsent draft");
+    session.beginSession(draft);
+    const auto cleanup = qScopeGuard(/** @brief 失败路径也停止重连和账号存储。 */ [&] { session.resetSession(SessionResetReason::UnexpectedDisconnect); });
     const QByteArray request = QJsonDocument(QJsonObject{{"from_uid", 101}, {"to_uid", 102},
         {"chat_id", 501}, {"text_array", QJsonArray{QJsonObject{
         {"msg_uuid", "00000000-0000-4000-8000-000000000004"}, {"msg_content", "retry body"}}}}})
@@ -297,12 +303,16 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
     first->abort();
     QTRY_VERIFY_WITH_TIMEOUT(!closed.isEmpty(), 2000);
     QVERIFY(!closed.last()[0].toBool());
-    tcp->connectToServer(endpoint);
     QTRY_COMPARE_WITH_TIMEOUT(connected.size(), 2, 2000);
     QTRY_VERIFY_WITH_TIMEOUT(peer.hasPendingConnections(), 2000);
     std::unique_ptr<QTcpSocket> second(peer.nextPendingConnection());
-    QCOMPARE(second->bytesAvailable(), 0);
+    QTRY_VERIFY_WITH_TIMEOUT(second->bytesAvailable() > 4, 2000);
+    const auto authentication = QJsonDocument::fromJson(second->readAll().mid(4)).object();
+    QCOMPARE(authentication["uid"].toInt(), 101);
+    QCOMPARE(authentication["token"].toString(), QString("synthetic-resume-fixture"));
+    QVERIFY(draft); QCOMPARE(draft->property("draft").toString(), QString("unsent draft"));
     tcp->handleMessage(ReqId::ID_CHAT_LOGIN_RSP, login.size(), login);
+    QVERIFY(!session.isReconnecting());
     QSignalSpy recovery(service, &MessageService::syncRequested);
     service->start(directory.path(), 101);
     QTRY_COMPARE_WITH_TIMEOUT(recovery.size(), 1, 2000);
@@ -422,6 +432,43 @@ void SessionResetTests::socialRequestsRespectSessionLifecycle()
     }
     tcp->resetConnection(true);
     QTRY_VERIFY(!QFileInfo::exists(directory.path() + "/202/messages.lock"));
+}
+
+void SessionResetTests::logoutWaitsForRevocationAndPreservesStateOnFailure()
+{
+    // Q02-SESSION-10
+    const auto previousGate = gate_url_prefix;
+    ClientSession session;
+    auto user = UserMgr::instance();
+    const auto cleanup = qScopeGuard(/** @brief 结束本测试会话并恢复应用服务地址。 */ [&] {
+        session.resetSession(SessionResetReason::UnexpectedDisconnect); gate_url_prefix = previousGate;
+    });
+    QTcpServer gate; QVERIFY(gate.listen(QHostAddress::LocalHost, 0));
+    gate_url_prefix = "http://127.0.0.1:" + QString::number(gate.serverPort());
+    user->setUserInfo(std::make_shared<UserInfo>(101, "fixture", ""));
+    user->setToken("synthetic-logout-fixture");
+    QPointer<QObject> owned = new QObject(&session); session.beginSession(owned);
+    QSignalSpy completed(&session, &ClientSession::logoutFinished);
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        QVERIFY(session.requestLogout(SessionResetReason::Logout));
+        QVERIFY(session.isActive()); QVERIFY(owned);
+        QTRY_VERIFY_WITH_TIMEOUT(gate.hasPendingConnections(), 2000);
+        std::unique_ptr<QTcpSocket> socket(gate.nextPendingConnection());
+        QByteArray bytes;
+        QTRY_VERIFY_WITH_TIMEOUT((bytes += socket->readAll()).contains("synthetic-logout-fixture"), 2000);
+        QVERIFY(bytes.startsWith("POST /logout HTTP/1.1"));
+        const auto payload = QJsonDocument::fromJson(bytes.mid(bytes.indexOf("\r\n\r\n") + 4)).object();
+        QCOMPARE(payload.size(), 2); QCOMPARE(payload["uid"].toInt(), 101);
+        const QByteArray body = attempt == 0 ? "{\"error\":1002}" : "{\"error\":0}";
+        socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+            + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body);
+        socket->disconnectFromHost();
+        QTRY_COMPARE_WITH_TIMEOUT(completed.size(), attempt + 1, 2000);
+        QCOMPARE(completed.last()[0].toBool(), attempt == 1);
+        QCOMPARE(session.isActive(), attempt == 0);
+        if (attempt == 0) { QVERIFY(owned); QCOMPARE(user->uid(), 101); }
+    }
+    QVERIFY(!owned); QVERIFY(user->token().isEmpty());
 }
 
 QTEST_MAIN(SessionResetTests)

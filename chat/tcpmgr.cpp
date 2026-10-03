@@ -1083,11 +1083,19 @@ void TcpMgr::connectToServer(ServerInfo si)
     endpoint.flowId = ++_transportFlowId;
     endpoint.connectDeadlineMs = 5000;
     endpoint.writeDeadlineMs = 5000;
+    endpoint.tls = QUrl(gate_url_prefix).scheme() == QStringLiteral("https");
     _transport.connectTo(endpoint);
 }
 
 TcpMgr::~TcpMgr() {
     _transport.reset();
+}
+
+ServerInfo TcpMgr::connectionInfo() const {
+    ServerInfo result{}; result.Host = _host; result.Port = QString::number(_port);
+    result.Uid = UserMgr::instance()->uid(); result.Token =
+        UserMgr::instance()->token();
+    return result;
 }
 
 void TcpMgr::socialRequest(ReqId id, QJsonObject request, QObject *context,

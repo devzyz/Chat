@@ -3,8 +3,8 @@
 #include <optional>
 
 namespace chat_session {
-/** @brief 标识用户所在实例及具体会话，用于防止旧连接误删或误踢新连接。 */
-struct UserPresence { std::string server_id; SessionId session_id; };
+/** @brief 标识用户位置和绑定凭据；凭据仅供原子发布核验，不随在线位置查询或日志返回。 */
+struct UserPresence { std::string server_id; SessionId session_id; std::string authentication_token; };
 }
 enum class PresenceStatus { Found, NotFound, Unavailable };
 /** @brief 区分查得位置、不存在与存储不可用；Publish 的位置表示被替换的旧值。 */

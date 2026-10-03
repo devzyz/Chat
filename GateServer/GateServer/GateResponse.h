@@ -13,6 +13,7 @@ enum class Endpoint {
 	UserRegister,
 	ResetPassword,
 	UserLogin,
+    Logout,
 };
 
 /** @brief 保存 HTTP 请求处理的状态码与 JSON 响应值，供传输层组装响应。 */

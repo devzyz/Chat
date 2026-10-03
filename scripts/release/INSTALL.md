@@ -15,7 +15,8 @@
    填写本机地址、端口、数据库和日志设置。C++ 服务凭据填入对应 INI；Varify 凭据通过环境变量
    `CHAT_VARIFY_EMAIL_USER`、`CHAT_VARIFY_EMAIL_PASS`、`CHAT_VARIFY_MYSQL_PASSWORD`、
    `CHAT_VARIFY_REDIS_PASSWORD` 提供，不写入 JSON。模板不包含开发者连接信息。
-4. 配置 StatusServer 中的 ChatServer 列表；ChatServer 的实例名、TCP/RPC 端口必须与之对应。
+4. 配置 StatusServer 中的 ChatServer 列表，实例名称保持一致；TLS 部署时公布外部 TCP 入口，
+   ChatServer 监听内部端口，RPC 仍使用本机地址。
    多实例参考 ChatServer/configs/ 中的模板。
 5. 填写 ResourceServer 的监听地址、StatusServer、MySQL 和可写 StorageRoot；相对存储路径以配置目录为基准。
    在各应用目录启动 VarifyServer（node.exe server.js）、StatusServer.exe、ChatServer.exe、ResourceServer.exe、GateServer.exe。
@@ -29,3 +30,17 @@
 
 CI 对同一源码运行完整 Linux 真实依赖业务 E2E，并对下载解压后的 Windows 包检查
 文件、运行库、配置处理与应用启动。Windows 包启动检查不等同于真实数据库业务 E2E。
+
+## LAN TLS
+
+LAN 客户端需通过 TLS 入口访问三类业务服务。复制 `VarifyServer/tls.config.example.json`
+为本机配置，提供包含实际主机名/IP SAN 的证书链和私钥，然后用包内 Node 运行：
+
+```powershell
+.\VarifyServer\node.exe .\VarifyServer\tlsGateway.js --config .\VarifyServer\tls.config.json
+```
+
+Gate/Resource/Chat 明文监听必须改为 loopback；仅对外开放
+示例中的 8443、8444、8445、8446。Status 公布的是外部 Chat TLS 端口，Chat 自身监听内部端口。
+客户端需 `GateServer/scheme=https`、HTTPS Resource URL，并信任对应 CA；不得关闭证书验证。
+完整字段、端口映射与关闭规则见仓库 `docs/Operations.md`。升级时同步替换全部服务和客户端，断开旧会话。

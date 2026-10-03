@@ -471,7 +471,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             try {
                 const keys = recipients.map(/** 把本次收件人映射为需清理的验证码键。 */ email => `code_${email}`);
                 for (const user of [...users, ...auxiliaryUsers].filter(/** 提取本次用户编号供所属数据清理。 */ user => user.uid)) {
-                    for (const prefix of ['utoken_', 'uip_', 'ubaseinfo_', 'usessionid_', 'lock_']) keys.push(`${prefix}${user.uid}`);
+                    for (const prefix of ['', 'auth_version_', 'utoken_', 'uip_', 'ubaseinfo_', 'usessionid_', 'usessiontoken_', 'lock_']) keys.push(`${prefix}${user.uid}`);
                 }
                 if (keys.length) { await redis.del(...keys); assert.equal(await redis.exists(...keys), 0); }
                 if (topology) for (const server of topology.servers) assert.equal(await redis.hexists('logincount', server.name), 0);

@@ -1,3 +1,4 @@
+#include "AuthenticatedRecipient.h"
 #include "../../common/social/SocialDirectory.h"
 #include "../../common/message/PrivateSendAccess.h"
 #include "../../common/message/MessagePersistence.h"
@@ -156,7 +157,7 @@ void LogicSystem::RegisterCallbacks() {
             Json::Value notification;
             notification["chat_id"] = request["chat_id"];
             notification["latest_revision"] = response["latest_revision"];
-            if (auto local = _directory->FindCurrent(peer)) {
+            if (auto local = FindAuthorizedRecipient(*_directory, *_presence, peer)) {
                 if (local->SupportsReceipts()) local->Send(messaging::CompactJson(notification), MSG_MESSAGE_RECEIPT_CHANGED_NOTIFY);
                 return;
             }
@@ -338,7 +339,7 @@ void LogicSystem::RegisterCallbacks() {
         session->BindAuthenticatedUser(uid, /** @brief 按异步会话绑定结果完成登录响应。 */ [session, response = std::move(return_value)](SessionBindResult result) mutable {
             if (result != SessionBindResult::Bound) response["error"] = ErrorCodes::RPCFailed;
             session->Send(messaging::CompactJson(response), MSG_CHAT_LOGIN_RSP);
-        });
+        }, token);
 
 	};
 
@@ -447,7 +448,7 @@ void LogicSystem::RegisterCallbacks() {
 		// 查询到在同一服务器
 		if (to_ip_value == self_name) {
 			auto sessions = _directory;
-			auto touid_session = sessions->FindCurrent(touid);
+			auto touid_session = FindAuthorizedRecipient(*sessions, *_presence, touid);
 			if (touid_session) {
 				// 直接通知对方
 				Json::Value notify;
@@ -578,7 +579,7 @@ void LogicSystem::RegisterCallbacks() {
 		// 两个人在同一个服务器上，则直接找到对方的session，并发送请求
 		if (self_server_name == applyuid_ip_value) {
 			auto sessions = _directory;
-			auto session = sessions->FindCurrent(applyuid);
+			auto session = FindAuthorizedRecipient(*sessions, *_presence, applyuid);
 			if (session) {
 				Json::Value notify;
 				notify["error"] = ErrorCodes::Success;
@@ -831,7 +832,7 @@ void LogicSystem::RegisterCallbacks() {
 		// 两者在同一个服务器，则直接发送
 		if (self_server_name == touid_ip_value) {
 			auto sessions = _directory;
-			auto session = sessions->FindCurrent(to_uid);
+			auto session = FindAuthorizedRecipient(*sessions, *_presence, to_uid);
 			if (session) {
 				// 这是往另一个客户端的通知信息
 				Json::Value notify;

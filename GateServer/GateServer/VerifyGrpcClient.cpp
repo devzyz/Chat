@@ -2,9 +2,10 @@
 
 #include "ConfigMgr.h"
 
-GetVarifyRsp VerifyGrpcClient::GetVarifyCode(std::string email) {
+GetVarifyRsp VerifyGrpcClient::GetVarifyCode(std::string email, const std::string& purpose) {
     GetVarifyReq request;
     request.set_email(email);
+    request.set_purpose(purpose);
 
     auto result = rpc::InvokeUnary<RPCConnectionPool, GetVarifyReq, GetVarifyRsp>(
         *_pool,

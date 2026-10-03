@@ -96,6 +96,8 @@ test('process shutdown reports retain safe failure identity and reject incomplet
         const cases = [
             { id: 'T10-4PROC-10', name: 'occupied port', pass: false,
               diagnostic: caseDiagnostic(new Error('FourProcess:GateServer:harness-incomplete')) },
+            { id: 'T10-4PROC-06', name: 'authentication', pass: false,
+              diagnostic: { stage: 'auth-login', category: 'assertion' } },
             { id: 'T10-4PROC-18', name: 'cleanup', pass: false,
               diagnostic: { stage: 'private-account', category: 'secret-token' } }
         ];
@@ -103,8 +105,38 @@ test('process shutdown reports retain safe failure identity and reject incomplet
         const manifest = JSON.parse(fs.readFileSync(path.join(root, 'phase3c-reports.json'), 'utf8'));
         const recorded = manifest.reports.find(/** 从清单中定位四进程报告结果。 */ group => group.prefix === 'T10-4PROC-').cases;
         assert.deepEqual(recorded[0].diagnostic, { stage: 'stop-GateServer', category: 'harness-incomplete' });
-        assert.equal(recorded[1].diagnostic, undefined);
+        assert.deepEqual(recorded[1].diagnostic, { stage: 'auth-login', category: 'assertion' });
+        assert.equal(recorded[2].diagnostic, undefined);
         assert.match(fs.readFileSync(path.join(root, 'linux_four_process.xml'), 'utf8'), /stop-GateServer:harness-incomplete/);
         assert.doesNotMatch(JSON.stringify(manifest), /private-account|secret-token/);
     } finally { fs.rmSync(root, { recursive: true }); }
+});
+
+
+test('four-process RPC preserves omitted proto3 success and explicit rejection codes', { timeout: 10000 }, /** 使用真实 gRPC 验证 C++ 省略零值的成功回复，不把业务拒绝归零。 */ async () => {
+    const { createRequire } = require('node:module');
+    const requireVarify = createRequire(path.resolve(__dirname, '../../VarifyServer/package.json'));
+    const grpc = requireVarify('@grpc/grpc-js');
+    const loader = requireVarify('@grpc/proto-loader');
+    const definition = grpc.loadPackageDefinition(loader.loadSync(path.resolve(__dirname, '../../proto/status.proto')));
+    const { rpcRequest } = require('./fourProcessCases');
+    const server = new grpc.Server();
+    server.addService(definition.message.StatusService.service, {
+        /** 省略 error 字段模拟 C++ proto3 零值编码，其他分支保留明确业务错误。 */
+        login(call, callback) {
+            if (call.request.uid === 1) callback(null, { uid: 1 });
+            else if (call.request.uid === 2) callback(null, { error: 1011 });
+            else callback({ code: grpc.status.UNAVAILABLE, message: 'fixture unavailable' });
+        }
+    });
+    try {
+        const port = await new Promise(/** 绑定本用例拥有的动态 loopback 端口。 */ (resolve, reject) => {
+            server.bindAsync('127.0.0.1:0', grpc.ServerCredentials.createInsecure(),
+                /** 将真实绑定结果返回测试。 */ (error, bound) => error ? reject(error) : resolve(bound));
+        });
+        assert.equal((await rpcRequest(port, 'StatusService', 'Login', { uid: 1 })).error, 0);
+        assert.equal((await rpcRequest(port, 'StatusService', 'Login', { uid: 2 })).error, 1011);
+        await assert.rejects(rpcRequest(port, 'StatusService', 'Login', { uid: 3 }),
+            /** 传输失败不能被解释成零值成功。 */ error => error.code === grpc.status.UNAVAILABLE);
+    } finally { server.forceShutdown(); }
 });

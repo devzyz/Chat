@@ -27,6 +27,7 @@ class RedisFixture(socketserver.ThreadingTCPServer):
         self.values, self.hashes = {}, {}
         self.lock = threading.Lock()
         for uid in (7, 8, 9):
+            self.hashes[str(uid).encode()] = {f"utoken_{uid}".encode(): b"fixture-token"}
             self.values[f"ubaseinfo_{uid}".encode()] = json.dumps(dict(uid=uid, name=f"user{uid}",
                 password="fixture", email=f"user{uid}@example.invalid", description="", icon="", sex=0)).encode()
 
@@ -74,17 +75,20 @@ class RedisHandler(socketserver.StreamRequestHandler):
                         else:
                             data[keys[1]] = argv[2]; hashes.setdefault(keys[0], {})[argv[0]] = argv[1]
                             result = b"*1\r\n" + self.bulk(b"renewed")
-                    elif len(keys) == 2:
-                        # Production RedisUserPresenceStore uses atomic two-key presence operations.
-                        previous = [data.get(key, b"") for key in keys]
+                    elif len(keys) == 4:
+                        # Explicit authentication fixture, not evidence for real Redis atomicity or TTL.
+                        previous = [data.get(key, b"") for key in keys[:2]]
+                        credential = hashes.get(keys[2], {}).get(b"utoken_" + keys[2])
                         if b"return {'current'}" in script:
-                            result = b"*1\r\n" + self.bulk(b"current") if previous[1] == argv[0] and previous[0] else b"*0\r\n"
+                            result = b"*1\r\n" + self.bulk(b"current") if previous[1] == argv[0] and previous[0] and credential and credential == data.get(keys[3]) else b"*0\r\n"
                         elif b"MSET" in script:
-                            data.update(zip(keys, argv))
-                            result = b"*2\r\n" + b"".join(self.bulk(value) for value in previous)
+                            if credential != argv[2]: result = b"*0\r\n"
+                            else:
+                                data.update(zip([keys[0], keys[1], keys[3]], argv))
+                                result = b"*2\r\n" + b"".join(self.bulk(value) for value in previous)
                         elif b"DEL" in script:
                             if previous == argv:
-                                for key in keys: data.pop(key, None)
+                                for key in [keys[0], keys[1], keys[3]]: data.pop(key, None)
                             result = b"*0\r\n"
                         else:
                             result = b"*2\r\n" + b"".join(self.bulk(value) for value in previous)

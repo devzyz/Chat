@@ -7,6 +7,8 @@
 #include <QPointer>
 #include <QQueue>
 #include <QTcpSocket>
+#include <QSslSocket>
+#include <QSslConfiguration>
 #include <QTimer>
 
 /** @brief 独占 TCP socket、读写缓冲和期限计时器；由外层 QObject 线程调用并通过连接代隔离回调。 */
@@ -57,21 +59,30 @@ struct ChatTcpTransport::Impl
             return generation;
         }
 
-        auto *nextSocket = new QTcpSocket(owner);
+        QTcpSocket *nextSocket = endpoint.tls ? new QSslSocket(owner) : new QTcpSocket(owner);
         nextSocket->setProxy(QNetworkProxy::NoProxy);
         socket = nextSocket;
         const quint64 currentGeneration = generation;
 
-        QObject::connect(nextSocket, &QTcpSocket::connected, owner,
-                         /** @brief 仅接受当前 socket 和连接代的连接成功事件。 */
-                         [this, nextSocket, currentGeneration] {
+        const auto connectionReady = /** @brief TLS 握手完成后才允许发送账号凭据，旧代回调无效。 */
+            [this, nextSocket, currentGeneration] {
             if (!isCurrent(nextSocket, currentGeneration)) {
                 return;
             }
             connected = true;
             connectDeadline.stop();
             emit owner->connected(currentGeneration, endpoint.flowId);
-        });
+        };
+        if (endpoint.tls) {
+            auto *secureSocket = static_cast<QSslSocket*>(nextSocket);
+            auto configuration = QSslConfiguration::defaultConfiguration();
+            configuration.setProtocol(QSsl::TlsV1_2OrLater);
+            configuration.setPeerVerifyMode(QSslSocket::VerifyPeer);
+            secureSocket->setSslConfiguration(configuration);
+            QObject::connect(secureSocket, &QSslSocket::encrypted, owner, connectionReady);
+        } else {
+            QObject::connect(nextSocket, &QTcpSocket::connected, owner, connectionReady);
+        }
         QObject::connect(nextSocket, &QTcpSocket::readyRead, owner,
                          /** @brief 仅解析当前连接收到的字节，协议错误结束连接。 */
                          [this, nextSocket, currentGeneration] {
@@ -128,7 +139,8 @@ struct ChatTcpTransport::Impl
         });
 
         connectDeadline.start(endpoint.connectDeadlineMs);
-        nextSocket->connectToHost(endpoint.host, endpoint.port);
+        if (endpoint.tls) static_cast<QSslSocket*>(nextSocket)->connectToHostEncrypted(endpoint.host, endpoint.port);
+        else nextSocket->connectToHost(endpoint.host, endpoint.port);
         return generation;
     }
 

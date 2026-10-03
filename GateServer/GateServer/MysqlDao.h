@@ -7,6 +7,7 @@
 #include <jdbc/cppconn/exception.h>
 #include <jdbc/cppconn/resultset.h>
 #include <jdbc/cppconn/statement.h>
+#include <functional>
 
 /** @brief 持有一个 JDBC 连接及该模块所需连接状态，借用期间由调用方独占。 */
 class SqlConnection {
@@ -32,8 +33,9 @@ private:
     std::unique_ptr<chat_mysql::ConnectionPool<>> _connections;
 };
 
-/** @brief 保存查询得到的用户资料；仅作为进程内数据对象，不控制会话生命周期。 */
+/** @brief 保存查询用户资料及凭据校验锁租约；租约须保持至 Token 发布结束，晚于请求的池负责连接回收。 */
 struct UserInfo {
+    std::shared_ptr<void> credential_lease;
 	std::string name;
 	std::string pwd;
 	int uid;
@@ -51,9 +53,10 @@ public:
 	int RegUser(const std::string& name, const std::string& email, const std::string& pwd);
 	/** @brief 核对用户名与邮箱是否属于同一用户，返回校验结果。 */
 	bool CheckEmail(const std::string& username, const std::string& email);
-	/** @brief 更新指定用户密码并返回数据库操作结果，不在此处完成验证码校验。 */
-	bool UpdatePassword(const std::string& username, const std::string& password, const std::string& email);
-	/** @brief 按邮箱核验密码，成功时填充用户资料，失败结果不得作为已认证身份使用。 */
+    /** @brief 在账号锁内先撤销旧凭据再更新密码；撤销失败保持旧密码，SQL 失败保留已撤销状态。 */
+    bool UpdatePassword(const std::string& username, const std::string& password, const std::string& email,
+        const std::function<bool(int)>& revoke);
+    /** @brief 账号锁内核验密码；成功返回资料及共享锁租约，发布 Token 前不得释放该租约。 */
 	bool CheckPassword(const std::string& email, const std::string& password, UserInfo& userinfo);
 private:
 	std::unique_ptr<MysqlConnectionPool> _pool;

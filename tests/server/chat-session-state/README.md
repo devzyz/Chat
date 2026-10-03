@@ -44,5 +44,7 @@ Owning quick runner (not RunAllTests):
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows-local.ps1 -Task RunServerTests -Configuration Release
 ```
 
-The Server family contains 239 cases: 68 Unit, 57 Component, 106 main Integration,
-4 Chat gRPC, and 2 each Gate/Status lifecycle. No full E2E or external dependency lane is included.
+Report counts are owned by `scripts/windows-local.ps1`.
+
+T09-SESSION-06 also checks the outgoing authorization seam: stale presence or unavailable
+storage refuses the recipient and closes its session before any push is queued.

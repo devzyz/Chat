@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
             /** @brief 把入站消息交给有界业务分发器。 */ [&](LogicMessage message) { return logic->Submit(std::move(message)); },
             /** @brief 从 Asio 池选择会话执行器。 */ [&]() -> boost::asio::io_context& { return pool->GetIOService(); });
         lifecycle->AttachServer(tcp);
-        service = std::make_unique<ChatServiceImpl>(directory, lifecycle);
+        service = std::make_unique<ChatServiceImpl>(directory, lifecycle, presence);
         grpc::ServerBuilder builder;
         builder.AddListeningPort(rpc_host + ":" + config["SelfServer"]["RPCPort"],
             grpc::InsecureServerCredentials());

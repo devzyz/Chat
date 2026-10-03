@@ -441,6 +441,7 @@ class GetVarifyReq final : public ::google::protobuf::Message
   // accessors -------------------------------------------------------
   enum : int {
     kEmailFieldNumber = 1,
+    kPurposeFieldNumber = 2,
   };
   // string email = 1;
   void clear_email() ;
@@ -457,12 +458,27 @@ class GetVarifyReq final : public ::google::protobuf::Message
   ::std::string* PROTOBUF_NONNULL _internal_mutable_email();
 
   public:
+  // string purpose = 2;
+  void clear_purpose() ;
+  const ::std::string& purpose() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_purpose(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_purpose();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_purpose();
+  void set_allocated_purpose(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_purpose() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_purpose(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_purpose();
+
+  public:
   // @@protoc_insertion_point(class_scope:message.GetVarifyReq)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<0, 1,
-                                   0, 34,
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 41,
                                    2>
       _table_;
 
@@ -484,6 +500,7 @@ class GetVarifyReq final : public ::google::protobuf::Message
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr email_;
+    ::google::protobuf::internal::ArenaStringPtr purpose_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -571,6 +588,71 @@ inline void GetVarifyReq::set_allocated_email(::std::string* PROTOBUF_NULLABLE v
     _impl_.email_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:message.GetVarifyReq.email)
+}
+
+// string purpose = 2;
+inline void GetVarifyReq::clear_purpose() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.purpose_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& GetVarifyReq::purpose() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:message.GetVarifyReq.purpose)
+  return _internal_purpose();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetVarifyReq::set_purpose(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.purpose_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:message.GetVarifyReq.purpose)
+}
+inline ::std::string* PROTOBUF_NONNULL GetVarifyReq::mutable_purpose()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_purpose();
+  // @@protoc_insertion_point(field_mutable:message.GetVarifyReq.purpose)
+  return _s;
+}
+inline const ::std::string& GetVarifyReq::_internal_purpose() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.purpose_.Get();
+}
+inline void GetVarifyReq::_internal_set_purpose(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.purpose_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetVarifyReq::_internal_mutable_purpose() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.purpose_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetVarifyReq::release_purpose() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:message.GetVarifyReq.purpose)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.purpose_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.purpose_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetVarifyReq::set_allocated_purpose(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.purpose_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.purpose_.IsDefault()) {
+    _impl_.purpose_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:message.GetVarifyReq.purpose)
 }
 
 // -------------------------------------------------------------------

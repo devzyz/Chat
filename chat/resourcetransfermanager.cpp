@@ -39,12 +39,20 @@ void ResourceTransferManager::jsonRequest(const QByteArray& method, const QStrin
     const auto generation = _generation;
     connect(reply, &QNetworkReply::finished, this,
         /** @brief 释放响应对象，仅向当前任务代交付成功结果或报告失败。 */
-        [this, reply, generation, done = std::move(done)] {
+        [this, reply, generation, method, route, done = std::move(done)] {
         _replies.remove(reply); reply->deleteLater();
         if (generation != _generation) return;
         const auto response = QJsonDocument::fromJson(reply->readAll()).object();
         if (reply->error() != QNetworkReply::NoError) {
             const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (status == 404 && method == "GET" && _busy && !_uploadId.isEmpty()
+                && route == "/uploads/" + _uploadId) {
+                // 断点已被服务端按保留期回收，本次操作直接创建新任务，不重复查询旧 ID。
+                if (QFile::exists(_checkpoint) && !QFile::remove(_checkpoint)) {
+                    fail(tr("无法更新已过期的续传信息")); return;
+                }
+                _uploadId.clear(); beginUpload(); return;
+            }
             if (status == 404 || status == 422) QFile::remove(_checkpoint);
             fail(response.value("error").toString(reply->errorString())); return;
         }

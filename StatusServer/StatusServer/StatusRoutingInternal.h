@@ -23,8 +23,8 @@ public:
 	virtual ~StatusStore() = default;
     /** @brief 返回原始计数字符串；空值或非法计数按未知处理，抛异常则令整个分配失败。 */
 	virtual std::optional<std::string> ReadCount(const std::string& server_name) = 0;
-    /** @brief 覆盖 uid 的登录 Token，成功返回 true，false 阻止返回选服结果。 */
-	virtual bool PutToken(int uid, const std::string& token) = 0;
+    /** @brief 认证代次匹配才覆盖登录 Token，失败阻止返回地址和凭据。 */
+	virtual bool PutToken(int uid, const std::string& token, long long auth_version) = 0;
     /** @brief 返回 Token 副本，nullopt 在校验层映射为 UidInvalid。 */
 	virtual std::optional<std::string> GetToken(int uid) = 0;
 };

@@ -28,7 +28,7 @@ public:
      * @brief 仅选择有效非负计数的实例，未知计数跳过；取最小计数，同值按实例名称排序；写入 Token 后才返回成功。
      * @note 空实例表、空 Token、存储写失败或异常返回 RPCFailed；本操作不预留连接数。
      */
-	virtual AssignmentResult Assign(int uid) = 0;
+	virtual AssignmentResult Assign(int uid, long long auth_version = 0) = 0;
     /** @brief 同步比较保存的 Token；缺失为 UidInvalid，不匹配为 TokenInvalid，异常为 RPCFailed。 */
 	virtual LoginResult Validate(int uid, const std::string& token) = 0;
 };

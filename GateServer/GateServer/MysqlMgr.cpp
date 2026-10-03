@@ -16,8 +16,9 @@ bool MysqlMgr::CheckEmail(const std::string& username, const std::string& email)
 	return _dao.CheckEmail(username, email);
 }
 
-bool MysqlMgr::UpdatePassword(const std::string& username, const std::string& password, const std::string& email) {
-	return _dao.UpdatePassword(username, password, email);
+bool MysqlMgr::UpdatePassword(const std::string& username, const std::string& password, const std::string& email,
+    const std::function<bool(int)>& revoke) {
+	return _dao.UpdatePassword(username, password, email, revoke);
 }
 
 bool MysqlMgr::CheckPassword(const std::string& email, const std::string& password, UserInfo& userinfo) {

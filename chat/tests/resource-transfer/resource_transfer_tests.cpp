@@ -375,6 +375,17 @@ private slots:
         QFile actual(downloaded.first()[1].toString()), expected(source);
         QVERIFY(actual.open(QIODevice::ReadOnly)); QVERIFY(expected.open(QIODevice::ReadOnly));
         QCOMPARE(actual.readAll(), expected.readAll());
+        // 服务端回收旧任务后，同一次上传必须丢弃失效断点并从零创建新任务。
+        const auto checkpoints = QDir(directory.path() + "/cache/transfers/uploads").entryList({"*.upload.json"}, QDir::Files);
+        QCOMPARE(checkpoints.size(), 1);
+        QFile stale(directory.path() + "/cache/transfers/uploads/" + checkpoints.first());
+        QVERIFY(stale.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QVERIFY(stale.write("{\"upload_id\":\"00000000-0000-0000-0000-000000000001\"}") > 0);
+        stale.close();
+        progress.clear(); uploaded.clear(); resumed.upload(source);
+        QTRY_VERIFY_WITH_TIMEOUT(uploaded.count() == 1 || failed.count() > 0, 20000);
+        QCOMPARE(failed.count(), 0); QCOMPARE(progress.first()[0].toLongLong(), qint64(0));
+        QVERIFY(uploaded.first()[0].toJsonObject()["resource_id"] != metadata["resource_id"]);
         // The production composer uploads attachments and only clears an accepted snapshot.
         MessageService messages;
         QSignalSpy ready(&messages, &MessageService::directoryRestored);

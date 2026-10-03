@@ -39,7 +39,7 @@ public:
                     std::uint64_t size, const std::string& sha256);
     /** @brief 读取元数据及实际文件长度，不检查调用者权限；不存在抛 404，非法 id 抛 400。 */
     Metadata Inspect(const std::string& id) const;
-    /** @brief 读取快照并检查 owner，所有者不符抛 403。 */
+    /** @brief 读取快照并检查 owner，所有者不符抛 403；未完成任务续租七天保留期。 */
     Metadata Owned(const std::string& id, int owner) const;
     /**
      * @brief 从当前字节偏移追加至多 BUFFER_SIZE 字节，data 在同步调用期间必须有效。
@@ -61,6 +61,10 @@ public:
     static std::string Digest(const std::filesystem::path& path);
     static constexpr std::size_t BUFFER_SIZE = 64 * 1024;
 private:
+    /** @brief 按需回收七天未活动的未完成上传；完成文件永久保留，删除标记支持中断恢复。 */
+    void CollectExpiredUploads();
+    /** @brief 完成已标记上传的清理；遇到完成文件、符号链接或非普通文件时拒绝删除。 */
+    void FinishDiscard(const std::string& id);
     /** @brief 校验 id 的长度及字符后拼接内部 suffix 路径，不进行完整 UUID 语义验证。 */
     std::filesystem::path Path(const std::string& id, const char* suffix) const;
     /** @brief 按已声明大小保留全局和用户额度，限制未完成上传数并保留磁盘余量。 */

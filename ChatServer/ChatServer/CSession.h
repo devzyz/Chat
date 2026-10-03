@@ -56,7 +56,8 @@ public:
      * @note 非 Active 返回 NotActive；无效 UID、已绑定或绑定中返回 AlreadyBound；存储失败返回
      * Unavailable。Bound 表示本地登记完成，跨服替换通知可能仍未完成。
      */
-    void BindAuthenticatedUser(int uid, BindCompletion completion);
+    void BindAuthenticatedUser(int uid, BindCompletion completion, std::string authentication_token =
+        {});
     /** @brief 在 strand 将状态及首次关闭原因交给必填回调；回调不得阻塞或抛异常。 */
     void Inspect(std::function<void(SessionState, std::optional<SessionCloseReason>)> completion);
 private:
@@ -92,6 +93,7 @@ private:
     std::atomic<bool> _social{false};
     std::atomic<int> _authenticated_uid{0}; // Read-only snapshot for business threads.
     int _binding_uid = 0;
+    std::string _authentication_token; // 仅首次绑定在 strand 写入，生命周期任务持有自己的副本。
     bool _binding = false;
     bool _released = false;
     std::size_t _io_pending = 0;

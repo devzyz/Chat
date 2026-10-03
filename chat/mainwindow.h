@@ -78,5 +78,6 @@ private:
     AuthFlowCoordinator _authFlow;
     AuthFlowId _activeAuthFlowId = 0;
     ClientSession _session;
+    bool _closeAfterLogout = false;
 };
 #endif // MAINWINDOW_H

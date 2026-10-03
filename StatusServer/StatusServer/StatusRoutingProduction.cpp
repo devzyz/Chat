@@ -22,9 +22,9 @@ public:
 	}
 
     /** @brief 写入 UID 哈希的 Token 字段，直接传播 HSet 成功或失败。 */
-	bool PutToken(int uid, const std::string& token) override {
+	bool PutToken(int uid, const std::string& token, long long auth_version) override {
 		const auto uid_text = std::to_string(uid);
-		return RedisMgr::GetInstance()->PutExpiringToken(uid_text, USER_TOKEN_PREFIX + uid_text, token);
+		return RedisMgr::GetInstance()->PutExpiringToken(uid_text, USER_TOKEN_PREFIX + uid_text, token, auth_version);
 	}
 
     /** @brief 读取 UID 对应 Token；HGet 返回 false 时返回 nullopt。 */

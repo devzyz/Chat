@@ -126,6 +126,7 @@ add_library(chat_session_core STATIC
 )
 target_include_directories(chat_session_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(chat_session_core PUBLIC
+    chat_gate_http_transport
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Network
     spdlog::spdlog
@@ -604,6 +605,10 @@ if(BUILD_TESTING)
         COMMAND session_reset_tests reconnectResendsIdenticalWirePayloadAfterAuthentication)
     set_tests_properties(session_reset.authenticated_wire_retry PROPERTIES
         ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 10)
+    add_test(NAME session_reset.logout_revocation
+        COMMAND session_reset_tests logoutWaitsForRevocationAndPreservesStateOnFailure)
+    set_tests_properties(session_reset.logout_revocation PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 10)
 
     add_executable(http_transport_tests
         tests/http-transport/http_transport_tests.cpp
@@ -644,6 +649,7 @@ if(BUILD_TESTING)
         Qt${QT_VERSION_MAJOR}::Network
     )
     foreach(TCP_TRANSPORT_CASE IN ITEMS
+        tlsRequiresTrustedMatchingCertificate
         connectPreservesGenerationAndFlowIdentity
         sendWritesProductionFrame
         fragmentedFrameDecodedOnce

@@ -68,6 +68,13 @@ LogicSystem::LogicSystem(gate::GateRequest& gate_request)
 	});
 
 	// 分发登录请求并返回业务结果。
+    RegisterPostHandler("/logout", /** @brief 将凭据撤销请求交给共享业务编排器。 */
+        [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
+        write_gate_response(connection, gate::Endpoint::Logout,
+            /** @brief 返回撤销结果，不回显凭据。 */ [this](const Json::Value& request) {
+                return _gate_request.Handle(gate::Endpoint::Logout, request);
+            });
+    });
 	/** @brief 把登录 HTTP 请求交给共享响应流程。 */
 	RegisterPostHandler("/user_login", [this, write_gate_response](std::shared_ptr<HttpConnection> connection) {
 		write_gate_response(connection, gate::Endpoint::UserLogin,

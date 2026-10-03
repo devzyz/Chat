@@ -27,7 +27,7 @@ public:
     void setToken(QString token);
     /** @brief 返回当前账号的会话令牌。 */
     QString token() const;
-    /** @brief 设置当前用户资料并切换头像账号，清除原远端头像会话。 */
+    /** @brief 同账号重认证只刷新资料并保留提交任务；换账号时清理资源会话并切换头像。 */
     void setUserInfo(std::shared_ptr<UserInfo> user_info);
     /** @brief 为当前账号建立资源服务会话，已有会话时不重复创建。 */
     void startResourceSession();
