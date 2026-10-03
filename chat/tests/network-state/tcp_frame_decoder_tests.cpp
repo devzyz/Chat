@@ -81,6 +81,13 @@ int main(int argc, char *argv[])
     passed &= expect(freshFrames[0].body == QByteArray("fresh", 5),
                      "fresh connection frame inherited old body bytes");
 
+    for (const quint16 id : {1006, 1017}) {
+        TcpFrameDecoder expanded;
+        const QByteArray body(8192, 'x');
+        const auto frames = expanded.append(frame(id, body));
+        passed &= expect(frames.size() == 1 && frames[0].body == body,
+                         "login or acknowledgement response rejected at its boundary");
+    }
     TcpFrameDecoder history;
     const QByteArray historyBody(65535, 'x');
     const auto historyFrames = history.append(frame(1028, historyBody));

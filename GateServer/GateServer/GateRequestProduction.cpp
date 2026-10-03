@@ -20,17 +20,26 @@ public:
 	}
 };
 
-/** @brief 从现有 Redis 验证码键读取值，不消费验证码。 */
+/** @brief 对验证码校验限速，并以原子比较删除防止重复使用。 */
 class RedisCodeStoreAdapter final : public gate::internal::CodeStore {
 public:
     /** @brief 返回验证码副本；Redis Get 返回 false 时统一返回 nullopt。 */
 	std::optional<std::string> ReadCode(const std::string& email) override {
+        if (RedisMgr::GetInstance()->EvalNumber(
+            "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],600) end; return n",
+            "code_attempt_" + email, "") > 8) return std::nullopt;
 		std::string code;
 		if (!RedisMgr::GetInstance()->Get(CODEPREFIX + email, code)) {
 			return std::nullopt;
 		}
 		return code;
 	}
+    /** @brief 比较并消费匹配验证码；过期、替换或已被消费时返回 false。 */
+    bool ConsumeCode(const std::string& email, const std::string& code) override {
+        return RedisMgr::GetInstance()->EvalNumber(
+            "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) end; return 0",
+            CODEPREFIX + email, code) == 1;
+    }
 };
 
 /** @brief 将账号端口适配到共享 MysqlMgr，不缓存请求或凭据。 */
@@ -54,8 +63,9 @@ public:
     /** @brief 同步更新指定用户密码，直接返回管理器结果。 */
 	bool UpdatePassword(
 		const std::string& username,
-		const std::string& password) override {
-		return MysqlMgr::GetInstance()->UpdatePassword(username, password);
+		const std::string& password,
+        const std::string& email) override {
+		return MysqlMgr::GetInstance()->UpdatePassword(username, password, email);
 	}
 
     /** @brief 校验邮箱及密码，仅返回认证 UID；校验失败返回 nullopt。 */

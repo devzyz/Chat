@@ -31,7 +31,9 @@ struct Metadata {
 class ResourceStore {
 public:
     /** @brief 固定绝对根路径并创建目录；max_size 单位为字节且必须大于零，失败抛异常。 */
-    ResourceStore(std::filesystem::path root, std::uint64_t max_size);
+    ResourceStore(std::filesystem::path root, std::uint64_t max_size,
+        std::uint64_t total_limit = 64ull * 1024 * 1024 * 1024,
+        std::uint64_t owner_limit = 16ull * 1024 * 1024 * 1024);
     /** @brief 校验所有者、名称、类型、字节数及小写 SHA-256，创建元数据与空临时文件，返回快照。 */
     Metadata Create(int owner, const std::string& name, const std::string& type,
                     std::uint64_t size, const std::string& sha256);
@@ -61,7 +63,11 @@ public:
 private:
     /** @brief 校验 id 的长度及字符后拼接内部 suffix 路径，不进行完整 UUID 语义验证。 */
     std::filesystem::path Path(const std::string& id, const char* suffix) const;
+    /** @brief 按已声明大小保留全局和用户额度，限制未完成上传数并保留磁盘余量。 */
+    void CheckQuota(int owner, std::uint64_t requested) const;
     std::filesystem::path _root;
     std::uint64_t _max_size;
+    std::uint64_t _total_limit;
+    std::uint64_t _owner_limit;
 };
 }

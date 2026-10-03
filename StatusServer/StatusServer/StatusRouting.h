@@ -25,7 +25,7 @@ public:
 	virtual ~StatusRouting() = default;
 
     /**
-     * @brief 优先选择最小有效非负计数，未知计数排后，同值按实例名称排序；写入 Token 后才返回成功。
+     * @brief 仅选择有效非负计数的实例，未知计数跳过；取最小计数，同值按实例名称排序；写入 Token 后才返回成功。
      * @note 空实例表、空 Token、存储写失败或异常返回 RPCFailed；本操作不预留连接数。
      */
 	virtual AssignmentResult Assign(int uid) = 0;

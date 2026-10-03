@@ -25,10 +25,10 @@ void CheckDeadline(Deadline deadline) {
 bool IsMember(sql::Connection& connection, int sender, int recipient, int chat) {
     if (recipient == 0) {
         try { messaging::LockGroup(connection, chat, sender); return true; }
-        catch (const std::runtime_error&) { return false; }
+        catch (const messaging::MembershipDenied&) { return false; }
     }
     try { messaging::LockConversation(connection, chat, sender, recipient); return true; }
-    catch (const std::runtime_error&) { return false; }
+    catch (const messaging::MembershipDenied&) { return false; }
 }
 
 /** @brief 锁定发送者 UUID 对应记录并核对会话、接收者及正文；不一致抛 CONFLICT。 */
@@ -87,7 +87,7 @@ Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, co
         if (!IsMember(_connection, sender, recipient, chat)) { throw Error::INVALID_MEMBERSHIP; }
         if (recipient == 0 && _group_epoch > 0) {
             try { messaging::LockGroup(_connection, chat, sender, _group_epoch); }
-            catch (const std::runtime_error&) { throw Error::INVALID_MEMBERSHIP; }
+            catch (const messaging::MembershipDenied&) { throw Error::INVALID_MEMBERSHIP; }
         }
         CheckDeadline(deadline);
         std::unique_ptr<sql::PreparedStatement> insert(_connection.prepareStatement(

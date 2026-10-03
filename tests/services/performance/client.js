@@ -24,7 +24,7 @@ class Decoder {
         while (this.buffer.length >= 4) {
             const id = this.buffer.readUInt16BE(0);
             const size = this.buffer.readUInt16BE(2);
-            const limit = id === 1028 ? 65535 : id === 1047 ? 8192 : 2048;
+            const limit = id === 1028 ? 65535 : [1006, 1017, 1047].includes(id) ? 8192 : 2048;
             assert.ok(size > 0 && size <= limit, 'response-size');
             if (this.buffer.length < size + 4) break;
             const value = JSON.parse(this.buffer.subarray(4, size + 4).toString());
@@ -52,7 +52,7 @@ class Client extends EventEmitter {
             catch { this.fail(new Error('invalid-frame')); }
         });
         await this.request(1005, 1006, { uid: this.uid, token: this.token,
-            capabilities: ['sync_v1', 'group_membership_v1'] });
+            capabilities: ['sync_v1', 'group_membership_v1', 'basic_social_v1'] });
         this.heartbeat = setInterval(/** 维持生产会话存活并传播心跳失败。 */ () => {
             this.request(1020, 1021, { uid: this.uid }).catch(/** 心跳失败终止会话。 */ error => this.fail(error));
         }, 5000);
@@ -63,7 +63,14 @@ class Client extends EventEmitter {
         for (const [key, item] of this.pending) {
             if (item.id === id && item.match(value)) {
                 clearTimeout(item.timer); this.pending.delete(key);
-                if (value.error !== 0) item.reject(new Error(`business-${id}-${Number(value.error)}`));
+                if (value.error !== 0) {
+                    const commitErrors = { UnauthorizedSender: 'unauthorized-sender', InvalidMembership: 'invalid-membership',
+                        InvalidUuid: 'invalid-uuid', Conflict: 'conflict', DeadlineExceeded: 'deadline-exceeded',
+                        StorageUnavailable: 'storage-unavailable' };
+                    const detail = id === 1017 && Object.hasOwn(commitErrors, value.commit_error)
+                        ? `-${commitErrors[value.commit_error]}` : '';
+                    item.reject(new Error(`business-${id}-${Number(value.error)}${detail}`));
+                }
                 else item.resolve(value);
                 return;
             }

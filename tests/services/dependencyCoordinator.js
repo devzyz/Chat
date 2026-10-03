@@ -48,7 +48,7 @@ async function bootstrapStep(stage, action) {
 
 /** 为业务合同子步骤保留固定阶段及数值错误码，始终丢弃原始错误内容。 */
 async function contractStep(stage, action) {
-    if (!/^(gate-(verify|mail|register|login|selection)|client-(create|chat-id|send|message-sync|message-data))$/.test(stage)) {
+    if (!/^(gate-(verify|mail|register|login|selection)|client-(create|chat-id|send|message-sync|message-data|friend-accept|friend-models))$/.test(stage)) {
         throw new Error('Unknown contract diagnostic stage');
     }
     try { return await action(); }

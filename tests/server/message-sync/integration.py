@@ -306,6 +306,7 @@ def tcp_flow(directory, mysql_command, mysql_port):
         outgoing = social(sender,1046,kind="profile",target_uid=8)["profile"]["outgoing_revision"]
         social(sender,1044,operation="apply",target_uid=8,expected_revision=outgoing,description="again",backname="receiver")
         applications = social(receiver,1046,kind="applications",after="0")["items"]
+        assert all(row["touid"] == 8 and "backname" in row for row in applications)
         version = next(row["application_revision"] for row in applications if row["fromuid"] == 7)
         social(receiver,1044,operation="reject",target_uid=7,expected_revision=version)
         assert social(receiver,1044,False,operation="accept",target_uid=7,expected_revision=version,description="",backname="")["social_error"] == "VersionConflict"
@@ -342,7 +343,18 @@ def tcp_flow(directory, mysql_command, mysql_port):
         assert relation["name"] == "名"*255 and relation["description"] == "新"*255 and relation["backname"] == "注"*255
         contacts=social(receiver,1046,kind="contacts",after="0")["items"]
         assert contacts[0]["uid"] == 7 and contacts[0]["backname"] == "注"*255
-        print("Social UTF-8: complete oversized application/contact/profile records passed")
+        receiver.close(); receiver = login(1, 8, True)
+        sender.close(); sender = login(0, 7, True)
+        contacts = social(receiver,1046,kind="contacts",after="0")["items"]
+        assert contacts[0]["name"] == "名"*255 and contacts[0]["backname"] == "注"*255
+        batch = dict(from_uid=7,to_uid=8,chat_id=201,relationship_revision=contacts[0]["relationship_revision"],
+            text_array=[dict(msg_uuid=str(uuid.uuid4()),msg_content="x") for _ in range(20)])
+        send(sender,1016,batch)
+        ack = receive(sender,1017)
+        assert len(ack["uuid_msgId"]) == 20
+        send(sender,1016,batch)
+        assert receive(sender,1017)["uuid_msgId"] == ack["uuid_msgId"]
+        print("Social UTF-8: relogin, complete directory and 20-item ACK retry passed")
         seeds="USE message_sync_test;"
         for uid in range(20,36):
             seeds+=f"INSERT INTO user(uid,name,email,password,description,icon,sex) VALUES({uid},'page{uid}','page{uid}@example.invalid','','','',0);"

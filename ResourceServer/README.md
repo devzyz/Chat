@@ -19,7 +19,7 @@ Chat TCP 和跨服 gRPC 通道发送资源描述。图片在消息列表展示�
 
 ## HTTP 合同
 
-除 `/health` 外，每次请求均携带 `X-User-Id` 和 `Authorization: Bearer <token>`。
+除 `/health`、`/ready` 外，每次请求均携带 `X-User-Id` 和 `Authorization: Bearer <token>`。
 使用 Content-Length，不支持 HTTP chunked 请求。HTTP Keep-Alive 可复用连接。
 
 | 请求 | 输入/输出 |

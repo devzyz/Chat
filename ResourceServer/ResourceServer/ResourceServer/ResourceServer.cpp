@@ -29,7 +29,9 @@ int main(int argc, char** argv) {
         auto storage_root = std::filesystem::path(config.get<std::string>("ResourceServer.StorageRoot"));
         if (storage_root.is_relative()) storage_root = std::filesystem::absolute(path).parent_path() / storage_root;
         resource::ResourceStore store(storage_root,
-            config.get<std::uint64_t>("ResourceServer.MaxFileBytes", 8ull * 1024 * 1024 * 1024));
+            config.get<std::uint64_t>("ResourceServer.MaxFileBytes", 8ull * 1024 * 1024 * 1024),
+            config.get<std::uint64_t>("ResourceServer.MaxTotalBytes", 64ull * 1024 * 1024 * 1024),
+            config.get<std::uint64_t>("ResourceServer.MaxOwnerBytes", 16ull * 1024 * 1024 * 1024));
         resource::ResourceCatalog catalog(config.get<std::string>("Mysql.Host") + ":" + config.get<std::string>("Mysql.Port"),
             config.get<std::string>("Mysql.User"), config.get<std::string>("Mysql.Password", ""),
             config.get<std::string>("Mysql.Schema"));
@@ -51,7 +53,17 @@ int main(int argc, char** argv) {
             /** @brief 把上传完成的元数据发布到共享目录。 */ [&catalog](const resource::Metadata& metadata) {
                 catalog.Publish(metadata.id, metadata.owner, metadata.name, metadata.media_type, metadata.size, metadata.sha256);
             }, /** @brief 查询用户已发布头像的资源 ID。 */ [&catalog](int uid) { return catalog.GetAvatar(uid); },
-            /** @brief 更新用户头像并由目录再次核验资源归属。 */ [&catalog](int uid, const std::string& id) { catalog.SetAvatar(uid, id); });
+            /** @brief 更新用户头像并由目录再次核验资源归属。 */ [&catalog](int uid, const std::string& id) { catalog.SetAvatar(uid, id); },
+            /** @brief 同时核对数据库 schema 和 Status RPC 可用性，不把监听成功等同业务就绪。 */ [&catalog, &status] {
+                if (!catalog.IsReady()) return false;
+                message::LoginReq request; request.set_uid(0);
+                const auto result = rpc::InvokeUnary<decltype(status), message::LoginReq, message::LoginRsp>(
+                    status, request, std::chrono::milliseconds(1000),
+                    /** @brief 使用无效身份探测 RPC，预期获得明确身份拒绝。 */ [](auto& stub, auto& context, const auto& input, auto& output) {
+                        return stub.Login(&context, input, &output);
+                    });
+                return result && result.response.error() == 1010;
+            });
         std::promise<void> stopped;
         auto future = stopped.get_future();
         boost::asio::signal_set signals(context, SIGINT, SIGTERM);

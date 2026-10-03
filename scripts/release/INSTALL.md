@@ -6,7 +6,11 @@
 ## 配置与启动
 
 1. 准备 MySQL、Redis 和 SMTP。它们是外部服务，不包含在本包中。
-2. 首次安装按 migrations/manifest.json 顺序执行 SQL；升级已有数据库前先备份，只应用尚未执行的迁移。
+2. 首次安装创建空数据库；升级前停止写入并备份数据库与 ResourceServer 存储目录。
+   设置 `CHAT_MYSQL_CLIENT`（MySQL 8 客户端绝对路径）、`CHAT_MYSQL_HOST`、`CHAT_MYSQL_PORT`、
+   `CHAT_MYSQL_USER`、`CHAT_MYSQL_PASSWORD`、`CHAT_MYSQL_DATABASE`，在包根目录依次执行
+   `VarifyServer/node.exe migrations/migrate.js plan`、`apply`、`verify`（每次保留相同命令前缀）。
+   必须通过执行器维护版本、摘要和恢复状态，不能手工逐个导入 SQL 替代迁移。
 3. 将各应用的 config.ini.template / config.json.template 复制为 config.ini / config.json，
    填写本机地址、端口、数据库和日志设置。C++ 服务凭据填入对应 INI；Varify 凭据通过环境变量
    `CHAT_VARIFY_EMAIL_USER`、`CHAT_VARIFY_EMAIL_PASS`、`CHAT_VARIFY_MYSQL_PASSWORD`、

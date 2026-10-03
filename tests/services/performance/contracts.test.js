@@ -58,6 +58,15 @@ async function fixture(t, receive) {
     return client.connect();
 }
 
+test('message errors retain only allowlisted commit classifications', /** 保留服务端提交错误类别并丢弃未知敏感正文。 */ async t => {
+    const client = await fixture(t, /** 返回受控业务错误，不改变失败语义。 */ (socket, id, value) => {
+        socket.write(encode(id + 1, { error: 1011, commit_error: value.kind }));
+    });
+    await assert.rejects(client.request(1016, 1017, { kind: 'DeadlineExceeded' }), /^Error: business-1017-1011-deadline-exceeded$/);
+    await assert.rejects(client.request(1016, 1017, { kind: 'StorageUnavailable' }), /^Error: business-1017-1011-storage-unavailable$/);
+    await assert.rejects(client.request(1016, 1017, { kind: 'private payload' }), /^Error: business-1017-1011$/);
+});
+
 test('correlation handles out-of-order responses and notifications', /** 错序真实 socket 回包必须仍匹配正确请求。 */ async t => {
     const received = [];
     const client = await fixture(t, /** 收集两个请求并倒序返回。 */ (socket, id, value) => {

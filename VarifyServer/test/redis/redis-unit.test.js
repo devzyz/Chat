@@ -39,6 +39,8 @@ test('verification write is one atomic SET EX command', /** 验证 SET EX 原子
     assert.deepEqual(clients[0].calls, [
         ['key', 'value', 'EX', 600], ['key', 'value', 'EX', Number.MAX_SAFE_INTEGER]
     ]);
+    assert.equal(await adapter.setRedisExpire('key', 'candidate', 600, true), true);
+    assert.deepEqual(clients[0].calls.at(-1), ['key', 'candidate', 'EX', 600, 'NX']);
     await adapter.close();
 });
 

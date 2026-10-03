@@ -12,6 +12,7 @@
     "gtest",
     "hiredis",
     "jsoncpp",
+    "openssl",
     {
       "name": "mysql-connector-cpp",
       "features": [

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "../../../GateServer/GateServer/CServer.h"
+#include "../../../GateServer/GateServer/HttpConnection.h"
 #include "../../../GateServer/GateServer/GateRequest.h"
 #include "../../../GateServer/GateServer/LogicSystem.h"
 
@@ -100,6 +101,30 @@ TEST_F(T09_GHTTP_Core, PublishesReadyLoopbackEndpointAndStopsIdempotently) {
 	EXPECT_NE(server_->BoundPort(), 0);
 	server_->Stop();
 	server_->Stop();
+    boost::asio::io_context io;
+    auto connection = std::make_shared<HttpConnection>(io, logic_, 100ms);
+    tcp::acceptor listener(io, {boost::asio::ip::make_address("127.0.0.1"), 0});
+    tcp::socket peer(io);
+    peer.connect(listener.local_endpoint());
+    listener.accept(connection->GetSocket());
+    // Advance beyond the construction-time deadline before starting the accepted connection.
+    boost::asio::steady_timer idle(io, 120ms);
+    idle.wait();
+    http::request<http::string_body> request{http::verb::post, "/user_login", 11};
+    request.body() = "{}"; request.prepare_payload();
+    http::write(peer, request);
+    connection->Start();
+    beast::flat_buffer buffer;
+    http::response<http::dynamic_body> response;
+    bool received = false;
+    boost::asio::steady_timer deadline(io, 2s);
+    deadline.async_wait(/** @brief 超时停止本用例事件循环，避免读响应悬挂。 */ [&](auto error) { if (!error) io.stop(); });
+    http::async_read(peer, buffer, response, /** @brief 记录真实 HTTP 响应结果并取消测试总期限。 */ [&](auto error, auto) {
+        received = !error; deadline.cancel();
+    });
+    io.run();
+    ASSERT_TRUE(received);
+    EXPECT_EQ(response.result(), http::status::ok);
 }
 
 // T09-GHTTP-02

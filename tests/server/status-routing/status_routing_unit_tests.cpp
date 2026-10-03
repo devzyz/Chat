@@ -127,12 +127,13 @@ TEST(StatusRoutingUnitTests, ValidCountRanksBeforeUnknownCount) {
 }
 
 // T08-STATUS-06
-/** 验证所有计数未知时仍按运行实例名称确定选择。 */
-TEST(StatusRoutingUnitTests, AllUnknownCountsUseRuntimeNameOrder) {
+/** 验证所有计数未知时不为用户分配失效实例。 */
+TEST(StatusRoutingUnitTests, AllUnknownCountsFailClosed) {
 	const auto result = AssignWithCounts(
 		{{"chat-z", "10.0.0.9", "9009"}, {"chat-a", "10.0.0.1", "9001"}},
 		{{"chat-z", std::nullopt}, {"chat-a", ""}});
-	EXPECT_EQ(result.host, "10.0.0.1");
+    EXPECT_EQ(result.error, kRpcFailed);
+    EXPECT_TRUE(result.host.empty());
 }
 
 // T08-STATUS-07

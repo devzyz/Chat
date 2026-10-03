@@ -3,8 +3,10 @@
 #include "LogicSystem.h"
 #include <stdexcept>
 
-HttpConnection::HttpConnection(boost::asio::io_context& ioc, std::shared_ptr<LogicSystem> logic)
-	: _socket(ioc), _logic(std::move(logic)) {
+HttpConnection::HttpConnection(boost::asio::io_context& ioc, std::shared_ptr<LogicSystem> logic,
+    std::chrono::steady_clock::duration request_timeout)
+	: _socket(ioc), _logic(std::move(logic)), _request_timeout(request_timeout) {
+    if (request_timeout <= std::chrono::steady_clock::duration::zero()) throw std::invalid_argument("positive request timeout required");
 	_parser.body_limit(CServer::MaxRequestBodyBytes());
 }
 
@@ -18,6 +20,7 @@ tcp::socket& HttpConnection::GetSocket() {
  */
 void HttpConnection::Start() {
 	auto self = shared_from_this();
+	deadline_.expires_after(_request_timeout);
 	CheckDeadline();
 	http::async_read(_socket, _buffer, _parser, /** @brief 读取请求后处理正文上限和传输错误，再进入路由。 */ [self](beast::error_code ec, std::size_t bytes_transferred) {
 		try {

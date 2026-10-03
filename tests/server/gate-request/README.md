@@ -29,3 +29,9 @@ no real Redis, MySQL, gRPC, SMTP, socket, credential, or public endpoint is used
 Real Gate HTTP composition remains Phase 3B. Real Redis/MySQL/Varify/Status/SMTP
 Adapters remain Phase 3C. Existing T06-GATE response allowlist contracts remain
 the sole parser/envelope/secret-field coverage.
+
+本轮补充非法输入、一次性消费失败与用户名/邮箱联合更新参数断言；口令测试验证随机盐、
+正确/错误输入、嵌入 NUL、损坏哈希与旧格式判定。真实数据库迁移认证由 GitHub 服务组合验证，
+本模块替身不能证明真实 Redis 原子性。报告数量以 runner 注册表为准，上述阶段历史总数不作为门禁。
+
+口令派生属于 Unit，源码 `password_hash_unit_tests.cpp`，由 `ServerUnitTests` 编译并写入 `server_unit.xml`。

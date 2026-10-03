@@ -413,6 +413,13 @@ void SessionResetTests::socialRequestsRespectSessionLifecycle()
     const auto fresh = latest();
     deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",fresh["request_id"]},{"error",0}});
     QCOMPARE(completed,3); QCOMPARE(destroyedCallbacks,0);
+    QSignalSpy legacyCompletion(tcp.get(), &TcpMgr::requestCompleted);
+    for (const int error : {0, 1001}) {
+        deliver(ID_AUTH_FRIEND_RSP, {{"error", error}});
+        QCOMPARE(legacyCompletion.size(), error == 0 ? 1 : 2);
+        QCOMPARE(legacyCompletion.last()[0].value<ReqId>(), ID_AUTH_FRIEND_RSP);
+        QCOMPARE(legacyCompletion.last()[1].toInt(), error);
+    }
     tcp->resetConnection(true);
     QTRY_VERIFY(!QFileInfo::exists(directory.path() + "/202/messages.lock"));
 }

@@ -2,6 +2,17 @@
 #include "../../common/redis/Reply.h"
 #include "ConfigMgr.h"
 
+bool RedisMgr::PutExpiringToken(const std::string& key, const std::string& field, const std::string& value) {
+    auto* connection = _pool->GetConnection();
+    if (!connection) return false;
+    Defer release(/** @brief 归还独占 Redis 连接。 */ [this, connection] { _pool->ReturnConnection(connection); });
+    const std::string script = "redis.call('HSET',KEYS[1],ARGV[1],ARGV[2]); return redis.call('EXPIRE',KEYS[1],86400)";
+    auto* reply = static_cast<redisReply*>(redisCommand(connection, "EVAL %b 1 %b %b %b",
+        script.data(), script.size(), key.data(), key.size(), field.data(), field.size(), value.data(), value.size()));
+    Defer free_reply(/** @brief 释放命令回复。 */ [reply] { if (reply) freeReplyObject(reply); });
+    return reply && reply->type == REDIS_REPLY_INTEGER && reply->integer == 1;
+}
+
 
 RedisMgr::RedisMgr() {
 	auto& grcpConfigMgr = ConfigMgr::GetInstance();

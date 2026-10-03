@@ -13,7 +13,7 @@ public:
 	/** @brief 核对用户名与邮箱是否属于同一用户，返回校验结果。 */
 	bool CheckEmail(const std::string& username, const std::string& email);
 	/** @brief 更新指定用户密码并返回数据库操作结果，不在此处完成验证码校验。 */
-	bool UpdatePassword(const std::string& username, const std::string& password);
+	bool UpdatePassword(const std::string& username, const std::string& password, const std::string& email);
 	/** @brief 按邮箱核验密码，成功时填充用户资料，失败结果不得作为已认证身份使用。 */
 	bool CheckPassword(const std::string& email, const std::string& password, UserInfo& userinfo);
 private:

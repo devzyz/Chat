@@ -356,9 +356,10 @@ TEST(T09_COMP_Formal, ChatRealDependencyBoundaryIsExplicitBoundedAndResidueFree)
     EXPECT_EQ(*first.exit_code, *second.exit_code);
     EXPECT_FALSE(first.ready_probe_succeeded);
     EXPECT_FALSE(second.ready_probe_succeeded);
-    EXPECT_TRUE(first.graceful_stop_attempted);
-    EXPECT_TRUE(second.graceful_stop_attempted);
-    EXPECT_EQ(first.escalated, second.escalated);
+    EXPECT_FALSE(first.graceful_stop_attempted);
+    EXPECT_FALSE(second.graceful_stop_attempted);
+    EXPECT_FALSE(first.escalated);
+    EXPECT_FALSE(second.escalated);
     EXPECT_TRUE(first.pipe_readers_closed);
     EXPECT_TRUE(second.pipe_readers_closed);
     for (const auto* text : {

@@ -15,6 +15,8 @@ public:
     PresenceResult Publish(int uid, const chat_session::UserPresence& presence) override;
     /** @brief 原子读取双键；任一值为空视为 NotFound，Eval 失败为 Unavailable。 */
     PresenceResult Find(int uid) override;
+    /** @brief 仅当前会话可续租在线双键；失效、替换或 Redis 不可用返回 false。 */
+    bool RefreshIfCurrent(int uid, const SessionId& session_id) override;
     /** @brief 仅在双键匹配时删除；无匹配也成功，Eval 失败返回 false。 */
     bool RemoveIfCurrent(int uid, const chat_session::UserPresence& presence) override;
 private:

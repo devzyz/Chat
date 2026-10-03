@@ -43,6 +43,8 @@ public:
 	bool RPop(const std::string& key, std::string& value);
 	/** @brief 写入 Redis 哈希字段并校验整数响应，返回命令是否成功。 */
 	bool HSet(const std::string& key, const std::string& hkey, const std::string& value);
+    /** @brief 原子写入带一天有效期的用户 Token 哈希，依赖失败返回 false。 */
+    bool PutExpiringToken(const std::string& key, const std::string& field, const std::string& value);
 	/** @brief 写入 Redis 哈希字段并校验整数响应，返回命令是否成功。 */
 	bool HSet(const char* key, const char* hkey, const char* hvalue, size_t hvaluelen);
 	/** @brief 读取 Redis 哈希字段至输出 value，缺失、类型不符或命令失败返回 false。 */

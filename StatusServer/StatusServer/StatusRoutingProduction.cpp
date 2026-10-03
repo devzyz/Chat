@@ -14,6 +14,7 @@ public:
     /** @brief 从登录计数哈希读取实例计数；HGet 返回 false 时返回未知值。 */
 	std::optional<std::string> ReadCount(const std::string& server_name) override {
 		std::string value;
+        if (!RedisMgr::GetInstance()->Get("chatlease_" + server_name, value)) return std::nullopt;
 		if (!RedisMgr::GetInstance()->HGet(LOGIN_COUNT, server_name, value)) {
 			return std::nullopt;
 		}
@@ -23,7 +24,7 @@ public:
     /** @brief 写入 UID 哈希的 Token 字段，直接传播 HSet 成功或失败。 */
 	bool PutToken(int uid, const std::string& token) override {
 		const auto uid_text = std::to_string(uid);
-		return RedisMgr::GetInstance()->HSet(uid_text, USER_TOKEN_PREFIX + uid_text, token);
+		return RedisMgr::GetInstance()->PutExpiringToken(uid_text, USER_TOKEN_PREFIX + uid_text, token);
 	}
 
     /** @brief 读取 UID 对应 Token；HGet 返回 false 时返回 nullopt。 */

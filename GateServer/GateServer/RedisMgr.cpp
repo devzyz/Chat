@@ -1,6 +1,18 @@
 #include "RedisMgr.h"
 #include "../../common/redis/Reply.h"
 #include "ConfigMgr.h"
+#include <stdexcept>
+
+long long RedisMgr::EvalNumber(const std::string& script, const std::string& key, const std::string& value) {
+    auto* connection = _redis_pool->GetConnection();
+    if (!connection) throw std::runtime_error("redis unavailable");
+    Defer release(/** @brief 所有路径归还当前连接。 */ [this, connection] { _redis_pool->ReturnConnection(connection); });
+    auto* reply = static_cast<redisReply*>(redisCommand(connection, "EVAL %b 1 %b %b",
+        script.data(), script.size(), key.data(), key.size(), value.data(), value.size()));
+    Defer free_reply(/** @brief 释放可能为空的 Redis 回复。 */ [reply] { if (reply) freeReplyObject(reply); });
+    if (!reply || reply->type != REDIS_REPLY_INTEGER) throw std::runtime_error("redis command unavailable");
+    return reply->integer;
+}
 
 
 RedisMgr::RedisMgr() {

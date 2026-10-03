@@ -19,7 +19,9 @@ REQUIRED = [*(f'{app}/{app}.exe' for app in SERVERS),
             'VarifyServer/node_modules/ioredis/package.json',
             'VarifyServer/node_modules/nodemailer/package.json',
             'VarifyServer/node_modules/uuid/package.json',
-            'proto/varify.proto', 'migrations/manifest.json', 'README.md']
+            'proto/varify.proto', 'migrations/manifest.json', 'README.md',
+            *(f'migrations/{name}' for name in
+              ('migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'))]
 
 
 def sha256(data):
@@ -97,7 +99,7 @@ def assemble(source, artifacts, output, source_sha):
             target.parent.mkdir(exist_ok=True)
             target.write_bytes(file.read_bytes())
         manifest = json.loads((source / 'schema/manifest.json').read_text(encoding='utf-8'))
-        for name in ['manifest.json'] + [item['file'] for item in manifest['migrations']]:
+        for name in ['manifest.json', 'migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'] + [item['file'] for item in manifest['migrations']]:
             target = stage / 'migrations' / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((source / 'schema' / name).read_bytes())

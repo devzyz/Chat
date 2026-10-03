@@ -79,13 +79,14 @@ inline void Read(sql::Connection& db, int actor, const Json::Value& request, Jso
         const int peer = ids.rows->getInt(1);
         auto item = kind == "contacts" ? Relation(db, actor, peer) : Profile(db, peer);
         if (kind == "applications") {
-            Query application(db, "SELECT status,revision,description FROM apply_friend WHERE from_uid=? AND to_uid=?",
+            Query application(db, "SELECT status,revision,description,backname FROM apply_friend WHERE from_uid=? AND to_uid=?",
                 {std::to_string(peer),self});
             if (!application.rows->next()) continue;
-            item["fromuid"] = peer; item["status"] = application.rows->getInt(1);
+            item["fromuid"] = peer; item["touid"] = actor; item["status"] = application.rows->getInt(1);
             item["application_revision"] = std::to_string(application.rows->getInt64(2));
             item["applydescription"] = item["description"];
             item["description"] = application.rows->getString(3).asStdString();
+            item["backname"] = application.rows->getString(4).asStdString();
         }
         auto candidate = response; candidate["items"].append(item); candidate["next"] = std::to_string(peer);
         candidate["load_more"] = true;

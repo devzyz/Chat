@@ -19,7 +19,7 @@
 写操作完成后立即触发读取，超时由周期目录恢复，账号切换丢弃旧请求和回调。
 
 用户名、描述和备注最多 255 个字符，用户名去除首尾 SQL 空格且不能为空；重名返回 `NameExists`。
-请求仍受 2048 字节 TCP 帧限制。仅已协商能力的目录响应 1047 允许最多 8192 字节，
+请求仍受 2048 字节 TCP 帧限制。登录响应 1006、批量消息确认 1017 和已协商能力的目录响应 1047 允许最多 8192 字节，
 每页最多 50 条并按完整响应 8000 字节预算分页，足以容纳组合的 255 字符姓名、描述和备注。
 无法容纳异常旧记录时返回 `ResponseTooLarge`。联系人关系目录完整落盘后即允许发送，申请目录失败不阻断聊天。所有公开资料查询直接投影数据库中的公开字段，不返回密码、邮箱或令牌。
 
@@ -150,7 +150,7 @@ Session ID。查询区分 Found、NotFound、Unavailable；发布失败不报告
 
 Request 1027 adds `mode: "sync_v1"`, authenticated `uid`, `chat_id`, nonnegative `after_id`, and `request_id` (at most 64 bytes). Response 1028 echoes the envelope and returns `error`, `msgs`, `next_cursor`, `load_more`. Each row has `message_id`, `send_id`, `recv_id`, raw `content`, epoch-seconds `created_at`, and `msg_uuid`.
 
-Rows are ordered by increasing server ID; only IDs greater than `after_id` are returned. A page contains at most 50 rows and fits the complete encoded response. Response 1028 permits a body up to 65535 bytes; social directory response 1047 permits 8192 bytes. Other messages and client requests retain the 2048-byte bound. Legacy history keeps its existing serializer and fields. Old clients cannot consume large sync responses; update all ChatServer writers before deploying the new client.
+Rows are ordered by increasing server ID; only IDs greater than `after_id` are returned. A page contains at most 50 rows and fits the complete encoded response. Response 1028 permits a body up to 65535 bytes; login 1006, batch ACK 1017 and social directory 1047 permit 8192 bytes. Other messages and client requests retain the 2048-byte bound. Legacy history keeps its existing serializer and fields. Old clients cannot consume large sync responses; update all ChatServer writers before deploying the new client.
 
 The client atomically commits a whole page and its cursor; ACKs/pushes never advance it. Existing committed local history is trusted. Synchronization and deployment details: [MessageStorage](MessageStorage.md).
 
@@ -204,7 +204,7 @@ periodic authoritative synchronization and is sent only to a session that negoti
   客户端每 10 秒从起点完整分页，每 2 秒同步有效群；旧版本不覆盖新状态，旧代次响应和 outbox 不重发。
   同服、跨服及离线恢复以 MySQL 为权威，不新增广播设施。
 
-普通响应遵守 2048 字节包体限制，群资料按实际序列化大小分页；1028 和已协商的社交目录 1047 按各自读响应上限处理。
+普通响应遵守 2048 字节包体限制，群资料按实际序列化大小分页；1006、1017、1028 和已协商的社交目录 1047 按各自读响应上限处理。
 协议需要 migration 006 及相应二进制合同；迁移入口与恢复边界见 [Data](Data.md)。
 
 ## 用户搜索请求关联
@@ -212,3 +212,17 @@ periodic authoritative synchronization and is sent only to a session that negoti
 1007 请求可携带非空、最多 64 字节的字符串 `request_id`，1008 在成功、用户不存在及可解析的参数错误响应中原样回传。旧客户端省略该字段时仍收到不含该字段的旧格式响应；消息 ID、UID/名称查询行为不变。
 
 新版客户端生成 UUID，等待十秒后结束当前搜索；只消费匹配当前搜索的响应。无编号响应结束等待并提示更新服务器，不猜测其对应请求。完整安全重试要求更新 ChatServer。断线、取消及账号结束使当前等待失效。
+
+### 登录和批量确认的有界响应
+
+协商 `basic_social_v1` 的登录不内嵌全量好友、申请及会话目录，返回空 `chat_list`、
+`current_chat_id=0`、`load_more=true`；客户端从游标 0 拉取分页，并通过 1046 获取社交目录。
+申请目录同时返回 `fromuid`、`touid` 和申请时的 `backname`，保留旧审批请求所需的完整身份及备注。
+旧登录响应超过上限时返回 `login_error=UpgradeRequired`，不提交会话绑定。
+1017 使用紧凑 JSON，消息入库前以最大消息 ID 预估完整 ACK，超限批次整体拒绝。
+请求上限仍为 2048 字节；客户端与 ChatServer 必须同步升级。
+
+验证码仍使用既有邮箱键和 RPC，不区分注册/重置用途；有效期十分钟、八位随机码，
+每邮箱十分钟最多八次校验，匹配后 Lua 原子消费。相同进程内同邮箱并发合并为一次发送，
+成功后一分钟内复用，已消费可重新申请。数据库写入失败后必须重新申请验证码。
+Token 写入 UID 哈希时设置 24 小时 TTL；当前没有自动续期及改密/退出撤销合同。

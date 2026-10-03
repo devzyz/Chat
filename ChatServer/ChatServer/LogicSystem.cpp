@@ -44,6 +44,10 @@ bool LogicSystem::Dispatch(const LogicMessage& message) {
     if (message.id != MSG_CHAT_LOGIN_REQ) {
         const int uid = message.session->AuthenticatedUid();
         if (uid <= 0 || !_directory->IsCurrent(uid, message.session->Id())) return true;
+        if (!_presence->RefreshIfCurrent(uid, message.session->Id())) {
+            message.session->Close(SessionCloseReason::Replaced);
+            return true;
+        }
         Json::Value request;
         Json::Reader reader;
         if (!reader.parse(message.body, request) || !request.isObject()) return true;
@@ -219,6 +223,15 @@ void LogicSystem::RegisterCallbacks() {
 		return_value["sex"] = user_info->_sex;
 		return_value["token"] = token;
 
+        bool social = false;
+        if (root["capabilities"].isArray()) for (const auto& value : root["capabilities"])
+            if (value.isString() && value.asString() == "basic_social_v1") social = true;
+        // 新客户端通过目录分页加载，登录响应不随好友和申请数量增长。
+        if (social) {
+            return_value["load_more"] = true;
+            return_value["current_chat_id"] = 0;
+            return_value["chat_list"] = Json::Value(Json::arrayValue);
+        } else {
 		// 同样的，这里也不需要添加分布式锁
 		// 因为刚好有两个相同uid=1的客户端，然后另一个客户端uid=2要添加uid=1为好友，但是我们一定会写入到数据库中
 		// 所以即使我查到的是旧的serverip信息，也能够接受，当下一次上线的时候，会重新收到好友请求信息
@@ -295,6 +308,8 @@ void LogicSystem::RegisterCallbacks() {
 			}
 		}
 
+        }
+
 		// 登录回包交由异步会话绑定完成后发送。
         binding_started = true;
         bool receipts = false;
@@ -310,11 +325,15 @@ void LogicSystem::RegisterCallbacks() {
             if (value.isString() && value.asString() == "group_membership_v1") groups = true;
         session->EnableGroups(groups);
         if (groups) return_value["capabilities"].append("group_membership_v1");
-        bool social = false;
-        if (root["capabilities"].isArray()) for (const auto& value : root["capabilities"])
-            if (value.isString() && value.asString()=="basic_social_v1") social=true;
         session->EnableSocial(social);
         if (social) return_value["capabilities"].append("basic_social_v1");
+        if (messaging::CompactJson(return_value).size() > ResponseBodyLimit(MSG_CHAT_LOGIN_RSP)) {
+            binding_started = false;
+            return_value = Json::Value(Json::objectValue);
+            return_value["error"] = ErrorCodes::Error_Json;
+            return_value["login_error"] = "UpgradeRequired";
+            return;
+        }
         // 将会话绑定结果合并到登录响应。
         session->BindAuthenticatedUser(uid, /** @brief 按异步会话绑定结果完成登录响应。 */ [session, response = std::move(return_value)](SessionBindResult result) mutable {
             if (result != SessionBindResult::Bound) response["error"] = ErrorCodes::RPCFailed;
@@ -651,7 +670,7 @@ void LogicSystem::RegisterCallbacks() {
             return_value["attempt_id"] = root["attempt_id"];
 
 		Defer defer(/** @brief 在文本提交处理退出时发送 ACK 或业务错误。 */ [this, &return_value, session]() {
-			std::string return_str = return_value.toStyledString();
+			std::string return_str = messaging::CompactJson(return_value);
 			session->Send(return_str, MSG_TEXT_CHAT_MSG_RSP);
 			});
 
@@ -707,6 +726,18 @@ void LogicSystem::RegisterCallbacks() {
 			_cache_msgs.push_back({ msg_uuid, msg_content });
 		}
 
+        Json::Value ack_budget = return_value;
+        for (const auto& item : _cache_msgs) {
+            Json::Value mapping;
+            mapping["msg_uuid"] = item.first;
+            mapping["message_id"] = 2147483647;
+            ack_budget["uuid_msgId"].append(mapping);
+        }
+        if (messaging::CompactJson(ack_budget).size() > ResponseBodyLimit(MSG_TEXT_CHAT_MSG_RSP)) {
+            return_value["error"] = ErrorCodes::Error_Json;
+            return_value["commit_error"] = "InvalidUuid";
+            return;
+        }
         bool resource_existing = false;
         message_commit::Result result;
         if (resource_message) {

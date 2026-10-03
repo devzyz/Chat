@@ -33,6 +33,7 @@ void CSession::BeginClosing(SessionCloseReason reason) {
     _state = SessionState::Closing;
     _close_reason = reason;
     const int uid = _authenticated_uid.exchange(0);
+    SPDLOG_INFO("session closing, session_id={}, uid={}, reason={}", _id, uid, static_cast<int>(reason));
     _lifecycle->OnClosing(_id, uid ? uid : _binding_uid);
     _frames.clear(); // The in-flight write owns its buffer independently.
     boost::system::error_code ignored;
@@ -86,7 +87,11 @@ void CSession::OnFrame(std::uint16_t id) {
     try {
         const auto result = _submit({shared_from_this(), static_cast<std::int16_t>(id), std::move(_body)});
         if (result == LogicSubmitResult::Closed) { BeginClosing(SessionCloseReason::LogicUnavailable); return; }
-        if (result == LogicSubmitResult::Full) SPDLOG_WARN("logic message rejected, reason=full, msg_id={}", id);
+        if (result == LogicSubmitResult::Full) {
+            SPDLOG_WARN("logic message rejected, reason=full, msg_id={}", id);
+            BeginClosing(SessionCloseReason::LogicUnavailable);
+            return;
+        }
         ReadHeader();
     } catch (const std::exception& error) {
         SPDLOG_ERROR("session dispatch failed: {}", error.what());
@@ -103,6 +108,8 @@ void CSession::Send(SessionFrame frame, SendCompletion completion) {
         if (self->_state == SessionState::Active) {
             const auto limit = ResponseBodyLimit(frame.message_id);
             if (frame.body.size() > limit) {
+                SPDLOG_WARN("outbound frame exceeds limit, msg_id={}, bytes={}, limit={}",
+                    frame.message_id, frame.body.size(), limit);
                 self->BeginClosing(SessionCloseReason::ProtocolError);
             } else if (self->_frames.size() >= MAX_SENDQUE) {
                 result = SessionSendResult::Full;

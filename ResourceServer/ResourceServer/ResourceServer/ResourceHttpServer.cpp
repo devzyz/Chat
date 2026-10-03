@@ -51,13 +51,14 @@ struct ResourceHttpServer::Impl : std::enable_shared_from_this<Impl> {
     SetAvatar set_avatar;
     std::set<std::shared_ptr<Session>> sessions;
     bool stopping = false;
+    std::function<bool()> ready;
     /** @brief 初始化Impl，拥有外层服务的运行状态和异步操作所需资源，生命周期由外层实现约束。 */
     Impl(net::io_context& context, const std::string& host, unsigned short port,
          ResourceStore& value, Authenticate auth, CanRead reader, Publish publisher,
-         GetAvatar avatar_reader, SetAvatar avatar_writer)
+         GetAvatar avatar_reader, SetAvatar avatar_writer, std::function<bool()> readiness)
         : acceptor(context, tcp::endpoint(net::ip::make_address(host), port)), store(value),
           authenticate(std::move(auth)), can_read(std::move(reader)), publish(std::move(publisher)),
-          get_avatar(std::move(avatar_reader)), set_avatar(std::move(avatar_writer)) {}
+          get_avatar(std::move(avatar_reader)), set_avatar(std::move(avatar_writer)), ready(std::move(readiness)) {}
     /** @brief 安排下一次资源 HTTP 连接接收，并在运行状态与会话数限制内启动会话。 */
     void Accept();
     /** @brief 停止接收新工作并关闭当前服务的监听或执行器；后续销毁由所属生命周期流程负责。 */
@@ -124,6 +125,15 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
         keep_alive = request.keep_alive(); route = std::string(request.target());
         if (route == "/health" && request.method() == http::verb::get && parser->is_done()) {
             Json::Value value; value["status"] = "ok"; Reply(200, value); return;
+        }
+        if (route == "/ready" && request.method() == http::verb::get && parser->is_done()) {
+            Run(/** @brief 在存储线程执行真实依赖就绪检查，失败返回 503。 */ [owner = server] {
+                bool ready = false;
+                try { ready = owner->ready && owner->ready(); } catch (...) {}
+                if (!ready) throw Error(503, "dependencies unavailable");
+                Json::Value value; value["status"] = "ready"; return value;
+            }, /** @brief 仅依赖就绪才响应成功。 */ [self = shared_from_this()](const Json::Value& value) { self->Reply(200, value); });
+            return;
         }
         try {
             const auto parsed_uid = Number(std::string(request["X-User-Id"]));
@@ -323,9 +333,9 @@ void ResourceHttpServer::Impl::Stop() {
 }
 ResourceHttpServer::ResourceHttpServer(net::io_context& context, const std::string& host, unsigned short port,
     ResourceStore& store, Authenticate authenticate, CanRead can_read, Publish publish,
-    GetAvatar get_avatar, SetAvatar set_avatar)
+    GetAvatar get_avatar, SetAvatar set_avatar, std::function<bool()> ready)
     : _impl(std::make_shared<Impl>(context, host, port, store, std::move(authenticate), std::move(can_read),
-          std::move(publish), std::move(get_avatar), std::move(set_avatar))) {}
+          std::move(publish), std::move(get_avatar), std::move(set_avatar), std::move(ready))) {}
 ResourceHttpServer::~ResourceHttpServer() { _impl->storage.join(); }
 void ResourceHttpServer::Start() { _impl->Accept(); }
 void ResourceHttpServer::Stop() { _impl->Stop(); }

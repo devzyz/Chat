@@ -258,7 +258,7 @@ void TcpMgr::initHandlers()
                 UserMgr::instance()->setChatListCursor(cursor);
                 UserMgr::instance()->setChatListFullyLoaded(!more);
                 emit chatListLoaded(jsonObj["chat_list"].toArray());
-                if (more && cursor > 0) {
+                if (more && cursor >= 0) {
                     emit sendRequested(ID_LOAD_CHAT_LIST_REQ, QJsonDocument(QJsonObject{
                         {"uid", uid}, {"current_chat_id", cursor}}).toJson(QJsonDocument::Compact));
                 }
@@ -964,6 +964,10 @@ void TcpMgr::handleMessage(ReqId id, int len, QByteArray data)
         return;
     }
     if (_social && (id == ID_NOTIFY_ADD_FRIEND_REQ || id == ID_NOTIFY_AUTH_FRIEND_REQ || id == ID_AUTH_FRIEND_RSP)) {
+        if (id == ID_AUTH_FRIEND_RSP) {
+            const auto response = QJsonDocument::fromJson(data).object();
+            emit requestCompleted(id, response.value("error").toInt(-1));
+        }
         refreshSocialDirectory(); return;
     }
     if (_handlers.find(id) == _handlers.end()) {
