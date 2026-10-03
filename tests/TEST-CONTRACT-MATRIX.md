@@ -651,7 +651,7 @@ Domain/Level：Architecture / Integration。
 
 ### 5.5 Startup（4）
 
-Interface：`startServer` bind/start 转换和直接进程 bind 失败。
+Interface：`startServer` bind/就绪转换和直接进程 bind 失败；当前 grpc-js 绑定后自动服务。
 Domain：Architecture。
 报告：Unit 在 `varify_unit.xml`，Integration 在 `varify_integration.xml`。
 
@@ -659,7 +659,7 @@ Domain：Architecture。
 | --- | --- | --- | --- |
 | V07-START-01 | Unit | `bind failure rejects startup and never starts the server` | bind error 拒绝且不 start |
 | V07-START-02 | Unit | `zero bound port rejects startup and never starts the server` | 无效实际端口拒绝且不 start |
-| V07-START-03 | Unit | `successful bind starts once and exposes the actual bound port` | 成功 bind 只 start 一次并返回实际端口 |
+| V07-START-03 | Unit | `successful bind exposes the actual port without deprecated start` | 成功 bind 返回实际端口，不调用弃用的 start |
 | V07-START-04 | Integration | `direct process exits with a failure status when its port is occupied` | 固定端口冲突时直接进程非零退出且不泄密 |
 
 ## 6. PowerShell testcase 目录

@@ -141,7 +141,6 @@ function startServer({ server, address, credentials, logger = console }) {
                 reject(new Error('gRPC server did not bind a port'));
                 return;
             }
-            server.start();
             logger.log(`grpc server started on port ${boundPort}`);
             resolve(boundPort);
         });
