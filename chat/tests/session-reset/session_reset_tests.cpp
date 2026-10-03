@@ -436,6 +436,7 @@ void SessionResetTests::socialRequestsRespectSessionLifecycle()
 
 void SessionResetTests::logoutWaitsForRevocationAndPreservesStateOnFailure()
 {
+    // Q02-SESSION-10
     const auto previousGate = gate_url_prefix;
     ClientSession session;
     auto user = UserMgr::instance();

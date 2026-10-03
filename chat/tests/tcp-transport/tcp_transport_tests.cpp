@@ -175,6 +175,7 @@ private slots:
 
 void TcpTransportTests::tlsRequiresTrustedMatchingCertificate()
 {
+    // Q04-TCP-13
     QVERIFY(QSslSocket::supportsSsl());
     RestoreSslConfiguration restore;
     QTemporaryDir directory; QVERIFY(directory.isValid());

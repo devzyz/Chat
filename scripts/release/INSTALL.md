@@ -15,7 +15,8 @@
    填写本机地址、端口、数据库和日志设置。C++ 服务凭据填入对应 INI；Varify 凭据通过环境变量
    `CHAT_VARIFY_EMAIL_USER`、`CHAT_VARIFY_EMAIL_PASS`、`CHAT_VARIFY_MYSQL_PASSWORD`、
    `CHAT_VARIFY_REDIS_PASSWORD` 提供，不写入 JSON。模板不包含开发者连接信息。
-4. 配置 StatusServer 中的 ChatServer 列表；ChatServer 的实例名、TCP/RPC 端口必须与之对应。
+4. 配置 StatusServer 中的 ChatServer 列表，实例名称保持一致；TLS 部署时公布外部 TCP 入口，
+   ChatServer 监听内部端口，RPC 仍使用本机地址。
    多实例参考 ChatServer/configs/ 中的模板。
 5. 填写 ResourceServer 的监听地址、StatusServer、MySQL 和可写 StorageRoot；相对存储路径以配置目录为基准。
    在各应用目录启动 VarifyServer（node.exe server.js）、StatusServer.exe、ChatServer.exe、ResourceServer.exe、GateServer.exe。
