@@ -5,16 +5,15 @@ const test = require('node:test');
 const grpc = require('@grpc/grpc-js');
 
 const messageProto = require('../../proto');
-const { createServer } = require('../../server');
+const { createServer, startServer } = require('../../server');
 
 /** 在随机回环端口启动注入处理器的真实 gRPC 服务并返回实例及端口。 */ async function startLoopbackServer(handler) {
     const server = createServer(handler);
-    const port = await new Promise(/** 把异步服务绑定转换为可等待的 Promise。 */ (resolve, reject) => {
-        server.bindAsync(
-            '127.0.0.1:0',
-            grpc.ServerCredentials.createInsecure(),
-            /** 将绑定错误传播或返回实际监听端口。 */ (error, boundPort) => error ? reject(error) : resolve(boundPort)
-        );
+    const port = await startServer({
+        server,
+        address: '127.0.0.1:0',
+        credentials: grpc.ServerCredentials.createInsecure(),
+        logger: { /** 抑制测试中正常就绪日志。 */ log() {} }
     });
     return { server, port };
 }

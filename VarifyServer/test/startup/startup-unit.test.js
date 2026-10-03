@@ -69,7 +69,7 @@ test('zero bound port rejects startup and never starts the server', /** 验证�
 });
 
 // V07-START-03
-test('successful bind starts once and exposes the actual bound port', /** 验证有效绑定端口被返回且服务只启动一次。 */ async () => {
+test('successful bind exposes the actual port without deprecated start', /** 验证有效绑定直接就绪且不调用已弃用的 start。 */ async () => {
     let starts = 0;
     const server = {
         /** 模拟成功绑定并返回固定有效端口。 */ bindAsync(address, credentials, callback) {
@@ -88,5 +88,5 @@ test('successful bind starts once and exposes the actual bound port', /** 验证
     });
 
     assert.equal(port, 43210);
-    assert.equal(starts, 1);
+    assert.equal(starts, 0);
 });

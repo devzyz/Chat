@@ -37,6 +37,16 @@ class GitRulesTests(unittest.TestCase):
                         "fix(chat): 修复错误", "fix(chat): add " + "x" * 100]:
             self.assertTrue(validate_message(message))
 
+    def test_window_and_rpc_imperatives(self):
+        """接受窗口和 RPC 的具体祈使动作，继续拒绝过去式、进行时和错误拼写。"""
+        for message in ["fix(client): fit chat windows to available screen geometry",
+                        "fix(verify): serve bound RPCs without deprecated start"]:
+            with self.subTest(message=message):
+                self.assertEqual([], validate_message(message))
+        for verb in ["fitted", "fitting", "served", "serving", "servve"]:
+            with self.subTest(verb=verb):
+                self.assertTrue(validate_message(f"fix(repo): {verb} local test requests"))
+
     def test_merge_requires_real_parents(self):
         """只允许实际多父 merge 使用自动标题，普通提交不能冒充 merge。"""
         self.assertEqual([], validate_message("Merge pull request #15 from devzyz/docs/repo/server-contracts", 2))

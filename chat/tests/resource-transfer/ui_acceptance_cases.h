@@ -12,10 +12,21 @@
 #include <QPointer>
 #include <QScopeGuard>
 #include <QElapsedTimer>
+#include <spdlog/sinks/ostream_sink.h>
+#include <sstream>
 
 /** @brief 验证消息提醒不依赖实时通知和会话行的创建时机。 */
 inline void ResourceTransferTests::conversationAttentionWidgets()
 {
+    std::ostringstream warnings;
+    auto sink = std::make_shared<spdlog::sinks::ostream_sink_mt>(warnings);
+    auto logger = std::make_shared<spdlog::logger>("conversation-selection-test", sink);
+    logger->set_level(spdlog::level::warn);
+    const auto previousLogger = spdlog::default_logger();
+    spdlog::set_default_logger(logger);
+    const auto restoreLogger = qScopeGuard(/** @brief 测试结束或断言失败时恢复原日志接收器。 */ [previousLogger] {
+        spdlog::set_default_logger(previousLogger);
+    });
     QTemporaryDir root;
     {
         LocalMessageStore store; store.open(root.path(), 7);
@@ -57,6 +68,8 @@ inline void ResourceTransferTests::conversationAttentionWidgets()
         ChatDialog window; window.resize(1000, 650); window.show();
         auto *list = window.findChild<ChatUserList*>();
         QTRY_VERIFY(list->count() > 0);
+        QVERIFY2(warnings.str().find("invalid chat uid=0") == std::string::npos,
+            "normal initial conversation selection must not warn");
         auto *first = qobject_cast<ChatUserItem*>(list->itemWidget(list->item(0)));
         QVERIFY(first); QCOMPARE(first->getChatInfo()->getChatId(),29);
         QCOMPARE(first->findChild<QLabel*>("user_chat_label")->text(),QString("recent-29"));

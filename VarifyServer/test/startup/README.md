@@ -1,12 +1,14 @@
 # Varify startup lifecycle tests
 
-The production `startServer` interface owns bind validation and the start transition.
+The production `startServer` interface owns bind validation and readiness reporting.
+The pinned grpc-js version serves requests after `bindAsync`; it must not call the
+deprecated `start()` method. The real loopback routing test uses this same entry.
 
 | Test ID | Level | Contract |
 | --- | --- | --- |
 | V07-START-01 | Unit | A bind error rejects and never calls `start`. |
 | V07-START-02 | Unit | A zero/invalid bound port rejects and never calls `start`. |
-| V07-START-03 | Unit | A successful bind starts once and returns the actual port. |
+| V07-START-03 | Unit | A successful bind returns the actual port without calling deprecated `start`. |
 | V07-START-04 | Integration | Direct `node server.js` exits nonzero when port 50051 is occupied and does not expose configured credentials. |
 
 Domain is Architecture. `startup-unit.test.js` contains the first three tests

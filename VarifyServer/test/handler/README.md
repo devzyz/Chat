@@ -39,7 +39,7 @@ JUnit 报告写入 `build/test-results/varify_unit.xml`，失败时由现有 `if
 ## 已知缺口
 
 - 默认 handler、Redis 和 SMTP adapter 日志已改为通用事件，不输出邮箱、验证码、provider response 或异常对象。
-- `bindAsync` error/实际端口与 start 转换由 `test/startup` 的生产 `startServer` interface 覆盖。
+- `bindAsync` error/实际端口与就绪转换由 `test/startup` 的生产 `startServer` interface 覆盖。
 - `redis.js` 会把读取异常转换为 `null`，因此真实 adapter 无法区分 miss 与依赖错误；本模块只验证 handler
   收到 rejection 时的现有映射。真实 Redis adapter、TTL 原子性与重连属于后续 Integration 测试。
 - 不验证真实 SMTP、邮件到达、gRPC transport/deadline、输入邮箱格式或空 UUID；当前源码尚未定义这些契约。

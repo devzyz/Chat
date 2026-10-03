@@ -33,6 +33,7 @@ commit 范围排除目标分支已包含的提交及固定历史祖先。缺失�
 
 - 合法/非法分支、普通/squash、真实 merge、revert、breaking 和发布标题；标题编辑、push 新分支、
   固定历史豁免、非法 PR 元数据不执行命令。
+- 窗口布局和 RPC 标题中的 `fit`、`serve` 祈使动作合法，过去式、进行时和错误拼写仍拒绝。
 - C++ 重载、default/delete、转换运算符、类归属、直接头文件及同文件声明契约、歧义重载。
 - Qt 信号槽/emit/foreach、经 `.ui` 核对的自动槽、QTest 入口；GTest 用例及其内层回调、WINAPI 和花括号默认参数。
 - 框架夹具、显式声明合同来源的 Connector/C++ 替身及 JS 匿名类保留合法形式，职责说明仍检查。
