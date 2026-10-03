@@ -57,3 +57,5 @@ catalog/transfer paths. These are protocol/media evidence, not Qt card-display o
 
 本轮存储回归补充账号/总量预算隔离与超限拒绝；ResourceCatalog 在建连时核验完整 schema，
 部署 smoke 必须先运行发布包内版本化迁移。`/ready` 与真实 Status/MySQL 的组合由 hosted 测试核验。
+
+`StoreTest.DeclaredLengthAndBufferAreBounded` now fills the 32-upload quota, ages abandoned uploads eight days, verifies an active upload survives, preserves completed bytes, and resumes interrupted discard cleanup. The owned fixture directory is removed at teardown.

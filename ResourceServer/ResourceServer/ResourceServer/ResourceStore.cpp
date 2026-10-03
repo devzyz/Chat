@@ -5,6 +5,7 @@
 #include <openssl/evp.h>
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <memory>
@@ -17,6 +18,42 @@ ResourceStore::ResourceStore(std::filesystem::path root, std::uint64_t max_size,
       _total_limit(total_limit), _owner_limit(owner_limit) {
     if (!max_size || !total_limit || !owner_limit) throw Error(400, "invalid maximum size");
     std::filesystem::create_directories(_root);
+}
+void ResourceStore::FinishDiscard(const std::string& id) {
+    const auto marker = Path(id, ".discard");
+    const auto part = Path(id, ".part");
+    const auto data = Path(id, ".data");
+    if (std::filesystem::exists(data) || std::filesystem::is_symlink(data))
+        throw Error(507, "completed resource requires repair");
+    for (const auto& path : {marker, part}) {
+        if (std::filesystem::is_symlink(path)
+            || (std::filesystem::exists(path) && !std::filesystem::is_regular_file(path)))
+            throw Error(507, "upload cleanup requires repair");
+    }
+    std::filesystem::remove(part);
+    std::filesystem::remove(marker);
+}
+void ResourceStore::CollectExpiredUploads() {
+    const auto cutoff = std::filesystem::file_time_type::clock::now() - std::chrono::hours(24 * 7);
+    for (const auto& entry : std::filesystem::directory_iterator(_root)) {
+        const auto extension = entry.path().extension();
+        if (extension != ".json" && extension != ".discard") continue;
+        if (!entry.is_regular_file() || entry.is_symlink() || entry.file_size() > 8192)
+            throw Error(507, "resource metadata requires repair");
+        const auto id = entry.path().stem().string();
+        if (extension == ".discard") { FinishDiscard(id); continue; }
+        const auto data = Path(id, ".data");
+        if (std::filesystem::exists(data) || std::filesystem::is_symlink(data)) continue;
+        const auto part = Path(id, ".part");
+        if (std::filesystem::is_symlink(part)
+            || (std::filesystem::exists(part) && !std::filesystem::is_regular_file(part)))
+            throw Error(507, "upload cleanup requires repair");
+        if (entry.last_write_time() > cutoff || (std::filesystem::exists(part)
+            && std::filesystem::last_write_time(part) > cutoff)) continue;
+        // 先原子移走描述文件，崩溃后可继续清理；完成资源永远不进入此路径。
+        std::filesystem::rename(entry.path(), Path(id, ".discard"));
+        FinishDiscard(id);
+    }
 }
 void ResourceStore::CheckQuota(int owner, std::uint64_t requested) const {
     std::uint64_t total = 0, owned = 0;
@@ -56,6 +93,7 @@ Metadata ResourceStore::Create(int owner, const std::string& name, const std::st
     if (sha256.size() != 64 || !std::all_of(sha256.begin(), sha256.end(), /** @brief 只接受 SHA256 文本的小写十六进制字符。 */ [](char c) {
         return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
     })) throw Error(400, "SHA-256 required");
+    CollectExpiredUploads();
     CheckQuota(owner, size);
     const auto id = boost::uuids::to_string(boost::uuids::random_generator()());
     Json::Value value;
@@ -84,6 +122,8 @@ Metadata ResourceStore::Inspect(const std::string& id) const {
 Metadata ResourceStore::Owned(const std::string& id, int owner) const {
     auto result = Inspect(id);
     if (result.owner != owner) throw Error(403, "resource belongs to another user");
+    if (!result.ready) std::filesystem::last_write_time(Path(id, ".part"),
+        std::filesystem::file_time_type::clock::now());
     return result;
 }
 Metadata ResourceStore::Append(const std::string& id, int owner, std::uint64_t offset,

@@ -47,3 +47,5 @@ and destruction with pending work. The model case verifies that attachment updat
 基础易用性补充：`conversationAttentionWidgets` 使用多页且时间不等于 ID 的目录，验证最近活动排序仍保留
 未加载会话的提醒边界；`localHistorySearchWidgets` 通过真实 Ctrl+C 检查单条正文复制。提醒夹具中的更近本人消息
 用于保持被测未读会话在第一页之外，避免默认打开该会话后正确清除提醒而改变原测试前提。
+
+`resumeUploadAndDownload` also provides an expired upload checkpoint: the server returns 404 and the client creates a fresh upload while preserving the source file and completing the transfer.
