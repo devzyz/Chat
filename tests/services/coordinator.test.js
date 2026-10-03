@@ -27,6 +27,13 @@ test('business substeps retain only fixed stages and numeric response diagnostic
                 return true;
             });
     }
+    for (const stage of ['auth-renewal', 'auth-purpose', 'auth-reset', 'auth-stale-issue', 'auth-login', 'auth-logout']) {
+        await assert.rejects(contractStep(stage, /** 认证子步骤失败只保留固定阶段及数值错误。 */ async () => {
+            assert.equal(1011, 0);
+        }), /** 确保新增认证阶段也能经过安全诊断入口。 */ error => {
+            assert.deepEqual(caseDiagnostic(error), { stage, category: 'response-1011' }); return true;
+        });
+    }
     await assert.rejects(contractStep('private-user', /** 不应执行非法阶段的回调。 */ async () => {}), /Unknown/);
     assert.equal(await contractStep('gate-login', /** 验证正常结果原样返回。 */ async () => 42), 42);
     for (const stage of ['client-friend-accept', 'client-friend-models']) {

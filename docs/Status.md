@@ -54,7 +54,11 @@ PR #31 的合并前 CI [37108529638](https://github.com/devzyz/Chat/actions/runs
 Qt 正式程序构建、过期上传续传专项、12 项发布合同、23 项附加合同及增量规范检查通过。
 推送接收者校验完成受控 RED/GREEN：移除校验触发断言失败，恢复后通过。
 [PR #32](https://github.com/devzyz/Chat/pull/32) 已提交，目标分支为 develop。
-真实依赖完整 CI 待本轮运行确认；本轮未合入 develop，未执行或未完成的验收不记为通过。
+`cd01277` 的 PR 检查因正文缺少 `BREAKING CHANGE:` 标记失败，现已补齐。
+同提交完整 CI 的 Windows 回归及 Linux 双实例/Qt 验收通过，但四进程认证验收失败。
+本地复现发现 Node 验收 RPC 未读取 proto3 默认值，将 C++ 省略的零值成功码读成 undefined；
+已修复解码并增加真实 loopback gRPC 的成功/业务拒绝/传输错误回归，以及脱敏认证子步骤诊断。
+修复已完成 RED/GREEN，完整真实依赖验收待重跑；本轮未合入 develop，未完成的验收不记为通过。
 
 ## 下一步与未完成边界
 

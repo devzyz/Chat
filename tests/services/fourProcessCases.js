@@ -15,6 +15,17 @@ const requireVarify = createRequire(path.resolve(__dirname, '../../VarifyServer/
 const grpc = requireVarify('@grpc/grpc-js');
 const loader = requireVarify('@grpc/proto-loader');
 
+/** 对同机 Status 或 Varify 执行有界 gRPC 请求，成功与错误路径都关闭本次客户端。 */
+async function rpcRequest(port, service, method, request) {
+    const file = service === 'StatusService' ? 'status.proto' : 'varify.proto';
+    const definition = grpc.loadPackageDefinition(loader.loadSync(path.resolve(__dirname, '../../proto', file), { defaults: true }));
+    const client = new definition.message[service](`127.0.0.1:${port}`, grpc.credentials.createInsecure());
+    try {
+        return await new Promise(/** 将有截止时间的 gRPC 调用结果接入 Promise。 */ (resolve, reject) => client[method](request,
+            { deadline: Date.now() + 2000 }, /** 传播 RPC 错误或返回响应值。 */ (error, value) => error ? reject(error) : resolve(value)));
+    } finally { client.close(); }
+}
+
 /** 保留一个临时 loopback 端口，并返回带释放操作的所有权对象。 */
 async function reserve() {
     const server = net.createServer();
@@ -138,14 +149,9 @@ async function runFourProcessCases(coordinator, record) {
                 CHAT_FOUR_WIRE: JSON.stringify({ port: ports.ChatServer, login, requests }) }, timeout: 20000
         }));
     }
-    /** 对 Status 或 Varify 执行有界 gRPC 就绪请求，始终关闭客户端。 */
+    /** 根据服务名选择本次隔离端口，复用有界 RPC 调用。 */
     async function rpcReady(service, method, request) {
-        const file = service === 'StatusService' ? 'status.proto' : 'varify.proto';
-        const definition = grpc.loadPackageDefinition(loader.loadSync(path.resolve(__dirname, '../../proto', file)));
-        const client = new definition.message[service](`127.0.0.1:${ports[service === 'StatusService' ? 'StatusServer' : 'VarifyServer']}`, grpc.credentials.createInsecure());
-        try {
-            return await new Promise(/** 将有截止时间的 gRPC 调用结果接入 Promise。 */ (resolve, reject) => client[method](request, { deadline: Date.now() + 2000 }, /** 传播 RPC 错误或返回响应值。 */ (error, value) => error ? reject(error) : resolve(value)));
-        } finally { client.close(); }
+        return rpcRequest(ports[service === 'StatusService' ? 'StatusServer' : 'VarifyServer'], service, method, request);
     }
     /** 通过真实邮件验证码注册并登录本次唯一用户，保存后续协议身份。 */
     async function register(index) {
@@ -323,4 +329,4 @@ async function runFourProcessCases(coordinator, record) {
     if (primary) throw primary;
 }
 
-module.exports = { reserve, stop, runFourProcessCases };
+module.exports = { reserve, stop, runFourProcessCases, rpcRequest };

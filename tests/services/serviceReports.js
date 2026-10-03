@@ -37,7 +37,7 @@ function xml(value) {
 
 /** 只保留白名单内的进程停止或业务子步骤诊断，拒绝任意敏感内容。 */
 function processDiagnostic(value) {
-    if (value && /^(gate-(verify|mail|register|login|selection)|client-(create|chat-id|send|message-sync|message-data))$/.test(value.stage)
+    if (value && /^(auth-(renewal|purpose|reset|stale-issue|login|logout)|gate-(verify|mail|register|login|selection)|client-(create|chat-id|send|message-sync|message-data))$/.test(value.stage)
         && /^(deadline|assertion|operation-failed|response--?\d{1,10})$/.test(value.category)) {
         return { stage: value.stage, category: value.category };
     }
