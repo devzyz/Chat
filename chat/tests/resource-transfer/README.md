@@ -55,3 +55,6 @@ and destruction with pending work. The model case verifies that attachment updat
 用于保持被测未读会话在第一页之外，避免默认打开该会话后正确清除提醒而改变原测试前提。
 
 `resumeUploadAndDownload` also provides an expired upload checkpoint: the server returns 404 and the client creates a fresh upload while preserving the source file and completing the transfer.
+
+`chatWindowPlacement` 同时保护 UI-BUG-08：嵌入主窗口的 ChatDialog 收到编辑器或搜索框的
+Escape 后仍可见且草稿保留；原 `searchCancellationWidgets` 继续验证真正等待窗可以用 Escape 取消。

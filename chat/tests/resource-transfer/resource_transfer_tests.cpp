@@ -55,6 +55,13 @@ private slots:
             QVERIFY(available.contains(QRect(send->mapToGlobal(QPoint()), send->size())));
             QVERIFY(available.contains(QRect(editor->mapToGlobal(QPoint()), editor->size())));
             QVERIFY(editor->height() > 0);
+            editor->setPlainText("keep draft");
+            QTest::keyClick(editor, Qt::Key_Escape);
+            QVERIFY2(page->isVisible(), "Escape must not hide the embedded chat page");
+            QCOMPARE(editor->toPlainText(), QString("keep draft"));
+            auto *searchEdit = page->findChild<QLineEdit *>("search_edit"); QVERIFY(searchEdit);
+            searchEdit->clear(); QTest::keyClick(searchEdit, Qt::Key_Escape);
+            QVERIFY(page->isVisible());
         }
     }
     /** @brief 关闭真实搜索等待窗立即取消请求，迟到结果无效且可以重新搜索。 */

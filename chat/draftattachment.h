@@ -7,12 +7,14 @@
 struct DraftAttachmentResult {
     DraftEntry entry;
     QImage preview;
+    qint64 byteSize = 0;
     QString error;
 };
 
 /** @brief 不可变附件身份与异步结果，不依赖编辑器生命周期。 */
 struct DraftAttachment {
     QString id;
+    QString displayName;
     QFuture<DraftAttachmentResult> future;
 };
 

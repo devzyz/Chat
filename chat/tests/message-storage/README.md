@@ -91,3 +91,8 @@ network group directory conversion and restores the group type after account res
 `socialVersionsAndSummaries` 复用默认 persistence 入口，验证真实 SQLite 中资料版本单调合并、
 失效联系人不出现在搜索、旧 outbox 在删除/重新加回/重启后均不重发、新版本显式提交成功，
 以及超过一页会话的摘要、附件名称与最近活动顺序持久化。
+
+`uploadedResourceCanonicalHistory` 补充 UI-BUG-01 回归：真实上传描述符包含进度等临时字段，
+私聊/群消息 ACK 后重启，仍能按 UUID 合并规范资源正文并继续补拉后续消息；
+资源 ID、名称、类型、摘要、大小及未知字段冲突必须整页回滚，游标不能前进。
+该方法复用 `message_storage.persistence`，不增加 CTest 聚合入口。

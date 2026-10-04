@@ -10,7 +10,9 @@
 范围及部署见 [基础群聊协议](Protocol.md#基础文字群聊)。
 
 客户端复用账号目录：`data/environments/<环境SHA256>/users/<uid>/messages.sqlite`。
-附件保存原始资源描述符，下载文件仍由现有资源模块管理。SQLite 不是服务端 MySQL 的替代品。
+附件待发时保存上传资源描述符，同步后保存服务端规范正文。按 UUID 对账时仅忽略上传临时字段
+`offset`、`owner`、`ready`、`upload_id`；资源 ID、名称、类型、摘要、大小和其他字段仍必须一致。
+下载文件仍由现有资源模块管理。SQLite 不是服务端 MySQL 的替代品。
 
 ## 工作流程
 

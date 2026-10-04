@@ -136,10 +136,7 @@ void ResetDialog::showTip(QString str, bool isOk) {
 
 void ResetDialog::showAuthError(AuthError error)
 {
-    showTip(error == AuthError::Network ? tr("网络请求错误")
-                                        : error == AuthError::MalformedResponse
-                                            ? tr("json解析错误") : tr("参数错误"),
-            false);
+    showTip(authErrorMessage(error), false);
 }
 
 // 添加对网络请求返回的json对象的处理
@@ -250,8 +247,8 @@ bool ResetDialog::checkVarifyValid() {
         return false;
     }
 
-    if (varify.length() != 4) {
-        addTipErr(TipErr::TIP_VARIFY_ERR, tr("请输入4位验证码"));
+    if (varify.length() != 8) {
+        addTipErr(TipErr::TIP_VARIFY_ERR, tr("请输入8位验证码"));
         return false;
     }
 

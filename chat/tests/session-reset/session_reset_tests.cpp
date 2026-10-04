@@ -384,7 +384,25 @@ void SessionResetTests::socialRequestsRespectSessionLifecycle()
     QCOMPARE(user->friendById(102)->_name, peer["name"].toString());
     auto applications = latest();
     deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",applications["request_id"]},{"error",1},{"social_error","StorageUnavailable"}});
-    QVERIFY(service->socialReady()); // An application-list failure must not block authorized chats.
+    QVERIFY(service->socialReady());
+    tcp->refreshSocialDirectory(); profile = latest();
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",profile["request_id"]},{"error",0},
+        {"profile",QJsonObject{{"id",101},{"uid",101},{"name","owner"},{"profile_revision","1"}}}});
+    QTRY_COMPARE(latest()["kind"].toString(), QString("contacts")); contacts = latest();
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",contacts["request_id"]},{"error",0},
+        {"items",QJsonArray{}},{"load_more",false}});
+    QTRY_COMPARE(latest()["kind"].toString(), QString("applications")); applications = latest();
+    const QJsonObject applicant{{"id",103},{"fromuid",103},{"touid",101},{"name","Applicant"},
+        {"icon",":/res/head_1.jpg"},{"sex",1},{"description",""},{"status",0},
+        {"profile_revision","1"},{"application_revision","1"}};
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",applications["request_id"]},{"error",0},
+        {"items",QJsonArray{applicant}},{"load_more",false}});
+    std::vector<std::shared_ptr<ApplyInfo>> received;
+    QTRY_VERIFY((received.clear(), user->appendFriendApplicationsTo(received), !received.empty()));
+    QCOMPARE(received.front()->_apply_name, QString("Applicant"));
+    QCOMPARE(received.front()->_apply_icon, QString(":/res/head_1.jpg"));
+    QCOMPARE(received.front()->_apply_sex, 1);
+    QVERIFY(service->socialReady());
 
     QObject receiver;
     int completed = 0;

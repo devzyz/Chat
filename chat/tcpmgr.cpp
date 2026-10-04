@@ -1140,7 +1140,10 @@ void TcpMgr::loadSocialPage(QString kind, QString after)
             for (const auto &value : response["items"].toArray()) {
                 auto row = value.toObject();
                 if (kind == "applications") {
-                    row["applyname"] = row["name"]; row["applyicon"] = row["icon"]; row["applysex"] = row["sex"];
+                    // 先按值读取，避免插入新键使右侧 QJsonValueRef 的下标失效。
+                    row["applyname"] = row.value("name");
+                    row["applyicon"] = row.value("icon");
+                    row["applysex"] = row.value("sex");
                 } else if (row["chat_id"].toInt() > 0) {
                     auto chat = row; chat["id"] = row["chat_id"]; chat["type"] = "private";
                     conversations.append(chat);

@@ -30,6 +30,7 @@ std::shared_ptr<DraftAttachment> prepareDraftAttachment(const QString &path, con
 {
     auto attachment = std::make_shared<DraftAttachment>();
     attachment->id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    attachment->displayName = image.isNull() ? QFileInfo(path).fileName() : QObject::tr("剪贴板图片");
     const auto bytes = static_cast<qint64>(image.sizeInBytes());
     const auto count = pendingAttachments.fetch_add(1);
     const auto priorBytes = pendingImageBytes.fetch_add(bytes);
@@ -70,13 +71,11 @@ std::shared_ptr<DraftAttachment> prepareDraftAttachment(const QString &path, con
             result.error = QObject::tr("附件不存在、为空或不可读，请删除或重新添加"); return result;
         }
         result.entry.content = file.absoluteFilePath();
+        result.byteSize = file.size();
         QImageReader reader(result.entry.content);
         if (reference.expired()) return DraftAttachmentResult{};
         if (reader.size().isValid()) reader.setScaledSize(reader.size().scaled(120, 80, Qt::KeepAspectRatio));
         result.preview = reader.read();
-        if (result.preview.isNull()) {
-            result.preview = QImage(48, 48, QImage::Format_RGB32); result.preview.fill(Qt::lightGray);
-        }
         return result;
     });
     return attachment;
