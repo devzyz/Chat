@@ -47,6 +47,13 @@ class GitRulesTests(unittest.TestCase):
             with self.subTest(verb=verb):
                 self.assertTrue(validate_message(f"fix(repo): {verb} local test requests"))
 
+    def test_recovery_imperative(self):
+        """恢复加固的祈使动词合法，过去式、进行时及拼写错误仍拒绝。"""
+        self.assertEqual([], validate_message("fix(repo): harden reconnect and resource upload recovery"))
+        for verb in ["hardened", "hardening", "hardenn"]:
+            with self.subTest(verb=verb):
+                self.assertTrue(validate_message(f"fix(repo): {verb} reconnect and resource upload recovery"))
+
     def test_merge_requires_real_parents(self):
         """只允许实际多父 merge 使用自动标题，普通提交不能冒充 merge。"""
         self.assertEqual([], validate_message("Merge pull request #15 from devzyz/docs/repo/server-contracts", 2))
