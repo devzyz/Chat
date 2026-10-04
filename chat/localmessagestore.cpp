@@ -28,8 +28,16 @@ bool sameMessageContent(const QString &original, const QString &canonical)
     if (!original.startsWith("@resource:v1:") || !canonical.startsWith("@resource:v1:")) return false;
     const auto left = QJsonDocument::fromJson(original.mid(13).toUtf8());
     const auto right = QJsonDocument::fromJson(canonical.mid(13).toUtf8());
-    return left.isObject() && right.isObject() && !left.object()["resource_id"].toString().isEmpty()
-        && left.object() == right.object();
+    if (!left.isObject() || !right.isObject() || left.object().value("resource_id").toString().isEmpty())
+        return false;
+    auto submitted = left.object();
+    auto received = right.object();
+    // 上传进度不属于消息内容；仅移除已知临时字段，其他业务字段或未知字段差异仍拒绝。
+    for (const QString field : {"offset", "owner", "ready", "upload_id"}) {
+        submitted.remove(field);
+        received.remove(field);
+    }
+    return submitted == received;
 }
 
 /** @brief 准备并绑定 SQL 参数后同步执行，失败抛异常，返回可读取结果的查询对象。 */

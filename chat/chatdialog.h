@@ -33,6 +33,8 @@ public:
     void loadChatUserList();
 
 protected:
+    /** @brief 主聊天页嵌入主窗口，忽略默认对话框拒绝，弹窗仍独立处理 Escape。 */
+    void reject() override;
     /** @brief 处理搜索区外点击及窗口激活后的历史刷新，返回基类事件过滤结果。 */
     bool eventFilter(QObject * watched, QEvent * event) override;
 

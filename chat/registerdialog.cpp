@@ -118,7 +118,7 @@ RegisterDialog::~RegisterDialog()
 // 获取验证码按钮的点击事件
 void RegisterDialog::on_get_code_clicked()
 {
-    auto match = checkVarifyValid();
+    auto match = checkEmailValid();
     auto email = ui->email_edit->text();
     if (match) {
         // 发送http验证码
@@ -192,10 +192,7 @@ void RegisterDialog::regModFinish(AuthFlowId flowId, ReqId id, QString res, Erro
 
 void RegisterDialog::showAuthError(AuthError error)
 {
-    showTip(error == AuthError::Network ? tr("网络请求错误")
-                                        : error == AuthError::MalformedResponse
-                                            ? tr("json解析失败") : tr("参数错误"),
-            false);
+    showTip(authErrorMessage(error), false);
 }
 
 // 用于显示错误信息
@@ -363,8 +360,8 @@ bool RegisterDialog::checkVarifyValid() {
         return false;
     }
 
-    if (varify.length() != 4) {
-        addTipErr(TipErr::TIP_VARIFY_ERR, tr("请输入4位验证码"));
+    if (varify.length() != 8) {
+        addTipErr(TipErr::TIP_VARIFY_ERR, tr("请输入8位验证码"));
         return false;
     }
 

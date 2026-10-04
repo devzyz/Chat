@@ -22,6 +22,9 @@
 #include "submissionexitguard.h"
 #include <QtConcurrentRun>
 #include <QSemaphore>
+#include <QTextBlock>
+#include <QTextFragment>
+#include <QTextImageFormat>
 #include <QThreadPool>
 
 
@@ -174,6 +177,28 @@ private slots:
         editor.undo();
         editor.clearAccepted(draft.id); QVERIFY(!editor.toPlainText().isEmpty());
         editor.clearAccepted(editor.draft().id); QVERIFY(editor.draft().entries.isEmpty());
+    }
+    /** @brief 普通文件草稿显示带文件名的卡片，跨会话和撤销后仍可识别。 */
+    void fileAttachmentPreview() {
+        QTemporaryDir root;
+        const auto path = root.filePath(QString::fromUtf8("测试-file.txt"));
+        QFile file(path); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("fixture"); file.close();
+        MessageTextEdit editor; editor.setAccountRoot(root.path()); editor.setConversation(10);
+        QVERIFY(editor.addAttachment(path)); QTRY_VERIFY(!editor.hasPendingAttachments());
+        QCoreApplication::processEvents();
+        const auto format = editor.document()->begin().begin().fragment().charFormat().toImageFormat();
+        QVERIFY(format.toolTip().contains(QFileInfo(path).fileName()));
+        const auto preview = qvariant_cast<QImage>(editor.document()->resource(QTextDocument::ImageResource, QUrl(format.name())));
+        QVERIFY(!preview.isNull());
+        bool hasDetails = false;
+        for (int y = 0; y < preview.height(); ++y)
+            for (int x = 0; x < preview.width(); ++x)
+                hasDetails |= preview.pixel(x, y) != preview.pixel(0, 0);
+        QVERIFY2(hasDetails, "file preview cannot be a flat gray block");
+        editor.setConversation(20); editor.setConversation(10);
+        editor.undo(); editor.redo();
+        QCOMPARE(editor.draft().entries.first().content, path);
+        QVERIFY(editor.document()->begin().begin().fragment().charFormat().toolTip().contains(QFileInfo(path).fileName()));
     }
     /** @brief 剪贴板图片暂存文件由草稿及任务共享持有。 */
     void clipboardLifetime() {

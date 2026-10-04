@@ -730,7 +730,7 @@ if(BUILD_TESTING)
         clickedoncelabel.cpp clickedoncelabel.h timerbtn.cpp timerbtn.h)
     target_link_libraries(composer_tests PRIVATE chat_session_core Qt${QT_VERSION_MAJOR}::Test)
     add_test(NAME composer.interaction COMMAND composer_tests pasteText unicodeLength releaseOutside
-        conversationDrafts attachmentDraft attachmentClipboard discardedAttachment preparationIsAsynchronous preparationCapacity
+        conversationDrafts attachmentDraft fileAttachmentPreview attachmentClipboard discardedAttachment preparationIsAsynchronous preparationCapacity
         clipboardLifetime submissionPersistence storageFailureRetry storageFailureCancel keyboardControls)
     add_test(NAME composer.upload_failure COMMAND composer_tests uploadFailureCancel)
     set_tests_properties(composer.upload_failure PROPERTIES ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 20)
@@ -742,4 +742,16 @@ if(BUILD_TESTING)
     set_tests_properties(user_search.loopback PROPERTIES ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 20)
     set_tests_properties(composer.interaction PROPERTIES
         ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 45)
+endif()
+
+if(BUILD_TESTING)
+    add_executable(auth_form_tests tests/auth-flow/auth_form_tests.cpp httpmgr.h httpmgr.cpp
+        logindialog.h logindialog.cpp logindialog.ui
+        registerdialog.h registerdialog.cpp registerdialog.ui
+        resetdialog.h resetdialog.cpp resetdialog.ui
+        timerbtn.h timerbtn.cpp clickedlabel.h clickedlabel.cpp)
+    target_link_libraries(auth_form_tests PRIVATE chat_client_login Qt${QT_VERSION_MAJOR}::Test)
+    add_test(NAME auth_flow.forms COMMAND auth_form_tests)
+    set_tests_properties(auth_flow.forms PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 30)
 endif()

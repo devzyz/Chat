@@ -123,7 +123,17 @@ AuthAction AuthFlowCoordinator::reduce(AuthFlowId flowId, const AuthOutcome &out
     } else if (outcome.kind == AuthOutcomeKind::HttpMalformedJson) {
         error = AuthError::MalformedResponse;
     } else if (outcome.kind == AuthOutcomeKind::HttpBusinessError) {
-        error = AuthError::Business;
+        switch (outcome.businessError) {
+        case 1003:
+        case 1004: error = AuthError::VerificationRejected; break;
+        case 1006:
+        case 1007:
+        case 1009: error = AuthError::InvalidCredentials; break;
+        case 1005: error = AuthError::RegistrationRejected; break;
+        case 1002:
+        case 1008: error = AuthError::ServiceUnavailable; break;
+        default: error = AuthError::Business; break;
+        }
     } else {
         return {};
     }
@@ -133,4 +143,19 @@ AuthAction AuthFlowCoordinator::reduce(AuthFlowId flowId, const AuthOutcome &out
     }
     return {flowId, AuthActionKind::StayAndShowError, error,
             true, std::nullopt};
+}
+
+QString authErrorMessage(AuthError error)
+{
+    switch (error) {
+    case AuthError::Network:
+    case AuthError::TcpConnection: return QObject::tr("网络连接失败，请检查网络后重试");
+    case AuthError::MalformedResponse: return QObject::tr("服务器响应异常，请稍后重试");
+    case AuthError::InvalidCredentials: return QObject::tr("账号或密码不正确，请检查后重试");
+    case AuthError::VerificationRejected: return QObject::tr("验证码错误或已过期，请重新获取");
+    case AuthError::RegistrationRejected: return QObject::tr("无法注册，请检查填写信息或尝试登录");
+    case AuthError::ServiceUnavailable: return QObject::tr("服务暂不可用，请稍后重试");
+    case AuthError::ChatLogin: return QObject::tr("登录状态已失效，请重新登录");
+    default: return QObject::tr("请求未成功，请检查输入或稍后重试");
+    }
 }

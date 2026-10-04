@@ -13,6 +13,24 @@
 #include <QTextDocumentFragment>
 #include <QFutureWatcher>
 #include <QSignalBlocker>
+#include <QPainter>
+#include <QFontMetrics>
+
+namespace {
+/** @brief 在 GUI 线程绘制文件名与状态，完整文件名仍由附件提示保留。 */
+QImage attachmentCard(const QString &name, const QString &status)
+{
+    QImage card(240, 80, QImage::Format_RGB32);
+    card.fill(QColor("#f1f3f5"));
+    QPainter painter(&card);
+    painter.setPen(QColor("#243447"));
+    const auto label = painter.fontMetrics().elidedText(name, Qt::ElideMiddle, 216);
+    painter.drawText(QRect(12, 10, 216, 30), Qt::AlignVCenter, label);
+    painter.setPen(QColor("#526475"));
+    painter.drawText(QRect(12, 42, 216, 24), Qt::AlignVCenter, status);
+    return card;
+}
+}
 
 /** @brief 进程内剪贴板保存原始片段和附件，避免把对象占位符当成文本发送。 */
 class DraftMimeData final : public QMimeData {
@@ -140,7 +158,16 @@ void MessageTextEdit::observeAttachment(const std::shared_ptr<DraftAttachment> &
         if (!result.error.isEmpty()) {
             if (target == _active) emit inputRejected(result.error);
         } else {
-            target->document->addResource(QTextDocument::ImageResource, QUrl(id), result.preview);
+            const auto name = target->attachments.value(id)->displayName;
+            QImage preview = result.preview;
+            if (preview.isNull()) preview = attachmentCard(name, tr("文件 · %1 字节").arg(result.byteSize));
+            else {
+                QImage canvas(240, 80, QImage::Format_ARGB32_Premultiplied); canvas.fill(Qt::transparent);
+                QPainter painter(&canvas);
+                painter.drawImage(QPoint((240 - preview.width()) / 2, (80 - preview.height()) / 2), preview);
+                painter.end(); preview = canvas;
+            }
+            target->document->addResource(QTextDocument::ImageResource, QUrl(id), preview);
             target->document->markContentsDirty(0, target->document->characterCount());
             if (target == _active) viewport()->update();
         }
@@ -150,12 +177,12 @@ void MessageTextEdit::observeAttachment(const std::shared_ptr<DraftAttachment> &
 }
 void MessageTextEdit::insertAttachment(const std::shared_ptr<DraftAttachment> &attachment)
 {
-    QImage preview(120, 80, QImage::Format_RGB32); preview.fill(Qt::lightGray);
+    const auto preview = attachmentCard(attachment->displayName, tr("正在准备…"));
     document()->addResource(QTextDocument::ImageResource, QUrl(attachment->id), preview);
     QTextImageFormat format;
     format.setName(attachment->id);
     format.setWidth(preview.width()); format.setHeight(preview.height());
-    format.setToolTip(tr("附件：准备完成后可发送；准备失败请删除后重新添加"));
+    format.setToolTip(attachment->displayName);
     _active->attachments.insert(attachment->id, attachment);
     auto cursor = textCursor(); cursor.insertImage(format); setTextCursor(cursor);
     observeAttachment(attachment);

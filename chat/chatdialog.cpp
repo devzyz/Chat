@@ -1047,3 +1047,8 @@ void ChatDialog::openDirectorySearch()
     });
     dialog->show();
 }
+
+void ChatDialog::reject()
+{
+    // 本页由 MainWindow 管理生命周期；QDialog 的默认 Escape 行为会隐藏整个 central widget。
+}

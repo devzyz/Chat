@@ -63,6 +63,8 @@ private slots:
     void schemaOneUpgradePreservesHistoryAndBackup();
     /** 验证资源发送意图在重启与重试预算耗尽后仍保留原资源身份。 */
     void resourceIntentSurvivesRecoveryAndRetryBudget();
+    /** @brief 上传描述符在私聊和群重启后可合并规范历史，业务冲突仍整页回滚。 */
+    void uploadedResourceCanonicalHistory();
 };
 
 void MessageStorageTests::conversationAttentionPersistence()
@@ -626,6 +628,46 @@ void MessageStorageTests::resourceIntentSurvivesRecoveryAndRetryBudget()
     store.applySyncPage(12, 0, 10, {canonical});
     QVERIFY(store.dispatchDue(2000000).isEmpty());
     QCOMPARE(store.history(12, 0, 50).messages.first().state, StoredMessage::Confirmed);
+}
+
+void MessageStorageTests::uploadedResourceCanonicalHistory()
+{
+    for (bool group : {false, true}) {
+        QTemporaryDir root;
+        LocalMessageStore store; store.open(root.path(), 7);
+        const QString epoch = group ? "1" : "";
+        if (group) store.mergeDirectory({{"conversations", QJsonArray{QJsonObject{{"id", 12},
+            {"type", "group"}, {"group_state", "active"}, {"group_revision", "1"}, {"membership_epoch", epoch}}}}});
+        QJsonObject canonical{{"resource_id", "resource-1"}, {"name", "file.txt"}, {"media_type", "file"},
+            {"sha256", QString(64, 'a')}, {"size", 75000}};
+        auto uploaded = canonical;
+        uploaded["offset"] = 75000; uploaded["owner"] = 7; uploaded["ready"] = true; uploaded["upload_id"] = "upload-1";
+        const auto content = /** @brief 生成实际消息资源前缀及紧凑 JSON。 */ [](const QJsonObject &value) {
+            return "@resource:v1:" + QString::fromUtf8(QJsonDocument(value).toJson(QJsonDocument::Compact));
+        };
+        auto pending = message(0, "upload-uuid"); pending.recipientId = group ? 0 : 8;
+        pending.content = content(uploaded); store.saveOutgoing({pending});
+        store.acknowledge(12, 7, pending.clientMessageId, 10);
+        store.close(); store.open(root.path(), 7);
+        auto confirmed = pending; confirmed.messageId = 10; confirmed.content = content(canonical);
+        auto followup = message(11, "after-upload"); followup.senderId = 8; followup.recipientId = group ? 0 : 7;
+        for (const QString field : {"resource_id", "name", "media_type", "sha256", "size", "unexpected"}) {
+            auto forged = confirmed; auto altered = canonical;
+            altered[field] = field == "size" ? QJsonValue(75001) : QJsonValue("different");
+            forged.content = content(altered);
+            QVERIFY_EXCEPTION_THROWN(store.applySyncPage(12, 0, 11, {forged, followup}, epoch), std::exception);
+            QCOMPARE(store.cursor(12), qint64(0));
+            QCOMPARE(store.history(12, 0, 50).messages.size(), 1);
+        }
+        store.applySyncPage(12, 0, 11, {confirmed, followup}, epoch);
+        QCOMPARE(store.cursor(12), qint64(11));
+        const auto rows = store.history(12, 0, 50).messages;
+        QCOMPARE(rows.size(), 2);
+        QCOMPARE(rows.first().content, content(canonical));
+        store.close(); store.open(root.path(), 7);
+        QCOMPARE(store.cursor(12), qint64(11));
+        QCOMPARE(store.history(12, 0, 50).messages.size(), 2);
+    }
 }
 
 void MessageStorageTests::invalidReceiptPageRollsBackAndDoesNotAdvance()

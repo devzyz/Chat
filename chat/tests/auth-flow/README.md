@@ -28,3 +28,11 @@ Each CTest case has a 10-second hard timeout. Tests use no real network, port, d
 ## Local runner and remaining gaps
 
 Run `scripts/windows-local.ps1 -Task RunClientTests -Configuration Release`. Unit results belong to `client_unit.xml`; the abnormal-disconnect production wiring case will belong to `client_component.xml`. Real HTTP/TCP transport timing remains Phase 3B and complete login E2E remains Phase 3C/3D.
+
+## 桌面认证表单回归
+
+`Q03-AUTH-13 / auth_flow.forms` 为 Business / Integration，使用真实 Login/Register/Reset
+控件和回环 HTTP 对端，覆盖空验证码首次请求、8 位签发码提交、空/4 位/9 位拒绝、
+找回页初始提示及登录错误不泄露账号存在性。无真实账号、外部邮件或固定服务端口。
+复用 `chat_client_login` 与生产表单源码，30 秒硬超时，归入 `client_integration.xml`。
+该测试不将合成 HTTP 成功响应记为真实后端注册或改密验收。

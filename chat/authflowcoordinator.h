@@ -34,9 +34,16 @@ enum class AuthError {
     Network,
     MalformedResponse,
     Business,
+    InvalidCredentials,
+    VerificationRejected,
+    RegistrationRejected,
+    ServiceUnavailable,
     TcpConnection,
     ChatLogin
 };
+
+/** @brief 将认证错误转换为不泄露账号存在性的可操作提示，供三个表单共用。 */
+QString authErrorMessage(AuthError error);
 
 /** @brief 携带认证步骤结果及其请求身份，供流程协调器判断是否接收。 */
 struct AuthOutcome {

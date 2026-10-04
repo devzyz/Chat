@@ -531,7 +531,7 @@ authenticated retry 写入 `client_integration.xml`，仅使用动态 loopback�
 ### 4.4 Auth/network outcome coordinator（12）
 
 Interface：production `AuthFlowCoordinator::reduce(flowId, AuthOutcome) -> AuthAction`；`AuthAction::kind` 以 optional 稳定表达无 action，存在的 action 仅为 `StayAndShowError | ConnectChat | ShowLogin | ShowChat`。
-Domain/Level：Business/Architecture；Q03-AUTH-01..11 为 Unit，Q03-AUTH-12 为 Component。
+Domain/Level：Business/Architecture；Q03-AUTH-01..11 为 Unit，Q03-AUTH-12 为 Component，Q03-AUTH-13 为 Integration。
 报告：Unit 写入 `client_unit.xml`，Component 写入 `client_component.xml`；synthetic outcome，无真实 HTTP/TCP。
 
 | Test ID | CTest name | 合同 |
@@ -542,6 +542,7 @@ Domain/Level：Business/Architecture；Q03-AUTH-01..11 为 Unit，Q03-AUTH-12 �
 | Q03-AUTH-07..10 | `auth_flow.login_http_success`、`tcp_failure`、`chat_login_failure`、`chat_login_success` | HTTP/TCP/Chat login 只按合法 stage 推进，failure 不进入 Chat，success exactly-once |
 | Q03-AUTH-11 | `auth_flow.duplicate_and_late` | duplicate 与旧 flow outcome 不 action |
 | Q03-AUTH-12 | `auth_flow.abnormal_disconnect_reset` | abnormal disconnect production mapping 复用 `ClientSession::resetSession(UnexpectedDisconnect)` |
+| Q03-AUTH-13 | `auth_flow.forms` | Business / Integration；真实认证表单及回环 HTTP，首次验证码请求、8 位码合同、初始提示及安全业务错误 |
 
 Plan 3B-02 前 Qt runner testcase 合计 24：Unit 18、Component 6。Level 精化不改变生产 Module 目录或断言。
 
@@ -927,7 +928,7 @@ Qt 控件及资源存储报告的完整用例集合，保留自动控件与真�
 
 | Test ID | 入口 | 保护合同 |
 | --- | --- | --- |
-| Q05-COMPOSER-01 | composer.interaction | 原生粘贴、附件剪切粘贴、后台准备、撤销分支资源释放、落盘失败原 UUID 重试、取消后唯一所有权、退出提示 Cancel 及控件激活 |
+| Q05-COMPOSER-01 | composer.interaction | 原生粘贴、附件剪切粘贴、后台准备、文件名卡片与提示、撤销分支资源释放、落盘失败原 UUID 重试、取消后唯一所有权、退出提示 Cancel 及控件激活 |
 | Q05-COMPOSER-02 | composer.byte_budget | JSON UTF-8 字节预算与 Unicode 无损拆分 |
 | Q05-COMPOSER-03 | composer.upload_failure | 真实 HTTP 连接失败、部分成功后重试/取消、账号停止与重新登录后的旧通知隔离 |
 | Q05-SEARCH-01 | user_search.lifecycle | 超时、取消、断线、旧回包、无编号兼容提示、重复结果及销毁 |
@@ -942,7 +943,7 @@ Qt 控件及资源存储报告的完整用例集合，保留自动控件与真�
 | Test ID | 入口 | 保护合同 |
 | --- | --- | --- |
 | Q06-SOCIAL-01 | message_storage.persistence / socialVersionsAndSummaries | 独立资料/关系版本、删除后搜索过滤、旧 outbox 不复活、摘要排序与重启 |
-| Q06-SOCIAL-02 | session_reset.social_lifecycle | 社交请求关联、超时、销毁及账号隔离；关系落盘就绪独立于申请列表 |
+| Q06-SOCIAL-02 | session_reset.social_lifecycle | 社交请求关联、超时、销毁及账号隔离；关系落盘就绪独立于申请列表；申请人姓名、头像、性别经生产回包与 SQLite 保持 |
 | Q06-DRAFT-01 | composer.interaction / conversationDrafts | 跨会话原生草稿、附件、撤销与重做 |
 | Q06-SUMMARY-01 | conversation_attention.widgets；localHistorySearchWidgets | 最近活动排序、未加载会话提醒与正文复制 |
 | S08-SOCIAL-01 | message-sync/integration.py / tcp_flow | 生产 TCP 资料/好友全生命周期、旧版本拒绝、分页、长正文和安全投影 |

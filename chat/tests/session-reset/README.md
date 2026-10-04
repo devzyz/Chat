@@ -55,3 +55,6 @@ verifies reauthentication, preserved draft ownership, and replay of the original
 Q02-SESSION-10 (`session_reset.logout_revocation`) uses real loopback HTTP to verify that failed
 revocation preserves account state, retry remains possible, and only confirmed revocation resets
 it. Server-side revocation, renewal and reset races are owned by the hosted four-process suite.
+
+`socialRequestsRespectSessionLifecycle` 还通过生产目录回包→SQLite→UserMgr 验证申请人的
+姓名、头像和性别转换，防止向同一个 QJsonObject 插入键使 QJsonValueRef 读错字段。

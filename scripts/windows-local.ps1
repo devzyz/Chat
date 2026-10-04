@@ -84,7 +84,7 @@ $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_resource_integration.xml'; ExpectedCount = 8 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 25 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 19 }
-    [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 32 }
+    [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 33 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 35 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 22 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_component.xml'; ExpectedCount = 9 }

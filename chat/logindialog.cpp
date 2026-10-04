@@ -182,14 +182,7 @@ void LoginDialog::initHead()
 
 void LoginDialog::showAuthError(AuthError error)
 {
-    const QString message = error == AuthError::Network
-        ? tr("网络请求错误")
-        : error == AuthError::MalformedResponse
-            ? tr("json解析失败")
-            : error == AuthError::TcpConnection
-                ? tr("网络异常")
-                : tr("参数错误");
-    showTip(message, false);
+    showTip(authErrorMessage(error), false);
     ui->login_btn->setEnabled(true);
 }
 
