@@ -424,6 +424,42 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(uploaded.count() == 1 || failed.count() > 0, 20000);
         QCOMPARE(failed.count(), 0); QCOMPARE(progress.first()[0].toLongLong(), qint64(0));
         QVERIFY(uploaded.first()[0].toJsonObject()["resource_id"] != metadata["resource_id"]);
+        // 相同字节改名后必须返回本次名称，且同名重试仍复用原资源。
+        const auto renamed = directory.path() + "/renamed.png";
+        QVERIFY(QFile::copy(source, renamed));
+        uploaded.clear(); resumed.upload(renamed);
+        QTRY_VERIFY_WITH_TIMEOUT(uploaded.count() == 1 || failed.count() > 0, 20000);
+        QCOMPARE(failed.count(), 0);
+        const auto renamedMetadata = uploaded.first()[0].toJsonObject();
+        QCOMPARE(renamedMetadata["name"].toString(), QString("renamed.png"));
+        QVERIFY(renamedMetadata["resource_id"] != metadata["resource_id"]);
+        uploaded.clear(); resumed.upload(renamed);
+        QTRY_VERIFY_WITH_TIMEOUT(uploaded.count() == 1 || failed.count() > 0, 20000);
+        QCOMPARE(failed.count(), 0);
+        QCOMPARE(uploaded.first()[0].toJsonObject()["resource_id"], renamedMetadata["resource_id"]);
+        // 旧版无名称断点只能在完整描述匹配时迁移；不匹配和已过期均应新建且不能循环恢复旧 ID。
+        const auto legacyCache = directory.path() + "/legacy-cache";
+        QVERIFY(QDir().mkpath(legacyCache + "/transfers/uploads"));
+        const auto legacyKey = QCryptographicHash::hash((endpoint.toString() + "\nimage/png\n"
+            + metadata["sha256"].toString()).toUtf8(), QCryptographicHash::Sha256).toHex();
+        QFile legacy(legacyCache + "/transfers/uploads/" + QString::fromLatin1(legacyKey) + ".upload.json");
+        QVERIFY(legacy.open(QIODevice::WriteOnly));
+        legacy.write(QJsonDocument(QJsonObject{{"upload_id", metadata["resource_id"]}}).toJson()); legacy.close();
+        ResourceTransferManager migrated(endpoint, 7, "fixture-token", legacyCache);
+        QSignalSpy migratedUploads(&migrated, &ResourceTransferManager::uploaded);
+        QSignalSpy migratedFailures(&migrated, &ResourceTransferManager::failed);
+        migrated.upload(source); QTRY_COMPARE_WITH_TIMEOUT(migratedUploads.size(), 1, 15000);
+        QCOMPARE(migratedUploads.first()[0].toJsonObject()["resource_id"], metadata["resource_id"]);
+        migrated.upload(renamed); QTRY_COMPARE_WITH_TIMEOUT(migratedUploads.size(), 2, 15000);
+        QCOMPARE(migratedUploads.last()[0].toJsonObject()["name"].toString(), QString("renamed.png"));
+        QVERIFY(migratedUploads.last()[0].toJsonObject()["resource_id"] != metadata["resource_id"]);
+        QVERIFY(legacy.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        legacy.write("{\"upload_id\":\"00000000-0000-0000-0000-000000000001\"}"); legacy.close();
+        const auto renamedAgain = directory.path() + "/expired-legacy.png";
+        QVERIFY(QFile::copy(source, renamedAgain));
+        migrated.upload(renamedAgain); QTRY_COMPARE_WITH_TIMEOUT(migratedUploads.size(), 3, 15000);
+        QCOMPARE(migratedUploads.last()[0].toJsonObject()["name"].toString(), QString("expired-legacy.png"));
+        QVERIFY(migratedFailures.isEmpty());
         // The production composer uploads attachments and only clears an accepted snapshot.
         MessageService messages;
         QSignalSpy ready(&messages, &MessageService::directoryRestored);
@@ -449,6 +485,13 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(submission.isFailed(), 15000);
         QVERIFY(interrupted); QCOMPARE(saved.size(), 1); QVERIFY(submission.hasPending());
         disconnect(interruption);
+        const auto pendingSummary = submission.pendingSummary();
+        submission.suspend(); messages.stop();
+        QVERIFY(submission.hasPending());
+        QCOMPARE(submission.pendingSummary(), pendingSummary);
+        submission.retry(); QCOMPARE(saved.size(), 1);
+        messages.start(directory.path() + "/messages", 7); QTRY_COMPARE(ready.size(), 2);
+        submission.resume();
         host.start(qEnvironmentVariable("RESOURCE_TEST_HOST"), {"--serve-test", directory.path() + "/store", port});
         QVERIFY(host.waitForStarted(5000)); QVERIFY(host.waitForReadyRead(5000));
         QCOMPARE(QString::fromUtf8(host.readLine()).trimmed(), port);

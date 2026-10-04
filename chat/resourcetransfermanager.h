@@ -52,7 +52,7 @@ private:
                      std::function<void(QJsonObject)> done, qint64 offset = -1);
     /** @brief 读取下一块文件计算摘要，通过事件队列分片执行以避免一次占用整个文件处理时间。 */
     void hashNext();
-    /** @brief 根据文件摘要和端点读取断点信息，查询已有任务或创建新上传。 */
+    /** @brief 根据端点、摘要、类型和名称读取断点，核对服务端身份后续传或新建。 */
     void beginUpload();
     /** @brief 从服务端已确认 offset 读取并上传下一块，到末尾时请求完成校验。 */
     void sendNext(qint64 offset);
@@ -72,5 +72,6 @@ private:
     QCryptographicHash _hash{QCryptographicHash::Sha256};
     QJsonObject _metadata;
     bool _busy = false;
+    bool _legacyChecked = false;
     quint64 _generation = 0;
 };

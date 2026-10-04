@@ -610,6 +610,12 @@ if(BUILD_TESTING)
         COMMAND session_reset_tests logoutWaitsForRevocationAndPreservesStateOnFailure)
     set_tests_properties(session_reset.logout_revocation PROPERTIES
         ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 10)
+    add_test(NAME session_reset.accepted_submission COMMAND session_reset_tests disconnectPreservesAcceptedSubmission)
+    set_tests_properties(session_reset.accepted_submission PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "component" TIMEOUT 10)
+    add_test(NAME session_reset.silent_peer COMMAND session_reset_tests silentPeerTriggersReconnect)
+    set_tests_properties(session_reset.silent_peer PROPERTIES
+        ENVIRONMENT "${MESSAGE_MODEL_TEST_ENVIRONMENT}" LABELS "integration" TIMEOUT 55)
 
     add_executable(http_transport_tests
         tests/http-transport/http_transport_tests.cpp

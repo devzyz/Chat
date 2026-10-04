@@ -37,7 +37,7 @@ void ResourceStore::CollectExpiredUploads() {
     const auto cutoff = std::filesystem::file_time_type::clock::now() - std::chrono::hours(24 * 7);
     for (const auto& entry : std::filesystem::directory_iterator(_root)) {
         const auto extension = entry.path().extension();
-        if (extension != ".json" && extension != ".discard") continue;
+        if (extension != ".json" && extension != ".discard" && extension != ".creating") continue;
         if (!entry.is_regular_file() || entry.is_symlink() || entry.file_size() > 8192)
             throw Error(507, "resource metadata requires repair");
         const auto id = entry.path().stem().string();
@@ -48,8 +48,9 @@ void ResourceStore::CollectExpiredUploads() {
         if (std::filesystem::is_symlink(part)
             || (std::filesystem::exists(part) && !std::filesystem::is_regular_file(part)))
             throw Error(507, "upload cleanup requires repair");
-        if (entry.last_write_time() > cutoff || (std::filesystem::exists(part)
-            && std::filesystem::last_write_time(part) > cutoff)) continue;
+        // 未发布的创建记录和旧版本无字节残留可立即回收；有效分块仍遵循七天保留期。
+        if (extension == ".json" && std::filesystem::exists(part)
+            && (entry.last_write_time() > cutoff || std::filesystem::last_write_time(part) > cutoff)) continue;
         // 先原子移走描述文件，崩溃后可继续清理；完成资源永远不进入此路径。
         std::filesystem::rename(entry.path(), Path(id, ".discard"));
         FinishDiscard(id);
@@ -99,13 +100,22 @@ Metadata ResourceStore::Create(int owner, const std::string& name, const std::st
     Json::Value value;
     value["id"] = id; value["owner"] = owner; value["name"] = name;
     value["media_type"] = type; value["size"] = Json::UInt64(size); value["sha256"] = sha256;
-    std::ofstream metadata(Path(id, ".json"), std::ios::binary);
-    metadata << value;
-    metadata.close();
-    if (!metadata) throw Error(507, "cannot persist upload metadata");
-    std::ofstream bytes(Path(id, ".part"), std::ios::binary);
-    bytes.close();
-    if (!bytes) { std::filesystem::remove(Path(id, ".json")); throw Error(507, "cannot create upload"); }
+    try {
+        std::ofstream metadata(Path(id, ".creating"), std::ios::binary);
+        metadata << value;
+        metadata.close();
+        if (!metadata) throw Error(507, "cannot persist upload metadata");
+        std::ofstream bytes(Path(id, ".part"), std::ios::binary);
+        bytes.close();
+        if (!bytes) throw Error(507, "cannot create upload");
+        // 仅在描述和字节文件均可用后发布；进程中断留下的 creating 由下次创建清理。
+        std::filesystem::rename(Path(id, ".creating"), Path(id, ".json"));
+    } catch (...) {
+        std::error_code ignored;
+        std::filesystem::remove(Path(id, ".part"), ignored);
+        std::filesystem::remove(Path(id, ".creating"), ignored);
+        throw;
+    }
     return Inspect(id);
 }
 Metadata ResourceStore::Inspect(const std::string& id) const {

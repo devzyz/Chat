@@ -1,5 +1,6 @@
 #include "clientsession.h"
 #include "messageservice.h"
+#include "messagesubmissioncontroller.h"
 #include <QTemporaryDir>
 #include <QScopeGuard>
 #include "global.h"
@@ -37,6 +38,10 @@ private slots:
     void retryDoesNotCrossAuthenticatedAccounts();
     /** @brief 验证重连认证后沿用原 UUID 和业务载荷，仅递增发送尝试。 */
     void reconnectResendsIdenticalWirePayloadAfterAuthentication();
+    /** @brief 未落盘提交在连接重置期间保留，恢复账号库后可重试。 */
+    void disconnectPreservesAcceptedSubmission();
+    /** @brief 连接仍存活却不回复心跳时必须进入有限恢复。 */
+    void silentPeerTriggersReconnect();
     /** @brief 退出只有收到撤销确认才清理账号，失败仍可重试。 */
     void logoutWaitsForRevocationAndPreservesStateOnFailure();
     /** @brief 验证社交读取落盘、回包关联、超时与账号生命周期隔离。 */
@@ -332,6 +337,102 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
     QCOMPARE(replayBody.take("attempt_id").toString(), QString("2"));
     QCOMPARE(originalBody, replayBody);
     tcp->resetConnection(true);
+}
+
+void SessionResetTests::disconnectPreservesAcceptedSubmission()
+{
+    QTemporaryDir directory;
+    auto tcp = TcpMgr::instance();
+    auto user = UserMgr::instance();
+    const auto cleanup = qScopeGuard(/** @brief 清理本测试拥有的账号状态和临时存储。 */ [&] {
+        tcp->resetConnection(true); user->resetSession();
+        QTest::qWaitFor(/** @brief 等待存储线程释放测试目录。 */ [&] {
+            return !QFileInfo::exists(directory.path() + "/messages.lock");
+        }, 2000);
+    });
+    tcp->resetConnection(true); user->resetSession();
+    user->setUserInfo(std::make_shared<UserInfo>(101, "owner", ""));
+    auto *service = user->messages();
+    QSignalSpy restored(service, &MessageService::directoryRestored);
+    QSignalSpy persisted(service, &MessageService::outgoingPersisted);
+    service->start(directory.path(), 101); QTRY_COMPARE(restored.size(), 1);
+    auto *submission = user->submissions();
+    MessageDraft draft; draft.id = "accepted-before-disconnect";
+    draft.entries = {{DraftEntry::Kind::Text, "first", "first retained text", {}},
+        {DraftEntry::Kind::Text, "second", "second retained text", {}}};
+    QVERIFY(submission->submit(draft, 501, 102, false));
+    tcp->resetConnection(false);
+    QVERIFY(submission->hasPending());
+    QCOMPARE(submission->pendingSummary(), QString("first retained text\nsecond retained text"));
+    submission->retry();
+    QCoreApplication::processEvents(); QVERIFY(persisted.isEmpty());
+    service->start(directory.path(), 101); QTRY_COMPARE(restored.size(), 2);
+    submission->retry();
+    QTRY_COMPARE(persisted.size(), 2);
+    QVERIFY(persisted[0][2].toBool()); QVERIFY(persisted[1][2].toBool());
+    QTRY_VERIFY(!submission->hasPending());
+    // 投递当前提交的零时推进，但不投递存储完成回调，覆盖 SQL 已接收而界面未确认的窗口。
+    draft.id = "queued-before-disconnect";
+    QVERIFY(submission->submit(draft, 501, 102, false));
+    QCoreApplication::sendPostedEvents(submission, QEvent::MetaCall);
+    QCOMPARE(persisted.size(), 2);
+    tcp->resetConnection(false); QVERIFY(submission->hasPending());
+    service->start(directory.path(), 101); QTRY_COMPARE(restored.size(), 3);
+    QSignalSpy history(service, &MessageService::historyLoaded);
+    service->loadHistory(501); QTRY_COMPARE(history.size(), 1);
+    const auto beforeRetry = qvariant_cast<QVector<StoredMessage>>(history.first()[2]);
+    QCOMPARE(beforeRetry.size(), 3);
+    const auto originalUuid = beforeRetry.last().clientMessageId;
+    submission->retry(); QTRY_COMPARE(persisted.size(), 4);
+    QCOMPARE(qvariant_cast<QVector<QString>>(persisted[2][1]), QVector<QString>{originalUuid});
+    QTRY_VERIFY(!submission->hasPending());
+    service->loadHistory(501); QTRY_COMPARE(history.size(), 2);
+    QCOMPARE(qvariant_cast<QVector<StoredMessage>>(history.last()[2]).size(), 4);
+    draft.id = "discard-on-logout";
+    QVERIFY(submission->submit(draft, 501, 102, false));
+    tcp->resetConnection(false); QVERIFY(submission->hasPending());
+    QPointer<MessageSubmissionController> previous(submission);
+    user->resetSession(); QVERIFY(previous.isNull());
+}
+
+void SessionResetTests::silentPeerTriggersReconnect()
+{
+    auto tcp = TcpMgr::instance();
+    tcp->resetConnection(true);
+    QTcpServer peer; QVERIFY(peer.listen(QHostAddress::LocalHost, 0));
+    ServerInfo endpoint; endpoint.Host = "127.0.0.1"; endpoint.Port = QString::number(peer.serverPort());
+    QSignalSpy connected(tcp.get(), &TcpMgr::connectionAttemptFinished);
+    tcp->connectToServer(endpoint);
+    QTRY_COMPARE_WITH_TIMEOUT(connected.size(), 1, 2000);
+    QTRY_VERIFY_WITH_TIMEOUT(peer.hasPendingConnections(), 2000);
+    std::unique_ptr<QTcpSocket> socket(peer.nextPendingConnection());
+    const auto login = QJsonDocument(QJsonObject{{"error", 0}, {"uid", 101}, {"token", "silent-peer-fixture"}}).toJson();
+    tcp->handleMessage(ID_CHAT_LOGIN_RSP, login.size(), login);
+    QSignalSpy acknowledged(tcp.get(), &TcpMgr::heartbeatAcknowledged);
+    for (const QByteArray body : {QByteArray("{\"error\":0}"), QByteArray("{\"error\":0.5}"),
+            QByteArray("{\"error\":false}"), QByteArray("{\"error\":\"0\"}"), QByteArray("{}")})
+        tcp->handleMessage(ID_HEART_BEAT_RSP, body.size(), body);
+    QCOMPARE(acknowledged.size(), 1);
+    ClientSession session; session.beginSession();
+    const auto cleanup = qScopeGuard(/** @brief 超时断言失败也停止会话计时器和连接。 */ [&] {
+        session.resetSession(SessionResetReason::UnexpectedDisconnect);
+    });
+    QSignalSpy recovery(&session, &ClientSession::reconnectChanged);
+    // 对端保持 TCP 可写，每次请求都回一个错误类型的成功码，不能延长活跃期限。
+    connect(socket.get(), &QTcpSocket::readyRead, &session, /** @brief 消费请求但注入无效心跳响应。 */ [&] {
+        socket->readAll();
+        const QByteArray invalid("{\"error\":\"0\"}");
+        tcp->handleMessage(ID_HEART_BEAT_RSP, invalid.size(), invalid);
+    });
+    QTimer deadline; deadline.setSingleShot(true); deadline.start(45000);
+    QTRY_VERIFY_WITH_TIMEOUT(!recovery.isEmpty() || !deadline.isActive(), 46000);
+    QVERIFY(!recovery.isEmpty());
+    QVERIFY(recovery.first()[0].toBool());
+    QVERIFY(session.isActive());
+    QVERIFY(!tcp->isAuthenticated());
+    const QByteArray late("{\"error\":0}");
+    tcp->handleMessage(ID_HEART_BEAT_RSP, late.size(), late);
+    QCOMPARE(acknowledged.size(), 1);
 }
 
 void SessionResetTests::socialRequestsRespectSessionLifecycle()

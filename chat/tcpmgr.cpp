@@ -101,6 +101,7 @@ TcpMgr::TcpMgr() : _host("") {
         _social = false; _socialRefreshing = false; _socialPending.clear();
         _legacyHistoryRequests.clear();
         if (expectedClose && !_retainingPending) UserMgr::instance()->messages()->pauseOutgoing();
+        if (!expectedClose || _retainingPending) UserMgr::instance()->suspendSubmissions();
         UserMgr::instance()->messages()->stop();
         if (outcome.terminal == ChatTcpTerminal::Refused
             || outcome.terminal == ChatTcpTerminal::ConnectDeadlineExceeded) {
@@ -747,12 +748,12 @@ void TcpMgr::initHandlers()
         }
 
         // 取出error键，判断是否为运行正确
-        int err = jsonObj["error"].toInt();
-        if (err != ErrorCodes::SUCCESS) {
-            SPDLOG_WARN("heartbeat response failed, msg_id={}, error={}",
-                        static_cast<int>(id), err);
+        const auto error = jsonObj["error"];
+        if (!error.isDouble() || error.toDouble(-1) != ErrorCodes::SUCCESS || !_authenticated) {
+            SPDLOG_WARN("heartbeat response is invalid or unauthenticated, msg_id={}", static_cast<int>(id));
             return ;
         }
+        emit heartbeatAcknowledged();
     });
 
     // 从服务器加载一部分聊天列表
@@ -1021,6 +1022,7 @@ void TcpMgr::resetConnection(bool expectedClose)
     if (expectedClose) {
         UserMgr::instance()->messages()->pauseOutgoing();
     }
+    else UserMgr::instance()->suspendSubmissions();
     UserMgr::instance()->messages()->stop();
     _host.clear();
     _port = 0;

@@ -56,5 +56,9 @@ and destruction with pending work. The model case verifies that attachment updat
 
 `resumeUploadAndDownload` also provides an expired upload checkpoint: the server returns 404 and the client creates a fresh upload while preserving the source file and completing the transfer.
 
+同一测试还验证相同内容改名后返回新名称、同名重试复用原资源；旧版无名称断点只在服务器描述完整匹配时迁移，
+不匹配或过期断点创建新任务，不循环读取旧 ID。分块中断后还冻结提交、停止并恢复同账号 SQLite，
+验证未移交附件及后续文本保持不变，恢复后仍只产生三条有序消息。使用真实 HTTP 和临时目录，原续传与摘要断言保持不变。
+
 `chatWindowPlacement` 同时保护 UI-BUG-08：嵌入主窗口的 ChatDialog 收到编辑器或搜索框的
 Escape 后仍可见且草稿保留；原 `searchCancellationWidgets` 继续验证真正等待窗可以用 Escape 取消。

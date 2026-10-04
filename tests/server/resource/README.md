@@ -1,8 +1,8 @@
 # Resource transfer tests
 
-Test IDs: S05-RESOURCE-01..17; method mapping and CI boundary are in `tests/TEST-CONTRACT-MATRIX.md`.
+Test IDs: S05-RESOURCE-01..18; method mapping and CI boundary are in `tests/TEST-CONTRACT-MATRIX.md`.
 
-Run `scripts/windows-local.ps1 -Task RunServerTests` for the eight `StoreTest.*` filesystem
+Run `scripts/windows-local.ps1 -Task RunServerTests` for the nine `StoreTest.*` filesystem
 integration cases (60-second timeout, no database). Windows develop/full CI runs the same
 entry and retains `build/test-results/server_resource_integration.xml`. Debug and Release
 are supported. ResourceServer is built and deployed by this entry and `BuildServers`.
@@ -59,3 +59,6 @@ catalog/transfer paths. These are protocol/media evidence, not Qt card-display o
 部署 smoke 必须先运行发布包内版本化迁移。`/ready` 与真实 Status/MySQL 的组合由 hosted 测试核验。
 
 `StoreTest.DeclaredLengthAndBufferAreBounded` now fills the 32-upload quota, ages abandoned uploads eight days, verifies an active upload survives, preserves completed bytes, and resumes interrupted discard cleanup. The owned fixture directory is removed at teardown.
+
+`StoreTest.InterruptedCreationDoesNotBlockUploads`（S05-RESOURCE-18）注入新鲜缺字节 `.json` 和损坏的
+未发布 `.creating`，重建存储后同账号及其他账号均可创建；中断残留被回收，完成资源的原字节不变。

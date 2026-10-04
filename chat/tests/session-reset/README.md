@@ -18,6 +18,8 @@ Domain is Architecture/Business. The five state cases are Component; the authent
 | Q02-SESSION-07 | `session_reset.uncertainBatchSurvivesDisconnectAndMatchesExactUuid` | Out-of-order replies match exact UUID sets; transient storage errors and malformed success keep pending; valid acknowledgement or terminal conflict removes only the matching batch. |
 | Q02-SESSION-08 | `session_reset.retryDoesNotCrossAuthenticatedAccounts` | Account-bound pending is dropped when a different account authenticates. |
 | Q02-SESSION-09 | `session_reset.authenticated_wire_retry` | After reconnect and authentication, sync verification precedes retry with the same UUID/business payload and an incremented attempt ID. |
+| Q02-SESSION-11 | `session_reset.accepted_submission` | 暂时断线保留已接受条目；SQL 已排队但回调未送达时保持原 UUID，恢复重试无重复，账号结束销毁任务。 |
+| Q02-SESSION-12 | `session_reset.silent_peer` | 真实 TCP 对端可写但只给无效心跳回复时触发三十秒期限和有限恢复；成功码必须是数值零且连接已认证。 |
 
 The decoder's old-half-frame isolation is T07-FRM-04 in the adjacent network-state Unit module. Together these contracts cover active logout/switch-account, kicked, and abnormal-disconnect reset semantics without a `clearForTest`, test-only build flag, copied state object, fixed port, public network, or credential.
 
@@ -28,7 +30,7 @@ The decoder's old-half-frame isolation is T07-FRM-04 in the adjacent network-sta
 ctest --test-dir build/windows-client/Release -R "^session_reset\\." --output-on-failure
 ```
 
-State cases are written to `build/test-results/client_component.xml`; the real retry case goes to `client_integration.xml`. Counts are defined by the public runner. The social lifecycle case has a 30-second hard timeout to exercise the production ten-second deadline; other cases have a 10-second hard timeout and uses `QT_QPA_PLATFORM=minimal`.
+State cases are written to `build/test-results/client_component.xml`; real socket cases go to `client_integration.xml`. Counts are defined by the public runner. The social lifecycle case has a 30-second hard timeout; the silent-peer case has a 55-second timeout to cover the ten-second heartbeat interval plus thirty-second response deadline. Other cases use a 10-second timeout. All use `QT_QPA_PLATFORM=minimal`.
 
 RED evidence was recorded for the missing owning Module/User reset, retained owned UI, retained pending batch, and unsafe no-user UID read. GREEN uses the same `chat_session_core` library linked by the production executable. The regression mutation removes the `ClientSession` reset call from `MainWindow`; `CheckTestStructure` and the session wiring gate must reject it.
 

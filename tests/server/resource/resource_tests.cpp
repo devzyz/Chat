@@ -63,6 +63,24 @@ TEST_F(StoreTest, ResumeAfterStoreRecreation) {
     }
     EXPECT_EQ(result, bytes);
 }
+/** 验证创建中断的缺字节描述及临时元数据不会阻塞其他账号上传或删除完成资源。 */
+TEST_F(StoreTest, InterruptedCreationDoesNotBlockUploads) {
+    resource::ResourceStore store(root, 1000000);
+    const auto completed = Create(store); Write(store, completed.id); store.Complete(completed.id, 7);
+    const auto interrupted = Create(store);
+    const auto staged = Create(store);
+    std::filesystem::remove(root / (interrupted.id + ".part"));
+    std::filesystem::rename(root / (staged.id + ".json"), root / (staged.id + ".creating"));
+    std::ofstream(root / (staged.id + ".creating"), std::ios::trunc) << "{partial";
+    resource::ResourceStore reopened(root, 1000000);
+    EXPECT_NO_THROW(Create(reopened));
+    EXPECT_NO_THROW(reopened.Create(8, "other.txt", "application/octet-stream", bytes.size(), digest));
+    EXPECT_THROW(reopened.Inspect(interrupted.id), resource::Error);
+    EXPECT_FALSE(std::filesystem::exists(root / (staged.id + ".creating")));
+    EXPECT_FALSE(std::filesystem::exists(root / (staged.id + ".part")));
+    EXPECT_TRUE(reopened.Inspect(completed.id).ready);
+    EXPECT_EQ(resource::ResourceStore::Digest(root / (completed.id + ".data")), digest);
+}
 /** 验证错误上传偏移被拒绝且文件长度不变。 */
 TEST_F(StoreTest, RejectsWrongOffsetWithoutChangingFile) {
     resource::ResourceStore store(root, 1000000); auto item = Create(store);

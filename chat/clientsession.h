@@ -56,6 +56,7 @@ private:
     bool _active = false;
     QPointer<QObject> _ownedSessionRoot;
     QTimer _heartbeat;
+    QTimer _heartbeatDeadline;
     QTimer _retry;
     QTimer _attemptDeadline;
     GateHttpTransport _logout;

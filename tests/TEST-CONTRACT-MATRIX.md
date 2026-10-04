@@ -527,6 +527,8 @@ authenticated retry 写入 `client_integration.xml`，仅使用动态 loopback�
 | Q02-SESSION-07 | `session_reset.uncertainBatchSurvivesDisconnectAndMatchesExactUuid` | 按 UUID 集合匹配乱序回复；暂时错误/畸形成功保留 pending，终态只清匹配批次 |
 | Q02-SESSION-08 | `session_reset.retryDoesNotCrossAuthenticatedAccounts` | pending 绑定认证账号，切换账号不重放旧批次 |
 | Q02-SESSION-09 | `session_reset.authenticated_wire_retry` | 实际断线保留原 bytes/UUID，重新认证前不重放，认证后发送相同批次 |
+| Q02-SESSION-11 | `session_reset.accepted_submission` | Component：已接受未确认落盘条目跨暂时断线保留；排队 SQL 重试保持 UUID、无重复且账号清理有效 |
+| Q02-SESSION-12 | `session_reset.silent_peer` | Integration：真实 TCP 可写但无有效心跳回复，三十秒期限进入有限重连；无效类型及未认证回包不确认 |
 
 ### 4.4 Auth/network outcome coordinator（12）
 
@@ -836,18 +838,19 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 ### 资源扩展合同与 CI 边界
 
 现有 Q04-AVATAR-03 扩展安装目录和旧头像复制迁移断言，不删除原账号/环境隔离语义。
-`S05-RESOURCE-01..08` 由 `RunServerTests` 和 Windows CI 执行，计入 `server_resource_integration.xml`；
+`S05-RESOURCE-01..08`、`S05-RESOURCE-18` 由 `RunServerTests` 和 Windows CI 执行，计入 `server_resource_integration.xml`；
 它们使用真实临时文件，归类为 Integration。其余资源扩展继续使用 `scripts/resource-local.ps1 -Task Test`，
-不由这八项存储合同推断通过。发布包必须包含 ResourceServer 及其运行库、配置模板。
+不由这些存储合同推断通过。发布包必须包含 ResourceServer 及其运行库、配置模板。
 
 | Test ID | 所属入口 | 合同 |
 | --- | --- | --- |
 | Q04-RESOURCE-01 | Qt resource_transfer_tests / avatarPublicationIsolationAndRestore | 头像上传发布、双账号安装目录缓存、恢复及失败保留旧图 |
 | Q04-RESOURCE-02 | 同上 / incomingAttachmentAndPageLifetime | 附件识别及页面销毁取消 |
 | Q04-RESOURCE-03 | 同上 / resourceModelKeepsTextAndAttachmentsSeparate | 文本与资源模型更新隔离 |
-| Q04-RESOURCE-04 | 同上 / resumeUploadAndDownload | 上传中断、控制器重建续传、Range 下载和字节一致 |
+| Q04-RESOURCE-04 | 同上 / resumeUploadAndDownload | 上传中断、控制器重建续传、Range 下载、字节一致、改名隔离及旧断点身份核对/过期迁移 |
 | Q04-RESOURCE-05 | 同上 / rejectsEmptyFile | 空文件本地拒绝 |
-| S05-RESOURCE-01..08 | ResourceTests / StoreTest | 按源码顺序：重建续传、偏移冲突、所有者、未完成、摘要、大小上限、路径、媒体签名 |
+| S05-RESOURCE-01..08 | ResourceTests / StoreTest | 重建续传、偏移冲突、所有者、未完成、摘要、大小上限、路径、媒体签名（排除单列的 S05-RESOURCE-18） |
+| S05-RESOURCE-18 | ResourceTests / StoreTest.InterruptedCreationDoesNotBlockUploads | 创建中断残留不阻塞本账号或其他账号新建，且不删除完成资源 |
 | S05-RESOURCE-09 | stream_integration.py / test_avatar_publication_permissions_and_validation | 头像发布权限、完整 PNG 验证、失败保留引用 |
 | S05-RESOURCE-10 | 同上 / test_generic_attachment_bytes | 普通文件字节传输 |
 | S05-RESOURCE-11 | 同上 / test_image_resume_and_download_range | 图片续传与 Range 下载 |

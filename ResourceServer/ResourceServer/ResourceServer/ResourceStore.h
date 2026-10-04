@@ -34,7 +34,7 @@ public:
     ResourceStore(std::filesystem::path root, std::uint64_t max_size,
         std::uint64_t total_limit = 64ull * 1024 * 1024 * 1024,
         std::uint64_t owner_limit = 16ull * 1024 * 1024 * 1024);
-    /** @brief 校验所有者、名称、类型、字节数及小写 SHA-256，创建元数据与空临时文件，返回快照。 */
+    /** @brief 校验元数据、创建分块文件后原子发布描述；中断创建由下次 Create 回收。 */
     Metadata Create(int owner, const std::string& name, const std::string& type,
                     std::uint64_t size, const std::string& sha256);
     /** @brief 读取元数据及实际文件长度，不检查调用者权限；不存在抛 404，非法 id 抛 400。 */
@@ -61,7 +61,7 @@ public:
     static std::string Digest(const std::filesystem::path& path);
     static constexpr std::size_t BUFFER_SIZE = 64 * 1024;
 private:
-    /** @brief 按需回收七天未活动的未完成上传；完成文件永久保留，删除标记支持中断恢复。 */
+    /** @brief 回收中断创建和七天未活动上传；完成文件保留，删除标记支持中断恢复。 */
     void CollectExpiredUploads();
     /** @brief 完成已标记上传的清理；遇到完成文件、符号链接或非普通文件时拒绝删除。 */
     void FinishDiscard(const std::string& id);
