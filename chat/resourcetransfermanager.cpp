@@ -66,7 +66,7 @@ void ResourceTransferManager::upload(const QString& path) {
     const auto suffix = QFileInfo(path).suffix().toLower();
     const auto type = suffix == "png" ? "image/png" : (suffix == "jpg" || suffix == "jpeg") ? "image/jpeg" :
                       suffix == "mp4" ? "video/mp4" : suffix == "avi" ? "video/x-msvideo" : "application/octet-stream";
-    _busy = true; _hash.reset(); _uploadId.clear();
+    _busy = true; _legacyChecked = false; _hash.reset(); _uploadId.clear();
     _metadata = {{"name", QFileInfo(path).fileName()}, {"media_type", type}, {"size", QString::number(_source.size())}};
     hashNext();
 }
@@ -87,19 +87,34 @@ void ResourceTransferManager::hashNext() {
 }
 void ResourceTransferManager::beginUpload() {
     const auto key = QCryptographicHash::hash((_endpoint.toString() + "\n" + _metadata["media_type"].toString()
-        + "\n" + _metadata["sha256"].toString()).toUtf8(),
+        + "\n" + _metadata["sha256"].toString() + "\n" + _metadata["name"].toString()).toUtf8(),
                                              QCryptographicHash::Sha256).toHex();
     const auto tasks = QDir(_cache).filePath("transfers/uploads");
     if (_cache.isEmpty() || !QDir().mkpath(tasks)) { fail(tr("无法写入安装目录中的用户数据")); return; }
     _checkpoint = QDir(tasks).filePath(QString::fromLatin1(key) + ".upload.json");
+    // 升级旧版断点时保留原文件；服务端完整身份匹配后才续传，改名则创建独立任务。
+    const auto legacyKey = QCryptographicHash::hash((_endpoint.toString() + "\n" + _metadata["media_type"].toString()
+        + "\n" + _metadata["sha256"].toString()).toUtf8(), QCryptographicHash::Sha256).toHex();
+    const auto legacy = QDir(tasks).filePath(QString::fromLatin1(legacyKey) + ".upload.json");
+    const bool migrate = !_legacyChecked && !QFile::exists(_checkpoint) && QFile::exists(legacy);
+    _legacyChecked = true;
+    if (migrate && !QFile::copy(legacy, _checkpoint)) {
+        fail(tr("无法迁移旧版续传信息")); return;
+    }
     QFile checkpoint(_checkpoint);
     if (checkpoint.open(QIODevice::ReadOnly)) {
         _uploadId = QJsonDocument::fromJson(checkpoint.readAll()).object()["upload_id"].toString();
     }
     if (!_uploadId.isEmpty()) {
         jsonRequest("GET", "/uploads/" + _uploadId, {},
-            /** @brief 校验服务端续传偏移后继续上传。 */
+            /** @brief 校验完整上传身份和服务端续传偏移后继续上传。 */
             [this](QJsonObject value) {
+            for (const auto &field : {"name", "media_type", "size", "sha256"}) {
+                if (value[field] != _metadata[field]) {
+                    if (!QFile::remove(_checkpoint)) { fail(tr("无法更新不匹配的续传信息")); return; }
+                    _uploadId.clear(); beginUpload(); return;
+                }
+            }
             bool valid = false; const auto offset = value["offset"].toString().toLongLong(&valid);
             if (!valid || offset < 0 || offset > _source.size()) { fail(tr("服务端返回了无效续传位置")); return; }
             sendNext(offset);

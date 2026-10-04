@@ -47,6 +47,8 @@ public:
     MessageService *messages() const { return _messages; }
     /** @brief 返回账号提交控制器，首次访问创建；账号结束前有效。 */
     MessageSubmissionController *submissions();
+    /** @brief 连接暂时中断时冻结已有提交，不创建新的上传或控制器。 */
+    void suspendSubmissions();
     /** @brief 查询是否存在未落盘发送内容，不创建控制器。 */
     bool hasPendingSubmissions() const;
     /** @brief 返回本人或联系人的版本资料。 */

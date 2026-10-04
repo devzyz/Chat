@@ -81,10 +81,10 @@ $regressionReportGroups = @(
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_resource_integration.xml'; ExpectedCount = 8 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_resource_integration.xml'; ExpectedCount = 9 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 25 }
-    [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 19 }
-    [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 33 }
+    [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 20 }
+    [pscustomobject]@{ Lane = 'client'; Name = 'client_integration.xml'; ExpectedCount = 34 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_unit.xml'; ExpectedCount = 35 }
     [pscustomobject]@{ Lane = 'varify'; Name = 'varify_integration.xml'; ExpectedCount = 22 }
     [pscustomobject]@{ Lane = 'script'; Name = 'script_component.xml'; ExpectedCount = 9 }
@@ -1290,6 +1290,8 @@ function Confirm-TestStructure {
         'session_reset.retryDoesNotCrossAuthenticatedAccounts' = 'component'
         'session_reset.social_lifecycle' = 'component'
         'session_reset.authenticated_wire_retry' = 'integration'
+        'session_reset.accepted_submission' = 'component'
+        'session_reset.silent_peer' = 'integration'
         'session_reset.logout_revocation' = 'integration'
         'auth_flow.register_network_error' = 'unit'
         'auth_flow.reset_network_error' = 'unit'

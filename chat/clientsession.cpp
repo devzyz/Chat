@@ -17,6 +17,17 @@ ClientSession::ClientSession(QObject *parent)
         TcpMgr::instance()->resetConnection(false); scheduleReconnect();
     });
     const auto tcp = TcpMgr::instance();
+    _heartbeatDeadline.setSingleShot(true);
+    _heartbeatDeadline.setInterval(30000);
+    connect(&_heartbeatDeadline, &QTimer::timeout, this,
+        /** @brief TCP 可写但心跳迟迟未确认时关闭旧连接，进入同账号有限重连。 */ [this] {
+        if (!_active || _loggingOut || _reconnecting || _authenticationRejected) return;
+        TcpMgr::instance()->resetConnection(false); scheduleReconnect();
+    });
+    connect(tcp.get(), &TcpMgr::heartbeatAcknowledged, this,
+        /** @brief 仅当前活跃认证连接的有效回复解除本轮心跳期限。 */ [this] {
+        if (_active && !_reconnecting && !_loggingOut) _heartbeatDeadline.stop();
+    });
     connect(tcp.get(), &TcpMgr::connectionClosed, this, /** @brief 暂时断线保持账号界面，恢复仍使用同一 Token。 */ [this](bool expected) {
         if (!expected) scheduleReconnect();
     });
@@ -28,7 +39,7 @@ ClientSession::ClientSession(QObject *parent)
     });
     connect(tcp.get(), &TcpMgr::loginSucceeded, this, /** @brief 恢复认证成功后停止退避并重新开始心跳。 */ [this] {
         if (!_active || !_reconnecting) return;
-        stopReconnect(); _attempts = 0; _heartbeat.start();
+        stopReconnect(); _attempts = 0; _heartbeatDeadline.stop(); _heartbeat.start();
     });
     connect(tcp.get(), &TcpMgr::loginFailed, this, /** @brief 失效凭据停止自动尝试，服务暂时失败保留有限重试。 */ [this](int error) {
         if (!_active || !_reconnecting) return;
@@ -37,7 +48,7 @@ ClientSession::ClientSession(QObject *parent)
         } else { TcpMgr::instance()->resetConnection(false); scheduleReconnect(); }
     });
     connect(tcp.get(), &TcpMgr::forcedOffline, this, /** @brief 被替换的账号不得通过自动重连踢回新会话。 */ [this] {
-        _authenticationRejected = true; stopReconnect();
+        _authenticationRejected = true; stopReconnect(); _heartbeat.stop(); _heartbeatDeadline.stop();
     });
     connect(&_logout, &GateHttpTransport::finished, this, /** @brief 仅接受当前退出操作，撤销确认前保留账号状态。 */ [this](const GateHttpResult& result) {
         if (!_loggingOut || result.flowId != _logoutGeneration) return;
@@ -48,6 +59,7 @@ ClientSession::ClientSession(QObject *parent)
             && (error.toInt(-1) == 0 || error.toInt(-1) == 1011);
         if (success) resetSession(_logoutReason);
         else if (!TcpMgr::instance()->isAuthenticated()) scheduleReconnect();
+        else _heartbeat.start();
         emit logoutFinished(success);
     });
     _heartbeat.setInterval(10000);
@@ -55,7 +67,8 @@ ClientSession::ClientSession(QObject *parent)
         /** @brief 只为仍活跃且有效的账号发送心跳。 */
         [this] {
         const int uid = UserMgr::instance()->uid();
-        if (!_active || uid <= 0) return;
+        if (!_active || _loggingOut || _reconnecting || uid <= 0) return;
+        if (!_heartbeatDeadline.isActive()) _heartbeatDeadline.start();
         emit TcpMgr::instance()->sendRequested(ID_HEART_BEAT_REQ,
             QJsonDocument(QJsonObject{{"uid", uid}}).toJson(QJsonDocument::Compact));
     });
@@ -67,6 +80,7 @@ void ClientSession::beginSession(QObject *ownedSessionRoot)
     _active = true;
     _authenticationRejected = false; _attempts = 0;
     _resumeServer = TcpMgr::instance()->connectionInfo();
+    _heartbeatDeadline.stop();
     _heartbeat.start();
     TcpMgr::instance()->beginSession();
 }
@@ -81,6 +95,7 @@ bool ClientSession::resetSession(SessionResetReason reason)
     _loggingOut = false; ++_logoutGeneration; _logout.reset();
     stopReconnect(); _resumeServer = {};
     _heartbeat.stop();
+    _heartbeatDeadline.stop();
     TcpMgr::instance()->resetConnection(
         reason != SessionResetReason::UnexpectedDisconnect);
     UserMgr::instance()->resetSession();
@@ -102,6 +117,7 @@ bool ClientSession::requestLogout(SessionResetReason reason)
 {
     if (!_active || _loggingOut || (reason != SessionResetReason::Logout && reason != SessionResetReason::SwitchAccount)) return false;
     _loggingOut = true; _logoutReason = reason; stopReconnect();
+    _heartbeat.stop(); _heartbeatDeadline.stop();
     GateHttpRequest request;
     request.url = QUrl(gate_url_prefix).resolved(QUrl("/logout"));
     request.body = QJsonDocument(QJsonObject{{"uid", UserMgr::instance()->uid()},
@@ -120,7 +136,7 @@ void ClientSession::stopReconnect()
 void ClientSession::scheduleReconnect()
 {
     if (!_active || _loggingOut || _authenticationRejected || _retry.isActive()) return;
-    _attemptDeadline.stop(); _heartbeat.stop();
+    _attemptDeadline.stop(); _heartbeat.stop(); _heartbeatDeadline.stop();
     if (_attempts >= 5 || _resumeServer.Uid <= 0 || _resumeServer.Token.isEmpty() || _resumeServer.Host.isEmpty()) {
         stopReconnect(); emit reconnectFailed(); return;
     }

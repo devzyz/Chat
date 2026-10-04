@@ -18,6 +18,10 @@ UserMgr::UserMgr()
 {
     connect(_messages, &MessageService::directoryRestored, this, &UserMgr::applyDirectory);
     connect(_messages, &MessageService::directoryChanged, this, &UserMgr::applyDirectory);
+    connect(_messages, &MessageService::directoryRestored, this,
+        /** @brief 账号库恢复后才允许重试断线期间保留的提交。 */ [this] {
+        if (_submissions) _submissions->resume();
+    });
     // 在 Qt 事件投递停止前排空存储，避免工作线程无法收到退出任务。
     qAddPostRoutine(
         /** @brief 应用退出时释放消息服务，兼容单例已释放的关闭顺序。 */
@@ -41,6 +45,11 @@ UserMgr::UserMgr()
         [this] {
         if (_user_info) emit avatarChanged(_user_info->_uid);
     });
+}
+
+void UserMgr::suspendSubmissions()
+{
+    if (_submissions) _submissions->suspend();
 }
 
 void UserMgr::setToken(QString token)

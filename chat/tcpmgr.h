@@ -59,6 +59,8 @@ signals:
     void loginFailed(int error);
     /** @brief 聊天登录成功后通知界面进入聊天页。 */
     void loginSucceeded();
+    /** @brief 当前认证连接收到类型正确且成功的心跳回复。 */
+    void heartbeatAcknowledged();
     /** @brief 通知用户搜索结果。 */
     void userSearchFinished(std::shared_ptr<SearchInfo>);
     /** @brief 通知收到的好友申请。 */

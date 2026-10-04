@@ -63,8 +63,8 @@ MessageSubmissionController::MessageSubmissionController(MessageService *message
         QTimer::singleShot(0, this, &MessageSubmissionController::advance);
     });
     connect(messages, &MessageService::stopped, this,
-        /** @brief 账号结束使上传和未落盘任务失效。 */ [this] {
-        _uploads->cancel(); finish();
+        /** @brief 存储停止时默认释放任务，暂时断线已冻结的提交则保留。 */ [this] {
+        if (!_suspended) { _uploads->cancel(); finish(); }
     });
 }
 
@@ -92,7 +92,7 @@ QVector<QJsonObject> MessageSubmissionController::textRequests(const QString &te
 bool MessageSubmissionController::submit(const MessageDraft &draft, int chatId, int recipient, bool group)
 {
     if (!draft.error.isEmpty()) { emit rejected(draft.error); return false; }
-    if (hasPending() || draft.id.isEmpty() || draft.id == _lastDraft || draft.entries.isEmpty()) {
+    if (_suspended || hasPending() || draft.id.isEmpty() || draft.id == _lastDraft || draft.entries.isEmpty()) {
         emit rejected(tr("当前提交尚未完成或草稿为空")); return false;
     }
     if (!_messages->isActive() || chatId <= 0 || (!group && recipient <= 0)) {
@@ -129,7 +129,7 @@ bool MessageSubmissionController::submit(const MessageDraft &draft, int chatId, 
 
 void MessageSubmissionController::advance()
 {
-    if (_saving || _uploading || _failed) return;
+    if (_suspended || _saving || _uploading || _failed) return;
     if (_entries.isEmpty()) { finish(); return; }
     if (!_requests.isEmpty()) { persist(); return; }
     const auto &entry = _entries.first();
@@ -154,13 +154,27 @@ void MessageSubmissionController::fail(const QString &reason)
 }
 void MessageSubmissionController::retry()
 {
-    if (!_failed) return;
+    if (_suspended || !_failed) return;
     _failed = false; _status = tr("正在重试"); emit stateChanged(); advance();
 }
 void MessageSubmissionController::cancel()
 {
     if (_saving) { _cancelAfterSave = true; return; }
     _uploads->cancel(); finish();
+}
+void MessageSubmissionController::suspend()
+{
+    _suspended = true;
+    _uploads->cancel();
+    _saving = false; _uploading = false;
+    if (_cancelAfterSave) { finish(); return; }
+    if (hasPending()) fail(tr("连接中断，内容已保留，恢复后可重试或取消"));
+}
+void MessageSubmissionController::resume()
+{
+    if (!_suspended) return;
+    _suspended = false;
+    if (hasPending()) fail(tr("连接已恢复，可重试或取消未完成内容"));
 }
 void MessageSubmissionController::finish()
 {

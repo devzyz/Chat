@@ -17,6 +17,10 @@ public:
     void retry();
     /** @brief 取消未落盘部分；已排队的存储事务完成后才释放任务。 */
     void cancel();
+    /** @brief 暂时断线时冻结未移交条目与原 UUID，等待同账号存储恢复。 */
+    void suspend();
+    /** @brief 同账号存储恢复后开放人工重试，不自动重发失败内容。 */
+    void resume();
     /** @brief 是否仍拥有未移交消息服务的内容。 */
     bool hasPending() const { return !_entries.isEmpty(); }
     /** @brief 是否处于可重试失败状态。 */
@@ -49,4 +53,5 @@ private:
     QVector<QJsonObject> _requests;
     QJsonObject _context;
     bool _failed = false, _saving = false, _uploading = false, _cancelAfterSave = false;
+    bool _suspended = false;
 };
