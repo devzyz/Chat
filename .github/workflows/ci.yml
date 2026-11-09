@@ -150,3 +150,25 @@ jobs:
     with:
       profile: ${{ needs.plan.outputs.performance_profile }}
       request_id: ${{ inputs.performance_request_id }}
+
+  failure-index:
+    name: Failure diagnostics
+    needs: [plan, windows, linux, performance]
+    if: ${{ failure() && !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Link failed jobs and steps from this attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          endpoint="repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs"
+          echo '### Failed CI steps' >> "$GITHUB_STEP_SUMMARY"
+          gh api --paginate "$endpoint?per_page=100" --jq '
+            .jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") |
+            . as $job | [.steps[]? | select(.conclusion == "failure" or .conclusion == "timed_out")] as $failed |
+            if ($failed | length) == 0 then
+              "- [\($job.name) — job log](\($job.html_url))"
+            else $failed[] | "- [\($job.name) — \(.name)](\($job.html_url)#step:\(.number):1)"
+            end' >> "$GITHUB_STEP_SUMMARY"

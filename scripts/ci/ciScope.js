@@ -32,6 +32,11 @@ if (require.main === module) {
             encoding: 'utf8', timeout: 10000, maxBuffer: 8 * 1024 * 1024
         }));
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `docs_only=${docsOnly}\n`);
+    if (docsOnly && process.env.GITHUB_STEP_SUMMARY) {
+        fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            '### Develop documentation scope\n\nRunning static/configuration checks, instance script tests and ' +
+            'packaging contracts. Windows application builds and component suites were not selected.\n');
+    }
     console.log(docsOnly ? 'Documentation-only develop change: static checks remain required.' : 'Build and regression required.');
 }
 
