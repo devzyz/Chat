@@ -189,8 +189,8 @@ jobs:
         run: python scripts/release/publish.py --check-version
 
       - name: Retain packaging regression results
-        id: evidence_1
         if: always()
+        id: evidence_1
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-packaging-test-results
@@ -211,8 +211,8 @@ jobs:
         run: .\scripts\windows-local.ps1 -Task RunScriptTests -SkipTestStructureCheck
 
       - name: Upload layered script test reports
-        id: evidence_2
         if: always()
+        id: evidence_2
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-script-test-results
@@ -465,8 +465,8 @@ jobs:
               -ServerHostTriplet x64-windows-chat-release
 
       - name: Upload layered Server test reports
-        id: evidence_3
         if: always()
+        id: evidence_3
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-server-test-results
@@ -591,8 +591,8 @@ jobs:
               -QtRoot $env:QT_ROOT_DIR
 
       - name: Upload layered Qt client test reports
-        id: evidence_4
         if: always()
+        id: evidence_4
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-client-test-results
@@ -687,8 +687,8 @@ jobs:
         run: .\scripts\windows-local.ps1 -Task RunVarifyTests -SkipTestStructureCheck
 
       - name: Upload layered VarifyServer test reports
-        id: evidence_5
         if: always()
+        id: evidence_5
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-varify-test-results
