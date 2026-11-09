@@ -35,7 +35,7 @@
 - `16d8d0a` 的 [baseline](https://github.com/devzyz/Chat/actions/runs/37030751093) 三轮、21 个正式场景及清理通过，含新增正确性回归；它不包含后续好友分页修复。
 - `4c56bb3` 的 [完整真实验收](https://github.com/devzyz/Chat/actions/runs/37036710541) 通过；
   [baseline](https://github.com/devzyz/Chat/actions/runs/37036752833) 因第一轮同服预热 1 次 `1017/1011` 提交拒绝、1 次未发送而失败，21 个正式测量及清理通过。旧压测客户端丢弃具体提交错误，不能从通用码推断根因。
-- `84c75de` 只补压测白名单提交错误分类和合同，生产代码未改；[原档位复测](https://github.com/devzyz/Chat/actions/runs/37041172126) 三轮、21 个正式场景、全部预热及清理通过，未放宽负载、期限或通过条件。完整测量见 [测试报告](../测试.md)。
+- `84c75de` 只补压测白名单提交错误分类和合同，生产代码未改；[原档位复测](https://github.com/devzyz/Chat/actions/runs/37041172126) 三轮、21 个正式场景、全部预热及清理通过，未放宽负载、期限或通过条件。完整测量见 [测试报告](history/PerformanceBaseline-84c75de.md)。
 - `a649a23` 仅修正有界脱敏日志导出，补齐正式服务子目录及旧令牌过滤；GitHub 框架合同已通过，[专项 smoke](https://github.com/devzyz/Chat/actions/runs/37044502611) 七个正式场景、预热及清理通过，工件已包含 Gate/Status/双 Chat 子目录日志；不替代 baseline。
 - 上述新增提交仅改变性能测试与证据；生产源码与完整验收通过的 `4c56bb3` 一致。先前预热异常未在复测中再次出现，根因未确认，仍需观察；不能将复测通过表述为该偶发问题已根治。
 - 本机未恢复 vcpkg 依赖或迁移个人数据库。Linux 同机性能结果不代表 Windows 性能、真实局域网容量或公网体验。
