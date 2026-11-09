@@ -295,14 +295,21 @@ jobs:
           path: .ci/vcpkg
           fetch-depth: 0
 
-      - name: Bootstrap vcpkg
+      - name: Bootstrap vcpkg · 02 Build infrastructure
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
-          if ($LASTEXITCODE -ne 0) {
-              throw "vcpkg bootstrap failed with exit code $LASTEXITCODE."
-          }
-          & "$env:VCPKG_ROOT\vcpkg.exe" version
+          $ErrorActionPreference = 'Stop'
+          $metadata = ConvertFrom-StringData (Get-Content "$env:VCPKG_ROOT/scripts/vcpkg-tool-metadata.txt" -Raw)
+          $tag = $metadata.VCPKG_TOOL_RELEASE_TAG
+          $url = "https://github.com/microsoft/vcpkg-tool/releases/download/$tag/vcpkg.exe"
+          # The pinned vcpkg metadata supplies the release tag but omits the Windows binary hash.
+          $sha512 = 'b87ef920e72b8160607132a5d098007af9c3cf8ac5a125e05fcd3a07da5e6531933378fd9c14974799071123cac34f00a05b14bf5a1d238bb4ca3b25c3056fc0'
+          $exe = Join-Path $env:VCPKG_ROOT 'vcpkg.exe'
+          & ./scripts/ci/vcpkg-github-asset.ps1 -Url $url -Sha512 $sha512 -Destination $exe
+          Set-Content -LiteralPath "$env:VCPKG_ROOT/vcpkg.disable-metrics" -Value ''
+          & $exe version --disable-metrics
           if ($LASTEXITCODE -ne 0) {
               throw "vcpkg version check failed with exit code $LASTEXITCODE."
           }
