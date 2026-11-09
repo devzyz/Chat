@@ -48,17 +48,17 @@ jobs:
         shell: pwsh
         run: ./scripts/windows-local.ps1 -Task RunConventionTests
 
-      - name: Check introduced Git and source conventions
+      - name: Check introduced Git and source conventions · 01 Static analysis
         shell: pwsh
         run: ./scripts/windows-local.ps1 -Task CheckConventions
 
-      - name: Validate GitHub Actions workflows
+      - name: Validate GitHub Actions workflows · 01 CI validation
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/ci/test-workflows.ps1 -ToolRoot (Join-Path $env:RUNNER_TEMP 'chat-actionlint')
 
-      - name: Validate build configuration
+      - name: Validate build configuration · 01 Static analysis
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -144,7 +144,7 @@ jobs:
           }
           $global:LASTEXITCODE = 0
 
-      - name: Verify all test sources are registered
+      - name: Verify all test sources are registered · 01 CI validation
         shell: pwsh
         run: .\scripts\windows-local.ps1 -Task CheckTestStructure
 
@@ -164,7 +164,10 @@ jobs:
         shell: pwsh
         run: node --test tests/build/ciPolicy.test.js tests/build/ciBudget.test.js tests/build/ciScope.test.js tests/build/regressionReports.test.js tests/services/phase3dEvidence.test.js tests/services/widgetEvidence.test.js tests/services/firstReleaseCases.test.js
 
-      - name: Test release packaging
+      - name: Test failure diagnostics · 10 Report validation
+        run: python -B -m unittest discover -s tests/build -p test_ci_summary.py
+
+      - name: Test release packaging · 08 Packaging
         shell: pwsh
         run: python tests/release/contracts/run_contracts.py
 
@@ -187,6 +190,7 @@ jobs:
 
       - name: Retain packaging regression results
         if: always()
+        id: evidence_1
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-packaging-test-results
@@ -194,18 +198,35 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Run ChatServer instance script test modules
+      - name: Summarize 08 Packaging evidence
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_1.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "08 Packaging" "build/test-results/release_candidate_contracts.xml"
+
+      - name: Run ChatServer instance script test modules · 05 Operations scripts
         shell: pwsh
         run: .\scripts\windows-local.ps1 -Task RunScriptTests -SkipTestStructureCheck
 
       - name: Upload layered script test reports
         if: always()
+        id: evidence_2
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-script-test-results
           path: build/test-results/script_*.xml
           if-no-files-found: error
           retention-days: 7
+
+      - name: Summarize 05 Operations scripts evidence
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_2.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "05 Operations scripts" "build/test-results/script_*.xml"
 
   servers-release:
     name: Server Release build
@@ -230,7 +251,7 @@ jobs:
           cache: npm
           cache-dependency-path: VarifyServer/package-lock.json
 
-      - name: Resolve validated Windows toolchain
+      - name: Resolve validated Windows toolchain · 02 Build infrastructure
         id: toolchain
         timeout-minutes: 5
         shell: pwsh
@@ -274,14 +295,21 @@ jobs:
           path: .ci/vcpkg
           fetch-depth: 0
 
-      - name: Bootstrap vcpkg
+      - name: Bootstrap vcpkg · 02 Build infrastructure
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
-          if ($LASTEXITCODE -ne 0) {
-              throw "vcpkg bootstrap failed with exit code $LASTEXITCODE."
-          }
-          & "$env:VCPKG_ROOT\vcpkg.exe" version
+          $ErrorActionPreference = 'Stop'
+          $metadata = ConvertFrom-StringData (Get-Content "$env:VCPKG_ROOT/scripts/vcpkg-tool-metadata.txt" -Raw)
+          $tag = $metadata.VCPKG_TOOL_RELEASE_TAG
+          $url = "https://github.com/microsoft/vcpkg-tool/releases/download/$tag/vcpkg.exe"
+          # The pinned vcpkg metadata supplies the release tag but omits the Windows binary hash.
+          $sha512 = 'b87ef920e72b8160607132a5d098007af9c3cf8ac5a125e05fcd3a07da5e6531933378fd9c14974799071123cac34f00a05b14bf5a1d238bb4ca3b25c3056fc0'
+          $exe = Join-Path $env:VCPKG_ROOT 'vcpkg.exe'
+          & ./scripts/ci/vcpkg-github-asset.ps1 -Url $url -Sha512 $sha512 -Destination $exe
+          Set-Content -LiteralPath "$env:VCPKG_ROOT/vcpkg.disable-metrics" -Value ''
+          & $exe version --disable-metrics
           if ($LASTEXITCODE -ne 0) {
               throw "vcpkg version check failed with exit code $LASTEXITCODE."
           }
@@ -342,7 +370,7 @@ jobs:
         shell: pwsh
         run: node scripts/ci/vcpkgBinaryCache.js snapshot "$env:RUNNER_TEMP/vcpkg-binary-cache"
 
-      - name: Restore server dependencies with binary archives
+      - name: Restore server dependencies with binary archives · 02 Build infrastructure
         id: dependency-restore
         shell: pwsh
         env:
@@ -370,7 +398,7 @@ jobs:
               Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'vcpkg-restore.log')
           if ($LASTEXITCODE -ne 0) { throw "Dependency restore failed: $LASTEXITCODE" }
 
-      - name: Report actual binary package reuse
+      - name: Report actual binary package reuse · 02 Artifact reuse
         id: binary-cache-after
         if: always() && steps.binary-cache-before.outcome == 'success'
         env:
@@ -425,7 +453,11 @@ jobs:
         working-directory: VarifyServer
         run: npm ci --ignore-scripts
 
-      - name: Build and run layered Server tests
+      - name: Enable compiler annotations
+        run: echo "::add-matcher::scripts/ci/compiler-matchers.json"
+
+      - name: Build and run layered Server tests · 03 Windows build / 04 Component regression
+        # Annotations link native compiler errors to their source lines.
         shell: pwsh
         run: |
           & .\scripts\windows-local.ps1 `
@@ -441,6 +473,7 @@ jobs:
 
       - name: Upload layered Server test reports
         if: always()
+        id: evidence_3
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-server-test-results
@@ -448,7 +481,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Verify independent app-local server directories
+      - name: Summarize 04 Server components evidence
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_3.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "04 Server components" "build/test-results/server_*.xml"
+
+      - name: Verify independent app-local server directories · 03 Windows build
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -484,7 +525,7 @@ jobs:
               }
           }
 
-      - name: Create independent server ZIP packages
+      - name: Create independent server ZIP packages · 08 Packaging
         if: env.BUILD_PACKAGES == 'true'
         shell: pwsh
         run: |
@@ -544,7 +585,10 @@ jobs:
           tools: tools_mingw90
           cache: true
 
-      - name: Build and test Qt client
+      - name: Enable compiler annotations
+        run: echo "::add-matcher::scripts/ci/compiler-matchers.json"
+
+      - name: Build and test Qt client · 03 Windows build / 04 Qt Client
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -555,6 +599,7 @@ jobs:
 
       - name: Upload layered Qt client test reports
         if: always()
+        id: evidence_4
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-client-test-results
@@ -562,7 +607,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Deploy and package Qt client
+      - name: Summarize 04 Qt Client evidence
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_4.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "04 Qt Client" "build/test-results/client_*.xml"
+
+      - name: Deploy and package Qt client · 08 Packaging
         if: env.BUILD_PACKAGES == 'true'
         shell: pwsh
         run: |
@@ -636,12 +689,13 @@ jobs:
               throw "npm dependency validation failed with exit code $LASTEXITCODE."
           }
 
-      - name: Run layered VarifyServer tests
+      - name: Run layered VarifyServer tests · 04 VarifyServer
         shell: pwsh
         run: .\scripts\windows-local.ps1 -Task RunVarifyTests -SkipTestStructureCheck
 
       - name: Upload layered VarifyServer test reports
         if: always()
+        id: evidence_5
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-varify-test-results
@@ -649,7 +703,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Package VarifyServer
+      - name: Summarize 04 VarifyServer evidence
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_5.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "04 VarifyServer" "build/test-results/varify_*.xml"
+
+      - name: Package VarifyServer · 08 Packaging
         if: env.BUILD_PACKAGES == 'true'
         shell: pwsh
         run: |

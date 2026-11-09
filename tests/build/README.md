@@ -5,6 +5,10 @@ registration are documented in [conventions/README.md](conventions/README.md).
 
 ## CI routing and budgets
 
+Run `python -B -m unittest discover -s tests/build -p test_ci_summary.py` to exercise CI diagnostics
+with mixed-module GoogleTest, CTest, Node and Linux JUnit fixtures, missing reports and malformed XML.
+Windows static-check runs these fixtures. The original test runners own pass/fail and report counts.
+
 `node --test tests/build/regressionReports.test.js` executes the production PowerShell report
 validator against disposable XML fixtures on Windows. It checks that adding a testcase changes
 only its row in `$regressionReportGroups`, while missing/duplicate inventory, incorrect counts,

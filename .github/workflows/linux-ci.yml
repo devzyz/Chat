@@ -25,9 +25,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/install-linux-tools.sh
-      - name: Run real child lifecycle without service dependencies
+      - name: Run real child lifecycle without service dependencies · 05 Process lifecycle
         run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-01-posix
       - name: Upload process lifecycle evidence
+        id: evidence_1
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -35,6 +36,14 @@ jobs:
           path: out/phase3c/ownership/junit/*.xml
           if-no-files-found: error
           retention-days: 7
+
+      - name: Summarize 05 POSIX lifecycle evidence
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_1.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "05 POSIX lifecycle" "out/phase3c/ownership/junit/*.xml"
 
   linux-preflight:
     name: Linux configure compile link and startup preflight
@@ -123,7 +132,7 @@ jobs:
         id: binary-cache-before
         run: node scripts/ci/vcpkgBinaryCache.js snapshot "$RUNNER_TEMP/vcpkg-binary-cache"
 
-      - name: Restore dependencies before project configuration
+      - name: Restore dependencies before project configuration · 02 Build infrastructure
         id: dependency-restore
         timeout-minutes: 170
         run: |
@@ -165,7 +174,10 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Run fail-closed Linux preflight
+      - name: Enable compiler annotations
+        run: echo "::add-matcher::scripts/ci/compiler-matchers.json"
+
+      - name: Run fail-closed Linux preflight · 03 Linux build
         # Leave time for blocked evidence and artifact upload before the job cap.
         timeout-minutes: 57
         run: |
@@ -176,7 +188,7 @@ jobs:
             bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-00-T2 \
               2>&1 | tee "$CHAT_EVIDENCE_ROOT/preflight.log"
 
-      - name: Configure and compile servers without Qt or client modules
+      - name: Configure and compile servers without Qt or client modules · 03 Linux build
         timeout-minutes: 20
         run: |
           cmake --preset linux-x64-release -B out/build/linux-server-only \
@@ -188,7 +200,7 @@ jobs:
       - name: Verify shared production targets and ProcessHarness
         run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-01
 
-      - name: Build opt-in production resources and widget acceptance
+      - name: Build opt-in production resources and widget acceptance · 07 Real acceptance
         if: inputs.real_acceptance
         timeout-minutes: 15
         run: |
@@ -205,6 +217,7 @@ jobs:
           node tests/services/widgetEvidence.js out/real-acceptance/widgets "$(git rev-parse HEAD)"
 
       - name: Upload opt-in automated widget evidence
+        id: evidence_2
         if: always() && inputs.real_acceptance
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -212,6 +225,14 @@ jobs:
           path: out/real-acceptance/widgets/*
           if-no-files-found: error
           retention-days: 7
+
+      - name: Summarize 07 Widget acceptance evidence
+        if: always() && inputs.real_acceptance
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_2.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "07 Widget acceptance" "out/real-acceptance/widgets/*.xml"
 
       - name: Build same-source service RunContext launcher
         run: |
@@ -256,6 +277,7 @@ jobs:
           jq -e '.status == "PASS"' out/phase3c/preflight/linux-preflight.json
 
       - name: Upload Linux preflight evidence
+        id: evidence_3
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -263,6 +285,14 @@ jobs:
           path: out/phase3c/preflight/**
           if-no-files-found: error
           retention-days: 7
+
+      - name: Summarize 03 Linux preflight evidence
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_3.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "03 Linux preflight" "out/phase3c/preflight/**/*.xml"
 
   disposable-services:
     name: Phase 3C disposable services
@@ -309,7 +339,7 @@ jobs:
         with:
           name: phase3c-service-launcher
           path: out/phase3c/service-launcher
-      - name: Verify launcher identity and locked service configuration
+      - name: Verify launcher identity and locked service configuration · 02 Artifact reuse
         run: |
           test "$(cat out/phase3c/service-launcher/source-sha.txt)" = "$(git rev-parse HEAD)"
           (cd out/phase3c/service-launcher && sha256sum --check service_run.sha256)
@@ -327,7 +357,7 @@ jobs:
         timeout-minutes: 2
         working-directory: VarifyServer
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Prove bounded disposable service lifecycle
+      - name: Prove bounded disposable service lifecycle · 06 Service integration
         timeout-minutes: 13
         env:
           CHAT_SERVICE_SELECTOR: 3C-07
@@ -348,6 +378,7 @@ jobs:
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
         run: node tests/services/finalizeEvidence.js out/phase3c/services
       - name: Upload disposable dependency evidence
+        id: evidence_4
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -355,6 +386,14 @@ jobs:
           path: out/phase3c/services/*
           if-no-files-found: error
           retention-days: 7
+
+      - name: Summarize 06 Service integration evidence
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_4.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "06 Service integration" "out/phase3c/services/**/*.xml"
 
   two-server-contract:
     name: Linux two-server foundation contract
@@ -400,7 +439,7 @@ jobs:
         with:
           name: phase3c-service-launcher
           path: out/phase3c/service-launcher
-      - name: Verify launcher identity and locked service configuration
+      - name: Verify launcher identity and locked service configuration · 02 Artifact reuse
         run: |
           test "$(cat out/phase3c/service-launcher/source-sha.txt)" = "$(git rev-parse HEAD)"
           (cd out/phase3c/service-launcher && sha256sum --check service_run.sha256)
@@ -424,7 +463,7 @@ jobs:
         timeout-minutes: 2
         working-directory: VarifyServer
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Prove complete current-N two-instance business and recovery journey
+      - name: Prove complete current-N two-instance business and recovery journey · 07 Business E2E
         timeout-minutes: 13
         env:
           CHAT_SERVICE_SELECTOR: 3D
@@ -445,6 +484,7 @@ jobs:
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
         run: node tests/services/finalizeEvidence.js out/phase3d/contracts
       - name: Upload disposable dependency evidence
+        id: evidence_5
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -452,6 +492,14 @@ jobs:
           path: out/phase3d/contracts/*
           if-no-files-found: error
           retention-days: 7
+
+      - name: Summarize 07 Business E2E evidence
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_5.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "07 Business E2E" "out/phase3d/contracts/**/*.xml"
 
   downstream-contract:
     name: Integration report checks
@@ -476,13 +524,13 @@ jobs:
         with:
           name: phase3d-contract-evidence
           path: out/phase3d/contracts
-      - name: Check service reports and cleanup
+      - name: Check service reports and cleanup · 10 Report validation
         if: ${{ !cancelled() }}
         env:
           SOURCE_SHA: ${{ github.sha }}
           CHAT_JOB_RESULTS: '{"linux-preflight":"${{ needs.linux-preflight.result }}","posix-process-contracts":"${{ needs.posix-process-contracts.result }}","disposable-services":"${{ needs.disposable-services.result }}"}'
         run: python3 tests/services/gate.py --services out/phase3c/services --output out/phase3c/gate --source-sha "$SOURCE_SHA" --jobs "$CHAT_JOB_RESULTS"
-      - name: Check business reports and cleanup
+      - name: Check business reports and cleanup · 10 Report validation
         if: ${{ !cancelled() }}
         env:
           SOURCE_SHA: ${{ github.sha }}
@@ -492,6 +540,7 @@ jobs:
           test "$BUSINESS_RESULT" = success
           node scripts/ci/verify-service-reports.js out/phase3d/contracts "$SOURCE_SHA"
       - name: Upload report validation
+        id: evidence_6
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -499,3 +548,11 @@ jobs:
           path: out/phase3c/gate/
           if-no-files-found: error
           retention-days: 7
+
+      - name: Summarize 10 Report validation evidence
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_6.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "10 Report validation" "out/phase3c/gate/**/*.xml"

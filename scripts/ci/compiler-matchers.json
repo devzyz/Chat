@@ -1,0 +1,28 @@
+{
+    "problemMatcher": [
+        {
+            "owner": "chat-msvc-errors",
+            "pattern": [
+                {
+                    "regexp": "^\\s*(?:[0-9]+>)?\\s*(.+?)\\((\\d+)(?:,\\d+)?\\):\\s*(?:fatal )?error (\\w+):\\s*(.+)$",
+                    "file": 1,
+                    "line": 2,
+                    "code": 3,
+                    "message": 4
+                }
+            ]
+        },
+        {
+            "owner": "chat-gcc-errors",
+            "pattern": [
+                {
+                    "regexp": "^(.+?):(\\d+):(\\d+): (?:fatal )?error: (.+)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "message": 4
+                }
+            ]
+        }
+    ]
+}

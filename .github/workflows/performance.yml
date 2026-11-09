@@ -80,7 +80,7 @@ jobs:
         id: binary-cache-before
         run: node scripts/ci/vcpkgBinaryCache.js snapshot "$RUNNER_TEMP/vcpkg-binary-cache"
 
-      - name: Restore dependencies before project configuration
+      - name: Restore dependencies before project configuration · 02 Build infrastructure
         id: dependency-restore
         timeout-minutes: 170
         run: |
@@ -123,7 +123,10 @@ jobs:
           retention-days: 7
       - name: Verify performance contracts
         run: node --test tests/services/performance/*.test.js tests/services/connectionCount.test.js tests/build/ciPolicy.test.js
-      - name: Build only production servers and their supervisor
+      - name: Enable compiler annotations
+        run: echo "::add-matcher::scripts/ci/compiler-matchers.json"
+
+      - name: Build only production servers and their supervisor · 03 Linux build
         timeout-minutes: 30
         run: |
           cmake --preset linux-x64-release -B out/build/performance \
@@ -186,7 +189,7 @@ jobs:
       - name: Restore locked service libraries
         working-directory: VarifyServer
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Run selected bounded performance profile
+      - name: Run selected bounded performance profile · 09 Performance
         env:
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
@@ -196,10 +199,11 @@ jobs:
           CHAT_SMTP_PORT: ${{ job.services.mailpit.ports['1025'] }}
           CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports['8025'] }}
         run: timeout --signal=TERM --kill-after=90s 41m node tests/services/performance/run.js
-      - name: Verify complete report
+      - name: Verify complete report · 10 Report validation
         if: always()
         run: node tests/services/performance/report.js out/performance "$GITHUB_SHA"
       - name: Preserve performance evidence
+        id: evidence_1
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -207,3 +211,11 @@ jobs:
           path: out/performance/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Summarize 09 Performance evidence
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+          CI_CHECK_RUN_ID: ${{ job.check_run_id }}
+          CI_ARTIFACT_URL: ${{ steps.evidence_1.outputs.artifact-url }}
+        run: python scripts/ci/test_summary.py "09 Performance" "out/performance/performance.xml"

@@ -43,6 +43,24 @@ function selectPolicy(eventName, ref, event) {
     return { mode, refresh_tools: refreshTools, cold_linux: coldLinux, real_acceptance: realAcceptance, promoted };
 }
 
+/** 说明所选模式的验证边界；develop 文档范围由后续静态作业根据完整差异确定。 */
+function describeCoverage(policy, eventName, ref) {
+    if (policy.mode === 'performance') {
+        return 'Selected: **09 Performance** (' + policy.performance_profile +
+            ') with dedicated 01 framework checks, 02/03 Linux runtime build and 10 evidence validation.';
+    }
+    const common = 'Windows: 01 static checks, 02 infrastructure, 03 build, 04 component regression, ' +
+        '05 instance scripts, 08 packaging contracts and 10 report validation.';
+    if (policy.mode === 'quick') {
+        return common + ' Automatic develop documentation scope is resolved in the static job. ' +
+            'Linux integration, business E2E, application ZIPs and performance are outside quick scope.';
+    }
+    const smoke = eventName === 'push' && ref === 'refs/heads/master';
+    return common + ' Full adds Linux build/lifecycle, 06 real dependencies, 07 two-server E2E and 08 application ZIPs. ' +
+        'Four-account acceptance: ' + (policy.real_acceptance ? 'selected' : 'not requested') +
+        '. Final package smoke: ' + (smoke ? 'after full succeeds' : 'not selected') + '.';
+}
+
 if (require.main === module) {
     try {
         const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
@@ -53,7 +71,8 @@ if (require.main === module) {
         const summary = `CI mode: **${policy.mode}**.\n` +
             (policy.promoted ? 'Requested quick mode was promoted to full by an optional acceptance or maintenance flag.\n' : '') +
             `Windows tool refresh: ${policy.refresh_tools}; Linux cold restore: ${policy.cold_linux}; ` +
-            `real acceptance: ${policy.real_acceptance}.\n`;
+            `real acceptance: ${policy.real_acceptance}.\n\n` +
+            describeCoverage(policy, process.env.GITHUB_EVENT_NAME, process.env.GITHUB_REF) + '\n';
         if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
         console.log(summary);
     } catch (error) { console.error(error.message); process.exitCode = 1; }
