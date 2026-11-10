@@ -40,7 +40,7 @@
 - 新代码 MUST 使用 `const` 和 `let`，MUST NOT 新增 `var`。
 - 每条语句使用分号，字符串引号在同一文件中保持一致。
 - 文件、函数和变量 MUST 使用 lowerCamelCase；类使用 PascalCase，常量对象或错误枚举使用清晰稳定名称。
-- 类、函数和匿名回调使用 JSDoc `/** 中文作用说明 */`；异步接口按需说明 Promise 结果、拒绝条件与 callback 时机，覆盖要求见 [总则](Standards.md#类与函数注释)。
+- 类、函数和匿名回调按[总则](Standards.md#类与函数注释)在独立行说明作用，多行说明使用 JSDoc；异步接口按需说明 Promise 结果、拒绝条件与 callback 时机，覆盖要求见 [总则](Standards.md#类与函数注释)。
 - 模块加载 SHOULD 无副作用；服务只应在作为主入口执行时启动监听。
 
 ### 异步与依赖

@@ -45,7 +45,8 @@ TEST(SessionComponentTests, RepeatedClosePreservesFirstReason) {
 TEST(SessionComponentTests, ConcurrentCloseIsIdempotent) {
     Harness h; auto session = h.Create();
     std::vector<std::thread> threads;
-    for (int i = 0; i < 8; ++i) threads.emplace_back(/** 并发请求关闭同一会话。 */ [session] { session->Close(); });
+    // 并发请求关闭同一会话。
+    for (int i = 0; i < 8; ++i) threads.emplace_back([session] { session->Close(); });
     for (auto& thread : threads) thread.join();
     EXPECT_EQ(h.Snapshot(session).first, SessionState::Closing);
     EXPECT_EQ(h.presence->removals, 0);

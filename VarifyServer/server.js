@@ -88,9 +88,12 @@ function createGetVarifyCodeHandler({ redisModule, emailModule, senderEmail, gen
             if (pending.size >= 32 || delivered.size >= 1024) {
                 callback(null, { email, error: constModule.Errors.Exception }); return;
             }
-            const operation = new Promise(/** 将一次处理结果共享给相同邮箱的等待者。 */ resolve => {
-                execute(call, /** 保存唯一业务响应。 */ (_, response) => resolve(response)).catch(
-                    /** 未预期异常仍完成所有等待者，防止悬挂请求。 */ () => resolve({ email, error: constModule.Errors.Exception }));
+            // 将一次处理结果共享给相同邮箱的等待者。
+            const operation = new Promise(resolve => {
+                // 保存唯一业务响应。
+                execute(call, (_, response) => resolve(response)).catch(
+                    // 未预期异常仍完成所有等待者，防止悬挂请求。
+                    () => resolve({ email, error: constModule.Errors.Exception }));
             });
             pending.set(key, operation);
         }

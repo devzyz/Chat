@@ -13,7 +13,8 @@
 
 MysqlPool::MysqlPool(const std::string& url, const std::string& user, const std::string& password,
     const std::string& schema, int pool_size)
-    : _connections(std::make_unique<chat_mysql::ConnectionPool<>>(pool_size, /** @brief 用已配置的有限期限创建聊天数据库连接。 */ [=] {
+    // 用已配置的有限期限创建聊天数据库连接。
+    : _connections(std::make_unique<chat_mysql::ConnectionPool<>>(pool_size, [=] {
         return message_commit::ConnectBounded(url, user, password, schema);
     })) {
     if (pool_size > 0) {
@@ -56,7 +57,8 @@ std::shared_ptr<UserInfo> MysqlDao::GetUser(int uid) {
 		return nullptr;
 	}
 
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &connection]() {
+	// 归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, &connection]() {
 		_pool->ReturnConnection(std::move(connection));
 		});
 
@@ -96,7 +98,8 @@ std::shared_ptr<UserInfo> MysqlDao::GetUserByName(const std::string name) {
 		return nullptr;
 	}
 
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &connection]() {
+	// 归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, &connection]() {
 		_pool->ReturnConnection(std::move(connection));
 		});
 
@@ -137,7 +140,8 @@ bool MysqlDao::AddFriendApply(const int& from_uid, const int& to_uid, const std:
 		return false;
 	}
 
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &connection]() {
+	// 归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, &connection]() {
 		_pool->ReturnConnection(std::move(connection));
 		});
 
@@ -175,7 +179,8 @@ bool MysqlDao::GetApplyFriendList(int to_uid, std::vector<std::shared_ptr<ApplyI
 		return false;
 	}
 
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &connection]() {
+	// 归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, &connection]() {
 		_pool->ReturnConnection(std::move(connection));
 		});
 
@@ -227,7 +232,8 @@ bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_bac
 		return false;
 	}
 
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &connection]() {
+	// 归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, &connection]() {
 		_pool->ReturnConnection(std::move(connection));
 		});
 
@@ -432,7 +438,8 @@ bool MysqlDao::GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& fr
 		return false;
 	}
 
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &connection]() {
+	// 归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, &connection]() {
 		_pool->ReturnConnection(std::move(connection));
 		});
 
@@ -475,7 +482,8 @@ bool MysqlDao::GetUserChatList(int uid, int current_chat_id, int page_size,
 		return false;
 	}
 
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &connection]() {
+	// 归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, &connection]() {
 		_pool->ReturnConnection(std::move(connection));
 		});
 
@@ -558,7 +566,8 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
 		return false;
 	}
 
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &connection]() {
+	// 归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, &connection]() {
 		_pool->ReturnConnection(std::move(connection));
 		});
 
@@ -693,7 +702,8 @@ message_commit::Result MysqlDao::AddChatMessageList(message_commit::Authenticate
 bool MysqlDao::SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response) {
     auto connection = _pool->GetConnection();
     if (!connection) return false;
-    Defer release(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &connection] { _pool->ReturnConnection(std::move(connection)); });
+    // 归还本次借用的数据库连接，退出作用域后不得再使用。
+    Defer release([this, &connection] { _pool->ReturnConnection(std::move(connection)); });
     try {
         messaging::SyncPage(*connection->_connection, uid, chat_id, after, response, MAX_HISTORY_BODY_LENGTH);
         return true;
@@ -716,7 +726,8 @@ bool MysqlDao::GetChatMessageList(int principal_uid, int chat_id, int current_ms
 		return false;
 	}
 
-	Defer defer(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &connection]() {
+	// 归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, &connection]() {
 		_pool->ReturnConnection(std::move(connection));
 		});
 
@@ -776,7 +787,8 @@ bool MysqlDao::GetChatMessageList(int principal_uid, int chat_id, int current_ms
 bool MysqlDao::HandleReceiptRequest(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer) {
     auto connection = _pool->GetConnection();
     if (!connection) { response["receipt_error"] = "StorageUnavailable"; return false; }
-    Defer release(/** @brief 归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, &connection] { _pool->ReturnConnection(std::move(connection)); });
+    // 归还本次借用的数据库连接，退出作用域后不得再使用。
+    Defer release([this, &connection] { _pool->ReturnConnection(std::move(connection)); });
     try {
         messaging::ReceiptRequest(*connection->_connection, uid, request, report, response, peer);
         return true;
@@ -801,7 +813,8 @@ bool MysqlDao::CreateGroup(int owner, const std::string& name, const std::string
     expected.insert(owner);
     auto connection = _pool->GetConnection();
     if (!connection) return false;
-    Defer release(/** @brief 归还本次群创建借用的连接。 */
+    // 归还本次群创建借用的连接。
+    Defer release(
         [this, &connection] { _pool->ReturnConnection(std::move(connection)); });
     try {
         auto& db = *connection->_connection;
@@ -867,7 +880,8 @@ bool MysqlDao::GroupRequest(int uid, const Json::Value& request, bool manage, Js
     response["chat_id"] = request["chat_id"];
     auto connection = _pool->GetConnection();
     if (!connection) { response["group_error"] = "StorageUnavailable"; return false; }
-    Defer release(/** @brief 归还请求独占借用的连接。 */ [this, &connection] { _pool->ReturnConnection(std::move(connection)); });
+    // 归还请求独占借用的连接。
+    Defer release([this, &connection] { _pool->ReturnConnection(std::move(connection)); });
     try {
         if (request["operation"] == "remark") {
             if (!request["target_uid"].isInt() || !request["name"].isString() || request["name"].asString().size() > 60)
@@ -895,7 +909,8 @@ bool MysqlDao::SocialRequest(int uid, const Json::Value& request, int kind, Json
     response["error"] = ErrorCodes::UidInvalid;
     response["request_id"] = request.get("request_id", "");
     if (!connection) { response["social_error"] = "StorageUnavailable"; return false; }
-    Defer release(/** @brief 无论查询或写入结果均归还本次连接。 */
+    // 无论查询或写入结果均归还本次连接。
+    Defer release(
         [this, &connection] { _pool->ReturnConnection(std::move(connection)); });
     try {
         response["error"] = 0;

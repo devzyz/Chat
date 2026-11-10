@@ -35,15 +35,18 @@ int main(int argc, char* argv[]) {
     bool registered = false;
     bool stopping = false;
     bool tcp_stopped = false;
-    auto shutdown = /** @brief 幂等取消维护计时并启动 TCP 停服。 */ [&] {
+    // 幂等取消维护计时并启动 TCP 停服。
+    auto shutdown = [&] {
         if (stopping) return;
         stopping = true;
         boost::system::error_code ignored;
         count_timer.cancel();
-        if (tcp) tcp->Stop(/** @brief 在会话关闭及 I/O 取消完成后退出主事件循环。 */ [&] { tcp_stopped = true; io.stop(); });
+        // 在会话关闭及 I/O 取消完成后退出主事件循环。
+        if (tcp) tcp->Stop([&] { tcp_stopped = true; io.stop(); });
         else { tcp_stopped = true; io.stop(); }
     };
-    auto finish = /** @brief 排空连接事件后等待工作线程与 RPC 关闭。 */ [&] {
+    // 排空连接事件后等待工作线程与 RPC 关闭。
+    auto finish = [&] {
         // Run the acceptor executor until all sessions have completed close and cancelled I/O.
         if (!tcp_stopped) { io.restart(); io.run(); }
         // Blocking worker/RPC joins run on the owner after the acceptor has stopped, not in its handler.
@@ -74,7 +77,8 @@ int main(int argc, char* argv[]) {
         // The adapter resolves Redis lazily: bind both ports before connecting to dependencies.
         auto presence = std::make_shared<RedisUserPresenceStore>();
         lifecycle = std::make_shared<SessionLifecycleCoordinator>(directory, presence, server_id,
-            /** @brief 向旧用户所在实例发送带会话标识的踢出请求。 */ [](int uid, const chat_session::UserPresence& old) {
+            // 向旧用户所在实例发送带会话标识的踢出请求。
+            [](int uid, const chat_session::UserPresence& old) {
                 message::KickUserReq request;
                 request.set_uid(uid);
                 request.set_session_id(old.session_id);
@@ -89,8 +93,10 @@ int main(int argc, char* argv[]) {
         if (!boost::asio::ip::make_address(rpc_host).is_loopback())
             throw std::invalid_argument("unauthenticated Chat RPC must bind loopback");
         tcp = std::make_shared<chat_transport::CServer>(io, bind_host, static_cast<unsigned short>(port), lifecycle, directory,
-            /** @brief 把入站消息交给有界业务分发器。 */ [&](LogicMessage message) { return logic->Submit(std::move(message)); },
-            /** @brief 从 Asio 池选择会话执行器。 */ [&]() -> boost::asio::io_context& { return pool->GetIOService(); });
+            // 把入站消息交给有界业务分发器。
+            [&](LogicMessage message) { return logic->Submit(std::move(message)); },
+            // 从 Asio 池选择会话执行器。
+            [&]() -> boost::asio::io_context& { return pool->GetIOService(); });
         lifecycle->AttachServer(tcp);
         service = std::make_unique<ChatServiceImpl>(directory, lifecycle, presence);
         grpc::ServerBuilder builder;
@@ -116,12 +122,15 @@ int main(int argc, char* argv[]) {
         if (!registered) throw std::runtime_error("instance registration failed or name already leased");
         tcp->Start();
         std::function<void()> update_count;
-        update_count = /** @brief 安排下一轮连接计数发布。 */ [&] {
+        // 安排下一轮连接计数发布。
+        update_count = [&] {
             count_timer.expires_after(std::chrono::seconds(60));
-            count_timer.async_wait(/** @brief 计时成功且未停服时把计数更新交给维护执行器。 */ [&](boost::system::error_code error) {
+            // 计时成功且未停服时把计数更新交给维护执行器。
+            count_timer.async_wait([&](boost::system::error_code error) {
                 if (error || stopping) return;
                 const auto count = tcp->ConnectionCount();
-                boost::asio::post(maintenance, /** @brief 将当前连接数写入 Redis 选服统计。 */ [redis, server_id, lease_owner, count] {
+                // 将当前连接数写入 Redis 选服统计。
+                boost::asio::post(maintenance, [redis, server_id, lease_owner, count] {
                     const auto renewed = redis->Eval(
                         "local owner=redis.call('GET',KEYS[2]); if owner and owner~=ARGV[3] then return {} end; "
                         "redis.call('HSET',KEYS[1],ARGV[1],ARGV[2]); "
@@ -135,7 +144,8 @@ int main(int argc, char* argv[]) {
         };
         update_count();
         boost::asio::signal_set signals(io, SIGINT, SIGTERM);
-        signals.async_wait(/** @brief 接收退出信号并启动统一停服流程。 */ [&](boost::system::error_code error, int) { if (!error) shutdown(); });
+        // 接收退出信号并启动统一停服流程。
+        signals.async_wait([&](boost::system::error_code error, int) { if (!error) shutdown(); });
         io.run();
         shutdown();
         finish();

@@ -238,7 +238,8 @@ void SessionResetTests::uncertainBatchSurvivesDisconnectAndMatchesExactUuid()
     store.open(directory.path(), 101);
     store.resumeOutgoing();
     QCOMPARE(store.dispatchDue(1).size(), 2);
-    const auto ack = /** 构造精确关联 UUID 与服务端消息编号的成功 ACK。 */ [](QString uuid, int id) { return QJsonObject{{"error", 0}, {"chat_id", 501},
+    // 构造精确关联 UUID 与服务端消息编号的成功 ACK。
+    const auto ack = [](QString uuid, int id) { return QJsonObject{{"error", 0}, {"chat_id", 501},
         {"from_uid", 101}, {"to_uid", 102}, {"client_msg_uuids", QJsonArray{uuid}},
         {"uuid_msgId", QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"message_id", id}}}}}; };
     store.acceptSendResponse(ack("second", 902));
@@ -295,7 +296,8 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
     ClientSession session;
     QPointer<QObject> draft = new QObject(&session); draft->setProperty("draft", "unsent draft");
     session.beginSession(draft);
-    const auto cleanup = qScopeGuard(/** @brief 失败路径也停止重连和账号存储。 */ [&] { session.resetSession(SessionResetReason::UnexpectedDisconnect); });
+    // 失败路径也停止重连和账号存储。
+    const auto cleanup = qScopeGuard([&] { session.resetSession(SessionResetReason::UnexpectedDisconnect); });
     const QByteArray request = QJsonDocument(QJsonObject{{"from_uid", 101}, {"to_uid", 102},
         {"chat_id", 501}, {"text_array", QJsonArray{QJsonObject{
         {"msg_uuid", "00000000-0000-4000-8000-000000000004"}, {"msg_content", "retry body"}}}}})
@@ -344,9 +346,11 @@ void SessionResetTests::disconnectPreservesAcceptedSubmission()
     QTemporaryDir directory;
     auto tcp = TcpMgr::instance();
     auto user = UserMgr::instance();
-    const auto cleanup = qScopeGuard(/** @brief 清理本测试拥有的账号状态和临时存储。 */ [&] {
+    // 清理本测试拥有的账号状态和临时存储。
+    const auto cleanup = qScopeGuard([&] {
         tcp->resetConnection(true); user->resetSession();
-        QTest::qWaitFor(/** @brief 等待存储线程释放测试目录。 */ [&] {
+        // 等待存储线程释放测试目录。
+        QTest::qWaitFor([&] {
             return !QFileInfo::exists(directory.path() + "/messages.lock");
         }, 2000);
     });
@@ -414,12 +418,14 @@ void SessionResetTests::silentPeerTriggersReconnect()
         tcp->handleMessage(ID_HEART_BEAT_RSP, body.size(), body);
     QCOMPARE(acknowledged.size(), 1);
     ClientSession session; session.beginSession();
-    const auto cleanup = qScopeGuard(/** @brief 超时断言失败也停止会话计时器和连接。 */ [&] {
+    // 超时断言失败也停止会话计时器和连接。
+    const auto cleanup = qScopeGuard([&] {
         session.resetSession(SessionResetReason::UnexpectedDisconnect);
     });
     QSignalSpy recovery(&session, &ClientSession::reconnectChanged);
     // 对端保持 TCP 可写，每次请求都回一个错误类型的成功码，不能延长活跃期限。
-    connect(socket.get(), &QTcpSocket::readyRead, &session, /** @brief 消费请求但注入无效心跳响应。 */ [&] {
+    // 消费请求但注入无效心跳响应。
+    connect(socket.get(), &QTcpSocket::readyRead, &session, [&] {
         socket->readAll();
         const QByteArray invalid("{\"error\":\"0\"}");
         tcp->handleMessage(ID_HEART_BEAT_RSP, invalid.size(), invalid);
@@ -441,22 +447,26 @@ void SessionResetTests::socialRequestsRespectSessionLifecycle()
     auto tcp = TcpMgr::instance();
     auto user = UserMgr::instance();
     const auto oldGate = gate_url_prefix;
-    const auto cleanup = qScopeGuard(/** @brief 失败路径也清理本次账号状态并恢复应用配置。 */ [&] {
+    // 失败路径也清理本次账号状态并恢复应用配置。
+    const auto cleanup = qScopeGuard([&] {
         tcp->resetConnection(true); user->resetSession(); gate_url_prefix = oldGate;
     });
     gate_url_prefix.clear(); tcp->resetConnection(true); user->resetSession();
     QSignalSpy requests(tcp.get(), &TcpMgr::sendRequested);
-    const auto deliver = /** @brief 通过生产业务回包入口注入合成服务响应。 */ [&](ReqId id, QJsonObject row) {
+    // 通过生产业务回包入口注入合成服务响应。
+    const auto deliver = [&](ReqId id, QJsonObject row) {
         const auto bytes = QJsonDocument(row).toJson(QJsonDocument::Compact);
         tcp->handleMessage(id, bytes.size(), bytes);
     };
-    const auto latest = /** @brief 读取最近发送的社交请求，跳过消息同步等其他事件。 */ [&] {
+    // 读取最近发送的社交请求，跳过消息同步等其他事件。
+    const auto latest = [&] {
         for (auto it = requests.crbegin(); it != requests.crend(); ++it)
             if ((*it)[0].value<ReqId>() == ID_SOCIAL_DIRECTORY_REQ)
                 return QJsonDocument::fromJson((*it)[1].toByteArray()).object();
         return QJsonObject{};
     };
-    const auto login = /** @brief 协商生产社交能力并将存储限定到临时账号目录。 */ [&](int uid) {
+    // 协商生产社交能力并将存储限定到临时账号目录。
+    const auto login = [&](int uid) {
         tcp->beginSession();
         deliver(ID_CHAT_LOGIN_RSP, {{"error",0},{"uid",uid},{"capabilities",QJsonArray{"basic_social_v1"}}});
         user->messages()->start(directory.path() + "/" + QString::number(uid), uid, false, true);
@@ -508,7 +518,8 @@ void SessionResetTests::socialRequestsRespectSessionLifecycle()
     QObject receiver;
     int completed = 0;
     QJsonObject terminal;
-    const auto accept = /** @brief 记录当前接收者看到的唯一终态。 */ [&](QJsonObject response) {
+    // 记录当前接收者看到的唯一终态。
+    const auto accept = [&](QJsonObject response) {
         ++completed; terminal = response;
     };
     tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, &receiver, accept);
@@ -522,7 +533,8 @@ void SessionResetTests::socialRequestsRespectSessionLifecycle()
     int destroyedCallbacks = 0;
     auto removed = std::make_unique<QObject>();
     tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, removed.get(),
-        /** @brief 已销毁接收者不得收到完成或超时。 */ [&](QJsonObject) { ++destroyedCallbacks; });
+        // 已销毁接收者不得收到完成或超时。
+        [&](QJsonObject) { ++destroyedCallbacks; });
     const auto abandoned = latest(); removed.reset();
     deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",abandoned["request_id"]},{"error",0}});
     QCOMPARE(destroyedCallbacks,0);
@@ -559,7 +571,8 @@ void SessionResetTests::logoutWaitsForRevocationAndPreservesStateOnFailure()
     const auto previousGate = gate_url_prefix;
     ClientSession session;
     auto user = UserMgr::instance();
-    const auto cleanup = qScopeGuard(/** @brief 结束本测试会话并恢复应用服务地址。 */ [&] {
+    // 结束本测试会话并恢复应用服务地址。
+    const auto cleanup = qScopeGuard([&] {
         session.resetSession(SessionResetReason::UnexpectedDisconnect); gate_url_prefix = previousGate;
     });
     QTcpServer gate; QVERIFY(gate.listen(QHostAddress::LocalHost, 0));

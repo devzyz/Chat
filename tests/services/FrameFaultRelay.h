@@ -33,14 +33,16 @@ class FrameFaultRelay {
             auto header = std::make_shared<ChatFrameCodec::HeaderBytes>();
             auto& source = upstream ? front : back;
             boost::asio::async_read(source, boost::asio::buffer(*header),
-                /** 核对帧头与长度，错误时关闭会话，否则继续读取载荷。 */ [self, header, upstream](auto error, auto) {
+                // 核对帧头与长度，错误时关闭会话，否则继续读取载荷。
+                [self, header, upstream](auto error, auto) {
                     if (error) { self->Close(); return; }
                     const auto decoded = ChatFrameCodec::DecodeValidatedHeader(header->data(), MAX_LENGTH);
                     if (!decoded) { self->relay.failed = true; self->Close(); return; }
                     auto body = std::make_shared<std::string>(decoded->body_length, '\0');
                     auto& source = upstream ? self->front : self->back;
                     boost::asio::async_read(source, boost::asio::buffer(*body),
-                        /** 解析消息并按目标 UUID 丢弃 ACK 或重放通知，然后转发完整字节。 */ [self, header, body, upstream, id = decoded->message_id](auto body_error, auto) {
+                        // 解析消息并按目标 UUID 丢弃 ACK 或重放通知，然后转发完整字节。
+                        [self, header, body, upstream, id = decoded->message_id](auto body_error, auto) {
                             if (body_error) { self->Close(); return; }
                             Json::Value value;
                             Json::Reader reader;
@@ -68,7 +70,8 @@ class FrameFaultRelay {
                             }
                             auto& destination = upstream ? self->back : self->front;
                             boost::asio::async_write(destination, boost::asio::buffer(*bytes),
-                                /** 转发失败时关闭会话，成功时继续读取同方向下一帧。 */ [self, bytes, upstream](auto write_error, auto) {
+                                // 转发失败时关闭会话，成功时继续读取同方向下一帧。
+                                [self, bytes, upstream](auto write_error, auto) {
                                     if (write_error) self->Close(); else self->Read(upstream);
                                 });
                         });
@@ -107,9 +110,11 @@ public:
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(420);
         Accept();
         std::function<void()> tick;
-        tick = /** 安排下一次停止和总截止时间检查。 */ [&] {
+        // 安排下一次停止和总截止时间检查。
+        tick = [&] {
             timer.expires_after(std::chrono::milliseconds(100));
-            timer.async_wait(/** 停止或超时时结束事件循环，否则继续安排检查。 */ [&](auto error) {
+            // 停止或超时时结束事件循环，否则继续安排检查。
+            timer.async_wait([&](auto error) {
                 if (error) return;
                 if (stopped() || std::chrono::steady_clock::now() >= deadline) {
                     failed = failed || !stopped();
@@ -129,13 +134,16 @@ public:
 private:
     /** 限制并发会话数并异步接收下一条前端连接。 */
     void Accept() {
-        pairs.erase(std::remove_if(pairs.begin(), pairs.end(), /** 识别已释放的会话以清理弱引用记录。 */ [](const auto& pair) { return pair.expired(); }), pairs.end());
+        // 识别已释放的会话以清理弱引用记录。
+        pairs.erase(std::remove_if(pairs.begin(), pairs.end(), [](const auto& pair) { return pair.expired(); }), pairs.end());
         if (pairs.size() >= 64) { failed = true; io.stop(); return; }
         auto pair = std::make_shared<Pair>(io, *this);
         pairs.push_back(pair);
-        acceptor.async_accept(pair->front, /** 接收成功后连接后端，并立即继续接受下一会话。 */ [this, pair](auto error) {
+        // 接收成功后连接后端，并立即继续接受下一会话。
+        acceptor.async_accept(pair->front, [this, pair](auto error) {
             if (error) return;
-            pair->back.async_connect({boost::asio::ip::make_address("127.0.0.1"), backend}, /** 后端连接成功后启动双向读取，失败则关闭会话。 */ [pair](auto connect_error) {
+            // 后端连接成功后启动双向读取，失败则关闭会话。
+            pair->back.async_connect({boost::asio::ip::make_address("127.0.0.1"), backend}, [pair](auto connect_error) {
                 if (connect_error) pair->Close(); else { pair->Read(true); pair->Read(false); }
             });
             Accept();

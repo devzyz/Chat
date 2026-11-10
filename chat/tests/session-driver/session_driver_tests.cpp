@@ -118,9 +118,11 @@ public:
     /** 为指定测试用户安装 HTTP 登录与聊天帧处理回调。 */
     explicit LoopbackLogin(int uid) : userId(uid)
     {
-        QObject::connect(&gate, &QTcpServer::newConnection, this, /** 接收 Gate 连接并安装请求正文处理。 */ [this] {
+        // 接收 Gate 连接并安装请求正文处理。
+        QObject::connect(&gate, &QTcpServer::newConnection, this, [this] {
             auto *peer = gate.nextPendingConnection();
-            QObject::connect(peer, &QTcpSocket::readyRead, peer, /** 等待完整 HTTP JSON 后记录登录请求并返回测试用户选服结果。 */ [this, peer, buffer = QByteArray()]() mutable {
+            // 等待完整 HTTP JSON 后记录登录请求并返回测试用户选服结果。
+            QObject::connect(peer, &QTcpSocket::readyRead, peer, [this, peer, buffer = QByteArray()]() mutable {
                 buffer += peer->readAll();
                 const auto end = buffer.indexOf("\r\n\r\n");
                 if (end < 0) return;
@@ -135,9 +137,11 @@ public:
                 peer->disconnectFromHost();
             });
         });
-        QObject::connect(&chat, &QTcpServer::newConnection, this, /** 接收 Chat 连接并安装生产帧解码回调。 */ [this] {
+        // 接收 Chat 连接并安装生产帧解码回调。
+        QObject::connect(&chat, &QTcpServer::newConnection, this, [this] {
             auto *peer = chat.nextPendingConnection();
-            QObject::connect(peer, &QTcpSocket::readyRead, peer, /** 处理登录、心跳及增量同步请求，回送确定性的协议响应。 */ [this, peer, decoder = TcpFrameDecoder()]() mutable {
+            // 处理登录、心跳及增量同步请求，回送确定性的协议响应。
+            QObject::connect(peer, &QTcpSocket::readyRead, peer, [this, peer, decoder = TcpFrameDecoder()]() mutable {
                 for (const auto &frame : decoder.append(peer->readAll())) {
                     if (frame.messageId == 1020) { ++heartbeats; continue; }
                     if (frame.messageId == 1034 || frame.messageId == 1038) {
@@ -146,7 +150,8 @@ public:
                             {"chat_id", 71}, {"group_name", "storage lock group"}, {"owner_uid", userId},
                             {"group_revision", "1"}, {"membership_epoch", "1"}, {"joined_after_id", "0"},
                             {"group_state", "active"}, {"member_count", 2}};
-                        const auto respond = /** 回送真实 TCP 群业务结果，SQLite 锁仅存在于客户端。 */ [peer, result, id = frame.messageId + 1] {
+                        // 回送真实 TCP 群业务结果，SQLite 锁仅存在于客户端。
+                        const auto respond = [peer, result, id = frame.messageId + 1] {
                             const auto payload = QJsonDocument(result).toJson(QJsonDocument::Compact);
                             QByteArray header(4, '\0');
                             qToBigEndian<quint16>(id, header.data());
@@ -203,7 +208,8 @@ public:
                             result["error"] = 0;
                             result["chatid"] = 7;
                         }
-                        const auto sendFrame = /** 将响应 JSON 编码为大端聊天帧发送给该连接。 */ [peer](int id, const QJsonObject &object) {
+                        // 将响应 JSON 编码为大端聊天帧发送给该连接。
+                        const auto sendFrame = [peer](int id, const QJsonObject &object) {
                             const auto payload = QJsonDocument(object).toJson(QJsonDocument::Compact);
                             QByteArray header(4, '\0');
                             qToBigEndian<quint16>(id, header.data());
@@ -287,7 +293,8 @@ private slots:
             QFile obstruction(blockedRoot);
             QVERIFY(obstruction.open(QIODevice::WriteOnly));
             obstruction.close();
-            const auto removeObstruction = qScopeGuard(/** @brief 子进程结束后只清理本次新建的账号文件或目录。 */ [&] {
+            // 子进程结束后只清理本次新建的账号文件或目录。
+            const auto removeObstruction = qScopeGuard([&] {
                 const auto path = QDir::cleanPath(blockedRoot);
                 const auto dataRoot = QDir::cleanPath(UserStoragePaths::dataRoot()) + '/';
                 const QFileInfo info(path);
@@ -367,7 +374,8 @@ private slots:
         QCOMPARE(first.applicationBody.value("description").toString(), QString("hello peer"));
         int nextCommand = 7;
         QJsonObject application;
-        const auto applicationStored = /** 等待异步目录事务可从用户状态观察到，不假定通知与请求 ACK 同步完成。 */ [&] {
+        // 等待异步目录事务可从用户状态观察到，不假定通知与请求 ACK 同步完成。
+        const auto applicationStored = [&] {
             alice.send({{"id", nextCommand++}, {"command", "snapshot"}, {"otherUid", 42}});
             application = alice.receive();
             return application.value("applied").toBool();

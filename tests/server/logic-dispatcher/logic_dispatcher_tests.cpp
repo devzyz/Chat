@@ -57,7 +57,8 @@ TEST(LogicDispatcherTests, AcceptedMessagesDispatchInFifoOrder) {
 	std::mutex mutex;
 	std::condition_variable dispatched;
 	std::vector<std::int16_t> ids;
-	LogicDispatcher dispatcher(/** 记录消息编号并唤醒等待者。 */ [&](const LogicMessage& message) {
+	// 记录消息编号并唤醒等待者。
+	LogicDispatcher dispatcher([&](const LogicMessage& message) {
 		{
 			std::lock_guard<std::mutex> lock(mutex);
 			ids.push_back(message.id);
@@ -72,7 +73,8 @@ TEST(LogicDispatcherTests, AcceptedMessagesDispatchInFifoOrder) {
 
 	{
 		std::unique_lock<std::mutex> lock(mutex);
-		ASSERT_TRUE(dispatched.wait_for(lock, 2s, /** 判断三条消息是否全部处理。 */ [&]() { return ids.size() == 3; }));
+		// 判断三条消息是否全部处理。
+		ASSERT_TRUE(dispatched.wait_for(lock, 2s, [&]() { return ids.size() == 3; }));
 	}
 	dispatcher.Stop();
 	EXPECT_EQ(ids, (std::vector<std::int16_t>{11, 12, 13}));
@@ -90,7 +92,8 @@ TEST(LogicDispatcherTests, ConcurrentProducersDispatchEveryAcceptedMessageExactl
 	std::vector<int> dispatch_counts(message_count, 0);
 	int dispatched_count = 0;
 	std::vector<LogicSubmitResult> results(message_count, LogicSubmitResult::Closed);
-	LogicDispatcher dispatcher(/** 在锁内累计各消息处理次数并通知等待者。 */ [&](const LogicMessage& message) {
+	// 在锁内累计各消息处理次数并通知等待者。
+	LogicDispatcher dispatcher([&](const LogicMessage& message) {
 		{
 			std::lock_guard<std::mutex> lock(mutex);
 			++dispatch_counts[static_cast<std::size_t>(std::stoi(message.body))];
@@ -102,10 +105,12 @@ TEST(LogicDispatcherTests, ConcurrentProducersDispatchEveryAcceptedMessageExactl
 
 	std::vector<std::thread> producers;
 	for (int producer = 0; producer < producer_count; ++producer) {
-		producers.emplace_back(/** 等待起跑屏障后提交本生产者的独立消息区间。 */ [&, producer]() {
+		// 等待起跑屏障后提交本生产者的独立消息区间。
+		producers.emplace_back([&, producer]() {
 			{
 				std::unique_lock<std::mutex> lock(mutex);
-				condition.wait(lock, /** 检查并发生产者起跑屏障。 */ [&]() { return start; });
+				// 检查并发生产者起跑屏障。
+				condition.wait(lock, [&]() { return start; });
 			}
 			for (int index = 0; index < messages_per_producer; ++index) {
 				const int value = producer * messages_per_producer + index;
@@ -125,11 +130,13 @@ TEST(LogicDispatcherTests, ConcurrentProducersDispatchEveryAcceptedMessageExactl
 
 	{
 		std::unique_lock<std::mutex> lock(mutex);
-		ASSERT_TRUE(condition.wait_for(lock, 2s, /** 判断全部消息是否处理完成。 */ [&]() { return dispatched_count == message_count; }));
+		// 判断全部消息是否处理完成。
+		ASSERT_TRUE(condition.wait_for(lock, 2s, [&]() { return dispatched_count == message_count; }));
 	}
 	dispatcher.Stop();
 	EXPECT_EQ(std::count(results.begin(), results.end(), LogicSubmitResult::Accepted), message_count);
-	EXPECT_TRUE(std::all_of(dispatch_counts.begin(), dispatch_counts.end(), /** 检查单条消息恰好处理一次。 */ [](int count) { return count == 1; }));
+	// 检查单条消息恰好处理一次。
+	EXPECT_TRUE(std::all_of(dispatch_counts.begin(), dispatch_counts.end(), [](int count) { return count == 1; }));
 }
 
 // T08-LOGIC-03
@@ -140,13 +147,15 @@ TEST(LogicDispatcherTests, ExactPendingCapacityRejectsOnlyTheNextMessage) {
 	bool first_handler_started = false;
 	bool release_handler = false;
 	std::vector<int> dispatched;
-	LogicDispatcher dispatcher(/** 记录委派消息并阻塞首条处理以构造满队列。 */ [&](const LogicMessage& message) {
+	// 记录委派消息并阻塞首条处理以构造满队列。
+	LogicDispatcher dispatcher([&](const LogicMessage& message) {
 		std::unique_lock<std::mutex> lock(mutex);
 		dispatched.push_back(std::stoi(message.body));
 		if (!first_handler_started) {
 			first_handler_started = true;
 			condition.notify_all();
-			condition.wait(lock, /** 判断首条处理阻塞是否已释放。 */ [&]() { return release_handler; });
+			// 判断首条处理阻塞是否已释放。
+			condition.wait(lock, [&]() { return release_handler; });
 		}
 		return true;
 	});
@@ -154,7 +163,8 @@ TEST(LogicDispatcherTests, ExactPendingCapacityRejectsOnlyTheNextMessage) {
 	ASSERT_EQ(dispatcher.Submit({nullptr, 1, "-1"}), LogicSubmitResult::Accepted);
 	{
 		std::unique_lock<std::mutex> lock(mutex);
-		ASSERT_TRUE(condition.wait_for(lock, 2s, /** 判断首条处理是否已进入。 */ [&]() { return first_handler_started; }));
+		// 判断首条处理是否已进入。
+		ASSERT_TRUE(condition.wait_for(lock, 2s, [&]() { return first_handler_started; }));
 	}
 	for (int index = 0; index < MAX_DEALQUE; ++index) {
 		ASSERT_EQ(
@@ -181,7 +191,8 @@ TEST(LogicDispatcherTests, ExactPendingCapacityRejectsOnlyTheNextMessage) {
 TEST(LogicDispatcherTests, WaitingWorkerWakesForMessageAndStop) {
 	std::promise<void> handled_promise;
 	auto handled = handled_promise.get_future();
-	LogicDispatcher message_dispatcher(/** 通知消息处理已完成。 */ [&](const LogicMessage&) {
+	// 通知消息处理已完成。
+	LogicDispatcher message_dispatcher([&](const LogicMessage&) {
 		handled_promise.set_value();
 		return true;
 	});
@@ -189,8 +200,10 @@ TEST(LogicDispatcherTests, WaitingWorkerWakesForMessageAndStop) {
 	ASSERT_EQ(handled.wait_for(2s), std::future_status::ready);
 	message_dispatcher.Stop();
 
-	LogicDispatcher idle_dispatcher(/** 提供正常空操作处理器以验证空闲停机。 */ [](const LogicMessage&) { return true; });
-	auto stopped = std::async(std::launch::async, /** 在异步任务中停止空闲分发器。 */ [&]() { idle_dispatcher.Stop(); });
+	// 提供正常空操作处理器以验证空闲停机。
+	LogicDispatcher idle_dispatcher([](const LogicMessage&) { return true; });
+	// 在异步任务中停止空闲分发器。
+	auto stopped = std::async(std::launch::async, [&]() { idle_dispatcher.Stop(); });
 	ASSERT_EQ(stopped.wait_for(2s), std::future_status::ready);
 	EXPECT_NO_THROW(stopped.get());
 }
@@ -204,13 +217,15 @@ TEST(LogicDispatcherTests, StopDrainsAcceptedMessagesWithinTwoSeconds) {
 	bool first_handler_started = false;
 	bool release_handler = false;
 	int handled_count = 0;
-	LogicDispatcher dispatcher(/** 累计已处理消息并在首条建立可控屏障。 */ [&](const LogicMessage&) {
+	// 累计已处理消息并在首条建立可控屏障。
+	LogicDispatcher dispatcher([&](const LogicMessage&) {
 		std::unique_lock<std::mutex> lock(mutex);
 		++handled_count;
 		if (!first_handler_started) {
 			first_handler_started = true;
 			condition.notify_all();
-			condition.wait(lock, /** 判断首条处理阻塞是否已释放。 */ [&]() { return release_handler; });
+			// 判断首条处理阻塞是否已释放。
+			condition.wait(lock, [&]() { return release_handler; });
 		}
 		return true;
 	});
@@ -220,9 +235,11 @@ TEST(LogicDispatcherTests, StopDrainsAcceptedMessagesWithinTwoSeconds) {
 	}
 	{
 		std::unique_lock<std::mutex> lock(mutex);
-		ASSERT_TRUE(condition.wait_for(lock, 2s, /** 判断首条处理是否已进入。 */ [&]() { return first_handler_started; }));
+		// 判断首条处理是否已进入。
+		ASSERT_TRUE(condition.wait_for(lock, 2s, [&]() { return first_handler_started; }));
 	}
-	auto stopped = std::async(std::launch::async, /** 在异步任务中执行排空停机。 */ [&]() { dispatcher.Stop(); });
+	// 在异步任务中执行排空停机。
+	auto stopped = std::async(std::launch::async, [&]() { dispatcher.Stop(); });
 	{
 		std::lock_guard<std::mutex> lock(mutex);
 		release_handler = true;
@@ -237,7 +254,8 @@ TEST(LogicDispatcherTests, StopDrainsAcceptedMessagesWithinTwoSeconds) {
 /** 验证关闭后提交立即拒绝且重复停止幂等。 */
 TEST(LogicDispatcherTests, ClosedDispatcherRejectsImmediatelyAndRepeatedStopIsIdempotent) {
 	std::atomic<int> handled_count{0};
-	LogicDispatcher dispatcher(/** 累计被调用次数以检测关闭后误处理。 */ [&](const LogicMessage&) {
+	// 累计被调用次数以检测关闭后误处理。
+	LogicDispatcher dispatcher([&](const LogicMessage&) {
 		handled_count.fetch_add(1);
 		return true;
 	});
@@ -256,7 +274,8 @@ TEST(LogicDispatcherTests, UnknownIdDoesNotBlockValidMessageAndLogOmitsBody) {
 	ScopedLogCapture logs;
 	std::promise<void> valid_handled_promise;
 	auto valid_handled = valid_handled_promise.get_future();
-	LogicDispatcher dispatcher(/** 只接受指定有效编号并通知处理完成。 */ [&](const LogicMessage& message) {
+	// 只接受指定有效编号并通知处理完成。
+	LogicDispatcher dispatcher([&](const LogicMessage& message) {
 		if (message.id != 77) {
 			return false;
 		}
@@ -282,7 +301,8 @@ TEST(LogicDispatcherTests, ThrowingHandlerDoesNotTerminateWorkerOrExposePayload)
     ScopedLogCapture logs;
     std::promise<void> handled;
     auto ready = handled.get_future();
-    LogicDispatcher dispatcher(/** 对指定编号抛含敏感标记的异常，其余消息正常完成。 */ [&](const LogicMessage& message) {
+    // 对指定编号抛含敏感标记的异常，其余消息正常完成。
+    LogicDispatcher dispatcher([&](const LogicMessage& message) {
         if (message.id == 90) throw std::runtime_error("PRIVATE_EXCEPTION_PAYLOAD");
         handled.set_value();
         return true;

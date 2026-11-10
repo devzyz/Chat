@@ -35,7 +35,8 @@ public:
         : rpc::BoundedPool<ChatService::Stub>(
               pool_size,
               acquire_timeout,
-              /** @brief 为固定对端创建 ChatService stub，通道由 stub 共享持有。 */ [endpoint = host + ":" + port] {
+              // 为固定对端创建 ChatService stub，通道由 stub 共享持有。
+              [endpoint = host + ":" + port] {
                   return ChatService::NewStub(grpc::CreateChannel(
                       endpoint,
                       grpc::InsecureChannelCredentials()));

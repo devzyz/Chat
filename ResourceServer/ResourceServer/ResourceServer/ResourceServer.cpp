@@ -36,30 +36,39 @@ int main(int argc, char** argv) {
             config.get<std::string>("Mysql.User"), config.get<std::string>("Mysql.Password", ""),
             config.get<std::string>("Mysql.Schema"));
         const auto endpoint = config.get<std::string>("StatusServer.Host") + ":" + config.get<std::string>("StatusServer.Port");
-        rpc::BoundedPool<message::StatusService::Stub> status(2, std::chrono::milliseconds(1000), /** @brief 按配置端点创建 StatusService stub。 */ [endpoint] {
+        // 按配置端点创建 StatusService stub。
+        rpc::BoundedPool<message::StatusService::Stub> status(2, std::chrono::milliseconds(1000), [endpoint] {
             return message::StatusService::NewStub(grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials()));
         });
         common::IOServicePool pool(1);
         auto& context = pool.GetIOService();
         resource::ResourceHttpServer server(context, config.get<std::string>("ResourceServer.Host"),
             static_cast<unsigned short>(port), store,
-            /** @brief 通过 Status 登录 RPC 验证请求 UID 与 Token。 */ [&status](int uid, const std::string& token) {
+            // 通过 Status 登录 RPC 验证请求 UID 与 Token。
+            [&status](int uid, const std::string& token) {
                 message::LoginReq request; request.set_uid(uid); request.set_token(token);
                 auto result = rpc::InvokeUnary<decltype(status), message::LoginReq, message::LoginRsp>(
                     status, request, std::chrono::milliseconds(3000),
-                    /** @brief 执行已设置截止时间的 Status 登录调用。 */ [](auto& stub, auto& context, const auto& input, auto& output) { return stub.Login(&context, input, &output); });
+                    // 执行已设置截止时间的 Status 登录调用。
+                    [](auto& stub, auto& context, const auto& input, auto& output) { return stub.Login(&context, input, &output); });
                 return result && result.response.error() == 0 && result.response.uid() == uid;
-            }, /** @brief 通过共享目录检查用户读取资源的权限。 */ [&catalog](int uid, const resource::Metadata& metadata) { return catalog.CanRead(uid, metadata.id); },
-            /** @brief 把上传完成的元数据发布到共享目录。 */ [&catalog](const resource::Metadata& metadata) {
+            // 通过共享目录检查用户读取资源的权限。
+            }, [&catalog](int uid, const resource::Metadata& metadata) { return catalog.CanRead(uid, metadata.id); },
+            // 把上传完成的元数据发布到共享目录。
+            [&catalog](const resource::Metadata& metadata) {
                 catalog.Publish(metadata.id, metadata.owner, metadata.name, metadata.media_type, metadata.size, metadata.sha256);
-            }, /** @brief 查询用户已发布头像的资源 ID。 */ [&catalog](int uid) { return catalog.GetAvatar(uid); },
-            /** @brief 更新用户头像并由目录再次核验资源归属。 */ [&catalog](int uid, const std::string& id) { catalog.SetAvatar(uid, id); },
-            /** @brief 同时核对数据库 schema 和 Status RPC 可用性，不把监听成功等同业务就绪。 */ [&catalog, &status] {
+            // 查询用户已发布头像的资源 ID。
+            }, [&catalog](int uid) { return catalog.GetAvatar(uid); },
+            // 更新用户头像并由目录再次核验资源归属。
+            [&catalog](int uid, const std::string& id) { catalog.SetAvatar(uid, id); },
+            // 同时核对数据库 schema 和 Status RPC 可用性，不把监听成功等同业务就绪。
+            [&catalog, &status] {
                 if (!catalog.IsReady()) return false;
                 message::LoginReq request; request.set_uid(0);
                 const auto result = rpc::InvokeUnary<decltype(status), message::LoginReq, message::LoginRsp>(
                     status, request, std::chrono::milliseconds(1000),
-                    /** @brief 使用无效身份探测 RPC，预期获得明确身份拒绝。 */ [](auto& stub, auto& context, const auto& input, auto& output) {
+                    // 使用无效身份探测 RPC，预期获得明确身份拒绝。
+                    [](auto& stub, auto& context, const auto& input, auto& output) {
                         return stub.Login(&context, input, &output);
                     });
                 return result && result.response.error() == 1010;
@@ -70,8 +79,10 @@ int main(int argc, char** argv) {
 #ifdef _WIN32
         signals.add(SIGBREAK);
 #endif
-        signals.async_wait(/** @brief 停止资源服务并通知停服等待者。 */ [&](auto, auto) { server.Stop(); stopped.set_value(); });
-        boost::asio::post(context, /** @brief 在服务执行器开始资源 HTTP 监听。 */ [&] { server.Start(); });
+        // 停止资源服务并通知停服等待者。
+        signals.async_wait([&](auto, auto) { server.Stop(); stopped.set_value(); });
+        // 在服务执行器开始资源 HTTP 监听。
+        boost::asio::post(context, [&] { server.Start(); });
         SPDLOG_INFO("ResourceServer listening on port {}", port);
         future.wait();
         return 0;

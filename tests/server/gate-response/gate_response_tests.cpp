@@ -150,7 +150,8 @@ TEST_P(NonLoginResponseTest, SuccessContainsOnlyError) {
 	const auto body = gate::HandleJsonRequest(
 		GetParam(),
 		RequestWithForbiddenFields(),
-		/** 提供默认成功业务结果。 */ [](const Json::Value&) { return gate::Result{}; });
+		// 提供默认成功业务结果。
+		[](const Json::Value&) { return gate::Result{}; });
 
 	const auto response = ParseResponse(body);
 	ExpectExactKeys(response, {"error"});
@@ -163,7 +164,8 @@ TEST_P(NonLoginResponseTest, BusinessFailureContainsOnlyError) {
 	const auto body = gate::HandleJsonRequest(
 		GetParam(),
 		RequestWithForbiddenFields(),
-		/** 提供固定业务失败结果。 */ [](const Json::Value&) { return gate::Result{kBusinessFailure}; });
+		// 提供固定业务失败结果。
+		[](const Json::Value&) { return gate::Result{kBusinessFailure}; });
 
 	const auto response = ParseResponse(body);
 	ExpectExactKeys(response, {"error"});
@@ -175,14 +177,16 @@ INSTANTIATE_TEST_SUITE_P(
 	Endpoints,
 	NonLoginResponseTest,
 	testing::ValuesIn(kNonLoginEndpoints),
-	/** 使用端点名生成参数化用例名称。 */ [](const testing::TestParamInfo<gate::Endpoint>& info) { return EndpointName(info.param); });
+	// 使用端点名生成参数化用例名称。
+	[](const testing::TestParamInfo<gate::Endpoint>& info) { return EndpointName(info.param); });
 
 /** 验证登录成功响应严格遵循身份、Token 及端点白名单。 */
 TEST(GateLoginResponseTest, SuccessUsesTheExactReviewedAllowlist) {
 	const auto body = gate::HandleJsonRequest(
 		gate::Endpoint::UserLogin,
 		RequestWithForbiddenFields(),
-		/** 提供完整登录成功结果。 */ [](const Json::Value&) {
+		// 提供完整登录成功结果。
+		[](const Json::Value&) {
 			return gate::Result{0, 42, "opaque-session-value", "127.0.0.1", "8090"};
 		});
 
@@ -201,7 +205,8 @@ TEST(GateLoginResponseTest, FailureContainsOnlyError) {
 	const auto body = gate::HandleJsonRequest(
 		gate::Endpoint::UserLogin,
 		RequestWithForbiddenFields(),
-		/** 提供固定业务失败结果。 */ [](const Json::Value&) { return gate::Result{kBusinessFailure}; });
+		// 提供固定业务失败结果。
+		[](const Json::Value&) { return gate::Result{kBusinessFailure}; });
 
 	const auto response = ParseResponse(body);
 	ExpectExactKeys(response, {"error"});
@@ -218,7 +223,8 @@ TEST_P(AllEndpointResponseTest, MalformedJsonReturnsTheStableJsonError) {
 	const auto body = gate::HandleJsonRequest(
 		GetParam(),
 		"{not-json",
-		/** 记录业务处理器是否被错误地调用。 */ [&called](const Json::Value&) {
+		// 记录业务处理器是否被错误地调用。
+		[&called](const Json::Value&) {
 			called = true;
 			return gate::Result{};
 		});
@@ -234,7 +240,8 @@ TEST_P(AllEndpointResponseTest, ForbiddenRequestFieldsAndValuesAreNeverReflected
 	const auto body = gate::HandleJsonRequest(
 		GetParam(),
 		RequestWithForbiddenFields(),
-		/** 提供固定业务失败结果。 */ [](const Json::Value&) { return gate::Result{kBusinessFailure}; });
+		// 提供固定业务失败结果。
+		[](const Json::Value&) { return gate::Result{kBusinessFailure}; });
 
 	const auto response = ParseResponse(body);
 	ExpectExactKeys(response, {"error"});
@@ -253,7 +260,8 @@ TEST_P(AllEndpointResponseTest, InternalExceptionReturnsStableErrorWithoutLoggin
 	const auto body = gate::HandleJsonRequest(
 		GetParam(),
 		RequestWithForbiddenFields(),
-		/** 抛出包含敏感夹具标记的异常以验证脱敏边界。 */ [&exception_text](const Json::Value&) -> gate::Result {
+		// 抛出包含敏感夹具标记的异常以验证脱敏边界。
+		[&exception_text](const Json::Value&) -> gate::Result {
 			throw std::runtime_error(exception_text);
 		});
 
@@ -273,14 +281,16 @@ INSTANTIATE_TEST_SUITE_P(
 	Endpoints,
 	AllEndpointResponseTest,
 	testing::ValuesIn(kAllEndpoints),
-	/** 使用端点名生成参数化用例名称。 */ [](const testing::TestParamInfo<gate::Endpoint>& info) { return EndpointName(info.param); });
+	// 使用端点名生成参数化用例名称。
+	[](const testing::TestParamInfo<gate::Endpoint>& info) { return EndpointName(info.param); });
 
 /** 验证登录 RPC 失败保持稳定的错误响应结构。 */
 TEST(GateLoginResponseTest, RpcFailureUsesTheStableErrorEnvelope) {
 	const auto body = gate::HandleJsonRequest(
 		gate::Endpoint::UserLogin,
 		RequestWithForbiddenFields(),
-		/** 提供固定 RPC 失败业务结果。 */ [](const Json::Value&) { return gate::Result{kRpcFailed}; });
+		// 提供固定 RPC 失败业务结果。
+		[](const Json::Value&) { return gate::Result{kRpcFailed}; });
 
 	const auto response = ParseResponse(body);
 	ExpectExactKeys(response, {"error"});

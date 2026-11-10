@@ -13,7 +13,8 @@ namespace {
 TEST(ServerRedisPoolTests, CloseWakesAWaitingBorrowerWithoutAServiceConnection) {
     RedisConnectionPool pool("127.0.0.1", "1", "test-placeholder", 0);
     std::promise<void> borrower_started;
-    auto borrower = std::async(std::launch::async, /** 通知等待已开始并以有限期限借用连接。 */ [&]() {
+    // 通知等待已开始并以有限期限借用连接。
+    auto borrower = std::async(std::launch::async, [&]() {
         borrower_started.set_value();
         return pool.GetConnection(std::chrono::milliseconds(500));
     });

@@ -125,7 +125,8 @@ public:
 				throw std::runtime_error("refusing to adopt a pre-existing run temp root");
 			}
 			owned_paths.insert(temp_root.lexically_normal().wstring());
-			ledger.push_back({"temp-root", /** 清理当前运行创建的临时根。 */ [this] { return RemovePath(temp_root); }, false});
+			// 清理当前运行创建的临时根。
+			ledger.push_back({"temp-root", [this] { return RemovePath(temp_root); }, false});
 		} catch (...) {
 			ReleaseRunId(run_id);
 			throw;
@@ -261,7 +262,8 @@ LoopbackPort RunContext::ReserveLoopbackPort(const std::string& name) {
 	}
 	const auto endpoint = acceptor->local_endpoint();
 	impl_->ports.emplace(name, std::move(acceptor));
-	impl_->ledger.push_back({"port:" + name, /** 按账本登记的名称关闭所属预约端口。 */ [impl = impl_.get(), name] { return impl->ClosePort(name); }, false});
+	// 按账本登记的名称关闭所属预约端口。
+	impl_->ledger.push_back({"port:" + name, [impl = impl_.get(), name] { return impl->ClosePort(name); }, false});
 	return {endpoint.address().to_string(), endpoint.port()};
 }
 
@@ -294,7 +296,8 @@ std::filesystem::path RunContext::CreateOwnedDirectory(const std::filesystem::pa
 		throw std::invalid_argument("refusing to adopt a pre-existing or invalid owned directory");
 	}
 	impl_->owned_paths.insert(path.wstring());
-	impl_->ledger.push_back({"path:" + path.string(), /** 移除账本登记的所属目录。 */ [impl = impl_.get(), path] { return impl->RemovePath(path); }, false});
+	// 移除账本登记的所属目录。
+	impl_->ledger.push_back({"path:" + path.string(), [impl = impl_.get(), path] { return impl->RemovePath(path); }, false});
 	return path;
 }
 

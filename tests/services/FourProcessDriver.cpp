@@ -35,7 +35,8 @@ class WireClient {
 public:
     /** 在有界异步操作中连接指定 loopback 端口。 */
     explicit WireClient(unsigned short port) : socket_(io_), timer_(io_) {
-        Run(/** 启动 TCP 连接并把结果交给统一完成回调。 */ [&](auto done) { socket_.async_connect(
+        // 启动 TCP 连接并把结果交给统一完成回调。
+        Run([&](auto done) { socket_.async_connect(
             {boost::asio::ip::make_address("127.0.0.1"), port}, done); });
     }
     /** 编码并发送完整请求；普通模式要求响应帧，拒绝模式仅接受零响应字节后的明确断开。 */
@@ -44,13 +45,17 @@ public:
         Require(text.size() <= MAX_LENGTH);
         const auto header = ChatFrameCodec::EncodeHeader(id, static_cast<std::uint16_t>(text.size()));
         const auto bytes = std::string(reinterpret_cast<const char*>(header.data()), header.size()) + text;
-        Run(/** 异步写入完整请求字节，保持缓冲有效直到操作完成。 */ [&](auto done) { boost::asio::async_write(socket_, boost::asio::buffer(bytes),
-            /** 将写入错误交给统一截止管理。 */ [done](auto error, auto) { done(error); }); });
+        // 异步写入完整请求字节，保持缓冲有效直到操作完成。
+        Run([&](auto done) { boost::asio::async_write(socket_, boost::asio::buffer(bytes),
+            // 将写入错误交给统一截止管理。
+            [done](auto error, auto) { done(error); }); });
         ChatFrameCodec::HeaderBytes response{};
         std::size_t header_bytes = 0;
-        const auto header_error = Run(/** 异步读取响应帧头，保留字节数以拒绝截断帧。 */ [&](auto done) {
+        // 异步读取响应帧头，保留字节数以拒绝截断帧。
+        const auto header_error = Run([&](auto done) {
             boost::asio::async_read(socket_, boost::asio::buffer(response),
-                /** 保存实际字节数并将读取结果交给统一截止管理。 */ [done, &header_bytes](auto error, auto bytes) {
+                // 保存实际字节数并将读取结果交给统一截止管理。
+                [done, &header_bytes](auto error, auto bytes) {
                     header_bytes = bytes; done(error);
                 });
         }, expect_disconnect);
@@ -64,8 +69,10 @@ public:
         const auto decoded = ChatFrameCodec::DecodeValidatedHeader(response.data(), MAX_LENGTH);
         Require(decoded && decoded->message_id == id + 1);
         std::string result(decoded->body_length, '\0');
-        Run(/** 异步读取帧头声明的完整载荷。 */ [&](auto done) { boost::asio::async_read(socket_, boost::asio::buffer(result),
-            /** 将载荷读取结果交给统一截止管理。 */ [done](auto error, auto) { done(error); }); });
+        // 异步读取帧头声明的完整载荷。
+        Run([&](auto done) { boost::asio::async_read(socket_, boost::asio::buffer(result),
+            // 将载荷读取结果交给统一截止管理。
+            [done](auto error, auto) { done(error); }); });
         return Parse(result);
     }
 private:
@@ -74,8 +81,10 @@ private:
         io_.restart();
         boost::system::error_code result = boost::asio::error::timed_out;
         timer_.expires_after(5s);
-        timer_.async_wait(/** 期限到达时关闭连接以结束未完成操作。 */ [&](auto error) { if (!error) { boost::system::error_code ignored; socket_.close(ignored); } });
-        action(/** 保存动作结果并取消超时计时器。 */ [&](auto error) { result = error; timer_.cancel(); });
+        // 期限到达时关闭连接以结束未完成操作。
+        timer_.async_wait([&](auto error) { if (!error) { boost::system::error_code ignored; socket_.close(ignored); } });
+        // 保存动作结果并取消超时计时器。
+        action([&](auto error) { result = error; timer_.cancel(); });
         io_.run();
         if (!observe_error) Require(!result);
         return result;
@@ -136,7 +145,8 @@ int Supervise(int argc, char** argv) {
         output << Json::writeString(Json::StreamWriterBuilder{}, value);
         Require(static_cast<bool>(output));
     }
-    const bool completed = child->WaitReady(/** 在收到停止信号或子进程退出时结束监督等待。 */ [&] { return stopping || child->CollectEvidence().exit_code.has_value(); },
+    // 在收到停止信号或子进程退出时结束监督等待。
+    const bool completed = child->WaitReady([&] { return stopping || child->CollectEvidence().exit_code.has_value(); },
         context->Deadline() - 15s);
     const auto cleanup = child->Stop(std::chrono::steady_clock::now() + 10s);
     const auto evidence = child->CollectEvidence();
@@ -169,7 +179,8 @@ int main(int argc, char** argv) {
             std::signal(SIGINT, StopSignal);
             FrameFaultRelay relay(static_cast<unsigned short>(port), static_cast<unsigned short>(backend),
                 config["dropUuid"].asString(), config["replayUuid"].asString(), argv[2]);
-            return relay.Run(/** 向中继报告是否已收到停止信号。 */ [] { return stopping != 0; });
+            // 向中继报告是否已收到停止信号。
+            return relay.Run([] { return stopping != 0; });
         }
         if (std::string(argv[1]) == "chat") return Chat();
         if (std::string(argv[1]) == "supervise") return Supervise(argc, argv);

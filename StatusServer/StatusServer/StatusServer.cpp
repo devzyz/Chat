@@ -60,7 +60,8 @@ void RunServer() {
 #endif
 
 	// 异步等待停止信号
-	signals.async_wait(/** @brief 收到正常退出信号时以有限截止时间关闭 gRPC 服务。 */ [&server](const boost::system::error_code& error, int signal_number) {
+	// 收到正常退出信号时以有限截止时间关闭 gRPC 服务。
+	signals.async_wait([&server](const boost::system::error_code& error, int signal_number) {
 		if (!error) {
 			SPDLOG_INFO("StatusServer shutting down");
 			server.Stop(std::chrono::system_clock::now() + std::chrono::seconds(5));
@@ -70,7 +71,8 @@ void RunServer() {
 	std::thread signal_thread;
 	try {
 		// 在单独的线程中运行io_context，并由 RunServer 明确 join。
-		signal_thread = std::thread(/** @brief 运行退出信号所需的 Asio 事件循环。 */ [&io_context]() {
+		// 运行退出信号所需的 Asio 事件循环。
+		signal_thread = std::thread([&io_context]() {
 			io_context.run();
 			});
 

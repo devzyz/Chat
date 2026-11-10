@@ -41,7 +41,8 @@ void VerifyCloseLifecycle(Factory factory) {
     ASSERT_TRUE(held);
     std::promise<void> entering;
     auto entered = entering.get_future();
-    auto waiter = std::async(std::launch::async, /** 通知借用任务已进入并等待池关闭结果。 */ [&] {
+    // 通知借用任务已进入并等待池关闭结果。
+    auto waiter = std::async(std::launch::async, [&] {
         entering.set_value();
         return pool->Acquire().failure;
     });
@@ -56,12 +57,14 @@ void VerifyCloseLifecycle(Factory factory) {
 
 /** 返回创建Chat 的 Status单容量短期限池的工厂。 */
 auto ChatStatusPoolFactory() {
-    return /** 创建Chat 的 Status生产 RPC 池，无需实际调用远端。 */ [] { return std::make_unique<StatusConnectionPool>("127.0.0.1", "1", 1, 50ms); };
+    // 创建Chat 的 Status生产 RPC 池，无需实际调用远端。
+    return [] { return std::make_unique<StatusConnectionPool>("127.0.0.1", "1", 1, 50ms); };
 }
 
 /** 返回创建Chat 对端单容量短期限池的工厂。 */
 auto ChatPeerPoolFactory() {
-    return /** 创建Chat 对端生产 RPC 池，无需实际调用远端。 */ [] { return std::make_unique<ChatConnectionPool>("127.0.0.1", "1", 1, 50ms); };
+    // 创建Chat 对端生产 RPC 池，无需实际调用远端。
+    return [] { return std::make_unique<ChatConnectionPool>("127.0.0.1", "1", 1, 50ms); };
 }
 }
 

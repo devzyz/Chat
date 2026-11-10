@@ -47,9 +47,8 @@ function createRedisAdapter(configuration, dependencies = {}) {
             enableReadyCheck: false
         });
         client = candidate;
-        candidate.on('error',
-            /** 连接错误由等待中的操作负责处理，此监听器避免未处理事件且不输出敏感文本。 */
-            () => { /* Awaited operations own failure; never emit raw secrets. */ });
+        // 连接错误由等待中的操作处理，此监听器避免未处理事件且不输出敏感信息。
+        candidate.on('error', () => {});
         let timer;
         const deadline = new Promise(
             /** 建立有限建连期限并保存清理句柄。 */

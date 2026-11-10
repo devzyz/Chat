@@ -179,7 +179,8 @@ TcpMgr::TcpMgr() : _host("") {
 void TcpMgr::initHandlers()
 {
     for (const auto id : {ID_GROUP_INFO_RSP, ID_GROUP_MANAGE_RSP, ID_FRIEND_REMARK_RSP}) {
-        _handlers.insert(id, /** @brief 发布已落盘的业务操作结果。 */ [this](ReqId id, int, QByteArray bytes) {
+        // 发布已落盘的业务操作结果。
+        _handlers.insert(id, [this](ReqId id, int, QByteArray bytes) {
             emit groupResponse(id, QJsonDocument::fromJson(bytes).object());
         });
     }
@@ -1107,12 +1108,14 @@ void TcpMgr::socialRequest(ReqId id, QJsonObject request, QObject *context,
     request["request_id"] = key;
     const auto bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
     if (!_social || !_authenticated || _socialPending.size() >= 16 || bytes.size() > 2048) {
-        QTimer::singleShot(0, context, /** @brief 在接收者仍存活时报告本地拒绝。 */
+        // 在接收者仍存活时报告本地拒绝。
+        QTimer::singleShot(0, context,
             [callback, supported = _social] { callback({{"error", 1}, {"social_error", supported ? "RequestUnavailable" : "UpgradeRequired"}}); });
         return;
     }
     _socialPending.insert(key, {ReqId(int(id) + 1), context, std::move(callback)});
-    QTimer::singleShot(10000, this, /** @brief 超时只结束当前请求，不自动重放写命令。 */ [this,key] {
+    // 超时只结束当前请求，不自动重放写命令。
+    QTimer::singleShot(10000, this, [this,key] {
         auto it = _socialPending.find(key); if (it == _socialPending.end()) return;
         auto pending = *it; _socialPending.erase(it);
         if (pending.context) pending.callback({{"error", 1}, {"social_error", "Timeout"}});
@@ -1170,7 +1173,8 @@ void TcpMgr::loadSocialPage(QString kind, QString after)
                     _socialRefreshing = false;
                     if (_socialRefreshAgain) refreshSocialDirectory();
                 }
-            }, /** @brief 写盘失败保留旧目录，下次周期重试读取。 */
+            // 写盘失败保留旧目录，下次周期重试读取。
+            },
             [this] { _socialRefreshing = false; });
     });
 }

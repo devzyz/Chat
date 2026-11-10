@@ -58,7 +58,8 @@ int main(int argc, char** argv) {
             const auto started = std::chrono::steady_clock::now();
             Require(pool.Borrow(30ms) == nullptr, "empty pool borrow succeeded");
             Require(std::chrono::steady_clock::now() - started < 500ms, "borrow deadline exceeded");
-            auto borrower = std::async(std::launch::async, /** 在并发任务中进行两秒有界借用，以验证关闭唤醒。 */ [&]() { return pool.Borrow(2s); });
+            // 在并发任务中进行两秒有界借用，以验证关闭唤醒。
+            auto borrower = std::async(std::launch::async, [&]() { return pool.Borrow(2s); });
             pool.Close();
             pool.Close();
             Require(borrower.wait_for(300ms) == std::future_status::ready, "close did not wake borrower");

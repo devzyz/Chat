@@ -8,7 +8,8 @@ async function waitForConnectionCount(coordinator, name, expected, controls, sig
     try {
         // CServer publishes every 60 seconds; keep each live controller below its
         // separate 60-second inactivity limit while awaiting the next publication.
-        await poll(/** 向活跃控制器发快照命令并检查目标实例的连接计数。 */ async () => {
+        // 向活跃控制器发快照命令并检查目标实例的连接计数。
+        await poll(async () => {
             for (const control of controls) await control.command('snapshot');
             return await redis.hget('logincount', name) === String(expected);
         }, 70000, signal);

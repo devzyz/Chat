@@ -14,7 +14,7 @@ function classify(error) {
 /** 创建可关闭的 SMTP 适配器；配置错误延迟由 sendMail 返回 InvalidConfig。 */
 function createSmtpAdapter(input, createTransport = nodemailer.createTransport) {
     let config;
-    try { config = normalizeSmtpConfig(input, input?.credentials); } catch { /* sendMail reports InvalidConfig. */ }
+    try { config = normalizeSmtpConfig(input, input?.credentials); } catch {}
     const pending = new Set();
     let closed = false;
 

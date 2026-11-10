@@ -4,7 +4,8 @@ UserSearchController::UserSearchController(QObject *parent, int timeoutMs) : QOb
 {
     _deadline.setSingleShot(true); _deadline.setInterval(qMax(1, timeoutMs));
     connect(&_deadline, &QTimer::timeout, this,
-        /** @brief 无响应也必须结束等待，用户可发起带新编号的重试。 */ [this] { fail(tr("搜索超时，请重试")); });
+        // 无响应也必须结束等待，用户可发起带新编号的重试。
+        [this] { fail(tr("搜索超时，请重试")); });
 }
 void UserSearchController::search(const QString &text)
 {

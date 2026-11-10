@@ -6,9 +6,12 @@ const { setTimeout: delay } = require('node:timers/promises');
 /** 计算最近秩百分位，空样本保持 null，不伪报零延迟。 */
 function distribution(samples) {
     if (!samples.length) return { count: 0, p50: null, p95: null, p99: null, max: null };
-    assert.ok(samples.every(/** 只接收有限非负观测值。 */ value => Number.isFinite(value) && value >= 0));
-    const sorted = [...samples].sort(/** 按数值升序排列观测。 */ (a, b) => a - b);
-    const percentile = /** 读取最近秩百分位。 */ p => sorted[Math.ceil(sorted.length * p) - 1];
+    // 只接收有限非负观测值。
+    assert.ok(samples.every(value => Number.isFinite(value) && value >= 0));
+    // 按数值升序排列观测。
+    const sorted = [...samples].sort((a, b) => a - b);
+    // 读取最近秩百分位。
+    const percentile = p => sorted[Math.ceil(sorted.length * p) - 1];
     return { count: sorted.length, p50: percentile(0.5), p95: percentile(0.95), p99: percentile(0.99), max: sorted.at(-1) };
 }
 
@@ -31,17 +34,22 @@ async function measure({ seconds, rate, maxPending, action, signal, plannedCount
         if (pending.size >= maxPending || late > Math.max(100, 1000 / rate)) { unsent++; continue; }
         sent++;
         const begin = performance.now();
-        const operation = Promise.resolve().then(/** 启动一个真实业务动作。 */ () => action(index))
-            .then(/** 保存成功完成的业务延迟。 */ () => { completed++; latency.push(performance.now() - begin); })
-            .catch(/** 聚合固定错误分类，避免记录凭据及报文。 */ error => {
+        // 启动一个真实业务动作。
+        const operation = Promise.resolve().then(() => action(index))
+            // 保存成功完成的业务延迟。
+            .then(() => { completed++; latency.push(performance.now() - begin); })
+            // 聚合固定错误分类，避免记录凭据及报文。
+            .catch(error => {
                 const firstLine = error.message.split('\n')[0];
                 const category = /^[a-z][a-z0-9-]{0,70}$/.test(firstLine) ? firstLine : 'assertion-or-operation';
                 errors[category] = (errors[category] || 0) + 1;
                 if (errorDetails.length < 20) errorDetails.push({ operationIndex: index, category,
-                    location: error.stack?.split('\n').find(/** 只保留调用位置，不记录业务数据。 */ line => /^\s+at /.test(line))?.trim(),
+                    // 只保留调用位置，不记录业务数据。
+                    location: error.stack?.split('\n').find(line => /^\s+at /.test(line))?.trim(),
                     actualNumber: typeof error.actual === 'number' ? error.actual : undefined,
                     expectedNumber: typeof error.expected === 'number' ? error.expected : undefined });
-            }).finally(/** 从有界在途集合移除完成动作。 */ () => pending.delete(operation));
+            // 从有界在途集合移除完成动作。
+            }).finally(() => pending.delete(operation));
         pending.add(operation);
     }
     await Promise.all(pending);

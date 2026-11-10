@@ -19,7 +19,8 @@ async function run(root) {
     let primaryFailure;
     let primaryDiagnostic;
     let cleanup = { complete: false };
-    const record = /** 记录用例耗时与真实结果，失败时以稳定 Test ID 中断。 */ async (id, name, action) => {
+    // 记录用例耗时与真实结果，失败时以稳定 Test ID 中断。
+    const record = async (id, name, action) => {
         const started = performance.now();
         try {
             await action();
@@ -45,21 +46,28 @@ async function run(root) {
         fs.writeFileSync(path.join(root, 'teardown.json'), JSON.stringify({ ...cleanup, primaryFailure, primaryDiagnostic }));
         writeReports(root, selector, cases, { groups, manifest: 'phase3d-reports.json', level: 'E2E' });
         const complete = !primaryFailure && cleanup.complete === true &&
-            cases.length === groups.reduce(/** 汇总全部必需用例，缺项不能通过。 */ (sum, group) => sum + group.expected, 0) &&
-            cases.every(/** 仅接受实际执行成功的用例。 */ value => value.pass === true);
+            // 汇总全部必需用例，缺项不能通过。
+            cases.length === groups.reduce((sum, group) => sum + group.expected, 0) &&
+            // 仅接受实际执行成功的用例。
+            cases.every(value => value.pass === true);
         fs.writeFileSync(path.join(root, 'real-acceptance.json'), JSON.stringify({
             requested: realAcceptance, sourceSha: process.env.CHAT_CANDIDATE_SHA || null,
             status: realAcceptance ? (complete ? 'passed' : 'failed') : 'not-requested',
             cleanupComplete: realAcceptance && cleanup.complete === true
         }, null, 2));
     }
-    if (primaryFailure || !cleanup.complete || cases.length !== groups.reduce(/** 累计所选报告组预期用例总数。 */ (sum, group) => sum + group.expected, 0) || cases.some(/** 识别未通过的用例以判定本次运行失败。 */ value => !value.pass)) {
+    if (primaryFailure || !cleanup.complete || cases.length !== groups.reduce(
+        // 累计所选报告组预期用例总数。
+        (sum, group) => sum + group.expected, 0) || cases.some(
+        // 识别未通过的用例以判定本次运行失败。
+        value => !value.pass)) {
         throw new Error('phase3d-contract-failed');
     }
 }
 
 module.exports = { run };
-if (require.main === module) run(process.env.CHAT_SERVICE_EVIDENCE_ROOT).catch(/** 主流程异常时输出证据定位提示并以非零退出。 */ () => {
+// 主流程异常时输出证据定位提示并以非零退出。
+if (require.main === module) run(process.env.CHAT_SERVICE_EVIDENCE_ROOT).catch(() => {
     process.stderr.write('Phase 3D contract failed; inspect bounded evidence\n');
     process.exitCode = 1;
 });

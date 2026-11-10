@@ -32,26 +32,34 @@ public:
         _socket.setReadBufferSize(8193);
         _watchdog.setSingleShot(true);
         _commandDeadline.setSingleShot(true);
-        connect(&_commandDeadline, &QTimer::timeout, this, /** 登录共用十秒总预算，其他业务超时终止驱动。 */ [this] {
+        // 登录共用十秒总预算，其他业务超时终止驱动。
+        connect(&_commandDeadline, &QTimer::timeout, this, [this] {
             if (_pendingLogin) failLogin(-1);
             else finish(2);
         });
-        connect(&_accounts, &GateHttpTransport::finished, this, /** 只结算当前控制命令对应的 HTTP 流程，并返回安全业务状态。 */ [this](const GateHttpResult &result) {
+        // 只结算当前控制命令对应的 HTTP 流程，并返回安全业务状态。
+        connect(&_accounts, &GateHttpTransport::finished, this, [this](const GateHttpResult &result) {
             if (!_pendingId || static_cast<quint64>(_pendingId) != result.flowId) return;
             const auto object = QJsonDocument::fromJson(result.body).object();
             send(QJsonObject{{"id", _pendingId}, {"status", "completed"},
                 {"error", result.terminal == GateHttpTerminal::Success ? object.value("error").toInt(-1) : -1}});
             _pendingId = 0;
         });
-        connect(&_watchdog, &QTimer::timeout, this, /** 控制连接或命令发生不可恢复错误时退出。 */ [this] { finish(2); });
-        connect(&_socket, &QLocalSocket::errorOccurred, this, /** 控制连接或命令发生不可恢复错误时退出。 */ [this] { finish(2); });
-        connect(&_socket, &QLocalSocket::disconnected, this, /** 控制通道断开时按是否正常停机选择退出码。 */ [this] { finish(_stopping ? 0 : 2); });
-        connect(&_socket, &QLocalSocket::connected, this, /** 控制连接建立后启动看门狗并发布就绪事件。 */ [this] {
+        // 控制连接或命令发生不可恢复错误时退出。
+        connect(&_watchdog, &QTimer::timeout, this, [this] { finish(2); });
+        // 控制连接或命令发生不可恢复错误时退出。
+        connect(&_socket, &QLocalSocket::errorOccurred, this, [this] { finish(2); });
+        // 控制通道断开时按是否正常停机选择退出码。
+        connect(&_socket, &QLocalSocket::disconnected, this, [this] { finish(_stopping ? 0 : 2); });
+        // 控制连接建立后启动看门狗并发布就绪事件。
+        connect(&_socket, &QLocalSocket::connected, this, [this] {
             _watchdog.start(60000);
             send(QJsonObject{{"event", "ready"}, {"pid", QCoreApplication::applicationPid()}, {"format", 1}});
         });
-        connect(&_socket, &QLocalSocket::readyRead, this, /** 控制管道有数据时读取并处理命令。 */ [this] { read(); });
-        connect(&_login, &ClientLoginFlow::authenticated, this, /** 网络认证成功后隔离账号模型并开始会话，等待存储恢复再回复。 */ [this](AuthFlowId) {
+        // 控制管道有数据时读取并处理命令。
+        connect(&_socket, &QLocalSocket::readyRead, this, [this] { read(); });
+        // 网络认证成功后隔离账号模型并开始会话，等待存储恢复再回复。
+        connect(&_login, &ClientLoginFlow::authenticated, this, [this](AuthFlowId) {
             const int uid = UserMgr::instance()->uid();
             if (_lastUid && _lastUid != uid) {
                 _messages = MessageModelStore{};
@@ -62,10 +70,12 @@ public:
             _session.beginSession();
             _loginAuthenticated = true;
         });
-        connect(&_login, &ClientLoginFlow::failed, this, /** 登录失败后返回结构化错误并清除待处理命令。 */ [this](AuthFlowId, AuthError error) {
+        // 登录失败后返回结构化错误并清除待处理命令。
+        connect(&_login, &ClientLoginFlow::failed, this, [this](AuthFlowId, AuthError error) {
             failLogin(static_cast<int>(error));
         });
-        connect(TcpMgr::instance().get(), &TcpMgr::connectionClosed, this, /** 非预期断连时重置会话并终止正在等待响应的控制命令。 */ [this](bool expected) {
+        // 非预期断连时重置会话并终止正在等待响应的控制命令。
+        connect(TcpMgr::instance().get(), &TcpMgr::connectionClosed, this, [this](bool expected) {
             if (!expected && _session.isActive()) {
                 _session.resetSession(SessionResetReason::UnexpectedDisconnect);
                 if (_pendingId && _expectedResponse >= 0) {
@@ -77,7 +87,8 @@ public:
             }
         });
         connect(TcpMgr::instance().get(), &TcpMgr::forcedOffline, this,
-                /** 被踢出登录时以对应原因重置会话。 */ [this] { _session.resetSession(SessionResetReason::Kicked); });
+                // 被踢出登录时以对应原因重置会话。
+                [this] { _session.resetSession(SessionResetReason::Kicked); });
         const auto tcp = TcpMgr::instance();
         auto *service = UserMgr::instance()->messages();
         connect(service, &MessageService::directoryRestored, this,
@@ -107,9 +118,11 @@ public:
                     << (safeReasons.contains(reason) ? reason : QString("other"));
             });
         connect(service, &MessageService::messagesChanged, this,
-            /** 回执变化后从持久存储刷新所属会话历史。 */ [service](int chatId) { service->loadHistory(chatId); });
+            // 回执变化后从持久存储刷新所属会话历史。
+            [service](int chatId) { service->loadHistory(chatId); });
         connect(service, &MessageService::historyLoaded, this,
-            /** 只用本账号已确认历史对已有本地发送进行确认，保留驱动的显式分页流程。 */ [this](int chatId, qint64, const QVector<StoredMessage> &rows, bool) {
+            // 只用本账号已确认历史对已有本地发送进行确认，保留驱动的显式分页流程。
+            [this](int chatId, qint64, const QVector<StoredMessage> &rows, bool) {
                 // Preserve the harness's explicit legacy-history traversal; reconcile existing sends only.
                 auto *model = _messages.find(chatId);
                 if (!model) return;
@@ -120,7 +133,8 @@ public:
                     _committedUuids.insert(row.clientMessageId);
                 }
             });
-        connect(service, &MessageService::sendFailed, this, /** 文本发送失败时终止对应控制命令并返回业务失败。 */ [this](int, const QVector<QString> &) {
+        // 文本发送失败时终止对应控制命令并返回业务失败。
+        connect(service, &MessageService::sendFailed, this, [this](int, const QVector<QString> &) {
             if (!_pendingId || _expectedResponse != ID_TEXT_CHAT_MSG_RSP) return;
             _commandDeadline.stop();
             send(QJsonObject{{"id", _pendingId}, {"status", "completed"}, {"error", 1}});
@@ -128,39 +142,47 @@ public:
             _expectedResponse = -1;
         });
         connect(UserMgr::instance()->messages(), &MessageService::sendRequested, this,
-            /** 在重复提交场景重新发送相同生产文本请求。 */ [this, tcp](const QJsonObject &request) {
+            // 在重复提交场景重新发送相同生产文本请求。
+            [this, tcp](const QJsonObject &request) {
                 for (const auto &value : request["text_array"].toArray())
                     _sentRequests.insert(value.toObject()["msg_uuid"].toString(), request);
                 if (_pendingId && _expectedResponse == ID_TEXT_CHAT_MSG_RSP && _responsesRemaining == 2)
                     emit tcp->sendRequested(ID_TEXT_CHAT_MSG_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
             });
         connect(tcp.get(), &TcpMgr::friendApplicationReceived, this,
-                /** 将收到的好友申请登记到用户状态。 */ [](const std::shared_ptr<ApplyInfo> &apply) {
+                // 将收到的好友申请登记到用户状态。
+                [](const std::shared_ptr<ApplyInfo> &apply) {
             if (apply) UserMgr::instance()->addFriendApplication(apply->_apply_uid, apply);
         });
         connect(tcp.get(), &TcpMgr::chatMessagesReceived, this,
-                /** 把实时消息转换并追加到所属会话模型。 */ [this](int, int, int, std::vector<std::shared_ptr<ChatDataBase>> &messages) {
+                // 把实时消息转换并追加到所属会话模型。
+                [this](int, int, int, std::vector<std::shared_ptr<ChatDataBase>> &messages) {
             for (const auto &message : messages) {
                 const auto record = clientMessageRecord(message);
                 _messages.getOrCreate(record.chatId)->appendMessage(record);
             }
         });
         connect(tcp.get(), &TcpMgr::chatHistoryLoaded, this,
-                /** 将历史页转换后应用模型，记录拒绝结果供控制响应。 */ [this](int chatId, std::vector<std::shared_ptr<ChatDataBase>> messages, bool more, qint64 cursor) {
+                // 将历史页转换后应用模型，记录拒绝结果供控制响应。
+                [this](int chatId, std::vector<std::shared_ptr<ChatDataBase>> messages, bool more, qint64 cursor) {
             QVector<MessageRecord> records;
             for (const auto &message : messages) records.push_back(clientMessageRecord(message));
             if (!_messages.applyHistory(chatId, records, more, cursor)) _historyRejected = true;
         });
         connect(tcp.get(), &TcpMgr::messagesAcknowledged, this,
-                /** 按当前发送者身份应用 ACK 并记录已提交 UUID。 */ [this](int chatId, QVector<MessageAcknowledgement> acks) {
+                // 按当前发送者身份应用 ACK 并记录已提交 UUID。
+                [this](int chatId, QVector<MessageAcknowledgement> acks) {
             _messages.acknowledge(chatId, acks, UserMgr::instance()->uid());
             for (const auto &ack : acks) _committedUuids.insert(ack.clientMessageId);
         });
         connect(tcp.get(), &TcpMgr::messagesFailed, this,
-                /** 按当前发送者标记指定批次消息失败。 */ [this](int chatId, const QVector<QString> &ids) { _messages.markFailed(chatId, ids, UserMgr::instance()->uid()); });
+                // 按当前发送者标记指定批次消息失败。
+                [this](int chatId, const QVector<QString> &ids) { _messages.markFailed(chatId, ids, UserMgr::instance()->uid()); });
         connect(tcp.get(), &TcpMgr::privateChatCreated, this,
-                /** 保存最近创建或获取的聊天编号。 */ [this](const std::shared_ptr<ChatInfo> &chat) { if (chat) _lastChatId = chat->getChatId(); });
-        connect(tcp.get(), &TcpMgr::requestCompleted, this, /** 累计预期业务响应，全部到达后结算控制命令并清除期限。 */ [this](ReqId id, int error) {
+                // 保存最近创建或获取的聊天编号。
+                [this](const std::shared_ptr<ChatInfo> &chat) { if (chat) _lastChatId = chat->getChatId(); });
+        // 累计预期业务响应，全部到达后结算控制命令并清除期限。
+        connect(tcp.get(), &TcpMgr::requestCompleted, this, [this](ReqId id, int error) {
             if (!_pendingId || id != _expectedResponse) return;
             if (error != 0) _commandError = error;
             if (--_responsesRemaining > 0) return;
@@ -171,35 +193,43 @@ public:
             _expectedResponse = -1;
         });
         connect(tcp.get(), &TcpMgr::groupCreated, this,
-            /** @brief 返回匹配请求身份的生产建群结果。 */ [this](QJsonObject r) { groupResult(r); });
+            // 返回匹配请求身份的生产建群结果。
+            [this](QJsonObject r) { groupResult(r); });
         connect(tcp.get(), &TcpMgr::groupResponse, this,
-            /** @brief 返回匹配请求身份的已落盘管理结果。 */ [this](ReqId, QJsonObject r) { groupResult(r); });
+            // 返回匹配请求身份的已落盘管理结果。
+            [this](ReqId, QJsonObject r) { groupResult(r); });
         connect(service, &MessageService::historyLoaded, this,
-            /** @brief 返回生产存储页而非模型缓存。 */ [this](int chat, qint64 before, QVector<StoredMessage> rows, bool more) {
+            // 返回生产存储页而非模型缓存。
+            [this](int chat, qint64 before, QVector<StoredMessage> rows, bool more) {
                 if (_extended == "local-history" && chat == _queryChat && before == _queryBefore)
                     completeExtended({{"messages", storedRows(rows)}, {"more", more}});
             });
         connect(service, &MessageService::searchLoaded, this,
-            /** @brief 搜索结果按原查询身份匹配。 */ [this](int chat, QString text, qint64 before, QVector<StoredMessage> rows) {
+            // 搜索结果按原查询身份匹配。
+            [this](int chat, QString text, qint64 before, QVector<StoredMessage> rows) {
                 if (_extended == "search" && chat == _queryChat && text == _queryText && before == _queryBefore)
                     completeExtended({{"messages", storedRows(rows)}});
             });
         connect(service, &MessageService::directoryFound, this,
-            /** @brief 返回生产完整目录查询。 */ [this](QString kind, QString text, int after, QJsonArray rows) {
+            // 返回生产完整目录查询。
+            [this](QString kind, QString text, int after, QJsonArray rows) {
                 if (_extended == "directory-find" && kind == _queryKind && text == _queryText && after == _queryBefore)
                     completeExtended({{"rows", rows}});
             });
         connect(service, &MessageService::synchronized, this,
-            /** @brief 同步落盘后才报告完成。 */ [this](int chat, qint64 cursor) {
+            // 同步落盘后才报告完成。
+            [this](int chat, qint64 cursor) {
                 if (_extended == "sync" && chat == _queryChat) completeExtended({{"cursor", QString::number(cursor)}});
             });
         connect(service, &MessageService::failed, this,
-            /** @brief 持久化失败必须返回失败。 */ [this](int chat, QString) {
+            // 持久化失败必须返回失败。
+            [this](int chat, QString) {
                 if ((_extended == "local-history" || _extended == "search" || _extended == "sync")
                     && chat == _queryChat) completeExtended({}, -1);
             });
         connect(service, &MessageService::directoryFailed, this,
-            /** @brief 目录失败必须返回失败。 */ [this](QString) { if (_extended == "directory-find") completeExtended({}, -1); });
+            // 目录失败必须返回失败。
+            [this](QString) { if (_extended == "directory-find") completeExtended({}, -1); });
         _watchdog.start(5000);
         _socket.connectToServer(endpoint);
     }
@@ -345,7 +375,8 @@ private:
             request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
             auto *reply = _probeNetwork.get(request);
             connect(reply, &QNetworkReply::finished, this,
-                /** @brief 单独记录真实 HTTP 授权状态，不把传输失败解释为权限拒绝。 */ [this, reply] {
+                // 单独记录真实 HTTP 授权状态，不把传输失败解释为权限拒绝。
+                [this, reply] {
                     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
                     reply->deleteLater();
                     completeExtended({{"httpStatus", status}}, status > 0 ? 0 : -1);
@@ -358,11 +389,14 @@ private:
             _transfer = std::make_unique<ResourceTransferManager>(endpoint, UserMgr::instance()->uid(),
                 UserMgr::instance()->token(), _transferCaches.back()->path());
             connect(_transfer.get(), &ResourceTransferManager::uploaded, this,
-                /** @brief 返回服务端校验的真实描述。 */ [this](QJsonObject d) { completeExtended(d); });
+                // 返回服务端校验的真实描述。
+                [this](QJsonObject d) { completeExtended(d); });
             connect(_transfer.get(), &ResourceTransferManager::failed, this,
-                /** @brief 资源拒绝和校验失败不能回填期望结果。 */ [this](QString) { completeExtended({}, -1); });
+                // 资源拒绝和校验失败不能回填期望结果。
+                [this](QString) { completeExtended({}, -1); });
             connect(_transfer.get(), &ResourceTransferManager::downloaded, this,
-                /** @brief 从实际下载文件计算摘要并保留路径供解码验证。 */ [this](QString id, QString path) {
+                // 从实际下载文件计算摘要并保留路径供解码验证。
+                [this](QString id, QString path) {
                     QFile file(path); QCryptographicHash hash(QCryptographicHash::Sha256);
                     if (!file.open(QIODevice::ReadOnly) || !hash.addData(&file)) { completeExtended({}, -1); return; }
                     completeExtended({{"resource_id", id}, {"path", path},

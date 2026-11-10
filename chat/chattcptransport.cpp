@@ -64,7 +64,8 @@ struct ChatTcpTransport::Impl
         socket = nextSocket;
         const quint64 currentGeneration = generation;
 
-        const auto connectionReady = /** @brief TLS 握手完成后才允许发送账号凭据，旧代回调无效。 */
+        // TLS 握手完成后才允许发送账号凭据，旧代回调无效。
+        const auto connectionReady =
             [this, nextSocket, currentGeneration] {
             if (!isCurrent(nextSocket, currentGeneration)) {
                 return;

@@ -15,7 +15,8 @@ TEST(MsgNodeTests, ConstructorCreatesZeroedNullTerminatedBuffer) {
 
     EXPECT_EQ(node._cur_len, 0);
     EXPECT_EQ(node._total_len, 8);
-    EXPECT_TRUE(std::all_of(node._data, node._data + 9, /** 检查单字节已清零。 */ [](char value) { return value == 0; }));
+    // 检查单字节已清零。
+    EXPECT_TRUE(std::all_of(node._data, node._data + 9, [](char value) { return value == 0; }));
 }
 
 /** 验证零长度节点仍提供结束零字节。 */
@@ -35,7 +36,8 @@ TEST(MsgNodeTests, ClearResetsProgressAndEntirePayloadBuffer) {
     node.Clear();
 
     EXPECT_EQ(node._cur_len, 0);
-    EXPECT_TRUE(std::all_of(node._data, node._data + 6, /** 检查单字节已清零。 */ [](char value) { return value == 0; }));
+    // 检查单字节已清零。
+    EXPECT_TRUE(std::all_of(node._data, node._data + 6, [](char value) { return value == 0; }));
     EXPECT_EQ(node._data[6], '\0');
 }
 
@@ -96,7 +98,8 @@ TEST(RecvNodeTests, ConstructorRetainsMessageIdentityAndClearReusesBuffer) {
     EXPECT_EQ(node._msg_id, 0xffff);
     EXPECT_EQ(node._total_len, MAX_LENGTH);
     EXPECT_EQ(node._cur_len, 0);
-    EXPECT_TRUE(std::all_of(node._data, node._data + MAX_LENGTH, /** 检查单字节已清零。 */ [](char value) { return value == 0; }));
+    // 检查单字节已清零。
+    EXPECT_TRUE(std::all_of(node._data, node._data + MAX_LENGTH, [](char value) { return value == 0; }));
 }
 
 } // namespace

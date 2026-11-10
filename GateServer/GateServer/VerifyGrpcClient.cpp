@@ -11,7 +11,8 @@ GetVarifyRsp VerifyGrpcClient::GetVarifyCode(std::string email, const std::strin
         *_pool,
         request,
         _policy.rpc_deadline,
-        /** @brief 执行外部 GetVarifyCode RPC，不改变协议名称。 */ [](VarifyService::Stub& stub,
+        // 执行外部 GetVarifyCode RPC，不改变协议名称。
+        [](VarifyService::Stub& stub,
            ClientContext& context,
            const GetVarifyReq& req,
            GetVarifyRsp& rsp) {

@@ -42,7 +42,8 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid, long long auth_version
         *_pool,
         request,
         _policy.rpc_deadline,
-        /** @brief 执行 Status 选服 RPC 并返回传输状态。 */ [](StatusService::Stub& stub,
+        // 执行 Status 选服 RPC 并返回传输状态。
+        [](StatusService::Stub& stub,
            ClientContext& context,
            const GetChatServerReq& req,
            GetChatServerRsp& rsp) {

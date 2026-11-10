@@ -34,7 +34,8 @@ async function main() {
             "VALUES(1,1,2,'preserve existing message',0,'55555555-5555-4555-8555-555555555555')");
         const before = await session.execute('SELECT message_id,content,client_msg_uuid FROM chat_message');
         const current = new SchemaMigration(session, 'resource_upgrade');
-        assert.deepEqual((await current.plan()).map(/** 提取待应用迁移编号以核对升级计划。 */ entry => entry.id), [3, 4, 5, 6, 7]);
+        // 提取待应用迁移编号以核对升级计划。
+        assert.deepEqual((await current.plan()).map(entry => entry.id), [3, 4, 5, 6, 7]);
         assert.equal((await current.apply()).version, 7);
         assert.equal((await current.apply()).version, 7);
         assert.equal(await session.execute('SELECT message_id,content,client_msg_uuid FROM chat_message'), before);
@@ -51,4 +52,5 @@ async function main() {
     }
 }
 
-main().catch(/** 输出升级合同失败并设置非零退出状态。 */ error => { console.error(error.message); process.exitCode = 1; });
+// 输出升级合同失败并设置非零退出状态。
+main().catch(error => { console.error(error.message); process.exitCode = 1; });

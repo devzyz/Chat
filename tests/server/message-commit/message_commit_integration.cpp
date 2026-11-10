@@ -102,46 +102,59 @@ void Integration() {
     Execute(*connection, "INSERT INTO private_chat(chat_id,user1_id,user2_id) VALUES(100,1,2),(101,1,3)");
     MySqlMessageCommitAdapter store(*connection);
     int created_id = 0;
-    auto test = /** 执行指定编号的合同，成功后输出可核对的用例标记。 */ [](int number, const std::function<void()>& body) {
+    // 执行指定编号的合同，成功后输出可核对的用例标记。
+    auto test = [](int number, const std::function<void()>& body) {
         body();
         std::cout << "PASS T10-MSG-" << (number < 10 ? "0" : "") << number << '\n';
     };
     test(1, Validate);
-    test(2, /** 验证首次提交创建一条消息并返回持久化标识与时间。 */ [&] {
+    // 验证首次提交创建一条消息并返回持久化标识与时间。
+    test(2, [&] {
         auto result = Send(store, {{Uuid(2), "first"}});
         Require(result.IsSuccess() && result.items.size() == 1);
         Require(result.items[0].disposition == Disposition::CREATED && result.items[0].created_at > 0);
         created_id = result.items[0].message_id;
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message") == 1);
     });
-    test(3, /** 验证同一 UUID 与内容重试返回既有消息，不重复插入。 */ [&] {
+    // 验证同一 UUID 与内容重试返回既有消息，不重复插入。
+    test(3, [&] {
         auto result = Send(store, {{Uuid(2), "first"}});
         Require(result.IsSuccess() && result.items[0].message_id == created_id);
         Require(result.items[0].disposition == Disposition::EXISTING);
     });
-    test(4, /** 验证同一 UUID 携带不同内容被判冲突。 */ [&] { Require(Send(store, {{Uuid(2), "different"}}).error == Error::CONFLICT); });
-    test(5, /** 验证已使用的 UUID 不能迁移到另一接收方和会话。 */ [&] { Require(Send(store, {{Uuid(2), "first"}}, 1, 3, 101).error == Error::CONFLICT); });
-    test(6, /** 验证批次中后续冲突会回滚先前项，且不返回部分成功。 */ [&] {
+    // 验证同一 UUID 携带不同内容被判冲突。
+    test(4, [&] { Require(Send(store, {{Uuid(2), "different"}}).error == Error::CONFLICT); });
+    // 验证已使用的 UUID 不能迁移到另一接收方和会话。
+    test(5, [&] { Require(Send(store, {{Uuid(2), "first"}}, 1, 3, 101).error == Error::CONFLICT); });
+    // 验证批次中后续冲突会回滚先前项，且不返回部分成功。
+    test(6, [&] {
         const auto count = Scalar(*connection, "SELECT COUNT(*) FROM chat_message");
         auto result = Send(store, {{Uuid(6), "rolled back"}, {Uuid(2), "conflict"}});
         Require(result.error == Error::CONFLICT && result.items.empty());
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message") == count);
     });
-    test(7, /** 验证批次内重复 UUID 在提交前被拒绝。 */ [&] { Require(Send(store, {{Uuid(7), "a"}, {Uuid(7), "a"}}).error == Error::INVALID_UUID); });
-    test(8, /** 验证无效发送方不能提交消息。 */ [&] { Require(Send(store, {{Uuid(8), "a"}}, 0).error == Error::UNAUTHORIZED_SENDER); });
-    test(9, /** 验证认证身份与声明发送方不一致时拒绝提交。 */ [&] {
+    // 验证批次内重复 UUID 在提交前被拒绝。
+    test(7, [&] { Require(Send(store, {{Uuid(7), "a"}, {Uuid(7), "a"}}).error == Error::INVALID_UUID); });
+    // 验证无效发送方不能提交消息。
+    test(8, [&] { Require(Send(store, {{Uuid(8), "a"}}, 0).error == Error::UNAUTHORIZED_SENDER); });
+    // 验证认证身份与声明发送方不一致时拒绝提交。
+    test(9, [&] {
         auto result = message_commit::Commit(store, {1}, 2, 2, 100, {{Uuid(9), "a"}},
             std::chrono::steady_clock::now() + std::chrono::seconds(5));
         Require(result.error == Error::UNAUTHORIZED_SENDER);
     });
-    test(10, /** 验证接收方不属于会话时拒绝提交。 */ [&] { Require(Send(store, {{Uuid(10), "a"}}, 1, 3).error == Error::INVALID_MEMBERSHIP); });
-    test(11, /** 验证发送方不属于会话时拒绝提交。 */ [&] { Require(Send(store, {{Uuid(11), "a"}}, 3, 2).error == Error::INVALID_MEMBERSHIP); });
-    test(12, /** 验证已到截止时间的请求不会写入消息。 */ [&] {
+    // 验证接收方不属于会话时拒绝提交。
+    test(10, [&] { Require(Send(store, {{Uuid(10), "a"}}, 1, 3).error == Error::INVALID_MEMBERSHIP); });
+    // 验证发送方不属于会话时拒绝提交。
+    test(11, [&] { Require(Send(store, {{Uuid(11), "a"}}, 3, 2).error == Error::INVALID_MEMBERSHIP); });
+    // 验证已到截止时间的请求不会写入消息。
+    test(12, [&] {
         auto result = message_commit::Commit(store, {1}, 1, 2, 100, {{Uuid(12), "a"}},
             std::chrono::steady_clock::now());
         Require(result.error == Error::DEADLINE_EXCEEDED);
     });
-    test(13, /** 验证两个独立连接并发提交同一 UUID 仍只产生一条消息。 */ [&] {
+    // 验证两个独立连接并发提交同一 UUID 仍只产生一条消息。
+    test(13, [&] {
         auto first_connection = Connect();
         auto second_connection = Connect();
         std::mutex mutex;
@@ -150,23 +163,27 @@ void Integration() {
         bool go = false;
         Result first;
         Result second;
-        auto work = /** 等待统一起跑信号后，使用本线程连接提交同一测试消息。 */ [&](sql::Connection& owned, Result& result) {
+        // 等待统一起跑信号后，使用本线程连接提交同一测试消息。
+        auto work = [&](sql::Connection& owned, Result& result) {
             { std::unique_lock<std::mutex> lock(mutex); ++ready; changed.notify_all();
-                changed.wait(lock, /** 等待协调者发出并发提交信号。 */ [&] { return go; }); }
+                // 等待协调者发出并发提交信号。
+                changed.wait(lock, [&] { return go; }); }
             MySqlMessageCommitAdapter adapter(owned);
             result = Send(adapter, {{Uuid(13), "concurrent"}});
         };
         std::thread a(work, std::ref(*first_connection), std::ref(first));
         std::thread b(work, std::ref(*second_connection), std::ref(second));
         { std::unique_lock<std::mutex> lock(mutex);
-            changed.wait(lock, /** 等待两个提交线程均到达起跑屏障。 */ [&] { return ready == 2; }); go = true; changed.notify_all(); }
+            // 等待两个提交线程均到达起跑屏障。
+            changed.wait(lock, [&] { return ready == 2; }); go = true; changed.notify_all(); }
         a.join(); b.join();
         Require(first.IsSuccess() && second.IsSuccess());
         Require(first.items[0].message_id == second.items[0].message_id);
         Require(first.items[0].disposition != second.items[0].disposition);
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='" + Uuid(13) + "'") == 1);
     });
-    test(14, /** 验证提交边界断连不返回成功或部分结果，连接不可复用且批次回滚。 */ [&] {
+    // 验证提交边界断连不返回成功或部分结果，连接不可复用且批次回滚。
+    test(14, [&] {
         auto victim = Connect();
         KillAtCommit boundary(*connection);
         MySqlMessageCommitAdapter adapter(*victim, boundary);
@@ -175,13 +192,15 @@ void Integration() {
         Require(boundary.reached && !result.IsSuccess() && result.items.empty() && !adapter.IsReusable());
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message") == count);
     });
-    test(15, /** 验证冲突回滚恢复自动提交，原连接可继续处理下一批消息。 */ [&] {
+    // 验证冲突回滚恢复自动提交，原连接可继续处理下一批消息。
+    test(15, [&] {
         Require(connection->getAutoCommit());
         Require(Send(store, {{Uuid(2), "conflict"}}).error == Error::CONFLICT);
         Require(connection->getAutoCommit() && store.IsReusable());
         Require(Send(store, {{Uuid(15), "after rollback"}}).IsSuccess());
     });
-    test(16, /** 验证过长内容导致批次整体回滚，没有先前项残留。 */ [&] {
+    // 验证过长内容导致批次整体回滚，没有先前项残留。
+    test(16, [&] {
         auto owned = Connect();
         MySqlMessageCommitAdapter adapter(*owned);
         const auto count = Scalar(*connection, "SELECT COUNT(*) FROM chat_message");
@@ -189,17 +208,20 @@ void Integration() {
         Require(!result.IsSuccess() && result.items.empty());
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message") == count);
     });
-    test(17, /** 验证旧数据允许多条空 UUID 消息并存。 */ [&] {
+    // 验证旧数据允许多条空 UUID 消息并存。
+    test(17, [&] {
         Execute(*connection, "INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES "
             "(100,1,2,'legacy-one',0),(100,1,2,'legacy-two',0)");
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid IS NULL") == 2);
     });
-    test(18, /** 验证下一批消息返回按提交顺序递增的持久化标识。 */ [&] {
+    // 验证下一批消息返回按提交顺序递增的持久化标识。
+    test(18, [&] {
         auto result = Send(store, {{Uuid(18), "next"}, {Uuid(118), "next-two"}});
         Require(result.IsSuccess() && result.items.size() == 2);
         Require(result.items[0].message_id > created_id && result.items[1].message_id > result.items[0].message_id);
     });
-    test(19, /** 验证锁等待在有界时间内失败，且不遗留待提交消息。 */ [&] {
+    // 验证锁等待在有界时间内失败，且不遗留待提交消息。
+    test(19, [&] {
         auto blocking = Connect();
         blocking->setAutoCommit(false);
         Execute(*blocking, "SELECT chat_id FROM private_chat WHERE chat_id=100 FOR UPDATE");
@@ -212,7 +234,8 @@ void Integration() {
         Require(std::chrono::steady_clock::now() - before < std::chrono::seconds(6));
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='" + Uuid(19) + "'") == 0);
     });
-    test(20, /** 验证已关闭连接返回存储不可用并被判定不能复用。 */ [&] {
+    // 验证已关闭连接返回存储不可用并被判定不能复用。
+    test(20, [&] {
         auto closed = Connect();
         closed->close();
         MySqlMessageCommitAdapter adapter(*closed);

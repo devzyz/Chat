@@ -7,20 +7,25 @@ const grpc = require('@grpc/grpc-js');
 const messageProto = require('../../proto');
 const { createServer, startServer } = require('../../server');
 
-/** 在随机回环端口启动注入处理器的真实 gRPC 服务并返回实例及端口。 */ async function startLoopbackServer(handler) {
+// 在随机回环端口启动注入处理器的真实 gRPC 服务并返回实例及端口。
+async function startLoopbackServer(handler) {
     const server = createServer(handler);
     const port = await startServer({
         server,
         address: '127.0.0.1:0',
         credentials: grpc.ServerCredentials.createInsecure(),
-        logger: { /** 抑制测试中正常就绪日志。 */ log() {} }
+        // 抑制测试中正常就绪日志。
+        logger: { log() {} }
     });
     return { server, port };
 }
 
-/** 在给定期限内调用公开验证码 RPC 并返回响应 Promise。 */ function callGetVarifyCode(client, email, deadline) {
-    return new Promise(/** 发起带期限的 RPC 并接收最终回调。 */ (resolve, reject) => {
-        client.GetVarifyCode({ email }, { deadline }, /** 将传输错误拒绝或把响应交给等待者。 */ (error, response) => {
+// 在给定期限内调用公开验证码 RPC 并返回响应 Promise。
+function callGetVarifyCode(client, email, deadline) {
+    // 发起带期限的 RPC 并接收最终回调。
+    return new Promise((resolve, reject) => {
+        // 将传输错误拒绝或把响应交给等待者。
+        client.GetVarifyCode({ email }, { deadline }, (error, response) => {
             if (error) {
                 reject(error);
                 return;
@@ -31,9 +36,11 @@ const { createServer, startServer } = require('../../server');
 }
 
 // T05-GRPC-01
-test('loopback service routes GetVarifyCode to the registered handler', { timeout: 5000 }, /** 验证真实回环 RPC 只委派一次且响应邮箱及验证码保持一致。 */ async (t) => {
+// 验证真实回环 RPC 只委派一次且响应邮箱及验证码保持一致。
+test('loopback service routes GetVarifyCode to the registered handler', { timeout: 5000 }, async (t) => {
     const calls = [];
-    const { server, port } = await startLoopbackServer(/** 记录接收邮箱并返回固定验证码。 */ (call, callback) => {
+    // 记录接收邮箱并返回固定验证码。
+    const { server, port } = await startLoopbackServer((call, callback) => {
         calls.push(call.request.email);
         callback(null, { error: 0, email: call.request.email, code: 'TEST' });
     });
@@ -41,7 +48,8 @@ test('loopback service routes GetVarifyCode to the registered handler', { timeou
         `127.0.0.1:${port}`,
         grpc.credentials.createInsecure()
     );
-    t.after(/** 关闭本用例拥有的 gRPC 客户端和服务。 */ () => {
+    // 关闭本用例拥有的 gRPC 客户端和服务。
+    t.after(() => {
         client.close();
         server.forceShutdown();
     });

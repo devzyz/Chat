@@ -160,10 +160,12 @@ TEST(StatusRoutingUnitTests, ConcurrentSelectionIsDeterministic) {
 	std::vector<std::string> hosts(thread_count);
 	std::vector<std::thread> threads;
 	for (int index = 0; index < thread_count; ++index) {
-		threads.emplace_back(/** 等待共同起跑屏障后为独立用户选服并保存结果。 */ [&, index]() {
+		// 等待共同起跑屏障后为独立用户选服并保存结果。
+		threads.emplace_back([&, index]() {
 			{
 				std::unique_lock<std::mutex> lock(mutex);
-				condition.wait(lock, /** 检测并发选服起跑屏障是否释放。 */ [&]() { return start; });
+				// 检测并发选服起跑屏障是否释放。
+				condition.wait(lock, [&]() { return start; });
 			}
 			hosts[static_cast<std::size_t>(index)] = routing->Assign(1000 + index).host;
 		});
@@ -176,7 +178,8 @@ TEST(StatusRoutingUnitTests, ConcurrentSelectionIsDeterministic) {
 	for (auto& thread : threads) {
 		thread.join();
 	}
-	EXPECT_TRUE(std::all_of(hosts.begin(), hosts.end(), /** 确认所有线程选中同一预期地址。 */ [](const std::string& host) {
+	// 确认所有线程选中同一预期地址。
+	EXPECT_TRUE(std::all_of(hosts.begin(), hosts.end(), [](const std::string& host) {
 		return host == "10.0.0.1";
 	}));
 }

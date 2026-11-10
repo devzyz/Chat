@@ -34,10 +34,12 @@ private slots:
         _oldGate = gate_url_prefix; _requests.clear(); _error = 0;
         QVERIFY(_server.listen(QHostAddress::LocalHost, 0));
         gate_url_prefix = "http://127.0.0.1:" + QString::number(_server.serverPort());
-        connect(&_server, &QTcpServer::newConnection, this, /** @brief 按 Content-Length 收齐请求后返回合成 JSON。 */ [this] {
+        // 按 Content-Length 收齐请求后返回合成 JSON。
+        connect(&_server, &QTcpServer::newConnection, this, [this] {
             auto *socket = _server.nextPendingConnection();
             auto buffer = std::make_shared<QByteArray>();
-            connect(socket, &QTcpSocket::readyRead, socket, /** @brief 收齐一次请求后记录正文并关闭连接。 */ [this,socket,buffer] {
+            // 收齐一次请求后记录正文并关闭连接。
+            connect(socket, &QTcpSocket::readyRead, socket, [this,socket,buffer] {
                 *buffer += socket->readAll();
                 const int headerEnd = buffer->indexOf("\r\n\r\n"); if (headerEnd < 0) return;
                 int size = 0;

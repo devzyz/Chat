@@ -20,7 +20,8 @@ function validateReport(file, expected, gtest = false) {
     assert.ok(!/<(?:failure|error|skipped)\b/.test(xml));
     assert.ok(!/\b(?:failures|errors|skipped|disabled)="[1-9][0-9]*"/.test(xml));
     const cases = [...xml.matchAll(/<testcase\b([^>]*)>/g)];
-    const names = cases.map(/** 从测试记录提取名称，同时拒绝未执行的 GTest 用例。 */ match => {
+    // 从测试记录提取名称，同时拒绝未执行的 GTest 用例。
+    const names = cases.map(match => {
         const name = /\bname="([^"]+)"/.exec(match[1]);
         assert.ok(name);
         if (gtest) {

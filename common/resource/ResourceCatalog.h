@@ -18,7 +18,8 @@ public:
     /** @brief 建立目录数据库连接池，配置有限连接/读写期限并禁止自动重连。 */
     ResourceCatalog(const std::string& host, const std::string& user,
                     const std::string& password, const std::string& schema)
-        : _pool(2, /** @brief 以固定连接和 I/O 期限建立目录数据库连接，并禁止自动重连。 */ [=] {
+        // 以固定连接和 I/O 期限建立目录数据库连接，并禁止自动重连。
+        : _pool(2, [=] {
             sql::ConnectOptionsMap options;
             options["hostName"] = host; options["userName"] = user; options["password"] = password;
             options["OPT_CONNECT_TIMEOUT"] = 3; options["OPT_READ_TIMEOUT"] = 5; options["OPT_WRITE_TIMEOUT"] = 5;

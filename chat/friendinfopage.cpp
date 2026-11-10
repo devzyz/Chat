@@ -17,7 +17,8 @@ FriendInfoPage::FriendInfoPage(QWidget *parent)
     auto *remove = new QPushButton(tr("删除好友"),this); remove->setObjectName("deleteFriendButton"); layout()->addWidget(remove);
     auto *status = new QLabel(this); status->setWordWrap(true); layout()->addWidget(status);
     remove->setEnabled(TcpMgr::instance()->supportsSocial());
-    connect(remove,&QPushButton::clicked,this,/** @brief 明确确认双向解除关系后提交带版本命令。 */ [this,remove,status] {
+    // 明确确认双向解除关系后提交带版本命令。
+    connect(remove,&QPushButton::clicked,this,[this,remove,status] {
         if (!_friend_info) return;
         const int peer = _friend_info->_uid;
         const auto relation = UserMgr::instance()->socialProfile(peer);
@@ -25,13 +26,15 @@ FriendInfoPage::FriendInfoPage(QWidget *parent)
         remove->setEnabled(false);
         TcpMgr::instance()->socialRequest(ID_FRIEND_MANAGE_REQ, {{"operation","delete"},{"target_uid",peer},
             {"expected_revision",relation["relationship_revision"]}}, this,
-            /** @brief 结果只更新当前查看的好友页面。 */ [this,peer,remove,status](QJsonObject response) {
+            // 结果只更新当前查看的好友页面。
+            [this,peer,remove,status](QJsonObject response) {
                 if (!_friend_info || _friend_info->_uid != peer) { remove->setEnabled(true); return; }
                 remove->setEnabled(response["error"].toInt(-1) != 0); status->setText(socialResultText(response));
             });
     });
     connect(UserMgr::instance()->messages(),&MessageService::directoryChanged,this,
-        /** @brief 当前详情同步到已落盘的新资料或解除状态。 */ [this](const QJsonObject &) {
+        // 当前详情同步到已落盘的新资料或解除状态。
+        [this](const QJsonObject &) {
             if (!_friend_info) return;
             const auto current = UserMgr::instance()->friendById(_friend_info->_uid);
             if (current) setInfo(current);

@@ -5,7 +5,8 @@
 
 TimerBtn::TimerBtn(QWidget *parent) : QPushButton(parent), _counter(10){
     _timer = new QTimer(this);
-    connect(this, &QPushButton::clicked, this, /** @brief 有效鼠标或键盘点击后才启动倒计时。 */ [this] {
+    // 有效鼠标或键盘点击后才启动倒计时。
+    connect(this, &QPushButton::clicked, this, [this] {
         setEnabled(false); setText(QString::number(_counter)); _timer->start(1000);
     });
 

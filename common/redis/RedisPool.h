@@ -67,7 +67,8 @@ public:
         Context connection(nullptr, &redisFree);
         {
             std::unique_lock<std::mutex> lock(_mutex);
-            if (!_available.wait_until(lock, deadline, /** @brief 在关闭、有空闲连接或尚有容量时结束借用等待。 */ [this]() {
+            // 在关闭、有空闲连接或尚有容量时结束借用等待。
+            if (!_available.wait_until(lock, deadline, [this]() {
                     return _is_closed || !_idle.empty() || _size < _capacity;
                 }) || _is_closed) {
                 return nullptr;

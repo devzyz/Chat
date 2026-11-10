@@ -24,7 +24,8 @@ inline void ResourceTransferTests::conversationAttentionWidgets()
     logger->set_level(spdlog::level::warn);
     const auto previousLogger = spdlog::default_logger();
     spdlog::set_default_logger(logger);
-    const auto restoreLogger = qScopeGuard(/** @brief 测试结束或断言失败时恢复原日志接收器。 */ [previousLogger] {
+    // 测试结束或断言失败时恢复原日志接收器。
+    const auto restoreLogger = qScopeGuard([previousLogger] {
         spdlog::set_default_logger(previousLogger);
     });
     QTemporaryDir root;
@@ -54,7 +55,8 @@ inline void ResourceTransferTests::conversationAttentionWidgets()
     user->setUserInfo(std::make_shared<UserInfo>(7, "self", ""));
     auto *service = user->messages();
     // 断言失败同样先释放账号锁，再让临时目录析构。
-    const auto cleanup = qScopeGuard(/** @brief 即使断言失败也先停止存储并有界等待锁释放。 */ [service, &root] {
+    // 即使断言失败也先停止存储并有界等待锁释放。
+    const auto cleanup = qScopeGuard([service, &root] {
         service->stop();
         QElapsedTimer elapsed; elapsed.start();
         while (QFileInfo::exists(root.path() + "/messages.lock") && elapsed.elapsed() < 15000)
@@ -118,7 +120,8 @@ inline void ResourceTransferTests::conversationAttentionWidgets()
             else { modal.show(); QTRY_COMPARE(QApplication::activeModalWidget(), &modal); }
             service->synchronize(30);
             QJsonObject request;
-            QTRY_VERIFY_WITH_TIMEOUT((/** @brief 查找当前会话和已提交游标对应的真实同步请求。 */ [&] {
+            // 查找当前会话和已提交游标对应的真实同步请求。
+            QTRY_VERIFY_WITH_TIMEOUT(([&] {
                 for (const auto &entry : syncRequests)
                     if (entry[0].toJsonObject()["chat_id"].toInt() == 30
                         && entry[0].toJsonObject()["after_id"].toInteger() == mode + 3)
@@ -180,7 +183,8 @@ inline void ResourceTransferTests::localHistorySearchWidgets()
     service->start(root.path(),7); QTRY_COMPARE_WITH_TIMEOUT(restored.size(),1,15000);
     ChatPage page; page.resize(750,550); page.show();
     connect(service,&MessageService::historyLoaded,&page,&ChatPage::applyStoredHistory);
-    connect(&page,&ChatPage::historyRequested,service,/** @brief 使用生产存储异步加载当前页面。 */
+    // 使用生产存储异步加载当前页面。
+    connect(&page,&ChatPage::historyRequested,service,
         [service](int chat,qint64 before) { service->loadHistory(chat,before); });
     page.setChatInfo(std::make_shared<ChatInfo>(8,"peer",QString(),QString(),870,ChatType::PRIVATE));
     auto *view=page.findChild<ChatDetailList*>(); QTRY_VERIFY(view->model()->rowCount()>0);
@@ -272,7 +276,8 @@ inline void ResourceTransferTests::friendRemarkOutcomeWidgets()
     QTRY_VERIFY(acceptanceHasLabel(&window,"user_name_label","old"));
     QSignalSpy requests(TcpMgr::instance().get(),&TcpMgr::sendRequested);
     for (int outcome=0;outcome<4;++outcome) {
-        QTimer::singleShot(0,&window,/** @brief 通过真实备注对话框确认新值。 */ [&window] {
+        // 通过真实备注对话框确认新值。
+        QTimer::singleShot(0,&window,[&window] {
             auto *input=window.findChild<QInputDialog*>(); if (input) { input->setTextValue("new"); input->accept(); }
         });
         QTest::mouseClick(acceptanceButton(page,QStringLiteral("资料 / 备注")),Qt::LeftButton);
@@ -281,7 +286,8 @@ inline void ResourceTransferTests::friendRemarkOutcomeWidgets()
         QVERIFY(!request["request_id"].toString().isEmpty());
         QString displayed;
         QTimer closer;
-        connect(&closer,&QTimer::timeout,&window,/** @brief 记录用户实际看到的结果并关闭提示。 */ [&window,&displayed] {
+        // 记录用户实际看到的结果并关闭提示。
+        connect(&closer,&QTimer::timeout,&window,[&window,&displayed] {
             if (auto *box=window.findChild<QMessageBox*>()) { displayed=box->text(); box->accept(); }
         });
         closer.start(10);
@@ -303,7 +309,8 @@ inline void ResourceTransferTests::friendRemarkOutcomeWidgets()
         QVERIFY(acceptanceHasLabel(&window,"contact_user_name_label",expected));
         QVERIFY(acceptanceHasLabel(&window,"user_name_label",expected));
     }
-    QTimer::singleShot(0,&window,/** @brief 发起备注后立即导航到另一会话。 */ [&window] {
+    // 发起备注后立即导航到另一会话。
+    QTimer::singleShot(0,&window,[&window] {
         if (auto *input=window.findChild<QInputDialog*>()) { input->setTextValue("late"); input->accept(); }
     });
     QTest::mouseClick(acceptanceButton(page,QStringLiteral("资料 / 备注")),Qt::LeftButton);
@@ -311,7 +318,8 @@ inline void ResourceTransferTests::friendRemarkOutcomeWidgets()
     page->setChatInfo(std::make_shared<ChatInfo>(9,"another",QString(),QString(),881,ChatType::PRIVATE));
     QString unrelatedPrompt;
     QTimer closer;
-    connect(&closer,&QTimer::timeout,&window,/** @brief 捕获任何错误进入新会话的旧操作提示。 */ [&window,&unrelatedPrompt] {
+    // 捕获任何错误进入新会话的旧操作提示。
+    connect(&closer,&QTimer::timeout,&window,[&window,&unrelatedPrompt] {
         if (auto *box=window.findChild<QMessageBox*>()) { unrelatedPrompt=box->text(); box->accept(); }
     });
     closer.start(10);

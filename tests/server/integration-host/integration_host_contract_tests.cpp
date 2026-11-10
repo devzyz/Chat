@@ -108,7 +108,8 @@ public:
 integration::ProductionModules CreateProductionModules() {
 	integration::ProductionModules modules;
 	modules.logic_dispatcher = std::make_unique<LogicDispatcher>(
-		/** 接受逻辑消息且不产生外部副作用。 */ [](const LogicMessage&) { return true; });
+		// 接受逻辑消息且不产生外部副作用。
+		[](const LogicMessage&) { return true; });
 	modules.chat_sessions = std::make_unique<SessionLifecycleCoordinator>(
         std::make_shared<UserSessionDirectory>(), std::make_shared<session_test::MemoryPresence>(), "host-contract");
 	modules.gate_request = gate::internal::CreateGateRequest(
@@ -173,7 +174,8 @@ integration::HostSpec MakeSpec(
 	spec.endpoint = {"127.0.0.1", 0};
 	spec.deadline = std::chrono::steady_clock::now() + 5s;
 	spec.create_modules = CreateProductionModules;
-	spec.create_transport = /** 创建固定 loopback 端点的传输替身并共享调用记录。 */ [state = std::move(state)](
+	// 创建固定 loopback 端点的传输替身并共享调用记录。
+	spec.create_transport = [state = std::move(state)](
 		const integration::LoopbackEndpoint&,
 		const integration::ProductionModules&) {
 		return std::make_unique<ContractTransport>(
@@ -195,7 +197,8 @@ TEST(T09_HOST_Contract, RejectsNonLoopbackEndpoint) {
 /** 验证所选宿主缺少对应生产模块时拒绝启动。 */
 TEST(T09_HOST_Contract, RequiresSelectedConcreteProductionModule) {
 	auto spec = MakeSpec(std::make_shared<TransportState>());
-	spec.create_modules = /** 移除 Gate 模块以注入装配缺项。 */ []() {
+	// 移除 Gate 模块以注入装配缺项。
+	spec.create_modules = []() {
 		auto modules = CreateProductionModules();
 		modules.gate_request.reset();
 		return modules;

@@ -65,7 +65,8 @@ TEST(T09_PROC_ProcessHarness, StartupExitRetainsBoundedOutputIdentityAndExitCode
 		*context,
 		HelperSpec(*context, {L"--mode=exit", L"--exit-code=23", L"--emit-startup"}));
 
-	EXPECT_FALSE(harness->WaitReady(/** 保持探针失败，让提前退出决定启动结果。 */ [] { return false; }, std::chrono::steady_clock::now() + 2s));
+	// 保持探针失败，让提前退出决定启动结果。
+	EXPECT_FALSE(harness->WaitReady([] { return false; }, std::chrono::steady_clock::now() + 2s));
 	const auto evidence = harness->CollectEvidence();
 
 	EXPECT_NE(evidence.identity.pid, 0U);
@@ -80,7 +81,8 @@ TEST(T09_PROC_ProcessHarness, StartupExitRetainsBoundedOutputIdentityAndExitCode
         *context, HelperSpec(*context, {L"--mode=exit", L"--exit-code=23"}));
     bool first_probe = true;
     const auto deadline = std::chrono::steady_clock::now() + 2s;
-    EXPECT_TRUE(racing->WaitReady(/** 把退出固定在首次探针返回旧结果之前，复现监督器的完成观察竞态。 */ [&] {
+    // 把退出固定在首次探针返回旧结果之前，复现监督器的完成观察竞态。
+    EXPECT_TRUE(racing->WaitReady([&] {
         if (first_probe) {
             first_probe = false;
             while (!racing->CollectEvidence().exit_code.has_value() && std::chrono::steady_clock::now() < deadline) {
@@ -105,8 +107,10 @@ TEST(T09_PROC_ProcessHarness, ReadinessRequiresSuccessfulProtocolProbe) {
 		*context,
 		HelperSpec(*context, {L"--mode=server", L"--port=" + std::to_wstring(endpoint.port)}));
 
-	EXPECT_FALSE(harness->WaitReady(/** 拒绝就绪以验证协议探针失败路径。 */ [] { return false; }, std::chrono::steady_clock::now() + 100ms));
-	EXPECT_TRUE(harness->WaitReady(/** 通过真实 loopback 协议确认子进程就绪。 */ [&] { return ProbeReady(endpoint); }, std::chrono::steady_clock::now() + 2s));
+	// 拒绝就绪以验证协议探针失败路径。
+	EXPECT_FALSE(harness->WaitReady([] { return false; }, std::chrono::steady_clock::now() + 100ms));
+	// 通过真实 loopback 协议确认子进程就绪。
+	EXPECT_TRUE(harness->WaitReady([&] { return ProbeReady(endpoint); }, std::chrono::steady_clock::now() + 2s));
 	EXPECT_TRUE(harness->CollectEvidence().ready_probe_succeeded);
 }
 
@@ -119,7 +123,8 @@ TEST(T09_PROC_ProcessHarness, StopUsesGracefulSignalAndClosesPipesByDeadline) {
 	auto harness = integration::ProcessHarness::Start(
 		*context,
 		HelperSpec(*context, {L"--mode=server", L"--port=" + std::to_wstring(endpoint.port)}));
-	ASSERT_TRUE(harness->WaitReady(/** 等待辅助进程通过协议就绪检查。 */ [&] { return ProbeReady(endpoint); }, std::chrono::steady_clock::now() + 2s));
+	// 等待辅助进程通过协议就绪检查。
+	ASSERT_TRUE(harness->WaitReady([&] { return ProbeReady(endpoint); }, std::chrono::steady_clock::now() + 2s));
 
 	const auto stopped = harness->Stop(std::chrono::steady_clock::now() + 2s);
 	const auto evidence = harness->CollectEvidence();
@@ -142,7 +147,8 @@ TEST(T09_PROC_ProcessHarness, StopEscalatesOnlyAfterGracefulDeadline) {
 		*context,
 		HelperSpec(*context, {
 			L"--mode=server", L"--ignore-graceful", L"--port=" + std::to_wstring(endpoint.port)}));
-	ASSERT_TRUE(harness->WaitReady(/** 确认忽略温和信号的辅助进程已就绪。 */ [&] { return ProbeReady(endpoint); }, std::chrono::steady_clock::now() + 2s));
+	// 确认忽略温和信号的辅助进程已就绪。
+	ASSERT_TRUE(harness->WaitReady([&] { return ProbeReady(endpoint); }, std::chrono::steady_clock::now() + 2s));
 
 	const auto stopped = harness->Stop(std::chrono::steady_clock::now() + 250ms);
 	const auto evidence = harness->CollectEvidence();

@@ -17,7 +17,8 @@ AuthFriendDialog::AuthFriendDialog(QWidget *parent)
     ui->setupUi(this);
     auto *status = new QLabel(this); status->setObjectName("socialStatus"); status->setWordWrap(true); layout()->addWidget(status);
     auto *reject = new QPushButton(tr("拒绝申请"),this); reject->setObjectName("rejectApplicationButton"); layout()->addWidget(reject);
-    connect(reject,&QPushButton::clicked,this,/** @brief 拒绝与取消表单是独立操作。 */ [this] { manageApplication("reject"); });
+    // 拒绝与取消表单是独立操作。
+    connect(reject,&QPushButton::clicked,this,[this] { manageApplication("reject"); });
     ui->send_auth_user_description_edit->setMaxLength(255); ui->send_auth_user_back_edit->setMaxLength(255);
 
     // 隐藏对话框标题栏

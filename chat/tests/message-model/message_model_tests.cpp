@@ -64,9 +64,12 @@ void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized
     int inserted = 0;
     int changed = 0;
     int removed = 0;
-    connect(&model, &QAbstractItemModel::rowsInserted, /** 累计行插入信号次数。 */ [&inserted]() { ++inserted; });
-    connect(&model, &QAbstractItemModel::dataChanged, /** 累计数据变化信号次数。 */ [&changed]() { ++changed; });
-    connect(&model, &QAbstractItemModel::rowsRemoved, /** 累计行移除信号次数。 */ [&removed]() { ++removed; });
+    // 累计行插入信号次数。
+    connect(&model, &QAbstractItemModel::rowsInserted, [&inserted]() { ++inserted; });
+    // 累计数据变化信号次数。
+    connect(&model, &QAbstractItemModel::dataChanged, [&changed]() { ++changed; });
+    // 累计行移除信号次数。
+    connect(&model, &QAbstractItemModel::rowsRemoved, [&removed]() { ++removed; });
 
     QCOMPARE(model.appendMessage(message(0, QStringLiteral("uuid-1"))), 1);
     QCOMPARE(inserted, 1);
@@ -136,8 +139,10 @@ void MessageModelTests::unknownStableIdsDoNotMutateTheModel()
     model.appendMessage(message(101, QStringLiteral("known-client")));
     int changes = 0;
     int removals = 0;
-    connect(&model, &QAbstractItemModel::dataChanged, /** 累计拒绝操作期间的数据变化次数。 */ [&changes]() { ++changes; });
-    connect(&model, &QAbstractItemModel::rowsRemoved, /** 累计拒绝操作期间的移除次数。 */ [&removals]() { ++removals; });
+    // 累计拒绝操作期间的数据变化次数。
+    connect(&model, &QAbstractItemModel::dataChanged, [&changes]() { ++changes; });
+    // 累计拒绝操作期间的移除次数。
+    connect(&model, &QAbstractItemModel::rowsRemoved, [&removals]() { ++removals; });
 
     QVERIFY(!model.acknowledgeMessage(QStringLiteral("missing-client"), 202,
                                       DeliveryStatus::Sent));

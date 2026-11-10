@@ -19,7 +19,8 @@ TEST(MysqlDaoIntegration, PrivateChatIsSymmetricAndFailedInsertDoesNotCommitAnOr
     ASSERT_TRUE(dao.CreatePrivateChat(7002, 7001, reverse));
     EXPECT_EQ(forward, reverse);
 
-    const auto count_chats = /** 读取聊天表记录数供失败回滚断言。 */ [&] {
+    // 读取聊天表记录数供失败回滚断言。
+    const auto count_chats = [&] {
         std::unique_ptr<sql::ResultSet> rows(statement->executeQuery("SELECT COUNT(*) FROM chat"));
         if (!rows->next()) throw std::runtime_error("missing count");
         return rows->getInt(1);

@@ -65,14 +65,16 @@ function main(args) {
     if (!receipt.runId) {
         const runs = JSON.parse(gh(['run', 'list', '--repo', receipt.repository, '--workflow', 'ci.yml',
             '--event', 'workflow_dispatch', '--limit', '100', '--json', 'databaseId,displayTitle,headSha']));
-        const matches = runs.filter(/** 同时匹配唯一请求标识和源码提交。 */ run =>
+        // 同时匹配唯一请求标识和源码提交。
+        const matches = runs.filter(run =>
             run.displayTitle.includes(receipt.requestId) && run.headSha === receipt.sha);
         if (opts['--run']) {
             const candidate = readRun(receipt.repository, opts['--run']);
             assert.ok(candidate.displayTitle.includes(receipt.requestId), 'request-id-mismatch');
             matches.push(candidate);
         }
-        const unique = [...new Map(matches.map(/** 按远端运行 ID 去重。 */ run => [run.databaseId, run])).values()];
+        // 按远端运行 ID 去重。
+        const unique = [...new Map(matches.map(run => [run.databaseId, run])).values()];
         assert.equal(unique.length, 1, 'dispatch-not-uniquely-resolved-do-not-resubmit'); receipt.runId = unique[0].databaseId;
         fs.writeFileSync(file, JSON.stringify(receipt, null, 2));
     }

@@ -15,7 +15,8 @@ function selectPolicy(eventName, ref, event) {
     const requested = inputs.mode === undefined ? 'full' : inputs.mode;
     if (!['quick', 'full', 'performance'].includes(requested)) throw new Error('CI mode must be quick, full or performance');
     if (requested === 'performance') {
-        if (!manual || ['refresh_tools', 'cold_linux', 'real_acceptance'].some(/** 拒绝性能模式混用其他专项。 */ key => readBoolean(inputs[key]))) {
+        // 拒绝性能模式混用其他专项。
+        if (!manual || ['refresh_tools', 'cold_linux', 'real_acceptance'].some(key => readBoolean(inputs[key]))) {
             throw new Error('Performance requires an isolated manual request');
         }
         const profile = inputs.performance_profile || 'baseline';
@@ -65,7 +66,8 @@ if (require.main === module) {
     try {
         const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
         const policy = selectPolicy(process.env.GITHUB_EVENT_NAME, process.env.GITHUB_REF, event);
-        const output = Object.entries(policy).map(/** 序列化固定策略字段为 GitHub 输出。 */
+        // 序列化固定策略字段为 GitHub 输出。
+        const output = Object.entries(policy).map(
             ([key, value]) => `${key}=${value}\n`).join('');
         fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
         const summary = `CI mode: **${policy.mode}**.\n` +

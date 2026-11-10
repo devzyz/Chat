@@ -14,8 +14,10 @@ async function main() {
         const migration = new SchemaMigration(session, 'schema_capture');
         if (!process.argv.includes('--capture-contract') && !process.argv.includes('--diagnose')) {
             await session.close();
-            await runCases(/** 为自建实例创建独立 mysql 会话。 */ () => new MysqlSession(fixture.mysql, [...fixture.args, ...mysqlArgs], fixture.env),
-                'schema_capture', /** 执行单项合同后输出真实通过结果。 */ async (id, name, body) => {
+            // 为自建实例创建独立 mysql 会话。
+            await runCases(() => new MysqlSession(fixture.mysql, [...fixture.args, ...mysqlArgs], fixture.env),
+                // 执行单项合同后输出真实通过结果。
+                'schema_capture', async (id, name, body) => {
                     await body();
                     console.log(`${id} PASS ${name}`);
                 });
@@ -39,4 +41,5 @@ async function main() {
     } finally { await session.close(); await fixture.close(); }
 }
 
-main().catch(/** 输出失败原因并设置非零退出状态。 */ error => { console.error(error.message); process.exitCode = 1; });
+// 输出失败原因并设置非零退出状态。
+main().catch(error => { console.error(error.message); process.exitCode = 1; });

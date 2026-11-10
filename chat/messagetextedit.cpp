@@ -44,7 +44,8 @@ MessageTextEdit::MessageTextEdit(QWidget *parent) : QTextEdit(parent)
     setMaximumHeight(100);
     setAcceptRichText(false);
     setConversation(0);
-    connect(this, &QTextEdit::textChanged, this, /** @brief 每次编辑产生新提交身份。 */ [this] {
+    // 每次编辑产生新提交身份。
+    connect(this, &QTextEdit::textChanged, this, [this] {
         if (_switching) return;
         _active->id = QUuid::createUuid().toString(QUuid::WithoutBraces);
         reconcileAttachments();
@@ -93,7 +94,8 @@ MessageDraft MessageTextEdit::draft() const
 {
     MessageDraft result{_active->id, {}};
     QString text;
-    const auto flush = /** @brief 将相邻文本合为一项并保留换行。 */ [&] {
+    // 将相邻文本合为一项并保留换行。
+    const auto flush = [&] {
         if (!text.isEmpty()) result.entries.push_back({DraftEntry::Kind::Text, {}, text, {}});
         text.clear();
     };

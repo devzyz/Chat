@@ -137,7 +137,9 @@ def parse(source, language):
         return len(raw[:byte].decode("utf-8"))
 
     comments = [(position(n.start_byte), position(n.end_byte), text(n))
-                for n in walk(tree.root_node) if n.type == "comment"]
+                for n in walk(tree.root_node) if n.type == "comment"
+                and (not text(n).startswith("//")
+                     or not raw[raw.rfind(b"\n", 0, n.start_byte) + 1:n.start_byte].strip())]
     symbols = []
     for node in walk(tree.root_node):
         kind, anchor, name, parameters = "", node, "", ()
@@ -255,7 +257,7 @@ def problems(symbol, language, path, qt_slots=frozenset()):
     result = []
     comment = symbol.comment
     proper = (".SYNOPSIS" in comment.upper()) if language == "powershell" and symbol.kind != "lambda" else (
-        bool(comment) if language == "powershell" else "/**" in comment)
+        bool(comment) if language == "powershell" else ("/**" in comment or comment.startswith("//")))
     if not proper or not re.search(r"[\u3400-\u9fff]", comment):
         result.append("missing Chinese responsibility comment")
     if language == "powershell" and symbol.kind == "function" and proper:

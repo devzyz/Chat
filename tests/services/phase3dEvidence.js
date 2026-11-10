@@ -20,7 +20,8 @@ function reportGroups(selector = '3D-00', realAcceptance = false) {
 }
 /** 核对证据格式、源码 SHA、报告 Test ID 及通过状态，拒绝不完整或串用证据。 */
 function validate(root, sourceSha, selector = '3D-00', realAcceptance = false) {
-    const read = /** 从所属证据根目录读取指定 JSON，缺失或损坏时抛异常。 */ name => JSON.parse(fs.readFileSync(path.join(root, name), 'utf8'));
+    // 从所属证据根目录读取指定 JSON，缺失或损坏时抛异常。
+    const read = name => JSON.parse(fs.readFileSync(path.join(root, name), 'utf8'));
     assert.match(sourceSha || '', /^[a-f0-9]{40}$/);
     const manifest = read('phase3d-reports.json');
     assert.equal(manifest.format, 1);
@@ -38,13 +39,16 @@ function validate(root, sourceSha, selector = '3D-00', realAcceptance = false) {
     }
     assert.equal(manifest.reports.length, expectedGroups.length);
     for (const [index, group] of expectedGroups.entries()) {
-        const ids = Array.from({ length: group.expected }, /** 根据组编号生成连续且固定宽度的预期 Test ID。 */ (_, offset) =>
+        // 根据组编号生成连续且固定宽度的预期 Test ID。
+        const ids = Array.from({ length: group.expected }, (_, offset) =>
             `${group.prefix}${String(offset + (index === 0 ? 6 : 1)).padStart(2, '0')}`);
         const report = manifest.reports[index];
         assert.equal(report.file, group.file);
         assert.equal(report.expected, group.expected);
-        assert.deepEqual(report.cases.map(/** 提取实际用例标识供精确集合核对。 */ value => value.id).sort(), ids);
-        assert.ok(report.cases.every(/** 检查记录明确标为成功，不把缺失结果视为通过。 */ value => value.pass === true));
+        // 提取实际用例标识供精确集合核对。
+        assert.deepEqual(report.cases.map(value => value.id).sort(), ids);
+        // 检查记录明确标为成功，不把缺失结果视为通过。
+        assert.ok(report.cases.every(value => value.pass === true));
         const xml = fs.readFileSync(path.join(root, report.file), 'utf8');
         assert.equal(createHash('sha256').update(xml).digest('hex'), report.sha256);
         assert.equal((xml.match(/<testcase\b/g) || []).length, group.expected);
@@ -56,7 +60,8 @@ function validate(root, sourceSha, selector = '3D-00', realAcceptance = false) {
     assertConnectedClients(topology, topology.clients);
     if (realAcceptance) {
         assert.equal(topology.releaseClients?.length, 4);
-        assert.deepEqual(topology.releaseClients.map(/** 核对四个真实账号的逻辑身份。 */ client => client.logical).sort(),
+        // 核对四个真实账号的逻辑身份。
+        assert.deepEqual(topology.releaseClients.map(client => client.logical).sort(),
             ['releasea', 'releaseb', 'releasec', 'released']);
         for (const client of topology.releaseClients) {
             assert.ok(Number.isSafeInteger(client.pid) && client.pid > 0);
@@ -64,7 +69,8 @@ function validate(root, sourceSha, selector = '3D-00', realAcceptance = false) {
             assert.equal(client.active, true);
         }
         for (const key of ['pid', 'uid']) assert.equal(new Set(topology.releaseClients.map(
-            /** 独立进程和独立账号都必须明确存在。 */ client => client[key])).size, 4);
+            // 独立进程和独立账号都必须明确存在。
+            client => client[key])).size, 4);
     }
     if (['3D-03-history', '3D-03', '3D'].includes(selector)) {
         assert.equal(topology.recoveredClients?.length, 1);
@@ -80,7 +86,8 @@ function validate(root, sourceSha, selector = '3D-00', realAcceptance = false) {
         assert.equal(relay.droppedAck, true);
         assert.equal(relay.replayedNotification, true);
         assert.match(relay.committedId, /^[1-9][0-9]*$/);
-        assert.deepEqual(topology.serverRestarts?.map(/** 提取清理记录的逻辑资源名供归属核对。 */ value => value.logical), ['ChatA', 'ChatB']);
+        // 提取清理记录的逻辑资源名供归属核对。
+        assert.deepEqual(topology.serverRestarts?.map(value => value.logical), ['ChatA', 'ChatB']);
         for (const [index, restart] of topology.serverRestarts.entries()) {
             for (const identity of [restart.previous, restart.current]) {
                 assert.ok(Number.isSafeInteger(identity.pid) && identity.pid > 0);

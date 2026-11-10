@@ -20,7 +20,8 @@ public:
         try {
             for (auto& context : _contexts) {
                 auto* selected = &context;
-                _threads.emplace_back(/** @brief 在所属工作线程运行被选择的 io_context。 */ [selected] { selected->run(); });
+                // 在所属工作线程运行被选择的 io_context。
+                _threads.emplace_back([selected] { selected->run(); });
             }
         } catch (...) { Stop(); throw; }
     }

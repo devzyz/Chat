@@ -132,7 +132,8 @@ TEST(MessageSync, CursorCannotPassAnUncommittedWriter) {
     statement->execute("INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES(104,7,11,'held',0)");
     // Production sync uses the same row lock. Observe an actual DB lock wait,
     // rather than inferring ordering from a fixed sleep.
-    auto reading = std::async(std::launch::async, /** 使用独立数据库会话读取被写事务阻塞的同步页。 */ [] {
+    // 使用独立数据库会话读取被写事务阻塞的同步页。
+    auto reading = std::async(std::launch::async, [] {
         auto second = Connect();
         return Page(*second, 104, 0);
     });
@@ -279,7 +280,8 @@ TEST(MessageSync, DynamicGroupLifecycleAndResources) {
     messaging::GroupQuery friends(*db, "INSERT IGNORE INTO friend(self_id,other_id,backname) VALUES(7,9,''),(7,10,'')", {}, false);
     message_commit::MySqlMessageCommitAdapter adapter(*db); adapter.SetGroupEpoch(1);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
-    auto send = /** @brief 按当前群成员代次提交不可变 UUID 的文字。 */ [&](const std::string& name) {
+    // 按当前群成员代次提交不可变 UUID 的文字。
+    auto send = [&](const std::string& name) {
         return message_commit::Commit(adapter,{7},7,0,302,{{Uuid(name),name}},deadline,true);
     };
     const auto old = send("before-join"); ASSERT_TRUE(old.IsSuccess());
@@ -361,7 +363,8 @@ TEST(MessageSync, ConcurrentGroupVersionsSerialize) {
     first["expected_revision"]="1"; first["operation"]="rename"; first["name"]="First";
     auto second=first; second["request_id"]=Uuid("race-second"); second["name"]="Second";
     std::promise<void> start; auto ready=start.get_future().share();
-    const auto run=/** @brief 等待共同起点后在独立数据库连接修改同一版本。 */ [ready](Json::Value request) {
+    // 等待共同起点后在独立数据库连接修改同一版本。
+    const auto run=[ready](Json::Value request) {
         auto connection=Connect(); ready.wait(); Json::Value result;
         try { messaging::ManageGroup(*connection,7,request,result); return std::string("success"); }
         catch (const messaging::GroupError& error) { return std::string(error.what()); }
@@ -389,7 +392,8 @@ TEST(MessageSync, MembershipChangesWaitForCommittedMessages) {
         Json::Value request; request["chat_id"]=304; request["request_id"]=Uuid(std::string("order-")+operation);
         request["expected_revision"]=std::string(operation)=="add" ? "1" : "2";
         request["operation"]=operation; request["members"].append(9); request["target_uid"]=9;
-        auto mutation=std::async(std::launch::async,/** @brief 独立连接等待群消息事务后执行成员变更。 */ [request] {
+        // 独立连接等待群消息事务后执行成员变更。
+        auto mutation=std::async(std::launch::async,[request] {
             auto connection=Connect(); Json::Value result; messaging::ManageGroup(*connection,7,request,result); return result;
         });
         auto observer=Connect(); std::unique_ptr<sql::Statement> probe(observer->createStatement());
@@ -424,7 +428,8 @@ TEST(MessageSync, TransferAndLeaveCannotRemoveTheOwner) {
     transfer["expected_revision"]="1"; transfer["operation"]="transfer"; transfer["target_uid"]=8;
     auto leave=transfer; leave["request_id"]=Uuid("owner-leave-race"); leave["operation"]="leave";
     std::promise<void> start; auto ready=start.get_future().share();
-    const auto run=/** @brief 共同起点在独立连接按认证身份操作。 */ [ready](int actor,Json::Value request) {
+    // 共同起点在独立连接按认证身份操作。
+    const auto run=[ready](int actor,Json::Value request) {
         auto connection=Connect(); ready.wait(); Json::Value result;
         try { messaging::ManageGroup(*connection,actor,request,result); return true; }
         catch (const messaging::GroupError&) { return false; }

@@ -22,7 +22,8 @@ TEST(AsioPoolContractTests, PostedTaskCompletesBeforeScopedDestruction) {
     auto state = std::make_shared<CompletionState>();
     {
         AsioIOServicePool pool(1);
-        boost::asio::post(pool.GetIOService(), /** 递增完成计数并唤醒测试线程。 */ [state]() {
+        // 递增完成计数并唤醒测试线程。
+        boost::asio::post(pool.GetIOService(), [state]() {
             state->completed.fetch_add(1);
             state->condition.notify_all();
         });
@@ -31,7 +32,8 @@ TEST(AsioPoolContractTests, PostedTaskCompletesBeforeScopedDestruction) {
         ASSERT_TRUE(state->condition.wait_for(
             lock,
             std::chrono::seconds(2),
-            /** 检测测试任务是否恰好完成一次。 */ [state]() { return state->completed.load() == 1; }));
+            // 检测测试任务是否恰好完成一次。
+            [state]() { return state->completed.load() == 1; }));
     }
     EXPECT_EQ(state->completed.load(), 1);
 }

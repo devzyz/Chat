@@ -33,7 +33,8 @@ public:
                               QObject *parent = nullptr)
         : QObject(parent), _connectionBehavior(connectionBehavior)
     {
-        connect(&_server, &QTcpServer::newConnection, this, /** 接收全部待处理连接，按计划拒绝或安装读回调。 */ [this] {
+        // 接收全部待处理连接，按计划拒绝或安装读回调。
+        connect(&_server, &QTcpServer::newConnection, this, [this] {
             while (QTcpSocket *socket = _server.nextPendingConnection()) {
                 _sockets.append(socket);
                 if (_connectionBehavior == Behavior::ResetOnAccept) {
@@ -41,7 +42,8 @@ public:
                     socket->deleteLater();
                     continue;
                 }
-                connect(socket, &QTcpSocket::readyRead, this, /** 累积完整请求头后按路径选择计划，每个连接只处理一次请求。 */ [this, socket] {
+                // 累积完整请求头后按路径选择计划，每个连接只处理一次请求。
+                connect(socket, &QTcpSocket::readyRead, this, [this, socket] {
                     if (socket->property("request-handled").toBool()) {
                         socket->readAll();
                         return;
@@ -67,7 +69,8 @@ public:
                         socket->disconnectFromHost();
                         return;
                     }
-                    const auto respond = /** 若连接仍存活则写入完整 HTTP 响应并关闭发送连接。 */ [socket, body = plan.body] {
+                    // 若连接仍存活则写入完整 HTTP 响应并关闭发送连接。
+                    const auto respond = [socket, body = plan.body] {
                         if (!socket || socket->state() == QAbstractSocket::UnconnectedState) {
                             return;
                         }
@@ -85,7 +88,8 @@ public:
                     }
                 });
                 connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
-                connect(socket, &QObject::destroyed, this, /** 清除该连接的请求缓冲及跟踪引用。 */ [this, socket] {
+                // 清除该连接的请求缓冲及跟踪引用。
+                connect(socket, &QObject::destroyed, this, [this, socket] {
                     _requests.remove(socket);
                     _sockets.removeAll(socket);
                 });
@@ -193,7 +197,8 @@ void HttpTransportTests::successPreservesRequestAndFlowIdentity()
     GateHttpTransport transport;
     QList<GateHttpResult> results;
     connect(&transport, &GateHttpTransport::finished, this,
-            /** 收集 HTTP 终态结果，供身份、次数和错误断言。 */ [&results](const GateHttpResult &result) { results.append(result); });
+            // 收集 HTTP 终态结果，供身份、次数和错误断言。
+            [&results](const GateHttpResult &result) { results.append(result); });
 
     transport.post(request(peer.url(QStringLiteral("/success")), 41));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -213,7 +218,8 @@ void HttpTransportTests::refusedConnectionHasOneBoundedOutcome()
     GateHttpTransport transport;
     QList<GateHttpResult> results;
     connect(&transport, &GateHttpTransport::finished, this,
-            /** 收集 HTTP 终态结果，供身份、次数和错误断言。 */ [&results](const GateHttpResult &result) { results.append(result); });
+            // 收集 HTTP 终态结果，供身份、次数和错误断言。
+            [&results](const GateHttpResult &result) { results.append(result); });
     transport.post(request(peer.url(QStringLiteral("/refused")), 42));
 
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -231,7 +237,8 @@ void HttpTransportTests::finiteDeadlineAbortsAnUnresponsivePeer()
     GateHttpTransport transport;
     QList<GateHttpResult> results;
     connect(&transport, &GateHttpTransport::finished, this,
-            /** 收集 HTTP 终态结果，供身份、次数和错误断言。 */ [&results](const GateHttpResult &result) { results.append(result); });
+            // 收集 HTTP 终态结果，供身份、次数和错误断言。
+            [&results](const GateHttpResult &result) { results.append(result); });
 
     transport.post(request(peer.url(QStringLiteral("/hold")), 43, 100));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 1000);
@@ -247,7 +254,8 @@ void HttpTransportTests::malformedJsonIsRejectedWithoutLeakingItsBody()
     GateHttpTransport transport;
     QList<GateHttpResult> results;
     connect(&transport, &GateHttpTransport::finished, this,
-            /** 收集 HTTP 终态结果，供身份、次数和错误断言。 */ [&results](const GateHttpResult &result) { results.append(result); });
+            // 收集 HTTP 终态结果，供身份、次数和错误断言。
+            [&results](const GateHttpResult &result) { results.append(result); });
 
     transport.post(request(peer.url(QStringLiteral("/malformed")), 44));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -264,7 +272,8 @@ void HttpTransportTests::maximumResponseIsAccepted()
     GateHttpTransport transport;
     QList<GateHttpResult> results;
     connect(&transport, &GateHttpTransport::finished, this,
-            /** 收集 HTTP 终态结果，供身份、次数和错误断言。 */ [&results](const GateHttpResult &result) { results.append(result); });
+            // 收集 HTTP 终态结果，供身份、次数和错误断言。
+            [&results](const GateHttpResult &result) { results.append(result); });
 
     transport.post(request(peer.url(QStringLiteral("/maximum")), 45));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -281,7 +290,8 @@ void HttpTransportTests::oneByteOverMaximumIsRejected()
     GateHttpTransport transport;
     QList<GateHttpResult> results;
     connect(&transport, &GateHttpTransport::finished, this,
-            /** 收集 HTTP 终态结果，供身份、次数和错误断言。 */ [&results](const GateHttpResult &result) { results.append(result); });
+            // 收集 HTTP 终态结果，供身份、次数和错误断言。
+            [&results](const GateHttpResult &result) { results.append(result); });
 
     transport.post(request(peer.url(QStringLiteral("/oversized")), 46));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -298,7 +308,8 @@ void HttpTransportTests::peerClosingMidResponseHasOneNetworkOutcome()
     GateHttpTransport transport;
     QList<GateHttpResult> results;
     connect(&transport, &GateHttpTransport::finished, this,
-            /** 收集 HTTP 终态结果，供身份、次数和错误断言。 */ [&results](const GateHttpResult &result) { results.append(result); });
+            // 收集 HTTP 终态结果，供身份、次数和错误断言。
+            [&results](const GateHttpResult &result) { results.append(result); });
 
     transport.post(request(peer.url(QStringLiteral("/partial")), 47));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -316,7 +327,8 @@ void HttpTransportTests::explicitCancelHasExactlyOneTerminalOutcome()
     GateHttpTransport transport;
     QList<GateHttpResult> results;
     connect(&transport, &GateHttpTransport::finished, this,
-            /** 收集 HTTP 终态结果，供身份、次数和错误断言。 */ [&results](const GateHttpResult &result) { results.append(result); });
+            // 收集 HTTP 终态结果，供身份、次数和错误断言。
+            [&results](const GateHttpResult &result) { results.append(result); });
 
     transport.post(request(peer.url(QStringLiteral("/cancel")), 48));
     transport.cancel(48);
@@ -337,7 +349,8 @@ void HttpTransportTests::lateReplyFromAnOldFlowCannotCompleteTheNewFlow()
     GateHttpTransport transport;
     QList<GateHttpResult> results;
     connect(&transport, &GateHttpTransport::finished, this,
-            /** 收集 HTTP 终态结果，供身份、次数和错误断言。 */ [&results](const GateHttpResult &result) { results.append(result); });
+            // 收集 HTTP 终态结果，供身份、次数和错误断言。
+            [&results](const GateHttpResult &result) { results.append(result); });
 
     transport.post(request(peer.url(QStringLiteral("/old")), 49));
     QTest::qWait(20);

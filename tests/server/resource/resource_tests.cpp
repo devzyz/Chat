@@ -186,12 +186,16 @@ int main(int argc, char** argv) {
         std::map<int, std::string> avatars;
         const auto port = argc == 4 ? static_cast<unsigned short>(std::stoul(argv[3])) : 0;
         resource::ResourceHttpServer server(context, "127.0.0.1", port, store,
-            /** 仅允许固定测试用户与测试 Token 通过认证。 */ [](int uid, const std::string& token) { return (uid == 7 || uid == 8) && token == "fixture-token"; },
-            /** 仅当资源已成为某个测试头像时授予测试下载权限。 */ [&avatars](int, const resource::Metadata& metadata) {
+            // 仅允许固定测试用户与测试 Token 通过认证。
+            [](int uid, const std::string& token) { return (uid == 7 || uid == 8) && token == "fixture-token"; },
+            // 仅当资源已成为某个测试头像时授予测试下载权限。
+            [&avatars](int, const resource::Metadata& metadata) {
                 for (const auto& entry : avatars) if (entry.second == metadata.id) return true;
                 return false;
-            }, {}, /** 查询测试内存头像映射。 */ [&avatars](int owner) { return avatars[owner]; },
-            /** 更新指定测试用户的头像资源映射。 */ [&avatars](int owner, const std::string& id) { avatars[owner] = id; });
+            // 查询测试内存头像映射。
+            }, {}, [&avatars](int owner) { return avatars[owner]; },
+            // 更新指定测试用户的头像资源映射。
+            [&avatars](int owner, const std::string& id) { avatars[owner] = id; });
         server.Start();
         std::cout << server.Port() << std::endl;
         context.run();

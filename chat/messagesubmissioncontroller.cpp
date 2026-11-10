@@ -29,7 +29,8 @@ MessageSubmissionController::MessageSubmissionController(MessageService *message
     : QObject(parent), _messages(messages), _uploads(uploads), _uid(uid)
 {
     connect(uploads, &ResourceTransferManager::uploaded, this,
-        /** @brief 上传完成后保留描述，存储失败无需重复上传。 */ [this](const QJsonObject &descriptor) {
+        // 上传完成后保留描述，存储失败无需重复上传。
+        [this](const QJsonObject &descriptor) {
         if (!_uploading || !hasPending()) return;
         _uploading = false;
         auto request = messageRequest(_context, _uploadUuid,
@@ -39,12 +40,14 @@ MessageSubmissionController::MessageSubmissionController(MessageService *message
         _requests = {request}; persist();
     });
     connect(uploads, &ResourceTransferManager::failed, this,
-        /** @brief 专用上传器失败只影响当前草稿。 */ [this](const QString &reason) {
+        // 专用上传器失败只影响当前草稿。
+        [this](const QString &reason) {
         if (!_uploading) return;
         _uploading = false; fail(reason);
     });
     connect(uploads, &ResourceTransferManager::progress, this,
-        /** @brief 发布当前固定目标的上传进度。 */ [this](qint64 done, qint64 total) {
+        // 发布当前固定目标的上传进度。
+        [this](qint64 done, qint64 total) {
         if (!_uploading) return;
         _status = tr("会话 %1：上传 %2 / %3 字节").arg(_context["chat_id"].toInt()).arg(done).arg(total);
         emit stateChanged();
@@ -63,7 +66,8 @@ MessageSubmissionController::MessageSubmissionController(MessageService *message
         QTimer::singleShot(0, this, &MessageSubmissionController::advance);
     });
     connect(messages, &MessageService::stopped, this,
-        /** @brief 存储停止时默认释放任务，暂时断线已冻结的提交则保留。 */ [this] {
+        // 存储停止时默认释放任务，暂时断线已冻结的提交则保留。
+        [this] {
         if (!_suspended) { _uploads->cancel(); finish(); }
     });
 }
