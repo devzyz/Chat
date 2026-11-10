@@ -139,6 +139,12 @@ Required Checks、运行时机和失败规则统一见 [CI 治理](../tests/CI-G
 - 提交前 MUST 检查 `git diff --check` 和 staged 文件范围。
 - 禁止提交缓存、构建产物、测试秘密、临时状态和意外生成文件。
 
+**如何拆 commit。** 如果回退其中一个改动时，另一个仍应保留，就适合拆成两个提交。反过来，移动文件时应把引用它的链接放进同一提交，让评审者单独检出该提交时仍能使用。行为修复也应尽量与证明该修复的回归测试一起提交。这沿用了 Mumble 对独立、可构建提交的做法。[Mumble 提交指南](https://github.com/mumble-voip/mumble/blob/master/COMMIT_GUIDELINES.md)
+
+**如何写 PR。** 标题写出合并后读者能观察到的结果。正文开头说明为什么改，再给出核对结果的办法。有对应 issue 时附上链接；涉及多个模块时指出建议先看的入口。例如，归档一份性能基线时，可以写明原提交号、报告新位置、哪些页面引用它，以及如何确认归档前后内容一致。验证一栏填写实际执行的检查和结果。跨文件但服务于同一目标的改动可以同审，独立功能宜另开 PR。[Kubernetes PR 指南](https://github.com/kubernetes/community/blob/master/contributors/guide/pull-requests.md)
+
+本仓库沿用 Conventional Commits 的类型前缀和不兼容变更说明，并要求填写上表中的 scope。CI 还会核对允许的摘要动词，写标题时可查本仓库的校验器。例如，文档归档可以写成 `docs(repo): preserve the performance baseline in project history`。[Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) · [本仓库 Git 校验器](../scripts/conventions/git_rules.py)
+
 规范历史治理按 [批次计划](plans/CodeConventions.md) 执行，日常局部任务无需加载该计划。
 
 ## 合并完成定义
