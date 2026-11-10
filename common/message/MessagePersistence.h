@@ -62,7 +62,11 @@ public:
         if (!_finished) {
             // A broken connection must never return an open transaction to the pool.
             try { _connection.rollback(); _connection.setAutoCommit(true); }
-            catch (...) { try { _connection.close(); } catch (...) { /* Already unusable. */ } }
+            catch (...) {
+                try { _connection.close(); } catch (...) {
+                    // 连接已无法使用，析构期间忽略关闭异常。
+                }
+            }
         }
     }
     /** @brief 提交事务并恢复自动提交；提交异常向调用方传播，由析构尝试收尾。 */

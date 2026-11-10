@@ -115,7 +115,7 @@ function runCommand(executable, args, options = {}) {
         });
         child.stderr.resume();
         // 输入管道关闭由进程退出统一判定，避免未处理错误事件。
-        child.stdin.on('error', () => { /* Exit status owns closed-input failure. */ });
+        child.stdin.on('error', () => {});
         // 取消截止计时器并按真实退出结果交付输出或错误。
         child.on('close', (code) => {
             clearTimeout(timer);
@@ -132,7 +132,9 @@ async function poll(probe, timeoutMs, signal) {
     const deadline = performance.now() + timeoutMs;
     while (performance.now() < deadline) {
         signal?.throwIfAborted();
-        try { if (await probe()) return; } catch { /* Recheck bounded dependency readiness. */ }
+        try { if (await probe()) return; } catch {
+            // 依赖可能仍在启动，继续探测直到截止时间。
+        }
         const remaining = deadline - performance.now();
         if (remaining > 0) await delay(Math.min(100, remaining));
     }
@@ -222,7 +224,7 @@ class DependencyCoordinator {
             password, lazyConnect: true, connectTimeout: 1000, commandTimeout: 1000,
             retryStrategy: null, maxRetriesPerRequest: 0, enableOfflineQueue: false });
         // Redis 错误由调用 Promise 传播，事件处理不记录敏感信息。
-        client.on('error', () => { /* Call promises report safe failures. */ });
+        client.on('error', () => {});
         this.clients.add(client);
         try { await client.connect(); return client; }
         catch (error) { client.disconnect(); this.clients.delete(client); throw error; }

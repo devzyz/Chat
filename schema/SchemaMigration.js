@@ -115,7 +115,9 @@ class SchemaMigration {
                         WHERE version=${entry.id}`);
                 } catch (error) {
                     try { await this.session.execute(`UPDATE schema_version SET state='failed' WHERE version=${entry.id}`); }
-                    catch (_) { /* A lost session retains applying; both states require explicit recovery. */ }
+                    catch (_) {
+                        // 会话丢失时迁移记录保留 applying，与 failed 一样需要显式恢复。
+                    }
                     throw error;
                 }
             }

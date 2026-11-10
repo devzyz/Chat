@@ -37,7 +37,7 @@ function runNative(coordinator, scenario, options = {}) {
         child.on('error', () => { failure = new Error('native Redis unavailable'); });
         child.stderr.resume();
         // 由子进程退出统一报告输入管道关闭，避免未处理错误事件。
-        child.stdin.on('error', () => { /* Child exit owns closed stdin failure. */ });
+        child.stdin.on('error', () => {});
         // 收集有界输出，在首次 READY 后执行外部故障注入握手。
         child.stdout.on('data', (chunk) => {
             output += chunk.toString();
