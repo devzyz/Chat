@@ -17,8 +17,7 @@
 #include <spdlog/sinks/null_sink.h>
 
 /** @brief 验证账号隔离、会话清理及持久化消息重试边界。 */
-class SessionResetTests : public QObject
-{
+class SessionResetTests : public QObject {
     Q_OBJECT
 
 private slots:
@@ -48,21 +47,17 @@ private slots:
     void socialRequestsRespectSessionLifecycle();
 };
 
-void SessionResetTests::initTestCase()
-{
+void SessionResetTests::initTestCase() {
     qRegisterMetaType<SessionResetReason>("SessionResetReason");
-    spdlog::set_default_logger(
-        spdlog::create<spdlog::sinks::null_sink_mt>("session-reset-tests"));
+    spdlog::set_default_logger(spdlog::create<spdlog::sinks::null_sink_mt>("session-reset-tests"));
 }
 
-void SessionResetTests::cleanupTestCase()
-{
+void SessionResetTests::cleanupTestCase() {
     TcpMgr::releaseInstance();
     UserMgr::releaseInstance();
 }
 
-void SessionResetTests::accountStateDoesNotCrossLoginSessions()
-{
+void SessionResetTests::accountStateDoesNotCrossLoginSessions() {
     ClientSession session;
     auto userMgr = UserMgr::instance();
     session.beginSession();
@@ -70,9 +65,12 @@ void SessionResetTests::accountStateDoesNotCrossLoginSessions()
     const QString preservedGateEndpoint = QStringLiteral("http://127.0.0.1:18080");
     gate_url_prefix = preservedGateEndpoint;
     userMgr->setToken(QStringLiteral("synthetic-session-token"));
-    userMgr->setUserInfo(std::make_shared<UserInfo>(101, QStringLiteral("account-a"),
-                                                QStringLiteral("description"),
-                                                QStringLiteral("avatar"), 1));
+    userMgr->setUserInfo(std::make_shared<UserInfo>(
+        101,
+        QStringLiteral("account-a"),
+        QStringLiteral("description"),
+        QStringLiteral("avatar"),
+        1));
 
     QJsonObject apply;
     apply["fromuid"] = 201;
@@ -125,7 +123,7 @@ void SessionResetTests::accountStateDoesNotCrossLoginSessions()
 
     QTemporaryDir directory;
     userMgr->setUserInfo(std::make_shared<UserInfo>(101, "self", "", "", 0));
-    auto *messages = userMgr->messages();
+    auto* messages = userMgr->messages();
     QSignalSpy restored(messages, &MessageService::directoryRestored);
     QSignalSpy changed(messages, &MessageService::directoryChanged);
     messages->start(directory.path(), 101);
@@ -135,7 +133,9 @@ void SessionResetTests::accountStateDoesNotCrossLoginSessions()
     TcpMgr::instance()->handleMessage(ID_NOTIFY_ADD_FRIEND_REQ, notification.size(), notification);
     QTRY_COMPARE(changed.size(), 1);
     QVERIFY(userMgr->hasFriendApplication(301));
-    const QJsonObject approval{{"error", 0}, {"chatid", 401},
+    const QJsonObject approval{
+        {"error", 0},
+        {"chatid", 401},
         {"applyinfo", QJsonObject{{"applyuid", 301}, {"applyname", "peer"}}},
         {"authinfo", QJsonObject{{"backname", "alias"}}}};
     const auto response = QJsonDocument(approval).toJson(QJsonDocument::Compact);
@@ -148,7 +148,10 @@ void SessionResetTests::accountStateDoesNotCrossLoginSessions()
     TcpMgr::instance()->handleMessage(ID_AUTH_FRIEND_RSP, response.size(), response);
     QTRY_COMPARE(changed.size(), 3);
     QCOMPARE(userMgr->nextContactPage().size(), size_t(1));
-    const QJsonObject groupPage{{"error", 0}, {"current_chat_id", 402}, {"load_more", false},
+    const QJsonObject groupPage{
+        {"error", 0},
+        {"current_chat_id", 402},
+        {"load_more", false},
         {"chat_list", QJsonArray{QJsonObject{{"chat_id", 402}, {"type", "group"}, {"group_name", "Friends"}}}}};
     const auto groupBytes = QJsonDocument(groupPage).toJson(QJsonDocument::Compact);
     TcpMgr::instance()->handleMessage(ID_LOAD_CHAT_LIST_RSP, groupBytes.size(), groupBytes);
@@ -171,10 +174,9 @@ void SessionResetTests::accountStateDoesNotCrossLoginSessions()
     userMgr->resetSession();
 }
 
-void SessionResetTests::resetDestroysOwnedSessionUiOnceAndPreservesReason()
-{
+void SessionResetTests::resetDestroysOwnedSessionUiOnceAndPreservesReason() {
     ClientSession session;
-    auto *ownedSessionUi = new QObject;
+    auto* ownedSessionUi = new QObject;
     QPointer<QObject> guardedUi = ownedSessionUi;
     QSignalSpy destroyedSpy(ownedSessionUi, &QObject::destroyed);
     QSignalSpy resetSpy(&session, &ClientSession::sessionReset);
@@ -186,8 +188,7 @@ void SessionResetTests::resetDestroysOwnedSessionUiOnceAndPreservesReason()
     QCOMPARE(destroyedSpy.count(), 1);
     QVERIFY(guardedUi.isNull());
     QCOMPARE(resetSpy.count(), 1);
-    QCOMPARE(qvariant_cast<SessionResetReason>(resetSpy.at(0).at(0)),
-             SessionResetReason::Kicked);
+    QCOMPARE(qvariant_cast<SessionResetReason>(resetSpy.at(0).at(0)), SessionResetReason::Kicked);
 
     QVERIFY(!session.resetSession(SessionResetReason::UnexpectedDisconnect));
     QCOMPARE(resetSpy.count(), 1);
@@ -195,14 +196,15 @@ void SessionResetTests::resetDestroysOwnedSessionUiOnceAndPreservesReason()
 }
 
 /** 生成指定发送者与 UUID 的固定文本请求。 */
-static QJsonObject outgoing(const QString &uuid, int uid = 101)
-{
-    return {{"from_uid", uid}, {"to_uid", 102}, {"chat_id", 501},
+static QJsonObject outgoing(const QString& uuid, int uid = 101) {
+    return {
+        {"from_uid", uid},
+        {"to_uid", 102},
+        {"chat_id", 501},
         {"text_array", QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"msg_content", "body"}}}}};
 }
 
-void SessionResetTests::resetDropsPendingTextBatchBeforeAnOldFailureArrives()
-{
+void SessionResetTests::resetDropsPendingTextBatchBeforeAnOldFailureArrives() {
     QTemporaryDir directory;
     MessageService service;
     QSignalSpy sent(&service, &MessageService::sendRequested);
@@ -213,8 +215,12 @@ void SessionResetTests::resetDropsPendingTextBatchBeforeAnOldFailureArrives()
     service.pauseOutgoing();
     service.stop();
     const auto changes = changed.size();
-    service.acceptSendResponse({{"error", 1}, {"chat_id", 501}, {"commit_error", "Conflict"},
-        {"attempt_id", "1"}, {"client_msg_uuids", QJsonArray{"old-client-message"}}});
+    service.acceptSendResponse(
+        {{"error", 1},
+         {"chat_id", 501},
+         {"commit_error", "Conflict"},
+         {"attempt_id", "1"},
+         {"client_msg_uuids", QJsonArray{"old-client-message"}}});
     service.send(outgoing("after-reset"));
     QCOMPARE(sent.size(), 1);
     QCOMPARE(changed.size(), changes);
@@ -226,8 +232,7 @@ void SessionResetTests::resetDropsPendingTextBatchBeforeAnOldFailureArrives()
     QCOMPARE(sent.size(), 1); // Explicit logout pauses the durable intent.
 }
 
-void SessionResetTests::uncertainBatchSurvivesDisconnectAndMatchesExactUuid()
-{
+void SessionResetTests::uncertainBatchSurvivesDisconnectAndMatchesExactUuid() {
     QTemporaryDir directory;
     LocalMessageStore store;
     store.open(directory.path(), 101);
@@ -239,14 +244,26 @@ void SessionResetTests::uncertainBatchSurvivesDisconnectAndMatchesExactUuid()
     store.resumeOutgoing();
     QCOMPARE(store.dispatchDue(1).size(), 2);
     // 构造精确关联 UUID 与服务端消息编号的成功 ACK。
-    const auto ack = [](QString uuid, int id) { return QJsonObject{{"error", 0}, {"chat_id", 501},
-        {"from_uid", 101}, {"to_uid", 102}, {"client_msg_uuids", QJsonArray{uuid}},
-        {"uuid_msgId", QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"message_id", id}}}}}; };
+    const auto ack = [](QString uuid, int id) {
+        return QJsonObject{
+            {"error", 0},
+            {"chat_id", 501},
+            {"from_uid", 101},
+            {"to_uid", 102},
+            {"client_msg_uuids", QJsonArray{uuid}},
+            {"uuid_msgId", QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"message_id", id}}}}};
+    };
     store.acceptSendResponse(ack("second", 902));
-    QVERIFY_EXCEPTION_THROWN(store.acceptSendResponse({{"error", 0}, {"chat_id", 501}, {"from_uid", 101},
-        {"client_msg_uuids", QJsonArray{"first"}}}), std::exception);
-    store.acceptSendResponse({{"error", 1}, {"chat_id", 501}, {"attempt_id", "2"},
-        {"client_msg_uuids", QJsonArray{"first"}}, {"commit_error", "StorageUnavailable"}});
+    QVERIFY_EXCEPTION_THROWN(
+        store.acceptSendResponse(
+            {{"error", 0}, {"chat_id", 501}, {"from_uid", 101}, {"client_msg_uuids", QJsonArray{"first"}}}),
+        std::exception);
+    store.acceptSendResponse(
+        {{"error", 1},
+         {"chat_id", 501},
+         {"attempt_id", "2"},
+         {"client_msg_uuids", QJsonArray{"first"}},
+         {"commit_error", "StorageUnavailable"}});
     store.acceptSendResponse(ack("first", 901));
     store.acceptSendResponse(ack("first", 901));
     const auto rows = store.history(501, 0, 50).messages;
@@ -256,8 +273,7 @@ void SessionResetTests::uncertainBatchSurvivesDisconnectAndMatchesExactUuid()
     QVERIFY(store.dispatchDue(100000).isEmpty());
 }
 
-void SessionResetTests::retryDoesNotCrossAuthenticatedAccounts()
-{
+void SessionResetTests::retryDoesNotCrossAuthenticatedAccounts() {
     QTemporaryDir directory;
     MessageService service;
     QSignalSpy sent(&service, &MessageService::sendRequested);
@@ -265,8 +281,12 @@ void SessionResetTests::retryDoesNotCrossAuthenticatedAccounts()
     service.send(outgoing("account-101"));
     QTRY_COMPARE_WITH_TIMEOUT(sent.size(), 1, 2000);
     service.start(directory.path() + "/second", 202);
-    service.acceptSendResponse({{"error", 0}, {"chat_id", 501}, {"from_uid", 101}, {"to_uid", 102},
-        {"uuid_msgId", QJsonArray{QJsonObject{{"msg_uuid", "account-101"}, {"message_id", 901}}}}});
+    service.acceptSendResponse(
+        {{"error", 0},
+         {"chat_id", 501},
+         {"from_uid", 101},
+         {"to_uid", 102},
+         {"uuid_msgId", QJsonArray{QJsonObject{{"msg_uuid", "account-101"}, {"message_id", 901}}}}});
     QSignalSpy loaded(&service, &MessageService::historyLoaded);
     service.loadHistory(501);
     QTRY_COMPARE_WITH_TIMEOUT(loaded.size(), 1, 2000);
@@ -274,8 +294,7 @@ void SessionResetTests::retryDoesNotCrossAuthenticatedAccounts()
     QCOMPARE(sent.size(), 1);
 }
 
-void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication()
-{
+void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication() {
     QTemporaryDir directory;
     gate_url_prefix.clear();
     auto tcp = TcpMgr::instance();
@@ -291,18 +310,27 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
     QTRY_COMPARE_WITH_TIMEOUT(connected.size(), 1, 2000);
     QTRY_VERIFY_WITH_TIMEOUT(peer.hasPendingConnections(), 2000);
     std::unique_ptr<QTcpSocket> first(peer.nextPendingConnection());
-    const QByteArray login = QJsonDocument(QJsonObject{{"error", 0}, {"uid", 101}, {"token", "synthetic-resume-fixture"}}).toJson();
+    const QByteArray login =
+        QJsonDocument(QJsonObject{{"error", 0}, {"uid", 101}, {"token", "synthetic-resume-fixture"}}).toJson();
     tcp->handleMessage(ReqId::ID_CHAT_LOGIN_RSP, login.size(), login);
     ClientSession session;
-    QPointer<QObject> draft = new QObject(&session); draft->setProperty("draft", "unsent draft");
+    QPointer<QObject> draft = new QObject(&session);
+    draft->setProperty("draft", "unsent draft");
     session.beginSession(draft);
     // 失败路径也停止重连和账号存储。
-    const auto cleanup = qScopeGuard([&] { session.resetSession(SessionResetReason::UnexpectedDisconnect); });
-    const QByteArray request = QJsonDocument(QJsonObject{{"from_uid", 101}, {"to_uid", 102},
-        {"chat_id", 501}, {"text_array", QJsonArray{QJsonObject{
-        {"msg_uuid", "00000000-0000-4000-8000-000000000004"}, {"msg_content", "retry body"}}}}})
-        .toJson(QJsonDocument::Compact);
-    auto *service = UserMgr::instance()->messages();
+    const auto cleanup = qScopeGuard([&] {
+        session.resetSession(SessionResetReason::UnexpectedDisconnect);
+    });
+    const QByteArray request = QJsonDocument(QJsonObject{
+                                                 {"from_uid", 101},
+                                                 {"to_uid", 102},
+                                                 {"chat_id", 501},
+                                                 {"text_array",
+                                                  QJsonArray{QJsonObject{
+                                                      {"msg_uuid", "00000000-0000-4000-8000-000000000004"},
+                                                      {"msg_content", "retry body"}}}}})
+                                   .toJson(QJsonDocument::Compact);
+    auto* service = UserMgr::instance()->messages();
     service->start(directory.path(), 101);
     service->send(QJsonDocument::fromJson(request).object());
     QTRY_VERIFY_WITH_TIMEOUT(first->bytesAvailable() > 4, 2000);
@@ -317,7 +345,8 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
     const auto authentication = QJsonDocument::fromJson(second->readAll().mid(4)).object();
     QCOMPARE(authentication["uid"].toInt(), 101);
     QCOMPARE(authentication["token"].toString(), QString("synthetic-resume-fixture"));
-    QVERIFY(draft); QCOMPARE(draft->property("draft").toString(), QString("unsent draft"));
+    QVERIFY(draft);
+    QCOMPARE(draft->property("draft").toString(), QString("unsent draft"));
     tcp->handleMessage(ReqId::ID_CHAT_LOGIN_RSP, login.size(), login);
     QVERIFY(!session.isReconnecting());
     QSignalSpy recovery(service, &MessageService::syncRequested);
@@ -341,83 +370,107 @@ void SessionResetTests::reconnectResendsIdenticalWirePayloadAfterAuthentication(
     tcp->resetConnection(true);
 }
 
-void SessionResetTests::disconnectPreservesAcceptedSubmission()
-{
+void SessionResetTests::disconnectPreservesAcceptedSubmission() {
     QTemporaryDir directory;
     auto tcp = TcpMgr::instance();
     auto user = UserMgr::instance();
     // 清理本测试拥有的账号状态和临时存储。
     const auto cleanup = qScopeGuard([&] {
-        tcp->resetConnection(true); user->resetSession();
+        tcp->resetConnection(true);
+        user->resetSession();
         // 等待存储线程释放测试目录。
-        QTest::qWaitFor([&] {
-            return !QFileInfo::exists(directory.path() + "/messages.lock");
-        }, 2000);
+        QTest::qWaitFor(
+            [&] {
+                return !QFileInfo::exists(directory.path() + "/messages.lock");
+            },
+            2000);
     });
-    tcp->resetConnection(true); user->resetSession();
+    tcp->resetConnection(true);
+    user->resetSession();
     user->setUserInfo(std::make_shared<UserInfo>(101, "owner", ""));
-    auto *service = user->messages();
+    auto* service = user->messages();
     QSignalSpy restored(service, &MessageService::directoryRestored);
     QSignalSpy persisted(service, &MessageService::outgoingPersisted);
-    service->start(directory.path(), 101); QTRY_COMPARE(restored.size(), 1);
-    auto *submission = user->submissions();
-    MessageDraft draft; draft.id = "accepted-before-disconnect";
-    draft.entries = {{DraftEntry::Kind::Text, "first", "first retained text", {}},
+    service->start(directory.path(), 101);
+    QTRY_COMPARE(restored.size(), 1);
+    auto* submission = user->submissions();
+    MessageDraft draft;
+    draft.id = "accepted-before-disconnect";
+    draft.entries = {
+        {DraftEntry::Kind::Text, "first", "first retained text", {}},
         {DraftEntry::Kind::Text, "second", "second retained text", {}}};
     QVERIFY(submission->submit(draft, 501, 102, false));
     tcp->resetConnection(false);
     QVERIFY(submission->hasPending());
     QCOMPARE(submission->pendingSummary(), QString("first retained text\nsecond retained text"));
     submission->retry();
-    QCoreApplication::processEvents(); QVERIFY(persisted.isEmpty());
-    service->start(directory.path(), 101); QTRY_COMPARE(restored.size(), 2);
+    QCoreApplication::processEvents();
+    QVERIFY(persisted.isEmpty());
+    service->start(directory.path(), 101);
+    QTRY_COMPARE(restored.size(), 2);
     submission->retry();
     QTRY_COMPARE(persisted.size(), 2);
-    QVERIFY(persisted[0][2].toBool()); QVERIFY(persisted[1][2].toBool());
+    QVERIFY(persisted[0][2].toBool());
+    QVERIFY(persisted[1][2].toBool());
     QTRY_VERIFY(!submission->hasPending());
     // 投递当前提交的零时推进，但不投递存储完成回调，覆盖 SQL 已接收而界面未确认的窗口。
     draft.id = "queued-before-disconnect";
     QVERIFY(submission->submit(draft, 501, 102, false));
     QCoreApplication::sendPostedEvents(submission, QEvent::MetaCall);
     QCOMPARE(persisted.size(), 2);
-    tcp->resetConnection(false); QVERIFY(submission->hasPending());
-    service->start(directory.path(), 101); QTRY_COMPARE(restored.size(), 3);
+    tcp->resetConnection(false);
+    QVERIFY(submission->hasPending());
+    service->start(directory.path(), 101);
+    QTRY_COMPARE(restored.size(), 3);
     QSignalSpy history(service, &MessageService::historyLoaded);
-    service->loadHistory(501); QTRY_COMPARE(history.size(), 1);
+    service->loadHistory(501);
+    QTRY_COMPARE(history.size(), 1);
     const auto beforeRetry = qvariant_cast<QVector<StoredMessage>>(history.first()[2]);
     QCOMPARE(beforeRetry.size(), 3);
     const auto originalUuid = beforeRetry.last().clientMessageId;
-    submission->retry(); QTRY_COMPARE(persisted.size(), 4);
+    submission->retry();
+    QTRY_COMPARE(persisted.size(), 4);
     QCOMPARE(qvariant_cast<QVector<QString>>(persisted[2][1]), QVector<QString>{originalUuid});
     QTRY_VERIFY(!submission->hasPending());
-    service->loadHistory(501); QTRY_COMPARE(history.size(), 2);
+    service->loadHistory(501);
+    QTRY_COMPARE(history.size(), 2);
     QCOMPARE(qvariant_cast<QVector<StoredMessage>>(history.last()[2]).size(), 4);
     draft.id = "discard-on-logout";
     QVERIFY(submission->submit(draft, 501, 102, false));
-    tcp->resetConnection(false); QVERIFY(submission->hasPending());
+    tcp->resetConnection(false);
+    QVERIFY(submission->hasPending());
     QPointer<MessageSubmissionController> previous(submission);
-    user->resetSession(); QVERIFY(previous.isNull());
+    user->resetSession();
+    QVERIFY(previous.isNull());
 }
 
-void SessionResetTests::silentPeerTriggersReconnect()
-{
+void SessionResetTests::silentPeerTriggersReconnect() {
     auto tcp = TcpMgr::instance();
     tcp->resetConnection(true);
-    QTcpServer peer; QVERIFY(peer.listen(QHostAddress::LocalHost, 0));
-    ServerInfo endpoint; endpoint.Host = "127.0.0.1"; endpoint.Port = QString::number(peer.serverPort());
+    QTcpServer peer;
+    QVERIFY(peer.listen(QHostAddress::LocalHost, 0));
+    ServerInfo endpoint;
+    endpoint.Host = "127.0.0.1";
+    endpoint.Port = QString::number(peer.serverPort());
     QSignalSpy connected(tcp.get(), &TcpMgr::connectionAttemptFinished);
     tcp->connectToServer(endpoint);
     QTRY_COMPARE_WITH_TIMEOUT(connected.size(), 1, 2000);
     QTRY_VERIFY_WITH_TIMEOUT(peer.hasPendingConnections(), 2000);
     std::unique_ptr<QTcpSocket> socket(peer.nextPendingConnection());
-    const auto login = QJsonDocument(QJsonObject{{"error", 0}, {"uid", 101}, {"token", "silent-peer-fixture"}}).toJson();
+    const auto login =
+        QJsonDocument(QJsonObject{{"error", 0}, {"uid", 101}, {"token", "silent-peer-fixture"}}).toJson();
     tcp->handleMessage(ID_CHAT_LOGIN_RSP, login.size(), login);
     QSignalSpy acknowledged(tcp.get(), &TcpMgr::heartbeatAcknowledged);
-    for (const QByteArray body : {QByteArray("{\"error\":0}"), QByteArray("{\"error\":0.5}"),
-            QByteArray("{\"error\":false}"), QByteArray("{\"error\":\"0\"}"), QByteArray("{}")})
+    for (const QByteArray body :
+         {QByteArray("{\"error\":0}"),
+          QByteArray("{\"error\":0.5}"),
+          QByteArray("{\"error\":false}"),
+          QByteArray("{\"error\":\"0\"}"),
+          QByteArray("{}")})
         tcp->handleMessage(ID_HEART_BEAT_RSP, body.size(), body);
     QCOMPARE(acknowledged.size(), 1);
-    ClientSession session; session.beginSession();
+    ClientSession session;
+    session.beginSession();
     // 超时断言失败也停止会话计时器和连接。
     const auto cleanup = qScopeGuard([&] {
         session.resetSession(SessionResetReason::UnexpectedDisconnect);
@@ -430,7 +483,9 @@ void SessionResetTests::silentPeerTriggersReconnect()
         const QByteArray invalid("{\"error\":\"0\"}");
         tcp->handleMessage(ID_HEART_BEAT_RSP, invalid.size(), invalid);
     });
-    QTimer deadline; deadline.setSingleShot(true); deadline.start(45000);
+    QTimer deadline;
+    deadline.setSingleShot(true);
+    deadline.start(45000);
     QTRY_VERIFY_WITH_TIMEOUT(!recovery.isEmpty() || !deadline.isActive(), 46000);
     QVERIFY(!recovery.isEmpty());
     QVERIFY(recovery.first()[0].toBool());
@@ -441,17 +496,20 @@ void SessionResetTests::silentPeerTriggersReconnect()
     QCOMPARE(acknowledged.size(), 1);
 }
 
-void SessionResetTests::socialRequestsRespectSessionLifecycle()
-{
+void SessionResetTests::socialRequestsRespectSessionLifecycle() {
     QTemporaryDir directory;
     auto tcp = TcpMgr::instance();
     auto user = UserMgr::instance();
     const auto oldGate = gate_url_prefix;
     // 失败路径也清理本次账号状态并恢复应用配置。
     const auto cleanup = qScopeGuard([&] {
-        tcp->resetConnection(true); user->resetSession(); gate_url_prefix = oldGate;
+        tcp->resetConnection(true);
+        user->resetSession();
+        gate_url_prefix = oldGate;
     });
-    gate_url_prefix.clear(); tcp->resetConnection(true); user->resetSession();
+    gate_url_prefix.clear();
+    tcp->resetConnection(true);
+    user->resetSession();
     QSignalSpy requests(tcp.get(), &TcpMgr::sendRequested);
     // 通过生产业务回包入口注入合成服务响应。
     const auto deliver = [&](ReqId id, QJsonObject row) {
@@ -468,46 +526,85 @@ void SessionResetTests::socialRequestsRespectSessionLifecycle()
     // 协商生产社交能力并将存储限定到临时账号目录。
     const auto login = [&](int uid) {
         tcp->beginSession();
-        deliver(ID_CHAT_LOGIN_RSP, {{"error",0},{"uid",uid},{"capabilities",QJsonArray{"basic_social_v1"}}});
+        deliver(ID_CHAT_LOGIN_RSP, {{"error", 0}, {"uid", uid}, {"capabilities", QJsonArray{"basic_social_v1"}}});
         user->messages()->start(directory.path() + "/" + QString::number(uid), uid, false, true);
     };
-    login(101); QVERIFY(tcp->supportsSocial());
-    auto *service = user->messages();
+    login(101);
+    QVERIFY(tcp->supportsSocial());
+    auto* service = user->messages();
     QSignalSpy changed(service, &MessageService::directoryChanged);
-    auto profile = latest(); QCOMPARE(profile["kind"].toString(), QString("profile"));
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",profile["request_id"]},{"error",0},
-        {"profile",QJsonObject{{"id",101},{"uid",101},{"name","owner"},{"profile_revision","1"}}}});
+    auto profile = latest();
+    QCOMPARE(profile["kind"].toString(), QString("profile"));
+    deliver(
+        ID_SOCIAL_DIRECTORY_RSP,
+        {{"request_id", profile["request_id"]},
+         {"error", 0},
+         {"profile", QJsonObject{{"id", 101}, {"uid", 101}, {"name", "owner"}, {"profile_revision", "1"}}}});
     QTRY_COMPARE(latest()["kind"].toString(), QString("contacts"));
     QVERIFY(!service->socialReady());
     auto contacts = latest();
-    const QJsonObject peer{{"id",102},{"uid",102},{"name",QString(255,QChar(0x540d))},
-        {"description",QString(255,QChar(0x8ff0))},{"backname",QString(255,QChar(0x5907))},
-        {"chat_id",501},{"profile_revision","1"},{"relationship_active",true},{"relationship_revision","1"}};
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",contacts["request_id"]},{"error",0},
-        {"items",QJsonArray{peer}},{"load_more",true},{"next","102"}});
+    const QJsonObject peer{
+        {"id", 102},
+        {"uid", 102},
+        {"name", QString(255, QChar(0x540d))},
+        {"description", QString(255, QChar(0x8ff0))},
+        {"backname", QString(255, QChar(0x5907))},
+        {"chat_id", 501},
+        {"profile_revision", "1"},
+        {"relationship_active", true},
+        {"relationship_revision", "1"}};
+    deliver(
+        ID_SOCIAL_DIRECTORY_RSP,
+        {{"request_id", contacts["request_id"]},
+         {"error", 0},
+         {"items", QJsonArray{peer}},
+         {"load_more", true},
+         {"next", "102"}});
     QTRY_COMPARE(latest()["after"].toString(), QString("102"));
     QVERIFY(!service->socialReady());
     contacts = latest();
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",contacts["request_id"]},{"error",0},
-        {"items",QJsonArray{}},{"load_more",false}});
+    deliver(
+        ID_SOCIAL_DIRECTORY_RSP,
+        {{"request_id", contacts["request_id"]}, {"error", 0}, {"items", QJsonArray{}}, {"load_more", false}});
     QTRY_COMPARE(latest()["kind"].toString(), QString("applications"));
     QVERIFY(service->socialReady());
     QCOMPARE(user->friendById(102)->_name, peer["name"].toString());
     auto applications = latest();
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",applications["request_id"]},{"error",1},{"social_error","StorageUnavailable"}});
+    deliver(
+        ID_SOCIAL_DIRECTORY_RSP,
+        {{"request_id", applications["request_id"]}, {"error", 1}, {"social_error", "StorageUnavailable"}});
     QVERIFY(service->socialReady());
-    tcp->refreshSocialDirectory(); profile = latest();
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",profile["request_id"]},{"error",0},
-        {"profile",QJsonObject{{"id",101},{"uid",101},{"name","owner"},{"profile_revision","1"}}}});
-    QTRY_COMPARE(latest()["kind"].toString(), QString("contacts")); contacts = latest();
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",contacts["request_id"]},{"error",0},
-        {"items",QJsonArray{}},{"load_more",false}});
-    QTRY_COMPARE(latest()["kind"].toString(), QString("applications")); applications = latest();
-    const QJsonObject applicant{{"id",103},{"fromuid",103},{"touid",101},{"name","Applicant"},
-        {"icon",":/res/head_1.jpg"},{"sex",1},{"description",""},{"status",0},
-        {"profile_revision","1"},{"application_revision","1"}};
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",applications["request_id"]},{"error",0},
-        {"items",QJsonArray{applicant}},{"load_more",false}});
+    tcp->refreshSocialDirectory();
+    profile = latest();
+    deliver(
+        ID_SOCIAL_DIRECTORY_RSP,
+        {{"request_id", profile["request_id"]},
+         {"error", 0},
+         {"profile", QJsonObject{{"id", 101}, {"uid", 101}, {"name", "owner"}, {"profile_revision", "1"}}}});
+    QTRY_COMPARE(latest()["kind"].toString(), QString("contacts"));
+    contacts = latest();
+    deliver(
+        ID_SOCIAL_DIRECTORY_RSP,
+        {{"request_id", contacts["request_id"]}, {"error", 0}, {"items", QJsonArray{}}, {"load_more", false}});
+    QTRY_COMPARE(latest()["kind"].toString(), QString("applications"));
+    applications = latest();
+    const QJsonObject applicant{
+        {"id", 103},
+        {"fromuid", 103},
+        {"touid", 101},
+        {"name", "Applicant"},
+        {"icon", ":/res/head_1.jpg"},
+        {"sex", 1},
+        {"description", ""},
+        {"status", 0},
+        {"profile_revision", "1"},
+        {"application_revision", "1"}};
+    deliver(
+        ID_SOCIAL_DIRECTORY_RSP,
+        {{"request_id", applications["request_id"]},
+         {"error", 0},
+         {"items", QJsonArray{applicant}},
+         {"load_more", false}});
     std::vector<std::shared_ptr<ApplyInfo>> received;
     QTRY_VERIFY((received.clear(), user->appendFriendApplicationsTo(received), !received.empty()));
     QCOMPARE(received.front()->_apply_name, QString("Applicant"));
@@ -520,40 +617,50 @@ void SessionResetTests::socialRequestsRespectSessionLifecycle()
     QJsonObject terminal;
     // 记录当前接收者看到的唯一终态。
     const auto accept = [&](QJsonObject response) {
-        ++completed; terminal = response;
+        ++completed;
+        terminal = response;
     };
-    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, &receiver, accept);
+    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind", "profile"}}, &receiver, accept);
     const auto request = latest();
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id","unknown"},{"error",0}});
-    deliver(ID_PROFILE_UPDATE_RSP, {{"request_id",request["request_id"]},{"error",0}});
-    QCOMPARE(completed,0);
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",request["request_id"]},{"error",0}});
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",request["request_id"]},{"error",0}});
-    QCOMPARE(completed,1);
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id", "unknown"}, {"error", 0}});
+    deliver(ID_PROFILE_UPDATE_RSP, {{"request_id", request["request_id"]}, {"error", 0}});
+    QCOMPARE(completed, 0);
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id", request["request_id"]}, {"error", 0}});
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id", request["request_id"]}, {"error", 0}});
+    QCOMPARE(completed, 1);
     int destroyedCallbacks = 0;
     auto removed = std::make_unique<QObject>();
-    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, removed.get(),
+    tcp->socialRequest(
+        ID_SOCIAL_DIRECTORY_REQ,
+        {{"kind", "profile"}},
+        removed.get(),
         // 已销毁接收者不得收到完成或超时。
-        [&](QJsonObject) { ++destroyedCallbacks; });
-    const auto abandoned = latest(); removed.reset();
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",abandoned["request_id"]},{"error",0}});
-    QCOMPARE(destroyedCallbacks,0);
-    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, &receiver, accept);
+        [&](QJsonObject) {
+            ++destroyedCallbacks;
+        });
+    const auto abandoned = latest();
+    removed.reset();
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id", abandoned["request_id"]}, {"error", 0}});
+    QCOMPARE(destroyedCallbacks, 0);
+    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind", "profile"}}, &receiver, accept);
     const auto timedOut = latest();
-    QTRY_COMPARE_WITH_TIMEOUT(completed,2,15000);
-    QCOMPARE(terminal["social_error"].toString(),QString("Timeout"));
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",timedOut["request_id"]},{"error",0}});
-    QCOMPARE(completed,2);
-    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, &receiver, accept);
+    QTRY_COMPARE_WITH_TIMEOUT(completed, 2, 15000);
+    QCOMPARE(terminal["social_error"].toString(), QString("Timeout"));
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id", timedOut["request_id"]}, {"error", 0}});
+    QCOMPARE(completed, 2);
+    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind", "profile"}}, &receiver, accept);
     const auto old = latest();
-    tcp->resetConnection(true); tcp->resetConnection(true); user->resetSession();
+    tcp->resetConnection(true);
+    tcp->resetConnection(true);
+    user->resetSession();
     login(202);
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",old["request_id"]},{"error",0}});
-    QCOMPARE(completed,2);
-    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind","profile"}}, &receiver, accept);
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id", old["request_id"]}, {"error", 0}});
+    QCOMPARE(completed, 2);
+    tcp->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind", "profile"}}, &receiver, accept);
     const auto fresh = latest();
-    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id",fresh["request_id"]},{"error",0}});
-    QCOMPARE(completed,3); QCOMPARE(destroyedCallbacks,0);
+    deliver(ID_SOCIAL_DIRECTORY_RSP, {{"request_id", fresh["request_id"]}, {"error", 0}});
+    QCOMPARE(completed, 3);
+    QCOMPARE(destroyedCallbacks, 0);
     QSignalSpy legacyCompletion(tcp.get(), &TcpMgr::requestCompleted);
     for (const int error : {0, 1001}) {
         deliver(ID_AUTH_FRIEND_RSP, {{"error", error}});
@@ -565,42 +672,51 @@ void SessionResetTests::socialRequestsRespectSessionLifecycle()
     QTRY_VERIFY(!QFileInfo::exists(directory.path() + "/202/messages.lock"));
 }
 
-void SessionResetTests::logoutWaitsForRevocationAndPreservesStateOnFailure()
-{
+void SessionResetTests::logoutWaitsForRevocationAndPreservesStateOnFailure() {
     // Q02-SESSION-10
     const auto previousGate = gate_url_prefix;
     ClientSession session;
     auto user = UserMgr::instance();
     // 结束本测试会话并恢复应用服务地址。
     const auto cleanup = qScopeGuard([&] {
-        session.resetSession(SessionResetReason::UnexpectedDisconnect); gate_url_prefix = previousGate;
+        session.resetSession(SessionResetReason::UnexpectedDisconnect);
+        gate_url_prefix = previousGate;
     });
-    QTcpServer gate; QVERIFY(gate.listen(QHostAddress::LocalHost, 0));
+    QTcpServer gate;
+    QVERIFY(gate.listen(QHostAddress::LocalHost, 0));
     gate_url_prefix = "http://127.0.0.1:" + QString::number(gate.serverPort());
     user->setUserInfo(std::make_shared<UserInfo>(101, "fixture", ""));
     user->setToken("synthetic-logout-fixture");
-    QPointer<QObject> owned = new QObject(&session); session.beginSession(owned);
+    QPointer<QObject> owned = new QObject(&session);
+    session.beginSession(owned);
     QSignalSpy completed(&session, &ClientSession::logoutFinished);
     for (int attempt = 0; attempt < 2; ++attempt) {
         QVERIFY(session.requestLogout(SessionResetReason::Logout));
-        QVERIFY(session.isActive()); QVERIFY(owned);
+        QVERIFY(session.isActive());
+        QVERIFY(owned);
         QTRY_VERIFY_WITH_TIMEOUT(gate.hasPendingConnections(), 2000);
         std::unique_ptr<QTcpSocket> socket(gate.nextPendingConnection());
         QByteArray bytes;
         QTRY_VERIFY_WITH_TIMEOUT((bytes += socket->readAll()).contains("synthetic-logout-fixture"), 2000);
         QVERIFY(bytes.startsWith("POST /logout HTTP/1.1"));
         const auto payload = QJsonDocument::fromJson(bytes.mid(bytes.indexOf("\r\n\r\n") + 4)).object();
-        QCOMPARE(payload.size(), 2); QCOMPARE(payload["uid"].toInt(), 101);
+        QCOMPARE(payload.size(), 2);
+        QCOMPARE(payload["uid"].toInt(), 101);
         const QByteArray body = attempt == 0 ? "{\"error\":1002}" : "{\"error\":0}";
-        socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
-            + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body);
+        socket->write(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " + QByteArray::number(body.size()) +
+            "\r\nConnection: close\r\n\r\n" + body);
         socket->disconnectFromHost();
         QTRY_COMPARE_WITH_TIMEOUT(completed.size(), attempt + 1, 2000);
         QCOMPARE(completed.last()[0].toBool(), attempt == 1);
         QCOMPARE(session.isActive(), attempt == 0);
-        if (attempt == 0) { QVERIFY(owned); QCOMPARE(user->uid(), 101); }
+        if (attempt == 0) {
+            QVERIFY(owned);
+            QCOMPARE(user->uid(), 101);
+        }
     }
-    QVERIFY(!owned); QVERIFY(user->token().isEmpty());
+    QVERIFY(!owned);
+    QVERIFY(user->token().isEmpty());
 }
 
 QTEST_MAIN(SessionResetTests)

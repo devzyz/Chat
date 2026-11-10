@@ -18,8 +18,7 @@
 
 namespace {
 /** 生成指定颜色与尺寸的图像作为可精确比对的夹具。 */
-QImage solidImage(Qt::GlobalColor color, QSize size = QSize(256, 256))
-{
+QImage solidImage(Qt::GlobalColor color, QSize size = QSize(256, 256)) {
     QImage image(size, QImage::Format_RGB32);
     image.fill(color);
     return image;
@@ -27,8 +26,7 @@ QImage solidImage(Qt::GlobalColor color, QSize size = QSize(256, 256))
 }
 
 /** 验证本地头像读取、持久化、隔离及编辑交互。 */
-class LocalAvatarTests : public QObject
-{
+class LocalAvatarTests : public QObject {
     Q_OBJECT
 private slots:
     /** 验证 PNG 与 JPEG 完整读取并保持原图尺寸及颜色。 */
@@ -53,8 +51,7 @@ private slots:
     void cropWidgetDragsAndZooms();
 };
 
-void LocalAvatarTests::readsFullPngAndJpeg()
-{
+void LocalAvatarTests::readsFullPngAndJpeg() {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     QImage source = solidImage(Qt::red, QSize(600, 200));
@@ -63,7 +60,7 @@ void LocalAvatarTests::readsFullPngAndJpeg()
             source.setPixelColor(x, y, Qt::green);
         }
     }
-    for (const auto &format : {QByteArray("PNG"), QByteArray("JPG")}) {
+    for (const auto& format : {QByteArray("PNG"), QByteArray("JPG")}) {
         const QString file = dir.filePath(QString::fromLatin1(format));
         QVERIFY(source.save(file, format.constData()));
         const auto result = LocalAvatarStore::readImage(file);
@@ -76,8 +73,7 @@ void LocalAvatarTests::readsFullPngAndJpeg()
     }
 }
 
-void LocalAvatarTests::rejectsInvalidAndOversizedImages()
-{
+void LocalAvatarTests::rejectsInvalidAndOversizedImages() {
     QTemporaryDir dir;
     QVERIFY(!LocalAvatarStore::readImage(dir.filePath("missing.png")).error.isEmpty());
     const QString fileName = dir.filePath("invalid.png");
@@ -108,8 +104,7 @@ void LocalAvatarTests::rejectsInvalidAndOversizedImages()
     QVERIFY(!LocalAvatarStore::readImage(fileName).error.isEmpty());
 }
 
-void LocalAvatarTests::persistsAndIsolatesAccounts()
-{
+void LocalAvatarTests::persistsAndIsolatesAccounts() {
     QTemporaryDir dir;
     LocalAvatarStore store(dir.path());
     QVERIFY(store.load("server-a", 1).image.isNull());
@@ -130,8 +125,9 @@ void LocalAvatarTests::persistsAndIsolatesAccounts()
     QVERIFY(reopened.path("server-a", 1).endsWith("/users/1/static/head/1/current.png"));
     QVERIFY(UserStoragePaths::dataRoot().startsWith(QCoreApplication::applicationDirPath() + "/"));
     QVERIFY(UserStoragePaths::accountRoot(dir.path(), "server", 0).isEmpty());
-    QCOMPARE(UserStoragePaths::environmentKey("http://localhost:8080/"),
-             UserStoragePaths::environmentKey("http://localhost:8080"));
+    QCOMPARE(
+        UserStoragePaths::environmentKey("http://localhost:8080/"),
+        UserStoragePaths::environmentKey("http://localhost:8080"));
     const auto hash = QCryptographicHash::hash(QByteArray("legacy-server"), QCryptographicHash::Sha256).toHex();
     const auto legacy = dir.filePath("legacy/avatars/v1/" + QString::fromLatin1(hash) + "/1.png");
     QVERIFY(QDir().mkpath(QFileInfo(legacy).absolutePath()));
@@ -144,8 +140,7 @@ void LocalAvatarTests::persistsAndIsolatesAccounts()
     QCOMPARE(migrating.load("legacy-server", 1).image.pixelColor(0, 0), QColor(Qt::blue));
 }
 
-void LocalAvatarTests::saveFailurePreservesPreviousImage()
-{
+void LocalAvatarTests::saveFailurePreservesPreviousImage() {
     QTemporaryDir dir;
     LocalAvatarStore store(dir.path());
     QVERIFY(store.save("server", 1, solidImage(Qt::red)).isEmpty());
@@ -167,8 +162,7 @@ void LocalAvatarTests::saveFailurePreservesPreviousImage()
     QCOMPARE(store.load("server", 1).image.pixelColor(0, 0), QColor(Qt::red));
 }
 
-void LocalAvatarTests::refreshesOnlyMatchingSender()
-{
+void LocalAvatarTests::refreshesOnlyMatchingSender() {
     MessageListModel model(7);
     MessageRecord self;
     self.messageId = 1;
@@ -190,8 +184,7 @@ void LocalAvatarTests::refreshesOnlyMatchingSender()
     QCOMPARE(changed.count(), 1);
 }
 
-void LocalAvatarTests::savesAndRestoresThroughController()
-{
+void LocalAvatarTests::savesAndRestoresThroughController() {
     QTemporaryDir dir;
     const QString source = dir.filePath("source.png");
     QVERIFY(solidImage(Qt::green).save(source));
@@ -232,8 +225,7 @@ void LocalAvatarTests::savesAndRestoresThroughController()
     QCOMPARE(restored.image().pixelColor(0, 0), QColor(Qt::blue));
 }
 
-void LocalAvatarTests::cancellationAndResetDiscardPendingResults()
-{
+void LocalAvatarTests::cancellationAndResetDiscardPendingResults() {
     QTemporaryDir dir;
     const QString source = dir.filePath("source.png");
     QVERIFY(solidImage(Qt::blue).save(source));
@@ -262,13 +254,12 @@ void LocalAvatarTests::cancellationAndResetDiscardPendingResults()
     avatar.setAccount("server", 3);
     QTRY_VERIFY(!avatar.isBusy());
     QVERIFY(avatar.image().isNull());
-    for (const auto &args : changed) {
+    for (const auto& args : changed) {
         QVERIFY(qvariant_cast<QImage>(args.at(0)).isNull());
     }
 }
 
-void LocalAvatarTests::dialogConfirmsAndCancels()
-{
+void LocalAvatarTests::dialogConfirmsAndCancels() {
     QTemporaryDir dir;
     LocalAvatar avatar(dir.path());
     avatar.setAccount("server", 1);
@@ -282,9 +273,9 @@ void LocalAvatarTests::dialogConfirmsAndCancels()
     }
     QVERIFY(sourceImage.save(source));
     EditAvatarDialog dialog(&avatar, QPixmap::fromImage(solidImage(Qt::red)));
-    auto *confirm = dialog.findChild<QPushButton *>("edit_avatar_confirm_btn");
-    auto *cancel = dialog.findChild<QPushButton *>("edit_avatar_cancel_btn");
-    auto *preview = dialog.findChild<AvatarCropWidget *>("avatar_crop_widget");
+    auto* confirm = dialog.findChild<QPushButton*>("edit_avatar_confirm_btn");
+    auto* cancel = dialog.findChild<QPushButton*>("edit_avatar_cancel_btn");
+    auto* preview = dialog.findChild<AvatarCropWidget*>("avatar_crop_widget");
     QVERIFY(confirm && cancel && preview);
     QVERIFY(!confirm->isEnabled());
     dialog.show();
@@ -298,15 +289,20 @@ void LocalAvatarTests::dialogConfirmsAndCancels()
     dialog.show();
     avatar.selectFile(source);
     QTRY_VERIFY(confirm->isEnabled());
-    auto *zoom = dialog.findChild<QSlider *>("avatarZoomSlider");
+    auto* zoom = dialog.findChild<QSlider*>("avatarZoomSlider");
     QVERIFY(zoom);
     zoom->setValue(200);
     QCOMPARE(preview->sourceRect(), QRectF(250, 50, 100, 100));
     const QPoint center = preview->rect().center();
     QTest::mousePress(preview, Qt::LeftButton, Qt::NoModifier, center);
     const QPointF destination = center - QPoint(2000, 0);
-    QMouseEvent move(QEvent::MouseMove, destination, preview->mapToGlobal(destination.toPoint()),
-                     Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent move(
+        QEvent::MouseMove,
+        destination,
+        preview->mapToGlobal(destination.toPoint()),
+        Qt::NoButton,
+        Qt::LeftButton,
+        Qt::NoModifier);
     QCoreApplication::sendEvent(preview, &move);
     QTest::mouseRelease(preview, Qt::LeftButton, Qt::NoModifier, center);
     QCOMPARE(preview->sourceRect(), QRectF(500, 50, 100, 100));
@@ -328,8 +324,7 @@ void LocalAvatarTests::dialogConfirmsAndCancels()
     QCOMPARE(count, 1);
 }
 
-void LocalAvatarTests::cropGeometryAndSquareOutput()
-{
+void LocalAvatarTests::cropGeometryAndSquareOutput() {
     AvatarCrop crop;
     QVERIFY(crop.sourceRect().isEmpty());
     crop.setImageSize(QSize(600, 200));
@@ -367,8 +362,7 @@ void LocalAvatarTests::cropGeometryAndSquareOutput()
     QVERIFY(AvatarCrop::render(source, QRectF(-1, 0, 200, 200)).isNull());
 }
 
-void LocalAvatarTests::cropWidgetDragsAndZooms()
-{
+void LocalAvatarTests::cropWidgetDragsAndZooms() {
     AvatarCropWidget widget;
     widget.resize(400, 400);
     widget.setImage(solidImage(Qt::green, QSize(600, 200)));
@@ -380,13 +374,25 @@ void LocalAvatarTests::cropWidgetDragsAndZooms()
     const QPoint center = widget.rect().center();
     QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, center);
     const QPointF destination = QPointF(center) + QPointF(widget.frameRect().width() / 2, 0);
-    QMouseEvent move(QEvent::MouseMove, destination, widget.mapToGlobal(destination.toPoint()),
-                     Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent move(
+        QEvent::MouseMove,
+        destination,
+        widget.mapToGlobal(destination.toPoint()),
+        Qt::NoButton,
+        Qt::LeftButton,
+        Qt::NoModifier);
     QCoreApplication::sendEvent(&widget, &move);
     QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, center);
     QCOMPARE(widget.sourceRect(), QRectF(200, 50, 100, 100));
-    QWheelEvent wheel(center, widget.mapToGlobal(center), {}, QPoint(0, 120),
-                      Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QWheelEvent wheel(
+        center,
+        widget.mapToGlobal(center),
+        {},
+        QPoint(0, 120),
+        Qt::NoButton,
+        Qt::NoModifier,
+        Qt::NoScrollPhase,
+        false);
     QCoreApplication::sendEvent(&widget, &wheel);
     QCOMPARE(widget.zoom(), 210);
     widget.setZoom(100);

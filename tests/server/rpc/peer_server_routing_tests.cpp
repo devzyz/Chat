@@ -12,8 +12,7 @@ namespace {
 TEST(PeerServerRoutingTests, ConfiguredSectionsResolveToRuntimeNamesAndAddresses) {
     const std::map<std::string, std::map<std::string, std::string>> config = {
         {"PeerA", {{"Name", "chat-alpha"}, {"Host", "127.0.0.1"}, {"Port", "51001"}}},
-        {"PeerB", {{"Name", "chat-beta"}, {"Host", "localhost"}, {"Port", "51002"}}}
-    };
+        {"PeerB", {{"Name", "chat-beta"}, {"Host", "localhost"}, {"Port", "51002"}}}};
     // 按节和键查询测试配置，缺失时返回空。
     const auto lookup = [&config](const std::string& section, const std::string& key) {
         const auto section_iter = config.find(section);

@@ -1,7 +1,8 @@
 #include "ChatGrpcClient.h"
 
 message::ReceiptChangedRsp ChatGrpcClient::NotifyMessageReceiptChanged(
-    const std::string& server_name, const message::ReceiptChangedReq& request) {
+    const std::string& server_name,
+    const message::ReceiptChangedReq& request) {
     auto found = _pool.find(server_name);
     if (found == _pool.end()) {
         message::ReceiptChangedRsp response;
@@ -9,11 +10,18 @@ message::ReceiptChangedRsp ChatGrpcClient::NotifyMessageReceiptChanged(
         return response;
     }
     auto result = rpc::InvokeUnary<ChatConnectionPool, message::ReceiptChangedReq, message::ReceiptChangedRsp>(
-        *found->second, request, _policy.rpc_deadline,
+        *found->second,
+        request,
+        _policy.rpc_deadline,
         // 在既定截止时间内转发回执变化 RPC。
-        [](ChatService::Stub& stub, ClientContext& context, const message::ReceiptChangedReq& req,
-           message::ReceiptChangedRsp& rsp) { return stub.NotifyMessageReceiptChanged(&context, req, &rsp); });
-    if (!result) result.response.set_error(ErrorCodes::RPCFailed);
+        [](ChatService::Stub& stub,
+           ClientContext& context,
+           const message::ReceiptChangedReq& req,
+           message::ReceiptChangedRsp& rsp) {
+            return stub.NotifyMessageReceiptChanged(&context, req, &rsp);
+        });
+    if (!result)
+        result.response.set_error(ErrorCodes::RPCFailed);
     return result.response;
 }
 
@@ -28,11 +36,7 @@ ChatGrpcClient::ChatGrpcClient() {
             grpc_config["PoolAcquireTimeoutMs"],
             "[Grpc].PoolAcquireTimeoutMs",
             std::chrono::milliseconds(1000)),
-        rpc::ParseDurationMs(
-            grpc_config["ChatDeadlineMs"],
-            "[Grpc].ChatDeadlineMs",
-            std::chrono::milliseconds(3000))
-    };
+        rpc::ParseDurationMs(grpc_config["ChatDeadlineMs"], "[Grpc].ChatDeadlineMs", std::chrono::milliseconds(3000))};
 
     const auto endpoints = ResolvePeerServerEndpoints(
         config["PeerServer"]["Servers"],
@@ -49,10 +53,7 @@ ChatGrpcClient::ChatGrpcClient() {
     }
 }
 
-ChatGrpcClient::ChatGrpcClient(
-    EndpointMap endpoints,
-    rpc::ClientPolicy policy,
-    std::size_t pool_size)
+ChatGrpcClient::ChatGrpcClient(EndpointMap endpoints, rpc::ClientPolicy policy, std::size_t pool_size)
     : _policy(policy) {
     for (const auto& endpoint : endpoints) {
         _pool[endpoint.first] = std::make_unique<ChatConnectionPool>(
@@ -63,9 +64,7 @@ ChatGrpcClient::ChatGrpcClient(
     }
 }
 
-AddFriendRsp ChatGrpcClient::NotifyOtherAddFriend(
-    const std::string& server_name,
-    const AddFriendReq& request) {
+AddFriendRsp ChatGrpcClient::NotifyOtherAddFriend(const std::string& server_name, const AddFriendReq& request) {
     auto found = _pool.find(server_name);
     if (found == _pool.end()) {
         AddFriendRsp response;
@@ -77,10 +76,7 @@ AddFriendRsp ChatGrpcClient::NotifyOtherAddFriend(
         request,
         _policy.rpc_deadline,
         // 执行好友申请通知 RPC。
-        [](ChatService::Stub& stub,
-           ClientContext& context,
-           const AddFriendReq& req,
-           AddFriendRsp& rsp) {
+        [](ChatService::Stub& stub, ClientContext& context, const AddFriendReq& req, AddFriendRsp& rsp) {
             return stub.NotifyOtherAddFriend(&context, req, &rsp);
         });
     if (!result) {
@@ -89,9 +85,7 @@ AddFriendRsp ChatGrpcClient::NotifyOtherAddFriend(
     return result.response;
 }
 
-AuthFriendRsp ChatGrpcClient::NotifyOtherAuthFriend(
-    const std::string& server_name,
-    const AuthFriendReq& request) {
+AuthFriendRsp ChatGrpcClient::NotifyOtherAuthFriend(const std::string& server_name, const AuthFriendReq& request) {
     auto found = _pool.find(server_name);
     if (found == _pool.end()) {
         AuthFriendRsp response;
@@ -103,10 +97,7 @@ AuthFriendRsp ChatGrpcClient::NotifyOtherAuthFriend(
         request,
         _policy.rpc_deadline,
         // 执行好友认证通知 RPC。
-        [](ChatService::Stub& stub,
-           ClientContext& context,
-           const AuthFriendReq& req,
-           AuthFriendRsp& rsp) {
+        [](ChatService::Stub& stub, ClientContext& context, const AuthFriendReq& req, AuthFriendRsp& rsp) {
             return stub.NotifyOtherAuthFriend(&context, req, &rsp);
         });
     if (!result) {
@@ -129,10 +120,7 @@ TextChatMsgRsp ChatGrpcClient::NotifyOtherReceiveTextChatMsg(
         request,
         _policy.rpc_deadline,
         // 执行文本消息通知 RPC。
-        [](ChatService::Stub& stub,
-           ClientContext& context,
-           const TextChatMsgReq& req,
-           TextChatMsgRsp& rsp) {
+        [](ChatService::Stub& stub, ClientContext& context, const TextChatMsgReq& req, TextChatMsgRsp& rsp) {
             return stub.NotifyOtherReceiveTextChatMsg(&context, req, &rsp);
         });
     if (!result) {
@@ -141,9 +129,7 @@ TextChatMsgRsp ChatGrpcClient::NotifyOtherReceiveTextChatMsg(
     return result.response;
 }
 
-KickUserRsp ChatGrpcClient::NotifyOtherKickUser(
-    const std::string& server_name,
-    const KickUserReq& request) {
+KickUserRsp ChatGrpcClient::NotifyOtherKickUser(const std::string& server_name, const KickUserReq& request) {
     auto found = _pool.find(server_name);
     if (found == _pool.end()) {
         KickUserRsp response;
@@ -155,10 +141,7 @@ KickUserRsp ChatGrpcClient::NotifyOtherKickUser(
         request,
         _policy.rpc_deadline,
         // 执行旧登录踢出通知 RPC。
-        [](ChatService::Stub& stub,
-           ClientContext& context,
-           const KickUserReq& req,
-           KickUserRsp& rsp) {
+        [](ChatService::Stub& stub, ClientContext& context, const KickUserReq& req, KickUserRsp& rsp) {
             return stub.NotifyOtherKickUser(&context, req, &rsp);
         });
     if (!result) {

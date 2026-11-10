@@ -68,10 +68,7 @@ TEST(ProtobufContractTests, CurrentCppConsumerParsesInitialWireFixtureWithUnknow
         const auto fixture_path = fixture_root / fixture_name;
         std::ifstream input(fixture_path, std::ios::binary);
         ASSERT_TRUE(input.is_open()) << fixture_path.string();
-        const std::string payload(
-            (std::istreambuf_iterator<char>(input)),
-            std::istreambuf_iterator<char>()
-        );
+        const std::string payload((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
 
         message::GetVarifyReq request;
         ASSERT_TRUE(request.ParseFromString(payload)) << fixture_name;

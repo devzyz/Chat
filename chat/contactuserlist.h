@@ -7,12 +7,11 @@
 class ContactUserItem;
 
 /** @brief 展示新朋友入口与联系人列表，管理分页和选择通知。 */
-class ContactUserList : public QListWidget
-{
+class ContactUserList : public QListWidget {
     Q_OBJECT
 public:
     /** @brief 创建联系人列表并连接好友审批及分页事件。 */
-    ContactUserList(QWidget * parent = nullptr);
+    ContactUserList(QWidget* parent = nullptr);
     /**
      * @brief showRedPoint
      * _add_friend_item保存的是新的朋友那个item
@@ -30,14 +29,14 @@ private:
     int _cursor = 0;
     QMap<int, QListWidgetItem*> _items;
     /** @brief 按 UID 插入或更新本地联系人，保留现有选中项。 */
-    void applyContact(const QJsonObject &row);
+    void applyContact(const QJsonObject& row);
 
 public slots:
     /**
      * @brief itemClicked
      * 当某个item被点击后，触发的槽函数
      */
-    void itemClicked(QListWidgetItem * item);
+    void itemClicked(QListWidgetItem* item);
 signals:
     /**
      * @brief sig_switch_apply_friend_page
@@ -52,10 +51,10 @@ signals:
 
 private:
     // 保存的是新的朋友item
-    QListWidgetItem * _add_friend_item;
-    ContactUserItem * _add_friend_item_inner_widget;
+    QListWidgetItem* _add_friend_item;
+    ContactUserItem* _add_friend_item_inner_widget;
     // 用于保存联系人组的item，以后插入在该组的下方插入
-    QListWidgetItem * _contact_item;
+    QListWidgetItem* _contact_item;
 };
 
 #endif // CONTACTUSERLIST_H

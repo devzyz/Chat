@@ -2,10 +2,7 @@
 #include "applyfrienditem.h"
 #include "ui_applyfrienditem.h"
 
-ApplyFriendItem::ApplyFriendItem(QWidget *parent)
-    : ListItemBase(parent)
-    , ui(new Ui::ApplyFriendItem)
-{
+ApplyFriendItem::ApplyFriendItem(QWidget* parent) : ListItemBase(parent), ui(new Ui::ApplyFriendItem) {
     ui->setupUi(this);
     // 设置类型
     setItemType(ListItemType::APPLY_FRIEND_ITEM);
@@ -14,11 +11,14 @@ ApplyFriendItem::ApplyFriendItem(QWidget *parent)
     ui->apply_friend_add_friend_btn->hide();
 
     // 当点击添加后，发送认证成功信号
-    connect(ui->apply_friend_add_friend_btn, &ClickedBtn::clicked, this,
+    connect(
+        ui->apply_friend_add_friend_btn,
+        &ClickedBtn::clicked,
+        this,
         /** @brief 将审批按钮点击转换为当前申请的审批通知。 */
         [this]() {
-        emit this->friendApprovalRequested(_apply_info);
-    });
+            emit this->friendApprovalRequested(_apply_info);
+        });
 }
 
 /**
@@ -29,7 +29,6 @@ ApplyFriendItem::ApplyFriendItem(QWidget *parent)
 void ApplyFriendItem::setInfo(std::shared_ptr<ApplyInfo> apply_info) {
     _apply_info = apply_info;
     // 加载图片
-
 
     // 设置图片大小以及自动缩放
     UserMgr::instance()->bindAvatar(ui->apply_friend_head_label, _apply_info->_apply_uid, _apply_info->_apply_icon);
@@ -50,31 +49,28 @@ void ApplyFriendItem::setInfo(std::shared_ptr<ApplyInfo> apply_info) {
  * 是否显示添加按钮
  * 当点击添加按钮后，将其隐藏，将已添加的label显示
  */
-void ApplyFriendItem::showAddBtn(bool bshow)
-{
+void ApplyFriendItem::showAddBtn(bool bshow) {
     if (bshow) {
         ui->apply_friend_add_friend_btn->show();
         ui->apply_friend_already_add_label->hide();
         _added = false;
-    }else {
+    } else {
         ui->apply_friend_add_friend_btn->hide();
-        ui->apply_friend_already_add_label->setText(_apply_info && _apply_info->_status == 2 ? tr("已拒绝或失效") : tr("已添加"));
+        ui->apply_friend_already_add_label->setText(
+            _apply_info && _apply_info->_status == 2 ? tr("已拒绝或失效") : tr("已添加"));
         ui->apply_friend_already_add_label->show();
         _added = true;
     }
 }
 
-QSize ApplyFriendItem::sizeHint() const
-{
+QSize ApplyFriendItem::sizeHint() const {
     return QSize(250, 80);
 }
 
-int ApplyFriendItem::getUid()
-{
+int ApplyFriendItem::getUid() {
     return _apply_info->_apply_uid;
 }
 
-ApplyFriendItem::~ApplyFriendItem()
-{
+ApplyFriendItem::~ApplyFriendItem() {
     delete ui;
 }

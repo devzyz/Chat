@@ -20,7 +20,11 @@ namespace {
 using namespace message_commit;
 
 /** 条件不满足时抛出统一合同失败，避免输出数据库敏感信息。 */
-void Require(bool condition) { if (!condition) { throw std::runtime_error("contract_failed"); } }
+void Require(bool condition) {
+    if (!condition) {
+        throw std::runtime_error("contract_failed");
+    }
+}
 /** 读取指定环境变量，未配置时返回空字符串。 */
 std::string Env(const char* name) {
     const char* value = std::getenv(name);
@@ -28,8 +32,11 @@ std::string Env(const char* name) {
 }
 /** 按隔离测试环境连接 MySQL，使用有界连接设置。 */
 std::unique_ptr<sql::Connection> Connect() {
-    return ConnectBounded("tcp://" + Env("CHAT_MYSQL_HOST") + ":" + Env("CHAT_MYSQL_PORT"),
-        Env("CHAT_MYSQL_USER"), Env("CHAT_MYSQL_PASSWORD"), Env("CHAT_MYSQL_DATABASE"));
+    return ConnectBounded(
+        "tcp://" + Env("CHAT_MYSQL_HOST") + ":" + Env("CHAT_MYSQL_PORT"),
+        Env("CHAT_MYSQL_USER"),
+        Env("CHAT_MYSQL_PASSWORD"),
+        Env("CHAT_MYSQL_DATABASE"));
 }
 /** 执行一条测试 SQL，由调用方负责数据库和事务归属。 */
 void Execute(sql::Connection& connection, const std::string& text) {
@@ -50,14 +57,23 @@ std::string Uuid(int suffix) {
 }
 /** 以固定截止时间提交测试消息批次，可指定发送方、接收方和会话。 */
 Result Send(Store& store, const Batch& batch, int sender = 1, int recipient = 2, int chat = 100) {
-    return message_commit::Commit(store, {sender}, sender, recipient, chat, batch,
+    return message_commit::Commit(
+        store,
+        {sender},
+        sender,
+        recipient,
+        chat,
+        batch,
         std::chrono::steady_clock::now() + std::chrono::seconds(8));
 }
 /** 记录存储层调用次数，用于证明参数拒绝发生在持久化之前。 */
 struct RejectStore final : Store {
     int calls = 0;
     /** 记录一次存储调用并返回默认失败结果。 */
-    Result Commit(int, int, int, const Batch&, Deadline) override { ++calls; return {}; }
+    Result Commit(int, int, int, const Batch&, Deadline) override {
+        ++calls;
+        return {};
+    }
 };
 /** 验证 UUID、重复项和身份参数在触及存储之前被拒绝。 */
 void Validate() {
@@ -90,11 +106,14 @@ struct KillAtCommit final : TransactionCommit {
 void Integration() {
     // Only the owned fixture may invoke this destructive seed operation.
     const auto database = Env("CHAT_MYSQL_DATABASE");
-    Require(database.rfind("chat_", 0) == 0 && database.size() > 8 &&
+    Require(
+        database.rfind("chat_", 0) == 0 && database.size() > 8 &&
         database.compare(database.size() - 8, 8, "_message") == 0);
     auto connection = Connect();
     chat_schema::Verify(*connection);
-    Execute(*connection, "INSERT INTO user(uid,name,email,password,description,icon,sex) VALUES "
+    Execute(
+        *connection,
+        "INSERT INTO user(uid,name,email,password,description,icon,sex) VALUES "
         "(1,'message-one','one@example.invalid','synthetic','','',0),"
         "(2,'message-two','two@example.invalid','synthetic','','',0),"
         "(3,'message-three','three@example.invalid','synthetic','','',0)");
@@ -123,9 +142,13 @@ void Integration() {
         Require(result.items[0].disposition == Disposition::EXISTING);
     });
     // 验证同一 UUID 携带不同内容被判冲突。
-    test(4, [&] { Require(Send(store, {{Uuid(2), "different"}}).error == Error::CONFLICT); });
+    test(4, [&] {
+        Require(Send(store, {{Uuid(2), "different"}}).error == Error::CONFLICT);
+    });
     // 验证已使用的 UUID 不能迁移到另一接收方和会话。
-    test(5, [&] { Require(Send(store, {{Uuid(2), "first"}}, 1, 3, 101).error == Error::CONFLICT); });
+    test(5, [&] {
+        Require(Send(store, {{Uuid(2), "first"}}, 1, 3, 101).error == Error::CONFLICT);
+    });
     // 验证批次中后续冲突会回滚先前项，且不返回部分成功。
     test(6, [&] {
         const auto count = Scalar(*connection, "SELECT COUNT(*) FROM chat_message");
@@ -134,23 +157,37 @@ void Integration() {
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message") == count);
     });
     // 验证批次内重复 UUID 在提交前被拒绝。
-    test(7, [&] { Require(Send(store, {{Uuid(7), "a"}, {Uuid(7), "a"}}).error == Error::INVALID_UUID); });
+    test(7, [&] {
+        Require(Send(store, {{Uuid(7), "a"}, {Uuid(7), "a"}}).error == Error::INVALID_UUID);
+    });
     // 验证无效发送方不能提交消息。
-    test(8, [&] { Require(Send(store, {{Uuid(8), "a"}}, 0).error == Error::UNAUTHORIZED_SENDER); });
+    test(8, [&] {
+        Require(Send(store, {{Uuid(8), "a"}}, 0).error == Error::UNAUTHORIZED_SENDER);
+    });
     // 验证认证身份与声明发送方不一致时拒绝提交。
     test(9, [&] {
-        auto result = message_commit::Commit(store, {1}, 2, 2, 100, {{Uuid(9), "a"}},
+        auto result = message_commit::Commit(
+            store,
+            {1},
+            2,
+            2,
+            100,
+            {{Uuid(9), "a"}},
             std::chrono::steady_clock::now() + std::chrono::seconds(5));
         Require(result.error == Error::UNAUTHORIZED_SENDER);
     });
     // 验证接收方不属于会话时拒绝提交。
-    test(10, [&] { Require(Send(store, {{Uuid(10), "a"}}, 1, 3).error == Error::INVALID_MEMBERSHIP); });
+    test(10, [&] {
+        Require(Send(store, {{Uuid(10), "a"}}, 1, 3).error == Error::INVALID_MEMBERSHIP);
+    });
     // 验证发送方不属于会话时拒绝提交。
-    test(11, [&] { Require(Send(store, {{Uuid(11), "a"}}, 3, 2).error == Error::INVALID_MEMBERSHIP); });
+    test(11, [&] {
+        Require(Send(store, {{Uuid(11), "a"}}, 3, 2).error == Error::INVALID_MEMBERSHIP);
+    });
     // 验证已到截止时间的请求不会写入消息。
     test(12, [&] {
-        auto result = message_commit::Commit(store, {1}, 1, 2, 100, {{Uuid(12), "a"}},
-            std::chrono::steady_clock::now());
+        auto result =
+            message_commit::Commit(store, {1}, 1, 2, 100, {{Uuid(12), "a"}}, std::chrono::steady_clock::now());
         Require(result.error == Error::DEADLINE_EXCEEDED);
     });
     // 验证两个独立连接并发提交同一 UUID 仍只产生一条消息。
@@ -165,18 +202,31 @@ void Integration() {
         Result second;
         // 等待统一起跑信号后，使用本线程连接提交同一测试消息。
         auto work = [&](sql::Connection& owned, Result& result) {
-            { std::unique_lock<std::mutex> lock(mutex); ++ready; changed.notify_all();
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                ++ready;
+                changed.notify_all();
                 // 等待协调者发出并发提交信号。
-                changed.wait(lock, [&] { return go; }); }
+                changed.wait(lock, [&] {
+                    return go;
+                });
+            }
             MySqlMessageCommitAdapter adapter(owned);
             result = Send(adapter, {{Uuid(13), "concurrent"}});
         };
         std::thread a(work, std::ref(*first_connection), std::ref(first));
         std::thread b(work, std::ref(*second_connection), std::ref(second));
-        { std::unique_lock<std::mutex> lock(mutex);
+        {
+            std::unique_lock<std::mutex> lock(mutex);
             // 等待两个提交线程均到达起跑屏障。
-            changed.wait(lock, [&] { return ready == 2; }); go = true; changed.notify_all(); }
-        a.join(); b.join();
+            changed.wait(lock, [&] {
+                return ready == 2;
+            });
+            go = true;
+            changed.notify_all();
+        }
+        a.join();
+        b.join();
         Require(first.IsSuccess() && second.IsSuccess());
         Require(first.items[0].message_id == second.items[0].message_id);
         Require(first.items[0].disposition != second.items[0].disposition);
@@ -210,7 +260,9 @@ void Integration() {
     });
     // 验证旧数据允许多条空 UUID 消息并存。
     test(17, [&] {
-        Execute(*connection, "INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES "
+        Execute(
+            *connection,
+            "INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES "
             "(100,1,2,'legacy-one',0),(100,1,2,'legacy-two',0)");
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid IS NULL") == 2);
     });
@@ -229,7 +281,8 @@ void Integration() {
         MySqlMessageCommitAdapter adapter(*waiting);
         const auto before = std::chrono::steady_clock::now();
         auto result = Send(adapter, {{Uuid(19), "blocked"}});
-        blocking->rollback(); blocking->setAutoCommit(true);
+        blocking->rollback();
+        blocking->setAutoCommit(true);
         Require(result.error == Error::DEADLINE_EXCEEDED || result.error == Error::STORAGE_UNAVAILABLE);
         Require(std::chrono::steady_clock::now() - before < std::chrono::seconds(6));
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='" + Uuid(19) + "'") == 0);
@@ -248,8 +301,11 @@ void Integration() {
 /** 选择纯校验或显式集成场景，以脱敏错误和非零退出码报告失败。 */
 int main(int argc, char** argv) {
     try {
-        if (argc > 1 && std::string(argv[1]) == "integration") { Integration(); }
-        else { Validate(); }
+        if (argc > 1 && std::string(argv[1]) == "integration") {
+            Integration();
+        } else {
+            Validate();
+        }
         std::cout << "message_commit_validation_passed\n";
         return 0;
     } catch (const sql::SQLException& error) {

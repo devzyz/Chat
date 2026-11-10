@@ -7,30 +7,18 @@
 #include <QString>
 #include <QVector>
 
-enum class MessageType {
-    Text,
-    Image,
-    Video,
-    File
-};
+enum class MessageType { Text, Image, Video, File };
 
-enum class DeliveryStatus {
-    None,
-    Sending,
-    Sent,
-    Failed,
-    Read,
-    Uncertain,
-    Queued,
-    Delivered
-};
+enum class DeliveryStatus { None, Sending, Sent, Failed, Read, Uncertain, Queued, Delivered };
 
 /** @brief 合并发送和回执状态，保留已经确认的更高回执级别。 */
 inline DeliveryStatus mergeDeliveryStatus(DeliveryStatus prior, DeliveryStatus incoming) {
     // 给已确认状态分级，防止较低等级覆盖更高回执。
     const auto rank = [](DeliveryStatus state) {
-        return state == DeliveryStatus::Read ? 3 : state == DeliveryStatus::Delivered ? 2 :
-            state == DeliveryStatus::Sent ? 1 : 0;
+        return state == DeliveryStatus::Read        ? 3
+               : state == DeliveryStatus::Delivered ? 2
+               : state == DeliveryStatus::Sent      ? 1
+                                                    : 0;
     };
     return rank(prior) > rank(incoming) ? prior : incoming;
 }

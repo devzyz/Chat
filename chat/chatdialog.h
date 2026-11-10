@@ -14,13 +14,12 @@ class ChatDialog;
 }
 
 /** @brief 组织账号内的会话、联系人和聊天页面，响应网络结果与界面导航。 */
-class ChatDialog : public QDialog
-{
+class ChatDialog : public QDialog {
     Q_OBJECT
 
 public:
     /** @brief 创建聊天界面并连接账号、消息和会话列表事件。 */
-    explicit ChatDialog(QWidget *parent = nullptr);
+    explicit ChatDialog(QWidget* parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ChatDialog();
     /** @brief 返回聊天页所有会话是否有未提交草稿。 */
@@ -28,6 +27,7 @@ public:
 signals:
     /** @brief 用户请求结束账号，true 表示切换到其他账号。 */
     void logoutRequested(bool switchAccount);
+
 public:
     /** @brief 按最近消息顺序展开下一页本地会话。 */
     void loadChatUserList();
@@ -36,7 +36,7 @@ protected:
     /** @brief 主聊天页嵌入主窗口，忽略默认对话框拒绝，弹窗仍独立处理 Escape。 */
     void reject() override;
     /** @brief 处理搜索区外点击及窗口激活后的历史刷新，返回基类事件过滤结果。 */
-    bool eventFilter(QObject * watched, QEvent * event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     /** @brief 将账号提醒快照应用到已创建会话行与聊天入口，未加载行的数量仍保留。 */
@@ -49,13 +49,13 @@ private:
     void showSearch(bool bsearch = false);
     // 将stateWidget添加到_label_list组内
     /** @brief 将stateWidget添加到_label_list组内。 */
-    void addLabelGroup(StateWidget * label);
+    void addLabelGroup(StateWidget* label);
     // 清空组内元素
     /** @brief 清空组内元素。 */
-    void clearLabelState(StateWidget * label);
+    void clearLabelState(StateWidget* label);
     // 处理全局的点击，当在搜索界面，点击其他位置时，退出搜索界面，返回到上一次显示的界面
     /** @brief 处理全局的点击，当在搜索界面，点击其他位置时，退出搜索界面，返回到上一次显示的界面。 */
-    void handleGlobalMousePress(QMouseEvent * event);
+    void handleGlobalMousePress(QMouseEvent* event);
     /** @brief 按对方 UID 选中会话项，未指定时选中首项。 */
     void setSelectChatItem(int uid = 0);
     /** @brief 按对方 UID 展示聊天页，未指定时使用首项。 */
@@ -71,15 +71,15 @@ private:
     /** @brief 添加新的会话到聊天列表中。 */
     void addNewChat(std::shared_ptr<ChatInfo> chat_info);
 
-    Ui::ChatDialog *ui;
-    ChatUIMode _mode; // 当前的模式
+    Ui::ChatDialog* ui;
+    ChatUIMode _mode;  // 当前的模式
     ChatUIMode _state; // 需要切换为的模式
     int _visibleChatCount = LOADING_STEP_LENGTH;
     bool _hasMoreChats = true;
     bool _b_chat_loading; // 是否在加载聊天列表
 
     // 用于保存侧边栏中，已添加的StateWidget，因为每次只能选中一个
-    QList<StateWidget * > _label_list;
+    QList<StateWidget*> _label_list;
 
     // 保存所有的聊天列表的item key = chat_id
     QMap<int, QListWidgetItem*> _chat_item_map;
@@ -115,12 +115,12 @@ private slots:
     /** @brief 切换到好友资料页并显示选中好友的信息。 */
     void switchFriendInfoPage(std::shared_ptr<UserInfo>);
     /** @brief 打开点击的会话并加载相应聊天内容。 */
-    void chatItemClicked(QListWidgetItem *);
+    void chatItemClicked(QListWidgetItem*);
     /** @brief 将待发送消息加入对应会话的兼容缓存。 */
     void appendSendTextCacheMsg(QString, std::shared_ptr<ChatDataBase>);
     // 服务器通知我添加聊天数据，将数据刷新到聊天界面上
     /** @brief 服务器通知我添加聊天数据，将数据刷新到聊天界面上。 */
-    void updateTextChatMsg(int , int , int , std::vector<std::shared_ptr<ChatDataBase>>& );
+    void updateTextChatMsg(int, int, int, std::vector<std::shared_ptr<ChatDataBase>>&);
     // 切换右侧界面为setting界面
     /** @brief 切换右侧界面为setting界面。 */
     void switchUserInfoPage();

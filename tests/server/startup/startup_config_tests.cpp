@@ -23,8 +23,8 @@ public:
         const auto base = std::filesystem::temp_directory_path();
         for (int attempt = 0; attempt < 100; ++attempt) {
             const auto suffix = std::to_string(GetCurrentProcessId()) + "-" +
-                std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "-" +
-                std::to_string(attempt);
+                                std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "-" +
+                                std::to_string(attempt);
             _path = base / ("chat-startup-tests-" + suffix);
             std::error_code error;
             if (std::filesystem::create_directory(_path, error)) {
@@ -382,11 +382,7 @@ TEST(StartupConfigTests, WorkingDirectoryConfigIsTheDefault) {
 TEST(StartupConfigTests, OutOfRangeGrpcTimeoutReturnsNonZeroBeforeListening) {
     TempDirectory fixture;
     const auto config_path = fixture.Path() / "invalid-grpc-timeout.ini";
-    WriteValidStartupConfig(
-        config_path,
-        FindAvailablePort(),
-        FindAvailablePort(),
-        "[Grpc]\nChatDeadlineMs = 60001\n");
+    WriteValidStartupConfig(config_path, FindAvailablePort(), FindAvailablePort(), "[Grpc]\nChatDeadlineMs = 60001\n");
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
     const auto executable = FindChatServerExecutable();
     ASSERT_TRUE(std::filesystem::is_regular_file(executable)) << executable.string();
@@ -415,7 +411,7 @@ TEST(StartupConfigTests, OccupiedTcpPortFailsBeforeExternalDependencies) {
     const auto result = RunProcess(executable, {L"--config", config_path.wstring()}, fixture.Path());
 
     EXPECT_FALSE(result.timed_out) << "ChatServer did not fail fast for occupied TCP port " << tcp_port
-        << "\nstderr: " << result.stderr_text << "\nstdout: " << result.stdout_text;
+                                   << "\nstderr: " << result.stderr_text << "\nstdout: " << result.stdout_text;
     EXPECT_NE(result.exit_code, 0U);
     EXPECT_NE(result.stderr_text.find("ChatServer startup error:"), std::string::npos) << result.stderr_text;
 }
@@ -437,7 +433,7 @@ TEST(StartupConfigTests, OccupiedGrpcPortFailureReleasesTcpPort) {
     const auto result = RunProcess(executable, {L"--config", config_path.wstring()}, fixture.Path());
 
     EXPECT_FALSE(result.timed_out) << "ChatServer did not fail fast for occupied gRPC port " << grpc_port
-        << "\nstderr: " << result.stderr_text << "\nstdout: " << result.stdout_text;
+                                   << "\nstderr: " << result.stderr_text << "\nstdout: " << result.stdout_text;
     EXPECT_NE(result.exit_code, 0U);
     EXPECT_NE(result.stderr_text.find("failed to listen on gRPC address"), std::string::npos) << result.stderr_text;
 

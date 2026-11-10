@@ -33,9 +33,11 @@ int main(int argc, char** argv) {
         // Here the probe observes completion, not protocol readiness. Dependency
         // readiness is checked by the coordinator before writing any run data.
         // 当协调器子进程已退出时结束等待。
-        child->WaitReady([&] {
-            return child->CollectEvidence().exit_code.has_value();
-        }, deadline - std::chrono::seconds(20));
+        child->WaitReady(
+            [&] {
+                return child->CollectEvidence().exit_code.has_value();
+            },
+            deadline - std::chrono::seconds(20));
         const auto evidence = child->CollectEvidence();
         if (!evidence.exit_code || *evidence.exit_code != 0) {
             context->RecordPrimaryFailure("service coordinator failed or timed out");

@@ -17,9 +17,13 @@ public:
      * @brief 同步绑定数字回环地址并监听；port 为 0 时分配端口，依赖无效或绑定失败抛异常。
      * @note contexts 可为每个会话选择 io，空时复用传入 io；所有 io 必须存活到停止回调完成。
      */
-    CServer(boost::asio::io_context& io, std::string address, unsigned short port,
+    CServer(
+        boost::asio::io_context& io,
+        std::string address,
+        unsigned short port,
         std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
-        std::shared_ptr<UserSessionDirectory> directory, CSession::Submit submit,
+        std::shared_ptr<UserSessionDirectory> directory,
+        CSession::Submit submit,
         ContextSource contexts = {});
     /** @brief 请求启动接收循环；已有停止请求时返回 false，否则返回 true，不等待 accept 完成。 */
     bool Start();
@@ -31,15 +35,26 @@ public:
     /** @brief 供生命周期协调器在会话排空后投递所有权移除；未知 id 无副作用。 */
     void RemoveSession(const SessionId& id);
     /** @brief 返回已请求启动且未请求停止的原子快照，不证明依赖服务健康。 */
-    bool Ready() const noexcept { return _ready.load() && !_stop_requested.load(); }
+    bool Ready() const noexcept {
+        return _ready.load() && !_stop_requested.load();
+    }
     /** @brief 查询 accept 和全部会话已排空的停止标志，不涵盖在线存储工作队列。 */
-    bool Stopped() const noexcept { return _stopped.load(); }
+    bool Stopped() const noexcept {
+        return _stopped.load();
+    }
     /** @brief 返回构造时绑定的数字回环地址副本。 */
-    std::string BoundAddress() const { return _address; }
+    std::string BoundAddress() const {
+        return _address;
+    }
     /** @brief 返回实际监听端口，包括传入 0 时由系统分配的端口。 */
-    unsigned short BoundPort() const noexcept { return _port; }
+    unsigned short BoundPort() const noexcept {
+        return _port;
+    }
     /** @brief 返回 Server 持有的会话数快照，包含尚未排空的关闭中会话。 */
-    std::size_t ConnectionCount() const noexcept { return _connection_count.load(); }
+    std::size_t ConnectionCount() const noexcept {
+        return _connection_count.load();
+    }
+
 private:
     /** @brief 在 Server strand 接收下一连接，成功后持有并启动会话，停止时不再续接。 */
     void Accept();

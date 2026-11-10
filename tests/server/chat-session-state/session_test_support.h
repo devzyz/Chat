@@ -11,8 +11,9 @@
 namespace session_test {
 using namespace std::chrono_literals;
 /** 在三秒内等待异步结果，超时抛异常，任务异常原样传播。 */
-template<class T> T Await(std::future<T> future) {
-    if (future.wait_for(3s) != std::future_status::ready) throw std::runtime_error("session test timed out");
+template <class T> T Await(std::future<T> future) {
+    if (future.wait_for(3s) != std::future_status::ready)
+        throw std::runtime_error("session test timed out");
     return future.get();
 }
 /** 以锁保护用户在线归属的内存替身，可注入存储不可用及发布清理屏障。 */
@@ -20,12 +21,14 @@ class MemoryPresence final : public UserPresenceStore {
 public:
     /** 执行可选发布屏障后替换在线归属并返回旧值，故障时返回不可用。 */
     PresenceResult Publish(int uid, const chat_session::UserPresence& value) override {
-        if (before_publish) before_publish();
+        if (before_publish)
+            before_publish();
         std::lock_guard<std::mutex> lock(mutex);
-        if (unavailable) return {};
+        if (unavailable)
+            return {};
         auto found = entries.find(uid);
         PresenceResult old = found == entries.end() ? PresenceResult{PresenceStatus::NotFound, {}}
-            : PresenceResult{PresenceStatus::Found, found->second};
+                                                    : PresenceResult{PresenceStatus::Found, found->second};
         entries[uid] = value;
         ++publications;
         return old;
@@ -33,18 +36,22 @@ public:
     /** 在锁内查询在线归属，区分缺失与不可用。 */
     PresenceResult Find(int uid) override {
         std::lock_guard<std::mutex> lock(mutex);
-        if (unavailable) return {};
+        if (unavailable)
+            return {};
         auto it = entries.find(uid);
         return it == entries.end() ? PresenceResult{PresenceStatus::NotFound, {}}
-            : PresenceResult{PresenceStatus::Found, it->second};
+                                   : PresenceResult{PresenceStatus::Found, it->second};
     }
     /** 仅删除仍匹配服务和会话身份的在线归属，执行可选清理屏障。 */
     bool RemoveIfCurrent(int uid, const chat_session::UserPresence& value) override {
-        if (before_remove) before_remove();
+        if (before_remove)
+            before_remove();
         std::lock_guard<std::mutex> lock(mutex);
-        if (unavailable) return false;
+        if (unavailable)
+            return false;
         auto it = entries.find(uid);
-        if (it != entries.end() && it->second.server_id == value.server_id && it->second.session_id == value.session_id) {
+        if (it != entries.end() && it->second.server_id == value.server_id &&
+            it->second.session_id == value.session_id) {
             entries.erase(it);
             ++removals;
         }
@@ -54,6 +61,7 @@ public:
     std::function<void()> before_remove;
     std::atomic<bool> unavailable{false};
     std::atomic<int> publications{0}, removals{0};
+
 private:
     std::mutex mutex;
     std::map<int, chat_session::UserPresence> entries;
@@ -72,20 +80,30 @@ struct Harness {
         : lifecycle(std::make_shared<SessionLifecycleCoordinator>(directory, presence, "test-server", std::move(kick))),
           first(
               // 运行第一条 I/O 消费线程。
-               [this] { io.run(); }), second(
+              [this] {
+                  io.run();
+              }),
+          second(
               // 运行第二条 I/O 消费线程。
-              [this] { io.run(); }) {}
+              [this] {
+                  io.run();
+              }) {}
     /** 关闭并观察所有会话，排空存储协调任务后释放工作守卫并等待线程。 */
     ~Harness() {
-        for (auto& session : sessions) session->Close();
-        for (auto& session : sessions) Snapshot(session);
+        for (auto& session : sessions)
+            session->Close();
+        for (auto& session : sessions)
+            Snapshot(session);
         lifecycle->Drain();
         guard.reset();
-        first.join(); second.join();
+        first.join();
+        second.join();
     }
     /** 创建并跟踪共享会话，使用调用方指定的消息提交动作。 */
     // 默认接收入站消息以隔离业务处理因素。
-    std::shared_ptr<CSession> Create(CSession::Submit submit = [](LogicMessage) { return LogicSubmitResult::Accepted; }) {
+    std::shared_ptr<CSession> Create(CSession::Submit submit = [](LogicMessage) {
+        return LogicSubmitResult::Accepted;
+    }) {
         auto session = std::make_shared<CSession>(io, lifecycle, directory, std::move(submit));
         sessions.push_back(session);
         return session;
@@ -105,7 +123,9 @@ struct Harness {
         auto promise = std::make_shared<std::promise<SessionBindResult>>();
         auto future = promise->get_future();
         // 把绑定结果交给测试等待者。
-        session->BindAuthenticatedUser(uid, [promise](SessionBindResult result) { promise->set_value(result); });
+        session->BindAuthenticatedUser(uid, [promise](SessionBindResult result) {
+            promise->set_value(result);
+        });
         return Await(std::move(future));
     }
     /** 异步提交发送帧并有界等待入队结果，不将入队等同送达。 */
@@ -113,7 +133,9 @@ struct Harness {
         auto promise = std::make_shared<std::promise<SessionSendResult>>();
         auto future = promise->get_future();
         // 把发送入队结果交给测试等待者。
-        session->Send(std::move(frame), [promise](SessionSendResult result) { promise->set_value(result); });
+        session->Send(std::move(frame), [promise](SessionSendResult result) {
+            promise->set_value(result);
+        });
         return Await(std::move(future));
     }
 };
@@ -124,7 +146,12 @@ struct Connected {
     boost::asio::ip::tcp::socket peer;
     /** 创建会话与对端 socket，完成回环连接后启动会话并等候状态屏障。 */
     // 默认接收入站消息以隔离业务处理因素。
-    Connected(Harness& h, CSession::Submit submit = [](LogicMessage) { return LogicSubmitResult::Accepted; })
+    Connected(
+        Harness& h,
+        CSession::Submit submit =
+            [](LogicMessage) {
+                return LogicSubmitResult::Accepted;
+            })
         : harness(h), session(h.Create(std::move(submit))), peer(h.io) {
         boost::asio::ip::tcp::acceptor acceptor(h.io, {boost::asio::ip::address_v4::loopback(), 0});
         peer.connect(acceptor.local_endpoint());
@@ -133,17 +160,24 @@ struct Connected {
         h.Snapshot(session);
     }
     /** 请求关闭本对象关联的会话。 */
-    ~Connected() { session->Close(); }
+    ~Connected() {
+        session->Close();
+    }
     /** 从回环对端读取指定字节数，有界等待完成或传播读取异常。 */
     std::string Read(std::size_t count) {
         auto data = std::make_shared<std::string>(count, '\0');
         auto result = std::make_shared<std::promise<std::string>>();
         auto future = result->get_future();
         // 持有读取缓冲直到完成，将读取错误或完整字节交给等待者。
-        boost::asio::async_read(peer, boost::asio::buffer(*data), [data, result](boost::system::error_code error, std::size_t) {
-            if (error) result->set_exception(std::make_exception_ptr(std::runtime_error(error.message())));
-            else result->set_value(*data);
-        });
+        boost::asio::async_read(
+            peer,
+            boost::asio::buffer(*data),
+            [data, result](boost::system::error_code error, std::size_t) {
+                if (error)
+                    result->set_exception(std::make_exception_ptr(std::runtime_error(error.message())));
+                else
+                    result->set_value(*data);
+            });
         return Await(std::move(future));
     }
 };

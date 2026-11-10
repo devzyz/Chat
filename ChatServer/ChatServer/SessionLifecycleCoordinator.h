@@ -4,15 +4,20 @@
 #include <boost/asio.hpp>
 #include <memory>
 
-namespace chat_transport { class CServer; }
+namespace chat_transport {
+class CServer;
+}
 class CSession;
 /** @brief 用单工作线程串行发布及清理在线位置；弱引用 Server，绑定任务临时持有会话。 */
 class SessionLifecycleCoordinator {
 public:
     using Kick = std::function<void(int, const chat_session::UserPresence&)>;
     /** @brief 保存有效的目录、在线存储和实例标识；可选 kick 在工作线程通知旧实例踢出指定会话。 */
-    SessionLifecycleCoordinator(std::shared_ptr<UserSessionDirectory> directory,
-        std::shared_ptr<UserPresenceStore> presence, std::string server_id, Kick kick = {});
+    SessionLifecycleCoordinator(
+        std::shared_ptr<UserSessionDirectory> directory,
+        std::shared_ptr<UserPresenceStore> presence,
+        std::string server_id,
+        Kick kick = {});
     /** @brief 等待工作队列退出；销毁前应停止任务生产，且不得从工作线程销毁自身。 */
     ~SessionLifecycleCoordinator();
     /** @brief 在会话工作开始前挂接所属 Server 的弱引用，之后不得并发替换。 */

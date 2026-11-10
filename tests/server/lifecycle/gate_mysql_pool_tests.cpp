@@ -16,15 +16,21 @@ int main() {
             // without opening a database connection or using a test adapter.
             MysqlConnectionPool pool("", "", "", "", 0);
             // 在独立任务中等待借用，以验证关闭会唤醒等待者。
-            auto borrower = std::async(std::launch::async, [&pool] { return pool.GetConnection(); });
+            auto borrower = std::async(std::launch::async, [&pool] {
+                return pool.GetConnection();
+            });
             pool.Close();
             pool.Close();
             if (borrower.wait_for(1s) != std::future_status::ready || borrower.get()) {
                 throw std::runtime_error("closed_pool_borrow_failed");
             }
-            if (pool.GetConnection()) { throw std::runtime_error("closed_pool_reopened"); }
+            if (pool.GetConnection()) {
+                throw std::runtime_error("closed_pool_reopened");
+            }
         }
-        { MysqlConnectionPool pool("", "", "", "", 0); }
+        {
+            MysqlConnectionPool pool("", "", "", "", 0);
+        }
         if (std::chrono::steady_clock::now() - started > 2s) {
             throw std::runtime_error("pool_shutdown_deadline");
         }

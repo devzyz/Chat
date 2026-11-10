@@ -8,8 +8,7 @@
 #include <spdlog/sinks/null_sink.h>
 
 /** @brief 验证认证动作与真实客户端会话清理的接线。 */
-class AuthFlowComponentTests : public QObject
-{
+class AuthFlowComponentTests : public QObject {
     Q_OBJECT
 
 private slots:
@@ -21,21 +20,17 @@ private slots:
     void abnormalDisconnectDelegatesToClientSessionReset();
 };
 
-void AuthFlowComponentTests::initTestCase()
-{
+void AuthFlowComponentTests::initTestCase() {
     qRegisterMetaType<SessionResetReason>("SessionResetReason");
-    spdlog::set_default_logger(
-        spdlog::create<spdlog::sinks::null_sink_mt>("auth-flow-component-tests"));
+    spdlog::set_default_logger(spdlog::create<spdlog::sinks::null_sink_mt>("auth-flow-component-tests"));
 }
 
-void AuthFlowComponentTests::cleanupTestCase()
-{
+void AuthFlowComponentTests::cleanupTestCase() {
     TcpMgr::releaseInstance();
     UserMgr::releaseInstance();
 }
 
-void AuthFlowComponentTests::abnormalDisconnectDelegatesToClientSessionReset()
-{
+void AuthFlowComponentTests::abnormalDisconnectDelegatesToClientSessionReset() {
     AuthFlowCoordinator coordinator;
     AuthOutcome begin;
     begin.kind = AuthOutcomeKind::BeginHttp;
@@ -60,8 +55,7 @@ void AuthFlowComponentTests::abnormalDisconnectDelegatesToClientSessionReset()
     coordinator.reduce(flow.flowId, connected);
     AuthOutcome loggedIn;
     loggedIn.kind = AuthOutcomeKind::ChatLoginSucceeded;
-    QCOMPARE(coordinator.reduce(flow.flowId, loggedIn).kind,
-             std::optional<AuthActionKind>(AuthActionKind::ShowChat));
+    QCOMPARE(coordinator.reduce(flow.flowId, loggedIn).kind, std::optional<AuthActionKind>(AuthActionKind::ShowChat));
 
     ClientSession session;
     session.beginSession();
@@ -73,8 +67,7 @@ void AuthFlowComponentTests::abnormalDisconnectDelegatesToClientSessionReset()
 
     QVERIFY(session.resetSession(SessionResetReason::UnexpectedDisconnect));
     QCOMPARE(resetSpy.count(), 1);
-    QCOMPARE(qvariant_cast<SessionResetReason>(resetSpy.at(0).at(0)),
-             SessionResetReason::UnexpectedDisconnect);
+    QCOMPARE(qvariant_cast<SessionResetReason>(resetSpy.at(0).at(0)), SessionResetReason::UnexpectedDisconnect);
 }
 
 QTEST_MAIN(AuthFlowComponentTests)

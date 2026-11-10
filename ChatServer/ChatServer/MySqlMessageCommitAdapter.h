@@ -4,7 +4,9 @@
 
 #include <memory>
 
-namespace sql { class Connection; }
+namespace sql {
+class Connection;
+}
 
 namespace message_commit {
 
@@ -32,11 +34,18 @@ public:
      */
     Result Commit(int sender, int recipient, int chat, const Batch& batch, Deadline deadline) override;
     /** @brief 设置群发送请求绑定的成员资格代次。 */
-    void SetGroupEpoch(std::int64_t epoch) { _group_epoch = epoch; }
+    void SetGroupEpoch(std::int64_t epoch) {
+        _group_epoch = epoch;
+    }
     /** @brief 固定新增私聊消息使用的关系版本，零只兼容初始关系。 */
-    void SetRelationshipRevision(std::int64_t revision) { _relationship = revision; }
+    void SetRelationshipRevision(std::int64_t revision) {
+        _relationship = revision;
+    }
     /** @brief 查询连接是否仍可归还池，失败连接由调用方丢弃。 */
-    bool IsReusable() const { return _is_reusable; }
+    bool IsReusable() const {
+        return _is_reusable;
+    }
+
 private:
     sql::Connection& _connection;
     TransactionCommit* _commit = nullptr;
@@ -49,7 +58,10 @@ private:
  * @brief 建立独占连接并选择 schema，连接/读/写及 InnoDB 锁等待分别设置为 2 秒。
  * @note 仅接受 localhost 或数字端点，关闭自动重连；不是整个调用的硬期限，失败抛异常。
  */
-std::unique_ptr<sql::Connection> ConnectBounded(const std::string& url, const std::string& user,
-    const std::string& password, const std::string& schema);
+std::unique_ptr<sql::Connection> ConnectBounded(
+    const std::string& url,
+    const std::string& user,
+    const std::string& password,
+    const std::string& schema);
 
 }

@@ -36,23 +36,27 @@ public:
     using Clock = std::chrono::steady_clock;
 
     /** @brief 保存容量和认证配置，验证字面量端点与有限期限；连接在借用时惰性建立。 */
-    RedisPool(std::string host, int port, std::string password, std::size_t capacity,
+    RedisPool(
+        std::string host,
+        int port,
+        std::string password,
+        std::size_t capacity,
         Milliseconds io_timeout = Milliseconds(2000))
-        : _host(host == "localhost" ? "127.0.0.1" : std::move(host)), _port(port),
-          _password(std::move(password)), _capacity(capacity), _io_timeout(io_timeout) {
+        : _host(host == "localhost" ? "127.0.0.1" : std::move(host)), _port(port), _password(std::move(password)),
+          _capacity(capacity), _io_timeout(io_timeout) {
         // Synchronous DNS is not bounded by hiredis' socket deadline. Accept literal
         // endpoints (and loopback localhost) instead of claiming a false DNS bound.
         unsigned char address[16] = {};
-        if (_port < 1 || _port > 65535 || _io_timeout <= Milliseconds::zero() ||
-            _io_timeout > Milliseconds(60000) ||
-            (inet_pton(AF_INET, _host.c_str(), address) != 1 &&
-             inet_pton(AF_INET6, _host.c_str(), address) != 1)) {
+        if (_port < 1 || _port > 65535 || _io_timeout <= Milliseconds::zero() || _io_timeout > Milliseconds(60000) ||
+            (inet_pton(AF_INET, _host.c_str(), address) != 1 && inet_pton(AF_INET6, _host.c_str(), address) != 1)) {
             throw std::invalid_argument("Redis requires a literal endpoint and a finite timeout");
         }
     }
 
     /** @brief 关闭池并释放空闲资源；调用方须先结束使用并归还所有借出的资源。 */
-    ~RedisPool() { Close(); }
+    ~RedisPool() {
+        Close();
+    }
     /** @brief 禁止复制或赋值，避免重复拥有连接、线程或租约资源。 */
     RedisPool(const RedisPool&) = delete;
     /** @brief 禁止复制或赋值，避免重复拥有连接、线程或租约资源。 */
@@ -68,9 +72,13 @@ public:
         {
             std::unique_lock<std::mutex> lock(_mutex);
             // 在关闭、有空闲连接或尚有容量时结束借用等待。
-            if (!_available.wait_until(lock, deadline, [this]() {
-                    return _is_closed || !_idle.empty() || _size < _capacity;
-                }) || _is_closed) {
+            if (!_available.wait_until(
+                    lock,
+                    deadline,
+                    [this]() {
+                        return _is_closed || !_idle.empty() || _size < _capacity;
+                    }) ||
+                _is_closed) {
                 return nullptr;
             }
             if (!_idle.empty()) {
@@ -158,13 +166,12 @@ private:
 
     /** @brief 在给定期限内通过 PING/PONG 校验 Redis 连接健康。 */
     bool Validate(redisContext* connection, Clock::time_point deadline) const {
-        if (connection->err != 0 || Clock::now() >= deadline ||
-            !SetTimeout(connection, Remaining(deadline))) {
+        if (connection->err != 0 || Clock::now() >= deadline || !SetTimeout(connection, Remaining(deadline))) {
             return false;
         }
         Reply reply(static_cast<redisReply*>(redisCommand(connection, "PING")), &freeReplyObject);
         return reply && reply->type == REDIS_REPLY_STATUS && reply->str != nullptr &&
-            std::string(reply->str, reply->len) == "PONG";
+               std::string(reply->str, reply->len) == "PONG";
     }
 
     /** @brief 在截止时间内建立 Redis 连接、按需认证并校验健康，失败返回空连接。 */
@@ -175,8 +182,9 @@ private:
             return Context(nullptr, &redisFree);
         }
         if (!_password.empty()) {
-            Reply reply(static_cast<redisReply*>(redisCommand(connection.get(), "AUTH %b",
-                _password.data(), _password.size())), &freeReplyObject);
+            Reply reply(
+                static_cast<redisReply*>(redisCommand(connection.get(), "AUTH %b", _password.data(), _password.size())),
+                &freeReplyObject);
             if (!reply || reply->type != REDIS_REPLY_STATUS || reply->str == nullptr ||
                 std::string(reply->str, reply->len) != "OK") {
                 return Context(nullptr, &redisFree);

@@ -18,31 +18,50 @@ namespace {
 
 /** @brief 检查单调时钟截止时间，超时抛提交错误供事务层映射。 */
 void CheckDeadline(Deadline deadline) {
-    if (std::chrono::steady_clock::now() >= deadline) { throw Error::DEADLINE_EXCEEDED; }
+    if (std::chrono::steady_clock::now() >= deadline) {
+        throw Error::DEADLINE_EXCEEDED;
+    }
 }
 
 /** @brief 在当前事务锁定私聊双方或群成员所属会话行；无匹配返回 false，SQL 失败抛异常。 */
 bool IsMember(sql::Connection& connection, int sender, int recipient, int chat) {
     if (recipient == 0) {
-        try { messaging::LockGroup(connection, chat, sender); return true; }
-        catch (const messaging::MembershipDenied&) { return false; }
+        try {
+            messaging::LockGroup(connection, chat, sender);
+            return true;
+        } catch (const messaging::MembershipDenied&) {
+            return false;
+        }
     }
-    try { messaging::LockConversation(connection, chat, sender, recipient); return true; }
-    catch (const messaging::MembershipDenied&) { return false; }
+    try {
+        messaging::LockConversation(connection, chat, sender, recipient);
+        return true;
+    } catch (const messaging::MembershipDenied&) {
+        return false;
+    }
 }
 
 /** @brief 锁定发送者 UUID 对应记录并核对会话、接收者及正文；不一致抛 CONFLICT。 */
-Item ReadIdentity(sql::Connection& connection, int sender, int recipient, int chat,
-    const std::pair<std::string, std::string>& message, Disposition disposition) {
+Item ReadIdentity(
+    sql::Connection& connection,
+    int sender,
+    int recipient,
+    int chat,
+    const std::pair<std::string, std::string>& message,
+    Disposition disposition) {
     std::unique_ptr<sql::PreparedStatement> query(connection.prepareStatement(
         "SELECT message_id,chat_id,recv_id,content,UNIX_TIMESTAMP(created_at) AS created_epoch "
         "FROM chat_message WHERE send_id=? AND client_msg_uuid=? FOR UPDATE"));
     query->setInt(1, sender);
     query->setString(2, message.first);
     std::unique_ptr<sql::ResultSet> result(query->executeQuery());
-    if (!result->next()) { throw Error::STORAGE_UNAVAILABLE; }
+    if (!result->next()) {
+        throw Error::STORAGE_UNAVAILABLE;
+    }
     if (result->getInt64("chat_id") != chat || result->getInt64("recv_id") != recipient ||
-        result->getString("content").asStdString() != message.second) { throw Error::CONFLICT; }
+        result->getString("content").asStdString() != message.second) {
+        throw Error::CONFLICT;
+    }
     const auto identifier = result->getUInt64("message_id");
     if (identifier == 0 || identifier > static_cast<std::uint64_t>((std::numeric_limits<int>::max)())) {
         throw Error::STORAGE_UNAVAILABLE;
@@ -52,11 +71,16 @@ Item ReadIdentity(sql::Connection& connection, int sender, int recipient, int ch
 
 }
 
-std::unique_ptr<sql::Connection> ConnectBounded(const std::string& url, const std::string& user,
-    const std::string& password, const std::string& schema) {
+std::unique_ptr<sql::Connection> ConnectBounded(
+    const std::string& url,
+    const std::string& user,
+    const std::string& password,
+    const std::string& schema) {
     // The synchronous classic connector cannot cancel system DNS resolution.
     static const std::regex endpoint("^(tcp://)?(localhost|[0-9.]+|\\[[0-9a-fA-F:]+\\]):[0-9]+$");
-    if (!std::regex_match(url, endpoint)) { throw std::invalid_argument("mysql_numeric_endpoint_required"); }
+    if (!std::regex_match(url, endpoint)) {
+        throw std::invalid_argument("mysql_numeric_endpoint_required");
+    }
     sql::ConnectOptionsMap options;
     options["hostName"] = sql::SQLString(url);
     options["userName"] = sql::SQLString(user);
@@ -72,8 +96,7 @@ std::unique_ptr<sql::Connection> ConnectBounded(const std::string& url, const st
     return connection;
 }
 
-Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, const Batch& batch,
-    Deadline deadline) {
+Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, const Batch& batch, Deadline deadline) {
     Result result;
     bool has_transaction = false;
     bool was_autocommit = true;
@@ -81,13 +104,21 @@ Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, co
         CheckDeadline(deadline);
         was_autocommit = _connection.getAutoCommit();
         // Do not adopt an unrelated caller transaction or implicitly commit it.
-        if (!was_autocommit) { _is_reusable = false; return {Error::STORAGE_UNAVAILABLE, {}}; }
+        if (!was_autocommit) {
+            _is_reusable = false;
+            return {Error::STORAGE_UNAVAILABLE, {}};
+        }
         _connection.setAutoCommit(false);
         has_transaction = true;
-        if (!IsMember(_connection, sender, recipient, chat)) { throw Error::INVALID_MEMBERSHIP; }
+        if (!IsMember(_connection, sender, recipient, chat)) {
+            throw Error::INVALID_MEMBERSHIP;
+        }
         if (recipient == 0 && _group_epoch > 0) {
-            try { messaging::LockGroup(_connection, chat, sender, _group_epoch); }
-            catch (const messaging::MembershipDenied&) { throw Error::INVALID_MEMBERSHIP; }
+            try {
+                messaging::LockGroup(_connection, chat, sender, _group_epoch);
+            } catch (const messaging::MembershipDenied&) {
+                throw Error::INVALID_MEMBERSHIP;
+            }
         }
         CheckDeadline(deadline);
         std::unique_ptr<sql::PreparedStatement> insert(_connection.prepareStatement(
@@ -97,15 +128,20 @@ Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, co
             if (recipient > 0) {
                 std::unique_ptr<sql::PreparedStatement> prior(_connection.prepareStatement(
                     "SELECT message_id FROM chat_message WHERE send_id=? AND client_msg_uuid=? FOR UPDATE"));
-                prior->setInt(1,sender); prior->setString(2,message.first);
+                prior->setInt(1, sender);
+                prior->setString(2, message.first);
                 std::unique_ptr<sql::ResultSet> existing(prior->executeQuery());
                 if (existing->next()) {
                     existing.reset();
-                    result.items.push_back(ReadIdentity(_connection,sender,recipient,chat,message,Disposition::EXISTING));
+                    result.items.push_back(
+                        ReadIdentity(_connection, sender, recipient, chat, message, Disposition::EXISTING));
                     continue;
                 }
-                try { messaging::CheckPrivateSend(_connection,chat,_relationship); }
-                catch (const messaging::PrivateSendDenied&) { throw Error::INVALID_MEMBERSHIP; }
+                try {
+                    messaging::CheckPrivateSend(_connection, chat, _relationship);
+                } catch (const messaging::PrivateSendDenied&) {
+                    throw Error::INVALID_MEMBERSHIP;
+                }
             }
             insert->setInt(1, chat);
             insert->setInt(2, sender);
@@ -116,15 +152,20 @@ Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, co
             try {
                 insert->executeUpdate();
             } catch (const sql::SQLException& error) {
-                if (error.getErrorCode() != 1062) { throw; }
+                if (error.getErrorCode() != 1062) {
+                    throw;
+                }
                 disposition = Disposition::EXISTING;
             }
             CheckDeadline(deadline);
             result.items.push_back(ReadIdentity(_connection, sender, recipient, chat, message, disposition));
         }
         CheckDeadline(deadline);
-        if (_commit) { _commit->Commit(_connection); }
-        else { _connection.commit(); }
+        if (_commit) {
+            _commit->Commit(_connection);
+        } else {
+            _connection.commit();
+        }
         has_transaction = false;
         // A confirmed COMMIT is authoritative even if its reply consumes the remaining budget.
     } catch (Error error) {
@@ -138,12 +179,16 @@ Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, co
         _is_reusable = false;
     }
     try {
-        if (has_transaction) { _connection.rollback(); }
+        if (has_transaction) {
+            _connection.rollback();
+        }
         _connection.setAutoCommit(was_autocommit);
     } catch (const sql::SQLException&) {
         // A disconnected session is discarded; its server transaction rolls back on disconnect.
         _is_reusable = false;
-        if (result.IsSuccess()) { return result; }
+        if (result.IsSuccess()) {
+            return result;
+        }
     }
     return result;
 }

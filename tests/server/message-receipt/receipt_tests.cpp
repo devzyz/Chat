@@ -4,9 +4,12 @@
 /** 验证回执请求拒绝重复条目、非法等级及格式错误。 */
 TEST(MessageReceipt, RejectsMalformedAndDuplicateReports) {
     Json::Value request;
-    request["version"] = 1; request["chat_id"] = 12; request["request_id"] = "receipt-test";
+    request["version"] = 1;
+    request["chat_id"] = 12;
+    request["request_id"] = "receipt-test";
     Json::Value item;
-    item["message_id"] = 10; item["level"] = "read";
+    item["message_id"] = 10;
+    item["level"] = "read";
     request["items"].append(item);
     EXPECT_NO_THROW(messaging::ValidateReceiptRequest(request, true));
     request["items"].append(item);

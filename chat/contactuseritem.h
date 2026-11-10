@@ -13,12 +13,11 @@ class ContactUserItem;
  * @brief The ContactUserItem class
  * 联系连列表的自定义QListWidgetItem
  */
-class ContactUserItem : public ListItemBase
-{
+class ContactUserItem : public ListItemBase {
     Q_OBJECT
 public:
     /** @brief 初始化对象，用于展示好友或联系人条目的资料。 */
-    explicit ContactUserItem(QWidget *parent = nullptr);
+    explicit ContactUserItem(QWidget* parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ContactUserItem();
     /**
@@ -48,7 +47,7 @@ public:
     std::shared_ptr<UserInfo> getFriendInfo();
 
 private:
-    Ui::ContactUserItem *ui;
+    Ui::ContactUserItem* ui;
     // 当前item保存的用户信息
     std::shared_ptr<UserInfo> _friend_info;
 };

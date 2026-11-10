@@ -18,27 +18,46 @@ class CSession : public std::enable_shared_from_this<CSession> {
 public:
     using Submit = std::function<LogicSubmitResult(LogicMessage)>;
     /** @brief 创建未启动会话；依赖必须有效，submit 在会话 strand 同步调用，不应阻塞。 */
-    CSession(boost::asio::io_context& io, std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
-        std::shared_ptr<UserSessionDirectory> directory, Submit submit);
+    CSession(
+        boost::asio::io_context& io,
+        std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
+        std::shared_ptr<UserSessionDirectory> directory,
+        Submit submit);
     /** @brief 默认释放成员资源；正常关闭及所有权移除由 Close 的异步流程完成。 */
     ~CSession() = default;
     /** @brief 借出 socket 供 acceptor 在 Start 前接入；引用只在会话存活期间有效。 */
     boost::asio::ip::tcp::socket& Socket(); // Acceptor only, before Start.
     /** @brief 返回不可变会话标识的借用引用，有效期与会话相同。 */
-    const SessionId& Id() const noexcept { return _id; }
+    const SessionId& Id() const noexcept {
+        return _id;
+    }
     /** @brief 返回已绑定 UID 的原子快照；未绑定或进入关闭时为 0。 */
-    int AuthenticatedUid() const noexcept { return _authenticated_uid.load(); }
+    int AuthenticatedUid() const noexcept {
+        return _authenticated_uid.load();
+    }
     /** @brief 返回此连接是否协商资料与好友管理协议。 */
-    bool SupportsSocial() const noexcept { return _social.load(); }
+    bool SupportsSocial() const noexcept {
+        return _social.load();
+    }
     /** @brief 登录协商是否支持版本化资料和好友关系。 */
-    void EnableSocial(bool enabled) noexcept { _social.store(enabled); }
+    void EnableSocial(bool enabled) noexcept {
+        _social.store(enabled);
+    }
     /** @brief 查询已协商的群能力。 */
-    bool SupportsGroups() const noexcept { return _groups.load(); }
+    bool SupportsGroups() const noexcept {
+        return _groups.load();
+    }
     /** @brief 保存登录协商结果。 */
-    void EnableGroups(bool enabled) noexcept { _groups.store(enabled); }
-    bool SupportsReceipts() const noexcept { return _receipts.load(); }
+    void EnableGroups(bool enabled) noexcept {
+        _groups.store(enabled);
+    }
+    bool SupportsReceipts() const noexcept {
+        return _receipts.load();
+    }
     /** @brief 原子更新协商后的回执能力，不改变认证状态。 */
-    void EnableReceipts(bool enabled) noexcept { _receipts.store(enabled); }
+    void EnableReceipts(bool enabled) noexcept {
+        _receipts.store(enabled);
+    }
     /** @brief 投递首次启动至 strand，开始收帧和心跳；重复启动或关闭后启动无效。 */
     void Start();
     /**
@@ -56,15 +75,19 @@ public:
      * @note 非 Active 返回 NotActive；无效 UID、已绑定或绑定中返回 AlreadyBound；存储失败返回
      * Unavailable。Bound 表示本地登记完成，跨服替换通知可能仍未完成。
      */
-    void BindAuthenticatedUser(int uid, BindCompletion completion, std::string authentication_token =
-        {});
+    void BindAuthenticatedUser(int uid, BindCompletion completion, std::string authentication_token = {});
     /** @brief 在 strand 将状态及首次关闭原因交给必填回调；回调不得阻塞或抛异常。 */
     void Inspect(std::function<void(SessionState, std::optional<SessionCloseReason>)> completion);
+
 private:
     friend class SessionLifecycleCoordinator;
     /** @brief 将发布结果送回 strand；取消或关闭时拒绝绑定，先通知 committed 再调用业务 completion。 */
-    void FinishBinding(int uid, SessionBindResult result, BindCompletion completion,
-        std::shared_ptr<std::atomic<bool>> cancelled, std::function<void(bool)> committed);
+    void FinishBinding(
+        int uid,
+        SessionBindResult result,
+        BindCompletion completion,
+        std::shared_ptr<std::atomic<bool>> cancelled,
+        std::function<void(bool)> committed);
     /** @brief 仅在 strand 首次进入 Closing，注销本地身份并取消 socket、心跳及待发队列。 */
     void BeginClosing(SessionCloseReason reason);
     /** @brief 在 strand 确认关闭且 I/O、绑定全部结束后，仅一次请求 Server 释放所有权。 */

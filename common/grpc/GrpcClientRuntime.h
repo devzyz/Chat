@@ -55,8 +55,7 @@ inline std::chrono::milliseconds ParseDurationMs(
     long long value = 0;
     try {
         value = std::stoll(configured, &parsed);
-    }
-    catch (const std::exception&) {
+    } catch (const std::exception&) {
         throw std::invalid_argument(key + " must be an integer between 100 and 60000 milliseconds");
     }
     if (parsed != configured.size() || value < 100 || value > 60000) {
@@ -72,8 +71,7 @@ struct ClientPolicy {
 };
 
 /** @brief 在线程间分配固定容量的独占 RPC 资源；关闭唤醒等待者，租约须在池析构前释放。 */
-template <typename Resource>
-class BoundedPool {
+template <typename Resource> class BoundedPool {
 public:
     using Factory = std::function<std::unique_ptr<Resource>()>;
 
@@ -89,8 +87,7 @@ public:
 
         /** @brief 接管来源的池关联与独占资源，移动后来源为空租约。 */
         Lease(Lease&& other) noexcept
-            : _owner(std::exchange(other._owner, nullptr)),
-              _resource(std::move(other._resource)) {}
+            : _owner(std::exchange(other._owner, nullptr)), _resource(std::move(other._resource)) {}
 
         /** @brief 先归还自身资源，再接管来源并使其为空；自移动不改变状态。 */
         Lease& operator=(Lease&& other) noexcept {
@@ -108,11 +105,17 @@ public:
         }
 
         /** @brief 返回租约内资源的借用访问，调用前须保证租约有效且尚未归还。 */
-        Resource* operator->() const { return _resource.get(); }
+        Resource* operator->() const {
+            return _resource.get();
+        }
         /** @brief 返回租约内资源的借用访问，调用前须保证租约有效且尚未归还。 */
-        Resource& operator*() const { return *_resource; }
+        Resource& operator*() const {
+            return *_resource;
+        }
         /** @brief 查询租约是否仍持有资源。 */
-        explicit operator bool() const { return _resource != nullptr; }
+        explicit operator bool() const {
+            return _resource != nullptr;
+        }
 
         /** @brief 归还仍持有的租约资源并清空池关联，可重复调用。 */
         void Reset() {
@@ -125,8 +128,7 @@ public:
     private:
         friend class BoundedPool<Resource>;
         /** @brief 接管池借出的独占资源并记录归还目标；池须活过租约。 */
-        Lease(BoundedPool* owner, std::unique_ptr<Resource> resource)
-            : _owner(owner), _resource(std::move(resource)) {}
+        Lease(BoundedPool* owner, std::unique_ptr<Resource> resource) : _owner(owner), _resource(std::move(resource)) {}
 
         BoundedPool* _owner = nullptr;
         std::unique_ptr<Resource> _resource;
@@ -183,15 +185,15 @@ public:
             return _closed || !_resources.empty();
         });
         if (!ready) {
-            return { Failure::PoolExhausted, Lease() };
+            return {Failure::PoolExhausted, Lease()};
         }
         if (_closed) {
-            return { Failure::Closed, Lease() };
+            return {Failure::Closed, Lease()};
         }
 
         auto resource = std::move(_resources.front());
         _resources.pop();
-        return { Failure::None, Lease(this, std::move(resource)) };
+        return {Failure::None, Lease(this, std::move(resource))};
     }
 
     /** @brief 禁止后续借用并唤醒等待者；空闲资源留到析构释放，借出资源归还时释放。 */
@@ -224,13 +226,14 @@ private:
 };
 
 /** @brief 携带 RPC 响应及传输失败分类；业务错误仍由响应字段解释。 */
-template <typename Response>
-struct CallResult {
+template <typename Response> struct CallResult {
     Response response;
     Failure failure = Failure::None;
 
     /** @brief 查询当前结果或租约是否具有可用的成功状态。 */
-    explicit operator bool() const { return failure == Failure::None; }
+    explicit operator bool() const {
+        return failure == Failure::None;
+    }
 };
 
 /** @brief 先有界借用 stub，再设置 RPC 截止时间执行一次调用；返回响应及失败分类，不重放请求。 */
@@ -242,14 +245,14 @@ CallResult<Response> InvokeUnary(
     Invoker invoke) {
     auto acquired = pool.Acquire();
     if (!acquired) {
-        return { Response(), acquired.failure };
+        return {Response(), acquired.failure};
     }
 
     grpc::ClientContext context;
     context.set_deadline(std::chrono::system_clock::now() + deadline);
     Response response;
     const auto status = invoke(*acquired.lease, context, request, response);
-    return { std::move(response), ClassifyStatus(status) };
+    return {std::move(response), ClassifyStatus(status)};
 }
 
-}  // namespace rpc
+} // namespace rpc

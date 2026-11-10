@@ -11,8 +11,7 @@ using namespace std::chrono_literals;
 
 namespace {
 /** 验证具体生产池的租约归还后可再次借用。 */
-template <typename Factory>
-void VerifyBorrowReturn(Factory factory) {
+template <typename Factory> void VerifyBorrowReturn(Factory factory) {
     auto pool = factory();
     {
         auto first = pool->Acquire();
@@ -22,8 +21,7 @@ void VerifyBorrowReturn(Factory factory) {
 }
 
 /** 验证具体生产池耗尽时有限返回 PoolExhausted。 */
-template <typename Factory>
-void VerifyExhaustion(Factory factory) {
+template <typename Factory> void VerifyExhaustion(Factory factory) {
     auto pool = factory();
     auto held = pool->Acquire();
     ASSERT_TRUE(held);
@@ -34,8 +32,7 @@ void VerifyExhaustion(Factory factory) {
 }
 
 /** 验证生产池关闭幂等、唤醒等待者并拒绝关闭后借用。 */
-template <typename Factory>
-void VerifyCloseLifecycle(Factory factory) {
+template <typename Factory> void VerifyCloseLifecycle(Factory factory) {
     auto pool = factory();
     auto held = pool->Acquire();
     ASSERT_TRUE(held);
@@ -58,26 +55,42 @@ void VerifyCloseLifecycle(Factory factory) {
 /** 返回创建Chat 的 Status单容量短期限池的工厂。 */
 auto ChatStatusPoolFactory() {
     // 创建Chat 的 Status生产 RPC 池，无需实际调用远端。
-    return [] { return std::make_unique<StatusConnectionPool>("127.0.0.1", "1", 1, 50ms); };
+    return [] {
+        return std::make_unique<StatusConnectionPool>("127.0.0.1", "1", 1, 50ms);
+    };
 }
 
 /** 返回创建Chat 对端单容量短期限池的工厂。 */
 auto ChatPeerPoolFactory() {
     // 创建Chat 对端生产 RPC 池，无需实际调用远端。
-    return [] { return std::make_unique<ChatConnectionPool>("127.0.0.1", "1", 1, 50ms); };
+    return [] {
+        return std::make_unique<ChatConnectionPool>("127.0.0.1", "1", 1, 50ms);
+    };
 }
 }
 
 /** 验证Chat 的 Status池借用归还合同。 */
-TEST(ChatStatusPoolContractTests, BorrowReturn) { VerifyBorrowReturn(ChatStatusPoolFactory()); }
+TEST(ChatStatusPoolContractTests, BorrowReturn) {
+    VerifyBorrowReturn(ChatStatusPoolFactory());
+}
 /** 验证Chat 的 Status池耗尽有界合同。 */
-TEST(ChatStatusPoolContractTests, ExhaustionIsBounded) { VerifyExhaustion(ChatStatusPoolFactory()); }
+TEST(ChatStatusPoolContractTests, ExhaustionIsBounded) {
+    VerifyExhaustion(ChatStatusPoolFactory());
+}
 /** 验证Chat 的 Status池关闭唤醒与幂等合同。 */
-TEST(ChatStatusPoolContractTests, CloseIsIdempotentAndWakesBorrowers) { VerifyCloseLifecycle(ChatStatusPoolFactory()); }
+TEST(ChatStatusPoolContractTests, CloseIsIdempotentAndWakesBorrowers) {
+    VerifyCloseLifecycle(ChatStatusPoolFactory());
+}
 
 /** 验证Chat 对端池借用归还合同。 */
-TEST(ChatPeerPoolContractTests, BorrowReturn) { VerifyBorrowReturn(ChatPeerPoolFactory()); }
+TEST(ChatPeerPoolContractTests, BorrowReturn) {
+    VerifyBorrowReturn(ChatPeerPoolFactory());
+}
 /** 验证Chat 对端池耗尽有界合同。 */
-TEST(ChatPeerPoolContractTests, ExhaustionIsBounded) { VerifyExhaustion(ChatPeerPoolFactory()); }
+TEST(ChatPeerPoolContractTests, ExhaustionIsBounded) {
+    VerifyExhaustion(ChatPeerPoolFactory());
+}
 /** 验证Chat 对端池关闭唤醒与幂等合同。 */
-TEST(ChatPeerPoolContractTests, CloseIsIdempotentAndWakesBorrowers) { VerifyCloseLifecycle(ChatPeerPoolFactory()); }
+TEST(ChatPeerPoolContractTests, CloseIsIdempotentAndWakesBorrowers) {
+    VerifyCloseLifecycle(ChatPeerPoolFactory());
+}

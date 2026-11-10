@@ -4,12 +4,11 @@
 #include <QListView>
 
 /** @brief 观察消息视图滚动和尺寸变化，向页面提供历史加载与滚动定位事件。 */
-class ChatDetailList : public QListView
-{
+class ChatDetailList : public QListView {
     Q_OBJECT
 public:
     /** @brief 初始化对象，用于观察消息视图滚动和尺寸变化，向页面提供历史加载与滚动定位事件。 */
-    explicit ChatDetailList(QWidget *parent = nullptr);
+    explicit ChatDetailList(QWidget* parent = nullptr);
 
     /** @brief 判断滚动位置是否接近消息列表底部，供自动滚动策略使用。 */
     bool isNearBottom(int tolerance = 24) const;
@@ -24,11 +23,11 @@ signals:
 
 protected:
     /** @brief 响应控件尺寸变化并更新布局或通知视口变化。 */
-    void resizeEvent(QResizeEvent *event) override;
+    void resizeEvent(QResizeEvent* event) override;
     /** @brief 处理标准复制快捷键，其余按键交给原生列表。 */
-    void keyPressEvent(QKeyEvent *event) override;
+    void keyPressEvent(QKeyEvent* event) override;
     /** @brief 为鼠标指向的消息提供复制入口。 */
-    void contextMenuEvent(QContextMenuEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
 };
 
 #endif // CHATDETAILLIST_H

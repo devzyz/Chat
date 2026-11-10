@@ -13,8 +13,7 @@ StatusGrpcClient::StatusGrpcClient() {
         rpc::ParseDurationMs(
             grpc_config["StatusDeadlineMs"],
             "[Grpc].StatusDeadlineMs",
-            std::chrono::milliseconds(3000))
-    };
+            std::chrono::milliseconds(3000))};
     _pool = std::make_unique<RPCConnection>(
         5,
         config["StatusServer"]["Host"],
@@ -27,12 +26,7 @@ StatusGrpcClient::StatusGrpcClient(
     const std::string& port,
     rpc::ClientPolicy policy,
     std::size_t pool_size)
-    : _pool(std::make_unique<RPCConnection>(
-          pool_size,
-          host,
-          port,
-          policy.acquire_timeout)),
-      _policy(policy) {}
+    : _pool(std::make_unique<RPCConnection>(pool_size, host, port, policy.acquire_timeout)), _policy(policy) {}
 
 GetChatServerRsp StatusGrpcClient::GetChatServer(int uid, long long auth_version) {
     GetChatServerReq request;
@@ -43,10 +37,7 @@ GetChatServerRsp StatusGrpcClient::GetChatServer(int uid, long long auth_version
         request,
         _policy.rpc_deadline,
         // 执行 Status 选服 RPC 并返回传输状态。
-        [](StatusService::Stub& stub,
-           ClientContext& context,
-           const GetChatServerReq& req,
-           GetChatServerRsp& rsp) {
+        [](StatusService::Stub& stub, ClientContext& context, const GetChatServerReq& req, GetChatServerRsp& rsp) {
             return stub.GetChatServer(&context, req, &rsp);
         });
     if (!result) {

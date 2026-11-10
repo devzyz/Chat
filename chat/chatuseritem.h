@@ -11,13 +11,12 @@ class ChatUserItem;
 }
 
 /** @brief 展示单个会话的联系人头像、消息摘要与未读提醒。 */
-class ChatUserItem : public ListItemBase
-{
+class ChatUserItem : public ListItemBase {
     Q_OBJECT
 
 public:
     /** @brief 初始化对象，用于展示会话资料、最新消息和未读数。 */
-    explicit ChatUserItem(QWidget *parent = nullptr);
+    explicit ChatUserItem(QWidget* parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ChatUserItem();
     // 目的是为了设置外面的QListItem，因为QListWidget内部只能放这个类，所以要先放这个类，再在这个类内部放自己自定义的
@@ -35,15 +34,16 @@ public:
     /** @brief 设置上一次聊天数据。 */
     void setLastTextChatMsg(QString last_text_msg);
     /** @brief 从存储摘要同时更新内容和日期，空会话清除旧时间。 */
-    void setSummary(const QString &text, qint64 sentAt);
+    void setSummary(const QString& text, qint64 sentAt);
     // 通过判断_new_msg_count来决定是否显示新消息提醒
     /** @brief 通过判断_new_msg_count来决定是否显示新消息提醒。 */
     void showNewMsgTip();
     // 更新_new_msg_count的数量
     /** @brief 用账号存储返回的绝对数量刷新提醒，不依赖控件收到通知的次数。 */
     void setNewMsgCount(qint64 count);
+
 private:
-    Ui::ChatUserItem *ui;
+    Ui::ChatUserItem* ui;
     std::shared_ptr<ChatInfo> _chat_info;
     qint64 _new_msg_count;
 };

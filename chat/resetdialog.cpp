@@ -3,9 +3,8 @@
 #include "ui_resetdialog.h"
 #include "httpmgr.h"
 
-ResetDialog::ResetDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
-    : QDialog(parent), ui(new Ui::ResetDialog), _authFlow(authFlow)
-{
+ResetDialog::ResetDialog(AuthFlowCoordinator& authFlow, QWidget* parent)
+    : QDialog(parent), ui(new Ui::ResetDialog), _authFlow(authFlow) {
     ui->setupUi(this);
 
     // 密码显示格式
@@ -16,69 +15,80 @@ ResetDialog::ResetDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     repolish(ui->err_tip);
 
     // 连接单例类的信号与当前类的槽
-    connect(HttpMgr::instance().get(), &HttpMgr::passwordResetHttpFinished,
-            this, &ResetDialog::resetModFinish);
+    connect(HttpMgr::instance().get(), &HttpMgr::passwordResetHttpFinished, this, &ResetDialog::resetModFinish);
 
     initHttpHandlers();
 
     // 连接信号与槽，当QLabel编辑完成信号触发后，调用对应的检查函数，并进行提示
-    connect(ui->user_edit, &QLineEdit::editingFinished, this,
+    connect(
+        ui->user_edit,
+        &QLineEdit::editingFinished,
+        this,
         /** @brief 用户名编辑结束时校验。 */
-        [this](){
-        checkUserValid();
-    });
+        [this]() {
+            checkUserValid();
+        });
 
-    connect(ui->email_edit, &QLineEdit::editingFinished, this,
+    connect(
+        ui->email_edit,
+        &QLineEdit::editingFinished,
+        this,
         /** @brief 邮箱编辑结束时校验。 */
-        [this](){
-        checkEmailValid();
-    });
+        [this]() {
+            checkEmailValid();
+        });
 
-    connect(ui->password_edit, &QLineEdit::editingFinished, this,
+    connect(
+        ui->password_edit,
+        &QLineEdit::editingFinished,
+        this,
         /** @brief 密码编辑结束时校验。 */
-        [this](){
-        checkPasswordValid();
-    });
+        [this]() {
+            checkPasswordValid();
+        });
 
-    connect(ui->varify_edit, &QLineEdit::editingFinished, this,
+    connect(
+        ui->varify_edit,
+        &QLineEdit::editingFinished,
+        this,
         /** @brief 验证码编辑结束时校验。 */
-        [this](){
-        checkVarifyValid();
-    });
+        [this]() {
+            checkVarifyValid();
+        });
 
-    ui->password_visible->setState("invisible_leave", "invisible_hover", "",
-                                   "visible_leave", "visible_hover", "");
+    ui->password_visible->setState("invisible_leave", "invisible_hover", "", "visible_leave", "visible_hover", "");
 
     // 连接槽函数，触发真正的密码的隐藏与显示
-    connect(ui->password_visible, &ClickedLabel::clicked, this,
+    connect(
+        ui->password_visible,
+        &ClickedLabel::clicked,
+        this,
         /** @brief 按标签状态切换密码可见性。 */
         [this]() {
-        auto state = ui->password_visible->getCurState();
+            auto state = ui->password_visible->getCurState();
 
-        // 当为隐藏状态时，切换编辑框为密码模式;否则为显示模式
-        if (state == ClickLabelState::Normal) {
-            ui->password_edit->setEchoMode(QLineEdit::Password);
-        }else {
-            ui->password_edit->setEchoMode(QLineEdit::Normal);
-        }
-    });
+            // 当为隐藏状态时，切换编辑框为密码模式;否则为显示模式
+            if (state == ClickLabelState::Normal) {
+                ui->password_edit->setEchoMode(QLineEdit::Password);
+            } else {
+                ui->password_edit->setEchoMode(QLineEdit::Normal);
+            }
+        });
 }
 
 /**
  * @brief ResetDialog::~ResetDialog
  * 析构函数
  */
-ResetDialog::~ResetDialog()
-{
+ResetDialog::~ResetDialog() {
     delete ui;
 }
 
-void ResetDialog::resetModFinish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err)
-{
+void ResetDialog::resetModFinish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err) {
     AuthOutcome outcome;
     outcome.module = static_cast<int>(Modules::RESETMOD);
     outcome.requestId = static_cast<int>(id);
-    if(err != ErrorCodes::SUCCESS){
+    if (err != ErrorCodes::SUCCESS) {
         outcome.kind = AuthOutcomeKind::HttpNetworkError;
         const AuthAction action = _authFlow.reduce(flowId, outcome);
         if (action.kind == AuthActionKind::StayAndShowError) {
@@ -89,7 +99,7 @@ void ResetDialog::resetModFinish(AuthFlowId flowId, ReqId id, QString res, Error
     // 解析 JSON 字符串,res需转化为QByteArray
     QJsonDocument jsonDoc = QJsonDocument::fromJson(res.toUtf8());
     //json解析错误
-    if(jsonDoc.isNull()){
+    if (jsonDoc.isNull()) {
         outcome.kind = AuthOutcomeKind::HttpMalformedJson;
         const AuthAction action = _authFlow.reduce(flowId, outcome);
         if (action.kind == AuthActionKind::StayAndShowError) {
@@ -98,7 +108,7 @@ void ResetDialog::resetModFinish(AuthFlowId flowId, ReqId id, QString res, Error
         return;
     }
     //json解析错误
-    if(!jsonDoc.isObject()){
+    if (!jsonDoc.isObject()) {
         outcome.kind = AuthOutcomeKind::HttpMalformedJson;
         const AuthAction action = _authFlow.reduce(flowId, outcome);
         if (action.kind == AuthActionKind::StayAndShowError) {
@@ -109,8 +119,8 @@ void ResetDialog::resetModFinish(AuthFlowId flowId, ReqId id, QString res, Error
     const QJsonObject object = jsonDoc.object();
     const int businessError = object["error"].toInt();
     outcome.businessError = businessError;
-    outcome.kind = businessError == ErrorCodes::SUCCESS
-        ? AuthOutcomeKind::HttpSuccess : AuthOutcomeKind::HttpBusinessError;
+    outcome.kind =
+        businessError == ErrorCodes::SUCCESS ? AuthOutcomeKind::HttpSuccess : AuthOutcomeKind::HttpBusinessError;
     const AuthAction action = _authFlow.reduce(flowId, outcome);
     if (action.kind == AuthActionKind::StayAndShowError) {
         showAuthError(action.error);
@@ -126,7 +136,7 @@ void ResetDialog::resetModFinish(AuthFlowId flowId, ReqId id, QString res, Error
 void ResetDialog::showTip(QString str, bool isOk) {
     if (isOk) {
         ui->err_tip->setProperty("state", "normal");
-    }else {
+    } else {
         ui->err_tip->setProperty("state", "err");
     }
 
@@ -134,42 +144,42 @@ void ResetDialog::showTip(QString str, bool isOk) {
     repolish(ui->err_tip);
 }
 
-void ResetDialog::showAuthError(AuthError error)
-{
+void ResetDialog::showAuthError(AuthError error) {
     showTip(authErrorMessage(error), false);
 }
 
 // 添加对网络请求返回的json对象的处理
-void ResetDialog::initHttpHandlers()
-{
+void ResetDialog::initHttpHandlers() {
     // 重置密码获取验证码回包的逻辑
-    _handlers.insert(ReqId::ID_GET_VERIFY_CODE,
+    _handlers.insert(
+        ReqId::ID_GET_VERIFY_CODE,
         /** @brief 将验证码回复转换为表单提示。 */
         [this](const QJsonObject& jsonObj) {
-        int error = jsonObj["error"].toInt();
-        if (error != ErrorCodes::SUCCESS) {
-            showTip(tr("参数错误"), false);
-            return ;
-        }
+            int error = jsonObj["error"].toInt();
+            if (error != ErrorCodes::SUCCESS) {
+                showTip(tr("参数错误"), false);
+                return;
+            }
 
-        showTip(tr("验证码已经发送到邮箱，注意查收"), true);
-        SPDLOG_INFO("password-reset verification code sent");
-    });
+            showTip(tr("验证码已经发送到邮箱，注意查收"), true);
+            SPDLOG_INFO("password-reset verification code sent");
+        });
 
     // 重置密码的回包逻辑
-    _handlers.insert(ReqId::ID_RESET_PWD,
+    _handlers.insert(
+        ReqId::ID_RESET_PWD,
         /** @brief 将重置密码回复转换为成功或失败提示。 */
         [this](const QJsonObject& jsonObj) {
-        int error = jsonObj["error"].toInt();
+            int error = jsonObj["error"].toInt();
 
-        if (error != ErrorCodes::SUCCESS) {
-            showTip(tr("参数错误"), false);
-            return ;
-        }
+            if (error != ErrorCodes::SUCCESS) {
+                showTip(tr("参数错误"), false);
+                return;
+            }
 
-        showTip(tr("密码重置成功"), true);
-        SPDLOG_INFO("password reset succeeded");
-    });
+            showTip(tr("密码重置成功"), true);
+            SPDLOG_INFO("password reset succeeded");
+        });
 }
 
 // 添加错误信息到错误map里面
@@ -183,13 +193,12 @@ void ResetDialog::delTipErr(TipErr te) {
     _tip_errs.remove(te);
     if (_tip_errs.empty()) {
         ui->err_tip->setText("");
-        return ;
+        return;
     }
     showTip(_tip_errs.first(), false);
 }
 
-bool ResetDialog::checkUserValid()
-{
+bool ResetDialog::checkUserValid() {
     if (ui->user_edit->text() == "") {
         addTipErr(TipErr::TIP_USER_ERR, tr("用户名不能为空"));
         return false;
@@ -256,24 +265,22 @@ bool ResetDialog::checkVarifyValid() {
     return true;
 }
 
-
-void ResetDialog::on_confirm_btn_clicked()
-{
+void ResetDialog::on_confirm_btn_clicked() {
     auto user_match = checkUserValid();
     if (!user_match) {
-        return ;
+        return;
     }
     auto user_email = checkEmailValid();
     if (!user_email) {
-        return ;
+        return;
     }
     auto user_varify = checkVarifyValid();
     if (!user_varify) {
-        return ;
+        return;
     }
     auto user_password = checkPasswordValid();
     if (!user_password) {
-        return ;
+        return;
     }
 
     QJsonObject json_obj;
@@ -287,19 +294,16 @@ void ResetDialog::on_confirm_btn_clicked()
     begin.module = static_cast<int>(Modules::RESETMOD);
     begin.requestId = static_cast<int>(ReqId::ID_RESET_PWD);
     const AuthFlowId flowId = _authFlow.reduce(0, begin).flowId;
-    HttpMgr::instance()->postHttpReq(QUrl(gate_url_prefix + "/reset_pwd"), json_obj,
-                                        ReqId::ID_RESET_PWD, Modules::RESETMOD,
-                                        flowId);
+    HttpMgr::instance()
+        ->postHttpReq(QUrl(gate_url_prefix + "/reset_pwd"), json_obj, ReqId::ID_RESET_PWD, Modules::RESETMOD, flowId);
 }
 
-
-void ResetDialog::on_get_code_btn_clicked()
-{
+void ResetDialog::on_get_code_btn_clicked() {
     auto email = ui->email_edit->text();
     auto match = checkEmailValid();
 
     if (!match) {
-        return ;
+        return;
     }
 
     // 发送http请求获取验证码
@@ -311,13 +315,14 @@ void ResetDialog::on_get_code_btn_clicked()
     begin.module = static_cast<int>(Modules::RESETMOD);
     begin.requestId = static_cast<int>(ReqId::ID_GET_VERIFY_CODE);
     const AuthFlowId flowId = _authFlow.reduce(0, begin).flowId;
-    HttpMgr::instance()->postHttpReq(QUrl(gate_url_prefix + "/get_varifycode"), json_obj,
-                                        ReqId::ID_GET_VERIFY_CODE, Modules::RESETMOD,
-                                        flowId);
+    HttpMgr::instance()->postHttpReq(
+        QUrl(gate_url_prefix + "/get_varifycode"),
+        json_obj,
+        ReqId::ID_GET_VERIFY_CODE,
+        Modules::RESETMOD,
+        flowId);
 }
 
-
-void ResetDialog::on_cancel_btn_clicked()
-{
+void ResetDialog::on_cancel_btn_clicked() {
     emit loginRequested();
 }

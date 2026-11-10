@@ -14,7 +14,7 @@ inline void CheckPrivateSend(sql::Connection& db, int chat, std::int64_t revisio
         "SELECT relationship_active,relationship_revision FROM private_chat WHERE chat_id=? FOR UPDATE"));
     statement->setInt(1, chat);
     std::unique_ptr<sql::ResultSet> row(statement->executeQuery());
-    if (!row->next() || !row->getBoolean(1)
-        || row->getInt64(2) != (revision > 0 ? revision : 1)) throw PrivateSendDenied();
+    if (!row->next() || !row->getBoolean(1) || row->getInt64(2) != (revision > 0 ? revision : 1))
+        throw PrivateSendDenied();
 }
 }

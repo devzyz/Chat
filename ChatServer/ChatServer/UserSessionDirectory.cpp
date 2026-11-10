@@ -1,6 +1,8 @@
 #include "UserSessionDirectory.h"
 
-std::shared_ptr<CSession> UserSessionDirectory::Register(int uid, const SessionId& id,
+std::shared_ptr<CSession> UserSessionDirectory::Register(
+    int uid,
+    const SessionId& id,
     std::weak_ptr<CSession> session) {
     std::lock_guard<std::mutex> lock(_mutex);
     auto old = _entries[uid].session.lock();
@@ -20,5 +22,6 @@ bool UserSessionDirectory::IsCurrent(int uid, const SessionId& id) const {
 void UserSessionDirectory::UnregisterIfCurrent(int uid, const SessionId& id) {
     std::lock_guard<std::mutex> lock(_mutex);
     const auto it = _entries.find(uid);
-    if (it != _entries.end() && it->second.id == id) _entries.erase(it);
+    if (it != _entries.end() && it->second.id == id)
+        _entries.erase(it);
 }

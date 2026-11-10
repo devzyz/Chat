@@ -26,82 +26,82 @@ using tcp = boost::asio::ip::tcp;
 /** 线程安全记录 Gate 委托端点，隔离业务实现供 HTTP 路由测试使用。 */
 class RecordingGateRequest final : public gate::GateRequest {
 public:
-	/** 在锁内记录端点并返回默认 Gate 结果。 */
-	gate::Result Handle(gate::Endpoint endpoint, const Json::Value&) override {
-		std::lock_guard<std::mutex> lock(mutex_);
-		endpoints_.push_back(endpoint);
-		return {};
-	}
+    /** 在锁内记录端点并返回默认 Gate 结果。 */
+    gate::Result Handle(gate::Endpoint endpoint, const Json::Value&) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        endpoints_.push_back(endpoint);
+        return {};
+    }
 
-	/** 在锁内复制已接收端点列表，调用方不借用内部容器。 */
-	std::vector<gate::Endpoint> Endpoints() const {
-		std::lock_guard<std::mutex> lock(mutex_);
-		return endpoints_;
-	}
+    /** 在锁内复制已接收端点列表，调用方不借用内部容器。 */
+    std::vector<gate::Endpoint> Endpoints() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return endpoints_;
+    }
 
 private:
-	mutable std::mutex mutex_;
-	std::vector<gate::Endpoint> endpoints_;
+    mutable std::mutex mutex_;
+    std::vector<gate::Endpoint> endpoints_;
 };
 
 /** 拥有 loopback Gate 服务、工作线程和请求替身，逐用例启动与停止。 */
 class T09_GHTTP_Core : public testing::Test {
 protected:
-	/** 创建请求替身和真实 HTTP 监听器，并启动事件线程。 */
-	void SetUp() override {
-		request_ = std::make_shared<RecordingGateRequest>();
-		logic_ = std::make_shared<LogicSystem>(*request_);
-		server_ = std::make_shared<CServer>(ioc_, "127.0.0.1", 0, logic_);
-		server_->Start();
-		// 在夹具工作线程中运行 Gate 事件循环。
-		server_thread_ = std::thread([this] { ioc_.run(); });
-	}
+    /** 创建请求替身和真实 HTTP 监听器，并启动事件线程。 */
+    void SetUp() override {
+        request_ = std::make_shared<RecordingGateRequest>();
+        logic_ = std::make_shared<LogicSystem>(*request_);
+        server_ = std::make_shared<CServer>(ioc_, "127.0.0.1", 0, logic_);
+        server_->Start();
+        // 在夹具工作线程中运行 Gate 事件循环。
+        server_thread_ = std::thread([this] {
+            ioc_.run();
+        });
+    }
 
-	/** 停止监听与事件循环并等待线程退出。 */
-	void TearDown() override {
-		server_->Stop();
-		ioc_.stop();
-		if (server_thread_.joinable()) {
-			server_thread_.join();
-		}
-	}
+    /** 停止监听与事件循环并等待线程退出。 */
+    void TearDown() override {
+        server_->Stop();
+        ioc_.stop();
+        if (server_thread_.joinable()) {
+            server_thread_.join();
+        }
+    }
 
-	/** 向所属 Gate 端点发送 JSON POST，并返回完整 HTTP 响应。 */
-	http::response<http::dynamic_body> Post(
-		const std::string& route,
-		const std::string& body) {
-		boost::asio::io_context client_ioc;
-		beast::tcp_stream stream(client_ioc);
-		stream.expires_after(2s);
-		stream.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
+    /** 向所属 Gate 端点发送 JSON POST，并返回完整 HTTP 响应。 */
+    http::response<http::dynamic_body> Post(const std::string& route, const std::string& body) {
+        boost::asio::io_context client_ioc;
+        beast::tcp_stream stream(client_ioc);
+        stream.expires_after(2s);
+        stream.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
 
-		http::request<http::string_body> request{http::verb::post, route, 11};
-		request.set(http::field::host, "127.0.0.1");
-		request.set(http::field::content_type, "application/json");
-		request.body() = body;
-		request.prepare_payload();
-		http::write(stream, request);
+        http::request<http::string_body> request{http::verb::post, route, 11};
+        request.set(http::field::host, "127.0.0.1");
+        request.set(http::field::content_type, "application/json");
+        request.body() = body;
+        request.prepare_payload();
+        http::write(stream, request);
 
-		beast::flat_buffer buffer;
-		http::response<http::dynamic_body> response;
-		http::read(stream, buffer, response);
-		return response;
-	}
+        beast::flat_buffer buffer;
+        http::response<http::dynamic_body> response;
+        http::read(stream, buffer, response);
+        return response;
+    }
 
-	boost::asio::io_context ioc_;
-	std::shared_ptr<RecordingGateRequest> request_;
-	std::shared_ptr<LogicSystem> logic_;
-	std::shared_ptr<CServer> server_;
-	std::thread server_thread_;
+    boost::asio::io_context ioc_;
+    std::shared_ptr<RecordingGateRequest> request_;
+    std::shared_ptr<LogicSystem> logic_;
+    std::shared_ptr<CServer> server_;
+    std::thread server_thread_;
 };
 
 // T09-GHTTP-01
 /** 验证监听端点已分配，且重复停止无副作用。 */
 TEST_F(T09_GHTTP_Core, PublishesReadyLoopbackEndpointAndStopsIdempotently) {
-	EXPECT_EQ(server_->BoundAddress(), "127.0.0.1");
-	EXPECT_NE(server_->BoundPort(), 0);
-	server_->Stop();
-	server_->Stop();
+    EXPECT_EQ(server_->BoundAddress(), "127.0.0.1");
+    EXPECT_NE(server_->BoundPort(), 0);
+    server_->Stop();
+    server_->Stop();
     boost::asio::io_context io;
     auto connection = std::make_shared<HttpConnection>(io, logic_, 100ms);
     tcp::acceptor listener(io, {boost::asio::ip::make_address("127.0.0.1"), 0});
@@ -112,7 +112,8 @@ TEST_F(T09_GHTTP_Core, PublishesReadyLoopbackEndpointAndStopsIdempotently) {
     boost::asio::steady_timer idle(io, 120ms);
     idle.wait();
     http::request<http::string_body> request{http::verb::post, "/user_login", 11};
-    request.body() = "{}"; request.prepare_payload();
+    request.body() = "{}";
+    request.prepare_payload();
     http::write(peer, request);
     connection->Start();
     beast::flat_buffer buffer;
@@ -120,10 +121,14 @@ TEST_F(T09_GHTTP_Core, PublishesReadyLoopbackEndpointAndStopsIdempotently) {
     bool received = false;
     boost::asio::steady_timer deadline(io, 2s);
     // 超时停止本用例事件循环，避免读响应悬挂。
-    deadline.async_wait([&](auto error) { if (!error) io.stop(); });
+    deadline.async_wait([&](auto error) {
+        if (!error)
+            io.stop();
+    });
     // 记录真实 HTTP 响应结果并取消测试总期限。
     http::async_read(peer, buffer, response, [&](auto error, auto) {
-        received = !error; deadline.cancel();
+        received = !error;
+        deadline.cancel();
     });
     io.run();
     ASSERT_TRUE(received);
@@ -133,93 +138,100 @@ TEST_F(T09_GHTTP_Core, PublishesReadyLoopbackEndpointAndStopsIdempotently) {
 // T09-GHTTP-02
 /** 验证验证码路由委托正确的 Gate 端点。 */
 TEST_F(T09_GHTTP_Core, VerificationRouteDelegatesToGateRequest) {
-	EXPECT_EQ(Post("/get_varifycode", "{}").result(), http::status::ok);
-	EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::GetVarifyCode});
+    EXPECT_EQ(Post("/get_varifycode", "{}").result(), http::status::ok);
+    EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::GetVarifyCode});
 }
 
 // T09-GHTTP-03
 /** 验证注册路由委托正确的 Gate 端点。 */
 TEST_F(T09_GHTTP_Core, RegistrationRouteDelegatesToGateRequest) {
-	EXPECT_EQ(Post("/user_register", "{}").result(), http::status::ok);
-	EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::UserRegister});
+    EXPECT_EQ(Post("/user_register", "{}").result(), http::status::ok);
+    EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::UserRegister});
 }
 
 // T09-GHTTP-04
 /** 验证密码重置路由委托正确的 Gate 端点。 */
 TEST_F(T09_GHTTP_Core, ResetRouteDelegatesToGateRequest) {
-	EXPECT_EQ(Post("/reset_pwd", "{}").result(), http::status::ok);
-	EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::ResetPassword});
+    EXPECT_EQ(Post("/reset_pwd", "{}").result(), http::status::ok);
+    EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::ResetPassword});
 }
 
 // T09-GHTTP-05
 /** 验证登录路由委托正确的 Gate 端点。 */
 TEST_F(T09_GHTTP_Core, LoginRouteDelegatesToGateRequest) {
-	EXPECT_EQ(Post("/user_login", "{}").result(), http::status::ok);
-	EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::UserLogin});
+    EXPECT_EQ(Post("/user_login", "{}").result(), http::status::ok);
+    EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::UserLogin});
 }
 
 // T09-GHTTP-06
 /** 验证按片段发送的最大合法请求体仅触发一次业务处理。 */
 TEST_F(T09_GHTTP_Core, FragmentedMaximumBodyIsAcceptedExactlyOnce) {
-	const std::string prefix = "{\"padding\":\"";
-	const std::string suffix = "\"}";
-	const std::string body = prefix +
-		std::string(CServer::MaxRequestBodyBytes() - prefix.size() - suffix.size(), 'x') + suffix;
+    const std::string prefix = "{\"padding\":\"";
+    const std::string suffix = "\"}";
+    const std::string body =
+        prefix + std::string(CServer::MaxRequestBodyBytes() - prefix.size() - suffix.size(), 'x') + suffix;
 
-	boost::asio::io_context client_ioc;
-	beast::tcp_stream stream(client_ioc);
-	stream.expires_after(2s);
-	stream.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
-	const std::string raw = "POST /user_login HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: " +
-		std::to_string(body.size()) + "\r\nConnection: close\r\n\r\n" + body;
-	for (std::size_t offset = 0; offset < raw.size(); offset += 17) {
-		boost::asio::write(stream.socket(), boost::asio::buffer(raw.data() + offset, (std::min)(std::size_t{17}, raw.size() - offset)));
-	}
-	beast::flat_buffer buffer;
-	http::response<http::dynamic_body> response;
-	http::read(stream, buffer, response);
+    boost::asio::io_context client_ioc;
+    beast::tcp_stream stream(client_ioc);
+    stream.expires_after(2s);
+    stream.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
+    const std::string raw =
+        "POST /user_login HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: " +
+        std::to_string(body.size()) + "\r\nConnection: close\r\n\r\n" + body;
+    for (std::size_t offset = 0; offset < raw.size(); offset += 17) {
+        boost::asio::write(
+            stream.socket(),
+            boost::asio::buffer(raw.data() + offset, (std::min)(std::size_t{17}, raw.size() - offset)));
+    }
+    beast::flat_buffer buffer;
+    http::response<http::dynamic_body> response;
+    http::read(stream, buffer, response);
 
-	EXPECT_EQ(response.result(), http::status::ok);
-	EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::UserLogin});
+    EXPECT_EQ(response.result(), http::status::ok);
+    EXPECT_EQ(request_->Endpoints(), std::vector<gate::Endpoint>{gate::Endpoint::UserLogin});
 }
 
 // T09-GHTTP-07
 /** 验证超限、畸形与中断请求均不会触发业务委托。 */
 TEST_F(T09_GHTTP_Core, OverLimitMalformedAndInterruptedRequestsNeverDispatch) {
-	const std::string prefix = "{\"padding\":\"";
-	const std::string suffix = "\"}";
-	const auto over_limit = prefix +
-		std::string(CServer::MaxRequestBodyBytes() + 1 - prefix.size() - suffix.size(), 'x') + suffix;
+    const std::string prefix = "{\"padding\":\"";
+    const std::string suffix = "\"}";
+    const auto over_limit =
+        prefix + std::string(CServer::MaxRequestBodyBytes() + 1 - prefix.size() - suffix.size(), 'x') + suffix;
 
-	boost::asio::io_context client_ioc;
-	beast::tcp_stream oversized(client_ioc);
-	oversized.expires_after(2s);
-	oversized.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
-	http::request<http::string_body> request{http::verb::post, "/user_login", 11};
-	request.body() = over_limit;
-	request.prepare_payload();
-	http::write(oversized, request);
-	beast::flat_buffer buffer;
-	http::response<http::dynamic_body> response;
-	beast::error_code error;
-	http::read(oversized, buffer, response, error);
-	EXPECT_TRUE(error || response.result() == http::status::payload_too_large);
+    boost::asio::io_context client_ioc;
+    beast::tcp_stream oversized(client_ioc);
+    oversized.expires_after(2s);
+    oversized.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
+    http::request<http::string_body> request{http::verb::post, "/user_login", 11};
+    request.body() = over_limit;
+    request.prepare_payload();
+    http::write(oversized, request);
+    beast::flat_buffer buffer;
+    http::response<http::dynamic_body> response;
+    beast::error_code error;
+    http::read(oversized, buffer, response, error);
+    EXPECT_TRUE(error || response.result() == http::status::payload_too_large);
 
-	beast::tcp_stream malformed(client_ioc);
-	malformed.expires_after(2s);
-	malformed.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
-	boost::asio::write(malformed.socket(), boost::asio::buffer("POST /user_login HTTP/1.1\r\nContent-Length: nope\r\n\r\n"));
-	malformed.socket().shutdown(tcp::socket::shutdown_send, error);
+    beast::tcp_stream malformed(client_ioc);
+    malformed.expires_after(2s);
+    malformed.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
+    boost::asio::write(
+        malformed.socket(),
+        boost::asio::buffer("POST /user_login HTTP/1.1\r\nContent-Length: nope\r\n\r\n"));
+    malformed.socket().shutdown(tcp::socket::shutdown_send, error);
 
-	beast::tcp_stream interrupted(client_ioc);
-	interrupted.expires_after(2s);
-	interrupted.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
-	boost::asio::write(interrupted.socket(), boost::asio::buffer("POST /user_login HTTP/1.1\r\nContent-Length: 20\r\n\r\n{"));
-	interrupted.socket().close(error);
-	std::this_thread::sleep_for(100ms);
+    beast::tcp_stream interrupted(client_ioc);
+    interrupted.expires_after(2s);
+    interrupted.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
+    boost::asio::write(
+        interrupted.socket(),
+        boost::asio::buffer("POST /user_login HTTP/1.1\r\nContent-Length: 20\r\n\r\n{"));
+    interrupted.socket().close(error);
+    std::this_thread::sleep_for(100ms);
 
-	EXPECT_TRUE(request_->Endpoints().empty());
-	EXPECT_EQ(Post("/user_login", "{}").result(), http::status::ok);
+    EXPECT_TRUE(request_->Endpoints().empty());
+    EXPECT_EQ(Post("/user_login", "{}").result(), http::status::ok);
 }
 
 /** 验证非法百分号编码返回坏请求，服务仍可处理后续请求。 */

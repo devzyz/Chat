@@ -4,8 +4,7 @@
 #include <QPainter>
 #include <QMouseEvent>
 
-StateWidget::StateWidget(QWidget *parent) : QWidget(parent), _curState(ClickLabelState::Normal)
-{
+StateWidget::StateWidget(QWidget* parent) : QWidget(parent), _curState(ClickLabelState::Normal) {
     setCursor(Qt::PointingHandCursor);
     setFocusPolicy(Qt::StrongFocus);
     // 添加红点
@@ -19,8 +18,7 @@ StateWidget::StateWidget(QWidget *parent) : QWidget(parent), _curState(ClickLabe
  * @param select
  * 初始化不同状态名称，通过其控制qss样式表
  */
-void StateWidget::setState(QString leave, QString hover, QString select)
-{
+void StateWidget::setState(QString leave, QString hover, QString select) {
     _leave = leave;
     _hover = hover;
     _select = select;
@@ -33,8 +31,7 @@ void StateWidget::setState(QString leave, QString hover, QString select)
  * @return
  * 获取当前的statewidget状态
  */
-ClickLabelState StateWidget::getCurState()
-{
+ClickLabelState StateWidget::getCurState() {
     return _curState;
 }
 
@@ -42,8 +39,7 @@ ClickLabelState StateWidget::getCurState()
  * @brief StateWidget::clearState
  * 清空当前的状态为关闭状态
  */
-void StateWidget::clearState()
-{
+void StateWidget::clearState() {
     _curState = ClickLabelState::Normal;
     setProperty("state", _leave);
     repolish(this);
@@ -55,14 +51,13 @@ void StateWidget::clearState()
  * @param bselected
  * 设置StateWidget是否是选中状态
  */
-void StateWidget::setSelected(bool bselected)
-{
+void StateWidget::setSelected(bool bselected) {
     if (bselected) {
         _curState = ClickLabelState::Selected;
         setProperty("state", _select);
         repolish(this);
         update();
-        return ;
+        return;
     }
 
     _curState = ClickLabelState::Normal;
@@ -79,7 +74,7 @@ void StateWidget::addRedPoint() {
     // 添加红点
     _red_point = new QLabel();
     _red_point->setObjectName("red_point");
-    QVBoxLayout * layout2 = new QVBoxLayout();
+    QVBoxLayout* layout2 = new QVBoxLayout();
 
     _red_point->setAlignment(Qt::AlignCenter);
     layout2->addWidget(_red_point);
@@ -89,14 +84,12 @@ void StateWidget::addRedPoint() {
 }
 
 // 显示红点
-void StateWidget::showRedPoint(bool show)
-{
+void StateWidget::showRedPoint(bool show) {
     _red_point->setVisible(show);
 }
 
 // 为了让自定义样式生效
-void StateWidget::paintEvent(QPaintEvent *event)
-{
+void StateWidget::paintEvent(QPaintEvent* event) {
     QStyleOption opt;
     opt.initFrom(this);
     QPainter p(this);
@@ -108,8 +101,7 @@ void StateWidget::paintEvent(QPaintEvent *event)
  * @param event
  * 重写鼠标左键按压事件，如果左键按压后为普通模式，则转换为选中模式
  */
-void StateWidget::mousePressEvent(QMouseEvent *event)
-{
+void StateWidget::mousePressEvent(QMouseEvent* event) {
     _activation.press(this, event);
     QWidget::mousePressEvent(event);
 }
@@ -119,9 +111,11 @@ void StateWidget::mousePressEvent(QMouseEvent *event)
  * @param event
  * 左键按压后的释放事件
  */
-void StateWidget::mouseReleaseEvent(QMouseEvent *event)
-{
-    if (_activation.release(this, event)) { setSelected(true); emit clicked(); }
+void StateWidget::mouseReleaseEvent(QMouseEvent* event) {
+    if (_activation.release(this, event)) {
+        setSelected(true);
+        emit clicked();
+    }
     QWidget::mouseReleaseEvent(event);
 }
 
@@ -130,8 +124,7 @@ void StateWidget::mouseReleaseEvent(QMouseEvent *event)
  * @param event
  * 鼠标移入事件
  */
-void StateWidget::enterEvent(QEnterEvent *event)
-{
+void StateWidget::enterEvent(QEnterEvent* event) {
     if (_curState == ClickLabelState::Normal) {
         setProperty("state", _hover);
         repolish(this);
@@ -144,8 +137,7 @@ void StateWidget::enterEvent(QEnterEvent *event)
  * @param event
  * 鼠标移出事件
  */
-void StateWidget::leaveEvent(QEvent *event)
-{
+void StateWidget::leaveEvent(QEvent* event) {
     if (_curState == ClickLabelState::Normal) {
         setProperty("state", _leave);
         repolish(this);
@@ -153,17 +145,23 @@ void StateWidget::leaveEvent(QEvent *event)
     }
 }
 
-void StateWidget::keyPressEvent(QKeyEvent *event)
-{
-    if (_activation.keyPress(event)) { event->accept(); return; }
+void StateWidget::keyPressEvent(QKeyEvent* event) {
+    if (_activation.keyPress(event)) {
+        event->accept();
+        return;
+    }
     QWidget::keyPressEvent(event);
 }
-void StateWidget::keyReleaseEvent(QKeyEvent *event)
-{
-    if (_activation.keyRelease(event)) { setSelected(true); emit clicked(); event->accept(); return; }
+void StateWidget::keyReleaseEvent(QKeyEvent* event) {
+    if (_activation.keyRelease(event)) {
+        setSelected(true);
+        emit clicked();
+        event->accept();
+        return;
+    }
     QWidget::keyReleaseEvent(event);
 }
-void StateWidget::focusOutEvent(QFocusEvent *event)
-{
-    _activation.cancel(); QWidget::focusOutEvent(event);
+void StateWidget::focusOutEvent(QFocusEvent* event) {
+    _activation.cancel();
+    QWidget::focusOutEvent(event);
 }

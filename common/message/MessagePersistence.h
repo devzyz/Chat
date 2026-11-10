@@ -28,17 +28,20 @@ struct GroupAccess {
 };
 /** @brief 先锁群再检查有效成员，保证所有群写入和资格变更使用相同锁顺序。 */
 inline GroupAccess LockGroup(sql::Connection& connection, int chat, int uid, std::int64_t epoch = 0) {
-    std::unique_ptr<sql::PreparedStatement> group(connection.prepareStatement(
-        "SELECT dissolved FROM group_chat WHERE chat_id=? FOR UPDATE"));
+    std::unique_ptr<sql::PreparedStatement> group(
+        connection.prepareStatement("SELECT dissolved FROM group_chat WHERE chat_id=? FOR UPDATE"));
     group->setInt(1, chat);
     std::unique_ptr<sql::ResultSet> row(group->executeQuery());
-    if (!row->next() || row->getBoolean(1)) throw MembershipDenied("GroupUnavailable");
+    if (!row->next() || row->getBoolean(1))
+        throw MembershipDenied("GroupUnavailable");
     row.reset();
     std::unique_ptr<sql::PreparedStatement> member(connection.prepareStatement(
         "SELECT membership_epoch,joined_after_id FROM group_chat_member WHERE chat_id=? AND user_id=? AND state='active'"));
-    member->setInt(1, chat); member->setInt(2, uid);
+    member->setInt(1, chat);
+    member->setInt(2, uid);
     row.reset(member->executeQuery());
-    if (!row->next() || (epoch > 0 && epoch != row->getInt64(1))) throw MembershipDenied("MembershipChanged");
+    if (!row->next() || (epoch > 0 && epoch != row->getInt64(1)))
+        throw MembershipDenied("MembershipChanged");
     return {row->getInt64(1), row->getInt64(2)};
 }
 /** @brief 借用 JDBC 连接关闭自动提交，显式提交或在析构时回滚并恢复会话状态。 */
@@ -46,7 +49,8 @@ class Transaction final {
 public:
     /** @brief 借用连接并关闭自动提交，构造后事务必须显式提交或在析构时回滚。 */
     explicit Transaction(sql::Connection& connection) : _connection(connection) {
-        if (!_connection.getAutoCommit()) throw std::runtime_error("transaction already active");
+        if (!_connection.getAutoCommit())
+            throw std::runtime_error("transaction already active");
         _connection.setAutoCommit(false);
     }
     /** @brief 禁止复制或赋值，避免重复拥有连接、线程或租约资源。 */
@@ -61,9 +65,13 @@ public:
     ~Transaction() {
         if (!_finished) {
             // A broken connection must never return an open transaction to the pool.
-            try { _connection.rollback(); _connection.setAutoCommit(true); }
-            catch (...) {
-                try { _connection.close(); } catch (...) {
+            try {
+                _connection.rollback();
+                _connection.setAutoCommit(true);
+            } catch (...) {
+                try {
+                    _connection.close();
+                } catch (...) {
                     // 连接已无法使用，析构期间忽略关闭异常。
                 }
             }
@@ -75,6 +83,7 @@ public:
         _connection.setAutoCommit(true);
         _finished = true;
     }
+
 private:
     sql::Connection& _connection;
     bool _finished = false;
@@ -82,18 +91,19 @@ private:
 
 /** @brief 在当前事务中锁定私聊或群聊行并核对参与者，使同会话提交顺序串行化。 */
 inline GroupAccess LockConversation(sql::Connection& connection, int chat, int uid, int recipient = 0) {
-    std::unique_ptr<sql::PreparedStatement> statement(connection.prepareStatement(
-        "SELECT user1_id,user2_id FROM private_chat WHERE chat_id=? FOR UPDATE"));
+    std::unique_ptr<sql::PreparedStatement> statement(
+        connection.prepareStatement("SELECT user1_id,user2_id FROM private_chat WHERE chat_id=? FOR UPDATE"));
     statement->setInt(1, chat);
     std::unique_ptr<sql::ResultSet> row(statement->executeQuery());
     if (!row->next()) {
         row.reset();
-        if (recipient != 0) throw MembershipDenied("conversation unavailable");
+        if (recipient != 0)
+            throw MembershipDenied("conversation unavailable");
         return LockGroup(connection, chat, uid);
     }
     const int first = row->getInt(1), second = row->getInt(2);
-    if ((first != uid && second != uid)
-        || (recipient > 0 && !((first == uid && second == recipient) || (second == uid && first == recipient))))
+    if ((first != uid && second != uid) ||
+        (recipient > 0 && !((first == uid && second == recipient) || (second == uid && first == recipient))))
         throw MembershipDenied("not a conversation participant");
     return {};
 }
@@ -111,19 +121,27 @@ inline std::string CompactJson(const Json::Value& value) {
 /** @brief 实时通知超过帧上限时只保留同步提示，正文由既有增量同步取得。 */
 inline std::string BoundedNotification(Json::Value response) {
     auto bytes = CompactJson(response);
-    if (bytes.size() <= 2048) return bytes;
+    if (bytes.size() <= 2048)
+        return bytes;
     response["notify_msgs"] = Json::Value(Json::arrayValue);
     return CompactJson(response);
 }
 
 /** @brief 读取指定游标之后的消息增量并形成同步响应。 */
-inline void SyncPage(sql::Connection& connection, int uid, int chat, std::int64_t after,
-                     Json::Value& response, std::size_t maximum_body) {
-    if (after < 0) throw std::invalid_argument("invalid message cursor");
+inline void SyncPage(
+    sql::Connection& connection,
+    int uid,
+    int chat,
+    std::int64_t after,
+    Json::Value& response,
+    std::size_t maximum_body) {
+    if (after < 0)
+        throw std::invalid_argument("invalid message cursor");
     Transaction transaction(connection);
     const auto access = LockConversation(connection, chat, uid);
     if (access.epoch > 0) {
-        if (response.isMember("membership_epoch") && response["membership_epoch"].asString() != std::to_string(access.epoch))
+        if (response.isMember("membership_epoch") &&
+            response["membership_epoch"].asString() != std::to_string(access.epoch))
             throw std::runtime_error("MembershipChanged");
         response["membership_epoch"] = std::to_string(access.epoch);
     }
@@ -131,7 +149,8 @@ inline void SyncPage(sql::Connection& connection, int uid, int chat, std::int64_
         "SELECT m.message_id,m.send_id,m.recv_id,m.content,UNIX_TIMESTAMP(m.created_at) AS sent_at,"
         "COALESCE(m.client_msg_uuid,'') AS client_uuid FROM chat_message m "
         "WHERE m.chat_id=? AND m.message_id>? ORDER BY m.message_id LIMIT 51"));
-    statement->setInt(1, chat); statement->setInt64(2, (std::max)(after, access.boundary));
+    statement->setInt(1, chat);
+    statement->setInt64(2, (std::max)(after, access.boundary));
     std::unique_ptr<sql::ResultSet> rows(statement->executeQuery());
     response["msgs"] = Json::Value(Json::arrayValue);
     response["next_cursor"] = Json::Int64(after);
@@ -149,7 +168,8 @@ inline void SyncPage(sql::Connection& connection, int uid, int chat, std::int64_
         candidate["msgs"].append(message);
         candidate["next_cursor"] = Json::Int64(id);
         if (candidate["msgs"].size() > 50 || CompactJson(candidate).size() > maximum_body) {
-            if (response["msgs"].empty()) throw std::runtime_error("message exceeds synchronization frame limit");
+            if (response["msgs"].empty())
+                throw std::runtime_error("message exceeds synchronization frame limit");
             response["load_more"] = true;
             break;
         }

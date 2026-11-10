@@ -15,4 +15,3 @@ TEST(GatePasswordTests, SaltedHashesRejectWrongOrMalformedCredentials) {
     EXPECT_TRUE(authentication::VerifyPassword(input, input));
     EXPECT_FALSE(authentication::IsPasswordHash(input));
 }
-

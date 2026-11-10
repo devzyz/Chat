@@ -2,9 +2,11 @@
 #include <QMessageBox>
 
 /** @brief 主动退出前确认未落盘内容；Cancel 返回 false，不改变提交任务。 */
-inline bool confirmSubmissionExit(QWidget *parent, bool hasPending)
-{
-    return !hasPending || QMessageBox::question(parent, QObject::tr("未提交内容"),
-        QObject::tr("仍有未发送草稿、消息或附件。退出将丢弃尚未保存的内容，是否退出？"),
-        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Yes;
+inline bool confirmSubmissionExit(QWidget* parent, bool hasPending) {
+    return !hasPending || QMessageBox::question(
+                              parent,
+                              QObject::tr("未提交内容"),
+                              QObject::tr("仍有未发送草稿、消息或附件。退出将丢弃尚未保存的内容，是否退出？"),
+                              QMessageBox::Yes | QMessageBox::Cancel,
+                              QMessageBox::Cancel) == QMessageBox::Yes;
 }

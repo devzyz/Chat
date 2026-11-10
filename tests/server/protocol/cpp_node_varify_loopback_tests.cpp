@@ -58,8 +58,7 @@ public:
             nullptr,
             script.parent_path().wstring().c_str(),
             &startup,
-            &process_info
-        );
+            &process_info);
         CloseHandleIfValid(stdout_write);
         CloseHandleIfValid(stdin_read);
         if (!created) {
@@ -146,17 +145,12 @@ std::filesystem::path RepositoryRoot() {
     if (length == 0 || length == path.size()) {
         return {};
     }
-    return std::filesystem::path(path.data())
-        .parent_path()
-        .parent_path()
-        .parent_path()
-        .parent_path();
+    return std::filesystem::path(path.data()).parent_path().parent_path().parent_path().parent_path();
 }
 
 /** 验证真实 C++ gRPC 客户端可调用随机回环端口上的 Node 验证码服务。 */
 TEST(CrossLanguageProtocolTests, CppClientCallsNodeVarifyOnDynamicLoopbackPort) {
-    const auto script = RepositoryRoot() /
-        "VarifyServer" / "test" / "protocol" / "node-varify-loopback-server.js";
+    const auto script = RepositoryRoot() / "VarifyServer" / "test" / "protocol" / "node-varify-loopback-server.js";
     ASSERT_TRUE(std::filesystem::is_regular_file(script)) << script.string();
 
     OwnedProcess node_server;
@@ -164,10 +158,7 @@ TEST(CrossLanguageProtocolTests, CppClientCallsNodeVarifyOnDynamicLoopbackPort) 
     int port = 0;
     ASSERT_TRUE(node_server.ReadReadyPort(&port, std::chrono::seconds(3)));
 
-    const auto channel = grpc::CreateChannel(
-        "127.0.0.1:" + std::to_string(port),
-        grpc::InsecureChannelCredentials()
-    );
+    const auto channel = grpc::CreateChannel("127.0.0.1:" + std::to_string(port), grpc::InsecureChannelCredentials());
     const auto stub = message::VarifyService::NewStub(channel);
     grpc::ClientContext context;
     context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(2));

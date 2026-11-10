@@ -16,8 +16,7 @@
 namespace {
 
 /** 提供真实回环 HTTP 对端，按路径注入延时、挂起、拒绝和截断响应。 */
-class LoopbackHttpPeer final : public QObject
-{
+class LoopbackHttpPeer final : public QObject {
 public:
     enum class Behavior { Respond, Hold, ResetOnAccept, CloseMidResponse };
 
@@ -29,13 +28,11 @@ public:
     };
 
     /** 接管监听器的新连接并安装请求解析与清理回调。 */
-    explicit LoopbackHttpPeer(Behavior connectionBehavior = Behavior::Respond,
-                              QObject *parent = nullptr)
-        : QObject(parent), _connectionBehavior(connectionBehavior)
-    {
+    explicit LoopbackHttpPeer(Behavior connectionBehavior = Behavior::Respond, QObject* parent = nullptr)
+        : QObject(parent), _connectionBehavior(connectionBehavior) {
         // 接收全部待处理连接，按计划拒绝或安装读回调。
         connect(&_server, &QTcpServer::newConnection, this, [this] {
-            while (QTcpSocket *socket = _server.nextPendingConnection()) {
+            while (QTcpSocket* socket = _server.nextPendingConnection()) {
                 _sockets.append(socket);
                 if (_connectionBehavior == Behavior::ResetOnAccept) {
                     socket->abort();
@@ -55,8 +52,7 @@ public:
                     if (firstSpace < 0 || secondSpace < 0 || !request.contains("\r\n\r\n")) {
                         return;
                     }
-                    const QString path = QString::fromLatin1(
-                        request.mid(firstSpace + 1, secondSpace - firstSpace - 1));
+                    const QString path = QString::fromLatin1(request.mid(firstSpace + 1, secondSpace - firstSpace - 1));
                     const Plan plan = _plans.value(path);
                     socket->setProperty("request-handled", true);
                     if (plan.behavior == Behavior::Hold) {
@@ -98,30 +94,24 @@ public:
     }
 
     /** 在随机回环端口监听并返回绑定结果。 */
-    bool listen()
-    {
+    bool listen() {
         return _server.listen(QHostAddress::LocalHost, 0);
     }
 
     /** 组合当前监听端口及指定路径为 HTTP 测试地址。 */
-    QUrl url(const QString &path) const
-    {
-        return QUrl(QStringLiteral("http://127.0.0.1:%1%2")
-                        .arg(_server.serverPort())
-                        .arg(path));
+    QUrl url(const QString& path) const {
+        return QUrl(QStringLiteral("http://127.0.0.1:%1%2").arg(_server.serverPort()).arg(path));
     }
 
     /** 为指定路径登记响应及故障计划。 */
-    void setPlan(const QString &path, Plan plan)
-    {
+    void setPlan(const QString& path, Plan plan) {
         _plans.insert(path, std::move(plan));
     }
 
     /** 统计尚未断开的测试连接。 */
-    int activeConnections() const
-    {
+    int activeConnections() const {
         int active = 0;
-        for (const QPointer<QTcpSocket> &socket : _sockets) {
+        for (const QPointer<QTcpSocket>& socket : _sockets) {
             if (socket && socket->state() != QAbstractSocket::UnconnectedState) {
                 ++active;
             }
@@ -132,15 +122,14 @@ public:
 private:
     Behavior _connectionBehavior;
     QHash<QString, Plan> _plans;
-    QHash<QTcpSocket *, QByteArray> _requests;
+    QHash<QTcpSocket*, QByteArray> _requests;
     QList<QPointer<QTcpSocket>> _sockets;
     // Destroy accepted sockets before the containers used by their destroyed callbacks.
     QTcpServer _server;
 };
 
 /** 构建带认证流程标识及有限期限的 Gate HTTP 请求。 */
-GateHttpRequest request(const QUrl &url, quint64 flowId, int deadlineMs = 1000)
-{
+GateHttpRequest request(const QUrl& url, quint64 flowId, int deadlineMs = 1000) {
     GateHttpRequest value;
     value.url = url;
     value.body = QByteArrayLiteral("{}");
@@ -152,8 +141,7 @@ GateHttpRequest request(const QUrl &url, quint64 flowId, int deadlineMs = 1000)
 }
 
 /** 生成指定字节长度的有效 JSON 正文以覆盖大小边界。 */
-QByteArray jsonBody(qsizetype size)
-{
+QByteArray jsonBody(qsizetype size) {
     const QByteArray prefix = "{\"value\":\"";
     const QByteArray suffix = "\"}";
     return prefix + QByteArray(size - prefix.size() - suffix.size(), 'x') + suffix;
@@ -162,8 +150,7 @@ QByteArray jsonBody(qsizetype size)
 } // namespace
 
 /** 验证真实 HTTP 传输的身份、期限、大小、取消及资源释放合同。 */
-class HttpTransportTests final : public QObject
-{
+class HttpTransportTests final : public QObject {
     Q_OBJECT
 
 private slots:
@@ -189,16 +176,20 @@ private slots:
     void deletingTransportReleasesReplyAndLoopbackSocket();
 };
 
-void HttpTransportTests::successPreservesRequestAndFlowIdentity()
-{
+void HttpTransportTests::successPreservesRequestAndFlowIdentity() {
     // Q04-HTTP-01
     LoopbackHttpPeer peer;
     QVERIFY(peer.listen());
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(&transport, &GateHttpTransport::finished, this,
-            // 收集 HTTP 终态结果，供身份、次数和错误断言。
-            [&results](const GateHttpResult &result) { results.append(result); });
+    connect(
+        &transport,
+        &GateHttpTransport::finished,
+        this,
+        // 收集 HTTP 终态结果，供身份、次数和错误断言。
+        [&results](const GateHttpResult& result) {
+            results.append(result);
+        });
 
     transport.post(request(peer.url(QStringLiteral("/success")), 41));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -209,17 +200,21 @@ void HttpTransportTests::successPreservesRequestAndFlowIdentity()
     QCOMPARE(results[0].body, QByteArrayLiteral("{\"ok\":true}"));
 }
 
-void HttpTransportTests::refusedConnectionHasOneBoundedOutcome()
-{
+void HttpTransportTests::refusedConnectionHasOneBoundedOutcome() {
     // Q04-HTTP-02
     LoopbackHttpPeer peer(LoopbackHttpPeer::Behavior::ResetOnAccept);
     QVERIFY(peer.listen());
 
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(&transport, &GateHttpTransport::finished, this,
-            // 收集 HTTP 终态结果，供身份、次数和错误断言。
-            [&results](const GateHttpResult &result) { results.append(result); });
+    connect(
+        &transport,
+        &GateHttpTransport::finished,
+        this,
+        // 收集 HTTP 终态结果，供身份、次数和错误断言。
+        [&results](const GateHttpResult& result) {
+            results.append(result);
+        });
     transport.post(request(peer.url(QStringLiteral("/refused")), 42));
 
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -228,34 +223,42 @@ void HttpTransportTests::refusedConnectionHasOneBoundedOutcome()
     QCOMPARE(results.size(), 1);
 }
 
-void HttpTransportTests::finiteDeadlineAbortsAnUnresponsivePeer()
-{
+void HttpTransportTests::finiteDeadlineAbortsAnUnresponsivePeer() {
     // Q04-HTTP-03
     LoopbackHttpPeer peer;
     QVERIFY(peer.listen());
     peer.setPlan(QStringLiteral("/hold"), {{}, LoopbackHttpPeer::Behavior::Hold, 0});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(&transport, &GateHttpTransport::finished, this,
-            // 收集 HTTP 终态结果，供身份、次数和错误断言。
-            [&results](const GateHttpResult &result) { results.append(result); });
+    connect(
+        &transport,
+        &GateHttpTransport::finished,
+        this,
+        // 收集 HTTP 终态结果，供身份、次数和错误断言。
+        [&results](const GateHttpResult& result) {
+            results.append(result);
+        });
 
     transport.post(request(peer.url(QStringLiteral("/hold")), 43, 100));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 1000);
     QCOMPARE(results[0].terminal, GateHttpTerminal::DeadlineExceeded);
 }
 
-void HttpTransportTests::malformedJsonIsRejectedWithoutLeakingItsBody()
-{
+void HttpTransportTests::malformedJsonIsRejectedWithoutLeakingItsBody() {
     // Q04-HTTP-04
     LoopbackHttpPeer peer;
     QVERIFY(peer.listen());
     peer.setPlan(QStringLiteral("/malformed"), {QByteArrayLiteral("not-json")});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(&transport, &GateHttpTransport::finished, this,
-            // 收集 HTTP 终态结果，供身份、次数和错误断言。
-            [&results](const GateHttpResult &result) { results.append(result); });
+    connect(
+        &transport,
+        &GateHttpTransport::finished,
+        this,
+        // 收集 HTTP 终态结果，供身份、次数和错误断言。
+        [&results](const GateHttpResult& result) {
+            results.append(result);
+        });
 
     transport.post(request(peer.url(QStringLiteral("/malformed")), 44));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -263,17 +266,21 @@ void HttpTransportTests::malformedJsonIsRejectedWithoutLeakingItsBody()
     QVERIFY(results[0].body.isEmpty());
 }
 
-void HttpTransportTests::maximumResponseIsAccepted()
-{
+void HttpTransportTests::maximumResponseIsAccepted() {
     // Q04-HTTP-05
     LoopbackHttpPeer peer;
     QVERIFY(peer.listen());
     peer.setPlan(QStringLiteral("/maximum"), {jsonBody(GateHttpTransport::maxResponseBytes())});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(&transport, &GateHttpTransport::finished, this,
-            // 收集 HTTP 终态结果，供身份、次数和错误断言。
-            [&results](const GateHttpResult &result) { results.append(result); });
+    connect(
+        &transport,
+        &GateHttpTransport::finished,
+        this,
+        // 收集 HTTP 终态结果，供身份、次数和错误断言。
+        [&results](const GateHttpResult& result) {
+            results.append(result);
+        });
 
     transport.post(request(peer.url(QStringLiteral("/maximum")), 45));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -281,17 +288,21 @@ void HttpTransportTests::maximumResponseIsAccepted()
     QCOMPARE(results[0].body.size(), GateHttpTransport::maxResponseBytes());
 }
 
-void HttpTransportTests::oneByteOverMaximumIsRejected()
-{
+void HttpTransportTests::oneByteOverMaximumIsRejected() {
     // Q04-HTTP-06
     LoopbackHttpPeer peer;
     QVERIFY(peer.listen());
     peer.setPlan(QStringLiteral("/oversized"), {jsonBody(GateHttpTransport::maxResponseBytes() + 1)});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(&transport, &GateHttpTransport::finished, this,
-            // 收集 HTTP 终态结果，供身份、次数和错误断言。
-            [&results](const GateHttpResult &result) { results.append(result); });
+    connect(
+        &transport,
+        &GateHttpTransport::finished,
+        this,
+        // 收集 HTTP 终态结果，供身份、次数和错误断言。
+        [&results](const GateHttpResult& result) {
+            results.append(result);
+        });
 
     transport.post(request(peer.url(QStringLiteral("/oversized")), 46));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -299,17 +310,21 @@ void HttpTransportTests::oneByteOverMaximumIsRejected()
     QVERIFY(results[0].body.isEmpty());
 }
 
-void HttpTransportTests::peerClosingMidResponseHasOneNetworkOutcome()
-{
+void HttpTransportTests::peerClosingMidResponseHasOneNetworkOutcome() {
     // Q04-HTTP-07
     LoopbackHttpPeer peer;
     QVERIFY(peer.listen());
     peer.setPlan(QStringLiteral("/partial"), {{}, LoopbackHttpPeer::Behavior::CloseMidResponse, 0});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(&transport, &GateHttpTransport::finished, this,
-            // 收集 HTTP 终态结果，供身份、次数和错误断言。
-            [&results](const GateHttpResult &result) { results.append(result); });
+    connect(
+        &transport,
+        &GateHttpTransport::finished,
+        this,
+        // 收集 HTTP 终态结果，供身份、次数和错误断言。
+        [&results](const GateHttpResult& result) {
+            results.append(result);
+        });
 
     transport.post(request(peer.url(QStringLiteral("/partial")), 47));
     QTRY_COMPARE_WITH_TIMEOUT(results.size(), 1, 2000);
@@ -318,17 +333,21 @@ void HttpTransportTests::peerClosingMidResponseHasOneNetworkOutcome()
     QCOMPARE(results.size(), 1);
 }
 
-void HttpTransportTests::explicitCancelHasExactlyOneTerminalOutcome()
-{
+void HttpTransportTests::explicitCancelHasExactlyOneTerminalOutcome() {
     // Q04-HTTP-08
     LoopbackHttpPeer peer;
     QVERIFY(peer.listen());
     peer.setPlan(QStringLiteral("/cancel"), {{}, LoopbackHttpPeer::Behavior::Hold, 0});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(&transport, &GateHttpTransport::finished, this,
-            // 收集 HTTP 终态结果，供身份、次数和错误断言。
-            [&results](const GateHttpResult &result) { results.append(result); });
+    connect(
+        &transport,
+        &GateHttpTransport::finished,
+        this,
+        // 收集 HTTP 终态结果，供身份、次数和错误断言。
+        [&results](const GateHttpResult& result) {
+            results.append(result);
+        });
 
     transport.post(request(peer.url(QStringLiteral("/cancel")), 48));
     transport.cancel(48);
@@ -338,19 +357,24 @@ void HttpTransportTests::explicitCancelHasExactlyOneTerminalOutcome()
     QCOMPARE(results.size(), 1);
 }
 
-void HttpTransportTests::lateReplyFromAnOldFlowCannotCompleteTheNewFlow()
-{
+void HttpTransportTests::lateReplyFromAnOldFlowCannotCompleteTheNewFlow() {
     // Q04-HTTP-09
     LoopbackHttpPeer peer;
     QVERIFY(peer.listen());
-    peer.setPlan(QStringLiteral("/old"), {QByteArrayLiteral("{\"old\":true}"),
-                                           LoopbackHttpPeer::Behavior::Respond, 250});
+    peer.setPlan(
+        QStringLiteral("/old"),
+        {QByteArrayLiteral("{\"old\":true}"), LoopbackHttpPeer::Behavior::Respond, 250});
     peer.setPlan(QStringLiteral("/current"), {QByteArrayLiteral("{\"current\":true}")});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(&transport, &GateHttpTransport::finished, this,
-            // 收集 HTTP 终态结果，供身份、次数和错误断言。
-            [&results](const GateHttpResult &result) { results.append(result); });
+    connect(
+        &transport,
+        &GateHttpTransport::finished,
+        this,
+        // 收集 HTTP 终态结果，供身份、次数和错误断言。
+        [&results](const GateHttpResult& result) {
+            results.append(result);
+        });
 
     transport.post(request(peer.url(QStringLiteral("/old")), 49));
     QTest::qWait(20);
@@ -364,8 +388,7 @@ void HttpTransportTests::lateReplyFromAnOldFlowCannotCompleteTheNewFlow()
     QCOMPARE(results.size(), 2);
 }
 
-void HttpTransportTests::deletingTransportReleasesReplyAndLoopbackSocket()
-{
+void HttpTransportTests::deletingTransportReleasesReplyAndLoopbackSocket() {
     // Q04-HTTP-10
     LoopbackHttpPeer peer;
     QVERIFY(peer.listen());

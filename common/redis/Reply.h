@@ -12,7 +12,8 @@ inline bool IsPositiveInteger(const redisReply* reply) {
 /** @brief 核验 Redis 响应类型并复制字符串字节至输出参数，失败返回 false。 */
 inline bool ReadString(const redisReply* reply, std::string& value) {
     value.clear();
-    if (!reply || reply->type != REDIS_REPLY_STRING || !reply->str) return false;
+    if (!reply || reply->type != REDIS_REPLY_STRING || !reply->str)
+        return false;
     value.assign(reply->str, reply->len);
     return true;
 }

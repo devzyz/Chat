@@ -11,15 +11,14 @@
  * 左侧的菜单栏。其中聊天列表，联系人都是用这个StateWidget
  * 目的是为了能够在右上角显示一个红点
  */
-class StateWidget : public QWidget
-{
+class StateWidget : public QWidget {
     Q_OBJECT
 public:
     /** @brief 初始化对象，用于按鼠标交互状态更新自绘组件样式。 */
-    explicit StateWidget(QWidget * parent = nullptr);
+    explicit StateWidget(QWidget* parent = nullptr);
 
     /** @brief 设置控件各交互状态对应的样式名称。 */
-    void setState(QString leave="", QString hover="", QString select="");
+    void setState(QString leave = "", QString hover = "", QString select = "");
 
     /**
      * @brief getCurState
@@ -51,17 +50,17 @@ public:
 
 protected:
     /** @brief 绘制当前控件的背景、边框或内容，遵循 Qt GUI 线程事件约束。 */
-    void paintEvent(QPaintEvent * event) override;
+    void paintEvent(QPaintEvent* event) override;
 
     // 重写的一些鼠标点击释放，移入移出事件
     /** @brief 处理鼠标按下，更新控件当前交互状态。 */
-    virtual void mousePressEvent(QMouseEvent * ev) override;
+    virtual void mousePressEvent(QMouseEvent* ev) override;
     /** @brief 处理鼠标释放并按控件状态触发点击或结束拖动。 */
-    virtual void mouseReleaseEvent(QMouseEvent * ev) override;
+    virtual void mouseReleaseEvent(QMouseEvent* ev) override;
     /** @brief 在鼠标进入时切换悬停样式。 */
-    virtual void enterEvent(QEnterEvent * event) override;
+    virtual void enterEvent(QEnterEvent* event) override;
     /** @brief 在鼠标离开时恢复非悬停样式。 */
-    virtual void leaveEvent(QEvent * event) override;
+    virtual void leaveEvent(QEvent* event) override;
 
 private:
     QString _leave;
@@ -69,15 +68,16 @@ private:
     QString _select;
 
     ClickLabelState _curState;
-    QLabel * _red_point;
+    QLabel* _red_point;
 
 protected:
     /** @brief 记录键盘激活，不在按下时改变业务状态。 */
-    void keyPressEvent(QKeyEvent *event) override;
+    void keyPressEvent(QKeyEvent* event) override;
     /** @brief 有效键盘释放触发一次操作。 */
-    void keyReleaseEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent* event) override;
     /** @brief 失焦取消未完成的操作。 */
-    void focusOutEvent(QFocusEvent *event) override;
+    void focusOutEvent(QFocusEvent* event) override;
+
 private:
     ClickActivation _activation;
 signals:

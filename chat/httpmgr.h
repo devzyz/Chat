@@ -16,9 +16,7 @@
  * @brief The HttpMgr class
  * 用于使用http短链接与服务器进行通信
  */
-class HttpMgr : public QObject, public Singleton<HttpMgr>,
-                public std::enable_shared_from_this<HttpMgr>
-{
+class HttpMgr : public QObject, public Singleton<HttpMgr>, public std::enable_shared_from_this<HttpMgr> {
     Q_OBJECT
 public:
     /**
@@ -31,8 +29,7 @@ public:
      */
     ~HttpMgr();
     /** @brief 提交指定模块的 JSON HTTP 请求，完成结果通过请求标识和模块信号分发。 */
-    void postHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod,
-                     AuthFlowId flowId);
+    void postHttpReq(QUrl url, QJsonObject json, ReqId req_id, Modules mod, AuthFlowId flowId);
 
 private:
     /**
@@ -49,13 +46,11 @@ private:
 
 private slots:
     /** @brief 按模块将 HTTP 终态分发给注册、登录或重置密码页面。 */
-    void httpFinish(AuthFlowId flowId, ReqId id, Modules mod,
-                          QString res, ErrorCodes err);
+    void httpFinish(AuthFlowId flowId, ReqId id, Modules mod, QString res, ErrorCodes err);
 
 signals:
     /** @brief 通知请求 ID、响应体、错误及模块关联的 HTTP 完成结果。 */
-    void httpFinished(AuthFlowId flowId, ReqId id, Modules mod,
-                         QString res, ErrorCodes err);
+    void httpFinished(AuthFlowId flowId, ReqId id, Modules mod, QString res, ErrorCodes err);
     /** @brief 通知注册模块的 HTTP 请求结果。 */
     void registrationHttpFinished(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err);
     /** @brief 通知重置密码模块的 HTTP 请求结果。 */

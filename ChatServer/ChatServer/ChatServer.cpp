@@ -37,53 +37,79 @@ int main(int argc, char* argv[]) {
     bool tcp_stopped = false;
     // 幂等取消维护计时并启动 TCP 停服。
     auto shutdown = [&] {
-        if (stopping) return;
+        if (stopping)
+            return;
         stopping = true;
         boost::system::error_code ignored;
         count_timer.cancel();
         // 在会话关闭及 I/O 取消完成后退出主事件循环。
-        if (tcp) tcp->Stop([&] { tcp_stopped = true; io.stop(); });
-        else { tcp_stopped = true; io.stop(); }
+        if (tcp)
+            tcp->Stop([&] {
+                tcp_stopped = true;
+                io.stop();
+            });
+        else {
+            tcp_stopped = true;
+            io.stop();
+        }
     };
     // 排空连接事件后等待工作线程与 RPC 关闭。
     auto finish = [&] {
         // Run the acceptor executor until all sessions have completed close and cancelled I/O.
-        if (!tcp_stopped) { io.restart(); io.run(); }
+        if (!tcp_stopped) {
+            io.restart();
+            io.run();
+        }
         // Blocking worker/RPC joins run on the owner after the acceptor has stopped, not in its handler.
-        if (rpc) rpc->Shutdown(std::chrono::system_clock::now() + std::chrono::seconds(5));
-        if (logic) logic->Stop();
-        if (lifecycle) lifecycle->Drain();
+        if (rpc)
+            rpc->Shutdown(std::chrono::system_clock::now() + std::chrono::seconds(5));
+        if (logic)
+            logic->Stop();
+        if (lifecycle)
+            lifecycle->Drain();
         maintenance.join();
-        if (pool) pool->Stop();
-        if (rpc) rpc->Wait();
+        if (pool)
+            pool->Stop();
+        if (rpc)
+            rpc->Wait();
         if (registered) {
-            redis->Eval("if redis.call('GET',KEYS[2])==ARGV[2] then "
+            redis->Eval(
+                "if redis.call('GET',KEYS[2])==ARGV[2] then "
                 "redis.call('HDEL',KEYS[1],ARGV[1]); redis.call('DEL',KEYS[2]); end; return {}",
-                {LOGIN_COUNT, "chatlease_" + server_id}, {server_id, lease_owner});
+                {LOGIN_COUNT, "chatlease_" + server_id},
+                {server_id, lease_owner});
             registered = false;
         }
-        if (redis) redis->Close();
+        if (redis)
+            redis->Close();
     };
     try {
-        if (argc == 3) ConfigMgr::SetConfigPath(argv[2]);
-        if (!LogMgr::GetInstance()->InitLogMgr()) throw std::runtime_error("logging initialization failed");
+        if (argc == 3)
+            ConfigMgr::SetConfigPath(argv[2]);
+        if (!LogMgr::GetInstance()->InitLogMgr())
+            throw std::runtime_error("logging initialization failed");
         auto& config = ConfigMgr::GetInstance();
         server_id = config["SelfServer"]["Name"];
         const auto port_text = config["SelfServer"]["Port"];
         std::size_t parsed = 0;
         const int port = std::stoi(port_text, &parsed);
-        if (parsed != port_text.size() || port < 1 || port > 65535) throw std::runtime_error("invalid TCP port");
+        if (parsed != port_text.size() || port < 1 || port > 65535)
+            throw std::runtime_error("invalid TCP port");
         auto directory = std::make_shared<UserSessionDirectory>();
         // The adapter resolves Redis lazily: bind both ports before connecting to dependencies.
         auto presence = std::make_shared<RedisUserPresenceStore>();
-        lifecycle = std::make_shared<SessionLifecycleCoordinator>(directory, presence, server_id,
+        lifecycle = std::make_shared<SessionLifecycleCoordinator>(
+            directory,
+            presence,
+            server_id,
             // 向旧用户所在实例发送带会话标识的踢出请求。
             [](int uid, const chat_session::UserPresence& old) {
                 message::KickUserReq request;
                 request.set_uid(uid);
                 request.set_session_id(old.session_id);
                 const auto response = ChatGrpcClient::GetInstance()->NotifyOtherKickUser(old.server_id, request);
-                if (response.error() != ErrorCodes::Success) SPDLOG_WARN("remote replacement failed, uid={}", uid);
+                if (response.error() != ErrorCodes::Success)
+                    SPDLOG_WARN("remote replacement failed, uid={}", uid);
             });
         logic = std::make_unique<LogicSystem>(directory, presence);
         const auto configured_bind = config["SelfServer"]["BindHost"];
@@ -92,22 +118,31 @@ int main(int argc, char* argv[]) {
         const auto rpc_host = configured_rpc.empty() ? std::string("127.0.0.1") : configured_rpc;
         if (!boost::asio::ip::make_address(rpc_host).is_loopback())
             throw std::invalid_argument("unauthenticated Chat RPC must bind loopback");
-        tcp = std::make_shared<chat_transport::CServer>(io, bind_host, static_cast<unsigned short>(port), lifecycle, directory,
+        tcp = std::make_shared<chat_transport::CServer>(
+            io,
+            bind_host,
+            static_cast<unsigned short>(port),
+            lifecycle,
+            directory,
             // 把入站消息交给有界业务分发器。
-            [&](LogicMessage message) { return logic->Submit(std::move(message)); },
+            [&](LogicMessage message) {
+                return logic->Submit(std::move(message));
+            },
             // 从 Asio 池选择会话执行器。
-            [&]() -> boost::asio::io_context& { return pool->GetIOService(); });
+            [&]() -> boost::asio::io_context& {
+                return pool->GetIOService();
+            });
         lifecycle->AttachServer(tcp);
         service = std::make_unique<ChatServiceImpl>(directory, lifecycle, presence);
         grpc::ServerBuilder builder;
-        builder.AddListeningPort(rpc_host + ":" + config["SelfServer"]["RPCPort"],
-            grpc::InsecureServerCredentials());
+        builder.AddListeningPort(rpc_host + ":" + config["SelfServer"]["RPCPort"], grpc::InsecureServerCredentials());
         builder.RegisterService(service.get());
         rpc = builder.BuildAndStart();
-        if (!rpc) throw std::runtime_error("failed to listen on gRPC address");
+        if (!rpc)
+            throw std::runtime_error("failed to listen on gRPC address");
         // 已独占绑定同机 TCP 端点，可接管该端点旧进程遗留的租约；其他端点仍拒绝同名注册。
-        const auto lease_endpoint = "[" + bind_host + "]:" + port_text + "/[" + rpc_host + "]:"
-            + config["SelfServer"]["RPCPort"] + "|";
+        const auto lease_endpoint =
+            "[" + bind_host + "]:" + port_text + "/[" + rpc_host + "]:" + config["SelfServer"]["RPCPort"] + "|";
         lease_owner = lease_endpoint + lease_owner;
         redis = RedisMgr::GetInstance();
         presence->AttachRedis(redis);
@@ -117,9 +152,11 @@ int main(int argc, char* argv[]) {
             "if old and string.sub(old,1,string.len(ARGV[3]))~=ARGV[3] then return {} end; "
             "redis.call('SET',KEYS[2],ARGV[2],'EX',90); "
             "redis.call('HSET',KEYS[1],ARGV[1],0); return {'registered'}",
-            {LOGIN_COUNT, "chatlease_" + server_id}, {server_id, lease_owner, lease_endpoint});
+            {LOGIN_COUNT, "chatlease_" + server_id},
+            {server_id, lease_owner, lease_endpoint});
         registered = registration && registration->size() == 1 && (*registration)[0] == "registered";
-        if (!registered) throw std::runtime_error("instance registration failed or name already leased");
+        if (!registered)
+            throw std::runtime_error("instance registration failed or name already leased");
         tcp->Start();
         std::function<void()> update_count;
         // 安排下一轮连接计数发布。
@@ -127,7 +164,8 @@ int main(int argc, char* argv[]) {
             count_timer.expires_after(std::chrono::seconds(60));
             // 计时成功且未停服时把计数更新交给维护执行器。
             count_timer.async_wait([&](boost::system::error_code error) {
-                if (error || stopping) return;
+                if (error || stopping)
+                    return;
                 const auto count = tcp->ConnectionCount();
                 // 将当前连接数写入 Redis 选服统计。
                 boost::asio::post(maintenance, [redis, server_id, lease_owner, count] {
@@ -135,7 +173,8 @@ int main(int argc, char* argv[]) {
                         "local owner=redis.call('GET',KEYS[2]); if owner and owner~=ARGV[3] then return {} end; "
                         "redis.call('HSET',KEYS[1],ARGV[1],ARGV[2]); "
                         "redis.call('SET',KEYS[2],ARGV[3],'EX',90); return {'renewed'}",
-                        {LOGIN_COUNT, "chatlease_" + server_id}, {server_id, std::to_string(count), lease_owner});
+                        {LOGIN_COUNT, "chatlease_" + server_id},
+                        {server_id, std::to_string(count), lease_owner});
                     if (!renewed || renewed->size() != 1 || (*renewed)[0] != "renewed")
                         SPDLOG_WARN("connection count publication failed");
                 });
@@ -145,7 +184,10 @@ int main(int argc, char* argv[]) {
         update_count();
         boost::asio::signal_set signals(io, SIGINT, SIGTERM);
         // 接收退出信号并启动统一停服流程。
-        signals.async_wait([&](boost::system::error_code error, int) { if (!error) shutdown(); });
+        signals.async_wait([&](boost::system::error_code error, int) {
+            if (!error)
+                shutdown();
+        });
         io.run();
         shutdown();
         finish();

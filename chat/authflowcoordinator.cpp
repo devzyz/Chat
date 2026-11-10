@@ -1,31 +1,25 @@
 #include "authflowcoordinator.h"
 
-AuthFlowCoordinator::FlowKind AuthFlowCoordinator::flowFor(int module, int requestId)
-{
-    if (module == static_cast<int>(Modules::REGISTERMOD)
-        && (requestId == static_cast<int>(ReqId::ID_GET_VERIFY_CODE)
-            || requestId == static_cast<int>(ReqId::ID_REG_USER))) {
+AuthFlowCoordinator::FlowKind AuthFlowCoordinator::flowFor(int module, int requestId) {
+    if (module == static_cast<int>(Modules::REGISTERMOD) && (requestId == static_cast<int>(ReqId::ID_GET_VERIFY_CODE) ||
+                                                             requestId == static_cast<int>(ReqId::ID_REG_USER))) {
         return FlowKind::Register;
     }
-    if (module == static_cast<int>(Modules::RESETMOD)
-        && (requestId == static_cast<int>(ReqId::ID_GET_VERIFY_CODE)
-            || requestId == static_cast<int>(ReqId::ID_RESET_PWD))) {
+    if (module == static_cast<int>(Modules::RESETMOD) && (requestId == static_cast<int>(ReqId::ID_GET_VERIFY_CODE) ||
+                                                          requestId == static_cast<int>(ReqId::ID_RESET_PWD))) {
         return FlowKind::Reset;
     }
-    if (module == static_cast<int>(Modules::LOGINMOD)
-        && requestId == static_cast<int>(ReqId::ID_LOGIN_UESR)) {
+    if (module == static_cast<int>(Modules::LOGINMOD) && requestId == static_cast<int>(ReqId::ID_LOGIN_UESR)) {
         return FlowKind::Login;
     }
     return FlowKind::None;
 }
 
-int AuthFlowCoordinator::outcomeKey(const AuthOutcome &outcome)
-{
+int AuthFlowCoordinator::outcomeKey(const AuthOutcome& outcome) {
     return static_cast<int>(outcome.kind);
 }
 
-AuthAction AuthFlowCoordinator::reduce(AuthFlowId flowId, const AuthOutcome &outcome)
-{
+AuthAction AuthFlowCoordinator::reduce(AuthFlowId flowId, const AuthOutcome& outcome) {
     if (outcome.kind == AuthOutcomeKind::BeginHttp) {
         const FlowKind flow = flowFor(outcome.module, outcome.requestId);
         if (flow == FlowKind::None) {
@@ -44,57 +38,46 @@ AuthAction AuthFlowCoordinator::reduce(AuthFlowId flowId, const AuthOutcome &out
         return {};
     }
 
-    const bool httpOutcome = outcome.kind == AuthOutcomeKind::HttpNetworkError
-        || outcome.kind == AuthOutcomeKind::HttpMalformedJson
-        || outcome.kind == AuthOutcomeKind::HttpBusinessError
-        || outcome.kind == AuthOutcomeKind::HttpSuccess;
-    if (httpOutcome && (flowFor(outcome.module, outcome.requestId) != _flow
-                        || outcome.requestId != _requestId)) {
+    const bool httpOutcome =
+        outcome.kind == AuthOutcomeKind::HttpNetworkError || outcome.kind == AuthOutcomeKind::HttpMalformedJson ||
+        outcome.kind == AuthOutcomeKind::HttpBusinessError || outcome.kind == AuthOutcomeKind::HttpSuccess;
+    if (httpOutcome && (flowFor(outcome.module, outcome.requestId) != _flow || outcome.requestId != _requestId)) {
         return {};
     }
 
     const int key = outcomeKey(outcome);
-    if (_stage == Stage::AwaitingTcp
-        && outcome.kind == AuthOutcomeKind::TcpConnectFailed) {
+    if (_stage == Stage::AwaitingTcp && outcome.kind == AuthOutcomeKind::TcpConnectFailed) {
         if (!_processedOutcomes.insert(key).second) {
             return {};
         }
-        return {flowId, AuthActionKind::StayAndShowError,
-                AuthError::TcpConnection, true, std::nullopt};
+        return {flowId, AuthActionKind::StayAndShowError, AuthError::TcpConnection, true, std::nullopt};
     }
-    if (_stage == Stage::AwaitingTcp
-        && outcome.kind == AuthOutcomeKind::TcpConnected) {
+    if (_stage == Stage::AwaitingTcp && outcome.kind == AuthOutcomeKind::TcpConnected) {
         if (!_processedOutcomes.insert(key).second) {
             return {};
         }
         _stage = Stage::AwaitingChatLogin;
         return {flowId, std::nullopt, AuthError::None, true, std::nullopt};
     }
-    if (_stage == Stage::AwaitingChatLogin
-        && outcome.kind == AuthOutcomeKind::ChatLoginFailed) {
+    if (_stage == Stage::AwaitingChatLogin && outcome.kind == AuthOutcomeKind::ChatLoginFailed) {
         if (!_processedOutcomes.insert(key).second) {
             return {};
         }
-        return {flowId, AuthActionKind::StayAndShowError,
-                AuthError::ChatLogin, true, std::nullopt};
+        return {flowId, AuthActionKind::StayAndShowError, AuthError::ChatLogin, true, std::nullopt};
     }
-    if (_stage == Stage::AwaitingChatLogin
-        && outcome.kind == AuthOutcomeKind::ChatLoginSucceeded) {
+    if (_stage == Stage::AwaitingChatLogin && outcome.kind == AuthOutcomeKind::ChatLoginSucceeded) {
         if (!_processedOutcomes.insert(key).second) {
             return {};
         }
         _stage = Stage::Chat;
-        return {flowId, AuthActionKind::ShowChat,
-                AuthError::None, true, std::nullopt};
+        return {flowId, AuthActionKind::ShowChat, AuthError::None, true, std::nullopt};
     }
-    if (_stage == Stage::Chat
-        && outcome.kind == AuthOutcomeKind::AbnormalDisconnect) {
+    if (_stage == Stage::Chat && outcome.kind == AuthOutcomeKind::AbnormalDisconnect) {
         if (!_processedOutcomes.insert(key).second) {
             return {};
         }
         _stage = Stage::Complete;
-        return {flowId, AuthActionKind::ShowLogin,
-                AuthError::None, true, std::nullopt};
+        return {flowId, AuthActionKind::ShowLogin, AuthError::None, true, std::nullopt};
     }
 
     if (_stage != Stage::AwaitingHttp) {
@@ -113,8 +96,7 @@ AuthAction AuthFlowCoordinator::reduce(AuthFlowId flowId, const AuthOutcome &out
             return {};
         }
         _stage = Stage::AwaitingTcp;
-        return {flowId, AuthActionKind::ConnectChat, AuthError::None,
-                true, outcome.server};
+        return {flowId, AuthActionKind::ConnectChat, AuthError::None, true, outcome.server};
     }
 
     AuthError error = AuthError::None;
@@ -125,14 +107,24 @@ AuthAction AuthFlowCoordinator::reduce(AuthFlowId flowId, const AuthOutcome &out
     } else if (outcome.kind == AuthOutcomeKind::HttpBusinessError) {
         switch (outcome.businessError) {
         case 1003:
-        case 1004: error = AuthError::VerificationRejected; break;
+        case 1004:
+            error = AuthError::VerificationRejected;
+            break;
         case 1006:
         case 1007:
-        case 1009: error = AuthError::InvalidCredentials; break;
-        case 1005: error = AuthError::RegistrationRejected; break;
+        case 1009:
+            error = AuthError::InvalidCredentials;
+            break;
+        case 1005:
+            error = AuthError::RegistrationRejected;
+            break;
         case 1002:
-        case 1008: error = AuthError::ServiceUnavailable; break;
-        default: error = AuthError::Business; break;
+        case 1008:
+            error = AuthError::ServiceUnavailable;
+            break;
+        default:
+            error = AuthError::Business;
+            break;
         }
     } else {
         return {};
@@ -141,21 +133,27 @@ AuthAction AuthFlowCoordinator::reduce(AuthFlowId flowId, const AuthOutcome &out
     if (!_processedOutcomes.insert(key).second) {
         return {};
     }
-    return {flowId, AuthActionKind::StayAndShowError, error,
-            true, std::nullopt};
+    return {flowId, AuthActionKind::StayAndShowError, error, true, std::nullopt};
 }
 
-QString authErrorMessage(AuthError error)
-{
+QString authErrorMessage(AuthError error) {
     switch (error) {
     case AuthError::Network:
-    case AuthError::TcpConnection: return QObject::tr("网络连接失败，请检查网络后重试");
-    case AuthError::MalformedResponse: return QObject::tr("服务器响应异常，请稍后重试");
-    case AuthError::InvalidCredentials: return QObject::tr("账号或密码不正确，请检查后重试");
-    case AuthError::VerificationRejected: return QObject::tr("验证码错误或已过期，请重新获取");
-    case AuthError::RegistrationRejected: return QObject::tr("无法注册，请检查填写信息或尝试登录");
-    case AuthError::ServiceUnavailable: return QObject::tr("服务暂不可用，请稍后重试");
-    case AuthError::ChatLogin: return QObject::tr("登录状态已失效，请重新登录");
-    default: return QObject::tr("请求未成功，请检查输入或稍后重试");
+    case AuthError::TcpConnection:
+        return QObject::tr("网络连接失败，请检查网络后重试");
+    case AuthError::MalformedResponse:
+        return QObject::tr("服务器响应异常，请稍后重试");
+    case AuthError::InvalidCredentials:
+        return QObject::tr("账号或密码不正确，请检查后重试");
+    case AuthError::VerificationRejected:
+        return QObject::tr("验证码错误或已过期，请重新获取");
+    case AuthError::RegistrationRejected:
+        return QObject::tr("无法注册，请检查填写信息或尝试登录");
+    case AuthError::ServiceUnavailable:
+        return QObject::tr("服务暂不可用，请稍后重试");
+    case AuthError::ChatLogin:
+        return QObject::tr("登录状态已失效，请重新登录");
+    default:
+        return QObject::tr("请求未成功，请检查输入或稍后重试");
     }
 }
