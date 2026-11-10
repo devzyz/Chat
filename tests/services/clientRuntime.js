@@ -20,7 +20,8 @@ function verifyClient(bundle) {
 /** 补入 ldd 不会发现的 SQLite 插件及其依赖，确保迁移后不借用构建机 Qt。 */
 function packClient(source, destination, qtRoot, installedRoot) {
     pack(source, destination, [qtRoot, installedRoot], 'chat_e2e_client', null);
-    const roots = [qtRoot, installedRoot].map(/** 规范化显式安装树供来源校验。 */ root => fs.realpathSync(root));
+    // 规范化显式安装树供来源校验。
+    const roots = [qtRoot, installedRoot].map(root => fs.realpathSync(root));
     const plugin = validateLibrarySource(path.join(qtRoot, 'plugins', 'sqldrivers', 'libqsqlite.so'), [roots[0]]);
     const libraries = dependencies(inspect(plugin));
     for (const [name, library] of libraries) {
@@ -38,7 +39,8 @@ function packClient(source, destination, qtRoot, installedRoot) {
     const hiddenPlugin = path.join(destination, 'sqlite-plugin.hidden');
     fs.renameSync(pluginPath, hiddenPlugin);
     try {
-        assert.throws(/** 缺少插件时真实存储探针必须失败，防止借用宿主 Qt 插件。 */ () => {
+        // 缺少插件时真实存储探针必须失败，防止借用宿主 Qt 插件。
+        assert.throws(() => {
             execFileSync(path.resolve(destination, 'chat_e2e_client'), ['--check-storage'], { timeout: 10000,
                 env: { ...process.env, LD_LIBRARY_PATH: path.resolve(destination), LD_PRELOAD: '', QT_PLUGIN_PATH: '' }, stdio: 'pipe' });
         });

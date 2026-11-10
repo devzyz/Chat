@@ -37,4 +37,5 @@ async function main() {
     await fixture.close();
 }
 
-main().catch(/** 输出复现失败原因并设置非零退出状态。 */ error => { console.error(error.message); process.exitCode = 1; });
+// 输出复现失败原因并设置非零退出状态。
+main().catch(error => { console.error(error.message); process.exitCode = 1; });

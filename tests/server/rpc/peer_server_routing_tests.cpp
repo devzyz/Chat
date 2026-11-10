@@ -14,7 +14,8 @@ TEST(PeerServerRoutingTests, ConfiguredSectionsResolveToRuntimeNamesAndAddresses
         {"PeerA", {{"Name", "chat-alpha"}, {"Host", "127.0.0.1"}, {"Port", "51001"}}},
         {"PeerB", {{"Name", "chat-beta"}, {"Host", "localhost"}, {"Port", "51002"}}}
     };
-    const auto lookup = /** 按节和键查询测试配置，缺失时返回空。 */ [&config](const std::string& section, const std::string& key) {
+    // 按节和键查询测试配置，缺失时返回空。
+    const auto lookup = [&config](const std::string& section, const std::string& key) {
         const auto section_iter = config.find(section);
         if (section_iter == config.end()) {
             return std::string();
@@ -35,7 +36,8 @@ TEST(PeerServerRoutingTests, ConfiguredSectionsResolveToRuntimeNamesAndAddresses
 // T05-ROUTE-02
 /** 验证缺少运行实例名的配置不建立路由。 */
 TEST(PeerServerRoutingTests, MissingRuntimeNameDoesNotCreateARoute) {
-    const auto lookup = /** 仅为已知测试实例返回完整路由配置。 */ [](const std::string& section, const std::string& key) {
+    // 仅为已知测试实例返回完整路由配置。
+    const auto lookup = [](const std::string& section, const std::string& key) {
         if (section == "Known" && key == "Name") {
             return std::string("chat-known");
         }

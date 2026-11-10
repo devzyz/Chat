@@ -642,7 +642,8 @@ void MessageStorageTests::uploadedResourceCanonicalHistory()
             {"sha256", QString(64, 'a')}, {"size", 75000}};
         auto uploaded = canonical;
         uploaded["offset"] = 75000; uploaded["owner"] = 7; uploaded["ready"] = true; uploaded["upload_id"] = "upload-1";
-        const auto content = /** @brief 生成实际消息资源前缀及紧凑 JSON。 */ [](const QJsonObject &value) {
+        // 生成实际消息资源前缀及紧凑 JSON。
+        const auto content = [](const QJsonObject &value) {
             return "@resource:v1:" + QString::fromUtf8(QJsonDocument(value).toJson(QJsonDocument::Compact));
         };
         auto pending = message(0, "upload-uuid"); pending.recipientId = group ? 0 : 8;

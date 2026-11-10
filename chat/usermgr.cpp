@@ -19,7 +19,8 @@ UserMgr::UserMgr()
     connect(_messages, &MessageService::directoryRestored, this, &UserMgr::applyDirectory);
     connect(_messages, &MessageService::directoryChanged, this, &UserMgr::applyDirectory);
     connect(_messages, &MessageService::directoryRestored, this,
-        /** @brief 账号库恢复后才允许重试断线期间保留的提交。 */ [this] {
+        // 账号库恢复后才允许重试断线期间保留的提交。
+        [this] {
         if (_submissions) _submissions->resume();
     });
     // 在 Qt 事件投递停止前排空存储，避免工作线程无法收到退出任务。

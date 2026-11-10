@@ -27,7 +27,8 @@ public:
         : rpc::BoundedPool<StatusService::Stub>(
               pool_size,
               acquire_timeout,
-              /** @brief 为固定端点构造 StatusService stub。 */ [endpoint = host + ":" + port] {
+              // 为固定端点构造 StatusService stub。
+              [endpoint = host + ":" + port] {
                   return StatusService::NewStub(grpc::CreateChannel(
                       endpoint,
                       grpc::InsecureChannelCredentials()));

@@ -98,21 +98,25 @@ TEST(T09_PROC_Faults, RefusalDeadlineAndPortConflictAreBoundedAndReleaseOwnershi
 		*context,
 		FaultHelperSpec(*context, {L"--mode=server", L"--port=" + std::to_wstring(child_endpoint.port)}));
 	ASSERT_TRUE(running->WaitReady(
-		/** 用子进程端点的协议响应判断就绪。 */ [&] { return FaultProbeReady(child_endpoint); }, std::chrono::steady_clock::now() + 2s));
+		// 用子进程端点的协议响应判断就绪。
+		[&] { return FaultProbeReady(child_endpoint); }, std::chrono::steady_clock::now() + 2s));
 
 	const auto refusal_deadline = std::chrono::steady_clock::now() + 150ms;
 	EXPECT_FALSE(running->WaitReady(
-		/** 探测被拒绝的端点以驱动截止时间失败路径。 */ [&] { return ProbeRefusedWithoutBlocking(refused_endpoint); }, refusal_deadline));
+		// 探测被拒绝的端点以驱动截止时间失败路径。
+		[&] { return ProbeRefusedWithoutBlocking(refused_endpoint); }, refusal_deadline));
 	EXPECT_LE(std::chrono::steady_clock::now(), refusal_deadline + 100ms);
 	EXPECT_FALSE(running->WaitReady(
-		/** 确认重启后的子进程通过协议就绪检查。 */ [&] { return FaultProbeReady(child_endpoint); }, std::chrono::steady_clock::now() - 1ms));
+		// 确认重启后的子进程通过协议就绪检查。
+		[&] { return FaultProbeReady(child_endpoint); }, std::chrono::steady_clock::now() - 1ms));
 	EXPECT_TRUE(running->Stop(std::chrono::steady_clock::now() + 2s).Complete());
 
 	const auto conflict_endpoint = context->ReserveLoopbackPort("fault-conflict");
 	auto conflicting = integration::ProcessHarness::Start(
 		*context,
 		FaultHelperSpec(*context, {L"--mode=server", L"--port=" + std::to_wstring(conflict_endpoint.port)}));
-	EXPECT_FALSE(conflicting->WaitReady(/** 保持探针失败以验证就绪等待的硬超时。 */ [] { return false; }, std::chrono::steady_clock::now() + 2s));
+	// 保持探针失败以验证就绪等待的硬超时。
+	EXPECT_FALSE(conflicting->WaitReady([] { return false; }, std::chrono::steady_clock::now() + 2s));
 	const auto evidence = conflicting->CollectEvidence();
 	ASSERT_TRUE(evidence.exit_code.has_value());
 	EXPECT_EQ(*evidence.exit_code, 31U);
@@ -139,7 +143,8 @@ TEST(T09_PROC_Faults, LateOutputAndCleanupFailureRemainSeparateSanitizedAndResid
 				L"--mode=server", L"--late-output", L"--emit-secret",
 				L"--port=" + std::to_wstring(endpoint.port)}));
 		ASSERT_TRUE(harness->WaitReady(
-			/** 确认故障子进程可接收协议请求。 */ [&] { return FaultProbeReady(endpoint); }, std::chrono::steady_clock::now() + 2s));
+			// 确认故障子进程可接收协议请求。
+			[&] { return FaultProbeReady(endpoint); }, std::chrono::steady_clock::now() + 2s));
 		ASSERT_TRUE(harness->Stop(std::chrono::steady_clock::now() + 2s).Complete());
 		const auto evidence = harness->CollectEvidence();
 		EXPECT_NE(evidence.stdout_text.find("synthetic late stdout"), std::string::npos);
@@ -151,10 +156,12 @@ TEST(T09_PROC_Faults, LateOutputAndCleanupFailureRemainSeparateSanitizedAndResid
 
 		const auto first = context->ReserveProcessSlot("fault-cleanup-first");
 		const auto second = context->ReserveProcessSlot("fault-cleanup-second");
-		context->CommitProcess(first, {7001, 701}, /** 返回成功清理结果，作为正常清理路径的对照。 */ [] {
+		// 返回成功清理结果，作为正常清理路径的对照。
+		context->CommitProcess(first, {7001, 701}, [] {
 			return integration::CleanupStatus::Success("clean");
 		});
-		context->CommitProcess(second, {7002, 702}, /** 返回含测试敏感值的清理失败，用于验证证据脱敏。 */ [] {
+		// 返回含测试敏感值的清理失败，用于验证证据脱敏。
+		context->CommitProcess(second, {7002, 702}, [] {
 			return integration::CleanupStatus::Failure("token=cleanup-secret");
 		});
 		context->RecordPrimaryFailure("password=primary-secret");

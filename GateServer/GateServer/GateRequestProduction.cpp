@@ -66,7 +66,11 @@ public:
 		const std::string& password,
         const std::string& email) override {
         return MysqlMgr::GetInstance()->UpdatePassword(username, password, email,
-            /** @brief 在账号锁内先提升认证代次并撤销旧 Token；依赖失败阻止改密。 */ [](int uid) {
+            /**
+             * 在账号锁内先提升认证代次并撤销旧 Token；
+             * 依赖失败阻止改密。
+             */
+            [](int uid) {
             return RedisMgr::GetInstance()->EvalNumber(
                 "redis.call('INCR','auth_version_'..KEYS[1]); redis.call('DEL',KEYS[1]); return 1",
                 std::to_string(uid), "") == 1;

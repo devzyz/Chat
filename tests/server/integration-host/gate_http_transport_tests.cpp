@@ -53,7 +53,8 @@ protected:
 		logic_ = std::make_shared<LogicSystem>(*request_);
 		server_ = std::make_shared<CServer>(ioc_, "127.0.0.1", 0, logic_);
 		server_->Start();
-		server_thread_ = std::thread(/** 在夹具工作线程中运行 Gate 事件循环。 */ [this] { ioc_.run(); });
+		// 在夹具工作线程中运行 Gate 事件循环。
+		server_thread_ = std::thread([this] { ioc_.run(); });
 	}
 
 	/** 停止监听与事件循环并等待线程退出。 */
@@ -118,8 +119,10 @@ TEST_F(T09_GHTTP_Core, PublishesReadyLoopbackEndpointAndStopsIdempotently) {
     http::response<http::dynamic_body> response;
     bool received = false;
     boost::asio::steady_timer deadline(io, 2s);
-    deadline.async_wait(/** @brief 超时停止本用例事件循环，避免读响应悬挂。 */ [&](auto error) { if (!error) io.stop(); });
-    http::async_read(peer, buffer, response, /** @brief 记录真实 HTTP 响应结果并取消测试总期限。 */ [&](auto error, auto) {
+    // 超时停止本用例事件循环，避免读响应悬挂。
+    deadline.async_wait([&](auto error) { if (!error) io.stop(); });
+    // 记录真实 HTTP 响应结果并取消测试总期限。
+    http::async_read(peer, buffer, response, [&](auto error, auto) {
         received = !error; deadline.cancel();
     });
     io.run();

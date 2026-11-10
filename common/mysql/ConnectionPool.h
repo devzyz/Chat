@@ -70,7 +70,8 @@ public:
         std::unique_ptr<Connection> connection;
         {
             std::unique_lock<std::mutex> lock(_mutex);
-            if (Clock::now() >= deadline || !_available.wait_until(lock, deadline, /** @brief 在关闭、有空闲连接或尚可创建连接时结束等待。 */ [this] {
+            // 在关闭、有空闲连接或尚可创建连接时结束等待。
+            if (Clock::now() >= deadline || !_available.wait_until(lock, deadline, [this] {
                 return _closed || !_idle.empty() || _size < _capacity;
             }) || _closed) return nullptr;
             if (!_idle.empty()) {

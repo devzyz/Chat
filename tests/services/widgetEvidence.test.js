@@ -6,23 +6,29 @@ const os = require('node:os');
 const path = require('node:path');
 const { validate, widgetCases, storeCases } = require('./widgetEvidence');
 
-test('widget gate requires exact executed cases, same SHA and a complete capture', /** 验证控件证据门禁的正例与必需失败路径。 */ () => {
+// 验证控件证据门禁的正例与必需失败路径。
+test('widget gate requires exact executed cases, same SHA and a complete capture', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-widget-evidence-'));
     const sha = 'b'.repeat(40);
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=', 'base64');
-    const report = /** 生成校验器的合成 XML 输入，不代表真实控件执行。 */ (names, gtest = false) =>
-        '<testsuite tests="' + names.length + '" failures="0">' + names.map(/** 编码单条用例及执行状态。 */ name =>
+    // 生成校验器的合成 XML 输入，不代表真实控件执行。
+    const report = (names, gtest = false) =>
+        // 编码单条用例及执行状态。
+        '<testsuite tests="' + names.length + '" failures="0">' + names.map(name =>
             `<testcase name="${name}"${gtest ? ' status="run" result="completed"' : ''}/>`).join('') + '</testsuite>';
-    const restore = /** 恢复完整的校验器测试输入。 */ () => {
+    // 恢复完整的校验器测试输入。
+    const restore = () => {
         fs.writeFileSync(path.join(root, 'source-sha.txt'), sha);
         fs.writeFileSync(path.join(root, 'widgets.xml'), report(widgetCases));
         fs.writeFileSync(path.join(root, 'resource-store.xml'), report(storeCases, true));
         fs.writeFileSync(path.join(root, 'group-panel.png'), png);
     };
-    const check = /** 检验当前测试目录。 */ () => validate(root, sha);
+    // 检验当前测试目录。
+    const check = () => validate(root, sha);
     try {
         restore(); check();
-        assert.throws(/** 拒绝其他源码提交的报告。 */ () => validate(root, 'c'.repeat(40)));
+        // 拒绝其他源码提交的报告。
+        assert.throws(() => validate(root, 'c'.repeat(40)));
         for (const file of ['widgets.xml', 'resource-store.xml', 'group-panel.png', 'source-sha.txt']) {
             restore(); fs.unlinkSync(path.join(root, file)); assert.throws(check);
         }

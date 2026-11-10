@@ -7,7 +7,8 @@ const { execFileSync } = require('node:child_process');
 const test = require('node:test');
 const { isDocumentationPath, selectScope } = require('../../scripts/ci/ciScope');
 
-test('documentation scope accepts only known Markdown locations', /** 验证构建输入、未知路径不会归为纯文档。 */ () => {
+// 验证构建输入、未知路径不会归为纯文档。
+test('documentation scope accepts only known Markdown locations', () => {
     for (const file of ['README.md', 'WINDOWS_BUILD.md', 'docs/Status.md', 'docs/plans/Plan.md']) {
         assert.equal(isDocumentationPath(file), true, file);
     }
@@ -16,10 +17,12 @@ test('documentation scope accepts only known Markdown locations', /** 验证构�
     }
 });
 
-test('full lanes and unavailable comparison never skip builds', /** 验证 master、周检、手动及无法确定差异的事件保留完整构建。 */ () => {
+// 验证 master、周检、手动及无法确定差异的事件保留完整构建。
+test('full lanes and unavailable comparison never skip builds', () => {
     const sha = 'a'.repeat(40);
     const event = { before: sha, after: 'b'.repeat(40), pull_request: { base: { ref: 'master', sha }, head: { sha } } };
-    const docs = /** 提供只改文档的合成 Git 输出。 */ () => 'README.md\0';
+    // 提供只改文档的合成 Git 输出。
+    const docs = () => 'README.md\0';
     for (const name of ['schedule', 'workflow_dispatch', 'pull_request']) {
         assert.equal(selectScope(name, 'refs/heads/develop', event, docs), false);
     }
@@ -27,21 +30,28 @@ test('full lanes and unavailable comparison never skip builds', /** 验证 maste
     assert.equal(selectScope('pull_request', '', { pull_request: { base: { ref: 'develop', sha } } }, docs), false);
     assert.equal(selectScope('push', 'refs/heads/develop', { ...event, before: '0'.repeat(40) }, docs), false);
     assert.equal(selectScope('push', 'refs/heads/develop', event,
-        /** 模拟提交对象不可用，要求保留构建。 */ () => { throw new Error('missing object'); }), false);
-    assert.equal(selectScope('push', 'refs/heads/develop', event, /** 模拟空差异。 */ () => ''), false);
+        // 模拟提交对象不可用，要求保留构建。
+        () => { throw new Error('missing object'); }), false);
+    // 模拟空差异。
+    assert.equal(selectScope('push', 'refs/heads/develop', event, () => ''), false);
     assert.equal(selectScope('push', 'refs/heads/develop', event,
-        /** 模拟文档和代码混合提交。 */ () => 'README.md\0chat/main.cpp\0'), false);
+        // 模拟文档和代码混合提交。
+        () => 'README.md\0chat/main.cpp\0'), false);
 });
 
-test('real Git history checks the whole PR and both sides of renames', /** 用隔离 Git 历史验证跨提交、目标分支前进、重命名与公开 CLI。 */ () => {
+// 用隔离 Git 历史验证跨提交、目标分支前进、重命名与公开 CLI。
+test('real Git history checks the whole PR and both sides of renames', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-ci-scope-'));
-    const git = /** 在测试自建仓库中有界执行 Git。 */ args => execFileSync('git', args, {
+    // 在测试自建仓库中有界执行 Git。
+    const git = args => execFileSync('git', args, {
         cwd: root, encoding: 'utf8', timeout: 10000
     });
-    const commit = /** 提交测试自建文件并返回精确 SHA。 */ () => {
+    // 提交测试自建文件并返回精确 SHA。
+    const commit = () => {
         git(['add', '.']); git(['commit', '-qm', 'fixture']); return git(['rev-parse', 'HEAD']).trim();
     };
-    const event = /** 为指定两端提交生成 develop PR 事件。 */ (base, head) => ({ pull_request: {
+    // 为指定两端提交生成 develop PR 事件。
+    const event = (base, head) => ({ pull_request: {
         base: { ref: 'develop', sha: base }, head: { sha: head }
     } });
     try {

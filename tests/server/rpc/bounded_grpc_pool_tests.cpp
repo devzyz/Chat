@@ -11,7 +11,8 @@ using namespace std::chrono_literals;
 
 /** 验证池耗尽在配置借用期限内返回明确失败。 */
 TEST(BoundedGrpcPoolTests, ExhaustedPoolReturnsWithinConfiguredAcquireTimeout) {
-    rpc::BoundedPool<int> pool(1, 50ms, /** 创建固定值的独占池资源。 */ [] {
+    // 创建固定值的独占池资源。
+    rpc::BoundedPool<int> pool(1, 50ms, [] {
         return std::make_unique<int>(7);
     });
 
@@ -30,7 +31,8 @@ TEST(BoundedGrpcPoolTests, ExhaustedPoolReturnsWithinConfiguredAcquireTimeout) {
 
 /** 验证租约析构归还后可再次借用。 */
 TEST(BoundedGrpcPoolTests, ReturnedLeaseCanBeBorrowedAgain) {
-    rpc::BoundedPool<int> pool(1, 50ms, /** 创建固定值的独占池资源。 */ [] { return std::make_unique<int>(7); });
+    // 创建固定值的独占池资源。
+    rpc::BoundedPool<int> pool(1, 50ms, [] { return std::make_unique<int>(7); });
     {
         auto borrowed = pool.Acquire();
         ASSERT_TRUE(borrowed);
@@ -41,13 +43,15 @@ TEST(BoundedGrpcPoolTests, ReturnedLeaseCanBeBorrowedAgain) {
 
 /** 验证关闭立即唤醒借用者，无需等待原借用期限。 */
 TEST(BoundedGrpcPoolTests, CloseWakesWaitingBorrowerWithoutWaitingForAcquireTimeout) {
-    rpc::BoundedPool<int> pool(1, 5s, /** 创建固定值的独占池资源。 */ [] { return std::make_unique<int>(7); });
+    // 创建固定值的独占池资源。
+    rpc::BoundedPool<int> pool(1, 5s, [] { return std::make_unique<int>(7); });
     auto held = pool.Acquire();
     ASSERT_TRUE(held);
 
     std::promise<void> entering_acquire;
     auto entered = entering_acquire.get_future();
-    auto waiter = std::async(std::launch::async, /** 通知借用即将开始并返回等待后的失败分类。 */ [&] {
+    // 通知借用即将开始并返回等待后的失败分类。
+    auto waiter = std::async(std::launch::async, [&] {
         entering_acquire.set_value();
         return pool.Acquire().failure;
     });
@@ -61,7 +65,8 @@ TEST(BoundedGrpcPoolTests, CloseWakesWaitingBorrowerWithoutWaitingForAcquireTime
 
 /** 验证重复关闭及关闭后归还不会重新开放池。 */
 TEST(BoundedGrpcPoolTests, RepeatedCloseAndReturnAfterCloseRemainClosed) {
-    rpc::BoundedPool<int> pool(1, 50ms, /** 创建固定值的独占池资源。 */ [] { return std::make_unique<int>(7); });
+    // 创建固定值的独占池资源。
+    rpc::BoundedPool<int> pool(1, 50ms, [] { return std::make_unique<int>(7); });
     auto held = pool.Acquire();
     ASSERT_TRUE(held);
 

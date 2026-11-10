@@ -69,14 +69,16 @@ private slots:
         auto *pool = QThreadPool::globalInstance();
         const int previous = pool->maxThreadCount(); pool->setMaxThreadCount(1);
         QSemaphore entered, release;
-        auto blocker = QtConcurrent::run(/** @brief 暂停工作池以确定性验证 UI 不等待附件准备。 */
+        // 暂停工作池以确定性验证 UI 不等待附件准备。
+        auto blocker = QtConcurrent::run(
             [&] { entered.release(); release.acquire(); });
         entered.acquire();
         MessageTextEdit editor; editor.setAccountRoot(root.path());
         QImage image(20, 20, QImage::Format_RGB32); image.fill(Qt::red);
         QApplication::clipboard()->setImage(image); editor.paste(); editor.insertPlainText("after");
         bool eventRan = false;
-        QTimer::singleShot(0, &editor, /** @brief 附件尚未准备时确认 GUI 事件仍能处理。 */
+        // 附件尚未准备时确认 GUI 事件仍能处理。
+        QTimer::singleShot(0, &editor,
             [&] { eventRan = true; });
         QCoreApplication::processEvents();
         const bool pending = editor.hasPendingAttachments();
@@ -94,7 +96,8 @@ private slots:
         pool->waitForDone();
         const int previous = pool->maxThreadCount(); pool->setMaxThreadCount(1);
         QSemaphore entered, release;
-        auto blocker = QtConcurrent::run(/** @brief 阻塞工作池，让容量与取消检查不依赖执行速度。 */
+        // 阻塞工作池，让容量与取消检查不依赖执行速度。
+        auto blocker = QtConcurrent::run(
             [&] { entered.release(); release.acquire(); });
         entered.acquire();
         QImage image(20, 20, QImage::Format_RGB32); image.fill(Qt::red);
@@ -255,7 +258,8 @@ private slots:
         QTRY_VERIFY(controller.isFailed()); QVERIFY(controller.hasPending());
         QCOMPARE(persisted.size(), 1); const auto ids = persisted.first()[1];
         bool sawWarning = false;
-        QTimer::singleShot(0, &controller, /** @brief 在真实退出提示中选择 Cancel。 */ [&] {
+        // 在真实退出提示中选择 Cancel。
+        QTimer::singleShot(0, &controller, [&] {
             for (auto *widget : QApplication::topLevelWidgets()) {
                 if (auto *box = qobject_cast<QMessageBox *>(widget)) {
                     sawWarning = true; box->done(QMessageBox::Cancel);
@@ -356,11 +360,13 @@ private slots:
         QTcpServer peer; QVERIFY(peer.listen(QHostAddress::LocalHost,0));
         ChatTcpTransport transport; UserSearchController search;
         connect(&search, &UserSearchController::requestReady, &transport,
-            /** @brief 测试使用真实协议帧传输查询 JSON。 */ [&transport](const QJsonObject &request) {
+            // 测试使用真实协议帧传输查询 JSON。
+            [&transport](const QJsonObject &request) {
             transport.send(1007,QJsonDocument(request).toJson(QJsonDocument::Compact));
         });
         connect(&transport, &ChatTcpTransport::frameReceived, &search,
-            /** @brief 回包通过生产解帧后核对查询身份。 */ [&search](const ChatTcpFrame &frame) {
+            // 回包通过生产解帧后核对查询身份。
+            [&search](const ChatTcpFrame &frame) {
             search.accept(QJsonDocument::fromJson(frame.body).object());
         });
         QSignalSpy connected(&transport,&ChatTcpTransport::connected), found(&search,&UserSearchController::found);
@@ -368,7 +374,8 @@ private slots:
         QTRY_COMPARE(connected.size(),1); QTRY_VERIFY(peer.hasPendingConnections());
         auto *socket=peer.nextPendingConnection(); search.search("user");
         QByteArray bytes;
-        const auto received = /** @brief 轮询读取隔离连接中的完整帧，不固定等待时长。 */ [&](qsizetype count) {
+        // 轮询读取隔离连接中的完整帧，不固定等待时长。
+        const auto received = [&](qsizetype count) {
             bytes += socket->readAll(); return bytes.size() >= count;
         };
         QTRY_VERIFY(received(4));

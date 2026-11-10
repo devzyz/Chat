@@ -15,15 +15,21 @@ MainWindow::MainWindow(QWidget *parent)
     , _session(this)
 {
     ui->setupUi(this);
-    connect(&_session, &ClientSession::reconnectChanged, this, /** @brief 保留会话页面并显示自动恢复提示。 */ [this](bool active) {
+    // 保留会话页面并显示自动恢复提示。
+    connect(&_session, &ClientSession::reconnectChanged, this, [this](bool active) {
         if (active) statusBar()->showMessage(tr("连接中断，正在重新连接…"));
         else statusBar()->clearMessage();
     });
-    connect(&_session, &ClientSession::reconnectFailed, this, /** @brief 恢复被拒绝或尝试耗尽后明确返回登录页。 */ [this] {
+    // 恢复被拒绝或尝试耗尽后明确返回登录页。
+    connect(&_session, &ClientSession::reconnectFailed, this, [this] {
         resetSession(SessionResetReason::UnexpectedDisconnect);
         QMessageBox::information(this, tr("连接已断开"), tr("无法恢复当前会话，请重新登录。"));
     });
-    connect(&_session, &ClientSession::logoutFinished, this, /** @brief 撤销成功才结束账号；失败保留界面并允许重试。 */ [this](bool success) {
+    /**
+     * 撤销成功才结束账号；
+     * 失败保留界面并允许重试。
+     */
+    connect(&_session, &ClientSession::logoutFinished, this, [this](bool success) {
         setEnabled(true);
         if (!success) {
             _closeAfterLogout = false;
@@ -136,7 +142,8 @@ void MainWindow::loginSwitchChat(AuthFlowId flowId) {
     _activeAuthFlowId = flowId;
     _chat_dlg = new ChatDialog(this);
     connect(_chat_dlg, &ChatDialog::logoutRequested, this,
-        /** @brief 账号按钮复用统一退出保护及完整会话清理。 */ [this](bool change) {
+        // 账号按钮复用统一退出保护及完整会话清理。
+        [this](bool change) {
         resetSession(change ? SessionResetReason::SwitchAccount : SessionResetReason::Logout);
     });
     _chat_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);

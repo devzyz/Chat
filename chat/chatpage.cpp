@@ -31,7 +31,8 @@ ChatPage::ChatPage(QWidget *parent)
     ui->setupUi(this);
     auto *reapply = new QPushButton(tr("重新申请好友"),this); reapply->setObjectName("reapplyFriendButton");
     ui->horizontalLayout_3->addWidget(reapply); reapply->hide();
-    connect(reapply,&QPushButton::clicked,this,/** @brief 复用好友申请表单，重新读取申请版本。 */ [this] {
+    // 复用好友申请表单，重新读取申请版本。
+    connect(reapply,&QPushButton::clicked,this,[this] {
         if (!_chatInfo || _chatInfo->getChatType() != ChatType::PRIVATE) return;
         auto *dialog = new ApplyFriendDialog(this);
         const auto profile = UserMgr::instance()->socialProfile(_chatInfo->getUid());
@@ -43,7 +44,8 @@ ChatPage::ChatPage(QWidget *parent)
     auto *search = new QPushButton(tr("查找历史"), this);
     ui->horizontalLayout_3->addWidget(details); ui->horizontalLayout_3->addWidget(search);
     connect(search, &QPushButton::clicked, this, &ChatPage::openHistorySearch);
-    connect(details, &QPushButton::clicked, this, /** @brief 群打开成员资料，私聊修改当前好友个人备注。 */ [this] {
+    // 群打开成员资料，私聊修改当前好友个人备注。
+    connect(details, &QPushButton::clicked, this, [this] {
         if (!_chatInfo) return;
         if (_chatInfo->getChatType() == ChatType::GROUP) {
             auto *panel = findChild<QDialog*>(QString("group-details-%1").arg(_currentChatId));
@@ -57,13 +59,15 @@ ChatPage::ChatPage(QWidget *parent)
         const QJsonObject request{{"target_uid",_chatInfo->getUid()},{"name",name},{"request_id",_remarkRequest}};
         emit TcpMgr::instance()->sendRequested(ID_FRIEND_REMARK_REQ,QJsonDocument(request).toJson(QJsonDocument::Compact));
         const auto identity = _remarkRequest;
-        QTimer::singleShot(10000,this, /** @brief 无回包时不宣称保存失败，允许重新设置相同备注。 */ [this,identity] {
+        // 无回包时不宣称保存失败，允许重新设置相同备注。
+        QTimer::singleShot(10000,this, [this,identity] {
             if (_remarkRequest != identity) return;
             _remarkRequest.clear();
             QMessageBox::information(this,tr("好友备注"),tr("结果尚未确认，请刷新联系人或重新设置备注。"));
         });
     });
-    connect(TcpMgr::instance().get(), &TcpMgr::groupResponse, this, /** @brief 备注写入完成后显示结果，拒绝时显示错误。 */
+    // 备注写入完成后显示结果，拒绝时显示错误。
+    connect(TcpMgr::instance().get(), &TcpMgr::groupResponse, this,
         [this](ReqId id, const QJsonObject &response) {
         if (id != ID_FRIEND_REMARK_RSP || _remarkRequest.isEmpty() || response["request_id"] != _remarkRequest) return;
         _remarkRequest.clear();
@@ -72,7 +76,8 @@ ChatPage::ChatPage(QWidget *parent)
             : response["error"].toInt(-1)==0 ? tr("备注已保存") : tr("备注未保存，请稍后重试"));
     });
     connect(UserMgr::instance()->messages(), &MessageService::directoryChanged, this,
-        /** @brief 已落盘的群权限变化即时关闭输入。 */ [this](const QJsonObject &) { refreshGroupState(); });
+        // 已落盘的群权限变化即时关闭输入。
+        [this](const QJsonObject &) { refreshGroupState(); });
     connect(UserMgr::instance().get(), &UserMgr::avatarChanged, this,
         /** @brief 更新对应发送者的消息头像。 */
         [this](int uid) {
@@ -98,7 +103,8 @@ ChatPage::ChatPage(QWidget *parent)
     ui->chat_edit->setAccountRoot(UserMgr::instance()->storageRoot());
     connect(ui->chat_edit, &MessageTextEdit::send, this, &ChatPage::on_send_btn_clicked);
     connect(ui->chat_edit, &MessageTextEdit::inputRejected, this,
-        /** @brief 保留草稿并显示输入失败原因。 */ [this](const QString &reason) {
+        // 保留草稿并显示输入失败原因。
+        [this](const QString &reason) {
         QMessageBox::information(this, tr("输入未接收"), reason);
     });
     auto *submission = UserMgr::instance()->submissions();
@@ -109,7 +115,8 @@ ChatPage::ChatPage(QWidget *parent)
     ui->horizontalLayout_3->addWidget(status);
     ui->horizontalLayout_3->addWidget(retry);
     ui->horizontalLayout_3->addWidget(cancel);
-    const auto refresh = /** @brief 页面重建时恢复账号任务进度及操作入口。 */ [submission, status, retry, cancel] {
+    // 页面重建时恢复账号任务进度及操作入口。
+    const auto refresh = [submission, status, retry, cancel] {
         status->setText(submission->status());
         status->setToolTip(submission->pendingSummary());
         retry->setVisible(submission->isFailed());
@@ -119,7 +126,8 @@ ChatPage::ChatPage(QWidget *parent)
     connect(retry, &QPushButton::clicked, submission, &MessageSubmissionController::retry);
     connect(cancel, &QPushButton::clicked, submission, &MessageSubmissionController::cancel);
     connect(submission, &MessageSubmissionController::rejected, this,
-        /** @brief 提交拒绝保持编辑器原内容并说明原因。 */ [this](const QString &reason) {
+        // 提交拒绝保持编辑器原内容并说明原因。
+        [this](const QString &reason) {
         QMessageBox::information(this, tr("未提交"), reason);
     });
     refresh();
@@ -251,7 +259,8 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before,
         // A periodic refresh must not consume the pending search-range navigation.
         if (_searchJumpId > 0 && before == _searchJumpId + 1) {
             const auto target = _searchJumpId; _searchJumpId = 0;
-            QTimer::singleShot(0,this,/** @brief 模型完成布局后定位搜索命中的消息。 */ [this,chatId,target] {
+            // 模型完成布局后定位搜索命中的消息。
+            QTimer::singleShot(0,this,[this,chatId,target] {
                 if (_currentChatId != chatId) return;
                 auto *model = ui->chat_detail_data_list->model();
                 for (int row=0;row<model->rowCount();++row) {
@@ -532,12 +541,14 @@ void ChatPage::openHistorySearch()
     auto *more = new QPushButton(tr("下一页"),dialog); layout->addWidget(more); more->setEnabled(false);
     auto cursor = std::make_shared<qint64>(0); auto term = std::make_shared<QString>();
     auto pending = std::make_shared<bool>(false);
-    connect(input,&QLineEdit::returnPressed,dialog,/** @brief 新查询重新开始本地分页。 */ [chat,input,rows,more,cursor,term,pending] {
+    // 新查询重新开始本地分页。
+    connect(input,&QLineEdit::returnPressed,dialog,[chat,input,rows,more,cursor,term,pending] {
         *term=input->text().trimmed(); if (term->isEmpty()) return;
         rows->clear(); *cursor=0; *pending=true; more->setEnabled(false);
         UserMgr::instance()->messages()->search(chat,*term);
     });
-    connect(more,&QPushButton::clicked,dialog,/** @brief 从上一页末尾继续搜索。 */ [chat,cursor,term,pending,more] {
+    // 从上一页末尾继续搜索。
+    connect(more,&QPushButton::clicked,dialog,[chat,cursor,term,pending,more] {
         if (*pending) return; *pending=true; more->setEnabled(false); UserMgr::instance()->messages()->search(chat,*term,*cursor);
     });
     connect(UserMgr::instance()->messages(),&MessageService::searchLoaded,dialog,
@@ -553,7 +564,8 @@ void ChatPage::openHistorySearch()
         }
         more->setEnabled(results.size()==50);
     });
-    connect(rows,&QListWidget::itemDoubleClicked,dialog,/** @brief 将结果所在历史范围加载到消息视图并请求定位。 */
+    // 将结果所在历史范围加载到消息视图并请求定位。
+    connect(rows,&QListWidget::itemDoubleClicked,dialog,
         [this,chat,dialog](QListWidgetItem *item) {
         if (_currentChatId!=chat) return;
         _searchJumpId=item->data(Qt::UserRole).toLongLong();

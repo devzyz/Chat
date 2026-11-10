@@ -26,7 +26,8 @@ public:
 	Result Handle(Endpoint endpoint, const Json::Value& request) override {
         try {
             if (!request.isObject()) return {ErrorCodes::Error_Json};
-            const auto text = /** @brief 校验字符串类型、非空和编码字节上限，不读取无关字段。 */
+            // 校验字符串类型、非空和编码字节上限，不读取无关字段。
+            const auto text =
                 [&request](const char* key, std::size_t limit) {
                     return request[key].isString() && !request[key].asString().empty()
                         && request[key].asString().size() <= limit;

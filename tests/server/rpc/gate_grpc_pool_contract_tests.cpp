@@ -41,7 +41,8 @@ void VerifyCloseLifecycle(Factory factory) {
     ASSERT_TRUE(held);
     std::promise<void> entering;
     auto entered = entering.get_future();
-    auto waiter = std::async(std::launch::async, /** 通知借用任务已进入并等待池关闭结果。 */ [&] {
+    // 通知借用任务已进入并等待池关闭结果。
+    auto waiter = std::async(std::launch::async, [&] {
         entering.set_value();
         return pool->Acquire().failure;
     });
@@ -56,12 +57,14 @@ void VerifyCloseLifecycle(Factory factory) {
 
 /** 返回创建Gate 的验证码单容量短期限池的工厂。 */
 auto VarifyPoolFactory() {
-    return /** 创建Gate 的验证码生产 RPC 池，无需实际调用远端。 */ [] { return std::make_unique<RPCConnectionPool>(1, "127.0.0.1", "1", 50ms); };
+    // 创建Gate 的验证码生产 RPC 池，无需实际调用远端。
+    return [] { return std::make_unique<RPCConnectionPool>(1, "127.0.0.1", "1", 50ms); };
 }
 
 /** 返回创建Gate 的 Status单容量短期限池的工厂。 */
 auto GateStatusPoolFactory() {
-    return /** 创建Gate 的 Status生产 RPC 池，无需实际调用远端。 */ [] { return std::make_unique<RPCConnection>(1, "127.0.0.1", "1", 50ms); };
+    // 创建Gate 的 Status生产 RPC 池，无需实际调用远端。
+    return [] { return std::make_unique<RPCConnection>(1, "127.0.0.1", "1", 50ms); };
 }
 }
 

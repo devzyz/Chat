@@ -8,7 +8,8 @@ const test = require('node:test');
 
 test('report inventory grows without a second total and retains failure gates',
     { skip: process.platform !== 'win32' },
-    /** 执行生产报告校验器，验证单点增加用例以及失败、缺项、清理和敏感信息拒绝。 */ () => {
+    // 执行生产报告校验器，验证单点增加用例以及失败、缺项、清理和敏感信息拒绝。
+    () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-report-contract-'));
         try {
             const script = String.raw`

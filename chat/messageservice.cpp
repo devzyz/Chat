@@ -244,7 +244,8 @@ void MessageService::acceptSyncPage(const QJsonObject &response)
             dispatchOutgoing();
             emit synchronized(chatId, next);
         }
-    }, /** @brief 写入失败后释放同步标记，后续周期可以重试且游标未推进。 */
+    // 写入失败后释放同步标记，后续周期可以重试且游标未推进。
+    },
     [this,chatId,requestId] {
         if (_requests.value(chatId) != requestId) return;
         _committing.remove(chatId);
@@ -340,7 +341,8 @@ void MessageService::loadHistory(int chatId, qint64 before, qint64 from)
 void MessageService::loadConversationSummaries()
 {
     auto rows = std::make_shared<QJsonArray>();
-    execute(0, /** @brief 只在工作线程读取会话摘要。 */
+    // 只在工作线程读取会话摘要。
+    execute(0,
         [rows](LocalMessageStore &store) { *rows = store.conversationSummaries(); },
         /** @brief 原账号查询完成后才允许界面刷新。 */
         [this, rows] { emit conversationSummariesLoaded(*rows); },
@@ -673,7 +675,8 @@ void MessageService::search(int chatId, const QString &text, qint64 before)
 {
     if (!isActive()) return;
     auto rows = std::make_shared<QVector<StoredMessage>>();
-    execute(chatId, /** @brief 使用已有 SQLite worker 执行有界历史搜索。 */
+    // 使用已有 SQLite worker 执行有界历史搜索。
+    execute(chatId,
         [chatId,text,before,rows](LocalMessageStore &store) { *rows = store.search(chatId,text,before); },
         /** @brief 当前账号收到带查询身份的结果。 */
         [this,chatId,text,before,rows] { emit searchLoaded(chatId,text,before,*rows); });
@@ -683,7 +686,8 @@ void MessageService::findDirectory(const QString &kind, const QString &text, int
 {
     if (!isActive()) return;
     auto rows=std::make_shared<QJsonArray>();
-    execute(0,/** @brief 在 worker 中搜索完整目录，避免只筛选已显示列表。 */
+    // 在 worker 中搜索完整目录，避免只筛选已显示列表。
+    execute(0,
         [kind,text,after,rows](LocalMessageStore &store) { *rows=store.findDirectory(kind,text,after,50); },
         /** @brief 发布可关联请求的目录搜索页。 */
         [this,kind,text,after,rows] { emit directoryFound(kind,text,after,*rows); });

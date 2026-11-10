@@ -52,11 +52,15 @@ function writeReports(root, selector, cases, options = {}) {
     const manifest = { format: 1, sourceSha: process.env.CHAT_CANDIDATE_SHA || null,
         selector, reports: [] };
     for (const group of options.groups || reportGroups(selector)) {
-        const selected = cases.filter(/** 筛选属于当前报告组前缀的用例。 */ (entry) => entry.id.startsWith(group.prefix));
+        // 筛选属于当前报告组前缀的用例。
+        const selected = cases.filter((entry) => entry.id.startsWith(group.prefix));
         const incomplete = selected.length === 0 || (group.expected !== undefined && selected.length !== group.expected);
-        const duplicate = new Set(selected.map(/** 提取 Test ID 以检测重复记录。 */ (entry) => entry.id)).size !== selected.length;
-        const failures = selected.filter(/** 识别未通过用例以累计失败数量。 */ (entry) => !entry.pass).length + Number(incomplete || duplicate);
-        const rows = selected.map(/** 编码单个 JUnit 用例，仅输出白名单内的失败诊断。 */ (entry) => {
+        // 提取 Test ID 以检测重复记录。
+        const duplicate = new Set(selected.map((entry) => entry.id)).size !== selected.length;
+        // 识别未通过用例以累计失败数量。
+        const failures = selected.filter((entry) => !entry.pass).length + Number(incomplete || duplicate);
+        // 编码单个 JUnit 用例，仅输出白名单内的失败诊断。
+        const rows = selected.map((entry) => {
             const diagnostic = processDiagnostic(entry.diagnostic);
             const message = diagnostic ? `${diagnostic.stage}:${diagnostic.category}` : 'bounded contract failed';
             return `<testcase classname="${xml(group.prefix)}" name="${xml(entry.id)} ${xml(entry.name)}" time="${Number(entry.seconds || 0).toFixed(3)}">${entry.pass ? '' : `<failure message="${xml(message)}"/>`}</testcase>`;
@@ -66,7 +70,8 @@ function writeReports(root, selector, cases, options = {}) {
             `<testsuite name="${xml(group.file)}" tests="${rows.length}" failures="${failures}">\n${rows.join('\n')}\n</testsuite>\n`);
         manifest.reports.push({ file: group.file, owner: 'tests/services', level: options.level || 'Integration',
             deadlineSeconds: 690, prefix: group.prefix, expected: group.expected,
-            cases: selected.map(/** 生成用例清单记录，诊断字段通过白名单后才保留。 */ entry => ({ id: entry.id, name: entry.name, pass: entry.pass,
+            // 生成用例清单记录，诊断字段通过白名单后才保留。
+            cases: selected.map(entry => ({ id: entry.id, name: entry.name, pass: entry.pass,
                 ...(processDiagnostic(entry.diagnostic) ? { diagnostic: processDiagnostic(entry.diagnostic) } : {}) })),
             sha256: createHash('sha256').update(fs.readFileSync(path.join(root, group.file))).digest('hex') });
     }

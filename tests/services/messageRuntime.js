@@ -26,7 +26,8 @@ function dependencies(output) {
 
 /** 核对包内依赖清单与实际解析结果一致，且所有非系统库留在所属目录。 */
 function validateRelocated(output, bundle, names) {
-    assert.ok(Array.isArray(names) && names.every(/** 校验清单中的动态库名称格式。 */ (name) => libraryName.test(name)),
+    // 校验清单中的动态库名称格式。
+    assert.ok(Array.isArray(names) && names.every((name) => libraryName.test(name)),
         'invalid runtime manifest');
     assert.equal(new Set(names).size, names.length, 'duplicate runtime manifest entry');
     const actual = dependencies(output);
@@ -47,7 +48,8 @@ function inspect(binary, bundle) {
 /** 验证动态库来源属于显式安装树或 Linux 系统库，返回规范路径。 */
 function validateLibrarySource(source, installedRoots) {
     const real = fs.realpathSync(source);
-    assert.ok(installedRoots.some(/** 按目录边界限定允许的依赖安装树。 */ root => real.startsWith(root + path.sep)) ||
+    // 按目录边界限定允许的依赖安装树。
+    assert.ok(installedRoots.some(root => real.startsWith(root + path.sep)) ||
         /^\/(?:usr\/)?lib\/x86_64-linux-gnu\//.test(real), 'library source outside locked/system roots');
     return real;
 }
@@ -56,7 +58,8 @@ function validateLibrarySource(source, installedRoots) {
 function pack(binary, bundle, installedRoot, name = 'message_commit_integration', probe = ['validation']) {
     assert.match(name, /^[A-Za-z][A-Za-z0-9_]*$/);
     binary = fs.realpathSync(binary);
-    const installedRoots = [installedRoot].flat().map(/** 规范化每个显式依赖安装根目录。 */ root => fs.realpathSync(root));
+    // 规范化每个显式依赖安装根目录。
+    const installedRoots = [installedRoot].flat().map(root => fs.realpathSync(root));
     bundle = path.resolve(bundle);
     assert.ok(!fs.existsSync(bundle), 'message runtime destination must be new');
     const libraries = dependencies(inspect(binary));

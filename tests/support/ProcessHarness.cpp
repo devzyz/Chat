@@ -113,7 +113,8 @@ std::unique_ptr<ProcessHarness> ProcessHarness::Start(RunContext& context, Proce
 	const auto identity = adapter->Start(spec);
 	auto impl = std::make_shared<Impl>(context, identity, adapter);
 	try {
-		context.CommitProcess(slot, identity, /** 运行清理时按所属硬期限停止此进程。 */ [impl] { return impl->StopOwned(impl->context.Deadline()); });
+		// 运行清理时按所属硬期限停止此进程。
+		context.CommitProcess(slot, identity, [impl] { return impl->StopOwned(impl->context.Deadline()); });
 	} catch (...) {
 		adapter->Terminate(identity, context.Deadline());
 		adapter->ClosePipes(context.Deadline());

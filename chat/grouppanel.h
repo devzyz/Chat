@@ -27,19 +27,23 @@ public:
         _status = new QLabel(this); _status->setWordWrap(true); layout->addWidget(_status);
         _members = new QListWidget(this); layout->addWidget(_members);
         auto *refresh = new QPushButton(tr("刷新资料"), this); layout->addWidget(refresh);
-        connect(refresh, &QPushButton::clicked, this, /** @brief 从第一页重新读取一致群资料。 */ [this] { refreshInfo(); });
+        // 从第一页重新读取一致群资料。
+        connect(refresh, &QPushButton::clicked, this, [this] { refreshInfo(); });
         auto *actions = new QHBoxLayout; layout->addLayout(actions);
         for (const auto &operation : {QString("add"),QString("remove"),QString("transfer"),QString("rename"),QString("leave"),QString("dissolve")}) {
             const QMap<QString,QString> titles{{"add",tr("添加")},{"remove",tr("移除")},{"transfer",tr("转让")},
                 {"rename",tr("改名")},{"leave",tr("退出")},{"dissolve",tr("解散")}};
             auto *button = new QPushButton(titles.value(operation), this); actions->addWidget(button);
             _buttons.insert(operation, button);
-            connect(button, &QPushButton::clicked, this, /** @brief 收集操作输入后提交固定身份的请求。 */ [this,operation] { operate(operation); });
+            // 收集操作输入后提交固定身份的请求。
+            connect(button, &QPushButton::clicked, this, [this,operation] { operate(operation); });
         }
         _retry = new QPushButton(tr("重试待确认操作"), this); _retry->setEnabled(false); layout->addWidget(_retry);
-        connect(_retry, &QPushButton::clicked, this, /** @brief 使用原 UUID、版本及参数重放请求。 */ [this] { submit(); });
+        // 使用原 UUID、版本及参数重放请求。
+        connect(_retry, &QPushButton::clicked, this, [this] { submit(); });
         _timer = new QTimer(this); _timer->setSingleShot(true); _timer->setInterval(10000);
-        connect(_timer, &QTimer::timeout, this, /** @brief 超时保留业务身份，不将结果未知显示为失败。 */ [this] {
+        // 超时保留业务身份，不将结果未知显示为失败。
+        connect(_timer, &QTimer::timeout, this, [this] {
             _status->setText(tr("结果尚未确认。可重试原操作，或刷新查看权威状态。")); _retry->setEnabled(!_pending.isEmpty());
         });
         connect(TcpMgr::instance().get(), &TcpMgr::groupResponse, this,
@@ -100,7 +104,8 @@ public:
         });
         _observedState = UserMgr::instance()->messages()->groupState(_chat);
         connect(UserMgr::instance()->messages(), &MessageService::directoryChanged, this,
-            /** @brief 已落盘身份改变立即撤销旧快照，迟到分页不能恢复旧权限。 */ [this](const QJsonObject &) {
+            // 已落盘身份改变立即撤销旧快照，迟到分页不能恢复旧权限。
+            [this](const QJsonObject &) {
             const auto state = UserMgr::instance()->messages()->groupState(_chat);
             if (state["group_revision"] != _observedState["group_revision"] ||
                 state["group_state"] != _observedState["group_state"] ||
@@ -117,12 +122,14 @@ public:
             }
         });
         connect(UserMgr::instance()->messages(), &MessageService::directoryFailed, this,
-            /** @brief 服务端成功但本地未保存时保留重试身份并清楚标注。 */ [this](const QString &) {
+            // 服务端成功但本地未保存时保留重试身份并清楚标注。
+            [this](const QString &) {
             _status->setText(tr("本地保存失败；服务端操作可能已完成，请刷新或重试原操作。"));
             _retry->setEnabled(!_pending.isEmpty());
         });
         connect(UserMgr::instance().get(), &UserMgr::avatarChanged, this,
-            /** @brief 异步头像到达后更新包括非好友在内的成员条目。 */ [this](int uid) {
+            // 异步头像到达后更新包括非好友在内的成员条目。
+            [this](int uid) {
                 for (int index=0;index<_members->count();++index) {
                     auto *item=_members->item(index);
                     if (item->data(Qt::UserRole).toInt()==uid) item->setIcon(QIcon(UserMgr::instance()->avatarFor(uid)));
@@ -180,7 +187,11 @@ private:
         const QPointer<GroupPanel> panel(this);
         _retry->setEnabled(false); showState();
         UserMgr::instance()->messages()->saveGroupOperation(_chat, _pending,
-            /** @brief 原始命令落盘后才发出；窗口关闭仍保留命令供下次打开重试。 */ [panel] {
+            /**
+             * 原始命令落盘后才发出；
+             * 窗口关闭仍保留命令供下次打开重试。
+             */
+            [panel] {
             if (!panel) return;
             emit TcpMgr::instance()->sendRequested(ID_GROUP_MANAGE_REQ,QJsonDocument(panel->_pending).toJson(QJsonDocument::Compact));
             panel->_timer->start(); panel->_status->setText(tr("正在等待操作结果…"));

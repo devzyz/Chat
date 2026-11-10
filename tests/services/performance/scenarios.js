@@ -12,7 +12,8 @@ class Messages {
     constructor(clients) {
         this.entries = new Map(); this.ack = []; this.delivery = []; this.listeners = []; this.invalid = 0;
         for (const client of clients) {
-            const listener = /** 处理生产消息通知，只观察当前场景的消息。 */ (id, value) => {
+            // 处理生产消息通知，只观察当前场景的消息。
+            const listener = (id, value) => {
                 if (id === 1018) for (const row of value.notify_msgs || []) this.observe(client.uid, row.msg_uuid, row.msg_content, row.message_id);
             };
             client.on('notification', listener); this.listeners.push([client, listener]);
@@ -31,24 +32,32 @@ class Messages {
     async send(sender, chatId, receivers, epoch, wait = true) {
         const uuid = randomUUID();
         let resolve;
-        const visible = new Promise(/** 保存此消息的全部接收完成回调。 */ done => { resolve = done; });
-        const entry = { targets: new Set(receivers.map(/** 取接收者身份。 */ client => client.uid)),
+        // 保存此消息的全部接收完成回调。
+        const visible = new Promise(done => { resolve = done; });
+        // 取接收者身份。
+        const entry = { targets: new Set(receivers.map(client => client.uid)),
             observed: new Set(), ids: new Set(), start: performance.now(), resolve };
         this.entries.set(uuid, entry);
         const fields = { from_uid: sender.uid, to_uid: epoch ? 0 : receivers[0].uid, chat_id: chatId,
             text_array: [{ msg_uuid: uuid, msg_content: text }] };
         if (epoch) Object.assign(fields, { chat_type: 'group', membership_epoch: epoch });
         const response = await sender.request(1016, 1017, fields,
-            /** 通过 UUID 关联提交结果。 */ value => value.uuid_msgId?.some(/** 匹配本条消息身份。 */ item => item.msg_uuid === uuid) ||
+            // 通过 UUID 关联提交结果。
+            value => value.uuid_msgId?.some(
+                // 匹配本条消息身份。
+                item => item.msg_uuid === uuid) ||
                 (value.error !== 0 && value.client_msg_uuids?.includes(uuid)));
-        const saved = response.uuid_msgId.find(/** 找到本条已持久化消息。 */ item => item.msg_uuid === uuid);
+        // 找到本条已持久化消息。
+        const saved = response.uuid_msgId.find(item => item.msg_uuid === uuid);
         assert.ok(Number.isSafeInteger(saved.message_id) && saved.message_id > 0);
         entry.id = saved.message_id; this.ack.push(performance.now() - entry.start);
         if (!wait) return uuid;
         let timer;
         try {
-            await Promise.race([visible, new Promise(/** 建立接收截止期限。 */ (_, reject) => {
-                timer = setTimeout(/** 期限到达仍未观察则保留丢失证据。 */ () => reject(new Error('delivery-timeout')), epoch ? 15000 : 10000);
+            // 建立接收截止期限。
+            await Promise.race([visible, new Promise((_, reject) => {
+                // 期限到达仍未观察则保留丢失证据。
+                timer = setTimeout(() => reject(new Error('delivery-timeout')), epoch ? 15000 : 10000);
             })]);
             assert.equal(entry.ids.size, 1); assert.ok(entry.ids.has(entry.id));
         } finally { clearTimeout(timer); }
@@ -59,7 +68,8 @@ class Messages {
         const uuids = [...this.entries.keys()];
         for (let start = 0; start < uuids.length; start += 200) {
             const batch = uuids.slice(start, start + 200);
-            const ids = batch.map(/** 只编码内部生成的 UUID，不接收外部 SQL。 */ uuid => `'${uuid}'`).join(',');
+            // 只编码内部生成的 UUID，不接收外部 SQL。
+            const ids = batch.map(uuid => `'${uuid}'`).join(',');
             const value = await sql.execute(`SELECT COUNT(*), COUNT(DISTINCT client_msg_uuid) FROM chat_message WHERE client_msg_uuid IN (${ids})`);
             assert.equal(value, `${batch.length}\t${batch.length}`, 'persistence-count');
         }
@@ -100,8 +110,10 @@ async function prepare(env, clients) {
     assert.equal(byPort.size, 2, 'two-live-instances');
     const [left, right] = [...byPort.values()];
     const known = new Map();
-    const pair = /** 复用已建立好友的私聊身份，避免重复申请。 */ async (first, second) => {
-        const key = [first.uid, second.uid].sort(/** 排序形成无方向好友身份。 */ (a, b) => a - b).join(':');
+    // 复用已建立好友的私聊身份，避免重复申请。
+    const pair = async (first, second) => {
+        // 排序形成无方向好友身份。
+        const key = [first.uid, second.uid].sort((a, b) => a - b).join(':');
         if (!known.has(key)) known.set(key, await env.befriend(first, second));
         return { first, second, chatId: known.get(key) };
     };
@@ -112,7 +124,8 @@ async function prepare(env, clients) {
     for (let start = 0; start < clients.length; start += 20) {
         const members = clients.slice(start, start + 20); assert.equal(members.length, 20);
         for (const member of members.slice(1)) await pair(members[0], member);
-        const group = await members[0].correlated(1034, { name: `perf-${start}`, members: members.slice(1).map(/** 取邀请用户。 */ value => value.uid) });
+        // 取邀请用户。
+        const group = await members[0].correlated(1034, { name: `perf-${start}`, members: members.slice(1).map(value => value.uid) });
         const epochs = [];
         for (const member of members) {
             const info = await member.correlated(1036, { chat_id: group.chat_id, after_uid: 0 });
@@ -128,7 +141,8 @@ async function privateMessages(env, pairs, clients, profile, seconds) {
     const messages = new Messages(clients);
     try {
         const result = await measure({ seconds, rate: profile.rate, maxPending: clients.length, signal: env.signal,
-            action: /** 将每次计划发送均匀分配给会话。 */ index => {
+            // 将每次计划发送均匀分配给会话。
+            action: index => {
                 const pair = pairs[index % pairs.length]; return messages.send(pair.first, pair.chatId, [pair.second]);
             } });
         result.ackMs = distribution(messages.ack); result.deliveryMs = distribution(messages.delivery);
@@ -139,21 +153,25 @@ async function privateMessages(env, pairs, clients, profile, seconds) {
 /** 以生产两秒周期补拉群消息，分别记录提交确认与所有成员可见延迟。 */
 async function groupMessages(env, groups, profile, seconds) {
     const messages = new Messages([]); let stopped = false; const errors = [];
-    const pollers = groups.flatMap(/** 为每个非发送成员建立独立游标。 */ group => group.members.slice(1).map(
-        /** 持续执行有界同步，组内写入和读取走真实服务。 */ async (client, index) => {
+    // 为每个非发送成员建立独立游标。
+    const pollers = groups.flatMap(group => group.members.slice(1).map(
+        // 持续执行有界同步，组内写入和读取走真实服务。
+        async (client, index) => {
             let cursor = 0;
             try {
                 while (!stopped) {
                     await delay(2000);
                     const value = await sync(client, group.chatId, cursor, group.epochs[index + 1],
-                        /** 将权威历史行计入真实可见事件。 */ row => messages.observe(client.uid, row.msg_uuid, row.content, row.message_id));
+                        // 将权威历史行计入真实可见事件。
+                        row => messages.observe(client.uid, row.msg_uuid, row.content, row.message_id));
                     cursor = value.cursor;
                 }
             } catch { errors.push('group-poll-failed'); }
         }));
     try {
         const result = await measure({ seconds, rate: groups.length, maxPending: groups.length * 16, signal: env.signal,
-            action: /** 每个二十人群每秒一条消息。 */ index => {
+            // 每个二十人群每秒一条消息。
+            action: index => {
                 const group = groups[index % groups.length];
                 return messages.send(group.members[0], group.chatId, group.members.slice(1), group.epochs[0]);
             } });
@@ -182,15 +200,19 @@ async function prepareOffline(env, pairs) {
 /** 经登录和分页恢复核对已准备的完整离线消息，计时不含积压生成。 */
 async function recoverOffline(env, pairs, seconds, { messages, expected }) {
     const result = await measure({ seconds, rate: pairs.length / seconds, plannedCount: pairs.length, maxPending: pairs.length, signal: env.signal,
-        action: /** 测量重新认证及一百条离线消息的完整补拉。 */ async index => {
+        // 测量重新认证及一百条离线消息的完整补拉。
+        action: async index => {
             const pair = pairs[index];
-            const account = env.accounts.find(/** 用稳定 UID 查找原账号。 */ value => value.uid === pair.second.uid);
+            // 用稳定 UID 查找原账号。
+            const account = env.accounts.find(value => value.uid === pair.second.uid);
             pair.second = await env.login(account);
             const fixture = expected.get(pair.chatId);
             const restored = await sync(pair.second, pair.chatId, fixture.cursor);
               assert.equal(restored.rows.length, fixture.ids.length, 'offline-count');
-              assert.deepEqual(restored.rows.map(/** 提取补拉消息身份。 */ row => row.msg_uuid), fixture.ids, 'offline-identities');
-              assert.ok(restored.rows.every(/** 核对消息内容没有损坏。 */ row => row.content === text), 'offline-content');
+              // 提取补拉消息身份。
+              assert.deepEqual(restored.rows.map(row => row.msg_uuid), fixture.ids, 'offline-identities');
+              // 核对消息内容没有损坏。
+              assert.ok(restored.rows.every(row => row.content === text), 'offline-content');
         } });
     await auditResult(messages, env.sql, result); return result;
 }
@@ -206,7 +228,8 @@ function resourceFixture(index) {
 async function transfer(env, pair, index) {
     const fixture = resourceFixture(index); const sha256 = createHash('sha256').update(fixture.bytes).digest('hex');
     const signal = env.signal ? AbortSignal.any([env.signal, AbortSignal.timeout(60000)]) : AbortSignal.timeout(60000);
-    const request = /** 发送具备真实 Status 鉴权的资源 HTTP 请求。 */ async (client, route, method, body, extra = {}) => {
+    // 发送具备真实 Status 鉴权的资源 HTTP 请求。
+    const request = async (client, route, method, body, extra = {}) => {
         const response = await fetch(`${env.resource}${route}`, { method, body, redirect: 'error', signal,
             headers: { 'X-User-Id': String(client.uid), Authorization: `Bearer ${client.token}`, ...extra } });
         if (!response.ok) throw new Error(`resource-http-${response.status}`); return response;
@@ -224,7 +247,10 @@ async function transfer(env, pair, index) {
     const uuid = randomUUID();
     await pair.first.request(1016, 1017, { from_uid: pair.first.uid, to_uid: pair.second.uid, chat_id: pair.chatId,
         resource_id: ready.resource_id, text_array: [{ msg_uuid: uuid, msg_content: '' }] },
-    /** 关联资源消息的持久化确认。 */ response => response.uuid_msgId?.some(/** 匹配资源 UUID。 */ item => item.msg_uuid === uuid) || response.client_msg_uuids?.includes(uuid));
+    // 关联资源消息的持久化确认。
+    response => response.uuid_msgId?.some(
+        // 匹配资源 UUID。
+        item => item.msg_uuid === uuid) || response.client_msg_uuids?.includes(uuid));
     const download = Buffer.from(await (await request(pair.second, `/resources/${ready.resource_id}`, 'GET')).arrayBuffer());
     assert.equal(download.length, fixture.bytes.length); assert.equal(createHash('sha256').update(download).digest('hex'), sha256);
     assert.equal(await env.sql.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${uuid}'`), '1');
@@ -235,7 +261,8 @@ async function transfer(env, pair, index) {
 async function resources(env, pairs, profile, seconds) {
     let bytes = 0;
     const result = await measure({ seconds, rate: profile.resourceConcurrency / 5, maxPending: profile.resourceConcurrency, signal: env.signal,
-        action: /** 每个并发槽约五秒尝试一个不同大小资源。 */ async index => { bytes += await transfer(env, pairs[index % pairs.length], index); } });
+        // 每个并发槽约五秒尝试一个不同大小资源。
+        action: async index => { bytes += await transfer(env, pairs[index % pairs.length], index); } });
     return { ...result, bytes, mibPerSecond: bytes / 1048576 / result.elapsedSeconds };
 }
 /** 审计失败保留原始吞吐与延迟，附加明确失败分类。 */

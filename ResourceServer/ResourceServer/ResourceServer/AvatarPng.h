@@ -10,10 +10,12 @@ namespace resource {
 /** @brief 核验 PNG 格式、图片尺寸和头像大小限制，非法内容抛出资源错误。 */
 inline void ValidateAvatarPng(const std::vector<char>& bytes)
 {
-    auto reject = /** @brief 统一拒绝格式或尺寸不合法的头像 PNG。 */ [] { throw Error(415, "avatar must be a valid 256x256 RGB/RGBA PNG"); };
+    // 统一拒绝格式或尺寸不合法的头像 PNG。
+    auto reject = [] { throw Error(415, "avatar must be a valid 256x256 RGB/RGBA PNG"); };
     if (bytes.size() < 57 || bytes.size() > 1024 * 1024 ||
         std::memcmp(bytes.data(), "\x89PNG\r\n\x1a\n", 8) != 0) reject();
-    auto number = /** @brief 按网络字节序读取 PNG 区块的四字节长度。 */ [&bytes](std::size_t at) {
+    // 按网络字节序读取 PNG 区块的四字节长度。
+    auto number = [&bytes](std::size_t at) {
         std::uint32_t result = 0;
         for (int i = 0; i < 4; ++i) result = (result << 8) | static_cast<unsigned char>(bytes[at + i]);
         return result;

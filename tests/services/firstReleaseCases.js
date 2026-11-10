@@ -27,44 +27,57 @@ async function runFirstReleaseCases({ record, client, authenticate, retire, keep
     const textUuid = randomUUID();
     const offlineUuid = randomUUID();
     const resources = [];
-    const command = /** 把控制通道结果归一为生产接口结果，不把控制完成当业务成功。 */ async (index, name, fields = {}) => {
+    // 把控制通道结果归一为生产接口结果，不把控制完成当业务成功。
+    const command = async (index, name, fields = {}) => {
         const response = await actors[index].instance.control.command(name, fields);
         return response.result ? { error: response.error, ...response.result } : response;
     };
-    const success = /** 只有明确的业务成功码才能满足成功断言。 */ result => assert.equal(result.error, 0);
-    const denied = /** 必须获得明确拒绝码，不能以超时或缺失结果替代权限拒绝。 */ result =>
+    // 只有明确的业务成功码才能满足成功断言。
+    const success = result => assert.equal(result.error, 0);
+    // 必须获得明确拒绝码，不能以超时或缺失结果替代权限拒绝。
+    const denied = result =>
         assert.ok(Number.isInteger(result.error) && result.error > 0);
-    const resourceDenied = /** 独立真实 GET 的 403 证明授权拒绝，网络失败不能满足断言。 */ async (index, descriptor) => {
+    // 独立真实 GET 的 403 证明授权拒绝，网络失败不能满足断言。
+    const resourceDenied = async (index, descriptor) => {
         const result = await command(index, 'resource-probe', { descriptor });
         success(result); assert.equal(result.httpStatus, 403);
     };
-    const state = /** 读取客户端已落盘群状态。 */ index => command(index, 'group-state', { chatId });
-    const info = /** 查询权威群版本及成员资料。 */ async index => {
+    // 读取客户端已落盘群状态。
+    const state = index => command(index, 'group-state', { chatId });
+    // 查询权威群版本及成员资料。
+    const info = async index => {
         const result = await command(index, 'group-info', { chatId, uuid: randomUUID(), after: 0 });
         success(result); return result;
     };
-    const manage = /** 按当前权威版本提交管理操作，可保留身份重试。 */ async (index, operation, params = {}, overrides = {}) => {
+    // 按当前权威版本提交管理操作，可保留身份重试。
+    const manage = async (index, operation, params = {}, overrides = {}) => {
         const current = await info(index);
         return command(index, 'group-manage', { chatId, uuid: randomUUID(), version: current.group_revision,
             operation, params, ...overrides });
     };
-    const messages = /** 读取实际消息模型而非直接制造客户端事实。 */ async index =>
+    // 读取实际消息模型而非直接制造客户端事实。
+    const messages = async index =>
         (await command(index, 'local-history', { chatId, before: '0' })).messages;
-    const hasMessage = /** 有界等待消息出现在真实客户端模型并且没有重复项。 */ async (index, uuid) => {
+    // 有界等待消息出现在真实客户端模型并且没有重复项。
+    const hasMessage = async (index, uuid) => {
         await info(index);
-        await poll(/** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await poll(async () => {
             await command(index, 'sync', { chatId });
-            const rows = (await messages(index)).filter(/** 匹配指定消息身份。 */ row => row.uuid === uuid);
+            // 匹配指定消息身份。
+            const rows = (await messages(index)).filter(row => row.uuid === uuid);
             return rows.length === 1 && BigInt(rows[0].messageId) > 0;
         }, 15000);
     };
-    const test = /** 为首版专项保留独立连续 Test ID，并维护原双账号的控制存活期限。 */ async (number, name, action) => {
+    // 为首版专项保留独立连续 Test ID，并维护原双账号的控制存活期限。
+    const test = async (number, name, action) => {
         await keepAlive();
         await record(`E03-RELEASE-${String(number).padStart(2, '0')}`, name, action);
         await keepAlive();
     };
     try {
-        await test(1, 'four public accounts and accepted friendships', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(1, 'four public accounts and accepted friendships', async () => {
             for (const logical of ['releasea', 'releaseb', 'releasec', 'released']) {
                 const identity = randomUUID().replaceAll('-', '');
                 const user = { logical, name: `${logical}_${identity}`, email:
@@ -81,19 +94,24 @@ async function runFirstReleaseCases({ record, client, authenticate, retire, keep
                 identities.push({ logical, pid: instance.pid, uid: user.uid, active: observed.active });
                 await keepAlive();
             }
-            assert.equal(new Set(identities.map(/** 提取真实客户端进程身份。 */ value => value.pid)).size, 4);
-            assert.equal(new Set(identities.map(/** 提取公开注册产生的账号身份。 */ value => value.uid)).size, 4);
+            // 提取真实客户端进程身份。
+            assert.equal(new Set(identities.map(value => value.pid)).size, 4);
+            // 提取公开注册产生的账号身份。
+            assert.equal(new Set(identities.map(value => value.uid)).size, 4);
             for (let index = 1; index < 4; ++index) {
                 success(await command(0, 'apply', { toUid: actors[index].user.uid, description: 'release acceptance', backname: 'peer' }));
-                await poll(/** 轮询生产客户端的关系状态。 */ async () => (await command(index, 'snapshot', { otherUid: actors[0].user.uid })).applied, 10000);
+                // 轮询生产客户端的关系状态。
+                await poll(async () => (await command(index, 'snapshot', { otherUid: actors[0].user.uid })).applied, 10000);
                 success(await command(index, 'accept', { toUid: actors[0].user.uid, description: 'accepted', backname: 'owner' }));
-                await poll(/** 轮询生产客户端的关系状态。 */ async () => (await command(0, 'snapshot', { otherUid: actors[index].user.uid })).friend, 10000);
+                // 轮询生产客户端的关系状态。
+                await poll(async () => (await command(0, 'snapshot', { otherUid: actors[index].user.uid })).friend, 10000);
                 await keepAlive();
             }
             privateChat = (await command(0, 'snapshot', { otherUid: actors[3].user.uid })).chatId;
             assert.ok(privateChat > 0);
         });
-        await test(2, 'create group and persist original message', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(2, 'create group and persist original message', async () => {
             const result = await command(0, 'group-create', { uuid: createUuid, name: 'release group',
                 members: [actors[1].user.uid, actors[2].user.uid] });
             success(result); chatId = result.chat_id;
@@ -106,16 +124,19 @@ async function runFirstReleaseCases({ record, client, authenticate, retire, keep
             success(uploaded); oldResource = { ...uploaded }; delete oldResource.error;
             success(await command(0, 'resource-send', { chatId, uuid: randomUUID(), descriptor: oldResource }));
         });
-        await test(3, 'new membership excludes earlier server history', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(3, 'new membership excludes earlier server history', async () => {
             success(await manage(0, 'add', { members: [actors[3].user.uid] }));
             await info(3); oldEpoch = (await state(3)).membership_epoch;
             assert.ok(BigInt(oldEpoch) > 0);
             await command(3, 'sync', { chatId });
             success(await command(3, 'history', { chatId, cursor: '0' }));
-            assert.ok(!(await messages(3)).some(/** 检查受入群边界保护的消息。 */ row => row.uuid === oldUuid));
+            // 检查受入群边界保护的消息。
+            assert.ok(!(await messages(3)).some(row => row.uuid === oldUuid));
             await resourceDenied(3, oldResource);
         });
-        await test(4, 'ordinary members and stale revisions cannot mutate group', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(4, 'ordinary members and stale revisions cannot mutate group', async () => {
             const forbidden = await manage(1, 'rename', { name: 'forbidden' });
             denied(forbidden); assert.equal(forbidden.group_error, 'Forbidden');
             const previous = await info(0);
@@ -124,7 +145,8 @@ async function runFirstReleaseCases({ record, client, authenticate, retire, keep
             denied(conflict); assert.equal(conflict.group_error, 'VersionConflict');
             assert.equal((await info(0)).group_name, 'release group');
         });
-        await test(5, 'group message UUID replay preserves one durable row', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(5, 'group message UUID replay preserves one durable row', async () => {
             const fields = { chatId, uuid: textUuid, text: 'after joining searchable' };
             success(await command(0, 'group-send', fields));
             success(await command(0, 'group-send', fields));
@@ -132,7 +154,8 @@ async function runFirstReleaseCases({ record, client, authenticate, retire, keep
             await hasMessage(3, textUuid);
             assert.equal(await sql.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${textUuid}'`), '1');
         });
-        await test(6, 'PNG ten-second video and file upload commit and verified download', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(6, 'PNG ten-second video and file upload commit and verified download', async () => {
             const png = path.join(root, 'release.png');
             await runCommand('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=32x32',
                 '-frames:v', '1', '-y', png], { timeout: 10000 });
@@ -168,7 +191,8 @@ async function runFirstReleaseCases({ record, client, authenticate, retire, keep
                 }
             }
         });
-        await test(7, 'offline member relogin restores text and all resource references', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(7, 'offline member relogin restores text and all resource references', async () => {
             await command(2, 'logout');
             success(await command(0, 'group-send', { chatId, uuid: offlineUuid, text: 'offline group message' }));
             await authenticate(actors[2].instance, actors[2].user, false);
@@ -180,14 +204,16 @@ async function runFirstReleaseCases({ record, client, authenticate, retire, keep
                 success(downloaded); assert.equal(downloaded.sha256, item.sha256);
             }
         });
-        await test(8, 'removed member loses server message and resource access', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(8, 'removed member loses server message and resource access', async () => {
             success(await manage(0, 'remove', { target_uid: actors[3].user.uid }));
             denied(await command(3, 'group-info', { chatId, uuid: randomUUID() }));
             await probeGroupSend(actors[3].instance, actors[3].user, chatId, oldEpoch);
             denied(await command(3, 'history', { chatId, cursor: '0' }));
             for (const item of resources) await resourceDenied(3, item.descriptor);
         });
-        await test(9, 'independent private references restore each resource permission', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(9, 'independent private references restore each resource permission', async () => {
             for (const item of resources) {
                 success(await command(0, 'resource-send', { chatId: privateChat, toUid: actors[3].user.uid,
                     uuid: randomUUID(), descriptor: item.descriptor }));
@@ -196,7 +222,8 @@ async function runFirstReleaseCases({ record, client, authenticate, retire, keep
                 success(downloaded); assert.equal(downloaded.sha256, item.sha256);
             }
         });
-        await test(10, 'rejoin advances epoch and excludes absent-period history', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(10, 'rejoin advances epoch and excludes absent-period history', async () => {
             const absentUuid = randomUUID();
             success(await command(0, 'group-send', { chatId, uuid: absentUuid, text: 'while absent' }));
             success(await manage(0, 'add', { members: [actors[3].user.uid] }));
@@ -206,9 +233,11 @@ async function runFirstReleaseCases({ record, client, authenticate, retire, keep
             await info(3);
             await command(3, 'sync', { chatId });
             success(await command(3, 'history', { chatId, cursor: '0' }));
-            assert.ok(!(await messages(3)).some(/** 检查受入群边界保护的消息。 */ row => row.uuid === absentUuid));
+            // 检查受入群边界保护的消息。
+            assert.ok(!(await messages(3)).some(row => row.uuid === absentUuid));
         });
-        await test(11, 'rename remark and local lookup reflect durable directory', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(11, 'rename remark and local lookup reflect durable directory', async () => {
             const current = await info(0);
             const rename = { chatId, uuid: randomUUID(), version: current.group_revision,
                 operation: 'rename', params: { name: 'renamed release' } };
@@ -220,26 +249,32 @@ async function runFirstReleaseCases({ record, client, authenticate, retire, keep
             assert.equal((await state(0)).name, 'renamed release');
             success(await command(0, 'remark', { uuid: randomUUID(), toUid: actors[1].user.uid, backname: 'release remark' }));
             const groups = await command(0, 'directory-find', { kind: 'conversations', text: 'renamed release' });
-            assert.ok(groups.rows.some(/** 精确匹配群身份与重命名结果。 */ row => row.id === chatId && row.name === 'renamed release'));
+            // 精确匹配群身份与重命名结果。
+            assert.ok(groups.rows.some(row => row.id === chatId && row.name === 'renamed release'));
             const contacts = await command(0, 'directory-find', { kind: 'contacts', text: 'release remark' });
-            assert.ok(contacts.rows.some(/** 精确匹配本人联系人备注。 */ row => row.id === actors[1].user.uid && row.backname === 'release remark'));
+            // 精确匹配本人联系人备注。
+            assert.ok(contacts.rows.some(row => row.id === actors[1].user.uid && row.backname === 'release remark'));
             const search = await command(0, 'search', { chatId, text: 'after joining searchable', before: '0' });
-            assert.ok(search.messages.some(/** 精确匹配搜索命中的消息身份。 */ row => row.uuid === textUuid));
+            // 精确匹配搜索命中的消息身份。
+            assert.ok(search.messages.some(row => row.uuid === textUuid));
         });
-        await test(12, 'original creation replay survives changed name and membership', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(12, 'original creation replay survives changed name and membership', async () => {
             const result = await command(0, 'group-create', { uuid: createUuid, name: 'release group',
                 members: [actors[1].user.uid, actors[2].user.uid] });
             success(result); assert.equal(result.chat_id, chatId);
             denied(await command(0, 'group-create', { uuid: createUuid, name: 'different identity', members: [actors[1].user.uid] }));
         });
-        await test(13, 'ownership transfer permits original owner leave', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(13, 'ownership transfer permits original owner leave', async () => {
             success(await manage(0, 'transfer', { target_uid: actors[1].user.uid }));
             assert.equal((await info(1)).owner_uid, actors[1].user.uid);
             denied(await manage(0, 'rename', { name: 'old owner forbidden' }));
             success(await manage(0, 'leave'));
             denied(await command(0, 'group-info', { chatId, uuid: randomUUID() }));
         });
-        await test(14, 'dissolution rejects new access but preserves independent resource permissions', /** 执行当前业务步骤并用真实响应校验其合同。 */ async () => {
+        // 执行当前业务步骤并用真实响应校验其合同。
+        await test(14, 'dissolution rejects new access but preserves independent resource permissions', async () => {
             const current = await info(1);
             const request = { chatId, uuid: randomUUID(), version: current.group_revision, operation: 'dissolve', params: {} };
             success(await command(1, 'group-manage', request));

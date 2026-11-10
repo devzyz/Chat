@@ -6,9 +6,11 @@ const os = require('node:os');
 const path = require('node:path');
 const { preserveLogs } = require('./evidence');
 
-test('evidence includes bounded service logs and excludes links configurations and secrets', /** 验证正式日志目录、截断边界、脱敏和导出范围。 */ t => {
+// 验证正式日志目录、截断边界、脱敏和导出范围。
+test('evidence includes bounded service logs and excludes links configurations and secrets', t => {
     const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'performance-evidence-'));
-    t.after(/** 只删除本用例创建的临时目录。 */ () => fs.rmSync(temporary, { recursive: true, force: true }));
+    // 只删除本用例创建的临时目录。
+    t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
     const root = path.join(temporary, 'logs'), output = path.join(temporary, 'evidence');
     fs.mkdirSync(path.join(root, 'ChatA', 'nested'), { recursive: true });
     fs.writeFileSync(path.join(root, 'ResourceServer.log'), 'resource ready\n');

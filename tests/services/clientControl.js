@@ -15,19 +15,25 @@ class ClientControl {
         this.sequence = 0;
         this.pending = new Map();
         this.buffer = '';
-        this.server = net.createServer(/** 仅接纳首个控制客户端，绑定接收与断连处理。 */ socket => {
+        // 仅接纳首个控制客户端，绑定接收与断连处理。
+        this.server = net.createServer(socket => {
             if (this.socket) { socket.destroy(); return; }
             this.socket = socket;
             socket.setEncoding('utf8');
-            socket.on('data', /** 把 UTF-8 数据交给控制消息解析器。 */ chunk => this.receive(chunk));
-            socket.on('error', /** 连接错误时失败所有未完成请求。 */ () => this.fail());
-            socket.on('close', /** 连接关闭时失败所有未完成请求。 */ () => this.fail());
+            // 把 UTF-8 数据交给控制消息解析器。
+            socket.on('data', chunk => this.receive(chunk));
+            // 连接错误时失败所有未完成请求。
+            socket.on('error', () => this.fail());
+            // 连接关闭时失败所有未完成请求。
+            socket.on('close', () => this.fail());
         });
-        this.server.on('error', /** 监听器错误时终止控制通道。 */ () => this.fail());
+        // 监听器错误时终止控制通道。
+        this.server.on('error', () => this.fail());
     }
     /** 启动本地控制端点，POSIX 下限制为当前用户访问。 */
     async listen() {
-        await new Promise(/** 等待监听成功或传播启动错误。 */ (resolve, reject) => {
+        // 等待监听成功或传播启动错误。
+        await new Promise((resolve, reject) => {
             this.server.once('error', reject);
             this.server.listen(this.endpoint, resolve);
         });
@@ -36,8 +42,10 @@ class ClientControl {
     /** 登记唯一关联键的有界等待；通道失败或重复键时拒绝。 */
     wait(key, timeout = 10000) {
         if (this.failed || this.pending.has(key)) return Promise.reject(new Error('client-control-unavailable'));
-        return new Promise(/** 保存等待者及截止计时器，供匹配响应完成。 */ (resolve, reject) => {
-            const timer = setTimeout(/** 等待超时后移除请求并关闭整个控制通道。 */ () => {
+        // 保存等待者及截止计时器，供匹配响应完成。
+        return new Promise((resolve, reject) => {
+            // 等待超时后移除请求并关闭整个控制通道。
+            const timer = setTimeout(() => {
                 this.pending.delete(key);
                 reject(new Error('client-control-deadline'));
                 this.fail();
@@ -96,7 +104,11 @@ class ClientControl {
     /** 失败未完成请求并等待所属监听器关闭。 */
     async close() {
         this.fail();
-        if (this.server.listening) await new Promise(/** 把监听器关闭转换为可等待的成功或失败。 */ (resolve, reject) => this.server.close(/** 传播监听器关闭错误，否则完成关闭等待。 */ error => error ? reject(error) : resolve()));
+        if (this.server.listening) await new Promise(
+            // 把监听器关闭转换为可等待的成功或失败。
+            (resolve, reject) => this.server.close(
+            // 传播监听器关闭错误，否则完成关闭等待。
+            error => error ? reject(error) : resolve()));
     }
 }
 

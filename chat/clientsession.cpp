@@ -8,49 +8,59 @@ ClientSession::ClientSession(QObject *parent)
     : QObject(parent)
 {
     _retry.setSingleShot(true); _attemptDeadline.setSingleShot(true);
-    connect(&_retry, &QTimer::timeout, this, /** @brief 每次恢复使用原账号、凭据和端点，整次认证限时十秒。 */ [this] {
+    // 每次恢复使用原账号、凭据和端点，整次认证限时十秒。
+    connect(&_retry, &QTimer::timeout, this, [this] {
         if (!_active || !_reconnecting || _loggingOut) return;
         ++_attempts; _attemptDeadline.start(10000);
         TcpMgr::instance()->connectToServer(_resumeServer);
     });
-    connect(&_attemptDeadline, &QTimer::timeout, this, /** @brief 无认证响应时结束旧连接并安排下一次有限尝试。 */ [this] {
+    // 无认证响应时结束旧连接并安排下一次有限尝试。
+    connect(&_attemptDeadline, &QTimer::timeout, this, [this] {
         TcpMgr::instance()->resetConnection(false); scheduleReconnect();
     });
     const auto tcp = TcpMgr::instance();
     _heartbeatDeadline.setSingleShot(true);
     _heartbeatDeadline.setInterval(30000);
     connect(&_heartbeatDeadline, &QTimer::timeout, this,
-        /** @brief TCP 可写但心跳迟迟未确认时关闭旧连接，进入同账号有限重连。 */ [this] {
+        // TCP 可写但心跳迟迟未确认时关闭旧连接，进入同账号有限重连。
+        [this] {
         if (!_active || _loggingOut || _reconnecting || _authenticationRejected) return;
         TcpMgr::instance()->resetConnection(false); scheduleReconnect();
     });
     connect(tcp.get(), &TcpMgr::heartbeatAcknowledged, this,
-        /** @brief 仅当前活跃认证连接的有效回复解除本轮心跳期限。 */ [this] {
+        // 仅当前活跃认证连接的有效回复解除本轮心跳期限。
+        [this] {
         if (_active && !_reconnecting && !_loggingOut) _heartbeatDeadline.stop();
     });
-    connect(tcp.get(), &TcpMgr::connectionClosed, this, /** @brief 暂时断线保持账号界面，恢复仍使用同一 Token。 */ [this](bool expected) {
+    // 暂时断线保持账号界面，恢复仍使用同一 Token。
+    connect(tcp.get(), &TcpMgr::connectionClosed, this, [this](bool expected) {
         if (!expected) scheduleReconnect();
     });
-    connect(tcp.get(), &TcpMgr::connectionAttemptFinished, this, /** @brief 恢复连接成功后重新认证，连接失败进入退避。 */ [this](bool success) {
+    // 恢复连接成功后重新认证，连接失败进入退避。
+    connect(tcp.get(), &TcpMgr::connectionAttemptFinished, this, [this](bool success) {
         if (!_active || !_reconnecting || _loggingOut) return;
         if (!success) { scheduleReconnect(); return; }
         emit TcpMgr::instance()->sendRequested(ID_CHAT_LOGIN_REQ,
             QJsonDocument(QJsonObject{{"uid", _resumeServer.Uid}, {"token", _resumeServer.Token}}).toJson(QJsonDocument::Compact));
     });
-    connect(tcp.get(), &TcpMgr::loginSucceeded, this, /** @brief 恢复认证成功后停止退避并重新开始心跳。 */ [this] {
+    // 恢复认证成功后停止退避并重新开始心跳。
+    connect(tcp.get(), &TcpMgr::loginSucceeded, this, [this] {
         if (!_active || !_reconnecting) return;
         stopReconnect(); _attempts = 0; _heartbeatDeadline.stop(); _heartbeat.start();
     });
-    connect(tcp.get(), &TcpMgr::loginFailed, this, /** @brief 失效凭据停止自动尝试，服务暂时失败保留有限重试。 */ [this](int error) {
+    // 失效凭据停止自动尝试，服务暂时失败保留有限重试。
+    connect(tcp.get(), &TcpMgr::loginFailed, this, [this](int error) {
         if (!_active || !_reconnecting) return;
         if (error == 1010 || error == 1011) {
             _authenticationRejected = true; stopReconnect(); emit reconnectFailed();
         } else { TcpMgr::instance()->resetConnection(false); scheduleReconnect(); }
     });
-    connect(tcp.get(), &TcpMgr::forcedOffline, this, /** @brief 被替换的账号不得通过自动重连踢回新会话。 */ [this] {
+    // 被替换的账号不得通过自动重连踢回新会话。
+    connect(tcp.get(), &TcpMgr::forcedOffline, this, [this] {
         _authenticationRejected = true; stopReconnect(); _heartbeat.stop(); _heartbeatDeadline.stop();
     });
-    connect(&_logout, &GateHttpTransport::finished, this, /** @brief 仅接受当前退出操作，撤销确认前保留账号状态。 */ [this](const GateHttpResult& result) {
+    // 仅接受当前退出操作，撤销确认前保留账号状态。
+    connect(&_logout, &GateHttpTransport::finished, this, [this](const GateHttpResult& result) {
         if (!_loggingOut || result.flowId != _logoutGeneration) return;
         _loggingOut = false;
         const auto value = QJsonDocument::fromJson(result.body).object();

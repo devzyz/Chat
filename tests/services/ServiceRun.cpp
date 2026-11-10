@@ -32,7 +32,8 @@ int main(int argc, char** argv) {
         auto child = integration::ProcessHarness::Start(*context, std::move(spec));
         // Here the probe observes completion, not protocol readiness. Dependency
         // readiness is checked by the coordinator before writing any run data.
-        child->WaitReady(/** 当协调器子进程已退出时结束等待。 */ [&] {
+        // 当协调器子进程已退出时结束等待。
+        child->WaitReady([&] {
             return child->CollectEvidence().exit_code.has_value();
         }, deadline - std::chrono::seconds(20));
         const auto evidence = child->CollectEvidence();

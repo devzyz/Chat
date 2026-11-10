@@ -14,7 +14,8 @@ function selectScope(eventName, ref, event, git) {
     if (!pullRequest && !push) return false;
     let base = pullRequest ? event.pull_request.base.sha : event.before;
     const head = pullRequest ? event.pull_request.head?.sha : event.after;
-    if (![base, head].every(/** 拒绝缺失、零值或非提交标识的事件输入。 */ sha =>
+    // 拒绝缺失、零值或非提交标识的事件输入。
+    if (![base, head].every(sha =>
         typeof sha === 'string' && /^[a-f0-9]{40}$/.test(sha) && !/^0+$/.test(sha))) return false;
     try {
         if (pullRequest) base = git(['merge-base', base, head]).trim();
@@ -28,7 +29,8 @@ function selectScope(eventName, ref, event, git) {
 if (require.main === module) {
     const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
     const docsOnly = selectScope(process.env.GITHUB_EVENT_NAME, process.env.GITHUB_REF, event,
-        /** 有界读取 Git 提交差异，参数不经过 shell。 */ args => execFileSync('git', args, {
+        // 有界读取 Git 提交差异，参数不经过 shell。
+        args => execFileSync('git', args, {
             encoding: 'utf8', timeout: 10000, maxBuffer: 8 * 1024 * 1024
         }));
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `docs_only=${docsOnly}\n`);

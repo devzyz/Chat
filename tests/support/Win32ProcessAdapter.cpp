@@ -231,8 +231,10 @@ ProcessIdentity Win32ProcessAdapter::Start(const ProcessSpec& spec) {
 	}
 	impl_->identity = {process.dwProcessId, FileTimeValue(creation)};
 	impl_->output_limit = spec.evidence_limit;
-	impl_->stdout_reader = std::thread(/** 在独立线程排空标准输出并保存有界证据。 */ [impl = impl_.get()] { impl->ReadPipe(impl->stdout_read, impl->stdout_text); });
-	impl_->stderr_reader = std::thread(/** 在独立线程排空标准错误并保存有界证据。 */ [impl = impl_.get()] { impl->ReadPipe(impl->stderr_read, impl->stderr_text); });
+	// 在独立线程排空标准输出并保存有界证据。
+	impl_->stdout_reader = std::thread([impl = impl_.get()] { impl->ReadPipe(impl->stdout_read, impl->stdout_text); });
+	// 在独立线程排空标准错误并保存有界证据。
+	impl_->stderr_reader = std::thread([impl = impl_.get()] { impl->ReadPipe(impl->stderr_read, impl->stderr_text); });
 	if (ResumeThread(impl_->process_thread) == static_cast<DWORD>(-1)) {
 		TerminateProcess(impl_->process, 96);
 		WaitForSingleObject(impl_->process, 1000);

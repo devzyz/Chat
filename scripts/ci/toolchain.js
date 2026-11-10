@@ -14,7 +14,8 @@ function validate(lock) {
     if (lock.nativeSnapshotSha256 && !/^[a-f0-9]{64}$/.test(lock.nativeSnapshotSha256)) throw new Error('Invalid native snapshot digest');
     if (!Array.isArray(lock.tools) || lock.tools.length !== 3) throw new Error('Expected three locked tools');
     for (const name of Object.keys(repositories)) {
-        const tools = lock.tools.filter(/** 按工具名称筛出对应锁定项以核对唯一性。 */ tool => tool.name === name);
+        // 按工具名称筛出对应锁定项以核对唯一性。
+        const tools = lock.tools.filter(tool => tool.name === name);
         const tool = tools[0];
         if (tools.length !== 1 || tool.os !== 'windows' || tool.arch !== (name === 'cmake' ? 'amd64' : 'x64') ||
             !/^\d+\.\d+\.\d+$/.test(tool.version) || !/^[a-f0-9]{128}$/.test(tool.sha512) ||
@@ -44,8 +45,10 @@ function trustedRun(run, workflowId, branch) {
 /** Windows 工具链必须通过全部四个 Windows 门禁；Linux 失败不否定 Windows 编译器验证。 */
 function windowsPassed(jobs) {
     return ['Static configuration checks', 'Server Release build', 'Qt client Release',
-        'VarifyServer dependency and package check'].every(/** 每个必需作业必须唯一且执行成功。 */ name => {
-        const matches = jobs.filter(/** 仅匹配当前 Windows 工作流的精确作业名。 */ job => job.name === `windows / ${name}`);
+        // 每个必需作业必须唯一且执行成功。
+        'VarifyServer dependency and package check'].every(name => {
+        // 仅匹配当前 Windows 工作流的精确作业名。
+        const matches = jobs.filter(job => job.name === `windows / ${name}`);
         return matches.length === 1 && matches[0].conclusion === 'success';
     });
 }
@@ -55,7 +58,8 @@ function api(endpoint) {
 }
 /** 把工具选择结果发布到 GitHub 输出文件及标准输出。 */
 function output(values) {
-    const text = Object.entries(values).map(/** 把一个输出键值转换为工作流输出行。 */ ([key, value]) => `${key}=${value}\n`).join('');
+    // 把一个输出键值转换为工作流输出行。
+    const text = Object.entries(values).map(([key, value]) => `${key}=${value}\n`).join('');
     if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, text);
     process.stdout.write(text);
 }

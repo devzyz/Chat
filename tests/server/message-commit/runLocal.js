@@ -11,11 +11,14 @@ async function main() {
         const env = { ...process.env, ...fixture.env, CHAT_MYSQL_HOST: '127.0.0.1',
             CHAT_MYSQL_PORT: String(fixture.port), CHAT_MYSQL_USER: 'root',
             CHAT_MYSQL_PASSWORD: fixture.env?.MYSQL_PWD || '' };
-        await runCases(/** 为独立 MySQL 夹具创建 SQL 会话。 */ () => new MysqlSession(fixture.mysql, [...fixture.args, ...mysqlArgs], fixture.env),
-            process.env.CHAT_MESSAGE_TEST_BINARY, env, /** 运行单项合同并仅在成功后发布通过标记。 */ async (id, name, body) => {
+        // 为独立 MySQL 夹具创建 SQL 会话。
+        await runCases(() => new MysqlSession(fixture.mysql, [...fixture.args, ...mysqlArgs], fixture.env),
+            // 运行单项合同并仅在成功后发布通过标记。
+            process.env.CHAT_MESSAGE_TEST_BINARY, env, async (id, name, body) => {
                 await body(); console.log(`${id} PASS`);
             });
     } finally { await fixture.close(); }
 }
 
-main().catch(/** 输出合同失败原因并设置非零退出状态。 */ error => { console.error(error.message); process.exitCode = 1; });
+// 输出合同失败原因并设置非零退出状态。
+main().catch(error => { console.error(error.message); process.exitCode = 1; });

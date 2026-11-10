@@ -17,9 +17,14 @@ function verify(report, sha) {
     assert.equal(report.status, 'passed'); assert.equal(report.cleanup?.complete, true);
     assert.equal(report.failures.length, 0);
     const expected = Array.from({ length: profiles[report.profile].repeats },
-        /** 为每轮展开唯一场景集合。 */ (_, index) => scenarios.map(/** 生成场景结果键。 */ name => `${index + 1}:${name}`)).flat().sort();
-    assert.deepEqual(report.results.map(/** 提取实际场景结果键。 */ row => `${row.round}:${row.name}`).sort(), expected);
-    assert.deepEqual(report.warmups.map(/** 检查独立预热证据完整性。 */ row => `${row.round}:${row.name}`).sort(), expected);
+        // 为每轮展开唯一场景集合。
+        (_, index) => scenarios.map(
+            // 生成场景结果键。
+            name => `${index + 1}:${name}`)).flat().sort();
+    // 提取实际场景结果键。
+    assert.deepEqual(report.results.map(row => `${row.round}:${row.name}`).sort(), expected);
+    // 检查独立预热证据完整性。
+    assert.deepEqual(report.warmups.map(row => `${row.round}:${row.name}`).sort(), expected);
     for (const row of report.warmups) {
         validate(row.result.metrics || row.result);
         if (row.name === 'mixed') validate(row.result.resources);
@@ -33,12 +38,15 @@ function verify(report, sha) {
 function write(root, report) {
     fs.mkdirSync(root, { recursive: true });
     fs.writeFileSync(path.join(root, 'metrics.json'), JSON.stringify(report, null, 2));
-    const rows = report.results.map(/** 将每个场景指标呈现为简洁表格。 */ row => {
+    // 将每个场景指标呈现为简洁表格。
+    const rows = report.results.map(row => {
         const m = row.metrics;
         return `| ${row.round} / ${row.name} | ${m.completed}/${m.planned} | ${number(m.throughput)} | ${number(m.latencyMs.p95)} | ${number(m.latencyMs.p99)} | ${number(m.deliveryMs?.p95)} | ${m.pass ? '通过' : '失败'} |`;
     });
-    const resourceRows = report.results.filter(/** 筛选含资源吞吐的场景。 */ row => row.metrics.bytes !== undefined || row.resources)
-        .map(/** 呈现资源吞吐并保留混合场景独立结果。 */ row => {
+    // 筛选含资源吞吐的场景。
+    const resourceRows = report.results.filter(row => row.metrics.bytes !== undefined || row.resources)
+        // 呈现资源吞吐并保留混合场景独立结果。
+        .map(row => {
             const value = row.resources || row.metrics;
             return `- 第 ${row.round} 轮 ${row.name}：${number(value.mibPerSecond)} MiB/s，${value.completed}/${value.planned} 次，${value.pass ? '通过' : '失败'}。`;
         });
@@ -49,13 +57,15 @@ function write(root, report) {
         '| 轮次 / 场景 | 完成/计划 | 业务完成/秒 | p95 ms | p99 ms | 接收 p95 ms | 结果 |\n' +
         '|---|---:|---:|---:|---:|---:|---|\n' + rows.join('\n') + '\n\n' +
         resourceRows.join('\n') + '\n\n' +
-        `清理：${report.cleanup?.complete ? '通过' : '未完成'}。失败分类：${report.failures.map(/** 只列安全阶段和类别。 */ item => `${item.stage}: ${item.category}`).join('；') || '无'}。\n\n` +
+        // 只列安全阶段和类别。
+        `清理：${report.cleanup?.complete ? '通过' : '未完成'}。失败分类：${report.failures.map(item => `${item.stage}: ${item.category}`).join('；') || '无'}。\n\n` +
         'JSON 工件包含提交确认/接收百分位、未发送数量、事件循环延迟、资源字节吞吐、各进程 CPU/RSS 与各阶段计时。\n\n' +
         '此结果为 Linux 共享运行器同机基线，不代表公网体验、Windows 性能或生产容量。群聊包含两秒补拉等待。' +
         '速度指标暂不作为回归门禁；业务错误、超时、缺样本、消息或内容错误、清理失败会失败。\n\n' +
         '调用示例：`$chat-performance 对 develop 运行 baseline 并下载报告`。\n';
     fs.writeFileSync(path.join(root, '测试.md'), markdown);
-    const cases = report.results.map(/** 生成场景业务正确性用例。 */ row =>
+    // 生成场景业务正确性用例。
+    const cases = report.results.map(row =>
         `<testcase name="${row.round}-${escapeXml(row.name)}">${row.metrics.pass && (!row.resources || row.resources.pass) ? '' : '<failure message="scenario-failed"/>'}</testcase>`);
     for (const failure of report.failures) cases.push(`<testcase name="${escapeXml(failure.stage)}"><failure message="${escapeXml(failure.category)}"/></testcase>`);
     if (report.status !== 'passed' && !report.failures.length) cases.push('<testcase name="completion"><failure message="incomplete"/></testcase>');

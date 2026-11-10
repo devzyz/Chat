@@ -26,7 +26,8 @@ public:
         // 因为为静态变量，只会被初始化一次
         static std::once_flag s_flag;
         // call_once只有当s_flag第一次被定义的时候，才会执行后面的函数
-        std::call_once(s_flag, /** @brief 首次调用时创建共享实例，后续调用复用该初始化结果。 */ [&]() {
+        // 首次调用时创建共享实例，后续调用复用该初始化结果。
+        std::call_once(s_flag, [&]() {
             _instance = std::shared_ptr<T> (new T);
         });
 

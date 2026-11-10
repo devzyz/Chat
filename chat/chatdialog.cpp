@@ -99,9 +99,11 @@ ChatDialog::ChatDialog(QWidget *parent)
     auto *search = new UserSearchController(this);
     connect(ui->search_list, &SearchList::searchCancelled, search, &UserSearchController::cancel);
     connect(ui->search_list, &SearchList::searchRequested, this,
-        /** @brief 搜索流程只接收文本，不借用输入控件。 */ [this, search] { search->search(ui->search_edit->text()); });
+        // 搜索流程只接收文本，不借用输入控件。
+        [this, search] { search->search(ui->search_edit->text()); });
     connect(search, &UserSearchController::requestReady, this,
-        /** @brief 适配现有 TCP 发送入口并保留请求编号。 */ [](const QJsonObject &request) {
+        // 适配现有 TCP 发送入口并保留请求编号。
+        [](const QJsonObject &request) {
         emit TcpMgr::instance()->sendRequested(ID_SEARCH_USER_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
     });
     connect(TcpMgr::instance().get(), &TcpMgr::userSearchResponse, search, &UserSearchController::accept);
@@ -109,7 +111,8 @@ ChatDialog::ChatDialog(QWidget *parent)
     connect(search, &UserSearchController::busyChanged, ui->search_list, &SearchList::waitPending);
     connect(search, &UserSearchController::found, ui->search_list, &SearchList::tcpSearchUserFinish);
     connect(search, &UserSearchController::failed, this,
-        /** @brief 搜索失败解除等待并显示原因。 */ [this](const QString &reason) {
+        // 搜索失败解除等待并显示原因。
+        [this](const QString &reason) {
         QMessageBox::information(this, tr("搜索"), reason);
     });
 
@@ -1020,11 +1023,13 @@ void ChatDialog::openDirectorySearch()
     auto *input=new QLineEdit(dialog); input->setMaxLength(200); input->setPlaceholderText(tr("名称、备注或编号；回车查找")); layout->addWidget(input);
     auto *rows=new QListWidget(dialog); layout->addWidget(rows); auto *more=new QPushButton(tr("下一页"),dialog); layout->addWidget(more); more->setEnabled(false);
     auto text=std::make_shared<QString>(); auto category=std::make_shared<QString>(); auto cursor=std::make_shared<int>(0);
-    connect(input,&QLineEdit::returnPressed,dialog,/** @brief 从头筛选选定类别的本地目录。 */ [input,kind,rows,more,text,category,cursor] {
+    // 从头筛选选定类别的本地目录。
+    connect(input,&QLineEdit::returnPressed,dialog,[input,kind,rows,more,text,category,cursor] {
         *text=input->text().trimmed(); *category=kind->currentData().toString(); *cursor=0; rows->clear(); more->setEnabled(false);
         UserMgr::instance()->messages()->findDirectory(*category,*text);
     });
-    connect(more,&QPushButton::clicked,dialog,/** @brief 沿匹配记录的主键继续查询。 */ [more,text,category,cursor] {
+    // 沿匹配记录的主键继续查询。
+    connect(more,&QPushButton::clicked,dialog,[more,text,category,cursor] {
         more->setEnabled(false); UserMgr::instance()->messages()->findDirectory(*category,*text,*cursor);
     });
     connect(UserMgr::instance()->messages(),&MessageService::directoryFound,dialog,
@@ -1038,7 +1043,8 @@ void ChatDialog::openDirectorySearch()
         }
         more->setEnabled(values.size()==50);
     });
-    connect(rows,&QListWidget::itemDoubleClicked,dialog,/** @brief 从搜索结果打开已有群或联系人的会话。 */ [this,dialog](QListWidgetItem *item) {
+    // 从搜索结果打开已有群或联系人的会话。
+    connect(rows,&QListWidget::itemDoubleClicked,dialog,[this,dialog](QListWidgetItem *item) {
         const auto row=item->data(Qt::UserRole).toJsonObject();
         int chat=row["type"]=="group" ? row["id"].toInt() : UserMgr::instance()->privateChatIdFor(row["id"].toInt());
         if (chat<=0 || !UserMgr::instance()->chatInfo(chat)) return;

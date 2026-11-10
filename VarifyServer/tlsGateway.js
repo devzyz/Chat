@@ -21,7 +21,8 @@ function validate(config) {
         }
         names.add(listener.name);
     }
-    if (!names.has('gate') || !names.has('resource') || ![...names].some(/** 查找至少一个聊天入口。 */ name => /^chat-/.test(name))) {
+    // 查找至少一个聊天入口。
+    if (!names.has('gate') || !names.has('resource') || ![...names].some(name => /^chat-/.test(name))) {
         throw new Error('TLS gateway must cover Gate, Resource and Chat');
     }
 }
@@ -45,62 +46,87 @@ function createGateway(config, directory, logger = console) {
     /** 跟踪本实例拥有的连接，断开后释放跟踪记录。 */
     function own(socket) {
         sockets.add(socket);
-        socket.once('close', /** 连接关闭后释放本实例的跟踪引用。 */ () => sockets.delete(socket));
+        // 仅跟踪仍需由网关统一关闭的连接。
+        socket.once('close', () => sockets.delete(socket));
         return socket;
     }
 
-    /** 停止全部监听及握手/转发中的连接；重复调用安全。 */
+    /**
+     * 停止全部监听及握手/转发中的连接；
+     * 重复调用安全。
+     */
     async function close() {
         closed = true;
-        const pending = servers.map(/** 等待每个自有监听器停止接入。 */ server => new Promise(/** 将监听关闭回调转换为完成结果。 */ resolve => {
+        // 等待每个自有监听器停止接入。
+        // 将监听关闭回调转换为完成结果。
+        const pending = servers.map(server => new Promise(resolve => {
             if (!server.listening) { resolve(); return; }
-            server.close(/** 监听已释放。 */ () => resolve());
+            // 监听已释放。
+            server.close(() => resolve());
         }));
         for (const socket of sockets) socket.destroy();
         await Promise.all(pending);
     }
 
-    /** 顺序绑定所有入口；任一绑定失败时回滚本次已经建立的监听器。 */
+    /**
+     * 顺序绑定所有入口；
+     * 任一绑定失败时回滚本次已经建立的监听器。
+     */
     async function start() {
         if (closed || started) throw new Error('TLS gateway already started or closed');
         started = true;
         try {
             for (const listener of config.listeners) {
-                const server = tls.createServer(options, /** TLS 认证通过后创建唯一上游并成对管理生命周期。 */ client => {
+                // TLS 认证通过后创建唯一上游并成对管理生命周期。
+                const server = tls.createServer(options, client => {
                     if (closed) { client.destroy(); return; }
                     const upstream = own(net.createConnection({ host: listener.targetHost, port: listener.targetPort }));
-                    const deadline = setTimeout(/** 上游建连超过期限时关闭双端。 */ () => { client.destroy(); upstream.destroy(); }, 5000);
+                    // 上游建连超过期限时关闭双端。
+                    const deadline = setTimeout(() => { client.destroy(); upstream.destroy(); }, 5000);
                     deadline.unref();
-                    const stop = /** 任一端失败或空闲超时均结束整条通道。 */ () => { clearTimeout(deadline); client.destroy(); upstream.destroy(); };
+                    // 任一端失败或空闲超时均结束整条通道。
+                    const stop = () => { clearTimeout(deadline); client.destroy(); upstream.destroy(); };
                     client.once('error', stop);
                     upstream.once('error', stop);
                     client.once('close', stop);
-                    upstream.once('close', /** 正常 EOF 由 pipe 结束 TLS 写流，保留尚未刷出的响应字节。 */ () => {
+                    /**
+                     * 上游正常结束时，让 pipe 把剩余响应写完，再结束客户端写流。
+                     * 上游提前断开时，同时关闭两端，避免客户端继续等待。
+                     */
+                    upstream.once('close', () => {
                         if (!upstream.readableEnded) stop();
                     });
                     client.setTimeout(120000, stop);
                     upstream.setTimeout(120000, stop);
-                    upstream.once('connect', /** 建连成功后以流背压转发并清除建连期限。 */ () => {
+                    // 建连成功后以流背压转发并清除建连期限。
+                    upstream.once('connect', () => {
                         clearTimeout(deadline);
                         if (closed || client.destroyed) { stop(); return; }
                         client.pipe(upstream).pipe(client);
                     });
                 });
                 server.maxConnections = 1024;
-                server.on('connection', /** 握手前就登记原始连接，以便关闭可覆盖未认证连接。 */ socket => {
-                    own(socket); socket.on('error', /** 握手失败由 TLS 事件记录固定诊断。 */ () => {});
+                // 握手前就登记原始连接，以便关闭可覆盖未认证连接。
+                server.on('connection', socket => {
+                    own(socket);
+                    // 握手失败由 TLS 事件记录固定诊断。
+                    socket.on('error', () => {});
                 });
                 let lastRejection = 0;
-                server.on('tlsClientError', /** 每个入口每分钟最多一条固定诊断，避免握手洪泛写满日志。 */ () => {
+                // 每个入口每分钟最多一条固定诊断，避免握手洪泛写满日志。
+                server.on('tlsClientError', () => {
                     if (Date.now() - lastRejection >= 60000) {
                         lastRejection = Date.now(); logger.warn('TLS handshake rejected: ' + listener.name);
                     }
                 });
-                server.on('error', /** 只记录已校验的入口名称。 */ () => logger.error('TLS listener error: ' + listener.name));
+                // 只记录已校验的入口名称。
+                server.on('error', () => logger.error('TLS listener error: ' + listener.name));
                 servers.push(server);
-                await new Promise(/** 就绪或绑定失败仅完成一次启动操作。 */ (resolve, reject) => {
+                // 就绪或绑定失败仅完成一次启动操作。
+                await new Promise((resolve, reject) => {
                     server.once('error', reject);
-                    server.listen(listener.port, listener.host, /** 监听就绪后移除本次启动错误回调。 */ () => {
+                    // 监听成功后，后续错误由运行期处理器接管。
+                    server.listen(listener.port, listener.host, () => {
                         server.removeListener('error', reject);
                         resolve();
                     });
@@ -124,8 +150,10 @@ async function main(args = process.argv.slice(2)) {
         gateway = createGateway(config, path.dirname(filename));
         await gateway.start();
         console.log('TLS gateway ready');
-        const stop = /** 收到退出信号后关闭自有连接并传播清理失败。 */ () => gateway.close().catch(
-            /** 清理失败通过退出码反映。 */ () => { process.exitCode = 1; });
+        // 收到退出信号后关闭自有连接并传播清理失败。
+        const stop = () => gateway.close().catch(
+            // 清理失败通过退出码反映。
+            () => { process.exitCode = 1; });
         process.once('SIGINT', stop);
         process.once('SIGTERM', stop);
     } catch {

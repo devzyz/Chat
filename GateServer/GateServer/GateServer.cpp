@@ -63,7 +63,8 @@ int main(int argc, char* argv[])
         auto server = std::make_shared<CServer>(ioc, configured_host.empty() ? "0.0.0.0" : configured_host, port, logic);
         auto pool = AsioIOServicePool::GetInstance();
 
-        signals.async_wait(/** @brief 在正常退出信号到来时停止监听、连接与工作池。 */ [&ioc, pool, server](const boost::system::error_code& err, int signal_number) {
+        // 在正常退出信号到来时停止监听、连接与工作池。
+        signals.async_wait([&ioc, pool, server](const boost::system::error_code& err, int signal_number) {
             if (err) {
                 return;
             }

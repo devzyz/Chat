@@ -41,7 +41,8 @@ const protoc = resolvePinnedTool(path.join('tools', 'protobuf', 'protoc.exe'));
 const grpcCppPlugin = resolvePinnedTool(path.join('tools', 'grpc', 'grpc_cpp_plugin.exe'));
 const canonicalFiles = ['varify.proto', 'status.proto', 'chat.proto'];
 const initialReleaseProtoBlob = 'a8a34ebd17d5378376cf611762e5943a4c1bff45';
-const generatedFiles = canonicalFiles.flatMap(/** 从权威协议源名生成应有的 C++ 消息与 gRPC 文件名。 */ (file) => {
+// 从权威协议源名生成应有的 C++ 消息与 gRPC 文件名。
+const generatedFiles = canonicalFiles.flatMap((file) => {
     const stem = path.basename(file, '.proto');
     return [`${stem}.pb.h`, `${stem}.pb.cc`, `${stem}.grpc.pb.h`, `${stem}.grpc.pb.cc`];
 });
@@ -84,10 +85,12 @@ function requireFile(file) {
 /** 核对权威协议源集合；按需拒绝服务目录中的旧可编辑副本。 */
 function verifyCanonicalSources(sourceRoot = protoRoot, checkLegacyCopies = false) {
     const actualProtoFiles = fs.readdirSync(sourceRoot)
-        .filter(/** 筛选 proto 源文件。 */ (file) => file.endsWith('.proto'))
+        // 筛选 proto 源文件。
+        .filter((file) => file.endsWith('.proto'))
         .sort();
     const expectedProtoFiles = [...canonicalFiles].sort();
-    const unexpected = actualProtoFiles.filter(/** 筛出未登记的协议源文件。 */ (file) => !expectedProtoFiles.includes(file));
+    // 筛出未登记的协议源文件。
+    const unexpected = actualProtoFiles.filter((file) => !expectedProtoFiles.includes(file));
     if (unexpected.length > 0) {
         fail(`unregistered canonical proto source: ${unexpected.join(', ')}`);
     }
@@ -95,7 +98,8 @@ function verifyCanonicalSources(sourceRoot = protoRoot, checkLegacyCopies = fals
         requireFile(path.join(sourceRoot, file));
     }
     if (checkLegacyCopies) {
-        const legacyCopies = legacyEditableProtoFiles.filter(/** 筛出仍存在的旧协议副本。 */ (file) =>
+        // 筛出仍存在的旧协议副本。
+        const legacyCopies = legacyEditableProtoFiles.filter((file) =>
             fs.existsSync(path.join(repositoryRoot, file))
         );
         if (legacyCopies.length > 0) {
@@ -153,7 +157,8 @@ function generateCpp(outputRoot) {
         `--cpp_out=${outputRoot}`,
         `--grpc_out=${outputRoot}`,
         `--plugin=protoc-gen-grpc=${grpcCppPlugin}`,
-        ...canonicalFiles.map(/** 将权威协议文件名解析为源路径。 */ (file) => path.join(protoRoot, file))
+        // 将权威协议文件名解析为源路径。
+        ...canonicalFiles.map((file) => path.join(protoRoot, file))
     ]);
 }
 
@@ -163,7 +168,8 @@ function generateDescriptor(outputPath, sourceRoot = protoRoot, sources = canoni
     run(protoc, [
         `--proto_path=${sourceRoot}`,
         `--descriptor_set_out=${outputPath}`,
-        ...sources.map(/** 将协议源名解析为当前源目录下的路径。 */ (file) => path.join(sourceRoot, file))
+        // 将协议源名解析为当前源目录下的路径。
+        ...sources.map((file) => path.join(sourceRoot, file))
     ]);
 }
 
@@ -222,7 +228,8 @@ function text(field) {
 
 /** 读取首个匹配编号的字段值，缺失时返回指定回退值。 */
 function first(fields, number, fallback = undefined) {
-    const field = fields.find(/** 按字段编号匹配目标字段。 */ (candidate) => candidate.number === number);
+    // 按字段编号匹配目标字段。
+    const field = fields.find((candidate) => candidate.number === number);
     return field ? field.value : fallback;
 }
 
@@ -243,12 +250,21 @@ function parseMessage(buffer) {
     const fields = wireFields(buffer);
     return {
         name: first(fields, 1, Buffer.alloc(0)).toString('utf8'),
-        field: fields.filter(/** 筛选消息的字段描述符。 */ (field) => field.number === 2).map(/** 解析单个消息字段描述符。 */ (field) => parseField(field.value)),
-        reservedRange: fields.filter(/** 筛选保留编号区间。 */ (field) => field.number === 9).map(/** 解析保留区间的起止边界。 */ (field) => {
+        field: fields.filter(
+            // 筛选消息的字段描述符。
+            (field) => field.number === 2).map(
+            // 解析单个消息字段描述符。
+            (field) => parseField(field.value)),
+        reservedRange: fields.filter(
+            // 筛选保留编号区间。
+            (field) => field.number === 9).map(
+            // 解析保留区间的起止边界。
+            (field) => {
             const range = wireFields(field.value);
             return { start: first(range, 1, 0), end: first(range, 2, 0) };
         }),
-        reservedName: fields.filter(/** 筛选保留字段名称。 */ (field) => field.number === 10).map(text)
+        // 筛选保留字段名称。
+        reservedName: fields.filter((field) => field.number === 10).map(text)
     };
 }
 
@@ -269,18 +285,34 @@ function parseService(buffer) {
     const fields = wireFields(buffer);
     return {
         name: first(fields, 1, Buffer.alloc(0)).toString('utf8'),
-        method: fields.filter(/** 筛选服务内的方法描述符。 */ (field) => field.number === 2).map(/** 解析单个 RPC 方法描述符。 */ (field) => parseMethod(field.value))
+        method: fields.filter(
+            // 筛选服务内的方法描述符。
+            (field) => field.number === 2).map(
+            // 解析单个 RPC 方法描述符。
+            (field) => parseMethod(field.value))
     };
 }
 
 /** 解析文件描述符集合中的包、消息及服务定义。 */
 function parseDescriptorSet(buffer) {
-    return wireFields(buffer).filter(/** 筛选文件描述符。 */ (field) => field.number === 1).map(/** 解析单个文件的包名、消息及服务。 */ (file) => {
+    return wireFields(buffer).filter(
+        // 筛选文件描述符。
+        (field) => field.number === 1).map(
+        // 解析单个文件的包名、消息及服务。
+        (file) => {
         const fields = wireFields(file.value);
         return {
             package: first(fields, 2, Buffer.alloc(0)).toString('utf8'),
-            messageType: fields.filter(/** 筛选文件中的消息类型。 */ (field) => field.number === 4).map(/** 解析单个消息类型。 */ (field) => parseMessage(field.value)),
-            service: fields.filter(/** 筛选文件中的服务定义。 */ (field) => field.number === 6).map(/** 解析单个服务定义。 */ (field) => parseService(field.value))
+            messageType: fields.filter(
+                // 筛选文件中的消息类型。
+                (field) => field.number === 4).map(
+                // 解析单个消息类型。
+                (field) => parseMessage(field.value)),
+            service: fields.filter(
+                // 筛选文件中的服务定义。
+                (field) => field.number === 6).map(
+                // 解析单个服务定义。
+                (field) => parseService(field.value))
         };
     });
 }
@@ -296,15 +328,18 @@ function descriptorModelFromBuffer(buffer) {
         for (const message of descriptorFile.messageType) {
             const fullName = `${prefix}.${message.name}`;
             messages.set(fullName, {
-                fields: new Map(message.field.map(/** 按字段编号建立索引条目。 */ (field) => [field.number, field])),
-                fieldsByName: new Map(message.field.map(/** 按字段名称建立索引条目。 */ (field) => [field.name, field])),
+                // 按字段编号建立索引条目。
+                fields: new Map(message.field.map((field) => [field.number, field])),
+                // 按字段名称建立索引条目。
+                fieldsByName: new Map(message.field.map((field) => [field.name, field])),
                 reservedNames: new Set(message.reservedName),
                 reservedRanges: message.reservedRange
             });
         }
         for (const service of descriptorFile.service) {
             const fullName = `${prefix}.${service.name}`;
-            services.set(fullName, new Map(service.method.map(/** 按 RPC 名称建立索引条目。 */ (method) => [method.name, method])));
+            // 按 RPC 名称建立索引条目。
+            services.set(fullName, new Map(service.method.map((method) => [method.name, method])));
         }
     }
     return { messages, services };
@@ -321,7 +356,8 @@ function nodeDescriptor(sourceRoot) {
     const protobuf = require(protobufRoot);
     require(path.join(protobufRoot, 'ext', 'descriptor'));
     const root = new protobuf.Root();
-    root.loadSync(canonicalFiles.map(/** 定位 Node 工具需要读取的权威协议源。 */ (file) => path.join(sourceRoot, file)), { keepCase: true });
+    // 定位 Node 工具需要读取的权威协议源。
+    root.loadSync(canonicalFiles.map((file) => path.join(sourceRoot, file)), { keepCase: true });
     root.resolveAll();
     const descriptor = root.toDescriptor('proto3');
     for (const file of descriptor.file) {
@@ -349,7 +385,8 @@ function nodeDescriptor(sourceRoot) {
 
 /** 判断字段编号是否处于某个保留区间。 */
 function numberIsReserved(message, number) {
-    return message.reservedRanges.some(/** 按左闭右开区间判断保留编号。 */ (range) => number >= range.start && number < range.end);
+    // 按左闭右开区间判断保留编号。
+    return message.reservedRanges.some((range) => number >= range.start && number < range.end);
 }
 
 /** 比较旧新协议模型，拒绝删除、重用或改变既有线路与 RPC 合同。 */
@@ -416,10 +453,12 @@ function compareCompatibilityBuffer(baselineFile, currentBuffer) {
 /** 核对生成文件集合及逐文件字节，拒绝多余或漂移产物。 */
 function compareGenerated(expectedRoot, actualRoot) {
     const actualGeneratedFiles = fs.readdirSync(actualRoot)
-        .filter(/** 筛选 C++ 消息及 gRPC 生成文件。 */ (file) => /(?:\.grpc)?\.pb\.(?:cc|h)$/.test(file))
+        // 筛选 C++ 消息及 gRPC 生成文件。
+        .filter((file) => /(?:\.grpc)?\.pb\.(?:cc|h)$/.test(file))
         .sort();
     const expectedGeneratedFiles = [...generatedFiles].sort();
-    const unexpected = actualGeneratedFiles.filter(/** 筛出未登记的生成文件。 */ (file) => !expectedGeneratedFiles.includes(file));
+    // 筛出未登记的生成文件。
+    const unexpected = actualGeneratedFiles.filter((file) => !expectedGeneratedFiles.includes(file));
     if (unexpected.length > 0) {
         fail(`unexpected generated protocol output: ${unexpected.join(', ')}; remove stale generated files`);
     }
@@ -437,7 +476,8 @@ function compareGenerated(expectedRoot, actualRoot) {
 /** 核对生成目录精确包含全部已登记的权威协议消费者。 */
 function verifyGeneratedConsumers() {
     const actualGeneratedFiles = fs.readdirSync(generatedRoot)
-        .filter(/** 筛选应纳入注册检查的生成文件。 */ (file) => /(?:\.grpc)?\.pb\.(?:cc|h)$/.test(file))
+        // 筛选应纳入注册检查的生成文件。
+        .filter((file) => /(?:\.grpc)?\.pb\.(?:cc|h)$/.test(file))
         .sort();
     const expectedGeneratedFiles = [...generatedFiles].sort();
     assert.deepEqual(

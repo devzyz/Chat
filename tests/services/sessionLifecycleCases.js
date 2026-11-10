@@ -70,7 +70,8 @@ async function verifySessionLifecycle({ coordinator, http, rpcReady, user, port 
         assert.equal(resumed.error, 0); user.token =
             resumed.token;
     } catch (error) {
-        await contractStep(stage, /** 仅输出固定认证阶段和白名单分类，不导出凭据或响应正文。 */ async () => { throw error; });
+        // 仅输出固定认证阶段和白名单分类，不导出凭据或响应正文。
+        await contractStep(stage, async () => { throw error; });
     } finally {
         for (const peer of peers) peer.close();
         redis.disconnect();

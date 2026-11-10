@@ -37,8 +37,10 @@ class Environment {
                 ...extra, LD_LIBRARY_PATH: `${path.dirname(this.driver)}:${path.dirname(executable)}`, LD_PRELOAD: '' }
         });
         const owned = { name, child, report };
-        owned.exited = new Promise(/** 保存监督器最终退出结果。 */ resolve => {
-            child.once('error', /** 把启动错误保存为失败退出。 */ () => resolve(-1)); child.once('exit', resolve);
+        // 保存监督器最终退出结果。
+        owned.exited = new Promise(resolve => {
+            // 把启动错误保存为失败退出。
+            child.once('error', () => resolve(-1)); child.once('exit', resolve);
         });
         this.children.push(owned);
     }
@@ -61,8 +63,10 @@ class Environment {
         this.sql = {
             /** 串行化观测查询，避免并行场景争用单个管理连接。 */
             execute(statement) {
-                const operation = queue.then(/** 前一查询完成后提交当前 SQL。 */ () => session.execute(statement));
-                queue = operation.catch(/** 本次错误由调用方处理，队列仍允许清理。 */ () => {});
+                // 前一查询完成后提交当前 SQL。
+                const operation = queue.then(() => session.execute(statement));
+                // 本次错误由调用方处理，队列仍允许清理。
+                queue = operation.catch(() => {});
                 return operation;
             },
             /** 等待已提交查询后关闭真实管理连接。 */
@@ -99,11 +103,13 @@ class Environment {
         this.start('ResourceServer', path.join(this.bundle, 'ResourceServer', 'ResourceServer'), ['--config', file]);
         this.gate = `http://127.0.0.1:${ports.gate}`; this.resource = `http://127.0.0.1:${resource.port}`;
         for (const url of [`${this.gate}/get_test`, `${this.resource}/ready`]) {
-            await poll(/** 等待真实 HTTP 服务就绪。 */ async () => {
+            // 等待真实 HTTP 服务就绪。
+            await poll(async () => {
                 const result = await fetch(url, { signal: AbortSignal.timeout(1000) }); await result.text(); return result.ok;
             }, 30000);
         }
-        await poll(/** 通过公开验证码链路核对 Varify 与真实 Redis/SMTP 就绪。 */ async () => {
+        // 通过公开验证码链路核对 Varify 与真实 Redis/SMTP 就绪。
+        await poll(async () => {
             await post(`${this.gate}/get_varifycode`, { email: this.config.recipient }); return true;
         }, 30000);
     }
@@ -114,7 +120,8 @@ class Environment {
             name: `perf${index}_${this.config.runId.slice(0, 8)}`, password: randomUUID().replaceAll('-', '').slice(0, 12) };
         await post(`${this.gate}/get_varifycode`, { email: account.email });
         let code;
-        await poll(/** 只从本次临时收件人的邮件中提取验证码。 */ async () => {
+        // 只从本次临时收件人的邮件中提取验证码。
+        await poll(async () => {
             const found = await this.coordinator.mailApi(`/api/v1/search?query=${encodeURIComponent(`to:${account.email}`)}`);
             if (!found.messages.length) return false;
             const mail = await this.coordinator.mailApi(`/api/v1/message/${found.messages[0].ID}`);
@@ -139,9 +146,11 @@ class Environment {
         sender.close(); receiver.close();
         sender = await this.login(first); receiver = await this.login(second);
         const contacts = await receiver.request(1046, 1047, { request_id: randomUUID(), kind: 'contacts', after: '0' });
-        assert.ok(contacts.items.some(/** 核对长字段完整保留。 */ item => item.uid === sender.uid && item.name === '名'.repeat(255)));
+        // 核对长字段完整保留。
+        assert.ok(contacts.items.some(item => item.uid === sender.uid && item.name === '名'.repeat(255)));
         const request = { from_uid: sender.uid, to_uid: receiver.uid, chat_id: chatId,
-            text_array: Array.from({ length: 20 }, /** 形成合法但 ACK 大于旧上限的消息批次。 */ () => ({ msg_uuid: randomUUID(), msg_content: 'x' })) };
+            // 形成合法但 ACK 大于旧上限的消息批次。
+            text_array: Array.from({ length: 20 }, () => ({ msg_uuid: randomUUID(), msg_content: 'x' })) };
         const ack = await sender.request(1016, 1017, request);
         assert.equal(ack.uuid_msgId.length, 20);
         assert.deepEqual((await sender.request(1016, 1017, request)).uuid_msgId, ack.uuid_msgId);
@@ -159,7 +168,8 @@ class Environment {
         const auth = await post(`${this.gate}/user_login`, { email: account.email, password: account.password });
         this.signal?.throwIfAborted();
         assert.equal(auth.host, '127.0.0.1');
-        assert.ok(this.topology.servers.some(/** 核对真实选服结果。 */ server => server.port === Number(auth.port)));
+        // 核对真实选服结果。
+        assert.ok(this.topology.servers.some(server => server.port === Number(auth.port)));
         const client = new Client(Number(auth.port), auth.uid, auth.token);
         this.clients.push(client); await client.connect(); account.uid = auth.uid; account.client = client; return client;
     }
@@ -175,18 +185,22 @@ class Environment {
     }
     /** 等待生产六十秒连接数发布后重新登录半数账号，避免把短时选服滞后伪作双实例负载。 */
     async balance(accounts) {
-        if (new Set(accounts.map(/** 取实际登录端点。 */ account => account.client.port)).size === 2) return;
+        // 取实际登录端点。
+        if (new Set(accounts.map(account => account.client.port)).size === 2) return;
         const existing = accounts[0].client.port;
-        const selected = this.topology.servers.find(/** 查找当前承载实例。 */ server => server.port === existing);
+        // 查找当前承载实例。
+        const selected = this.topology.servers.find(server => server.port === existing);
         const migrating = accounts.slice(accounts.length / 2);
         for (const account of migrating) account.client.close();
         await waitForConnectionCount(this.coordinator, selected.name, accounts.length - migrating.length, [], this.signal);
         for (const account of migrating) await this.login(account);
-        assert.equal(new Set(accounts.map(/** 核对真实分配的端点。 */ account => account.client.port)).size, 2, 'two-live-instances');
+        // 核对真实分配的端点。
+        assert.equal(new Set(accounts.map(account => account.client.port)).size, 2, 'two-live-instances');
     }
     /** 采样实际服务子进程的 Linux CPU 计数及 RSS，PID 来源于监督器身份。 */
     sample() {
-        return this.children.map(/** 读取每个已登记服务的进程计数，不包含日志和环境。 */ owned => {
+        // 读取每个已登记服务的进程计数，不包含日志和环境。
+        return this.children.map(owned => {
             const identity = JSON.parse(fs.readFileSync(`${owned.report}.identity`));
             const stat = fs.readFileSync(`/proc/${identity.pid}/stat`, 'utf8').split(') ')[1].split(' ');
             const status = fs.readFileSync(`/proc/${identity.pid}/status`, 'utf8');
@@ -220,8 +234,10 @@ class Environment {
                 if (fs.existsSync(source)) fs.copyFileSync(source, path.join(destination, `${owned.name}${suffix}.json`));
             }
         }
-        const secrets = [this.coordinator.password, ...this.accounts.flatMap(/** 汇集本次账号凭据。 */ account =>
-            [account.password, account.email]), ...this.clients.map(/** 包含已关闭或被替换会话的旧令牌。 */ client => client.token)];
+        // 汇集本次账号凭据。
+        const secrets = [this.coordinator.password, ...this.accounts.flatMap(account =>
+            // 包含已关闭或被替换会话的旧令牌。
+            [account.password, account.email]), ...this.clients.map(client => client.token)];
         preserveLogs(path.join(this.root, 'logs'), destination, secrets);
     }
 }

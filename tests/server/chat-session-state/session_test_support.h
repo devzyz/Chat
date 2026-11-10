@@ -70,7 +70,11 @@ struct Harness {
     /** 组合会话目录和在线存储，启动两条 I/O 工作线程。 */
     explicit Harness(SessionLifecycleCoordinator::Kick kick = {})
         : lifecycle(std::make_shared<SessionLifecycleCoordinator>(directory, presence, "test-server", std::move(kick))),
-          first(/** 运行第一条 I/O 消费线程。 */ [this] { io.run(); }), second(/** 运行第二条 I/O 消费线程。 */ [this] { io.run(); }) {}
+          first(
+              // 运行第一条 I/O 消费线程。
+               [this] { io.run(); }), second(
+              // 运行第二条 I/O 消费线程。
+              [this] { io.run(); }) {}
     /** 关闭并观察所有会话，排空存储协调任务后释放工作守卫并等待线程。 */
     ~Harness() {
         for (auto& session : sessions) session->Close();
@@ -80,7 +84,8 @@ struct Harness {
         first.join(); second.join();
     }
     /** 创建并跟踪共享会话，使用调用方指定的消息提交动作。 */
-    std::shared_ptr<CSession> Create(CSession::Submit submit = /** 默认接收入站消息以隔离业务处理因素。 */ [](LogicMessage) { return LogicSubmitResult::Accepted; }) {
+    // 默认接收入站消息以隔离业务处理因素。
+    std::shared_ptr<CSession> Create(CSession::Submit submit = [](LogicMessage) { return LogicSubmitResult::Accepted; }) {
         auto session = std::make_shared<CSession>(io, lifecycle, directory, std::move(submit));
         sessions.push_back(session);
         return session;
@@ -89,7 +94,8 @@ struct Harness {
     std::pair<SessionState, std::optional<SessionCloseReason>> Snapshot(std::shared_ptr<CSession> session) {
         auto promise = std::make_shared<std::promise<std::pair<SessionState, std::optional<SessionCloseReason>>>>();
         auto future = promise->get_future();
-        session->Inspect(/** 把状态及关闭原因交给快照等待者。 */ [promise](SessionState state, std::optional<SessionCloseReason> reason) {
+        // 把状态及关闭原因交给快照等待者。
+        session->Inspect([promise](SessionState state, std::optional<SessionCloseReason> reason) {
             promise->set_value({state, reason});
         });
         return Await(std::move(future));
@@ -98,14 +104,16 @@ struct Harness {
     SessionBindResult Bind(std::shared_ptr<CSession> session, int uid = 42) {
         auto promise = std::make_shared<std::promise<SessionBindResult>>();
         auto future = promise->get_future();
-        session->BindAuthenticatedUser(uid, /** 把绑定结果交给测试等待者。 */ [promise](SessionBindResult result) { promise->set_value(result); });
+        // 把绑定结果交给测试等待者。
+        session->BindAuthenticatedUser(uid, [promise](SessionBindResult result) { promise->set_value(result); });
         return Await(std::move(future));
     }
     /** 异步提交发送帧并有界等待入队结果，不将入队等同送达。 */
     SessionSendResult Send(std::shared_ptr<CSession> session, SessionFrame frame = {100, "body"}) {
         auto promise = std::make_shared<std::promise<SessionSendResult>>();
         auto future = promise->get_future();
-        session->Send(std::move(frame), /** 把发送入队结果交给测试等待者。 */ [promise](SessionSendResult result) { promise->set_value(result); });
+        // 把发送入队结果交给测试等待者。
+        session->Send(std::move(frame), [promise](SessionSendResult result) { promise->set_value(result); });
         return Await(std::move(future));
     }
 };
@@ -115,7 +123,8 @@ struct Connected {
     std::shared_ptr<CSession> session;
     boost::asio::ip::tcp::socket peer;
     /** 创建会话与对端 socket，完成回环连接后启动会话并等候状态屏障。 */
-    Connected(Harness& h, CSession::Submit submit = /** 默认接收入站消息以隔离业务处理因素。 */ [](LogicMessage) { return LogicSubmitResult::Accepted; })
+    // 默认接收入站消息以隔离业务处理因素。
+    Connected(Harness& h, CSession::Submit submit = [](LogicMessage) { return LogicSubmitResult::Accepted; })
         : harness(h), session(h.Create(std::move(submit))), peer(h.io) {
         boost::asio::ip::tcp::acceptor acceptor(h.io, {boost::asio::ip::address_v4::loopback(), 0});
         peer.connect(acceptor.local_endpoint());
@@ -130,7 +139,8 @@ struct Connected {
         auto data = std::make_shared<std::string>(count, '\0');
         auto result = std::make_shared<std::promise<std::string>>();
         auto future = result->get_future();
-        boost::asio::async_read(peer, boost::asio::buffer(*data), /** 持有读取缓冲直到完成，将读取错误或完整字节交给等待者。 */ [data, result](boost::system::error_code error, std::size_t) {
+        // 持有读取缓冲直到完成，将读取错误或完整字节交给等待者。
+        boost::asio::async_read(peer, boost::asio::buffer(*data), [data, result](boost::system::error_code error, std::size_t) {
             if (error) result->set_exception(std::make_exception_ptr(std::runtime_error(error.message())));
             else result->set_value(*data);
         });

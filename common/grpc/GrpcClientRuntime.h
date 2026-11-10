@@ -178,7 +178,8 @@ public:
     /** @brief 在配置期限内等待资源，返回可移动租约或耗尽/关闭分类。 */
     AcquireResult Acquire() {
         std::unique_lock<std::mutex> lock(_mutex);
-        const bool ready = _condition.wait_for(lock, _acquire_timeout, /** @brief 在关闭或有可用 stub 时唤醒等待借用者。 */ [this] {
+        // 在关闭或有可用 stub 时唤醒等待借用者。
+        const bool ready = _condition.wait_for(lock, _acquire_timeout, [this] {
             return _closed || !_resources.empty();
         });
         if (!ready) {

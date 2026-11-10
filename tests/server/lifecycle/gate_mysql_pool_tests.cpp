@@ -15,7 +15,8 @@ int main() {
             // An empty pool exercises the actual pool and waiting borrowers
             // without opening a database connection or using a test adapter.
             MysqlConnectionPool pool("", "", "", "", 0);
-            auto borrower = std::async(std::launch::async, /** 在独立任务中等待借用，以验证关闭会唤醒等待者。 */ [&pool] { return pool.GetConnection(); });
+            // 在独立任务中等待借用，以验证关闭会唤醒等待者。
+            auto borrower = std::async(std::launch::async, [&pool] { return pool.GetConnection(); });
             pool.Close();
             pool.Close();
             if (borrower.wait_for(1s) != std::future_status::ready || borrower.get()) {

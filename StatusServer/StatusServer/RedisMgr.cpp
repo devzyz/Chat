@@ -5,7 +5,8 @@
 bool RedisMgr::PutExpiringToken(const std::string& key, const std::string& field, const std::string& value, long long auth_version) {
     auto* connection = _pool->GetConnection();
     if (!connection) return false;
-    Defer release(/** @brief 归还独占 Redis 连接。 */ [this, connection] { _pool->ReturnConnection(connection); });
+    // 归还独占 Redis 连接。
+    Defer release([this, connection] { _pool->ReturnConnection(connection); });
     const std::string script = "if (redis.call('GET',KEYS[2]) or '0')~=ARGV[3] then return 0 end; "
         "redis.call('HSET',KEYS[1],ARGV[1],ARGV[2]); return redis.call('EXPIRE',KEYS[1],86400)";
     const auto version_key = "auth_version_" + key;
@@ -13,7 +14,8 @@ bool RedisMgr::PutExpiringToken(const std::string& key, const std::string& field
     auto* reply = static_cast<redisReply*>(redisCommand(connection, "EVAL %b 2 %b %b %b %b %b",
         script.data(), script.size(), key.data(), key.size(), version_key.data(), version_key.size(),
         field.data(), field.size(), value.data(), value.size(), version.data(), version.size()));
-    Defer free_reply(/** @brief 释放命令回复。 */ [reply] { if (reply) freeReplyObject(reply); });
+    // 释放命令回复。
+    Defer free_reply([reply] { if (reply) freeReplyObject(reply); });
     return reply && reply->type == REDIS_REPLY_INTEGER && reply->integer == 1;
 }
 
@@ -250,7 +252,8 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
 		return false;
 	}
 
-	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, reply, connection]() {
+	// 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, reply, connection]() {
 		freeReplyObject(reply);
 		_pool->ReturnConnection(connection);
 		});
@@ -297,7 +300,8 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
 		return false;
 	}
 
-	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, reply, connection]() {
+	// 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, reply, connection]() {
 		freeReplyObject(reply);
 		_pool->ReturnConnection(connection);
 		});
@@ -338,7 +342,8 @@ bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key,
 		_pool->ReturnConnection(connection);
 		return false;
 	}
-	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, reply, connection]() {
+	// 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, reply, connection]() {
 		freeReplyObject(reply);
 		_pool->ReturnConnection(connection);
 		});
@@ -385,7 +390,8 @@ bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key,
 		return false;
 	}
 
-	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, reply, connection]() {
+	// 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, reply, connection]() {
 		freeReplyObject(reply);
 		_pool->ReturnConnection(connection);
 		});
@@ -422,7 +428,8 @@ bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key)
 		return false;
 	}
 
-	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, reply, connection]() {
+	// 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, reply, connection]() {
 		freeReplyObject(reply);
 		_pool->ReturnConnection(connection);
 		});
@@ -458,7 +465,8 @@ bool RedisMgr::Del(const std::string& key) {
 		return false;
 	}
 
-	Defer defer(/** @brief 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。 */ [this, connection, reply]() {
+	// 释放 Redis 响应并归还本次借用的数据库连接，退出作用域后不得再使用。
+	Defer defer([this, connection, reply]() {
 		freeReplyObject(reply);
 		_pool->ReturnConnection(connection);
 		});

@@ -24,7 +24,8 @@ async function finalize() {
     const processTeardown = read('process-teardown.json');
     const junit = path.join(root, phase3d ? 'linux_phase3d_contract.xml' : 'linux_services.xml');
     const reports = phase3d ? require('./phase3dEvidence').reportGroups(process.env.CHAT_SERVICE_SELECTOR, realAcceptance) : reportGroups(process.env.CHAT_SERVICE_SELECTOR || '3C-02');
-    let reportsComplete = reports.every(/** 确认报告存在测试套件且没有失败或错误标记。 */ (group) => {
+    // 确认报告存在测试套件且没有失败或错误标记。
+    let reportsComplete = reports.every((group) => {
         try {
             const report = fs.readFileSync(path.join(root, group.file), 'utf8');
             return report.includes('<testsuite ') && !/<(?:failure|error)\b/.test(report) &&
@@ -80,4 +81,5 @@ async function finalize() {
     }
     if (!teardown.complete) process.exitCode = 1;
 }
-finalize().catch(/** 最终证据处理异常时输出脱敏提示并设置非零退出码。 */ () => { process.stderr.write('outer service cleanup failed\n'); process.exitCode = 1; });
+// 最终证据处理异常时输出脱敏提示并设置非零退出码。
+finalize().catch(() => { process.stderr.write('outer service cleanup failed\n'); process.exitCode = 1; });

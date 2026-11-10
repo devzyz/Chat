@@ -8,7 +8,8 @@ const repo = path.resolve(__dirname, '../..');
 
 /** 把缓存测量结果发布为工作流输出及标准输出。 */
 function output(values) {
-    const text = Object.entries(values).map(/** 将输出键值编码为工作流输出行。 */ ([key, value]) => `${key}=${value}\n`).join('');
+    // 将输出键值编码为工作流输出行。
+    const text = Object.entries(values).map(([key, value]) => `${key}=${value}\n`).join('');
     if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, text);
     process.stdout.write(text);
 }
@@ -22,14 +23,16 @@ function required(name) {
 
 /** 递归列出缓存 ZIP 路径及大小并排序；拒绝符号链接，忽略临时文件。 */
 function inventory(root, prefix = '') {
-    return fs.readdirSync(root, { withFileTypes: true }).flatMap(/** 检查目录项，递归目录或记录 ZIP 大小，拒绝符号链接。 */ entry => {
+    // 检查目录项，递归目录或记录 ZIP 大小，拒绝符号链接。
+    return fs.readdirSync(root, { withFileTypes: true }).flatMap(entry => {
         const relative = `${prefix}${entry.name}`;
         const file = path.join(root, entry.name);
         if (entry.isSymbolicLink()) throw new Error('Binary cache must not contain symbolic links');
         if (entry.isDirectory()) return inventory(file, `${relative}/`);
         // vcpkg archive names contain their ABI identity. Ignore temporary files.
         return entry.isFile() && entry.name.endsWith('.zip') ? [[relative, fs.statSync(file).size]] : [];
-    }).sort(/** 按相对路径稳定排列缓存清单。 */ ([a], [b]) => a.localeCompare(b));
+    // 按相对路径稳定排列缓存清单。
+    }).sort(([a], [b]) => a.localeCompare(b));
 }
 
 try {
@@ -81,9 +84,11 @@ try {
         const log = argument && fs.existsSync(argument) ? fs.readFileSync(argument, 'utf8') : '';
         const restored = [...log.matchAll(/Restored (\d+) package\(s\)/g)];
         const built = [...log.matchAll(/Building [^\s:]+:[^\s]+/g)].length;
-        const count = restored.length ? restored.reduce(/** 累计日志中匹配到的缓存计数。 */ (sum, match) => sum + Number(match[1]), 0) : 'unavailable';
+        // 累计日志中匹配到的缓存计数。
+        const count = restored.length ? restored.reduce((sum, match) => sum + Number(match[1]), 0) : 'unavailable';
         const elapsed = [...log.matchAll(/All requested installations completed successfully in: ([^\r\n]+)/g)]
-            .map(/** 提取匹配到的 ABI 标识。 */ match => match[1]).join(', ') || 'unavailable';
+            // 提取匹配到的 ABI 标识。
+            .map(match => match[1]).join(', ') || 'unavailable';
         const reason = !after.length ? 'empty' : promoted ? 'promote restored namespace' :
             changed ? 'archive inventory changed' : 'unchanged';
         const summary = `### vcpkg binary cache\n\nRestored key: ${restoredKey || 'none'}\n\n` +

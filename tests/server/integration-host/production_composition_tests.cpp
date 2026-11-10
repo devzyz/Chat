@@ -221,7 +221,8 @@ void ExpectSelectedInvalidConfig(FormalService service) {
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", ignored.wstring());
     auto process = StartFormal(*context, service, selected, working);
 
-    EXPECT_FALSE(process->WaitReady(/** 保持探针未就绪，让无效配置的启动结果决定断言。 */ [] { return false; }, std::chrono::steady_clock::now() + 5s));
+    // 保持探针未就绪，让无效配置的启动结果决定断言。
+    EXPECT_FALSE(process->WaitReady([] { return false; }, std::chrono::steady_clock::now() + 5s));
     const auto stop = process->Stop(std::chrono::steady_clock::now() + 2s);
     const auto evidence = process->CollectEvidence();
     EXPECT_TRUE(stop.Complete()) << stop.Detail();
@@ -248,7 +249,8 @@ void ExpectReadyAndGracefulStop(FormalService service) {
     auto process = StartFormal(*context, service, config, working);
 
     const auto ready = process->WaitReady(
-        /** 按正式服务类型执行对应的协议就绪探针。 */ [service, port = reservation.port] {
+        // 按正式服务类型执行对应的协议就绪探针。
+        [service, port = reservation.port] {
             return service == FormalService::Gate ? ProbeGate(port) : ProbeStatus(port);
         },
         std::chrono::steady_clock::now() + 10s);
@@ -284,7 +286,8 @@ RefusalEvidence ObserveChatRealDependencyBoundary(
     const std::filesystem::path& working,
     const std::filesystem::path& config) {
     auto process = StartFormal(context, FormalService::Chat, config, working);
-    EXPECT_FALSE(process->WaitReady(/** 不把依赖拒绝中的进程存活视为服务就绪。 */ [] { return false; }, std::chrono::steady_clock::now() + 7s));
+    // 不把依赖拒绝中的进程存活视为服务就绪。
+    EXPECT_FALSE(process->WaitReady([] { return false; }, std::chrono::steady_clock::now() + 7s));
     const auto stop = process->Stop(std::chrono::steady_clock::now() + 2s);
     const auto evidence = process->CollectEvidence();
     EXPECT_TRUE(stop.Complete()) << stop.Detail();

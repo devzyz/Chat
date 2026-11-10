@@ -142,6 +142,13 @@ class SyntaxTests(unittest.TestCase):
         self.assertTrue(check_source("VarifyServer/a.js", "", '/** 读取键。 */ function GetKey() { return 1; }'))
         self.assertTrue(check_source("VarifyServer/a.js", "", '/** 创建读取器。 */ function makeReader(){ return () => 1; }'))
 
+    def test_standalone_short_comments(self):
+        """独立行可说明回调及接口，上一条语句的行尾注释不属于下一声明。"""
+        self.assertEqual([], check_source("VarifyServer/a.js", "",
+            "// 关闭时清理连接。\nsocket.once('close', () => connections.clear());"))
+        self.assertEqual([], check_source("common/test.h", "", "// 读取状态。\nint Read();"))
+        self.assertTrue(check_source("common/test.h", "", "int value; // 缓存值。\nint Read();"))
+
     def test_direct_callback_doc_precedes_test_id(self):
         """测试编号不能遮蔽直接属于回调的 JSDoc，具名箭头也校验命名。"""
         self.assertEqual([], check_source("VarifyServer/a.js", "",

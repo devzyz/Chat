@@ -70,7 +70,8 @@ inline void ReceiptRequest(sql::Connection& connection, int uid, const Json::Val
                            bool report, Json::Value& response, int& peer) {
     ValidateReceiptRequest(request, report);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    const auto check_deadline = /** @brief 在事务关键阶段检查截止时间，超时抛回执期限错误。 */ [&] {
+    // 在事务关键阶段检查截止时间，超时抛回执期限错误。
+    const auto check_deadline = [&] {
         if (std::chrono::steady_clock::now() >= deadline) throw ReceiptError("DeadlineExceeded");
     };
     const int chat = request["chat_id"].asInt();

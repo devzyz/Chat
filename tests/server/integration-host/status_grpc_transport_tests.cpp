@@ -37,7 +37,8 @@ public:
 				block_next_read_ = false;
 				read_blocked_ = true;
 				fault_condition_.notify_all();
-				fault_condition_.wait(lock, /** 等待测试线程允许被阻塞的读取继续。 */ [this] { return release_read_; });
+				// 等待测试线程允许被阻塞的读取继续。
+				fault_condition_.wait(lock, [this] { return release_read_; });
 				read_completed_ = true;
 				fault_condition_.notify_all();
 			}
@@ -79,7 +80,8 @@ public:
 	/** 等待故障读取进入屏障，截止后返回失败。 */
 	bool WaitForReadBlocked(std::chrono::steady_clock::time_point deadline) {
 		std::unique_lock<std::mutex> lock(fault_mutex_);
-		return fault_condition_.wait_until(lock, deadline, /** 检查读取是否已进入阻塞状态。 */ [this] { return read_blocked_; });
+		// 检查读取是否已进入阻塞状态。
+		return fault_condition_.wait_until(lock, deadline, [this] { return read_blocked_; });
 	}
 
 	/** 释放读取屏障并通知等待线程。 */
@@ -94,7 +96,8 @@ public:
 	/** 等待故障读取越过屏障，截止后返回失败。 */
 	bool WaitForReadCompleted(std::chrono::steady_clock::time_point deadline) {
 		std::unique_lock<std::mutex> lock(fault_mutex_);
-		return fault_condition_.wait_until(lock, deadline, /** 检查被阻塞的读取是否已恢复完成。 */ [this] { return read_completed_; });
+		// 检查被阻塞的读取是否已恢复完成。
+		return fault_condition_.wait_until(lock, deadline, [this] { return read_completed_; });
 	}
 
 private:
@@ -266,7 +269,8 @@ TEST(T09_SGRPC_Fault, DeadlineExpiryIsBoundedAndClassified) {
 	grpc::ClientContext context;
 	context.set_deadline(std::chrono::system_clock::now() + 100ms);
 	message::GetChatServerRsp response;
-	auto call = std::async(std::launch::async, /** 在独立任务中发起将被存储屏障阻塞的选服请求。 */ [&] {
+	// 在独立任务中发起将被存储屏障阻塞的选服请求。
+	auto call = std::async(std::launch::async, [&] {
 		return InvokeAssignment(*stub, context, 106, response);
 	});
 
@@ -296,7 +300,8 @@ TEST(T09_SGRPC_Fault, ExplicitCancellationHasOneTerminalOutcome) {
 	grpc::ClientContext context;
 	context.set_deadline(std::chrono::system_clock::now() + 2s);
 	message::GetChatServerRsp response;
-	auto call = std::async(std::launch::async, /** 异步发起选服，供主测试线程显式取消。 */ [&] {
+	// 异步发起选服，供主测试线程显式取消。
+	auto call = std::async(std::launch::async, [&] {
 		return InvokeAssignment(*stub, context, 107, response);
 	});
 
@@ -343,11 +348,13 @@ TEST(T09_SGRPC_Fault, ShutdownDuringCallCancelsWithoutLateHostMutation) {
 	grpc::ClientContext context;
 	context.set_deadline(std::chrono::system_clock::now() + 2s);
 	message::GetChatServerRsp response;
-	auto call = std::async(std::launch::async, /** 异步发起选服，供服务关闭与其并发发生。 */ [&] {
+	// 异步发起选服，供服务关闭与其并发发生。
+	auto call = std::async(std::launch::async, [&] {
 		return InvokeAssignment(*stub, context, 109, response);
 	});
 	const bool entered = store->WaitForReadBlocked(std::chrono::steady_clock::now() + 1s);
-	auto stop = std::async(std::launch::async, /** 在独立任务中按短截止时间停止 gRPC 服务。 */ [&] {
+	// 在独立任务中按短截止时间停止 gRPC 服务。
+	auto stop = std::async(std::launch::async, [&] {
 		return server.Stop(std::chrono::system_clock::now() + 150ms);
 	});
 	ASSERT_TRUE(entered);
@@ -375,7 +382,8 @@ TEST(T09_SGRPC_Fault, LateCompletionCannotCrossRestartGeneration) {
 	grpc::ClientContext old_context;
 	old_context.set_deadline(std::chrono::system_clock::now() + 100ms);
 	message::GetChatServerRsp old_response;
-	auto old_call = std::async(std::launch::async, /** 通过旧服务桩发起将超时的选服请求。 */ [&] {
+	// 通过旧服务桩发起将超时的选服请求。
+	auto old_call = std::async(std::launch::async, [&] {
 		return InvokeAssignment(*old_stub, old_context, 110, old_response);
 	});
 	const bool entered = store->WaitForReadBlocked(std::chrono::steady_clock::now() + 1s);

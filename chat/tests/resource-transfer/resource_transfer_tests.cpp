@@ -265,7 +265,8 @@ private slots:
         editor.setAccount(endpoint.toString(), 7);
         editor.setUploadEnabled(true);
         connect(&editor, &LocalAvatar::uploadRequested, &sender, &AvatarCache::upload);
-        connect(&sender, &AvatarCache::published, &editor, /** 头像发布成功后结束编辑器上传状态。 */ [&editor] { editor.finishUpload(); });
+        // 头像发布成功后结束编辑器上传状态。
+        connect(&sender, &AvatarCache::published, &editor, [&editor] { editor.finishUpload(); });
         connect(&sender, &AvatarCache::uploadFailed, &editor, &LocalAvatar::finishUpload);
         QSignalSpy saved(&editor, &LocalAvatar::saved);
         QSignalSpy errors(&editor, &LocalAvatar::errorOccurred);
@@ -293,7 +294,8 @@ private slots:
         // A failed remote publication must never replace the confirmed image.
         disconnect(&sender, nullptr, &editor, nullptr);
         disconnect(&editor, &LocalAvatar::uploadRequested, &sender, &AvatarCache::upload);
-        connect(&editor, &LocalAvatar::uploadRequested, &editor, /** 头像发布失败后向编辑器提供固定拒绝原因。 */ [&editor](const QString &) {
+        // 头像发布失败后向编辑器提供固定拒绝原因。
+        connect(&editor, &LocalAvatar::uploadRequested, &editor, [&editor](const QString &) {
             editor.finishUpload("publication rejected");
         });
         sourceImage.fill(Qt::blue); QVERIFY(sourceImage.save(source));
@@ -384,7 +386,8 @@ private slots:
         {
             ResourceTransferManager first(endpoint, 7, "fixture-token", directory.path() + "/cache");
             QSignalSpy progress(&first, &ResourceTransferManager::progress);
-            connect(&first, &ResourceTransferManager::progress, &first, /** 上传至少一个块后取消，以保存可恢复的已确认偏移。 */ [&first](qint64 offset, qint64) {
+            // 上传至少一个块后取消，以保存可恢复的已确认偏移。
+            connect(&first, &ResourceTransferManager::progress, &first, [&first](qint64 offset, qint64) {
                 if (offset >= 65536) first.cancel();
             });
             first.upload(source);

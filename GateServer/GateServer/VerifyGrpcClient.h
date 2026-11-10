@@ -27,7 +27,8 @@ public:
         : rpc::BoundedPool<VarifyService::Stub>(
               pool_size,
               acquire_timeout,
-              /** @brief 为固定端点构造验证码服务 stub。 */ [endpoint = host + ":" + port] {
+              // 为固定端点构造验证码服务 stub。
+              [endpoint = host + ":" + port] {
                   return VarifyService::NewStub(grpc::CreateChannel(
                       endpoint,
                       grpc::InsecureChannelCredentials()));

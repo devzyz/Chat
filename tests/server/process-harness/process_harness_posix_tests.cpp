@@ -18,7 +18,8 @@ int main() {
             auto exited = integration::ProcessHarness::Start(*race_context, exit_spec);
             const auto deadline = std::chrono::steady_clock::now() + 2s;
             bool first_probe = true;
-            if (!exited->WaitReady(/** 固定退出发生在首次探针旧结果与存活检查之间，保护最终完成观察。 */ [&] {
+            // 固定退出发生在首次探针旧结果与存活检查之间，保护最终完成观察。
+            if (!exited->WaitReady([&] {
                 if (first_probe) {
                     first_probe = false;
                     while (!exited->CollectEvidence().exit_code.has_value() && std::chrono::steady_clock::now() < deadline) {
@@ -39,7 +40,8 @@ int main() {
         spec.arguments = {L"-c", L"trap '' TERM; printf ready; while :; do :; done"};
         spec.working_directory = root;
         auto harness = integration::ProcessHarness::Start(*context, spec);
-        if (!harness->WaitReady(/** 以子进程输出 ready 作为本场景的就绪条件。 */ [&] { return harness->CollectEvidence().stdout_text == "ready"; },
+        // 以子进程输出 ready 作为本场景的就绪条件。
+        if (!harness->WaitReady([&] { return harness->CollectEvidence().stdout_text == "ready"; },
                 std::chrono::steady_clock::now() + 2s)) {
             throw std::runtime_error("harness did not observe child handshake");
         }

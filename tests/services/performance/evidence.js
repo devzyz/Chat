@@ -22,7 +22,8 @@ function preserveLogs(root, destination, secrets) {
             finally { fs.closeSync(handle); }
             let text = bytes.toString('utf8');
             if (offset > 0) text = text.includes('\n') ? text.slice(text.indexOf('\n') + 1) : '';
-            text = text.split('\n').filter(/** 敏感协议与 SQL 整行剔除，不导出业务正文。 */ line =>
+            // 敏感协议与 SQL 整行剔除，不导出业务正文。
+            text = text.split('\n').filter(line =>
                 !/token|passwd|password|验证码|varify|verifycode|SELECT |INSERT |UPDATE /i.test(line)).join('\n');
             for (const secret of secrets.filter(Boolean)) text = text.replaceAll(secret, '<redacted>');
             const target = path.join(destination, prefix, name);

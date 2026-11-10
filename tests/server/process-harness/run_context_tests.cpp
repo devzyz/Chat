@@ -68,7 +68,8 @@ TEST(T09_PROC_RunContext, RequiresFutureAbsoluteDeadlineAndCommittedResourceOwne
 	const auto slot = context->ReserveProcessSlot("helper");
 	integration::ProcessIdentity identity{4242, 123456};
 	EXPECT_FALSE(context->IsOwnedProcess(identity));
-	context->CommitProcess(slot, identity, /** 提供成功清理结果供上下文生命周期断言。 */ [] { return integration::CleanupStatus::Success("stopped"); });
+	// 提供成功清理结果供上下文生命周期断言。
+	context->CommitProcess(slot, identity, [] { return integration::CleanupStatus::Success("stopped"); });
 	EXPECT_TRUE(context->IsOwnedProcess(identity));
 	EXPECT_FALSE(context->CleanupProcess(integration::ProcessIdentity{4242, 123457}));
 }
@@ -80,11 +81,13 @@ TEST(T09_PROC_RunContext, TeardownIsReverseOrderedAndPreservesPrimaryAndCleanupF
 	std::vector<std::string> order;
 	const auto first = context->ReserveProcessSlot("first");
 	const auto second = context->ReserveProcessSlot("second");
-	context->CommitProcess(first, {1001, 11}, /** 记录先登记的清理动作，并返回成功。 */ [&] {
+	// 记录先登记的清理动作，并返回成功。
+	context->CommitProcess(first, {1001, 11}, [&] {
 		order.push_back("first");
 		return integration::CleanupStatus::Success("first stopped");
 	});
-	context->CommitProcess(second, {1002, 12}, /** 记录后登记的清理动作，并返回独立清理失败。 */ [&] {
+	// 记录后登记的清理动作，并返回独立清理失败。
+	context->CommitProcess(second, {1002, 12}, [&] {
 		order.push_back("second");
 		return integration::CleanupStatus::Failure("cleanup marker");
 	});
