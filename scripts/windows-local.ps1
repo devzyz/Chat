@@ -1010,7 +1010,7 @@ function Confirm-TestStructure {
     if ($componentProject -notmatch 'ChatTransport\.vcxproj' -or
         $integrationProject -notmatch 'session_runtime_integration_tests\.cpp' -or
         $chatSessionSource -notmatch '_frames\.size\(\)\s*>=\s*MAX_SENDQUE' -or
-        $chatSessionSource -notmatch 'bind_executor\(_strand' -or
+        $chatSessionSource -notmatch 'bind_executor\(\s*_strand' -or
         $chatSessionSource -notmatch 'SessionState::Closing') {
         throw 'Session contracts must exercise the shared strand runtime with bounded writes and idempotent close.'
     }

@@ -55,6 +55,13 @@
 
 语言特定命名、Qt 例外和 PowerShell 规则见 [Languages.md](Languages.md)，C++ 规则见 [Native.md](Native.md)。
 
+### C++ 排版
+
+自有 C++ 代码统一使用根目录的 [.clang-format](../.clang-format)。函数声明和调用尽量写在一行；
+超过 120 列时在参数边界换行。左花括号跟随声明或控制语句，非空函数与 lambda 的函数体另起一行，
+指针和引用靠类型。保留 include 顺序、字符串和注释正文。Windows CI 静态检查覆盖全部受管文件，
+本地检查及批量排版命令见[规范测试入口](../tests/build/conventions/README.md#c-排版)。
+
 ## 类与函数注释
 
 - 每个自有类、结构体、模板类 MUST 在声明正上方用中文说明职责；涉及所有权、线程或生命周期时补充约束。

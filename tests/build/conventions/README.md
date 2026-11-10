@@ -45,3 +45,15 @@ commit 范围排除目标分支已包含的提交及固定历史祖先。缺失�
 本地与 CI 共用同一 Python 实现及 PowerShell 入口。任何断言失败或检查器非零退出都会使 static-check
 失败，继而阻断现有 Windows 汇总；不新增悬空 Required Check，不计入业务 JUnit 报告数量。
 语义、所有权和线程真实性仍需评审；支持边界见 [CI 治理](../../CI-GOVERNANCE.md#12-规范检查合同)。
+
+## C++ 排版
+
+在仓库根目录运行以下命令。默认检查全部受 Git 跟踪的自有 C++ 源码、头文件及测试；
+第三方包、生成文件及用户维护的 `tests/auto/` 在清单之外。指定 `--write` 将同一套规则应用到源码。
+
+```powershell
+python -m pip install --no-deps --only-binary=:all: --target build/conventions/formatter clang-format==19.1.5
+python scripts/conventions/cpp_format.py --binary build/conventions/formatter/clang_format/data/bin/clang-format.exe
+```
+
+已安装 clang-format 19.1.5 时可通过 `--binary` 指定其路径，或直接使用 PATH 中的同版本程序。
