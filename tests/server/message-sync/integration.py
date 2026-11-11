@@ -54,12 +54,15 @@ def tcp_flow(directory, mysql_command, mysql_port):
                     (directory / f"chat-{index}.stdout").read_text(errors="replace"))
                 raise
 
-        def login(index, uid, social=False):
+        def login(index, uid, social=False, expected_friends=None):
             sock = socket.create_connection(("127.0.0.1", tcp_ports[index]), timeout=10)
             sockets.append(sock)
             capabilities = ["message_receipts_v1", "group_membership_v1"] + (["basic_social_v1"] if social else [])
             send(sock, 1005, {"uid": uid, "token": "fixture-token", "capabilities": capabilities})
-            assert receive(sock, 1006)["capabilities"] == capabilities
+            response = receive(sock, 1006)
+            assert response["capabilities"] == capabilities
+            if expected_friends is not None:
+                assert sorted(response["friend_list"], key=lambda row: row["uid"]) == expected_friends
             return sock
 
         def sync(sock, after):
@@ -69,7 +72,34 @@ def tcp_flow(directory, mysql_command, mysql_port):
             assert response["after_id"] == after and response["request_id"] == request["request_id"]
             return response
 
-        sender = login(0, 7)
+        # Warm the DAO before measuring prepared statements on this isolated MySQL instance.
+        login(0, 7).close()
+
+        def statement_count():
+            output = subprocess.check_output(mysql_command + ["-BN", "-e",
+                "SHOW GLOBAL STATUS LIKE 'Com_stmt_execute'"], text=True, timeout=10)
+            return int(output.split()[1])
+
+        def measured_login(expected_friends):
+            before = statement_count()
+            sock = login(0, 7, expected_friends=expected_friends)
+            return sock, statement_count() - before
+
+        friends = [dict(uid=8, name="receiver", description="", icon="", sex=0, backname="")]
+        one, one_count = measured_login(friends)
+        one.close()
+        subprocess.run(mysql_command, input="""USE message_sync_test;
+            INSERT INTO friend(self_id,other_id,backname) VALUES(7,9,'school'),(7,10,'work');
+            UPDATE user SET description='test bio',icon='test.png',sex=1 WHERE uid=9;""",
+            text=True, check=True, timeout=10)
+        friends.extend([dict(uid=9, name="nine", description="test bio", icon="test.png", sex=1, backname="school"),
+                        dict(uid=10, name="ten", description="", icon="", sex=0, backname="work")])
+        sender, three_count = measured_login(friends)
+        assert three_count == one_count > 0, (one_count, three_count)
+        print(f"Legacy login: 1 and 3 friends each used {one_count} prepared statement executions")
+        subprocess.run(mysql_command, input="""USE message_sync_test;
+            DELETE FROM friend WHERE self_id=7 AND other_id IN (9,10);
+            UPDATE user SET description='',icon='',sex=0 WHERE uid=9;""", text=True, check=True, timeout=10)
         # Search identity is optional for legacy clients, mandatory for safe new-client retry.
         search_id = "00000000-0000-4000-8000-000000000701"
         send(sender, 1007, {"uid_name": "8", "request_id": search_id})
@@ -347,6 +377,8 @@ def tcp_flow(directory, mysql_command, mysql_port):
         send(sender,1016,batch)
         ack = receive(sender,1017)
         assert len(ack["uuid_msgId"]) == 20
+        notification = receive(receiver,1018)
+        assert [item["message_id"] for item in notification["notify_msgs"]] == [item["message_id"] for item in ack["uuid_msgId"]]
         send(sender,1016,batch)
         assert receive(sender,1017)["uuid_msgId"] == ack["uuid_msgId"]
         print("Social UTF-8: relogin, complete directory and 20-item ACK retry passed")
