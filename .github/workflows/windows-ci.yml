@@ -84,20 +84,10 @@ jobs:
               throw 'Chat.sln still references a legacy ChatServer1/ChatServer2 project.'
           }
 
-          $projectFiles = @(
-              'GateServer/GateServer/GateServer.vcxproj'
-              'GateServer/GateServer/GateGrpcClients.vcxproj'
-              'ChatServer/ChatServer/ChatServer.vcxproj'
-              'ChatServer/ChatServer/ChatGrpcClients.vcxproj'
-              'ResourceServer/ResourceServer/ResourceServer/ResourceServer.vcxproj'
-              'tests/server/resource/ResourceTests.vcxproj'
-              'tests/server/ServerUnitTests.vcxproj'
-              'tests/server/ServerComponentTests.vcxproj'
-              'tests/server/ServerIntegrationTests.vcxproj'
-              'tests/server/ChatGrpcClientTests.vcxproj'
-              'tests/server/lifecycle/GateAsioPoolTests.vcxproj'
-              'tests/server/lifecycle/StatusAsioPoolTests.vcxproj'
-          )
+          $projectFiles = @(git ls-files -- '*.vcxproj')
+          if ($LASTEXITCODE -ne 0 -or $projectFiles.Count -eq 0) {
+              throw 'Unable to enumerate tracked MSBuild projects.'
+          }
           foreach ($projectFile in $projectFiles) {
               try {
                   [void][xml](Get-Content -LiteralPath $projectFile -Raw)
