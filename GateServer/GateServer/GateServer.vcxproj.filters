@@ -106,7 +106,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\proto\status.proto" />
     <None Include="..\..\proto\varify.proto" />
     <None Include="config.ini" />
   </ItemGroup>

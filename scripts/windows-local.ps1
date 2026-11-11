@@ -926,7 +926,7 @@ function Confirm-TestStructure {
         @([regex]::Matches($chatTcpTransportTests, 'T09-CTCP-(?:0[1-9]|1[0-6])')).Count -ne 16) {
         throw 'Chat TCP transport tests must register exactly T09-CTCP-01..16 as sixteen Server Integration testcases.'
     }
-    if ($chatTransportProject -match '(?i)RedisMgr|MysqlMgr|StatusGrpcClient|ChatGrpcClient') {
+    if ($chatTransportProject -match '(?i)RedisMgr|MysqlMgr|ChatGrpcClient') {
         throw 'ChatTransport must remain isolated from Redis, MySQL, Status, and peer-RPC dependency managers.'
     }
     if ($unitProject -notmatch 'gate_routing_unit_tests\.cpp' -or
@@ -996,7 +996,7 @@ function Confirm-TestStructure {
             throw "Gate route '$($route.Key)' must call the shared GateRequest Module through the GateResponse Interface with endpoint $($route.Value)."
         }
     }
-    if ($gateLogic -match 'VerifyGrpcClient|RedisMgr|MysqlMgr|StatusGrpcClient') {
+    if ($gateLogic -match 'VerifyGrpcClient|RedisMgr|MysqlMgr') {
         throw 'LogicSystem routes must not bypass the GateRequest production Adapters.'
     }
     if ($integrationProject -notmatch 'startup\\gate_status_startup_tests\.cpp') {
@@ -1024,7 +1024,7 @@ function Confirm-TestStructure {
             throw "Server Integration tests must register the $($registration.Owner)."
         }
     }
-    if ($integrationProject -match 'ClCompile Include="[^"]*(?:LogicDispatcher|ChatSessionState|GateRequest|StatusRouting)(?:Production)?\.cpp"') {
+    if ($integrationProject -match 'ClCompile Include="[^"]*(?:LogicDispatcher|ChatSessionState|GateRequest|GateRouting)(?:Production)?\.cpp"') {
         throw 'Server Integration tests must link shared Phase 3A targets instead of compiling production implementations directly.'
     }
     $formalCompositionTests = Get-Content -LiteralPath `

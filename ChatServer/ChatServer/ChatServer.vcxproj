@@ -175,7 +175,6 @@
     <None Include="configs\chat-01.ini" />
     <None Include="configs\chat-02.ini" />
     <None Include="..\..\proto\chat.proto" />
-    <None Include="..\..\proto\status.proto" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="ChatTransport.vcxproj">

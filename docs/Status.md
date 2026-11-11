@@ -1,6 +1,6 @@
 # 项目当前状态
 
-2026-11-11：StatusServer 已从运行、构建及发布拓扑退役。Gate 负责选服和签发，Chat 与 Resource 读取 Redis 校验凭据。旧服务与客户端源码暂存，status.proto 和生成快照作为协议存档保留。
+2026-11-11：StatusServer 已从运行、构建及发布拓扑退役。Gate 负责选服和签发，Chat 与 Resource 读取 Redis 校验凭据。已移除旧服务工程、专属客户端、协议源及生成快照；旧实现通过 Git 历史查阅。初始发布描述符继续用于检查在用协议。
 
 Windows Release 的正式 Server 回归通过 226 项（6 份报告），包冒烟通过 6 项。解包服务连接隔离 MySQL 与 Redis 后，双实例消息、资源上传下载、实例租约失效切换及 Resource 就绪恢复通过。通过在 Redis 回复与调用方之间注入撤销，验证 Gate 拒绝迟到签发、Chat 拒绝绑定已撤销凭据。Linux 已验证 CMake 构建图和 preflight 合同，本轮未执行 Linux 原生构建或部署。
 

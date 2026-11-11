@@ -159,7 +159,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="config.ini" />
-    <None Include="..\..\proto\status.proto" />
     <None Include="..\..\proto\varify.proto" />
   </ItemGroup>
   <ItemGroup>

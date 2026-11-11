@@ -640,7 +640,7 @@ Domain/Level：Foundation / Unit。
 | --- | --- | --- |
 | V02-PROTO-01 | `shared verification constants keep their wire-visible values` | 错误码数值稳定 |
 | V02-PROTO-02 | `loaded protobuf exposes the verification RPC request and response types` | descriptor 暴露正确 RPC 和消息类型 |
-| V02-PROTO-03 | `repository canonical proto module is the sole editable wire authority` | 仅 `proto/varify.proto`、`status.proto`、`chat.proto` 为 editable authority |
+| V02-PROTO-03 | `repository canonical proto module is the sole editable wire authority` | 仅 `proto/varify.proto`、`chat.proto` 为 editable authority |
 | V02-PROTO-04 | `protocol compatibility command accepts the canonical contract and generated consumers` | 固定生成链、descriptor 兼容与提交式 generated drift 同时 GREEN |
 | V02-PROTO-05 | `compatibility command rejects isolated field-number and RPC-name drift` | 隔离副本字段号或 RPC rename 必须 RED，不修改 canonical/baseline |
 | V02-PROTO-06 | `current Node consumer parses the initial wire fixture with unknown fields` | 当前 Node 解析迁移前固定 payload；unknown field 不破坏公开 email |

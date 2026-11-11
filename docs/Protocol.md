@@ -37,7 +37,7 @@ ResourceServer HTTP、头像权限、用户目录和资源消息合同见 [Resou
 
 ## 范围
 
-本规范覆盖 `proto/chat.proto`、`proto/status.proto`、`proto/varify.proto`、gRPC、GateServer/ResourceServer HTTP、ChatServer TCP 包、Redis key/value 和 MySQL 持久化边界。它约束项目定义的契约，不测试或重写第三方库内部实现。
+本规范覆盖 `proto/chat.proto`、`proto/varify.proto`、gRPC、GateServer/ResourceServer HTTP、ChatServer TCP 包、Redis key/value 和 MySQL 持久化边界。它约束项目定义的契约，不测试或重写第三方库内部实现。
 
 ## protobuf
 

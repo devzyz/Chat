@@ -1,14 +1,13 @@
 # Canonical protocol module
 
-The three editable protobuf authorities are split by owning service:
+The two editable protobuf authorities are split by owning service:
 
 | Source | Owner and consumers |
 | --- | --- |
 | `varify.proto` | Varify owns; Gate C++ and Varify Node consume |
-| `status.proto` | Archived internal service contract; retained for descriptor and generated snapshot checks only |
 | `chat.proto` | Chat owns; Chat C++ alone consumes |
 
-All files retain `package message` and the migration-preexisting service, RPC,
+The active services retain `package message` and the migration-preexisting service, RPC,
 message, field-number, type, and cardinality contracts. Generated C++ under
 `generated/proto/cpp` is reproducible output, not an editable authority.
 
@@ -43,7 +42,7 @@ are protobuf/protoc 6.33.4 (`libprotoc 33.4`) and gRPC/grpc_cpp_plugin 1.76.0.
 Node loads `varify.proto` directly with lockfile-pinned `@grpc/grpc-js` 1.14.3,
 `@grpc/proto-loader` 0.8.0, and `protobufjs` 7.5.5. CI pins Node 22.
 
-`CheckProtocols` regenerates all twelve C++ files in an isolated temporary
+`CheckProtocols` regenerates all eight C++ files in an isolated temporary
 directory, rejects missing, modified, or unexpected generated outputs, and
 rejects unregistered canonical or legacy service-local proto authorities. It
 then creates a current descriptor set and compares it semantically with the
@@ -58,7 +57,7 @@ not a delivery/read acknowledgement. Existing fields and RPCs are unchanged. See
 [message state protocol](../docs/MessageStates.md#回执与同步).
 
 `varify.proto` adds `GetVarifyReq.purpose` (field 2): empty means registration;
-`reset_password` uses an independent code namespace. The archived `status.proto`
-retains `GetChatServerReq.auth_version` at field 2 for descriptor compatibility.
+`reset_password` uses an independent code namespace. The initial release descriptor is retained as historical test input. The compatibility
+check allows removal of StatusService and its four private request/response types.
 Gate now compares the revocation epoch and writes the expiring token in one Redis
 operation. Chat and Resource check that token directly. See the [authentication contract](../docs/Protocol.md).

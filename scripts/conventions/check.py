@@ -16,7 +16,7 @@ from syntax import affected_symbols, check_source, language_for, parse, problems
 
 EXCLUDED = ("chat/packages/", "generated/", "tests/auto/", "build/", "Cache/", "help/", "interview/",
             "vcpkg_installed/", ".git/")
-OWNED = ("chat/", "ChatServer/", "GateServer/", "StatusServer/", "ResourceServer/", "common/",
+OWNED = ("chat/", "ChatServer/", "GateServer/", "ResourceServer/", "common/",
          "VarifyServer/", "scripts/", "tests/", "schema/", "proto/", "cmake/", "triplets/", ".github/")
 
 
