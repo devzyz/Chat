@@ -17,9 +17,14 @@ namespace {
 using namespace std::chrono_literals;
 volatile std::sig_atomic_t stopping = 0;
 /** 以信号安全的标志通知主流程停止。 */
-void StopSignal(int) { stopping = 1; }
+void StopSignal(int) {
+    stopping = 1;
+}
 /** 条件不满足时抛出统一合同错误，避免泄漏协议敏感内容。 */
-void Require(bool condition) { if (!condition) throw std::runtime_error("four_process_contract"); }
+void Require(bool condition) {
+    if (!condition)
+        throw std::runtime_error("four_process_contract");
+}
 /** 解析 JSON 输入，格式错误时中止合同。 */
 Json::Value Parse(const std::string& input) {
     Json::Value value;
@@ -36,8 +41,9 @@ public:
     /** 在有界异步操作中连接指定 loopback 端口。 */
     explicit WireClient(unsigned short port) : socket_(io_), timer_(io_) {
         // 启动 TCP 连接并把结果交给统一完成回调。
-        Run([&](auto done) { socket_.async_connect(
-            {boost::asio::ip::make_address("127.0.0.1"), port}, done); });
+        Run([&](auto done) {
+            socket_.async_connect({boost::asio::ip::make_address("127.0.0.1"), port}, done);
+        });
     }
     /** 编码并发送完整请求；普通模式要求响应帧，拒绝模式仅接受零响应字节后的明确断开。 */
     Json::Value Request(int id, const Json::Value& body, bool expect_disconnect = false) {
@@ -46,22 +52,34 @@ public:
         const auto header = ChatFrameCodec::EncodeHeader(id, static_cast<std::uint16_t>(text.size()));
         const auto bytes = std::string(reinterpret_cast<const char*>(header.data()), header.size()) + text;
         // 异步写入完整请求字节，保持缓冲有效直到操作完成。
-        Run([&](auto done) { boost::asio::async_write(socket_, boost::asio::buffer(bytes),
-            // 将写入错误交给统一截止管理。
-            [done](auto error, auto) { done(error); }); });
+        Run([&](auto done) {
+            boost::asio::async_write(
+                socket_,
+                boost::asio::buffer(bytes),
+                // 将写入错误交给统一截止管理。
+                [done](auto error, auto) {
+                    done(error);
+                });
+        });
         ChatFrameCodec::HeaderBytes response{};
         std::size_t header_bytes = 0;
         // 异步读取响应帧头，保留字节数以拒绝截断帧。
-        const auto header_error = Run([&](auto done) {
-            boost::asio::async_read(socket_, boost::asio::buffer(response),
-                // 保存实际字节数并将读取结果交给统一截止管理。
-                [done, &header_bytes](auto error, auto bytes) {
-                    header_bytes = bytes; done(error);
-                });
-        }, expect_disconnect);
+        const auto header_error = Run(
+            [&](auto done) {
+                boost::asio::async_read(
+                    socket_,
+                    boost::asio::buffer(response),
+                    // 保存实际字节数并将读取结果交给统一截止管理。
+                    [done, &header_bytes](auto error, auto bytes) {
+                        header_bytes = bytes;
+                        done(error);
+                    });
+            },
+            expect_disconnect);
         if (expect_disconnect) {
-            Require(header_bytes == 0 && (header_error == boost::asio::error::eof ||
-                header_error == boost::asio::error::connection_reset));
+            Require(
+                header_bytes == 0 &&
+                (header_error == boost::asio::error::eof || header_error == boost::asio::error::connection_reset));
             Json::Value rejected;
             rejected["disconnected"] = true;
             return rejected;
@@ -70,23 +88,39 @@ public:
         Require(decoded && decoded->message_id == id + 1);
         std::string result(decoded->body_length, '\0');
         // 异步读取帧头声明的完整载荷。
-        Run([&](auto done) { boost::asio::async_read(socket_, boost::asio::buffer(result),
-            // 将载荷读取结果交给统一截止管理。
-            [done](auto error, auto) { done(error); }); });
+        Run([&](auto done) {
+            boost::asio::async_read(
+                socket_,
+                boost::asio::buffer(result),
+                // 将载荷读取结果交给统一截止管理。
+                [done](auto error, auto) {
+                    done(error);
+                });
+        });
         return Parse(result);
     }
+
 private:
     /** 为单次异步动作提供五秒期限；观察模式返回错误供调用方严格分类，默认失败即中止。 */
-    template<class Action> boost::system::error_code Run(Action action, bool observe_error = false) {
+    template <class Action> boost::system::error_code Run(Action action, bool observe_error = false) {
         io_.restart();
         boost::system::error_code result = boost::asio::error::timed_out;
         timer_.expires_after(5s);
         // 期限到达时关闭连接以结束未完成操作。
-        timer_.async_wait([&](auto error) { if (!error) { boost::system::error_code ignored; socket_.close(ignored); } });
+        timer_.async_wait([&](auto error) {
+            if (!error) {
+                boost::system::error_code ignored;
+                socket_.close(ignored);
+            }
+        });
         // 保存动作结果并取消超时计时器。
-        action([&](auto error) { result = error; timer_.cancel(); });
+        action([&](auto error) {
+            result = error;
+            timer_.cancel();
+        });
         io_.run();
-        if (!observe_error) Require(!result);
+        if (!observe_error)
+            Require(!result);
         return result;
     }
     boost::asio::io_context io_;
@@ -110,10 +144,12 @@ int Chat() {
     if (login["error"].asInt() == 0) {
         for (const auto& request : input["requests"]) {
             const int id = request["id"].asInt();
-            Require(id == MSG_CREATE_PRIVATE_CHAT_REQ || id == MSG_TEXT_CHAT_MSG_REQ || id == MSG_LOAD_CHAT_MESSAGE_REQ);
+            Require(
+                id == MSG_CREATE_PRIVATE_CHAT_REQ || id == MSG_TEXT_CHAT_MSG_REQ || id == MSG_LOAD_CHAT_MESSAGE_REQ);
             const bool expect_disconnect = request.get("expect_disconnect", false).asBool();
             output["responses"].append(client.Request(id, request["body"], expect_disconnect));
-            if (expect_disconnect) break;
+            if (expect_disconnect)
+                break;
         }
     }
     // Login tokens and private account data never leave the helper.
@@ -128,13 +164,16 @@ int Supervise(int argc, char** argv) {
     std::signal(SIGINT, StopSignal);
     // Performance runs retain the same owner/cleanup contract with a bounded longer lease.
     const auto* profile = std::getenv("CHAT_PERFORMANCE_PROFILE");
-    if (profile) Require(std::string(profile) == "smoke" || std::string(profile) == "baseline" || std::string(profile) == "stress");
+    if (profile)
+        Require(
+            std::string(profile) == "smoke" || std::string(profile) == "baseline" || std::string(profile) == "stress");
     auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + (profile ? 2640s : 600s));
     integration::ProcessSpec spec;
     spec.executable = std::filesystem::absolute(argv[2]);
     Require(std::filesystem::is_directory(std::filesystem::absolute(argv[3])));
     spec.working_directory = context->TempRoot();
-    for (int index = 5; index < argc; ++index) spec.arguments.push_back(std::filesystem::path(argv[index]).wstring());
+    for (int index = 5; index < argc; ++index)
+        spec.arguments.push_back(std::filesystem::path(argv[index]).wstring());
     auto child = integration::ProcessHarness::Start(*context, std::move(spec));
     {
         const auto identity = child->Identity();
@@ -146,7 +185,10 @@ int Supervise(int argc, char** argv) {
         Require(static_cast<bool>(output));
     }
     // 在收到停止信号或子进程退出时结束监督等待。
-    const bool completed = child->WaitReady([&] { return stopping || child->CollectEvidence().exit_code.has_value(); },
+    const bool completed = child->WaitReady(
+        [&] {
+            return stopping || child->CollectEvidence().exit_code.has_value();
+        },
         context->Deadline() - 15s);
     const auto cleanup = child->Stop(std::chrono::steady_clock::now() + 10s);
     const auto evidence = child->CollectEvidence();
@@ -177,14 +219,25 @@ int main(int argc, char** argv) {
             Require(std::filesystem::path(argv[2]).is_absolute());
             std::signal(SIGTERM, StopSignal);
             std::signal(SIGINT, StopSignal);
-            FrameFaultRelay relay(static_cast<unsigned short>(port), static_cast<unsigned short>(backend),
-                config["dropUuid"].asString(), config["replayUuid"].asString(), argv[2]);
+            FrameFaultRelay relay(
+                static_cast<unsigned short>(port),
+                static_cast<unsigned short>(backend),
+                config["dropUuid"].asString(),
+                config["replayUuid"].asString(),
+                argv[2]);
             // 向中继报告是否已收到停止信号。
-            return relay.Run([] { return stopping != 0; });
+            return relay.Run([] {
+                return stopping != 0;
+            });
         }
-        if (std::string(argv[1]) == "chat") return Chat();
-        if (std::string(argv[1]) == "supervise") return Supervise(argc, argv);
-        if (std::string(argv[1]) == "validation") return 0;
-    } catch (const std::exception&) { std::cerr << "four_process_driver_failed\n"; }
+        if (std::string(argv[1]) == "chat")
+            return Chat();
+        if (std::string(argv[1]) == "supervise")
+            return Supervise(argc, argv);
+        if (std::string(argv[1]) == "validation")
+            return 0;
+    } catch (const std::exception&) {
+        std::cerr << "four_process_driver_failed\n";
+    }
     return 1;
 }

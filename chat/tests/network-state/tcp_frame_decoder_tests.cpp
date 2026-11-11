@@ -8,8 +8,7 @@
 namespace {
 
 /** 按网络协议组合消息编号、正文长度及正文，供分片与粘包测试。 */
-QByteArray frame(quint16 messageId, const QByteArray &body)
-{
+QByteArray frame(quint16 messageId, const QByteArray& body) {
     QByteArray bytes;
     QDataStream stream(&bytes, QIODevice::WriteOnly);
     stream.setVersion(QDataStream::Qt_6_0);
@@ -19,8 +18,7 @@ QByteArray frame(quint16 messageId, const QByteArray &body)
 }
 
 /** 断言失败时输出定位信息并返回条件值，供累积测试结果。 */
-bool expect(bool condition, const char *message)
-{
+bool expect(bool condition, const char* message) {
     if (!condition) {
         std::cerr << message << '\n';
     }
@@ -30,8 +28,7 @@ bool expect(bool condition, const char *message)
 } // namespace
 
 /** 验证帧头及正文分片、粘包、非法长度和重置后的缓冲状态。 */
-int main(int argc, char *argv[])
-{
+int main(int argc, char* argv[]) {
     QCoreApplication application(argc, argv);
     bool passed = true;
 
@@ -54,8 +51,7 @@ int main(int argc, char *argv[])
 
     // T07-FRM-03
     TcpFrameDecoder adjacent;
-    const auto adjacentFrames = adjacent.append(
-        frame(1006, QByteArray("one", 3)) + frame(1021, QByteArray()));
+    const auto adjacentFrames = adjacent.append(frame(1006, QByteArray("one", 3)) + frame(1021, QByteArray()));
     passed &= expect(adjacentFrames.size() == 2, "adjacent frames were not both emitted");
     passed &= expect(adjacentFrames[0].messageId == 1006, "first adjacent frame id changed");
     passed &= expect(adjacentFrames[0].body == QByteArray("one", 3), "first adjacent frame body changed");
@@ -66,42 +62,41 @@ int main(int argc, char *argv[])
     // T07-FRM-04: connection lifecycle reset discards an old partial frame.
     TcpFrameDecoder reconnected;
     const auto staleFrame = frame(1006, QByteArray("stale", 5));
-    passed &= expect(reconnected.append(staleFrame.left(6)).isEmpty(),
-                     "partial old-connection frame emitted early");
-    passed &= expect(reconnected.bufferedBytes() == 6,
-                     "partial old-connection frame was not buffered");
+    passed &= expect(reconnected.append(staleFrame.left(6)).isEmpty(), "partial old-connection frame emitted early");
+    passed &= expect(reconnected.bufferedBytes() == 6, "partial old-connection frame was not buffered");
     reconnected.reset();
-    passed &= expect(reconnected.bufferedBytes() == 0,
-                     "connection reset retained old frame bytes");
+    passed &= expect(reconnected.bufferedBytes() == 0, "connection reset retained old frame bytes");
     const auto freshFrames = reconnected.append(frame(1021, QByteArray("fresh", 5)));
-    passed &= expect(freshFrames.size() == 1,
-                     "fresh connection frame did not decode independently");
-    passed &= expect(freshFrames[0].messageId == 1021,
-                     "fresh connection frame inherited the old message id");
-    passed &= expect(freshFrames[0].body == QByteArray("fresh", 5),
-                     "fresh connection frame inherited old body bytes");
+    passed &= expect(freshFrames.size() == 1, "fresh connection frame did not decode independently");
+    passed &= expect(freshFrames[0].messageId == 1021, "fresh connection frame inherited the old message id");
+    passed &= expect(freshFrames[0].body == QByteArray("fresh", 5), "fresh connection frame inherited old body bytes");
 
     for (const quint16 id : {1006, 1017}) {
         TcpFrameDecoder expanded;
         const QByteArray body(8192, 'x');
         const auto frames = expanded.append(frame(id, body));
-        passed &= expect(frames.size() == 1 && frames[0].body == body,
-                         "login or acknowledgement response rejected at its boundary");
+        passed &= expect(
+            frames.size() == 1 && frames[0].body == body,
+            "login or acknowledgement response rejected at its boundary");
     }
     TcpFrameDecoder history;
     const QByteArray historyBody(65535, 'x');
     const auto historyFrames = history.append(frame(1028, historyBody));
-    passed &= expect(historyFrames.size() == 1 && historyFrames[0].body == historyBody,
-                     "history response did not preserve the full uint16 body");
+    passed &= expect(
+        historyFrames.size() == 1 && historyFrames[0].body == historyBody,
+        "history response did not preserve the full uint16 body");
     TcpFrameDecoder bounded;
     TcpFrameDecoder social;
     const QByteArray socialBody(8192, 's');
     const auto socialFrames = social.append(frame(1047, socialBody));
-    passed &= expect(socialFrames.size() == 1 && socialFrames[0].body == socialBody,
-                     "social directory response did not preserve its bounded body");
-    passed &= expect(social.append(frame(1047, QByteArray(8193, 's'))).isEmpty()
-                     && social.hasError(), "social directory accepted an oversized body");
-    passed &= expect(bounded.append(frame(1018, QByteArray(2049, 'x'))).isEmpty()
-                     && bounded.hasError(), "non-history response exceeded its existing bound");
+    passed &= expect(
+        socialFrames.size() == 1 && socialFrames[0].body == socialBody,
+        "social directory response did not preserve its bounded body");
+    passed &= expect(
+        social.append(frame(1047, QByteArray(8193, 's'))).isEmpty() && social.hasError(),
+        "social directory accepted an oversized body");
+    passed &= expect(
+        bounded.append(frame(1018, QByteArray(2049, 'x'))).isEmpty() && bounded.hasError(),
+        "non-history response exceeded its existing bound");
     return passed ? 0 : 1;
 }

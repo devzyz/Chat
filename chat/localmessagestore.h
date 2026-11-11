@@ -53,55 +53,62 @@ public:
     /** @brief 单调保存已展示的本地消息编号上界，不清除之后落盘的新消息，也不生成已读回执。 */
     void markConversationSeen(int chatId, qint64 throughLocalId);
     /** @brief 事务合并联系人、会话和申请；缺失记录不代表删除，approved_uid 同时更新已有申请状态。 */
-    QJsonObject mergeDirectory(const QJsonObject &directory);
+    QJsonObject mergeDirectory(const QJsonObject& directory);
     /** @brief 读取账号目录，用于恢复内存查询缓存。 */
     QJsonObject directory();
     /** @brief 读取已持久化群状态；非群返回空对象。 */
     QJsonObject groupState(int chatId);
     /** @brief 检查请求所属群资格，防止旧 outbox 在重新入群后发送。 */
-    bool canSendGroup(const QJsonObject &request);
+    bool canSendGroup(const QJsonObject& request);
     /** @brief 按本地消息主键倒序搜索当前会话正文和资源文件名，最多返回 limit 条。 */
-    QVector<StoredMessage> search(int chatId, const QString &text, qint64 before = 0, int limit = 50);
+    QVector<StoredMessage> search(int chatId, const QString& text, qint64 before = 0, int limit = 50);
     /** @brief 按固定主键升序读取目录页；kind 为 contacts、conversations 或 applications。 */
-    QJsonArray directoryPage(const QString &kind, int after, int limit);
+    QJsonArray directoryPage(const QString& kind, int after, int limit);
     /** @brief 在完整本地目录按名称、备注或编号筛选，返回稳定 ID 分页。 */
-    QJsonArray findDirectory(const QString &kind, const QString &text, int after, int limit);
+    QJsonArray findDirectory(const QString& kind, const QString& text, int after, int limit);
     /** @brief 默认构造空状态，实际账号或资源在显式初始化时接入。 */
     LocalMessageStore() = default;
     /** @brief 关闭账号数据库并移除本对象的 SQLite 连接。 */
     ~LocalMessageStore();
     /** @brief 禁止复制该对象，避免共享可变状态或重复管理资源。 */
-    LocalMessageStore(const LocalMessageStore &) = delete;
+    LocalMessageStore(const LocalMessageStore&) = delete;
     /** @brief 禁止复制赋值，避免混淆独占资源和连接所有权。 */
-    LocalMessageStore &operator=(const LocalMessageStore &) = delete;
+    LocalMessageStore& operator=(const LocalMessageStore&) = delete;
     /** @brief 在工作线程打开账号数据库并获得独占锁，校验或升级 schema；失败抛异常。 */
-    void open(const QString &accountRoot, int uid = 0);
+    void open(const QString& accountRoot, int uid = 0);
     /** @brief 在工作线程关闭数据库并释放连接及账号锁，可重复调用。 */
     void close();
     /** @brief 查询当前工作线程持有的 SQLite 连接是否打开。 */
-    bool isOpen() const { return _db.isOpen(); }
+    bool isOpen() const {
+        return _db.isOpen();
+    }
     /** @brief 读取指定会话已经事务提交的消息同步游标。 */
     qint64 cursor(int chatId);
     /** @brief 在同一事务中合并服务器消息并推进匹配 previous 的游标；失败不推进游标。 */
-    void applySyncPage(int chatId, qint64 previous, qint64 next, const QVector<StoredMessage> &messages, const QString &epoch = {});
+    void applySyncPage(
+        int chatId,
+        qint64 previous,
+        qint64 next,
+        const QVector<StoredMessage>& messages,
+        const QString& epoch = {});
     /** @brief 将待发消息落入本地存储，保留客户端 UUID 以支持重试。 */
-    void saveOutgoing(const QVector<StoredMessage> &messages);
+    void saveOutgoing(const QVector<StoredMessage>& messages);
     /** @brief 按会话、发送者和 UUID 将已发送消息与服务器 ID 关联，不推断送达或已读。 */
-    void acknowledge(int chatId, int senderId, const QString &uuid, qint64 messageId);
+    void acknowledge(int chatId, int senderId, const QString& uuid, qint64 messageId);
     /** @brief 将指定 UUID 的未确认发送状态记为不确定，保留以后对账所需身份。 */
-    void markUncertain(int chatId, const QVector<QString> &uuids);
+    void markUncertain(int chatId, const QVector<QString>& uuids);
     /** @brief 按 before 读取至多 limit 条历史记录，from 限定范围；返回消息副本和后续页标志。 */
     LocalMessagePage history(int chatId, qint64 before, int limit, qint64 from = 0);
     /** @brief 将发送批次及其消息事务落盘，供断线重启后继续调度。 */
-    void saveOutgoingRequest(const QJsonObject &request);
+    void saveOutgoingRequest(const QJsonObject& request);
     /** @brief 按毫秒时间 now 选择到期发送批次并持久化 attempt；恢复中的会话暂缓，changed 可返回受影响会话。 */
-    QVector<QJsonObject> dispatchDue(qint64 now, const QSet<int> &recovering = {}, QSet<int> *changed = nullptr);
+    QVector<QJsonObject> dispatchDue(qint64 now, const QSet<int>& recovering = {}, QSet<int>* changed = nullptr);
     /** @brief 返回仍有未完成发送批次、需要先与服务器对账的会话集合。 */
     QSet<int> recoveryChats();
     /** @brief 将匹配 UUID 与发送批次的 ACK 合并到本地事实，保留幂等身份。 */
-    void acceptSendResponse(const QJsonObject &response);
+    void acceptSendResponse(const QJsonObject& response);
     /** @brief 请求重试指定本地消息，保留客户端 UUID 并由持久化状态决定是否可再次发送。 */
-    void retry(const QString &uuid);
+    void retry(const QString& uuid);
     /** @brief 暂停自动发送，保留本地消息及批次供以后恢复。 */
     void pauseOutgoing();
     /** @brief 恢复符合条件的本地发送批次，供后续到期调度使用。 */
@@ -111,24 +118,25 @@ public:
     /** @brief 返回指定会话尚待上报的送达及已读意图。 */
     QJsonArray pendingReceipts(int chatId);
     /** @brief 保存当前会话已满足可见性条件的消息已读意图，不直接发送网络请求。 */
-    void observeRead(int chatId, const QVector<qint64> &ids);
+    void observeRead(int chatId, const QVector<qint64>& ids);
     /** @brief 事务合并回执事实，指定 previous/next 时同时校验和推进 revision 游标。 */
-    void acceptReceipts(int chatId, const QJsonArray &items, qint64 previous = -1, qint64 next = -1);
+    void acceptReceipts(int chatId, const QJsonArray& items, qint64 previous = -1, qint64 next = -1);
     /** @brief 删除指定会话消息已无须继续上报的回执意图。 */
     void discardReceipt(int chatId, qint64 messageId);
+
 private:
     /** @brief 核对已落盘目录中的群会话身份，仅群消息允许收件人占位值零。 */
     bool isGroupChat(int chatId);
     /** @brief 保留旧版初始关系兼容，关系变化后仅接受完全匹配的版本。 */
-    bool canSendPrivate(const QJsonObject &request);
+    bool canSendPrivate(const QJsonObject& request);
     /** @brief 在现有事务范围保存待发消息行，供批次与消息原子写入复用。 */
-    void saveOutgoingRows(const QVector<StoredMessage> &messages);
+    void saveOutgoingRows(const QVector<StoredMessage>& messages);
     /** @brief 为本地已经落盘的接收消息生成送达意图。 */
     void queueDelivered(int chatId);
     /** @brief 清理消息已经确认的发送批次，避免重复调度。 */
     void clearCommittedBatches();
     /** @brief 按服务器 ID 与客户端 UUID 合并持久化消息，冲突时抛异常。 */
-    void mergeServerMessage(const StoredMessage &message);
+    void mergeServerMessage(const StoredMessage& message);
     int _uid = 0;
     QSqlDatabase _db;
     QString _connection;

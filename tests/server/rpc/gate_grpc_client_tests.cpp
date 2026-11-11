@@ -18,9 +18,7 @@ namespace {
 /** 短暂绑定并释放随机回环端口，提供预期不可用的测试端点。 */
 unsigned short FindUnavailableLoopbackPort() {
     boost::asio::io_context context;
-    boost::asio::ip::tcp::acceptor acceptor(
-        context,
-        { boost::asio::ip::address_v4::loopback(), 0 });
+    boost::asio::ip::tcp::acceptor acceptor(context, {boost::asio::ip::address_v4::loopback(), 0});
     const auto port = acceptor.local_endpoint().port();
     acceptor.close();
     return port;
@@ -42,7 +40,7 @@ public:
         return grpc::Status::OK;
     }
 
-    std::atomic<bool> delay{ false };
+    std::atomic<bool> delay{false};
 };
 
 /** 提供固定聊天端点的 Status 选服测试服务。 */
@@ -76,7 +74,9 @@ public:
     }
 
     /** 停止所属回环 gRPC 服务。 */
-    ~GateLoopbackServer() { Shutdown(); }
+    ~GateLoopbackServer() {
+        Shutdown();
+    }
 
     /** 以两秒截止时间关闭服务并释放实例。 */
     void Shutdown() {
@@ -87,9 +87,13 @@ public:
     }
 
     /** 返回实际绑定端口字符串。 */
-    std::string Port() const { return std::to_string(_port); }
+    std::string Port() const {
+        return std::to_string(_port);
+    }
     /** 借用验证码服务以控制测试延迟。 */
-    ControlledVarifyService& Varify() { return _varify; }
+    ControlledVarifyService& Varify() {
+        return _varify;
+    }
 
 private:
     int _port = 0;
@@ -102,7 +106,7 @@ private:
 /** 验证生产验证码与 Status 客户端可调用真实动态回环服务。 */
 TEST(GateGrpcClientIntegrationTests, VarifyAndStatusClientsCallDynamicLoopbackServices) {
     GateLoopbackServer server;
-    const rpc::ClientPolicy policy{ 50ms, 200ms };
+    const rpc::ClientPolicy policy{50ms, 200ms};
     VerifyGrpcClient varify("127.0.0.1", server.Port(), policy, 1);
     StatusGrpcClient status("127.0.0.1", server.Port(), policy, 1);
 
@@ -114,11 +118,7 @@ TEST(GateGrpcClientIntegrationTests, VarifyAndStatusClientsCallDynamicLoopbackSe
 TEST(GateGrpcClientIntegrationTests, DeadlineExceededMapsToRpcFailedWithinConfiguredDeadline) {
     GateLoopbackServer server;
     server.Varify().delay = true;
-    VerifyGrpcClient client(
-        "127.0.0.1",
-        server.Port(),
-        rpc::ClientPolicy{ 50ms, 100ms },
-        1);
+    VerifyGrpcClient client("127.0.0.1", server.Port(), rpc::ClientPolicy{50ms, 100ms}, 1);
 
     const auto started = std::chrono::steady_clock::now();
     const auto response = client.GetVarifyCode("deadline@example.test");
@@ -132,11 +132,7 @@ TEST(GateGrpcClientIntegrationTests, DeadlineExceededMapsToRpcFailedWithinConfig
 /** 验证不可用验证码端点有界返回 RPCFailed。 */
 TEST(GateGrpcClientIntegrationTests, UnavailableVarifyEndpointReturnsRpcFailedWithinDeadline) {
     const auto port = FindUnavailableLoopbackPort();
-    VerifyGrpcClient client(
-        "127.0.0.1",
-        std::to_string(port),
-        rpc::ClientPolicy{ 50ms, 150ms },
-        1);
+    VerifyGrpcClient client("127.0.0.1", std::to_string(port), rpc::ClientPolicy{50ms, 150ms}, 1);
 
     const auto started = std::chrono::steady_clock::now();
     const auto response = client.GetVarifyCode("unavailable@example.test");
@@ -149,11 +145,7 @@ TEST(GateGrpcClientIntegrationTests, UnavailableVarifyEndpointReturnsRpcFailedWi
 /** 验证对端关闭后有界返回 RPCFailed。 */
 TEST(GateGrpcClientIntegrationTests, PeerShutdownMapsToRpcFailedWithinDeadline) {
     GateLoopbackServer server;
-    VerifyGrpcClient client(
-        "127.0.0.1",
-        server.Port(),
-        rpc::ClientPolicy{ 50ms, 150ms },
-        1);
+    VerifyGrpcClient client("127.0.0.1", server.Port(), rpc::ClientPolicy{50ms, 150ms}, 1);
     server.Shutdown();
 
     const auto response = client.GetVarifyCode("shutdown@example.test");

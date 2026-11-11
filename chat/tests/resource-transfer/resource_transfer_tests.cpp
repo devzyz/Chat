@@ -30,12 +30,15 @@ class ResourceTransferTests : public QObject {
 private slots:
     /** @brief 验证登录位置扩为聊天窗口后，编辑器和发送按钮仍位于各种逻辑屏幕区域内。 */
     void chatWindowPlacement() {
-        for (const QRect available : {QRect(0, 0, 1536, 832), QRect(0, 0, 1280, 680),
-                QRect(-1536, 80, 1536, 832), QRect(1920, -180, 1280, 900)}) {
+        for (const QRect available :
+             {QRect(0, 0, 1536, 832),
+              QRect(0, 0, 1280, 680),
+              QRect(-1536, 80, 1536, 832),
+              QRect(1920, -180, 1280, 900)}) {
             QMainWindow window;
             window.setFixedSize(300, 500);
             window.move(available.center());
-            auto *page = new ChatDialog(&window);
+            auto* page = new ChatDialog(&window);
             page->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
             window.setCentralWidget(page);
             page->show();
@@ -48,10 +51,12 @@ private slots:
             QVERIFY(window.maximumHeight() > window.height());
             QVERIFY(window.windowFlags().testFlag(Qt::WindowMaximizeButtonHint));
             QVERIFY(window.windowFlags().testFlag(Qt::CustomizeWindowHint));
-            auto *send = page->findChild<QPushButton*>("send_btn");
-            auto *editor = page->findChild<QTextEdit*>("chat_edit");
-            QVERIFY(send); QVERIFY(editor);
-            QVERIFY(send->isVisible()); QVERIFY(editor->isVisible());
+            auto* send = page->findChild<QPushButton*>("send_btn");
+            auto* editor = page->findChild<QTextEdit*>("chat_edit");
+            QVERIFY(send);
+            QVERIFY(editor);
+            QVERIFY(send->isVisible());
+            QVERIFY(editor->isVisible());
             QVERIFY(available.contains(QRect(send->mapToGlobal(QPoint()), send->size())));
             QVERIFY(available.contains(QRect(editor->mapToGlobal(QPoint()), editor->size())));
             QVERIFY(editor->height() > 0);
@@ -59,8 +64,10 @@ private slots:
             QTest::keyClick(editor, Qt::Key_Escape);
             QVERIFY2(page->isVisible(), "Escape must not hide the embedded chat page");
             QCOMPARE(editor->toPlainText(), QString("keep draft"));
-            auto *searchEdit = page->findChild<QLineEdit *>("search_edit"); QVERIFY(searchEdit);
-            searchEdit->clear(); QTest::keyClick(searchEdit, Qt::Key_Escape);
+            auto* searchEdit = page->findChild<QLineEdit*>("search_edit");
+            QVERIFY(searchEdit);
+            searchEdit->clear();
+            QTest::keyClick(searchEdit, Qt::Key_Escape);
             QVERIFY(page->isVisible());
         }
     }
@@ -70,35 +77,47 @@ private slots:
         const auto user = UserMgr::instance();
         user->setUserInfo(std::make_shared<UserInfo>(7, "owner", ""));
         QSignalSpy restored(user->messages(), &MessageService::directoryRestored);
-        user->messages()->start(directory.path(), 7); QTRY_COMPARE(restored.size(), 1);
+        user->messages()->start(directory.path(), 7);
+        QTRY_COMPARE(restored.size(), 1);
         auto page = std::make_unique<ChatDialog>();
-        auto *search = page->findChild<UserSearchController *>(); QVERIFY(search);
-        auto *list = page->findChild<SearchList *>(); QVERIFY(list);
+        auto* search = page->findChild<UserSearchController*>();
+        QVERIFY(search);
+        auto* list = page->findChild<SearchList*>();
+        QVERIFY(list);
         QSignalSpy busy(search, &UserSearchController::busyChanged);
         QSignalSpy requests(search, &UserSearchController::requestReady);
         QSignalSpy found(search, &UserSearchController::found);
         search->search("fixture");
-        auto *waiting = list->findChild<LoadingDialog *>(); QVERIFY(waiting);
+        auto* waiting = list->findChild<LoadingDialog*>();
+        QVERIFY(waiting);
         QTest::keyClick(waiting, Qt::Key_Escape);
         QVERIFY(!busy.last()[0].toBool());
         const auto oldId = requests.first()[0].toJsonObject().value("request_id");
         search->search("retry");
         search->accept({{"request_id", oldId}, {"error", 0}, {"uid", 9}, {"name", "late"}});
-        QVERIFY(found.isEmpty()); QVERIFY(busy.last()[0].toBool());
+        QVERIFY(found.isEmpty());
+        QVERIFY(busy.last()[0].toBool());
         QPointer<UserSearchController> previousSearch(search);
         const auto previousId = requests.last()[0].toJsonObject().value("request_id");
-        page.reset(); QVERIFY(previousSearch.isNull());
+        page.reset();
+        QVERIFY(previousSearch.isNull());
         user->messages()->stop();
         QTRY_VERIFY(!QFileInfo::exists(directory.path() + "/messages.lock"));
         user->setUserInfo(std::make_shared<UserInfo>(8, "next", ""));
-        user->messages()->start(directory.path() + "/next", 8); QTRY_COMPARE(restored.size(), 2);
-        page = std::make_unique<ChatDialog>(); search = page->findChild<UserSearchController *>();
+        user->messages()->start(directory.path() + "/next", 8);
+        QTRY_COMPARE(restored.size(), 2);
+        page = std::make_unique<ChatDialog>();
+        search = page->findChild<UserSearchController*>();
         QSignalSpy nextBusy(search, &UserSearchController::busyChanged);
         QSignalSpy nextFound(search, &UserSearchController::found);
         search->search("new-account");
-        emit TcpMgr::instance()->userSearchResponse({{"request_id", previousId}, {"error", 0}, {"uid", 9}, {"name", "old"}});
-        QVERIFY(nextFound.isEmpty()); QVERIFY(nextBusy.last()[0].toBool());
-        search->cancel(); page.reset(); user->messages()->stop();
+        emit TcpMgr::instance()
+            -> userSearchResponse({{"request_id", previousId}, {"error", 0}, {"uid", 9}, {"name", "old"}});
+        QVERIFY(nextFound.isEmpty());
+        QVERIFY(nextBusy.last()[0].toBool());
+        search->cancel();
+        page.reset();
+        user->messages()->stop();
         QTRY_VERIFY(!QFileInfo::exists(directory.path() + "/next/messages.lock"));
     }
     /** @brief 验证未加载会话的持久化消息在列表分页和窗口重建后仍显示提醒。 */
@@ -119,131 +138,225 @@ private slots:
     /** 验证真实群界面随持久化成员状态禁止输入，并保留离群前缓存成员信息。 */
     void groupMembershipControlsWidgets() {
         QTemporaryDir directory;
-        const auto user=UserMgr::instance(); user->setUserInfo(std::make_shared<UserInfo>(7,"owner",""));
-        auto *service=user->messages();
-        QSignalSpy restored(service,&MessageService::directoryRestored), changed(service,&MessageService::directoryChanged);
-        service->start(directory.path(),7); QTRY_COMPARE(restored.size(),1);
-        QJsonObject state{{"id",12},{"type","group"},{"name","成员测试群"},{"group_revision","1"},
-            {"group_state","active"},{"membership_epoch","1"},{"owner_uid",7},
-            {"members",QJsonArray{QJsonObject{{"uid",7},{"name","owner"},{"role",1}}}}};
-        service->saveDirectory({{"conversations",QJsonArray{state}}}); QTRY_COMPARE(changed.size(),1);
-        ChatPage page; page.resize(650,450); page.setChatInfo(std::make_shared<ChatInfo>(0,"成员测试群",QString(),QString(),12,ChatType::GROUP));
+        const auto user = UserMgr::instance();
+        user->setUserInfo(std::make_shared<UserInfo>(7, "owner", ""));
+        auto* service = user->messages();
+        QSignalSpy restored(service, &MessageService::directoryRestored),
+            changed(service, &MessageService::directoryChanged);
+        service->start(directory.path(), 7);
+        QTRY_COMPARE(restored.size(), 1);
+        QJsonObject state{
+            {"id", 12},
+            {"type", "group"},
+            {"name", "成员测试群"},
+            {"group_revision", "1"},
+            {"group_state", "active"},
+            {"membership_epoch", "1"},
+            {"owner_uid", 7},
+            {"members", QJsonArray{QJsonObject{{"uid", 7}, {"name", "owner"}, {"role", 1}}}}};
+        service->saveDirectory({{"conversations", QJsonArray{state}}});
+        QTRY_COMPARE(changed.size(), 1);
+        ChatPage page;
+        page.resize(650, 450);
+        page.setChatInfo(std::make_shared<ChatInfo>(0, "成员测试群", QString(), QString(), 12, ChatType::GROUP));
         QVERIFY(page.findChild<QTextEdit*>("chat_edit")->isEnabled());
         QVERIFY(page.findChild<QPushButton*>("send_btn")->isEnabled());
-        state["group_state"]="removed"; state["group_revision"]="2";
-        service->saveDirectory({{"conversations",QJsonArray{state}}}); QTRY_COMPARE(changed.size(),2);
+        state["group_state"] = "removed";
+        state["group_revision"] = "2";
+        service->saveDirectory({{"conversations", QJsonArray{state}}});
+        QTRY_COMPARE(changed.size(), 2);
         QVERIFY(!page.findChild<QTextEdit*>("chat_edit")->isEnabled());
         QVERIFY(!page.findChild<QPushButton*>("send_btn")->isEnabled());
-        GroupPanel panel(12,&page); panel.show();
-        QCOMPARE(panel.findChild<QListWidget*>()->count(),1);
-        for (auto *button:panel.findChildren<QPushButton*>())
-            if (button->text()=="添加" || button->text()=="解散") QVERIFY(!button->isEnabled());
+        GroupPanel panel(12, &page);
+        panel.show();
+        QCOMPARE(panel.findChild<QListWidget*>()->count(), 1);
+        for (auto* button : panel.findChildren<QPushButton*>())
+            if (button->text() == "添加" || button->text() == "解散")
+                QVERIFY(!button->isEnabled());
         if (!qEnvironmentVariable("CHAT_UI_CAPTURE").isEmpty())
             QVERIFY(panel.grab().save(qEnvironmentVariable("CHAT_UI_CAPTURE")));
         service->stop();
-        QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(directory.path()+"/messages.lock"),15000);
+        QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(directory.path() + "/messages.lock"), 15000);
     }
     /** @brief 验证管理拒绝原因不会被状态文案覆盖。 */
-    void groupPanelRejectionVisible() { groupPanelConsistency(0); }
+    void groupPanelRejectionVisible() {
+        groupPanelConsistency(0);
+    }
     /** @brief 验证外部移除即时关闭本窗口管理权限。 */
-    void groupPanelExternalRevocation() { groupPanelConsistency(1); }
+    void groupPanelExternalRevocation() {
+        groupPanelConsistency(1);
+    }
     /** @brief 验证完整成员快照到达前禁止成员操作。 */
-    void groupPanelSnapshotRequired() { groupPanelConsistency(2); }
+    void groupPanelSnapshotRequired() {
+        groupPanelConsistency(2);
+    }
     /** @brief 验证分页完成门禁、失败缓存与迟到页隔离。 */
-    void groupPanelPaginationFailure() { groupPanelConsistency(3); }
+    void groupPanelPaginationFailure() {
+        groupPanelConsistency(3);
+    }
     /** @brief 验证重开面板按原身份重试待确认命令。 */
-    void groupPanelReopenRetryIdentity() { groupPanelConsistency(4); }
+    void groupPanelReopenRetryIdentity() {
+        groupPanelConsistency(4);
+    }
     /** @brief 验证真实TCP落盘顺序及旧成员代次隔离。 */
-    void groupPanelTcpRefreshRevision() { groupPanelConsistency(5); }
+    void groupPanelTcpRefreshRevision() {
+        groupPanelConsistency(5);
+    }
+
 private:
     /** @brief 通过真实控件及已落盘目录验证指定群面板场景。 */
     void groupPanelConsistency(int scenario) {
         QTemporaryDir directory;
-        const auto user=UserMgr::instance(); user->setUserInfo(std::make_shared<UserInfo>(7,"owner",""));
-        auto *service=user->messages();
-        QSignalSpy restored(service,&MessageService::directoryRestored), changed(service,&MessageService::directoryChanged);
-        service->start(directory.path(),7); QTRY_COMPARE(restored.size(),1);
-        QJsonObject state{{"id",12},{"type","group"},{"name","panel"},{"group_revision","1"},
-            {"group_state","active"},{"membership_epoch","1"},{"owner_uid",7},
-            {"members",QJsonArray{QJsonObject{{"uid",7},{"name","owner"},{"role",1}}}}};
-        if(scenario==0 || scenario==4) state["pending_group_operation"]=QJsonObject{{"request_id","pending-reopen"},
-            {"chat_id",12},{"operation","rename"},{"name","new"},{"expected_revision","1"}};
-        service->saveDirectory({{"conversations",QJsonArray{state}}}); QTRY_COMPARE(changed.size(),1);
+        const auto user = UserMgr::instance();
+        user->setUserInfo(std::make_shared<UserInfo>(7, "owner", ""));
+        auto* service = user->messages();
+        QSignalSpy restored(service, &MessageService::directoryRestored),
+            changed(service, &MessageService::directoryChanged);
+        service->start(directory.path(), 7);
+        QTRY_COMPARE(restored.size(), 1);
+        QJsonObject state{
+            {"id", 12},
+            {"type", "group"},
+            {"name", "panel"},
+            {"group_revision", "1"},
+            {"group_state", "active"},
+            {"membership_epoch", "1"},
+            {"owner_uid", 7},
+            {"members", QJsonArray{QJsonObject{{"uid", 7}, {"name", "owner"}, {"role", 1}}}}};
+        if (scenario == 0 || scenario == 4)
+            state["pending_group_operation"] = QJsonObject{
+                {"request_id", "pending-reopen"},
+                {"chat_id", 12},
+                {"operation", "rename"},
+                {"name", "new"},
+                {"expected_revision", "1"}};
+        service->saveDirectory({{"conversations", QJsonArray{state}}});
+        QTRY_COMPARE(changed.size(), 1);
         QSignalSpy sent(TcpMgr::instance().get(), &TcpMgr::sendRequested);
-        GroupPanel panel(12,nullptr); panel.show();
-        if(scenario==0) {
-            emit TcpMgr::instance()->groupResponse(ID_GROUP_MANAGE_RSP,
-                {{"request_id","pending-reopen"},{"error",1},{"group_error","VersionConflict"}});
+        GroupPanel panel(12, nullptr);
+        panel.show();
+        if (scenario == 0) {
+            emit TcpMgr::instance() -> groupResponse(
+                ID_GROUP_MANAGE_RSP,
+                {{"request_id", "pending-reopen"}, {"error", 1}, {"group_error", "VersionConflict"}});
             QVERIFY(panel.findChild<QLabel*>()->text().contains("VersionConflict"));
-        } else if(scenario==1) {
-            state["group_state"]="removed"; state["group_revision"]="2";
-            service->saveDirectory({{"conversations",QJsonArray{state}}}); QTRY_VERIFY(changed.size()>=2);
-            for(auto *button:panel.findChildren<QPushButton*>())
-                if(button->text()=="解散") QVERIFY(!button->isEnabled());
-        } else if(scenario==3) {
+        } else if (scenario == 1) {
+            state["group_state"] = "removed";
+            state["group_revision"] = "2";
+            service->saveDirectory({{"conversations", QJsonArray{state}}});
+            QTRY_VERIFY(changed.size() >= 2);
+            for (auto* button : panel.findChildren<QPushButton*>())
+                if (button->text() == "解散")
+                    QVERIFY(!button->isEnabled());
+        } else if (scenario == 3) {
             const auto first = QJsonDocument::fromJson(sent.last()[1].toByteArray()).object()["request_id"].toString();
-            emit TcpMgr::instance()->groupResponse(ID_GROUP_INFO_RSP, {{"request_id",first},{"error",0},
-                {"group_revision","1"},{"membership_epoch","1"},{"members",state["members"]},{"load_more",true},{"next_uid",7}});
+            emit TcpMgr::instance() -> groupResponse(
+                ID_GROUP_INFO_RSP,
+                {{"request_id", first},
+                 {"error", 0},
+                 {"group_revision", "1"},
+                 {"membership_epoch", "1"},
+                 {"members", state["members"]},
+                 {"load_more", true},
+                 {"next_uid", 7}});
             const auto second = QJsonDocument::fromJson(sent.last()[1].toByteArray()).object()["request_id"].toString();
             QVERIFY(first != second);
-            for(auto *button:panel.findChildren<QPushButton*>())
-                if(button->text()=="添加") QVERIFY(!button->isEnabled());
-            emit TcpMgr::instance()->groupResponse(ID_GROUP_INFO_RSP, {{"request_id",second},{"error",0},
-                {"group_revision","1"},{"membership_epoch","1"},{"members",QJsonArray{}},{"load_more",false}});
-            for(auto *button:panel.findChildren<QPushButton*>())
-                if(button->text()=="添加") QVERIFY(button->isEnabled());
-            for(auto *button:panel.findChildren<QPushButton*>())
-                if(button->text()=="刷新资料") QTest::mouseClick(button,Qt::LeftButton);
+            for (auto* button : panel.findChildren<QPushButton*>())
+                if (button->text() == "添加")
+                    QVERIFY(!button->isEnabled());
+            emit TcpMgr::instance() -> groupResponse(
+                ID_GROUP_INFO_RSP,
+                {{"request_id", second},
+                 {"error", 0},
+                 {"group_revision", "1"},
+                 {"membership_epoch", "1"},
+                 {"members", QJsonArray{}},
+                 {"load_more", false}});
+            for (auto* button : panel.findChildren<QPushButton*>())
+                if (button->text() == "添加")
+                    QVERIFY(button->isEnabled());
+            for (auto* button : panel.findChildren<QPushButton*>())
+                if (button->text() == "刷新资料")
+                    QTest::mouseClick(button, Qt::LeftButton);
             const auto failed = QJsonDocument::fromJson(sent.last()[1].toByteArray()).object()["request_id"].toString();
-            emit TcpMgr::instance()->groupResponse(ID_GROUP_INFO_RSP, {{"request_id",failed},{"error",1},{"group_error","StorageUnavailable"}});
-            QCOMPARE(panel.findChild<QListWidget*>()->count(),1);
-            for(auto *button:panel.findChildren<QPushButton*>())
-                if(button->text()=="添加") QVERIFY(!button->isEnabled());
-            emit TcpMgr::instance()->groupResponse(ID_GROUP_INFO_RSP, {{"request_id",second},{"error",0},
-                {"group_revision","1"},{"membership_epoch","1"},{"members",QJsonArray{}},{"load_more",false}});
+            emit TcpMgr::instance() -> groupResponse(
+                ID_GROUP_INFO_RSP,
+                {{"request_id", failed}, {"error", 1}, {"group_error", "StorageUnavailable"}});
+            QCOMPARE(panel.findChild<QListWidget*>()->count(), 1);
+            for (auto* button : panel.findChildren<QPushButton*>())
+                if (button->text() == "添加")
+                    QVERIFY(!button->isEnabled());
+            emit TcpMgr::instance() -> groupResponse(
+                ID_GROUP_INFO_RSP,
+                {{"request_id", second},
+                 {"error", 0},
+                 {"group_revision", "1"},
+                 {"membership_epoch", "1"},
+                 {"members", QJsonArray{}},
+                 {"load_more", false}});
             QVERIFY(panel.findChild<QLabel*>()->text().contains("StorageUnavailable"));
-        } else if(scenario==5) {
-            const auto request = QJsonDocument::fromJson(sent.last()[1].toByteArray()).object()["request_id"].toString();
-            QJsonObject response{{"request_id",request},{"error",0},{"chat_id",12},{"group_name","fresh"},
-                {"group_revision","2"},{"membership_epoch","1"},{"group_state","active"},{"owner_uid",7},
-                {"members",QJsonArray{QJsonObject{{"uid",8},{"name","fresh member"},{"role",0}}}},
-                {"member_count",1},{"load_more",false}};
-            const auto wire=QJsonDocument(response).toJson(QJsonDocument::Compact);
-            TcpMgr::instance()->handleMessage(ID_GROUP_INFO_RSP,wire.size(),wire);
-            QTRY_VERIFY(service->groupState(12)["group_revision"]=="2");
-            QTRY_COMPARE(panel.findChild<QListWidget*>()->item(0)->data(Qt::UserRole).toInt(),8);
-            for(auto *button:panel.findChildren<QPushButton*>())
-                if(button->text()=="添加") QVERIFY(button->isEnabled());
-            for(auto *button:panel.findChildren<QPushButton*>())
-                if(button->text()=="刷新资料") QTest::mouseClick(button,Qt::LeftButton);
+        } else if (scenario == 5) {
+            const auto request =
+                QJsonDocument::fromJson(sent.last()[1].toByteArray()).object()["request_id"].toString();
+            QJsonObject response{
+                {"request_id", request},
+                {"error", 0},
+                {"chat_id", 12},
+                {"group_name", "fresh"},
+                {"group_revision", "2"},
+                {"membership_epoch", "1"},
+                {"group_state", "active"},
+                {"owner_uid", 7},
+                {"members", QJsonArray{QJsonObject{{"uid", 8}, {"name", "fresh member"}, {"role", 0}}}},
+                {"member_count", 1},
+                {"load_more", false}};
+            const auto wire = QJsonDocument(response).toJson(QJsonDocument::Compact);
+            TcpMgr::instance()->handleMessage(ID_GROUP_INFO_RSP, wire.size(), wire);
+            QTRY_VERIFY(service->groupState(12)["group_revision"] == "2");
+            QTRY_COMPARE(panel.findChild<QListWidget*>()->item(0)->data(Qt::UserRole).toInt(), 8);
+            for (auto* button : panel.findChildren<QPushButton*>())
+                if (button->text() == "添加")
+                    QVERIFY(button->isEnabled());
+            for (auto* button : panel.findChildren<QPushButton*>())
+                if (button->text() == "刷新资料")
+                    QTest::mouseClick(button, Qt::LeftButton);
             const auto stale = QJsonDocument::fromJson(sent.last()[1].toByteArray()).object()["request_id"].toString();
-            state["group_revision"]="3"; state["membership_epoch"]="2";
-            service->saveDirectory({{"conversations",QJsonArray{state}}});
-            QTRY_VERIFY(service->groupState(12)["membership_epoch"]=="2");
+            state["group_revision"] = "3";
+            state["membership_epoch"] = "2";
+            service->saveDirectory({{"conversations", QJsonArray{state}}});
+            QTRY_VERIFY(service->groupState(12)["membership_epoch"] == "2");
             QSignalSpy delivered(TcpMgr::instance().get(), &TcpMgr::groupResponse);
-            response["request_id"]=stale;
-            const auto staleWire=QJsonDocument(response).toJson(QJsonDocument::Compact);
-            TcpMgr::instance()->handleMessage(ID_GROUP_INFO_RSP,staleWire.size(),staleWire);
-            QTRY_COMPARE(delivered.size(),1);
-            for(auto *button:panel.findChildren<QPushButton*>())
-                if(button->text()=="添加") QVERIFY(!button->isEnabled());
-        } else if(scenario==4) {
-            for(auto *button:panel.findChildren<QPushButton*>())
-                if(button->text()=="重试待确认操作") { QVERIFY(button->isEnabled()); QTest::mouseClick(button,Qt::LeftButton); }
+            response["request_id"] = stale;
+            const auto staleWire = QJsonDocument(response).toJson(QJsonDocument::Compact);
+            TcpMgr::instance()->handleMessage(ID_GROUP_INFO_RSP, staleWire.size(), staleWire);
+            QTRY_COMPARE(delivered.size(), 1);
+            for (auto* button : panel.findChildren<QPushButton*>())
+                if (button->text() == "添加")
+                    QVERIFY(!button->isEnabled());
+        } else if (scenario == 4) {
+            for (auto* button : panel.findChildren<QPushButton*>())
+                if (button->text() == "重试待确认操作") {
+                    QVERIFY(button->isEnabled());
+                    QTest::mouseClick(button, Qt::LeftButton);
+                }
             QTRY_VERIFY(sent.size() >= 2);
-            QCOMPARE(QJsonDocument::fromJson(sent.last()[1].toByteArray()).object(), state["pending_group_operation"].toObject());
-            emit TcpMgr::instance()->groupResponse(ID_GROUP_MANAGE_RSP,
-                {{"request_id","pending-reopen"},{"error",0},{"local_save_failed",true}});
+            QCOMPARE(
+                QJsonDocument::fromJson(sent.last()[1].toByteArray()).object(),
+                state["pending_group_operation"].toObject());
+            emit TcpMgr::instance() -> groupResponse(
+                ID_GROUP_MANAGE_RSP,
+                {{"request_id", "pending-reopen"}, {"error", 0}, {"local_save_failed", true}});
             QVERIFY(panel.findChild<QLabel*>()->text().contains("本地保存失败"));
-            for(auto *button:panel.findChildren<QPushButton*>())
-                if(button->text()=="重试待确认操作") QVERIFY(button->isEnabled());
+            for (auto* button : panel.findChildren<QPushButton*>())
+                if (button->text() == "重试待确认操作")
+                    QVERIFY(button->isEnabled());
         } else {
-            for(auto *button:panel.findChildren<QPushButton*>())
-                if(button->text()=="添加" || button->text()=="移除" || button->text()=="转让")
+            for (auto* button : panel.findChildren<QPushButton*>())
+                if (button->text() == "添加" || button->text() == "移除" || button->text() == "转让")
                     QVERIFY(!button->isEnabled());
         }
         service->stop();
-        QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(directory.path()+"/messages.lock"),15000);
+        QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(directory.path() + "/messages.lock"), 15000);
     }
 private slots:
     /** 验证头像发布、账号路径隔离与重新加载，并覆盖编辑器成功及拒绝状态。 */
@@ -266,13 +379,16 @@ private slots:
         editor.setUploadEnabled(true);
         connect(&editor, &LocalAvatar::uploadRequested, &sender, &AvatarCache::upload);
         // 头像发布成功后结束编辑器上传状态。
-        connect(&sender, &AvatarCache::published, &editor, [&editor] { editor.finishUpload(); });
+        connect(&sender, &AvatarCache::published, &editor, [&editor] {
+            editor.finishUpload();
+        });
         connect(&sender, &AvatarCache::uploadFailed, &editor, &LocalAvatar::finishUpload);
         QSignalSpy saved(&editor, &LocalAvatar::saved);
         QSignalSpy errors(&editor, &LocalAvatar::errorOccurred);
         QTRY_VERIFY(!editor.isBusy());
         const auto source = directory.path() + "/source.png";
-        QImage sourceImage(256, 256, QImage::Format_RGB32); sourceImage.fill(Qt::red);
+        QImage sourceImage(256, 256, QImage::Format_RGB32);
+        sourceImage.fill(Qt::red);
         QVERIFY(sourceImage.save(source));
         editor.selectFile(source);
         QTRY_VERIFY(!editor.isBusy());
@@ -295,11 +411,13 @@ private slots:
         disconnect(&sender, nullptr, &editor, nullptr);
         disconnect(&editor, &LocalAvatar::uploadRequested, &sender, &AvatarCache::upload);
         // 头像发布失败后向编辑器提供固定拒绝原因。
-        connect(&editor, &LocalAvatar::uploadRequested, &editor, [&editor](const QString &) {
+        connect(&editor, &LocalAvatar::uploadRequested, &editor, [&editor](const QString&) {
             editor.finishUpload("publication rejected");
         });
-        sourceImage.fill(Qt::blue); QVERIFY(sourceImage.save(source));
-        editor.discardSelection(); editor.selectFile(source);
+        sourceImage.fill(Qt::blue);
+        QVERIFY(sourceImage.save(source));
+        editor.discardSelection();
+        editor.selectFile(source);
         QTRY_VERIFY(!editor.isBusy());
         editor.saveSelection(QRectF(0, 0, 256, 256));
         QTRY_VERIFY(!errors.isEmpty());
@@ -307,16 +425,18 @@ private slots:
         QCOMPARE(editor.image().pixelColor(0, 0), QColor(Qt::red));
         editor.reset();
         QVERIFY(editor.image().isNull());
-        host.kill(); QVERIFY(host.waitForFinished(5000));
+        host.kill();
+        QVERIFY(host.waitForFinished(5000));
     }
     /** @brief 验证附件解析及页面销毁时释放账号资源传输。 */
     void incomingAttachmentAndPageLifetime() {
         UserMgr::instance()->setUserInfo(std::make_shared<UserInfo>(8, "receiver", ""));
         UserMgr::instance()->setToken("fixture-token");
         QTemporaryDir account;
-        auto *messages = UserMgr::instance()->messages();
+        auto* messages = UserMgr::instance()->messages();
         QSignalSpy ready(messages, &MessageService::directoryRestored);
-        messages->start(account.path(), 8); QTRY_COMPARE(ready.size(), 1);
+        messages->start(account.path(), 8);
+        QTRY_COMPARE(ready.size(), 1);
         ChatPage page;
         QCOMPARE(page.findChildren<ResourceTransferManager*>().size(), 1);
         page.resize(600, 400);
@@ -326,26 +446,37 @@ private slots:
         QCoreApplication::processEvents();
         QCOMPARE(page.findChildren<ResourceTransferManager*>().size(), 1);
         page.setChatInfo(std::make_shared<ChatInfo>(7, 1, 0));
-        QJsonObject descriptor{{"resource_id", "incoming-resource"}, {"media_type", "image/png"}, {"name", "image.png"}};
-        auto message = std::make_shared<TextChatData>("incoming-uuid", 1, ChatType::PRIVATE,
+        QJsonObject descriptor{
+            {"resource_id", "incoming-resource"},
+            {"media_type", "image/png"},
+            {"name", "image.png"}};
+        auto message = std::make_shared<TextChatData>(
+            "incoming-uuid",
+            1,
+            ChatType::PRIVATE,
             ChatMessageType::TEXT_TYPE,
             "@resource:v1:" + QString::fromUtf8(QJsonDocument(descriptor).toJson(QJsonDocument::Compact)),
-            7, QTime::currentTime());
+            7,
+            QTime::currentTime());
         page.appendChatMsg(message);
         auto* model = page.findChild<ChatDetailList*>()->model();
         QCOMPARE(model->rowCount(), 1);
         QCOMPARE(model->index(0, 0).data(MessageListModel::ResourceIdRole).toString(), QString("incoming-resource"));
         QCOMPARE(model->index(0, 0).data(MessageListModel::MessageTypeRole).toInt(), int(MessageType::Image));
-        auto *editor = page.findChild<MessageTextEdit*>("chat_edit");
-        auto *sendButton = page.findChild<QPushButton*>("send_btn");
-        QVERIFY(editor); QVERIFY(sendButton);
+        auto* editor = page.findChild<MessageTextEdit*>("chat_edit");
+        auto* sendButton = page.findChild<QPushButton*>("send_btn");
+        QVERIFY(editor);
+        QVERIFY(sendButton);
         QSignalSpy persisted(messages, &MessageService::outgoingPersisted);
         editor->setPlainText(QString::fromUtf8("页面发送😄"));
         QTest::mouseClick(sendButton, Qt::LeftButton);
-        QVERIFY(editor->toPlainText().isEmpty()); QTRY_COMPARE(persisted.size(), 1);
-        QCOMPARE(persisted.first()[0].toInt(), 1); QVERIFY(persisted.first()[2].toBool());
+        QVERIFY(editor->toPlainText().isEmpty());
+        QTRY_COMPARE(persisted.size(), 1);
+        QCOMPARE(persisted.first()[0].toInt(), 1);
+        QVERIFY(persisted.first()[2].toBool());
         QTRY_VERIFY(!UserMgr::instance()->hasPendingSubmissions());
-        editor->setPlainText("keyboard"); QTest::keyClick(editor, Qt::Key_Return);
+        editor->setPlainText("keyboard");
+        QTest::keyClick(editor, Qt::Key_Return);
         QTRY_COMPARE(persisted.size(), 2);
         messages->stop();
         QTRY_VERIFY_WITH_TIMEOUT(!QFileInfo::exists(account.path() + "/messages.lock"), 15000);
@@ -355,11 +486,16 @@ private slots:
     void resourceModelKeepsTextAndAttachmentsSeparate() {
         MessageListModel model(1);
         MessageRecord text;
-        text.messageId = 1; text.chatId = 1; text.text = "ordinary text";
+        text.messageId = 1;
+        text.chatId = 1;
+        text.text = "ordinary text";
         MessageRecord attachment;
-        attachment.messageId = 2; attachment.chatId = 1; attachment.resourceId = "resource-a";
+        attachment.messageId = 2;
+        attachment.chatId = 1;
+        attachment.resourceId = "resource-a";
         attachment.messageType = MessageType::Image;
-        model.appendMessage(text); model.appendMessage(attachment);
+        model.appendMessage(text);
+        model.appendMessage(attachment);
         model.setResourceFile("resource-a", "cached.png", QPixmap());
         QCOMPARE(model.data(model.index(0), MessageListModel::TextRole).toString(), QString("ordinary text"));
         QVERIFY(model.data(model.index(0), MessageListModel::LocalResourcePathRole).toString().isEmpty());
@@ -379,8 +515,9 @@ private slots:
         const QUrl endpoint("http://127.0.0.1:" + port);
         QImage image(700, 700, QImage::Format_RGB32);
         QRandomGenerator random(42);
-        for (int y = 0; y < image.height(); ++y) for (int x = 0; x < image.width(); ++x)
-            image.setPixel(x, y, random.generate() | 0xff000000);
+        for (int y = 0; y < image.height(); ++y)
+            for (int x = 0; x < image.width(); ++x)
+                image.setPixel(x, y, random.generate() | 0xff000000);
         const auto source = directory.path() + "/image.png";
         QVERIFY(image.save(source));
         {
@@ -388,7 +525,8 @@ private slots:
             QSignalSpy progress(&first, &ResourceTransferManager::progress);
             // 上传至少一个块后取消，以保存可恢复的已确认偏移。
             connect(&first, &ResourceTransferManager::progress, &first, [&first](qint64 offset, qint64) {
-                if (offset >= 65536) first.cancel();
+                if (offset >= 65536)
+                    first.cancel();
             });
             first.upload(source);
             QTRY_VERIFY_WITH_TIMEOUT(progress.count() >= 2, 15000);
@@ -407,60 +545,77 @@ private slots:
         QDir().mkpath(directory.path() + "/cache/files/images");
         QFile partial(directory.path() + "/cache/files/images/" + metadata["resource_id"].toString() + ".png.part");
         QFile prefix(source);
-        QVERIFY(prefix.open(QIODevice::ReadOnly)); QVERIFY(partial.open(QIODevice::WriteOnly));
-        QCOMPARE(partial.write(prefix.read(32001)), qint64(32001)); partial.close(); prefix.close();
+        QVERIFY(prefix.open(QIODevice::ReadOnly));
+        QVERIFY(partial.open(QIODevice::WriteOnly));
+        QCOMPARE(partial.write(prefix.read(32001)), qint64(32001));
+        partial.close();
+        prefix.close();
         QSignalSpy downloaded(&resumed, &ResourceTransferManager::downloaded);
         resumed.download(metadata);
         QTRY_VERIFY_WITH_TIMEOUT(downloaded.count() == 1 || failed.count() > 0, 15000);
         QCOMPARE(failed.count(), 0);
         QFile actual(downloaded.first()[1].toString()), expected(source);
-        QVERIFY(actual.open(QIODevice::ReadOnly)); QVERIFY(expected.open(QIODevice::ReadOnly));
+        QVERIFY(actual.open(QIODevice::ReadOnly));
+        QVERIFY(expected.open(QIODevice::ReadOnly));
         QCOMPARE(actual.readAll(), expected.readAll());
         // 服务端回收旧任务后，同一次上传必须丢弃失效断点并从零创建新任务。
-        const auto checkpoints = QDir(directory.path() + "/cache/transfers/uploads").entryList({"*.upload.json"}, QDir::Files);
+        const auto checkpoints =
+            QDir(directory.path() + "/cache/transfers/uploads").entryList({"*.upload.json"}, QDir::Files);
         QCOMPARE(checkpoints.size(), 1);
         QFile stale(directory.path() + "/cache/transfers/uploads/" + checkpoints.first());
         QVERIFY(stale.open(QIODevice::WriteOnly | QIODevice::Truncate));
         QVERIFY(stale.write("{\"upload_id\":\"00000000-0000-0000-0000-000000000001\"}") > 0);
         stale.close();
-        progress.clear(); uploaded.clear(); resumed.upload(source);
+        progress.clear();
+        uploaded.clear();
+        resumed.upload(source);
         QTRY_VERIFY_WITH_TIMEOUT(uploaded.count() == 1 || failed.count() > 0, 20000);
-        QCOMPARE(failed.count(), 0); QCOMPARE(progress.first()[0].toLongLong(), qint64(0));
+        QCOMPARE(failed.count(), 0);
+        QCOMPARE(progress.first()[0].toLongLong(), qint64(0));
         QVERIFY(uploaded.first()[0].toJsonObject()["resource_id"] != metadata["resource_id"]);
         // 相同字节改名后必须返回本次名称，且同名重试仍复用原资源。
         const auto renamed = directory.path() + "/renamed.png";
         QVERIFY(QFile::copy(source, renamed));
-        uploaded.clear(); resumed.upload(renamed);
+        uploaded.clear();
+        resumed.upload(renamed);
         QTRY_VERIFY_WITH_TIMEOUT(uploaded.count() == 1 || failed.count() > 0, 20000);
         QCOMPARE(failed.count(), 0);
         const auto renamedMetadata = uploaded.first()[0].toJsonObject();
         QCOMPARE(renamedMetadata["name"].toString(), QString("renamed.png"));
         QVERIFY(renamedMetadata["resource_id"] != metadata["resource_id"]);
-        uploaded.clear(); resumed.upload(renamed);
+        uploaded.clear();
+        resumed.upload(renamed);
         QTRY_VERIFY_WITH_TIMEOUT(uploaded.count() == 1 || failed.count() > 0, 20000);
         QCOMPARE(failed.count(), 0);
         QCOMPARE(uploaded.first()[0].toJsonObject()["resource_id"], renamedMetadata["resource_id"]);
         // 旧版无名称断点只能在完整描述匹配时迁移；不匹配和已过期均应新建且不能循环恢复旧 ID。
         const auto legacyCache = directory.path() + "/legacy-cache";
         QVERIFY(QDir().mkpath(legacyCache + "/transfers/uploads"));
-        const auto legacyKey = QCryptographicHash::hash((endpoint.toString() + "\nimage/png\n"
-            + metadata["sha256"].toString()).toUtf8(), QCryptographicHash::Sha256).toHex();
+        const auto legacyKey = QCryptographicHash::hash(
+                                   (endpoint.toString() + "\nimage/png\n" + metadata["sha256"].toString()).toUtf8(),
+                                   QCryptographicHash::Sha256)
+                                   .toHex();
         QFile legacy(legacyCache + "/transfers/uploads/" + QString::fromLatin1(legacyKey) + ".upload.json");
         QVERIFY(legacy.open(QIODevice::WriteOnly));
-        legacy.write(QJsonDocument(QJsonObject{{"upload_id", metadata["resource_id"]}}).toJson()); legacy.close();
+        legacy.write(QJsonDocument(QJsonObject{{"upload_id", metadata["resource_id"]}}).toJson());
+        legacy.close();
         ResourceTransferManager migrated(endpoint, 7, "fixture-token", legacyCache);
         QSignalSpy migratedUploads(&migrated, &ResourceTransferManager::uploaded);
         QSignalSpy migratedFailures(&migrated, &ResourceTransferManager::failed);
-        migrated.upload(source); QTRY_COMPARE_WITH_TIMEOUT(migratedUploads.size(), 1, 15000);
+        migrated.upload(source);
+        QTRY_COMPARE_WITH_TIMEOUT(migratedUploads.size(), 1, 15000);
         QCOMPARE(migratedUploads.first()[0].toJsonObject()["resource_id"], metadata["resource_id"]);
-        migrated.upload(renamed); QTRY_COMPARE_WITH_TIMEOUT(migratedUploads.size(), 2, 15000);
+        migrated.upload(renamed);
+        QTRY_COMPARE_WITH_TIMEOUT(migratedUploads.size(), 2, 15000);
         QCOMPARE(migratedUploads.last()[0].toJsonObject()["name"].toString(), QString("renamed.png"));
         QVERIFY(migratedUploads.last()[0].toJsonObject()["resource_id"] != metadata["resource_id"]);
         QVERIFY(legacy.open(QIODevice::WriteOnly | QIODevice::Truncate));
-        legacy.write("{\"upload_id\":\"00000000-0000-0000-0000-000000000001\"}"); legacy.close();
+        legacy.write("{\"upload_id\":\"00000000-0000-0000-0000-000000000001\"}");
+        legacy.close();
         const auto renamedAgain = directory.path() + "/expired-legacy.png";
         QVERIFY(QFile::copy(source, renamedAgain));
-        migrated.upload(renamedAgain); QTRY_COMPARE_WITH_TIMEOUT(migratedUploads.size(), 3, 15000);
+        migrated.upload(renamedAgain);
+        QTRY_COMPARE_WITH_TIMEOUT(migratedUploads.size(), 3, 15000);
         QCOMPARE(migratedUploads.last()[0].toJsonObject()["name"].toString(), QString("expired-legacy.png"));
         QVERIFY(migratedFailures.isEmpty());
         // The production composer uploads attachments and only clears an accepted snapshot.
@@ -471,54 +626,78 @@ private slots:
         ResourceTransferManager composerUploads(endpoint, 7, "fixture-token", directory.path() + "/composer-cache");
         MessageSubmissionController submission(&messages, &composerUploads, 7);
         MessageTextEdit editor;
-        editor.insertPlainText("before"); QVERIFY(editor.addAttachment(source)); editor.insertPlainText("after");
+        editor.insertPlainText("before");
+        QVERIFY(editor.addAttachment(source));
+        editor.insertPlainText("after");
         QTRY_VERIFY(!editor.hasPendingAttachments());
         const auto draft = editor.draft();
         QSignalSpy saved(&messages, &MessageService::outgoingPersisted);
         QSignalSpy uploadedByComposer(&composerUploads, &ResourceTransferManager::uploaded);
         bool interrupted = false;
-        const auto interruption = connect(&composerUploads, &ResourceTransferManager::progress, &messages,
+        const auto interruption = connect(
+            &composerUploads,
+            &ResourceTransferManager::progress,
+            &messages,
             /** @brief 已确认首块后关闭真实服务，下一次 HTTP 请求必须产生可恢复失败。 */
             [&host, &interrupted](qint64 offset, qint64) {
-            if (!interrupted && offset >= 65536) {
-                interrupted = true; host.kill(); host.waitForFinished(5000);
-            }
-        });
-        QVERIFY(submission.submit(draft, 12, 8, false)); editor.clearAccepted(draft.id);
+                if (!interrupted && offset >= 65536) {
+                    interrupted = true;
+                    host.kill();
+                    host.waitForFinished(5000);
+                }
+            });
+        QVERIFY(submission.submit(draft, 12, 8, false));
+        editor.clearAccepted(draft.id);
         QTRY_VERIFY_WITH_TIMEOUT(submission.isFailed(), 15000);
-        QVERIFY(interrupted); QCOMPARE(saved.size(), 1); QVERIFY(submission.hasPending());
+        QVERIFY(interrupted);
+        QCOMPARE(saved.size(), 1);
+        QVERIFY(submission.hasPending());
         disconnect(interruption);
         const auto pendingSummary = submission.pendingSummary();
-        submission.suspend(); messages.stop();
+        submission.suspend();
+        messages.stop();
         QVERIFY(submission.hasPending());
         QCOMPARE(submission.pendingSummary(), pendingSummary);
-        submission.retry(); QCOMPARE(saved.size(), 1);
-        messages.start(directory.path() + "/messages", 7); QTRY_COMPARE(ready.size(), 2);
+        submission.retry();
+        QCOMPARE(saved.size(), 1);
+        messages.start(directory.path() + "/messages", 7);
+        QTRY_COMPARE(ready.size(), 2);
         submission.resume();
         host.start(qEnvironmentVariable("RESOURCE_TEST_HOST"), {"--serve-test", directory.path() + "/store", port});
-        QVERIFY(host.waitForStarted(5000)); QVERIFY(host.waitForReadyRead(5000));
+        QVERIFY(host.waitForStarted(5000));
+        QVERIFY(host.waitForReadyRead(5000));
         QCOMPARE(QString::fromUtf8(host.readLine()).trimmed(), port);
         QSignalSpy resumedProgress(&composerUploads, &ResourceTransferManager::progress);
         submission.retry();
         QTRY_VERIFY_WITH_TIMEOUT(!submission.hasPending() || submission.isFailed(), 20000);
         QVERIFY2(!submission.isFailed(), qPrintable(submission.status()));
-        QVERIFY(!resumedProgress.isEmpty()); QVERIFY(resumedProgress.first()[0].toLongLong() >= 65536);
-        QCOMPARE(saved.size(), 3); QCOMPARE(uploadedByComposer.size(), 1);
+        QVERIFY(!resumedProgress.isEmpty());
+        QVERIFY(resumedProgress.first()[0].toLongLong() >= 65536);
+        QCOMPARE(saved.size(), 3);
+        QCOMPARE(uploadedByComposer.size(), 1);
         QSignalSpy history(&messages, &MessageService::historyLoaded);
-        messages.loadHistory(12); QTRY_COMPARE(history.size(), 1);
+        messages.loadHistory(12);
+        QTRY_COMPARE(history.size(), 1);
         const auto rows = qvariant_cast<QVector<StoredMessage>>(history.first()[2]);
-        QCOMPARE(rows.size(), 3); QCOMPARE(rows[0].content, QString("before"));
-        QVERIFY(rows[1].content.startsWith("@resource:v1:")); QCOMPARE(rows[2].content, QString("after"));
+        QCOMPARE(rows.size(), 3);
+        QCOMPARE(rows[0].content, QString("before"));
+        QVERIFY(rows[1].content.startsWith("@resource:v1:"));
+        QCOMPARE(rows[2].content, QString("after"));
 
-        host.kill(); QVERIFY(host.waitForFinished(5000));
+        host.kill();
+        QVERIFY(host.waitForFinished(5000));
     }
     /** 验证空文件被同步拒绝且传输器不进入忙状态。 */
     void rejectsEmptyFile() {
         QTemporaryDir directory;
-        QFile file(directory.path() + "/data.txt"); QVERIFY(file.open(QIODevice::WriteOnly)); file.close();
+        QFile file(directory.path() + "/data.txt");
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.close();
         ResourceTransferManager transfer(QUrl("http://127.0.0.1:1"), 7, "fixture-token", directory.path());
         QSignalSpy failed(&transfer, &ResourceTransferManager::failed);
-        transfer.upload(file.fileName()); QCOMPARE(failed.count(), 1); QVERIFY(!transfer.busy());
+        transfer.upload(file.fileName());
+        QCOMPARE(failed.count(), 1);
+        QVERIFY(!transfer.busy());
     }
 };
 #include "ui_acceptance_cases.h"

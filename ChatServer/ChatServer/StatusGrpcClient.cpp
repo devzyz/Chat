@@ -13,8 +13,7 @@ StatusGrpcClient::StatusGrpcClient() {
         rpc::ParseDurationMs(
             grpc_config["StatusDeadlineMs"],
             "[Grpc].StatusDeadlineMs",
-            std::chrono::milliseconds(3000))
-    };
+            std::chrono::milliseconds(3000))};
     _pool = std::make_unique<StatusConnectionPool>(
         config["StatusServer"]["Host"],
         config["StatusServer"]["Port"],
@@ -27,12 +26,7 @@ StatusGrpcClient::StatusGrpcClient(
     const std::string& port,
     rpc::ClientPolicy policy,
     std::size_t pool_size)
-    : _pool(std::make_unique<StatusConnectionPool>(
-          host,
-          port,
-          pool_size,
-          policy.acquire_timeout)),
-      _policy(policy) {}
+    : _pool(std::make_unique<StatusConnectionPool>(host, port, pool_size, policy.acquire_timeout)), _policy(policy) {}
 
 LoginRsp StatusGrpcClient::Login(int uid, std::string token) {
     LoginReq request;
@@ -43,10 +37,7 @@ LoginRsp StatusGrpcClient::Login(int uid, std::string token) {
         request,
         _policy.rpc_deadline,
         // 执行 Status 登录校验 RPC 并返回传输状态。
-        [](StatusService::Stub& stub,
-           ClientContext& context,
-           const LoginReq& req,
-           LoginRsp& rsp) {
+        [](StatusService::Stub& stub, ClientContext& context, const LoginReq& req, LoginRsp& rsp) {
             return stub.Login(&context, req, &rsp);
         });
     if (!result) {

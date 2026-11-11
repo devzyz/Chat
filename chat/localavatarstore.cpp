@@ -14,8 +14,7 @@
 LocalAvatarStore::LocalAvatarStore(QString root, QString legacyRoot)
     : _root(std::move(root)), _legacyRoot(std::move(legacyRoot)) {}
 
-AvatarResult LocalAvatarStore::readImage(const QString &fileName)
-{
+AvatarResult LocalAvatarStore::readImage(const QString& fileName) {
     QFile file(fileName);
     if (!file.open(QIODevice::ReadOnly)) {
         return {{}, QObject::tr("无法读取图片：%1").arg(file.errorString())};
@@ -40,28 +39,27 @@ AvatarResult LocalAvatarStore::readImage(const QString &fileName)
     return {image, {}};
 }
 
-QString LocalAvatarStore::path(const QString &environment, int uid) const
-{
+QString LocalAvatarStore::path(const QString& environment, int uid) const {
     const auto directory = UserStoragePaths::avatarDirectory(accountRoot(environment, uid), uid);
     return directory.isEmpty() ? QString() : QDir(directory).filePath("current.png");
 }
 
-QString LocalAvatarStore::accountRoot(const QString &environment, int uid) const
-{
+QString LocalAvatarStore::accountRoot(const QString& environment, int uid) const {
     return UserStoragePaths::accountRoot(_root, environment, uid);
 }
 
-AvatarResult LocalAvatarStore::load(const QString &environment, int uid) const
-{
+AvatarResult LocalAvatarStore::load(const QString& environment, int uid) const {
     const QString fileName = path(environment, uid);
     if (!QFileInfo::exists(fileName)) {
         if (!_legacyRoot.isEmpty() && uid > 0 && !environment.isEmpty()) {
             const auto key = QCryptographicHash::hash(environment.toUtf8(), QCryptographicHash::Sha256).toHex();
-            const auto legacy = QDir(_legacyRoot).filePath(QStringLiteral("avatars/v1/%1/%2.png")
-                .arg(QString::fromLatin1(key)).arg(uid));
+            const auto legacy =
+                QDir(_legacyRoot)
+                    .filePath(QStringLiteral("avatars/v1/%1/%2.png").arg(QString::fromLatin1(key)).arg(uid));
             if (QFileInfo::exists(legacy)) {
                 auto result = readImage(legacy);
-                if (result.error.isEmpty()) result.error = save(environment, uid, result.image);
+                if (result.error.isEmpty())
+                    result.error = save(environment, uid, result.image);
                 return result; // Preserve the legacy file even after a successful migration.
             }
         }
@@ -70,13 +68,13 @@ AvatarResult LocalAvatarStore::load(const QString &environment, int uid) const
     return readImage(fileName);
 }
 
-QString LocalAvatarStore::save(const QString &environment, int uid, const QImage &image) const
-{
+QString LocalAvatarStore::save(const QString& environment, int uid, const QImage& image) const {
     if (image.isNull() || image.size() != QSize(256, 256)) {
         return QObject::tr("请先选择有效图片");
     }
     const QString fileName = path(environment, uid);
-    if (fileName.isEmpty()) return QObject::tr("无效的用户数据目录");
+    if (fileName.isEmpty())
+        return QObject::tr("无效的用户数据目录");
     if (!QDir().mkpath(QFileInfo(fileName).absolutePath())) {
         return QObject::tr("无法创建头像保存目录");
     }

@@ -29,9 +29,7 @@ public:
               acquire_timeout,
               // 为固定端点构造验证码服务 stub。
               [endpoint = host + ":" + port] {
-                  return VarifyService::NewStub(grpc::CreateChannel(
-                      endpoint,
-                      grpc::InsecureChannelCredentials()));
+                  return VarifyService::NewStub(grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials()));
               }) {}
 };
 

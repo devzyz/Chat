@@ -11,11 +11,11 @@ std::size_t CheckedSendTotalLength(const char* message, std::size_t message_leng
     const auto limit = ResponseBodyLimit(message_id);
     if (message_length > limit) {
         throw std::length_error("message body exceeds send limit");
-	}
-	if (message_length > 0 && message == nullptr) {
-		throw std::invalid_argument("message body must not be null");
-	}
-	return message_length + HEAD_TOTAL_LEN;
+    }
+    if (message_length > 0 && message == nullptr) {
+        throw std::invalid_argument("message body must not be null");
+    }
+    return message_length + HEAD_TOTAL_LEN;
 }
 
 /** @brief 检查消息长度和协议限制后计算包含帧头的缓冲大小，非法输入抛异常。 */
@@ -23,27 +23,27 @@ std::size_t CheckedSendTotalLength(const std::string& message, std::size_t messa
     const auto limit = ResponseBodyLimit(message_id);
     if (message_length > limit) {
         throw std::length_error("message body exceeds send limit");
-	}
-	if (message_length > message.size()) {
-		throw std::invalid_argument("message length exceeds the source string");
-	}
-	return message_length + HEAD_TOTAL_LEN;
+    }
+    if (message_length > message.size()) {
+        throw std::invalid_argument("message length exceeds the source string");
+    }
+    return message_length + HEAD_TOTAL_LEN;
 }
 
 } // namespace
 
-MsgNode::MsgNode(std::size_t total_len) : _cur_len(0), _total_len(total_len){
-	_data = new char[_total_len + 1]();
-	_data[_total_len] = '\0';
+MsgNode::MsgNode(std::size_t total_len) : _cur_len(0), _total_len(total_len) {
+    _data = new char[_total_len + 1]();
+    _data[_total_len] = '\0';
 }
 
 MsgNode::~MsgNode() {
-	delete[] _data;
+    delete[] _data;
 }
 
 void MsgNode::Clear() {
-	std::memset(_data, 0, _total_len);
-	_cur_len = 0;
+    std::memset(_data, 0, _total_len);
+    _cur_len = 0;
 }
 
 /**
@@ -53,14 +53,15 @@ void MsgNode::Clear() {
  *
  * 注意要将本地字节序转换为网络字节序
  */
-SendNode::SendNode(const char* msg, std::uint16_t msgId, std::size_t msgLen) : MsgNode(CheckedSendTotalLength(msg, msgLen, msgId)), _msg_id(msgId) {
-	// id本地转网络
-	const auto header = ChatFrameCodec::EncodeHeader(
-		static_cast<std::uint16_t>(msgId), static_cast<std::uint16_t>(msgLen));
-	memcpy(_data, header.data(), header.size());
-	// msgLen本地转网络
-	// 数据
-	memcpy(_data + HEAD_TOTAL_LEN, msg, msgLen);
+SendNode::SendNode(const char* msg, std::uint16_t msgId, std::size_t msgLen)
+    : MsgNode(CheckedSendTotalLength(msg, msgLen, msgId)), _msg_id(msgId) {
+    // id本地转网络
+    const auto header =
+        ChatFrameCodec::EncodeHeader(static_cast<std::uint16_t>(msgId), static_cast<std::uint16_t>(msgLen));
+    memcpy(_data, header.data(), header.size());
+    // msgLen本地转网络
+    // 数据
+    memcpy(_data + HEAD_TOTAL_LEN, msg, msgLen);
 }
 /**
  *
@@ -69,24 +70,19 @@ SendNode::SendNode(const char* msg, std::uint16_t msgId, std::size_t msgLen) : M
  * @param msgLen 要发送的数据长度
  * 注意要将本地字节序转换为网络字节序
  */
-SendNode::SendNode(const std::string& msg, std::uint16_t msgId, std::size_t msgLen) : MsgNode(CheckedSendTotalLength(msg, msgLen, msgId)), _msg_id(msgId) {
-	// id本地转网络
-	const auto header = ChatFrameCodec::EncodeHeader(
-		static_cast<std::uint16_t>(msgId), static_cast<std::uint16_t>(msgLen));
-	memcpy(_data, header.data(), header.size());
-	// msgLen本地转网络
-	// 数据
-	memcpy(_data + HEAD_TOTAL_LEN, msg.c_str(), msgLen);
+SendNode::SendNode(const std::string& msg, std::uint16_t msgId, std::size_t msgLen)
+    : MsgNode(CheckedSendTotalLength(msg, msgLen, msgId)), _msg_id(msgId) {
+    // id本地转网络
+    const auto header =
+        ChatFrameCodec::EncodeHeader(static_cast<std::uint16_t>(msgId), static_cast<std::uint16_t>(msgLen));
+    memcpy(_data, header.data(), header.size());
+    // msgLen本地转网络
+    // 数据
+    memcpy(_data + HEAD_TOTAL_LEN, msg.c_str(), msgLen);
 }
 
-SendNode::~SendNode() {
+SendNode::~SendNode() {}
 
-}
+RecvNode::RecvNode(std::size_t maxLen, std::uint16_t msgId) : MsgNode(maxLen), _msg_id(msgId) {}
 
-RecvNode::RecvNode(std::size_t maxLen, std::uint16_t msgId) : MsgNode(maxLen), _msg_id(msgId) {
-
-}
-
-RecvNode::~RecvNode() {
-
-}
+RecvNode::~RecvNode() {}

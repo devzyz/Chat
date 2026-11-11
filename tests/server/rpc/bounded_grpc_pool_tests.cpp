@@ -32,7 +32,9 @@ TEST(BoundedGrpcPoolTests, ExhaustedPoolReturnsWithinConfiguredAcquireTimeout) {
 /** 验证租约析构归还后可再次借用。 */
 TEST(BoundedGrpcPoolTests, ReturnedLeaseCanBeBorrowedAgain) {
     // 创建固定值的独占池资源。
-    rpc::BoundedPool<int> pool(1, 50ms, [] { return std::make_unique<int>(7); });
+    rpc::BoundedPool<int> pool(1, 50ms, [] {
+        return std::make_unique<int>(7);
+    });
     {
         auto borrowed = pool.Acquire();
         ASSERT_TRUE(borrowed);
@@ -44,7 +46,9 @@ TEST(BoundedGrpcPoolTests, ReturnedLeaseCanBeBorrowedAgain) {
 /** 验证关闭立即唤醒借用者，无需等待原借用期限。 */
 TEST(BoundedGrpcPoolTests, CloseWakesWaitingBorrowerWithoutWaitingForAcquireTimeout) {
     // 创建固定值的独占池资源。
-    rpc::BoundedPool<int> pool(1, 5s, [] { return std::make_unique<int>(7); });
+    rpc::BoundedPool<int> pool(1, 5s, [] {
+        return std::make_unique<int>(7);
+    });
     auto held = pool.Acquire();
     ASSERT_TRUE(held);
 
@@ -66,7 +70,9 @@ TEST(BoundedGrpcPoolTests, CloseWakesWaitingBorrowerWithoutWaitingForAcquireTime
 /** 验证重复关闭及关闭后归还不会重新开放池。 */
 TEST(BoundedGrpcPoolTests, RepeatedCloseAndReturnAfterCloseRemainClosed) {
     // 创建固定值的独占池资源。
-    rpc::BoundedPool<int> pool(1, 50ms, [] { return std::make_unique<int>(7); });
+    rpc::BoundedPool<int> pool(1, 50ms, [] {
+        return std::make_unique<int>(7);
+    });
     auto held = pool.Acquire();
     ASSERT_TRUE(held);
 
@@ -82,10 +88,10 @@ TEST(BoundedGrpcPoolTests, RepeatedCloseAndReturnAfterCloseRemainClosed) {
 /** 验证 gRPC 状态映射为稳定的失败类别。 */
 TEST(GrpcClientRuntimeTests, ClassifiesStableGrpcFailureCategories) {
     EXPECT_EQ(rpc::ClassifyStatus(grpc::Status::OK), rpc::Failure::None);
-    EXPECT_EQ(rpc::ClassifyStatus({ grpc::StatusCode::DEADLINE_EXCEEDED, "test" }), rpc::Failure::DeadlineExceeded);
-    EXPECT_EQ(rpc::ClassifyStatus({ grpc::StatusCode::UNAVAILABLE, "test" }), rpc::Failure::Unavailable);
-    EXPECT_EQ(rpc::ClassifyStatus({ grpc::StatusCode::CANCELLED, "test" }), rpc::Failure::Cancelled);
-    EXPECT_EQ(rpc::ClassifyStatus({ grpc::StatusCode::INTERNAL, "test" }), rpc::Failure::Other);
+    EXPECT_EQ(rpc::ClassifyStatus({grpc::StatusCode::DEADLINE_EXCEEDED, "test"}), rpc::Failure::DeadlineExceeded);
+    EXPECT_EQ(rpc::ClassifyStatus({grpc::StatusCode::UNAVAILABLE, "test"}), rpc::Failure::Unavailable);
+    EXPECT_EQ(rpc::ClassifyStatus({grpc::StatusCode::CANCELLED, "test"}), rpc::Failure::Cancelled);
+    EXPECT_EQ(rpc::ClassifyStatus({grpc::StatusCode::INTERNAL, "test"}), rpc::Failure::Other);
 }
 
 /** 验证默认期限、合法边界及非法配置拒绝。 */

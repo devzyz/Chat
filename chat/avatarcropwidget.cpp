@@ -5,15 +5,13 @@
 #include <QPainterPath>
 #include <QWheelEvent>
 
-AvatarCropWidget::AvatarCropWidget(QWidget *parent) : QWidget(parent)
-{
+AvatarCropWidget::AvatarCropWidget(QWidget* parent) : QWidget(parent) {
     setMinimumSize(280, 280);
     setCursor(Qt::OpenHandCursor);
     setObjectName(QStringLiteral("avatarCropWidget"));
 }
 
-void AvatarCropWidget::setImage(const QImage &image)
-{
+void AvatarCropWidget::setImage(const QImage& image) {
     _image = image;
     _crop.setImageSize(image.size());
     _dragging = false;
@@ -22,22 +20,19 @@ void AvatarCropWidget::setImage(const QImage &image)
     update();
 }
 
-void AvatarCropWidget::setZoom(int percent)
-{
+void AvatarCropWidget::setZoom(int percent) {
     _crop.setZoom(percent);
     emit zoomChanged(_crop.zoom());
     update();
 }
 
-QRectF AvatarCropWidget::frameRect() const
-{
+QRectF AvatarCropWidget::frameRect() const {
     const qreal diameter = qMin(width(), height()) - 32.0;
     return {(width() - diameter) / 2, (height() - diameter) / 2, diameter, diameter};
 }
 
 /** @brief 绘制原图、裁剪范围与遮罩。 */
-void AvatarCropWidget::paintEvent(QPaintEvent *)
-{
+void AvatarCropWidget::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.fillRect(rect(), QColor(32, 34, 38));
     const QRectF frame = frameRect();
@@ -58,8 +53,7 @@ void AvatarCropWidget::paintEvent(QPaintEvent *)
     painter.drawEllipse(frame);
 }
 
-void AvatarCropWidget::mousePressEvent(QMouseEvent *event)
-{
+void AvatarCropWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton && !_image.isNull()) {
         _dragging = true;
         _lastPosition = event->position();
@@ -68,8 +62,7 @@ void AvatarCropWidget::mousePressEvent(QMouseEvent *event)
     }
 }
 
-void AvatarCropWidget::mouseMoveEvent(QMouseEvent *event)
-{
+void AvatarCropWidget::mouseMoveEvent(QMouseEvent* event) {
     if (_dragging) {
         const qreal sourcePerPixel = _crop.sourceRect().width() / frameRect().width();
         _crop.moveBy((_lastPosition - event->position()) * sourcePerPixel);
@@ -79,8 +72,7 @@ void AvatarCropWidget::mouseMoveEvent(QMouseEvent *event)
     }
 }
 
-void AvatarCropWidget::mouseReleaseEvent(QMouseEvent *event)
-{
+void AvatarCropWidget::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         _dragging = false;
         setCursor(Qt::OpenHandCursor);
@@ -88,8 +80,7 @@ void AvatarCropWidget::mouseReleaseEvent(QMouseEvent *event)
     }
 }
 
-void AvatarCropWidget::wheelEvent(QWheelEvent *event)
-{
+void AvatarCropWidget::wheelEvent(QWheelEvent* event) {
     if (!_image.isNull()) {
         setZoom(_crop.zoom() + event->angleDelta().y() / 12);
         event->accept();

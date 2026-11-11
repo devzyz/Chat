@@ -42,9 +42,8 @@ public:
     /** 按进程及序列号创建配置文件并写入内容。 */
     explicit ConfigFile(const std::string& contents) {
         static unsigned long sequence = 0;
-        path_ = std::filesystem::temp_directory_path() /
-            ("chat-config-test-" + std::to_string(GetCurrentProcessId()) + "-" +
-             std::to_string(++sequence) + ".ini");
+        path_ = std::filesystem::temp_directory_path() / ("chat-config-test-" + std::to_string(GetCurrentProcessId()) +
+                                                          "-" + std::to_string(++sequence) + ".ini");
         std::ofstream output(path_, std::ios::binary);
         output << contents;
         output.close();
@@ -57,7 +56,9 @@ public:
     }
 
     /** 借用临时文件路径，对象销毁后引用失效。 */
-    const std::filesystem::path& Path() const { return path_; }
+    const std::filesystem::path& Path() const {
+        return path_;
+    }
 
 private:
     std::filesystem::path path_;
@@ -65,28 +66,29 @@ private:
 
 /** 生成可带对端列表的合法非生产配置。 */
 std::string ValidConfig(const std::string& peer_servers = "") {
-    return
-        "[Redis]\n"
-        "Host=127.0.0.1\n"
-        "Port=6379\n"
-        "[Mysql]\n"
-        "Host=127.0.0.1\n"
-        "Port=3306\n"
-        "User=test-user\n"
-        "Schema=test-schema\n"
-        "[StatusServer]\n"
-        "Host=127.0.0.1\n"
-        "Port=50052\n"
-        "[SelfServer]\n"
-        "Name=ChatTest\n"
-        "Host=127.0.0.1\n"
-        "Port=18090\n"
-        "RPCPort=15055\n"
-        "[PeerServer]\n"
-        "Servers=" + peer_servers + "\n"
-        "[Log]\n"
-        "Name=ChatTest\n"
-        "LogDir=Log\n";
+    return "[Redis]\n"
+           "Host=127.0.0.1\n"
+           "Port=6379\n"
+           "[Mysql]\n"
+           "Host=127.0.0.1\n"
+           "Port=3306\n"
+           "User=test-user\n"
+           "Schema=test-schema\n"
+           "[StatusServer]\n"
+           "Host=127.0.0.1\n"
+           "Port=50052\n"
+           "[SelfServer]\n"
+           "Name=ChatTest\n"
+           "Host=127.0.0.1\n"
+           "Port=18090\n"
+           "RPCPort=15055\n"
+           "[PeerServer]\n"
+           "Servers=" +
+           peer_servers +
+           "\n"
+           "[Log]\n"
+           "Name=ChatTest\n"
+           "LogDir=Log\n";
 }
 
 /** 替换夹具文本的首次匹配，缺失时报告夹具构造错误。 */
@@ -180,7 +182,9 @@ TEST_P(InvalidPortTest, SelfServerTcpPortIsRejectedOutsideCanonicalRange) {
     ExpectInvalidConfig(invalid, "[SelfServer].Port must be a number between 1 and 65535");
 }
 
-INSTANTIATE_TEST_SUITE_P(InvalidPorts, InvalidPortTest,
+INSTANTIATE_TEST_SUITE_P(
+    InvalidPorts,
+    InvalidPortTest,
     testing::Values("", "not-a-number", "-1", "0", "65536", "8090suffix"));
 
 /** 验证 TCP 与 RPC 端口相同被拒绝。 */
@@ -204,18 +208,16 @@ TEST(ConfigMgrTests, SelfReferencePeerIsRejected) {
 /** 验证不同配置节不能定义重复的对端身份。 */
 TEST(ConfigMgrTests, DuplicatePeerNamesAreRejectedAcrossSections) {
     auto invalid = ValidConfig("PeerOne,PeerTwo");
-    invalid +=
-        "[PeerOne]\nName=SamePeer\nHost=127.0.0.1\nPort=15056\n"
-        "[PeerTwo]\nName=SamePeer\nHost=127.0.0.1\nPort=15057\n";
+    invalid += "[PeerOne]\nName=SamePeer\nHost=127.0.0.1\nPort=15056\n"
+               "[PeerTwo]\nName=SamePeer\nHost=127.0.0.1\nPort=15057\n";
     ExpectInvalidConfig(invalid, "duplicate peer name SamePeer");
 }
 
 /** 验证对端列表中的空条目被拒绝。 */
 TEST(ConfigMgrTests, EmptyPeerEntryIsRejected) {
     auto invalid = ValidConfig("PeerOne,,PeerTwo");
-    invalid +=
-        "[PeerOne]\nName=PeerOne\nHost=127.0.0.1\nPort=15056\n"
-        "[PeerTwo]\nName=PeerTwo\nHost=127.0.0.1\nPort=15057\n";
+    invalid += "[PeerOne]\nName=PeerOne\nHost=127.0.0.1\nPort=15056\n"
+               "[PeerTwo]\nName=PeerTwo\nHost=127.0.0.1\nPort=15057\n";
     ExpectInvalidConfig(invalid, "empty peer name");
 }
 

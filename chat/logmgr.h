@@ -13,8 +13,7 @@
 #include <spdlog/spdlog.h>
 
 /** @brief 管理客户端日志实例及 Qt 消息到日志级别的转换。 */
-class LogMgr : public Singleton<LogMgr>
-{
+class LogMgr : public Singleton<LogMgr> {
     friend class Singleton<LogMgr>;
 
 public:
@@ -36,15 +35,10 @@ private:
     LogMgr();
 
     /** @brief 将 Qt 框架消息按类型转发到客户端日志。 */
-    static void handleQtMessage(
-        QtMsgType type,
-        const QMessageLogContext& context,
-        const QString& message);
+    static void handleQtMessage(QtMsgType type, const QMessageLogContext& context, const QString& message);
 
     /** @brief 将配置级别转换为日志库级别。 */
-    spdlog::level::level_enum getLevel(
-        const QString& level,
-        spdlog::level::level_enum defaultLevel) const;
+    spdlog::level::level_enum getLevel(const QString& level, spdlog::level::level_enum defaultLevel) const;
 
     std::atomic<bool> _closed;
     std::atomic<bool> _initialized;

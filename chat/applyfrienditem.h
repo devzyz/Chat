@@ -13,13 +13,12 @@ class ApplyFriendItem;
  * @brief The ApplyFriendItem class
  * 好友请求列表重写item
  */
-class ApplyFriendItem : public ListItemBase
-{
+class ApplyFriendItem : public ListItemBase {
     Q_OBJECT
 
 public:
     /** @brief 初始化对象，用于展示一条好友申请及审批入口。 */
-    explicit ApplyFriendItem(QWidget *parent = nullptr);
+    explicit ApplyFriendItem(QWidget* parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ApplyFriendItem();
     /**
@@ -46,7 +45,7 @@ public:
     int getUid();
 
 private:
-    Ui::ApplyFriendItem *ui;
+    Ui::ApplyFriendItem* ui;
     // 当前item显示的，对应的好友申请信息
     std::shared_ptr<ApplyInfo> _apply_info;
     bool _added; // 是否已添加

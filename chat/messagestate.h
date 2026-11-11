@@ -27,15 +27,18 @@ public:
         } else if (event == Event::Read || event == Event::Delivered) {
             if (facts.messageId > 0 && facts.messageId == messageId) {
                 facts.phase = SendPhase::Committed;
-                if (event == Event::Read) facts.receipt = ReceiptLevel::Read;
-                else if (facts.receipt == ReceiptLevel::None) facts.receipt = ReceiptLevel::Delivered;
+                if (event == Event::Read)
+                    facts.receipt = ReceiptLevel::Read;
+                else if (facts.receipt == ReceiptLevel::None)
+                    facts.receipt = ReceiptLevel::Delivered;
             }
         } else if (facts.messageId == 0) {
             if (event == Event::Dispatch && attempt > facts.attempt) {
                 facts.attempt = attempt;
                 facts.phase = SendPhase::InFlight;
-            } else if ((event == Event::Timeout || event == Event::Rejected)
-                       && attempt == facts.attempt && facts.phase == SendPhase::InFlight) {
+            } else if (
+                (event == Event::Timeout || event == Event::Rejected) && attempt == facts.attempt &&
+                facts.phase == SendPhase::InFlight) {
                 facts.phase = event == Event::Rejected ? SendPhase::Rejected : SendPhase::Uncertain;
             }
         }

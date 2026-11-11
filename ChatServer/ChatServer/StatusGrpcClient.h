@@ -29,9 +29,7 @@ public:
               acquire_timeout,
               // 为固定端点构造 StatusService stub。
               [endpoint = host + ":" + port] {
-                  return StatusService::NewStub(grpc::CreateChannel(
-                      endpoint,
-                      grpc::InsecureChannelCredentials()));
+                  return StatusService::NewStub(grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials()));
               }) {}
 };
 

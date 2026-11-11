@@ -14,9 +14,17 @@ public:
     using GetAvatar = std::function<std::string(int)>;
     using SetAvatar = std::function<void(int, const std::string&)>;
     /** @brief 绑定并监听指定端点，创建存储工作线程；绑定错误抛异常，存储和回调依赖须活过所有会话。 */
-    ResourceHttpServer(boost::asio::io_context& context, const std::string& host, unsigned short port,
-                       ResourceStore& store, Authenticate authenticate, CanRead can_read = {}, Publish publish = {},
-                       GetAvatar get_avatar = {}, SetAvatar set_avatar = {}, std::function<bool()> ready = {});
+    ResourceHttpServer(
+        boost::asio::io_context& context,
+        const std::string& host,
+        unsigned short port,
+        ResourceStore& store,
+        Authenticate authenticate,
+        CanRead can_read = {},
+        Publish publish = {},
+        GetAvatar get_avatar = {},
+        SetAvatar set_avatar = {},
+        std::function<bool()> ready = {});
     /** @brief 等待存储工作线程结束；不自动停止监听，调用方须先 Stop 并完成所属 I/O 回调清理。 */
     ~ResourceHttpServer();
     /** @brief 在构造时已绑定的监听器上安排首次异步接收。 */
@@ -25,6 +33,7 @@ public:
     void Stop();
     /** @brief 返回资源 HTTP 监听器实际绑定的端口。 */
     unsigned short Port() const;
+
 private:
     struct Impl;
     std::shared_ptr<Impl> _impl;

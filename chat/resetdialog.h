@@ -6,16 +6,15 @@
 #include "authflowcoordinator.h"
 
 namespace Ui {
-    class ResetDialog;
+class ResetDialog;
 }
 
 /** @brief 收集密码重置资料和验证码，提交请求并展示处理结果。 */
-class ResetDialog : public QDialog
-{
+class ResetDialog : public QDialog {
     Q_OBJECT
 public:
     /** @brief 初始化对象，用于维护重置密码表单校验及请求结果。 */
-    explicit ResetDialog(AuthFlowCoordinator &authFlow, QWidget *parent = nullptr);
+    explicit ResetDialog(AuthFlowCoordinator& authFlow, QWidget* parent = nullptr);
 
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~ResetDialog();
@@ -65,8 +64,7 @@ private:
     bool checkPasswordValid();
     /** @brief 校验验证码输入并更新提示，返回是否通过。 */
     bool checkVarifyValid();
-    AuthFlowCoordinator &_authFlow;
-
+    AuthFlowCoordinator& _authFlow;
 };
 
 #endif // RESETDIALOG_H

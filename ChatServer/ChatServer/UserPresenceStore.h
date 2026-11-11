@@ -4,7 +4,11 @@
 
 namespace chat_session {
 /** @brief 标识用户位置和绑定凭据；凭据仅供原子发布核验，不随在线位置查询或日志返回。 */
-struct UserPresence { std::string server_id; SessionId session_id; std::string authentication_token; };
+struct UserPresence {
+    std::string server_id;
+    SessionId session_id;
+    std::string authentication_token;
+};
 }
 enum class PresenceStatus { Found, NotFound, Unavailable };
 /** @brief 区分查得位置、不存在与存储不可用；Publish 的位置表示被替换的旧值。 */
@@ -24,8 +28,8 @@ public:
     /** @brief 校验全局当前会话；生产适配器同时原子续租，替身默认只检查会话身份。 */
     virtual bool RefreshIfCurrent(int uid, const SessionId& session_id) {
         const auto current = Find(uid);
-        return current.status == PresenceStatus::Found && current.presence
-            && current.presence->session_id == session_id;
+        return current.status == PresenceStatus::Found && current.presence &&
+               current.presence->session_id == session_id;
     }
     /** @brief 仅在实例和会话都匹配时删除；不匹配也返回 true，false 表示存储失败。 */
     virtual bool RemoveIfCurrent(int uid, const chat_session::UserPresence& presence) = 0;

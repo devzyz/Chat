@@ -24,21 +24,15 @@ class MainWindow;
 }
 QT_END_NAMESPACE
 
-enum UIStatus{
-    LOGIN_UI,
-    REGISTER_UI,
-    RESET_UI,
-    CHAT_UI
-};
+enum UIStatus { LOGIN_UI, REGISTER_UI, RESET_UI, CHAT_UI };
 
 /** @brief 管理认证页面切换和账号会话根对象的生命周期。 */
-class MainWindow : public QMainWindow
-{
+class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
     /** @brief 创建登录入口并连接会话关闭和页面切换事件。 */
-    MainWindow(QWidget *parent = nullptr);
+    MainWindow(QWidget* parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~MainWindow();
     /** @brief 幂等结束账号会话并清理连接、模型及临时账号状态，返回是否执行了重置。 */
@@ -62,14 +56,16 @@ public slots:
     void notifyOffline();
     /** @brief 处理连接结束，仅异常断线触发账号会话重置。 */
     void connectionClose(bool expectedClose);
+
 protected:
     /** @brief 主动关闭前允许保留未落盘任务并取消退出。 */
-    void closeEvent(QCloseEvent *event) override;
+    void closeEvent(QCloseEvent* event) override;
+
 private:
     /** @brief 重新创建并展示登录页，恢复页面切换连接。 */
     void offlineLogin();
 
-    Ui::MainWindow *ui;
+    Ui::MainWindow* ui;
     QPointer<LoginDialog> _login_dlg;
     QPointer<RegisterDialog> _register_dlg;
     QPointer<ResetDialog> _reset_dlg;

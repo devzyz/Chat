@@ -2,10 +2,7 @@
 #include "contactuseritem.h"
 #include "ui_contactuseritem.h"
 
-ContactUserItem::ContactUserItem(QWidget *parent)
-    : ListItemBase(parent)
-    , ui(new Ui::ContactUserItem)
-{
+ContactUserItem::ContactUserItem(QWidget* parent) : ListItemBase(parent), ui(new Ui::ContactUserItem) {
     ui->setupUi(this);
     // 设置当前item的类型
     setItemType(ListItemType::CONTACT_USER_ITEM);
@@ -15,8 +12,7 @@ ContactUserItem::ContactUserItem(QWidget *parent)
     showRedPoint(false);
 }
 
-ContactUserItem::~ContactUserItem()
-{
+ContactUserItem::~ContactUserItem() {
     delete ui;
 }
 
@@ -25,24 +21,22 @@ ContactUserItem::~ContactUserItem()
  * @return
  * 用于设置外部的QListWidgetIem
  */
-QSize ContactUserItem::sizeHint() const
-{
+QSize ContactUserItem::sizeHint() const {
     return QSize(250, 70);
 }
 
 // 设置当前widget的一些信息
-void ContactUserItem::setInfo(std::shared_ptr<AuthInfo> auth_info)
-{
-    _friend_info = std::make_shared<UserInfo> (auth_info);
+void ContactUserItem::setInfo(std::shared_ptr<AuthInfo> auth_info) {
+    _friend_info = std::make_shared<UserInfo>(auth_info);
 
     // 加载图片
-
 
     // 设置图片自动缩放
     UserMgr::instance()->bindAvatar(ui->contact_user_head_label, _friend_info->_uid, _friend_info->_icon);
     ui->contact_user_head_label->setScaledContents(true);
 
-    ui->contact_user_name_label->setText(_friend_info->_backname.isEmpty() ? _friend_info->_name : _friend_info->_backname);
+    ui->contact_user_name_label->setText(
+        _friend_info->_backname.isEmpty() ? _friend_info->_name : _friend_info->_backname);
 }
 
 /**
@@ -52,17 +46,15 @@ void ContactUserItem::setInfo(std::shared_ptr<AuthInfo> auth_info)
  * @param icon
  * 这个专门为新的朋友item开放的接口
  */
-void ContactUserItem::setInfo(int uid, QString name, QString icon)
-{
-    _friend_info = std::make_shared<UserInfo> (uid, name, icon);
-
-
+void ContactUserItem::setInfo(int uid, QString name, QString icon) {
+    _friend_info = std::make_shared<UserInfo>(uid, name, icon);
 
     // 设置图片自动缩放
     UserMgr::instance()->bindAvatar(ui->contact_user_head_label, _friend_info->_uid, _friend_info->_icon);
     ui->contact_user_head_label->setScaledContents(true);
 
-    ui->contact_user_name_label->setText(_friend_info->_backname.isEmpty() ? _friend_info->_name : _friend_info->_backname);
+    ui->contact_user_name_label->setText(
+        _friend_info->_backname.isEmpty() ? _friend_info->_name : _friend_info->_backname);
 }
 
 /**
@@ -70,17 +62,15 @@ void ContactUserItem::setInfo(int uid, QString name, QString icon)
  * @param friend_info
  * 设置当前的用户列表的信息，并且每个contactUserItem内部保存一个FriendInfo用于管理当前item
  */
-void ContactUserItem::setInfo(std::shared_ptr<UserInfo> friend_info)
-{
+void ContactUserItem::setInfo(std::shared_ptr<UserInfo> friend_info) {
     _friend_info = friend_info;
-
-
 
     // 设置图片自动缩放
     UserMgr::instance()->bindAvatar(ui->contact_user_head_label, _friend_info->_uid, _friend_info->_icon);
     ui->contact_user_head_label->setScaledContents(true);
 
-    ui->contact_user_name_label->setText(_friend_info->_backname.isEmpty() ? _friend_info->_name : _friend_info->_backname);
+    ui->contact_user_name_label->setText(
+        _friend_info->_backname.isEmpty() ? _friend_info->_name : _friend_info->_backname);
 }
 
 /**
@@ -88,18 +78,14 @@ void ContactUserItem::setInfo(std::shared_ptr<UserInfo> friend_info)
  * @param show
  * 根据show是否显示红点
  */
-void ContactUserItem::showRedPoint(bool show)
-{
-    if (show){
+void ContactUserItem::showRedPoint(bool show) {
+    if (show) {
         ui->red_point->show();
-    }else {
+    } else {
         ui->red_point->hide();
     }
 }
 
-std::shared_ptr<UserInfo> ContactUserItem::getFriendInfo()
-{
+std::shared_ptr<UserInfo> ContactUserItem::getFriendInfo() {
     return _friend_info;
 }
-
-

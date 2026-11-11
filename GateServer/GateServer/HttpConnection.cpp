@@ -3,15 +3,18 @@
 #include "LogicSystem.h"
 #include <stdexcept>
 
-HttpConnection::HttpConnection(boost::asio::io_context& ioc, std::shared_ptr<LogicSystem> logic,
+HttpConnection::HttpConnection(
+    boost::asio::io_context& ioc,
+    std::shared_ptr<LogicSystem> logic,
     std::chrono::steady_clock::duration request_timeout)
-	: _socket(ioc), _logic(std::move(logic)), _request_timeout(request_timeout) {
-    if (request_timeout <= std::chrono::steady_clock::duration::zero()) throw std::invalid_argument("positive request timeout required");
-	_parser.body_limit(CServer::MaxRequestBodyBytes());
+    : _socket(ioc), _logic(std::move(logic)), _request_timeout(request_timeout) {
+    if (request_timeout <= std::chrono::steady_clock::duration::zero())
+        throw std::invalid_argument("positive request timeout required");
+    _parser.body_limit(CServer::MaxRequestBodyBytes());
 }
 
 tcp::socket& HttpConnection::GetSocket() {
-	return _socket;
+    return _socket;
 }
 
 /**
@@ -19,113 +22,110 @@ tcp::socket& HttpConnection::GetSocket() {
  * 异步读取客户端的请求，同时进行处理和开启定时器
  */
 void HttpConnection::Start() {
-	auto self = shared_from_this();
-	deadline_.expires_after(_request_timeout);
-	CheckDeadline();
-	// 读取请求后处理正文上限和传输错误，再进入路由。
-	http::async_read(_socket, _buffer, _parser, [self](beast::error_code ec, std::size_t bytes_transferred) {
-		try {
-			if (ec) {
-				if (ec == http::error::body_limit) {
-					self->_response.version(11);
-					self->_response.keep_alive(false);
-					self->_response.result(http::status::payload_too_large);
-					self->_response.set(http::field::content_type, "text/plain");
-					beast::ostream(self->_response.body()) << "request body exceeds limit\r\n";
-					self->WriteResponse();
-					return;
-				}
-				SPDLOG_WARN("HTTP request read failed");
-				return;
-			}
+    auto self = shared_from_this();
+    deadline_.expires_after(_request_timeout);
+    CheckDeadline();
+    // 读取请求后处理正文上限和传输错误，再进入路由。
+    http::async_read(_socket, _buffer, _parser, [self](beast::error_code ec, std::size_t bytes_transferred) {
+        try {
+            if (ec) {
+                if (ec == http::error::body_limit) {
+                    self->_response.version(11);
+                    self->_response.keep_alive(false);
+                    self->_response.result(http::status::payload_too_large);
+                    self->_response.set(http::field::content_type, "text/plain");
+                    beast::ostream(self->_response.body()) << "request body exceeds limit\r\n";
+                    self->WriteResponse();
+                    return;
+                }
+                SPDLOG_WARN("HTTP request read failed");
+                return;
+            }
 
-			boost::ignore_unused(bytes_transferred);
-			self->_request = self->_parser.release();
-			self->HandleReq();
-		}
-		catch (const std::exception&) {
-			SPDLOG_ERROR("HTTP request handling failed");
-		}
-		});
+            boost::ignore_unused(bytes_transferred);
+            self->_request = self->_parser.release();
+            self->HandleReq();
+        } catch (const std::exception&) {
+            SPDLOG_ERROR("HTTP request handling failed");
+        }
+    });
 }
 
 void HttpConnection::Stop() {
-	auto self = shared_from_this();
-	// 在 socket 执行器取消期限和双向连接。
-	net::dispatch(_socket.get_executor(), [self] {
-		beast::error_code error;
-		self->deadline_.cancel();
-		self->_socket.cancel(error);
-		self->_socket.shutdown(tcp::socket::shutdown_both, error);
-		self->_socket.close(error);
-	});
+    auto self = shared_from_this();
+    // 在 socket 执行器取消期限和双向连接。
+    net::dispatch(_socket.get_executor(), [self] {
+        beast::error_code error;
+        self->deadline_.cancel();
+        self->_socket.cancel(error);
+        self->_socket.shutdown(tcp::socket::shutdown_both, error);
+        self->_socket.close(error);
+    });
 }
 
 // 数字转16进制
 /** @brief 把半字节数值转换为十六进制字符。 */
 unsigned char ToHex(unsigned char x) {
-	return x > 9 ? x + 55 : x + 48;
+    return x > 9 ? x + 55 : x + 48;
 }
 
 // 16进制转数字
 /** @brief 将一个十六进制字符转换为数值，无效字符返回约定失败值。 */
 unsigned char FromHex(unsigned char value) {
-    if (value >= 'A' && value <= 'F') return value - 'A' + 10;
-    if (value >= 'a' && value <= 'f') return value - 'a' + 10;
-    if (value >= '0' && value <= '9') return value - '0';
+    if (value >= 'A' && value <= 'F')
+        return value - 'A' + 10;
+    if (value >= 'a' && value <= 'f')
+        return value - 'a' + 10;
+    if (value >= '0' && value <= '9')
+        return value - '0';
     throw std::invalid_argument("invalid percent encoding");
 }
 
 // 生成可发送的请求串
 /** @brief 按 URL 参数编码规则转义输入字节。 */
 std::string UrlEncode(const std::string& str) {
-	std::string strTemp = "";
-	size_t length = str.length();
-	for (size_t i = 0; i < length; i++) {
-		// 判断是否仅由数字和字母组成
-		if (isalnum((unsigned char)str[i]) ||
-			(str[i] == '-') ||
-			(str[i] == '_') ||
-			(str[i] == '.') ||
-			(str[i] == '~') || 
-			(str[i] == '=') || 
-			(str[i] == '?')) {
-			strTemp += str[i];
-		}
-		else if (str[i] == ' ') {
-			strTemp += "+";
-		}
-		else {
-			// 其他字符需要提前加%并且高四位和底四位分别转为16进制
-			strTemp += "%";
-			strTemp += ToHex((unsigned char)str[i] >> 4);
-			strTemp += ToHex((unsigned char)str[i] & 0x0F);
-		}
-	}
+    std::string strTemp = "";
+    size_t length = str.length();
+    for (size_t i = 0; i < length; i++) {
+        // 判断是否仅由数字和字母组成
+        if (isalnum((unsigned char)str[i]) || (str[i] == '-') || (str[i] == '_') || (str[i] == '.') ||
+            (str[i] == '~') || (str[i] == '=') || (str[i] == '?')) {
+            strTemp += str[i];
+        } else if (str[i] == ' ') {
+            strTemp += "+";
+        } else {
+            // 其他字符需要提前加%并且高四位和底四位分别转为16进制
+            strTemp += "%";
+            strTemp += ToHex((unsigned char)str[i] >> 4);
+            strTemp += ToHex((unsigned char)str[i] & 0x0F);
+        }
+    }
 
-	return strTemp;
+    return strTemp;
 }
 
 // 还原为原来的请求串
 /** @brief 解码 URL 转义序列，拒绝残缺或非法的百分号编码。 */
 std::string UrlDecode(const std::string& str) {
-	std::string strTemp = "";
-	size_t length = str.length();
+    std::string strTemp = "";
+    size_t length = str.length();
 
-	for (size_t i = 0; i < length; i++) {
-		// 还原+为空格
-		if (str[i] == '+') strTemp += " ";
-		// 遇到%则将后面的
-		else if (str[i] == '%') {
-			if (length - i < 3) throw std::invalid_argument("incomplete percent encoding");
-			unsigned char high = FromHex((unsigned char)str[++i]);
-			unsigned char low = FromHex((unsigned char)str[++i]);
-			strTemp += high * 16 + low;
-		}
-		else strTemp += str[i];
-	}
+    for (size_t i = 0; i < length; i++) {
+        // 还原+为空格
+        if (str[i] == '+')
+            strTemp += " ";
+        // 遇到%则将后面的
+        else if (str[i] == '%') {
+            if (length - i < 3)
+                throw std::invalid_argument("incomplete percent encoding");
+            unsigned char high = FromHex((unsigned char)str[++i]);
+            unsigned char low = FromHex((unsigned char)str[++i]);
+            strTemp += high * 16 + low;
+        } else
+            strTemp += str[i];
+    }
 
-	return strTemp;
+    return strTemp;
 }
 
 /**
@@ -134,51 +134,51 @@ std::string UrlDecode(const std::string& str) {
  * 修改_get_params为连接附带的参数
  */
 void HttpConnection::PreParseGetParam() {
-	// 提取URL http://localhost:8080/get_test?key1=value1&key2=value2
-	auto url = _request.target();
-	// 查询?的位置
-	auto query_pos = url.find('?');
-	if (query_pos == std::string::npos) {
-		_get_url = url;
-		return;
-	}
+    // 提取URL http://localhost:8080/get_test?key1=value1&key2=value2
+    auto url = _request.target();
+    // 查询?的位置
+    auto query_pos = url.find('?');
+    if (query_pos == std::string::npos) {
+        _get_url = url;
+        return;
+    }
 
-	_get_url = url.substr(0, query_pos);
-	std::string query_string = url.substr(query_pos + 1);
-	std::string key;
-	std::string value;
-	size_t pos = 0;
-	while ((pos = query_string.find('&')) != std::string::npos) {
-		auto pair = query_string.substr(0, pos);
-		size_t eq_pos = pair.find('=');
-		if (eq_pos != std::string::npos) {
-			key = UrlDecode(pair.substr(0, eq_pos));
-			value = UrlDecode(pair.substr(eq_pos + 1));
-			_get_params[key] = value;
-		}
+    _get_url = url.substr(0, query_pos);
+    std::string query_string = url.substr(query_pos + 1);
+    std::string key;
+    std::string value;
+    size_t pos = 0;
+    while ((pos = query_string.find('&')) != std::string::npos) {
+        auto pair = query_string.substr(0, pos);
+        size_t eq_pos = pair.find('=');
+        if (eq_pos != std::string::npos) {
+            key = UrlDecode(pair.substr(0, eq_pos));
+            value = UrlDecode(pair.substr(eq_pos + 1));
+            _get_params[key] = value;
+        }
 
-		query_string.erase(0, pos + 1);
-	}
+        query_string.erase(0, pos + 1);
+    }
 
-	// 处理最后一个参数对
-	if (!query_string.empty()) {
-		size_t eq_pos = query_string.find('=');
-		if (eq_pos != std::string::npos) {
-			key = UrlDecode(query_string.substr(0, eq_pos));
-			value = UrlDecode(query_string.substr(eq_pos + 1));
-			_get_params[key] = value;
-		}
-	}
+    // 处理最后一个参数对
+    if (!query_string.empty()) {
+        size_t eq_pos = query_string.find('=');
+        if (eq_pos != std::string::npos) {
+            key = UrlDecode(query_string.substr(0, eq_pos));
+            value = UrlDecode(query_string.substr(eq_pos + 1));
+            _get_params[key] = value;
+        }
+    }
 }
 
 void HttpConnection::HandleReq() {
-	// 设置版本 http/1.0 等
-	_response.version(_request.version());
-	// http维持长连接
-	_response.keep_alive(false);
+    // 设置版本 http/1.0 等
+    _response.version(_request.version());
+    // http维持长连接
+    _response.keep_alive(false);
 
-	// 处理get请求
-	if (_request.method() == http::verb::get) {
+    // 处理get请求
+    if (_request.method() == http::verb::get) {
         try {
             PreParseGetParam();
         } catch (const std::invalid_argument&) {
@@ -188,62 +188,62 @@ void HttpConnection::HandleReq() {
             WriteResponse();
             return;
         }
-		bool success = _logic->HandleGet(_get_url, shared_from_this());
-		if (!success) {
-			// 失败原因
-			_response.result(http::status::not_found);
-			// 设置的回应头，文本类型、二进制类型等
-			_response.set(http::field::content_type, "text/plain");
+        bool success = _logic->HandleGet(_get_url, shared_from_this());
+        if (!success) {
+            // 失败原因
+            _response.result(http::status::not_found);
+            // 设置的回应头，文本类型、二进制类型等
+            _response.set(http::field::content_type, "text/plain");
 
-			beast::ostream(_response.body()) << "url not found\r\n";
-			WriteResponse();
-			return;
-		}
+            beast::ostream(_response.body()) << "url not found\r\n";
+            WriteResponse();
+            return;
+        }
 
-		_response.result(http::status::ok);
-		_response.set(http::field::server, "GateServer");
-		WriteResponse();
-		return;
-	}
+        _response.result(http::status::ok);
+        _response.set(http::field::server, "GateServer");
+        WriteResponse();
+        return;
+    }
 
-	if (_request.method() == http::verb::post) {
-		bool success = _logic->HandlePost(_request.target(), shared_from_this());
-		if (!success) {
-			// 失败原因
-			_response.result(http::status::not_found);
-			// 设置的回应头，文本类型、二进制类型等
-			_response.set(http::field::content_type, "text/plain");
+    if (_request.method() == http::verb::post) {
+        bool success = _logic->HandlePost(_request.target(), shared_from_this());
+        if (!success) {
+            // 失败原因
+            _response.result(http::status::not_found);
+            // 设置的回应头，文本类型、二进制类型等
+            _response.set(http::field::content_type, "text/plain");
 
-			beast::ostream(_response.body()) << "url not found\r\n";
-			WriteResponse();
-			return;
-		}
+            beast::ostream(_response.body()) << "url not found\r\n";
+            WriteResponse();
+            return;
+        }
 
-		_response.result(http::status::ok);
-		_response.set(http::field::server, "GateServer");
-		WriteResponse();
-		return;
-	}
+        _response.result(http::status::ok);
+        _response.set(http::field::server, "GateServer");
+        WriteResponse();
+        return;
+    }
 }
 
 void HttpConnection::WriteResponse() {
-	auto self = shared_from_this();
-	// 设置回复消息的长度，用于http粘包处理
-	_response.content_length(_response.body().size());
-	// 响应发送完成后关闭发送方向并取消期限。
-	http::async_write(_socket, _response, [self](beast::error_code ec, std::size_t bytes_transferred) {
-		// 发送完成后，关闭发送端，并取消关联的定时器
-		self->_socket.shutdown(tcp::socket::shutdown_send, ec);
-		self->deadline_.cancel();
-		});
+    auto self = shared_from_this();
+    // 设置回复消息的长度，用于http粘包处理
+    _response.content_length(_response.body().size());
+    // 响应发送完成后关闭发送方向并取消期限。
+    http::async_write(_socket, _response, [self](beast::error_code ec, std::size_t bytes_transferred) {
+        // 发送完成后，关闭发送端，并取消关联的定时器
+        self->_socket.shutdown(tcp::socket::shutdown_send, ec);
+        self->deadline_.cancel();
+    });
 }
 // 开启定时器
 void HttpConnection::CheckDeadline() {
-	auto self = shared_from_this();
-	// 仅在真实期限到达时关闭 socket，忽略取消完成。
-	deadline_.async_wait([self](beast::error_code ec) {
-		if (!ec) {
-			self->_socket.close(ec);
-		}
-		});
+    auto self = shared_from_this();
+    // 仅在真实期限到达时关闭 socket，忽略取消完成。
+    deadline_.async_wait([self](beast::error_code ec) {
+        if (!ec) {
+            self->_socket.close(ec);
+        }
+    });
 }

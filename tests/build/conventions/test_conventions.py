@@ -364,6 +364,9 @@ class CredentialDiffTests(unittest.TestCase):
                  ([f'-{old}', f'+{old}', f'+{old}'], True),
                  ([f'-{old}', 'diff --git a/b b/b', f'+{old}'], True),
                  (['+' + key + ': ${{ secrets.TEST_VALUE }}'], False),
+                 (['-' + key + '=','-  fixtureOld', '+' + key + ' = fixtureOld'], False),
+                 (['-' + old, '+' + key + '=', '+ fixtureNew'], True),
+                 (['+' + key + '=', '+ fixtureNew'], True),
                  (['--- a/sample', '+++ b/sample'], False)]
         with tempfile.TemporaryDirectory() as folder:
             script = Path(folder) / 'check.ps1'

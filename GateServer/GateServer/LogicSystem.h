@@ -3,10 +3,9 @@
 #include "GateRequest.h"
 
 class HttpConnection;
-typedef std::function<void(std::shared_ptr<HttpConnection>)>HttpHandler;
+typedef std::function<void(std::shared_ptr<HttpConnection>)> HttpHandler;
 /** @brief 按 HTTP 路径分发请求，将注册、登录及验证码业务委托给 GateRequest。 */
-class LogicSystem
-{
+class LogicSystem {
 public:
     /** @brief 注册 HTTP 路由；gate_request 必须在本对象使用期间保持有效。 */
     explicit LogicSystem(gate::GateRequest& gate_request);
@@ -22,6 +21,7 @@ public:
     void RegisterGetHandler(std::string, HttpHandler);
     /** @brief 注册 POST 路径处理器，已有路径保持原处理器。 */
     void RegisterPostHandler(std::string, HttpHandler);
+
 private:
     gate::GateRequest& _gate_request;
     std::map<std::string, HttpHandler> _post_handlers;

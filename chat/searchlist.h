@@ -8,12 +8,11 @@
 #include "userdata.h"
 
 /** @brief 发起用户搜索并根据结果展示好友资料或申请入口。 */
-class SearchList : public QListWidget
-{
+class SearchList : public QListWidget {
     Q_OBJECT
 public:
     /** @brief 创建搜索列表并连接用户查询结果。 */
-    SearchList(QWidget * parent = nullptr);
+    SearchList(QWidget* parent = nullptr);
     /**
      * @brief closeFindDialog
      * 关闭搜索弹出框
@@ -27,7 +26,6 @@ public:
     void cancelSearch();
 
 private:
-
     /** @brief 添加不可选间隔项及添加用户入口。 */
     void addTipItem();
 
@@ -48,8 +46,7 @@ signals:
 
 private slots:
     /** @brief 根据点击条目类型发起搜索或关闭结果对话框。 */
-    void itemClicked(QListWidgetItem * item);
-
+    void itemClicked(QListWidgetItem* item);
 };
 
 #endif // SEARCHLIST_H

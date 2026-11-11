@@ -14,8 +14,7 @@
  * ChatUserWidget 聊天显示列表的item
  *
  */
-class ListItemBase : public QWidget
-{
+class ListItemBase : public QWidget {
     Q_OBJECT
 public:
     /** @brief 初始化对象，用于为列表展示组件保存条目类别并绘制样式背景。 */
@@ -28,7 +27,7 @@ public:
 protected:
     // 让 ChatPage 能完整显示样式表定义的背景颜色、背景图片、边框
     /** @brief 绘制当前控件的背景、边框或内容，遵循 Qt GUI 线程事件约束。 */
-    virtual void paintEvent(QPaintEvent *event) override;
+    virtual void paintEvent(QPaintEvent* event) override;
 
 private:
     ListItemType _itemType;

@@ -10,18 +10,17 @@ class LoginDialog;
 }
 
 /** @brief 收集登录凭据，通过 ClientLoginFlow 展示认证结果。 */
-class LoginDialog : public QDialog
-{
+class LoginDialog : public QDialog {
     Q_OBJECT
 
 public:
     /** @brief 创建登录表单并连接认证成功和失败事件。 */
-    explicit LoginDialog(AuthFlowCoordinator &authFlow, QWidget *parent = nullptr);
+    explicit LoginDialog(AuthFlowCoordinator& authFlow, QWidget* parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~LoginDialog();
 
 private:
-    Ui::LoginDialog *ui;
+    Ui::LoginDialog* ui;
     /** @brief 显示表单提示并按成功或失败状态选择样式。 */
     void showTip(QString str, bool isOk);
     // 用于显示注册出现的错误

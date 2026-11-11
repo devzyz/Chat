@@ -15,13 +15,12 @@ class GroupTipItem;
  * 一种是已有联系人group
  *
  */
-class GroupTipItem : public ListItemBase
-{
+class GroupTipItem : public ListItemBase {
     Q_OBJECT
 
 public:
     /** @brief 初始化对象，用于展示联系人列表的分组标题。 */
-    explicit GroupTipItem(QWidget *parent = nullptr);
+    explicit GroupTipItem(QWidget* parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~GroupTipItem();
     /**
@@ -38,7 +37,7 @@ public:
     void setGroupTip(QString str);
 
 private:
-    Ui::GroupTipItem *ui;
+    Ui::GroupTipItem* ui;
     // 本组的标题
     QString _tip;
 };

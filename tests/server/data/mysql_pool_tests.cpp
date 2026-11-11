@@ -12,16 +12,27 @@ struct Connection {
     int rollbacks = 0;
     std::function<void()> validation;
     /** 执行可选健康探针后返回有效状态；接口拼写由连接池模板约束。 @see sql::Connection::isValid。 */
-    bool isValid() { if (validation) validation(); return valid; }
+    bool isValid() {
+        if (validation)
+            validation();
+        return valid;
+    }
     /** 模拟连接未关闭。 @see sql::Connection::isClosed。 */
-    bool isClosed() { return false; }
+    bool isClosed() {
+        return false;
+    }
     /** 返回模拟自动提交状态。 @see sql::Connection::getAutoCommit。 */
-    bool getAutoCommit() { return autocommit; }
+    bool getAutoCommit() {
+        return autocommit;
+    }
     /** 更新模拟自动提交状态。 @see sql::Connection::setAutoCommit。 */
-    void setAutoCommit(bool value) { autocommit = value; }
+    void setAutoCommit(bool value) {
+        autocommit = value;
+    }
     /** 按故障开关抛出回滚错误，否则累计回滚次数。 @see sql::Connection::rollback。 */
     void rollback() {
-        if (fail_rollback) throw std::runtime_error("rollback failed");
+        if (fail_rollback)
+            throw std::runtime_error("rollback failed");
         ++rollbacks;
     }
 };
@@ -30,7 +41,9 @@ using Pool = chat_mysql::ConnectionPool<Connection>;
 /** 验证池耗尽等待有期限，归还后可再次借用。 */
 TEST(MysqlConnectionPoolTests, ExhaustionHasFiniteWaitAndReturnedConnectionCanBeBorrowed) {
     // 创建健康连接替身。
-    Pool pool(1, [] { return std::make_unique<Connection>(); });
+    Pool pool(1, [] {
+        return std::make_unique<Connection>();
+    });
     auto held = pool.Borrow();
     const auto started = Pool::Clock::now();
     EXPECT_EQ(pool.Borrow(started + 30ms), nullptr);
@@ -44,7 +57,9 @@ TEST(MysqlConnectionPoolTests, ExhaustionHasFiniteWaitAndReturnedConnectionCanBe
 /** 验证关闭唤醒等待者，重复关闭及归还不使池复活。 */
 TEST(MysqlConnectionPoolTests, CloseWakesWaitersAndRejectsReturnedConnections) {
     // 创建健康连接替身。
-    Pool pool(1, [] { return std::make_unique<Connection>(); });
+    Pool pool(1, [] {
+        return std::make_unique<Connection>();
+    });
     auto held = pool.Borrow();
     std::promise<void> entered;
     // 通知借用已开始并在有限期限内等待连接。
@@ -65,7 +80,10 @@ TEST(MysqlConnectionPoolTests, CloseWakesWaitersAndRejectsReturnedConnections) {
 TEST(MysqlConnectionPoolTests, InvalidIdleConnectionIsReplacedBeforeBorrow) {
     int created = 0;
     // 创建连接并累计工厂调用次数。
-    Pool pool(1, [&] { ++created; return std::make_unique<Connection>(); });
+    Pool pool(1, [&] {
+        ++created;
+        return std::make_unique<Connection>();
+    });
     auto held = pool.Borrow();
     held->valid = false;
     pool.Return(std::move(held));
@@ -79,7 +97,8 @@ TEST(MysqlConnectionPoolTests, FailedReplacementReleasesCapacityForRecovery) {
     bool unavailable = false;
     // 根据故障开关拒绝创建或返回健康连接。
     Pool pool(1, [&] {
-        if (unavailable) throw std::runtime_error("unavailable");
+        if (unavailable)
+            throw std::runtime_error("unavailable");
         return std::make_unique<Connection>();
     });
     auto held = pool.Borrow();
@@ -96,7 +115,10 @@ TEST(MysqlConnectionPoolTests, FailedReplacementReleasesCapacityForRecovery) {
 TEST(MysqlConnectionPoolTests, ReturnRollsBackUnfinishedWorkAndDiscardsResetFailures) {
     int created = 0;
     // 创建连接并累计工厂调用次数。
-    Pool pool(1, [&] { ++created; return std::make_unique<Connection>(); });
+    Pool pool(1, [&] {
+        ++created;
+        return std::make_unique<Connection>();
+    });
     auto held = pool.Borrow();
     held->autocommit = false;
     pool.Return(std::move(held));
@@ -120,14 +142,21 @@ TEST(MysqlConnectionPoolTests, SlowHealthCheckDoesNotHoldPoolMutexOrEscapeClose)
     Pool pool(1, [&] {
         auto connection = std::make_unique<Connection>();
         // 通知探针已进入并等待测试释放屏障。
-        connection->validation = [&] { entered.set_value(); released.wait(); };
+        connection->validation = [&] {
+            entered.set_value();
+            released.wait();
+        };
         return connection;
     });
     // 在独立任务中触发连接借用与健康校验。
-    auto borrow = std::async(std::launch::async, [&] { return pool.Borrow(); });
+    auto borrow = std::async(std::launch::async, [&] {
+        return pool.Borrow();
+    });
     const auto entered_status = started.wait_for(500ms);
     // 并发关闭连接池以验证不被健康检查阻塞。
-    auto closing = std::async(std::launch::async, [&] { pool.Close(); });
+    auto closing = std::async(std::launch::async, [&] {
+        pool.Close();
+    });
     const auto close_status = closing.wait_for(500ms);
     release.set_value();
     closing.get();

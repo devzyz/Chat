@@ -37,9 +37,7 @@ public:
               acquire_timeout,
               // 为固定对端创建 ChatService stub，通道由 stub 共享持有。
               [endpoint = host + ":" + port] {
-                  return ChatService::NewStub(grpc::CreateChannel(
-                      endpoint,
-                      grpc::InsecureChannelCredentials()));
+                  return ChatService::NewStub(grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials()));
               }) {}
 };
 
@@ -64,7 +62,8 @@ public:
     /** @brief 请求对端实例使指定旧登录会话下线。 */
     KickUserRsp NotifyOtherKickUser(const std::string& server_name, const KickUserReq& request);
     /** @brief 向对端实例通知回执发生变化；接收方仍需按 revision 同步持久化事实。 */
-    message::ReceiptChangedRsp NotifyMessageReceiptChanged(const std::string& server_name,
+    message::ReceiptChangedRsp NotifyMessageReceiptChanged(
+        const std::string& server_name,
         const message::ReceiptChangedReq& request);
 
 private:

@@ -19,5 +19,7 @@ struct DraftAttachment {
 };
 
 /** @brief 在线程池准备附件，最多 32 项/256 MiB 图片内存；满载返回失败结果，无引用任务跳过后续步骤。 */
-std::shared_ptr<DraftAttachment> prepareDraftAttachment(const QString &path, const QImage &image,
-                                                       const QString &accountRoot);
+std::shared_ptr<DraftAttachment> prepareDraftAttachment(
+    const QString& path,
+    const QImage& image,
+    const QString& accountRoot);

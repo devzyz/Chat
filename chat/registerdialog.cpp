@@ -4,11 +4,8 @@
 #include "global.h"
 #include "httpmgr.h"
 
-RegisterDialog::RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
-    : QDialog(parent)
-    , ui(new Ui::RegisterDialog)
-    , _authFlow(authFlow)
-{
+RegisterDialog::RegisterDialog(AuthFlowCoordinator& authFlow, QWidget* parent)
+    : QDialog(parent), ui(new Ui::RegisterDialog), _authFlow(authFlow) {
     ui->setupUi(this);
 
     // 密码显示格式
@@ -20,104 +17,122 @@ RegisterDialog::RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     repolish(ui->err_tip);
 
     // 连接单例类的信号与当前类的槽
-    connect(HttpMgr::instance().get(), &HttpMgr::registrationHttpFinished,
-            this, &RegisterDialog::regModFinish);
+    connect(HttpMgr::instance().get(), &HttpMgr::registrationHttpFinished, this, &RegisterDialog::regModFinish);
 
     // 网络请求的回调函数
     initHttpHandlers();
     ui->err_tip->setText("");
 
     // 连接信号与槽，当QLabel编辑完成信号触发后，调用对应的检查函数，并进行提示
-    connect(ui->user_edit, &QLineEdit::editingFinished, this,
+    connect(
+        ui->user_edit,
+        &QLineEdit::editingFinished,
+        this,
         /** @brief 用户名编辑结束时校验。 */
-        [this](){
-        checkUserValid();
-    });
+        [this]() {
+            checkUserValid();
+        });
 
-    connect(ui->email_edit, &QLineEdit::editingFinished, this,
+    connect(
+        ui->email_edit,
+        &QLineEdit::editingFinished,
+        this,
         /** @brief 邮箱编辑结束时校验。 */
-        [this](){
-        checkEmailValid();
-    });
+        [this]() {
+            checkEmailValid();
+        });
 
-    connect(ui->password_edit, &QLineEdit::editingFinished, this,
+    connect(
+        ui->password_edit,
+        &QLineEdit::editingFinished,
+        this,
         /** @brief 密码编辑结束时校验。 */
-        [this](){
-        checkPasswordValid();
-    });
+        [this]() {
+            checkPasswordValid();
+        });
 
-    connect(ui->confirm_edit, &QLineEdit::editingFinished, this,
+    connect(
+        ui->confirm_edit,
+        &QLineEdit::editingFinished,
+        this,
         /** @brief 确认密码编辑结束时校验。 */
-        [this](){
-        checkConfirmValid();
-    });
+        [this]() {
+            checkConfirmValid();
+        });
 
-    connect(ui->varify_edit, &QLineEdit::editingFinished, this,
+    connect(
+        ui->varify_edit,
+        &QLineEdit::editingFinished,
+        this,
         /** @brief 验证码编辑结束时校验。 */
-        [this](){
-        checkVarifyValid();
-    });
+        [this]() {
+            checkVarifyValid();
+        });
 
-    ui->password_visible->setState("invisible_leave", "invisible_hover", "",
-                                   "visible_leave", "visible_hover", "");
+    ui->password_visible->setState("invisible_leave", "invisible_hover", "", "visible_leave", "visible_hover", "");
 
-    ui->confirm_visible->setState("invisible_leave", "invisible_hover", "",
-                                   "visible_leave", "visible_hover", "");
+    ui->confirm_visible->setState("invisible_leave", "invisible_hover", "", "visible_leave", "visible_hover", "");
 
     // 连接槽函数，触发真正的密码的隐藏与显示
-    connect(ui->password_visible, &ClickedLabel::clicked, this,
+    connect(
+        ui->password_visible,
+        &ClickedLabel::clicked,
+        this,
         /** @brief 按标签状态切换密码可见性。 */
         [this]() {
-        auto state = ui->password_visible->getCurState();
+            auto state = ui->password_visible->getCurState();
 
-        // 当为隐藏状态时，切换编辑框为密码模式;否则为显示模式
-        if (state == ClickLabelState::Normal) {
-            ui->password_edit->setEchoMode(QLineEdit::Password);
-        }else {
-            ui->password_edit->setEchoMode(QLineEdit::Normal);
-        }
-    });
+            // 当为隐藏状态时，切换编辑框为密码模式;否则为显示模式
+            if (state == ClickLabelState::Normal) {
+                ui->password_edit->setEchoMode(QLineEdit::Password);
+            } else {
+                ui->password_edit->setEchoMode(QLineEdit::Normal);
+            }
+        });
 
-    connect(ui->confirm_visible, &ClickedLabel::clicked, this,
+    connect(
+        ui->confirm_visible,
+        &ClickedLabel::clicked,
+        this,
         /** @brief 按标签状态切换确认密码可见性。 */
         [this]() {
-        auto state = ui->confirm_visible->getCurState();
+            auto state = ui->confirm_visible->getCurState();
 
-        // 当为隐藏状态时，切换编辑框为密码模式;否则为显示模式
-        if (state == ClickLabelState::Normal) {
-            ui->confirm_edit->setEchoMode(QLineEdit::Password);
-        }else {
-            ui->confirm_edit->setEchoMode(QLineEdit::Normal);
-        }
-    });
+            // 当为隐藏状态时，切换编辑框为密码模式;否则为显示模式
+            if (state == ClickLabelState::Normal) {
+                ui->confirm_edit->setEchoMode(QLineEdit::Password);
+            } else {
+                ui->confirm_edit->setEchoMode(QLineEdit::Normal);
+            }
+        });
 
     // 创建定时器，用于注册成功后等待5s返回登录界面
     _return_login_counter = 5;
     _return_login_timer = new QTimer(this);
 
     // 连接信号与槽
-    connect(_return_login_timer, &QTimer::timeout,
+    connect(
+        _return_login_timer,
+        &QTimer::timeout,
         /** @brief 更新注册完成倒计时并到时返回登录。 */
         [this]() {
-        if (_return_login_counter == 0) {
-            _return_login_timer->stop();
-            emit loginRequested();
-            return;
-        }
-        _return_login_counter --;
-        auto str = QString("注册成功，%l s后返回登录").arg(_return_login_counter);
-        ui->return_label_tip_1->setText(str);
-    });
+            if (_return_login_counter == 0) {
+                _return_login_timer->stop();
+                emit loginRequested();
+                return;
+            }
+            _return_login_counter--;
+            auto str = QString("注册成功，%l s后返回登录").arg(_return_login_counter);
+            ui->return_label_tip_1->setText(str);
+        });
 }
 
-RegisterDialog::~RegisterDialog()
-{
+RegisterDialog::~RegisterDialog() {
     delete ui;
 }
 
 // 获取验证码按钮的点击事件
-void RegisterDialog::on_get_code_clicked()
-{
+void RegisterDialog::on_get_code_clicked() {
     auto match = checkEmailValid();
     auto email = ui->email_edit->text();
     if (match) {
@@ -129,17 +144,19 @@ void RegisterDialog::on_get_code_clicked()
         begin.module = static_cast<int>(Modules::REGISTERMOD);
         begin.requestId = static_cast<int>(ReqId::ID_GET_VERIFY_CODE);
         const AuthFlowId flowId = _authFlow.reduce(0, begin).flowId;
-        HttpMgr::instance()->postHttpReq(QUrl(gate_url_prefix + "/get_varifycode"),
-                                            json_obj, ReqId::ID_GET_VERIFY_CODE,
-                                            Modules::REGISTERMOD, flowId);
-    }else {
+        HttpMgr::instance()->postHttpReq(
+            QUrl(gate_url_prefix + "/get_varifycode"),
+            json_obj,
+            ReqId::ID_GET_VERIFY_CODE,
+            Modules::REGISTERMOD,
+            flowId);
+    } else {
         showTip("邮箱地址不正确", false);
     }
 }
 
 // 与httpmgr内sig_reg_mod_finish连接的槽函数，用于处理http完成后的工作
-void RegisterDialog::regModFinish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err)
-{
+void RegisterDialog::regModFinish(AuthFlowId flowId, ReqId id, QString res, ErrorCodes err) {
     AuthOutcome outcome;
     outcome.module = static_cast<int>(Modules::REGISTERMOD);
     outcome.requestId = static_cast<int>(id);
@@ -149,7 +166,7 @@ void RegisterDialog::regModFinish(AuthFlowId flowId, ReqId id, QString res, Erro
         if (action.kind == AuthActionKind::StayAndShowError) {
             showAuthError(action.error);
         }
-        return ;
+        return;
     }
 
     // 解析JSON 字符串，res转化为QByteArray类型
@@ -161,7 +178,7 @@ void RegisterDialog::regModFinish(AuthFlowId flowId, ReqId id, QString res, Erro
         if (action.kind == AuthActionKind::StayAndShowError) {
             showAuthError(action.error);
         }
-        return ;
+        return;
     }
 
     //json 解析错误
@@ -171,13 +188,13 @@ void RegisterDialog::regModFinish(AuthFlowId flowId, ReqId id, QString res, Erro
         if (action.kind == AuthActionKind::StayAndShowError) {
             showAuthError(action.error);
         }
-        return ;
+        return;
     }
     const QJsonObject object = jsonDoc.object();
     const int businessError = object["error"].toInt();
     outcome.businessError = businessError;
-    outcome.kind = businessError == ErrorCodes::SUCCESS
-        ? AuthOutcomeKind::HttpSuccess : AuthOutcomeKind::HttpBusinessError;
+    outcome.kind =
+        businessError == ErrorCodes::SUCCESS ? AuthOutcomeKind::HttpSuccess : AuthOutcomeKind::HttpBusinessError;
     const AuthAction action = _authFlow.reduce(flowId, outcome);
     if (action.kind == AuthActionKind::StayAndShowError) {
         showAuthError(action.error);
@@ -187,11 +204,9 @@ void RegisterDialog::regModFinish(AuthFlowId flowId, ReqId id, QString res, Erro
     if (action.accepted && handler != _handlers.cend()) {
         (*handler)(object);
     }
-
 }
 
-void RegisterDialog::showAuthError(AuthError error)
-{
+void RegisterDialog::showAuthError(AuthError error) {
     showTip(authErrorMessage(error), false);
 }
 
@@ -199,7 +214,7 @@ void RegisterDialog::showAuthError(AuthError error)
 void RegisterDialog::showTip(QString str, bool isOk) {
     if (isOk) {
         ui->err_tip->setProperty("state", "normal");
-    }else {
+    } else {
         ui->err_tip->setProperty("state", "err");
     }
 
@@ -208,37 +223,38 @@ void RegisterDialog::showTip(QString str, bool isOk) {
 }
 
 // 添加对网络请求返回的json对象的处理
-void RegisterDialog::initHttpHandlers()
-{
+void RegisterDialog::initHttpHandlers() {
     // 注册获取验证码回包的逻辑
-    _handlers.insert(ReqId::ID_GET_VERIFY_CODE,
+    _handlers.insert(
+        ReqId::ID_GET_VERIFY_CODE,
         /** @brief 将验证码回复转换为表单提示。 */
         [this](const QJsonObject& jsonObj) {
-        int error = jsonObj["error"].toInt();
-        if (error != ErrorCodes::SUCCESS) {
-            showTip(tr("参数错误"), false);
-            return ;
-        }
+            int error = jsonObj["error"].toInt();
+            if (error != ErrorCodes::SUCCESS) {
+                showTip(tr("参数错误"), false);
+                return;
+            }
 
-        showTip(tr("验证码已经发送到邮箱，注意查收"), true);
-        SPDLOG_INFO("registration verification code sent");
-    });
+            showTip(tr("验证码已经发送到邮箱，注意查收"), true);
+            SPDLOG_INFO("registration verification code sent");
+        });
 
     // 注册的回包逻辑
-    _handlers.insert(ReqId::ID_REG_USER,
+    _handlers.insert(
+        ReqId::ID_REG_USER,
         /** @brief 将注册回复转换为成功页或错误提示。 */
         [this](const QJsonObject& jsonObj) {
-        int error = jsonObj["error"].toInt();
+            int error = jsonObj["error"].toInt();
 
-        if (error != ErrorCodes::SUCCESS) {
-            showTip(tr("参数错误"), false);
-            return ;
-        }
+            if (error != ErrorCodes::SUCCESS) {
+                showTip(tr("参数错误"), false);
+                return;
+            }
 
-        changeTipPage();
-        showTip(tr("用户注册成功"), true);
-        SPDLOG_INFO("user registration succeeded");
-    });
+            changeTipPage();
+            showTip(tr("用户注册成功"), true);
+            SPDLOG_INFO("user registration succeeded");
+        });
 }
 
 // 添加错误信息到错误map里面
@@ -252,13 +268,12 @@ void RegisterDialog::delTipErr(TipErr te) {
     _tip_errs.remove(te);
     if (_tip_errs.empty()) {
         ui->err_tip->setText("");
-        return ;
+        return;
     }
     showTip(_tip_errs.first(), false);
 }
 
-bool RegisterDialog::checkUserValid()
-{
+bool RegisterDialog::checkUserValid() {
     if (ui->user_edit->text() == "") {
         addTipErr(TipErr::TIP_USER_ERR, tr("用户名不能为空"));
         return false;
@@ -311,7 +326,7 @@ bool RegisterDialog::checkPasswordValid() {
         // 提示密码与确认密码不匹配
         addTipErr(TipErr::TIP_PWD_CONFIRM, tr("密码和确认密码不匹配"));
         return false;
-    }else {
+    } else {
         delTipErr(TipErr::TIP_PWD_CONFIRM);
     }
 
@@ -345,7 +360,7 @@ bool RegisterDialog::checkConfirmValid() {
         // 提示密码与确认密码不匹配
         addTipErr(TipErr::TIP_PWD_CONFIRM, tr("确认密码和密码不匹配"));
         return false;
-    }else {
+    } else {
         delTipErr(TipErr::TIP_PWD_CONFIRM);
     }
 
@@ -370,8 +385,7 @@ bool RegisterDialog::checkVarifyValid() {
 }
 
 // 定时器时间到，
-void RegisterDialog::changeTipPage()
-{
+void RegisterDialog::changeTipPage() {
     _return_login_timer->stop();
     ui->stackedWidget->setCurrentWidget(ui->page_2);
 
@@ -381,26 +395,25 @@ void RegisterDialog::changeTipPage()
 }
 
 // 点击确认注册按钮后的事件
-void RegisterDialog::on_confirm_btn_clicked()
-{
+void RegisterDialog::on_confirm_btn_clicked() {
     auto check_user = checkUserValid();
-    if(!check_user){
+    if (!check_user) {
         return;
     }
     auto check_email = checkEmailValid();
-    if(!check_email){
+    if (!check_email) {
         return;
     }
     auto check_password = checkPasswordValid();
-    if(!check_password){
+    if (!check_password) {
         return;
     }
     auto check_confirm = checkConfirmValid();
-    if(!check_confirm){
+    if (!check_confirm) {
         return;
     }
     auto check_varify = checkVarifyValid();
-    if(!check_varify){
+    if (!check_varify) {
         return;
     }
 
@@ -417,21 +430,22 @@ void RegisterDialog::on_confirm_btn_clicked()
     begin.module = static_cast<int>(Modules::REGISTERMOD);
     begin.requestId = static_cast<int>(ReqId::ID_REG_USER);
     const AuthFlowId flowId = _authFlow.reduce(0, begin).flowId;
-    HttpMgr::instance()->postHttpReq(QUrl(gate_url_prefix + "/user_register"),
-                                        json_obj, ReqId::ID_REG_USER,
-                                        Modules::REGISTERMOD, flowId);
+    HttpMgr::instance()->postHttpReq(
+        QUrl(gate_url_prefix + "/user_register"),
+        json_obj,
+        ReqId::ID_REG_USER,
+        Modules::REGISTERMOD,
+        flowId);
 }
 
 // 点击返回登录按钮的事件
-void RegisterDialog::on_return_btn_clicked()
-{
+void RegisterDialog::on_return_btn_clicked() {
     _return_login_timer->stop();
     emit loginRequested();
 }
 
 // 点击取消登录，也进行跳转
-void RegisterDialog::on_cancel_btn_clicked()
-{
+void RegisterDialog::on_cancel_btn_clicked() {
     _return_login_timer->stop();
     emit loginRequested();
 }

@@ -26,11 +26,13 @@ public:
     /** @brief 查询指定用户当前头像资源，按请求代号丢弃旧响应。 */
     void fetchAvatar(int owner);
     /** @brief 将已经上传完成的资源发布为当前账号头像。 */
-    void commitAvatar(const QString &resourceId);
+    void commitAvatar(const QString& resourceId);
     /** @brief 使当前任务代失效并取消在途网络请求，保留可用于下次恢复的断点文件。 */
     void cancel();
     /** @brief 查询是否正在处理上传任务；不表示没有并发下载。 */
-    bool busy() const { return _busy; }
+    bool busy() const {
+        return _busy;
+    }
 signals:
     /** @brief 通知上传完成并给出服务器资源描述，后续消息提交由调用方处理。 */
     void uploaded(QJsonObject descriptor);
@@ -44,12 +46,17 @@ signals:
     void avatarResolved(int owner, QJsonObject descriptor);
     /** @brief 通知新头像已在服务器发布成功。 */
     void avatarCommitted(QJsonObject descriptor);
+
 private:
     /** @brief 构造带账号认证头和传输超时的资源请求，重定向由调用方显式处理。 */
     QNetworkRequest request(const QString& route) const;
     /** @brief 发起 JSON 或分块请求；成功时在对象线程调用 done，失败发出 failed，旧任务代不回调。 */
-    void jsonRequest(const QByteArray& method, const QString& route, const QByteArray& body,
-                     std::function<void(QJsonObject)> done, qint64 offset = -1);
+    void jsonRequest(
+        const QByteArray& method,
+        const QString& route,
+        const QByteArray& body,
+        std::function<void(QJsonObject)> done,
+        qint64 offset = -1);
     /** @brief 读取下一块文件计算摘要，通过事件队列分片执行以避免一次占用整个文件处理时间。 */
     void hashNext();
     /** @brief 根据端点、摘要、类型和名称读取断点，核对服务端身份后续传或新建。 */
@@ -57,8 +64,14 @@ private:
     /** @brief 从服务端已确认 offset 读取并上传下一块，到末尾时请求完成校验。 */
     void sendNext(qint64 offset);
     /** @brief 分块校验下载文件摘要，generation 不匹配时放弃旧任务，完成后发布本地路径。 */
-    void verifyDownload(std::shared_ptr<QFile> file, std::shared_ptr<QCryptographicHash> digest,
-                        QString expected, QString path, QString id, quint64 generation, bool finalFile = false);
+    void verifyDownload(
+        std::shared_ptr<QFile> file,
+        std::shared_ptr<QCryptographicHash> digest,
+        QString expected,
+        QString path,
+        QString id,
+        quint64 generation,
+        bool finalFile = false);
     /** @brief 结束当前上传文件操作并发出用户可见失败原因。 */
     void fail(const QString& reason);
     QUrl _endpoint;

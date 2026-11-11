@@ -7,11 +7,15 @@
 #>
 function Test-CredentialDiff {
     param([string[]]$Diff)
-    $pattern = '(?i)(?:password|passwd|secret|token|verification[-_ ]?code|email)\s*[:=]\s*[^\s<]{3,}'
+    $assignment = '(?i)(password|passwd|secret|token|verification[-_ ]?code|email)\s*([:=])'
+    $pattern = $assignment + '\s*[^\s<]{3,}'
+    $continuation = ''
+    $previousSide = ''
     $removed = [System.Collections.Generic.List[string]]::new()
     $added = [System.Collections.Generic.List[string]]::new()
     foreach ($line in @($Diff) + @('diff --git END END')) {
         if ($line.StartsWith('diff --git ')) {
+            $continuation = ''
             foreach ($value in $added) {
                 if (-not $removed.Remove($value)) { return $true }
             }
@@ -19,10 +23,20 @@ function Test-CredentialDiff {
             $added.Clear()
         } elseif ($line -match '^[+-](?!\+\+|--)') {
             $normalized = [regex]::Replace($line.Substring(1), '\$\{\{[^}]+\}\}', '<runtime>')
-            foreach ($match in [regex]::Matches($normalized, $pattern)) {
-                if ($line[0] -eq '-') { $removed.Add($match.Value) }
-                else { $added.Add($match.Value) }
+            # 仅在同一 diff 块、同侧的相邻行间补全赋值，保留值内的每个字符。
+            if ($continuation -and $previousSide -eq $line[0]) {
+                $normalized = $continuation + $normalized.TrimStart()
             }
+            $pending = [regex]::Match($normalized, $assignment + '\s*$')
+            $continuation = $pending.Value.TrimEnd()
+            $previousSide = $line[0]
+            foreach ($match in [regex]::Matches($normalized, $pattern)) {
+                $value = [regex]::Replace($match.Value, '^' + $assignment + '\s*', '$1$2')
+                if ($line[0] -eq '-') { $removed.Add($value) }
+                else { $added.Add($value) }
+            }
+        } else {
+            $continuation = ''
         }
     }
     return $false

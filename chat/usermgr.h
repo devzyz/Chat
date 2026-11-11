@@ -15,11 +15,10 @@ class MessageSubmissionController;
 class ResourceTransferManager;
 
 /** @brief 管理当前账号的用户、好友与会话缓存，并持有账号级消息和头像服务。 */
-class UserMgr : public QObject, public Singleton<UserMgr>,
-                public std::enable_shared_from_this<UserMgr>
-{
+class UserMgr : public QObject, public Singleton<UserMgr>, public std::enable_shared_from_this<UserMgr> {
     Q_OBJECT
     friend class Singleton<UserMgr>;
+
 public:
     /** @brief 释放账号管理对象及其 QObject 子对象。 */
     ~UserMgr();
@@ -34,32 +33,41 @@ public:
     /** @brief 停止消息服务并清空账号缓存，保留应用级配置。 */
     void resetSession();
     /** @brief 返回本对象持有的本地头像服务，调用方不负责释放。 */
-    LocalAvatar *localAvatar() const { return _localAvatar; }
+    LocalAvatar* localAvatar() const {
+        return _localAvatar;
+    }
     /** @brief 返回当前用户头像，缺失时使用默认头像。 */
     QPixmap selfAvatar() const;
     /** @brief 查询并关注指定用户头像，尚未取得时返回内置回退图。 */
-    QPixmap avatarFor(int uid, const QString &fallback = {}) const;
+    QPixmap avatarFor(int uid, const QString& fallback = {}) const;
     /** @brief 绑定标签的头像更新，标签销毁时自动断开连接。 */
-    void bindAvatar(QLabel *label, int uid, const QString &fallback = {});
+    void bindAvatar(QLabel* label, int uid, const QString& fallback = {});
     /** @brief 返回按 Gate 地址和当前账号隔离的本地数据目录。 */
     QString storageRoot() const;
     /** @brief 返回本对象持有的消息服务，调用方不负责释放。 */
-    MessageService *messages() const { return _messages; }
+    MessageService* messages() const {
+        return _messages;
+    }
     /** @brief 返回账号提交控制器，首次访问创建；账号结束前有效。 */
-    MessageSubmissionController *submissions();
+    MessageSubmissionController* submissions();
     /** @brief 连接暂时中断时冻结已有提交，不创建新的上传或控制器。 */
     void suspendSubmissions();
     /** @brief 查询是否存在未落盘发送内容，不创建控制器。 */
     bool hasPendingSubmissions() const;
     /** @brief 返回本人或联系人的版本资料。 */
-    QJsonObject socialProfile(int uid) const { return _socialProfiles.value(uid); }
+    QJsonObject socialProfile(int uid) const {
+        return _socialProfiles.value(uid);
+    }
     /** @brief 返回当前申请版本，供显式审批命令使用。 */
-    QString applicationRevision(int uid) const { return _applicationRevisions.value(uid); }
+    QString applicationRevision(int uid) const {
+        return _applicationRevisions.value(uid);
+    }
 signals:
     /** @brief 已落盘的本人资料变化后刷新展示。 */
     void profileChanged();
     /** @brief 通知指定用户的头像已变化。 */
     void avatarChanged(int uid);
+
 public:
     /** @brief 返回当前账号 UID；会话清空后返回 0。 */
     int uid();
@@ -81,7 +89,9 @@ public:
     /** @brief 查询缓存中的好友资料，未找到时返回 nullptr。 */
     std::shared_ptr<UserInfo> friendById(int uid);
     /** @brief 返回当前已恢复的联系人值，用于选择建群成员，不推进列表游标。 */
-    std::vector<std::shared_ptr<UserInfo>> friends() const { return _friend_list; }
+    std::vector<std::shared_ptr<UserInfo>> friends() const {
+        return _friend_list;
+    }
     /** @brief 返回当前游标对应的一页联系人，不推进游标。 */
     std::vector<std::shared_ptr<UserInfo>> nextContactPage();
     /** @brief 判断联系人分页游标是否已到列表末尾。 */
@@ -106,16 +116,17 @@ public:
     void addChatInfo(int chat_id, std::shared_ptr<ChatInfo> chat_info);
     /** @brief 按会话 ID 查询缓存资料，未找到时返回 nullptr。 */
     std::shared_ptr<ChatInfo> chatInfo(int chat_id);
+
 private:
-    MessageSubmissionController *_submissions = nullptr;
-    ResourceTransferManager *_uploads = nullptr;
+    MessageSubmissionController* _submissions = nullptr;
+    ResourceTransferManager* _uploads = nullptr;
     /** @brief 创建消息和头像服务，并在 Qt 退出前排空消息存储。 */
     UserMgr();
     /** @brief 使用数据库返回的目录值更新当前账号内存查询缓存。 */
-    void applyDirectory(const QJsonObject &directory);
-    MessageService *_messages;
-    LocalAvatar *_localAvatar;
-    AvatarCache *_remoteAvatars = nullptr;
+    void applyDirectory(const QJsonObject& directory);
+    MessageService* _messages;
+    LocalAvatar* _localAvatar;
+    AvatarCache* _remoteAvatars = nullptr;
     std::shared_ptr<UserInfo> _user_info;
     QString _token;
 
@@ -123,8 +134,8 @@ private:
 
     // 申请添加我为好友的列表，key为uid
     QMap<int, std::shared_ptr<ApplyInfo>> _apply_map;
-    QHash<int,QJsonObject> _socialProfiles;
-    QHash<int,QString> _applicationRevisions;
+    QHash<int, QJsonObject> _socialProfiles;
+    QHash<int, QString> _applicationRevisions;
     // 保存所有的好友，key为uid
     QMap<int, std::shared_ptr<UserInfo>> _friend_map;
     // 保存所有的好友

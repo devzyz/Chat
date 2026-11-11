@@ -13,8 +13,11 @@
 class FixtureStatus final : public message::StatusService::Service {
     /** 核对测试 Token 和用户范围后回显认证结果。 */
     grpc::Status Login(grpc::ServerContext*, const message::LoginReq* request, message::LoginRsp* response) override {
-        response->set_error(request->token() == "fixture-token" && request->uid() >= 7 && request->uid() <= 9 ? 0 : 1010);
-        response->set_uid(request->uid()); response->set_token(request->token()); return grpc::Status::OK;
+        response->set_error(
+            request->token() == "fixture-token" && request->uid() >= 7 && request->uid() <= 9 ? 0 : 1010);
+        response->set_uid(request->uid());
+        response->set_token(request->token());
+        return grpc::Status::OK;
     }
 };
 
@@ -27,14 +30,18 @@ protected:
     std::string digest;
     /** 创建独立临时目录、写入样本并计算摘要。 */
     void SetUp() override {
-        root = std::filesystem::temp_directory_path() / ("chat-resource-test-" +
-            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        root = std::filesystem::temp_directory_path() /
+               ("chat-resource-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         std::filesystem::create_directories(root);
-        std::ofstream output(root / "source", std::ios::binary); output << bytes; output.close();
+        std::ofstream output(root / "source", std::ios::binary);
+        output << bytes;
+        output.close();
         digest = resource::ResourceStore::Digest(root / "source");
     }
     /** 清理本用例拥有的临时资源目录。 */
-    void TearDown() override { std::filesystem::remove_all(root); }
+    void TearDown() override {
+        std::filesystem::remove_all(root);
+    }
     /** 为固定拥有者创建样本资源上传元数据。 */
     resource::Metadata Create(resource::ResourceStore& store) {
         return store.Create(7, "picture.png", "image/png", bytes.size(), digest);
@@ -43,14 +50,19 @@ protected:
     void Write(resource::ResourceStore& store, const std::string& id, std::uint64_t offset = 0) {
         while (offset < bytes.size()) {
             const auto count = std::min<std::size_t>(resource::ResourceStore::BUFFER_SIZE, bytes.size() - offset);
-            store.Append(id, 7, offset, bytes.data() + offset, count); offset += count;
+            store.Append(id, 7, offset, bytes.data() + offset, count);
+            offset += count;
         }
     }
 };
 /** 验证重建存储后恢复偏移、完成幂等及有界下载内容一致。 */
 TEST_F(StoreTest, ResumeAfterStoreRecreation) {
     std::string id;
-    { resource::ResourceStore store(root, 1000000); id = Create(store).id; store.Append(id, 7, 0, bytes.data(), 12345); }
+    {
+        resource::ResourceStore store(root, 1000000);
+        id = Create(store).id;
+        store.Append(id, 7, 0, bytes.data(), 12345);
+    }
     resource::ResourceStore reopened(root, 1000000);
     EXPECT_EQ(reopened.Owned(id, 7).offset, 12345u);
     Write(reopened, id, 12345);
@@ -58,15 +70,19 @@ TEST_F(StoreTest, ResumeAfterStoreRecreation) {
     EXPECT_TRUE(reopened.Complete(id, 7).ready);
     std::string result;
     for (std::uint64_t offset = 0; offset < bytes.size();) {
-        auto part = reopened.Read(id, offset, 900000); EXPECT_LE(part.size(), resource::ResourceStore::BUFFER_SIZE);
-        result.append(part.data(), part.size()); offset += part.size();
+        auto part = reopened.Read(id, offset, 900000);
+        EXPECT_LE(part.size(), resource::ResourceStore::BUFFER_SIZE);
+        result.append(part.data(), part.size());
+        offset += part.size();
     }
     EXPECT_EQ(result, bytes);
 }
 /** 验证创建中断的缺字节描述及临时元数据不会阻塞其他账号上传或删除完成资源。 */
 TEST_F(StoreTest, InterruptedCreationDoesNotBlockUploads) {
     resource::ResourceStore store(root, 1000000);
-    const auto completed = Create(store); Write(store, completed.id); store.Complete(completed.id, 7);
+    const auto completed = Create(store);
+    Write(store, completed.id);
+    store.Complete(completed.id, 7);
     const auto interrupted = Create(store);
     const auto staged = Create(store);
     std::filesystem::remove(root / (interrupted.id + ".part"));
@@ -83,34 +99,40 @@ TEST_F(StoreTest, InterruptedCreationDoesNotBlockUploads) {
 }
 /** 验证错误上传偏移被拒绝且文件长度不变。 */
 TEST_F(StoreTest, RejectsWrongOffsetWithoutChangingFile) {
-    resource::ResourceStore store(root, 1000000); auto item = Create(store);
+    resource::ResourceStore store(root, 1000000);
+    auto item = Create(store);
     store.Append(item.id, 7, 0, bytes.data(), 3);
     EXPECT_THROW(store.Append(item.id, 7, 0, bytes.data(), 3), resource::Error);
     EXPECT_EQ(store.Inspect(item.id).offset, 3u);
 }
 /** 验证其他用户不能查询所属上传、追加或完成。 */
 TEST_F(StoreTest, RejectsOtherOwner) {
-    resource::ResourceStore store(root, 1000000); auto item = Create(store);
+    resource::ResourceStore store(root, 1000000);
+    auto item = Create(store);
     EXPECT_THROW(store.Owned(item.id, 8), resource::Error);
     EXPECT_THROW(store.Append(item.id, 8, 0, bytes.data(), 3), resource::Error);
     EXPECT_THROW(store.Complete(item.id, 8), resource::Error);
 }
 /** 验证未完整上传的资源不能发布。 */
 TEST_F(StoreTest, IncompleteUploadCannotComplete) {
-    resource::ResourceStore store(root, 1000000); auto item = Create(store);
+    resource::ResourceStore store(root, 1000000);
+    auto item = Create(store);
     EXPECT_THROW(store.Complete(item.id, 7), resource::Error);
     EXPECT_FALSE(store.Inspect(item.id).ready);
 }
 /** 验证内容摘要不匹配不能发布。 */
 TEST_F(StoreTest, DigestMismatchCannotPublish) {
-    resource::ResourceStore store(root, 1000000); auto item = Create(store);
-    bytes.back() = 'y'; Write(store, item.id);
+    resource::ResourceStore store(root, 1000000);
+    auto item = Create(store);
+    bytes.back() = 'y';
+    Write(store, item.id);
     EXPECT_THROW(store.Complete(item.id, 7), resource::Error);
     EXPECT_FALSE(store.Inspect(item.id).ready);
 }
 /** 验证资源声明大小、单块大小及尾部写入边界。 */
 TEST_F(StoreTest, DeclaredLengthAndBufferAreBounded) {
-    resource::ResourceStore store(root, 1000000); auto item = Create(store);
+    resource::ResourceStore store(root, 1000000);
+    auto item = Create(store);
     EXPECT_THROW(store.Append(item.id, 7, 0, bytes.data(), bytes.size()), resource::Error);
     EXPECT_THROW(store.Create(7, "x", "image/png", 1000001, digest), resource::Error);
     Write(store, item.id);
@@ -126,7 +148,8 @@ TEST_F(StoreTest, DeclaredLengthAndBufferAreBounded) {
     const auto abandoned_root = root / "abandoned";
     resource::ResourceStore abandoned(abandoned_root, 1000000);
     std::vector<std::string> abandoned_ids;
-    for (int index = 0; index < 32; ++index) abandoned_ids.push_back(Create(abandoned).id);
+    for (int index = 0; index < 32; ++index)
+        abandoned_ids.push_back(Create(abandoned).id);
     EXPECT_THROW(Create(abandoned), resource::Error);
     const auto old = std::filesystem::file_time_type::clock::now() - std::chrono::hours(24 * 8);
     for (const auto& id : abandoned_ids) {
@@ -150,7 +173,8 @@ TEST_F(StoreTest, DeclaredLengthAndBufferAreBounded) {
 
     // 回收中断后重新打开存储，删除标记完成剩余清理且不占用配额。
     const auto interrupted = Create(abandoned);
-    std::filesystem::rename(abandoned_root / (interrupted.id + ".json"),
+    std::filesystem::rename(
+        abandoned_root / (interrupted.id + ".json"),
         abandoned_root / (interrupted.id + ".discard"));
     resource::ResourceStore recovered(abandoned_root, 1000000);
     EXPECT_NO_THROW(Create(recovered));
@@ -173,11 +197,17 @@ TEST_F(StoreTest, MediaSignatureIsChecked) {
 /** 按显式参数运行测试认证服务、真实资源 HTTP 夹具或 GTest 合同。 */
 int main(int argc, char** argv) {
     if (argc == 2 && std::string(argv[1]) == "--serve-status-fixture") {
-        FixtureStatus service; grpc::ServerBuilder builder; int port = 0;
+        FixtureStatus service;
+        grpc::ServerBuilder builder;
+        int port = 0;
         builder.AddListeningPort("127.0.0.1:0", grpc::InsecureServerCredentials(), &port);
-        builder.RegisterService(&service); auto server = builder.BuildAndStart();
-        if (!server) return 1;
-        std::cout << port << std::endl; server->Wait(); return 0;
+        builder.RegisterService(&service);
+        auto server = builder.BuildAndStart();
+        if (!server)
+            return 1;
+        std::cout << port << std::endl;
+        server->Wait();
+        return 0;
     }
     if ((argc == 3 || argc == 4) && std::string(argv[1]) == "--serve-test") {
         // Test executable only: real HTTP/storage with a deterministic authentication fake.
@@ -185,17 +215,31 @@ int main(int argc, char** argv) {
         resource::ResourceStore store(argv[2], 8ull * 1024 * 1024 * 1024);
         std::map<int, std::string> avatars;
         const auto port = argc == 4 ? static_cast<unsigned short>(std::stoul(argv[3])) : 0;
-        resource::ResourceHttpServer server(context, "127.0.0.1", port, store,
+        resource::ResourceHttpServer server(
+            context,
+            "127.0.0.1",
+            port,
+            store,
             // 仅允许固定测试用户与测试 Token 通过认证。
-            [](int uid, const std::string& token) { return (uid == 7 || uid == 8) && token == "fixture-token"; },
+            [](int uid, const std::string& token) {
+                return (uid == 7 || uid == 8) && token == "fixture-token";
+            },
             // 仅当资源已成为某个测试头像时授予测试下载权限。
             [&avatars](int, const resource::Metadata& metadata) {
-                for (const auto& entry : avatars) if (entry.second == metadata.id) return true;
+                for (const auto& entry : avatars)
+                    if (entry.second == metadata.id)
+                        return true;
                 return false;
-            // 查询测试内存头像映射。
-            }, {}, [&avatars](int owner) { return avatars[owner]; },
+                // 查询测试内存头像映射。
+            },
+            {},
+            [&avatars](int owner) {
+                return avatars[owner];
+            },
             // 更新指定测试用户的头像资源映射。
-            [&avatars](int owner, const std::string& id) { avatars[owner] = id; });
+            [&avatars](int owner, const std::string& id) {
+                avatars[owner] = id;
+            });
         server.Start();
         std::cout << server.Port() << std::endl;
         context.run();

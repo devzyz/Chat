@@ -11,8 +11,7 @@ using namespace std::chrono_literals;
 
 namespace {
 /** 验证具体生产池的租约归还后可再次借用。 */
-template <typename Factory>
-void VerifyBorrowReturn(Factory factory) {
+template <typename Factory> void VerifyBorrowReturn(Factory factory) {
     auto pool = factory();
     {
         auto first = pool->Acquire();
@@ -22,8 +21,7 @@ void VerifyBorrowReturn(Factory factory) {
 }
 
 /** 验证具体生产池耗尽时有限返回 PoolExhausted。 */
-template <typename Factory>
-void VerifyExhaustion(Factory factory) {
+template <typename Factory> void VerifyExhaustion(Factory factory) {
     auto pool = factory();
     auto held = pool->Acquire();
     ASSERT_TRUE(held);
@@ -34,8 +32,7 @@ void VerifyExhaustion(Factory factory) {
 }
 
 /** 验证生产池关闭幂等、唤醒等待者并拒绝关闭后借用。 */
-template <typename Factory>
-void VerifyCloseLifecycle(Factory factory) {
+template <typename Factory> void VerifyCloseLifecycle(Factory factory) {
     auto pool = factory();
     auto held = pool->Acquire();
     ASSERT_TRUE(held);
@@ -58,26 +55,42 @@ void VerifyCloseLifecycle(Factory factory) {
 /** 返回创建Gate 的验证码单容量短期限池的工厂。 */
 auto VarifyPoolFactory() {
     // 创建Gate 的验证码生产 RPC 池，无需实际调用远端。
-    return [] { return std::make_unique<RPCConnectionPool>(1, "127.0.0.1", "1", 50ms); };
+    return [] {
+        return std::make_unique<RPCConnectionPool>(1, "127.0.0.1", "1", 50ms);
+    };
 }
 
 /** 返回创建Gate 的 Status单容量短期限池的工厂。 */
 auto GateStatusPoolFactory() {
     // 创建Gate 的 Status生产 RPC 池，无需实际调用远端。
-    return [] { return std::make_unique<RPCConnection>(1, "127.0.0.1", "1", 50ms); };
+    return [] {
+        return std::make_unique<RPCConnection>(1, "127.0.0.1", "1", 50ms);
+    };
 }
 }
 
 /** 验证Gate 的验证码池借用归还合同。 */
-TEST(GateVarifyPoolContractTests, BorrowReturn) { VerifyBorrowReturn(VarifyPoolFactory()); }
+TEST(GateVarifyPoolContractTests, BorrowReturn) {
+    VerifyBorrowReturn(VarifyPoolFactory());
+}
 /** 验证Gate 的验证码池耗尽有界合同。 */
-TEST(GateVarifyPoolContractTests, ExhaustionIsBounded) { VerifyExhaustion(VarifyPoolFactory()); }
+TEST(GateVarifyPoolContractTests, ExhaustionIsBounded) {
+    VerifyExhaustion(VarifyPoolFactory());
+}
 /** 验证Gate 的验证码池关闭唤醒与幂等合同。 */
-TEST(GateVarifyPoolContractTests, CloseIsIdempotentAndWakesBorrowers) { VerifyCloseLifecycle(VarifyPoolFactory()); }
+TEST(GateVarifyPoolContractTests, CloseIsIdempotentAndWakesBorrowers) {
+    VerifyCloseLifecycle(VarifyPoolFactory());
+}
 
 /** 验证Gate 的 Status池借用归还合同。 */
-TEST(GateStatusPoolContractTests, BorrowReturn) { VerifyBorrowReturn(GateStatusPoolFactory()); }
+TEST(GateStatusPoolContractTests, BorrowReturn) {
+    VerifyBorrowReturn(GateStatusPoolFactory());
+}
 /** 验证Gate 的 Status池耗尽有界合同。 */
-TEST(GateStatusPoolContractTests, ExhaustionIsBounded) { VerifyExhaustion(GateStatusPoolFactory()); }
+TEST(GateStatusPoolContractTests, ExhaustionIsBounded) {
+    VerifyExhaustion(GateStatusPoolFactory());
+}
 /** 验证Gate 的 Status池关闭唤醒与幂等合同。 */
-TEST(GateStatusPoolContractTests, CloseIsIdempotentAndWakesBorrowers) { VerifyCloseLifecycle(GateStatusPoolFactory()); }
+TEST(GateStatusPoolContractTests, CloseIsIdempotentAndWakesBorrowers) {
+    VerifyCloseLifecycle(GateStatusPoolFactory());
+}

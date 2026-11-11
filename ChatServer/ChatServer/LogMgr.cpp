@@ -3,9 +3,7 @@
 #include "ConfigMgr.h"
 #include <iostream>
 
-LogMgr::LogMgr() : _b_stop(false) {
-
-}
+LogMgr::LogMgr() : _b_stop(false) {}
 
 LogMgr::~LogMgr() {
     Close();
@@ -72,20 +70,14 @@ bool LogMgr::InitLogMgr() {
 
     try {
         // 拿到当前服务的输出目录，如果不存在则创建目录
-        const std::filesystem::path service_log_dir =
-            std::filesystem::path(log_dir) / log_name;
+        const std::filesystem::path service_log_dir = std::filesystem::path(log_dir) / log_name;
         std::filesystem::create_directories(service_log_dir);
 
         // 拿到要输出的当前日志文件
-        const auto log_file =
-            (service_log_dir / (log_name + ".txt")).string();
+        const auto log_file = (service_log_dir / (log_name + ".txt")).string();
 
         // 创建多线程安全的logger
-        _logger = spdlog::rotating_logger_mt(
-            log_name,
-            log_file,
-            max_file_size,
-            rotated_files);
+        _logger = spdlog::rotating_logger_mt(log_name, log_file, max_file_size, rotated_files);
 
         // 设置最低输出级别
         _logger->set_level(GetLevel(log_level, spdlog::level::info));
@@ -118,8 +110,7 @@ bool LogMgr::InitLogMgr() {
             rotated_files);
 
         return true;
-    }
-    catch (std::exception& e) {
+    } catch (std::exception& e) {
         SPDLOG_ERROR("LogMgr init failed, error={}", e.what());
 
         _logger.reset();

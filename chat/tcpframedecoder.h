@@ -12,14 +12,15 @@ struct DecodedTcpFrame {
 };
 
 /** @brief 增量拆分 TCP 字节流，保存未完成帧并在非法帧头后进入错误状态。 */
-class TcpFrameDecoder
-{
+class TcpFrameDecoder {
 public:
     /** @brief 返回普通 TCP 消息允许的最大 body 字节数。 */
-    static constexpr qsizetype maxBodyBytes() noexcept { return 2048; }
+    static constexpr qsizetype maxBodyBytes() noexcept {
+        return 2048;
+    }
 
     /** @brief 追加网络字节并输出完整帧；非法帧头设置错误标记，由 reset 清除。 */
-    QVector<DecodedTcpFrame> append(const QByteArray &bytes);
+    QVector<DecodedTcpFrame> append(const QByteArray& bytes);
     /** @brief 清空残留帧字节及错误状态，供下一条连接复用。 */
     void reset();
     /** @brief 返回尚未组成完整帧的缓冲字节数。 */

@@ -16,8 +16,8 @@
  */
 struct SearchInfo {
     /** @brief 创建保存用户搜索结果的身份及展示资料。 */
-    SearchInfo(int uid, QString name, QString description, QString icon, int sex) :
-        _uid(uid), _name(name), _description(description), _sex(sex), _icon(icon) {}
+    SearchInfo(int uid, QString name, QString description, QString icon, int sex)
+        : _uid(uid), _name(name), _description(description), _sex(sex), _icon(icon) {}
     int _uid;
     QString _name;
     QString _description;
@@ -28,37 +28,50 @@ struct SearchInfo {
 /** @brief 保存新朋友申请列表展示所需的申请人资料和申请内容。 */
 struct ApplyInfo {
     /** @brief 使用好友申请回包构造列表项，backname 为申请人给接收方的备注名。 */
-    ApplyInfo(int apply_uid, QString apply_name, QString apply_description,
-              QString apply_icon, int apply_sex, int status, int to_uid, QString description, QString backname)
-        :_apply_uid(apply_uid),_apply_name(apply_name),_apply_description(apply_description),
-        _apply_icon(apply_icon),_apply_sex(apply_sex),_status(status), _to_uid(to_uid),
-        _description(description), _backname(backname) {}
+    ApplyInfo(
+        int apply_uid,
+        QString apply_name,
+        QString apply_description,
+        QString apply_icon,
+        int apply_sex,
+        int status,
+        int to_uid,
+        QString description,
+        QString backname)
+        : _apply_uid(apply_uid), _apply_name(apply_name), _apply_description(apply_description),
+          _apply_icon(apply_icon), _apply_sex(apply_sex), _status(status), _to_uid(to_uid), _description(description),
+          _backname(backname) {}
 
-    int _apply_uid; // 申请人id
-    QString _apply_name; // 申请人用户名
+    int _apply_uid;             // 申请人id
+    QString _apply_name;        // 申请人用户名
     QString _apply_description; // 申请人个人描述
-    QString _apply_icon; // 申请人头像
-    int _apply_sex; // 申请人性别
-    int _status; // 状态，是否添加
-    int _to_uid; // 被申请人id
-    QString _description; // 申请人发送的描述信息
-    QString _backname; // 申请人给被申请人的备注名
+    QString _apply_icon;        // 申请人头像
+    int _apply_sex;             // 申请人性别
+    int _status;                // 状态，是否添加
+    int _to_uid;                // 被申请人id
+    QString _description;       // 申请人发送的描述信息
+    QString _backname;          // 申请人给被申请人的备注名
 };
 
 /** @brief 保存好友审批后展示的对方资料和本账号设置的备注名。 */
 struct AuthInfo {
     /** @brief 使用好友确认回包构造联系人资料。 */
-    AuthInfo(int auth_uid, QString auth_name, QString auth_description,
-              QString auth_icon, int auth_sex, QString backname)
-        :_auth_uid(auth_uid),_auth_name(auth_name),_auth_description(auth_description),
-        _auth_icon(auth_icon),_auth_sex(auth_sex), _backname(backname) {}
+    AuthInfo(
+        int auth_uid,
+        QString auth_name,
+        QString auth_description,
+        QString auth_icon,
+        int auth_sex,
+        QString backname)
+        : _auth_uid(auth_uid), _auth_name(auth_name), _auth_description(auth_description), _auth_icon(auth_icon),
+          _auth_sex(auth_sex), _backname(backname) {}
 
-    int _auth_uid; // 对方的uid
-    QString _auth_name; // 对方的用户名
+    int _auth_uid;             // 对方的uid
+    QString _auth_name;        // 对方的用户名
     QString _auth_description; // 对方的个人描述
-    QString _auth_icon; // 对方的头像
-    int _auth_sex; // 对方的性别
-    QString _backname; // 我给对方的备注名
+    QString _auth_icon;        // 对方的头像
+    int _auth_sex;             // 对方的性别
+    QString _backname;         // 我给对方的备注名
 };
 
 // 聊天消息的基类
@@ -72,16 +85,34 @@ struct AuthInfo {
 class ChatDataBase {
 public:
     /** @brief 以服务器消息 ID 和日内时间构造消息，日期按当前日期补齐。 */
-    ChatDataBase(int msg_id, int chat_id, ChatType chat_type,
-                 ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time);
+    ChatDataBase(
+        int msg_id,
+        int chat_id,
+        ChatType chat_type,
+        ChatMessageType chat_msg_type,
+        QString content,
+        int send_uid,
+        QTime send_time);
 
     /** @brief 以客户端 UUID 构造待确认消息，日内时间按当前日期补齐。 */
-    ChatDataBase(QString client_msg_id, int chat_id, ChatType chat_type,
-                 ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time);
+    ChatDataBase(
+        QString client_msg_id,
+        int chat_id,
+        ChatType chat_type,
+        ChatMessageType chat_msg_type,
+        QString content,
+        int send_uid,
+        QTime send_time);
 
     /** @brief 以服务器消息 ID 和完整日期时间构造已确认消息。 */
-    ChatDataBase(int msg_id, int chat_id, ChatType chat_type,
-                 ChatMessageType chat_msg_type, QString content, int send_uid, QDateTime sent_at);
+    ChatDataBase(
+        int msg_id,
+        int chat_id,
+        ChatType chat_type,
+        ChatMessageType chat_msg_type,
+        QString content,
+        int send_uid,
+        QDateTime sent_at);
 
     /** @brief 返回服务器分配的消息 ID，本地待发消息可能尚无有效 ID。 */
     int getMsgId();
@@ -108,7 +139,8 @@ public:
     /** @brief 返回客户端生成的消息 UUID，用于 ACK 和重试关联。 */
     QString getCacheMsgId();
     /** @brief 设置客户端消息 UUID，保持与本地发送身份一致。 */
-    void setClientMessageId(const QString &clientMessageId);
+    void setClientMessageId(const QString& clientMessageId);
+
 private:
     // 客户端本地保存的id
     QString _client_msg_id;
@@ -132,19 +164,37 @@ private:
 
 // 一条文本消息
 /** @brief 保存文本消息的旧界面数据，支持本地 UUID 与服务器消息 ID 两种身份。 */
-class TextChatData : public ChatDataBase{
+class TextChatData : public ChatDataBase {
 public:
     /** @brief 以服务器消息 ID 和日内时间构造消息，日期按当前日期补齐。 */
-    TextChatData (int msg_id, int chat_id, ChatType chat_type,
-                 ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time);
+    TextChatData(
+        int msg_id,
+        int chat_id,
+        ChatType chat_type,
+        ChatMessageType chat_msg_type,
+        QString content,
+        int send_uid,
+        QTime send_time);
 
     /** @brief 以客户端 UUID 构造待确认消息，日内时间按当前日期补齐。 */
-    TextChatData (QString client_msg_id, int chat_id, ChatType chat_type,
-                 ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time);
+    TextChatData(
+        QString client_msg_id,
+        int chat_id,
+        ChatType chat_type,
+        ChatMessageType chat_msg_type,
+        QString content,
+        int send_uid,
+        QTime send_time);
 
     /** @brief 以服务器消息 ID 和完整日期时间构造已确认消息。 */
-    TextChatData (int msg_id, int chat_id, ChatType chat_type,
-                  ChatMessageType chat_msg_type, QString content, int send_uid, QDateTime sent_at);
+    TextChatData(
+        int msg_id,
+        int chat_id,
+        ChatType chat_type,
+        ChatMessageType chat_msg_type,
+        QString content,
+        int send_uid,
+        QDateTime sent_at);
 };
 
 /**
@@ -159,13 +209,12 @@ public:
  * 如果userMgr中有，则直接显示
  * 如果没有，则创建
  */
-class ChatInfo{
+class ChatInfo {
 public:
     /** @brief 以对方 UID、会话 ID 和末尾消息 ID 构造会话索引。 */
     ChatInfo(int uid, int chat_id, int last_msg_id);
     /** @brief 以完整展示资料及会话类型构造会话信息。 */
-    ChatInfo(int uid, QString name, QString icon, QString back_name, int chat_id,
-             ChatType chat_type);
+    ChatInfo(int uid, QString name, QString icon, QString back_name, int chat_id, ChatType chat_type);
 
     // 添加一条聊天数据
     /** @brief 添加一条聊天数据。 */
@@ -188,9 +237,13 @@ public:
     /** @brief 返回私聊或群聊会话类型。 */
     ChatType getChatType();
     /** @brief 返回会话展示名称，群聊使用建群时的群名。 */
-    QString name() const { return _name; }
+    QString name() const {
+        return _name;
+    }
     /** @brief 更新已持久化会话的展示名称，保留消息缓存。 */
-    void setName(const QString &name) { _name = name; }
+    void setName(const QString& name) {
+        _name = name;
+    }
     // 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息
     /** @brief 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息。 */
     std::shared_ptr<ChatDataBase> getChatDataByMsgId(int msg_id);
@@ -215,6 +268,7 @@ public:
     // 聊天记录是否是空的
     /** @brief 聊天记录是否是空的。 */
     bool isEmpty();
+
 private:
     // private: 对方的uid, group: 0
     int _uid;
@@ -248,12 +302,10 @@ private:
  */
 struct UserInfo {
     /** @brief 从完整账号资料构造用户信息，不设置好友备注。 */
-    UserInfo(int uid, QString name, QString description,
-             QString icon, int sex);
+    UserInfo(int uid, QString name, QString description, QString icon, int sex);
 
     /** @brief 从完整用户资料及本账号备注名构造好友信息。 */
-    UserInfo(int uid, QString name, QString description,
-             QString icon, int sex, QString backname);
+    UserInfo(int uid, QString name, QString description, QString icon, int sex, QString backname);
 
     /** @brief 从好友审批资料复制用户信息。 */
     UserInfo(std::shared_ptr<AuthInfo>);

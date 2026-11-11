@@ -6,16 +6,15 @@
 #include "authflowcoordinator.h"
 
 namespace Ui {
-    class RegisterDialog;
+class RegisterDialog;
 }
 
 /** @brief 收集注册资料和验证码，提交请求并展示认证流程结果。 */
-class RegisterDialog : public QDialog
-{
+class RegisterDialog : public QDialog {
     Q_OBJECT
 public:
     /** @brief 初始化对象，用于维护注册表单校验、验证码请求及注册结果提示。 */
-    explicit RegisterDialog(AuthFlowCoordinator &authFlow, QWidget *parent = nullptr);
+    explicit RegisterDialog(AuthFlowCoordinator& authFlow, QWidget* parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~RegisterDialog();
 
@@ -35,7 +34,7 @@ private slots:
     void on_cancel_btn_clicked();
 
 private:
-    Ui::RegisterDialog *ui;
+    Ui::RegisterDialog* ui;
     /** @brief 显示表单提示并按成功或失败状态选择样式。 */
     void showTip(QString str, bool isOk);
     /** @brief 将结构化认证错误转换为表单提示。 */
@@ -67,7 +66,7 @@ private:
 
     // 用于从注册成功后的页面，返回登录页面的定时器
     QTimer* _return_login_timer;
-    AuthFlowCoordinator &_authFlow;
+    AuthFlowCoordinator& _authFlow;
     int _return_login_counter;
     /** @brief 切换到注册完成提示并启动返回倒计时。 */
     void changeTipPage();

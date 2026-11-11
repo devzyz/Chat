@@ -26,9 +26,12 @@ enum class FormalService { Gate, Status, Chat };
 /** 将正式服务枚举映射为产物名称，未知值返回诊断名称。 */
 const char* ServiceName(FormalService service) {
     switch (service) {
-    case FormalService::Gate: return "GateServer";
-    case FormalService::Status: return "StatusServer";
-    case FormalService::Chat: return "ChatServer";
+    case FormalService::Gate:
+        return "GateServer";
+    case FormalService::Status:
+        return "StatusServer";
+    case FormalService::Chat:
+        return "ChatServer";
     }
     return "UnknownServer";
 }
@@ -82,8 +85,7 @@ std::filesystem::path FindExecutable(FormalService service) {
     module_path.resize(length);
     const auto configuration = std::filesystem::path(module_path.data()).parent_path().filename();
     const auto name = ServiceName(service);
-    return RepositoryRoot() / "build" / "windows-servers" / configuration / name /
-        (std::string(name) + ".exe");
+    return RepositoryRoot() / "build" / "windows-servers" / configuration / name / (std::string(name) + ".exe");
 }
 
 /** 写入本用例拥有的文本文件，写入失败时抛异常。 */
@@ -105,10 +107,8 @@ void WriteGateStatusConfig(
     config << "[GateServer]\nPort = " << (service == FormalService::Gate ? port : 1)
            << "\n[VarifyServer]\nHost = 127.0.0.1\nPort = 1"
            << "\n[Redis]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity
-           << "\n[Mysql]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity
-           << "\nUser = local\nSchema = local"
-           << "\n[StatusServer]\nHost = 127.0.0.1\nPort = "
-           << (service == FormalService::Status ? port : 1)
+           << "\n[Mysql]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity << "\nUser = local\nSchema = local"
+           << "\n[StatusServer]\nHost = 127.0.0.1\nPort = " << (service == FormalService::Status ? port : 1)
            << "\n[ChatServers]\nName = LocalChat"
            << "\n[LocalChat]\nHost = 127.0.0.1\nPort = 1\nName = LocalChat"
            << "\n[Log]\nName = " << ServiceName(service)
@@ -127,8 +127,7 @@ void WriteChatConfig(
     config << "[SelfServer]\nName = CompositionChat\nHost = 127.0.0.1"
            << "\nPort = " << tcp_port << "\nRPCPort = " << grpc_port
            << "\n[Redis]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity
-           << "\n[Mysql]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity
-           << "\nUser = local\nSchema = local"
+           << "\n[Mysql]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity << "\nUser = local\nSchema = local"
            << "\n[StatusServer]\nHost = 127.0.0.1\nPort = 1"
            << "\n[PeerServer]\nServers ="
            << "\n[Log]\nName = ChatComposition\nLogDir = logs\nMaxSizeMB = 1"
@@ -159,11 +158,12 @@ bool ProbeGate(std::uint16_t port) {
     boost::asio::ip::tcp::socket socket(context);
     boost::system::error_code error;
     socket.connect({boost::asio::ip::address_v4::loopback(), port}, error);
-    if (error) return false;
-    const std::string request =
-        "GET /get_test HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+    if (error)
+        return false;
+    const std::string request = "GET /get_test HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
     boost::asio::write(socket, boost::asio::buffer(request), error);
-    if (error) return false;
+    if (error)
+        return false;
     socket.non_blocking(true, error);
     std::array<char, 1024> buffer{};
     std::string response;
@@ -188,8 +188,7 @@ bool ProbeGate(std::uint16_t port) {
 
 /** 在限定时间内检查 Status gRPC 通道建立。 */
 bool ProbeStatus(std::uint16_t port) {
-    auto channel = grpc::CreateChannel(
-        "127.0.0.1:" + std::to_string(port), grpc::InsecureChannelCredentials());
+    auto channel = grpc::CreateChannel("127.0.0.1:" + std::to_string(port), grpc::InsecureChannelCredentials());
     return channel->WaitForConnected(std::chrono::system_clock::now() + 300ms);
 }
 
@@ -201,9 +200,14 @@ void ExpectPortReleased(std::uint16_t port, bool wildcard) {
     acceptor.open(boost::asio::ip::tcp::v4(), error);
     ASSERT_FALSE(error) << error.message();
     const BOOL exclusive = TRUE;
-    ASSERT_NE(setsockopt(
-        acceptor.native_handle(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
-        reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)), SOCKET_ERROR);
+    ASSERT_NE(
+        setsockopt(
+            acceptor.native_handle(),
+            SOL_SOCKET,
+            SO_EXCLUSIVEADDRUSE,
+            reinterpret_cast<const char*>(&exclusive),
+            sizeof(exclusive)),
+        SOCKET_ERROR);
     acceptor.bind(
         {wildcard ? boost::asio::ip::address_v4::any() : boost::asio::ip::address_v4::loopback(), port},
         error);
@@ -222,17 +226,19 @@ void ExpectSelectedInvalidConfig(FormalService service) {
     auto process = StartFormal(*context, service, selected, working);
 
     // 保持探针未就绪，让无效配置的启动结果决定断言。
-    EXPECT_FALSE(process->WaitReady([] { return false; }, std::chrono::steady_clock::now() + 5s));
+    EXPECT_FALSE(process->WaitReady(
+        [] {
+            return false;
+        },
+        std::chrono::steady_clock::now() + 5s));
     const auto stop = process->Stop(std::chrono::steady_clock::now() + 2s);
     const auto evidence = process->CollectEvidence();
     EXPECT_TRUE(stop.Complete()) << stop.Detail();
     ASSERT_TRUE(evidence.exit_code.has_value());
     EXPECT_NE(*evidence.exit_code, 0U);
     EXPECT_FALSE(evidence.graceful_stop_attempted);
-    EXPECT_NE(evidence.stderr_text.find("explicit-selected.ini"), std::string::npos)
-        << evidence.stderr_text;
-    EXPECT_EQ(evidence.stderr_text.find("environment-ignored.ini"), std::string::npos)
-        << evidence.stderr_text;
+    EXPECT_NE(evidence.stderr_text.find("explicit-selected.ini"), std::string::npos) << evidence.stderr_text;
+    EXPECT_EQ(evidence.stderr_text.find("environment-ignored.ini"), std::string::npos) << evidence.stderr_text;
     process.reset();
     EXPECT_TRUE(context->Teardown().complete);
 }
@@ -287,7 +293,11 @@ RefusalEvidence ObserveChatRealDependencyBoundary(
     const std::filesystem::path& config) {
     auto process = StartFormal(context, FormalService::Chat, config, working);
     // 不把依赖拒绝中的进程存活视为服务就绪。
-    EXPECT_FALSE(process->WaitReady([] { return false; }, std::chrono::steady_clock::now() + 7s));
+    EXPECT_FALSE(process->WaitReady(
+        [] {
+            return false;
+        },
+        std::chrono::steady_clock::now() + 7s));
     const auto stop = process->Stop(std::chrono::steady_clock::now() + 2s);
     const auto evidence = process->CollectEvidence();
     EXPECT_TRUE(stop.Complete()) << stop.Detail();
@@ -365,8 +375,7 @@ TEST(T09_COMP_Formal, ChatRealDependencyBoundaryIsExplicitBoundedAndResidueFree)
     EXPECT_FALSE(second.escalated);
     EXPECT_TRUE(first.pipe_readers_closed);
     EXPECT_TRUE(second.pipe_readers_closed);
-    for (const auto* text : {
-             &first.stdout_text, &first.stderr_text, &second.stdout_text, &second.stderr_text}) {
+    for (const auto* text : {&first.stdout_text, &first.stderr_text, &second.stdout_text, &second.stderr_text}) {
         EXPECT_EQ(text->find("http://"), std::string::npos) << *text;
         EXPECT_EQ(text->find("https://"), std::string::npos) << *text;
         EXPECT_EQ(text->find(context->SyntheticIdentity("credential")), std::string::npos) << *text;

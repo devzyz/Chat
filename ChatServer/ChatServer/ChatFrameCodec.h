@@ -21,7 +21,5 @@ public:
     /** @brief 将消息编号和正文长度编码为固定网络字节序帧头。 */
     static HeaderBytes EncodeHeader(std::uint16_t message_id, std::uint16_t body_length);
     /** @brief 读取完整固定长度帧头并校验编号和正文上限，非法时返回空 optional。 */
-    static std::optional<ChatFrameHeader> DecodeValidatedHeader(
-        const void* bytes,
-        std::size_t maximum_body_length);
+    static std::optional<ChatFrameHeader> DecodeValidatedHeader(const void* bytes, std::size_t maximum_body_length);
 };

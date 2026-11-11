@@ -1,35 +1,40 @@
 #include "userdata.h"
 
-ChatDataBase::ChatDataBase(int msg_id, int chat_id, ChatType chat_type,
-                           ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time):
-    _msg_id(msg_id), _chat_id(chat_id), _chat_type(chat_type),
-    _chat_msg_type(chat_msg_type), _content(content), _send_uid(send_uid),
-    _sent_at(QDateTime(QDate::currentDate(), send_time)),
-    _status(ChatStatus::STATUS_NO_READ)
-{
+ChatDataBase::ChatDataBase(
+    int msg_id,
+    int chat_id,
+    ChatType chat_type,
+    ChatMessageType chat_msg_type,
+    QString content,
+    int send_uid,
+    QTime send_time)
+    : _msg_id(msg_id), _chat_id(chat_id), _chat_type(chat_type), _chat_msg_type(chat_msg_type), _content(content),
+      _send_uid(send_uid), _sent_at(QDateTime(QDate::currentDate(), send_time)), _status(ChatStatus::STATUS_NO_READ) {}
 
-}
+ChatDataBase::ChatDataBase(
+    QString client_msg_id,
+    int chat_id,
+    ChatType chat_type,
+    ChatMessageType chat_msg_type,
+    QString content,
+    int send_uid,
+    QTime send_time)
+    : _client_msg_id(client_msg_id), _msg_id(0), _chat_id(chat_id), _chat_type(chat_type),
+      _chat_msg_type(chat_msg_type), _content(content), _send_uid(send_uid),
+      _sent_at(QDateTime(QDate::currentDate(), send_time)), _status(ChatStatus::STATUS_NO_READ) {}
 
-ChatDataBase::ChatDataBase(QString client_msg_id, int chat_id, ChatType chat_type,
-                           ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time) :
-    _client_msg_id(client_msg_id), _msg_id(0), _chat_id(chat_id), _chat_type(chat_type),
-    _chat_msg_type(chat_msg_type), _content(content), _send_uid(send_uid),
-    _sent_at(QDateTime(QDate::currentDate(), send_time)),
-    _status(ChatStatus::STATUS_NO_READ)
-{
+ChatDataBase::ChatDataBase(
+    int msg_id,
+    int chat_id,
+    ChatType chat_type,
+    ChatMessageType chat_msg_type,
+    QString content,
+    int send_uid,
+    QDateTime sent_at)
+    : _msg_id(msg_id), _chat_id(chat_id), _chat_type(chat_type), _chat_msg_type(chat_msg_type), _content(content),
+      _send_uid(send_uid), _sent_at(std::move(sent_at)), _status(ChatStatus::STATUS_NO_READ) {}
 
-}
-
-ChatDataBase::ChatDataBase(int msg_id, int chat_id, ChatType chat_type,
-                           ChatMessageType chat_msg_type, QString content, int send_uid,
-                           QDateTime sent_at) :
-    _msg_id(msg_id), _chat_id(chat_id), _chat_type(chat_type),
-    _chat_msg_type(chat_msg_type), _content(content), _send_uid(send_uid),
-    _sent_at(std::move(sent_at)), _status(ChatStatus::STATUS_NO_READ)
-{
-}
-
-void ChatDataBase::setClientMessageId(const QString &clientMessageId) {
+void ChatDataBase::setClientMessageId(const QString& clientMessageId) {
     _client_msg_id = clientMessageId;
 }
 
@@ -65,73 +70,72 @@ QDateTime ChatDataBase::getSentAt() {
     return _sent_at;
 }
 
-void ChatDataBase::setMessageId(int msg_id)
-{
+void ChatDataBase::setMessageId(int msg_id) {
     _msg_id = msg_id;
 }
 
-void ChatDataBase::setStatus(ChatStatus status)
-{
+void ChatDataBase::setStatus(ChatStatus status) {
     _status = status;
 }
 
-ChatStatus ChatDataBase::getStatus()
-{
+ChatStatus ChatDataBase::getStatus() {
     return _status;
 }
 
-QString ChatDataBase::getCacheMsgId()
-{
+QString ChatDataBase::getCacheMsgId() {
     return _client_msg_id;
 }
 
+TextChatData::TextChatData(
+    int msg_id,
+    int chat_id,
+    ChatType chat_type,
+    ChatMessageType chat_msg_type,
+    QString content,
+    int send_uid,
+    QTime send_time)
+    : ChatDataBase(msg_id, chat_id, chat_type, chat_msg_type, content, send_uid, send_time) {}
 
-TextChatData::TextChatData(int msg_id, int chat_id, ChatType chat_type,
-                           ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time) :
-    ChatDataBase(msg_id, chat_id, chat_type, chat_msg_type, content, send_uid, send_time)
-{
+TextChatData::TextChatData(
+    QString client_msg_id,
+    int chat_id,
+    ChatType chat_type,
+    ChatMessageType chat_msg_type,
+    QString content,
+    int send_uid,
+    QTime send_time)
+    : ChatDataBase(client_msg_id, chat_id, chat_type, chat_msg_type, content, send_uid, send_time) {}
 
-}
+TextChatData::TextChatData(
+    int msg_id,
+    int chat_id,
+    ChatType chat_type,
+    ChatMessageType chat_msg_type,
+    QString content,
+    int send_uid,
+    QDateTime sent_at)
+    : ChatDataBase(msg_id, chat_id, chat_type, chat_msg_type, content, send_uid, std::move(sent_at)) {}
 
-TextChatData::TextChatData(QString client_msg_id, int chat_id, ChatType chat_type,
-                           ChatMessageType chat_msg_type, QString content, int send_uid, QTime send_time) :
-    ChatDataBase(client_msg_id, chat_id, chat_type, chat_msg_type, content, send_uid, send_time)
-{
+UserInfo::UserInfo(int uid, QString name, QString description, QString icon, int sex)
+    : _uid(uid), _name(name), _description(description), _icon(icon), _sex(sex) {}
 
-}
-
-TextChatData::TextChatData(int msg_id, int chat_id, ChatType chat_type,
-                           ChatMessageType chat_msg_type, QString content, int send_uid,
-                           QDateTime sent_at) :
-    ChatDataBase(msg_id, chat_id, chat_type, chat_msg_type, content, send_uid, std::move(sent_at))
-{
-}
-
-UserInfo::UserInfo(int uid, QString name, QString description, QString icon, int sex) :
-        _uid(uid), _name(name), _description(description), _icon(icon),
-        _sex(sex){}
-
-UserInfo::UserInfo(int uid, QString name, QString description, QString icon, int sex, QString backname) :
-    _uid(uid), _name(name), _description(description), _icon(icon),
-    _sex(sex), _backname(backname) {}
+UserInfo::UserInfo(int uid, QString name, QString description, QString icon, int sex, QString backname)
+    : _uid(uid), _name(name), _description(description), _icon(icon), _sex(sex), _backname(backname) {}
 
 /** @brief 从认证好友资料构造用户展示信息。 */
-UserInfo::UserInfo(std::shared_ptr<AuthInfo> auth_info) :
-    _uid(auth_info->_auth_uid), _name(auth_info->_auth_name), _description(auth_info->_auth_description)
-    , _icon(auth_info->_auth_icon), _sex(auth_info->_auth_sex){}
+UserInfo::UserInfo(std::shared_ptr<AuthInfo> auth_info)
+    : _uid(auth_info->_auth_uid), _name(auth_info->_auth_name), _description(auth_info->_auth_description),
+      _icon(auth_info->_auth_icon), _sex(auth_info->_auth_sex) {}
 
 UserInfo::UserInfo(int uid, QString name, QString icon)
-    : _uid(uid), _name(name), _description(""),
-    _icon(icon), _sex(0) {}
+    : _uid(uid), _name(name), _description(""), _icon(icon), _sex(0) {}
 
+ChatInfo::ChatInfo(int uid, int chat_id, int last_msg_id)
+    : _uid(uid), _last_msg_id(last_msg_id), _chat_id(chat_id), _chat_type(ChatType::PRIVATE), _is_can_load_more(true) {}
 
-ChatInfo::ChatInfo(int uid, int chat_id, int last_msg_id) :
-    _uid(uid), _last_msg_id(last_msg_id), _chat_id(chat_id),
-    _chat_type(ChatType::PRIVATE), _is_can_load_more(true) {}
-
-ChatInfo::ChatInfo(int uid, QString name, QString icon, QString back_name, int chat_id, ChatType chat_type):
-    _uid(uid), _name(name), _icon(icon), _back_name(back_name), _last_msg_id(0), _chat_id(chat_id),
-    _chat_type(chat_type), _is_can_load_more(true) {}
+ChatInfo::ChatInfo(int uid, QString name, QString icon, QString back_name, int chat_id, ChatType chat_type)
+    : _uid(uid), _name(name), _icon(icon), _back_name(back_name), _last_msg_id(0), _chat_id(chat_id),
+      _chat_type(chat_type), _is_can_load_more(true) {}
 
 // 添加一条聊天数据
 /** @brief 按服务端消息 ID 保存会话消息。 */
@@ -164,8 +168,7 @@ void ChatInfo::setLastMsgId(int current_msg_id) {
     _last_msg_id = current_msg_id;
 }
 
-std::shared_ptr<ChatDataBase> ChatInfo::getChatDataByMsgId(int msg_id)
-{
+std::shared_ptr<ChatDataBase> ChatInfo::getChatDataByMsgId(int msg_id) {
     auto iter_find = _chat_msgs.find(msg_id);
     if (iter_find == _chat_msgs.end()) {
         return nullptr;
@@ -173,8 +176,7 @@ std::shared_ptr<ChatDataBase> ChatInfo::getChatDataByMsgId(int msg_id)
     return iter_find.value();
 }
 
-QMap<int, std::shared_ptr<ChatDataBase> > &ChatInfo::getChatMsgs()
-{
+QMap<int, std::shared_ptr<ChatDataBase>>& ChatInfo::getChatMsgs() {
     return _chat_msgs;
 }
 
@@ -206,12 +208,10 @@ void ChatInfo::eraseCacheChatMessage(QString uuid) {
     }
 }
 
-bool ChatInfo::canLoadMore()
-{
+bool ChatInfo::canLoadMore() {
     return _is_can_load_more;
 }
 
-bool ChatInfo::isEmpty()
-{
+bool ChatInfo::isEmpty() {
     return _chat_msgs.empty();
 }

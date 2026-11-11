@@ -33,7 +33,9 @@ struct Lease {
         Require(connection != nullptr, "Redis borrow failed");
     }
     /** 把连接归还原池。 */
-    ~Lease() { pool.Return(connection); }
+    ~Lease() {
+        pool.Return(connection);
+    }
 };
 
 /** 执行 Redis 命令并以独占回复对象管理释放。 */
@@ -59,7 +61,9 @@ int main(int argc, char** argv) {
             Require(pool.Borrow(30ms) == nullptr, "empty pool borrow succeeded");
             Require(std::chrono::steady_clock::now() - started < 500ms, "borrow deadline exceeded");
             // 在并发任务中进行两秒有界借用，以验证关闭唤醒。
-            auto borrower = std::async(std::launch::async, [&]() { return pool.Borrow(2s); });
+            auto borrower = std::async(std::launch::async, [&]() {
+                return pool.Borrow(2s);
+            });
             pool.Close();
             pool.Close();
             Require(borrower.wait_for(300ms) == std::future_status::ready, "close did not wake borrower");
@@ -86,14 +90,27 @@ int main(int argc, char** argv) {
             Lease lease(pool);
             const auto key = prefix + "native:ttl";
             const std::string value("native\0binary", 13);
-            Reply set(static_cast<redisReply*>(redisCommand(lease.connection, "SET %b %b EX 1",
-                key.data(), key.size(), value.data(), value.size())), &freeReplyObject);
+            Reply set(
+                static_cast<redisReply*>(redisCommand(
+                    lease.connection,
+                    "SET %b %b EX 1",
+                    key.data(),
+                    key.size(),
+                    value.data(),
+                    value.size())),
+                &freeReplyObject);
             Require(set && set->type == REDIS_REPLY_STATUS, "atomic SET EX failed");
-            Reply get(static_cast<redisReply*>(redisCommand(lease.connection, "GET %b", key.data(), key.size())), &freeReplyObject);
-            Require(get && get->type == REDIS_REPLY_STRING && std::string(get->str, get->len) == value,
+            Reply get(
+                static_cast<redisReply*>(redisCommand(lease.connection, "GET %b", key.data(), key.size())),
+                &freeReplyObject);
+            Require(
+                get && get->type == REDIS_REPLY_STRING && std::string(get->str, get->len) == value,
                 "binary readback failed");
-            Reply ttl(static_cast<redisReply*>(redisCommand(lease.connection, "PTTL %b", key.data(), key.size())), &freeReplyObject);
-            Require(ttl && ttl->type == REDIS_REPLY_INTEGER && ttl->integer >= 0 && ttl->integer <= 1000,
+            Reply ttl(
+                static_cast<redisReply*>(redisCommand(lease.connection, "PTTL %b", key.data(), key.size())),
+                &freeReplyObject);
+            Require(
+                ttl && ttl->type == REDIS_REPLY_INTEGER && ttl->integer >= 0 && ttl->integer <= 1000,
                 "TTL missing or out of range");
             std::mutex mutex;
             std::condition_variable changed;
@@ -101,9 +118,14 @@ int main(int argc, char** argv) {
             const auto deadline = std::chrono::steady_clock::now() + 2s;
             bool expired = false;
             while (std::chrono::steady_clock::now() < deadline) {
-                Reply probe(static_cast<redisReply*>(redisCommand(lease.connection, "GET %b", key.data(), key.size())), &freeReplyObject);
+                Reply probe(
+                    static_cast<redisReply*>(redisCommand(lease.connection, "GET %b", key.data(), key.size())),
+                    &freeReplyObject);
                 Require(probe != nullptr, "expiry probe failed");
-                if (probe->type == REDIS_REPLY_NIL) { expired = true; break; }
+                if (probe->type == REDIS_REPLY_NIL) {
+                    expired = true;
+                    break;
+                }
                 changed.wait_for(lock, 10ms);
             }
             Require(expired, "key did not expire");
@@ -112,8 +134,9 @@ int main(int argc, char** argv) {
                 Lease lease(pool);
                 const auto key = prefix + "native:empty-list";
                 const auto started = std::chrono::steady_clock::now();
-                Reply reply(static_cast<redisReply*>(redisCommand(lease.connection, "BLPOP %b 10",
-                    key.data(), key.size())), &freeReplyObject);
+                Reply reply(
+                    static_cast<redisReply*>(redisCommand(lease.connection, "BLPOP %b 10", key.data(), key.size())),
+                    &freeReplyObject);
                 Require(!reply && lease.connection->err != 0, "command timeout did not invalidate connection");
                 Require(std::chrono::steady_clock::now() - started < 1s, "command timeout exceeded bound");
             }
@@ -126,26 +149,38 @@ int main(int argc, char** argv) {
                 old_id = ClientId(lease.connection);
                 chat_redis::RedisPool admin(host, port, password, 1, 200ms);
                 Lease admin_lease(admin);
-                Reply killed(static_cast<redisReply*>(redisCommand(admin_lease.connection,
-                    "CLIENT KILL ID %lld", old_id)), &freeReplyObject);
-                Require(killed && killed->type == REDIS_REPLY_INTEGER && killed->integer == 1,
+                Reply killed(
+                    static_cast<redisReply*>(redisCommand(admin_lease.connection, "CLIENT KILL ID %lld", old_id)),
+                    &freeReplyObject);
+                Require(
+                    killed && killed->type == REDIS_REPLY_INTEGER && killed->integer == 1,
                     "connection fault injection failed");
             }
             Lease replacement(pool);
             Require(ClientId(replacement.connection) != old_id, "dead idle connection reused");
         } else if (scenario == "restart") {
-            { Lease initial(pool); Require(ClientId(initial.connection) > 0, "initial connection unavailable"); }
+            {
+                Lease initial(pool);
+                Require(ClientId(initial.connection) > 0, "initial connection unavailable");
+            }
             std::cout << "READY\n" << std::flush;
             std::string signal;
-            Require(static_cast<bool>(std::getline(std::cin, signal)) && signal == "RESUME", "restart handshake failed");
+            Require(
+                static_cast<bool>(std::getline(std::cin, signal)) && signal == "RESUME",
+                "restart handshake failed");
             Lease replacement(pool);
             const auto key = prefix + "native:restart";
-            Reply set(static_cast<redisReply*>(redisCommand(replacement.connection, "SET %b resumed EX 30",
-                key.data(), key.size())), &freeReplyObject);
+            Reply set(
+                static_cast<redisReply*>(
+                    redisCommand(replacement.connection, "SET %b resumed EX 30", key.data(), key.size())),
+                &freeReplyObject);
             Require(set && set->type == REDIS_REPLY_STATUS, "same pool did not recover after service restart");
-            Reply removed(static_cast<redisReply*>(redisCommand(replacement.connection, "DEL %b",
-                key.data(), key.size())), &freeReplyObject);
-            Require(removed && removed->type == REDIS_REPLY_INTEGER && removed->integer == 1, "restart key cleanup failed");
+            Reply removed(
+                static_cast<redisReply*>(redisCommand(replacement.connection, "DEL %b", key.data(), key.size())),
+                &freeReplyObject);
+            Require(
+                removed && removed->type == REDIS_REPLY_INTEGER && removed->integer == 1,
+                "restart key cleanup failed");
         } else {
             Require(false, "unknown scenario");
         }

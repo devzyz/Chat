@@ -16,9 +16,13 @@ public:
     bool IsCurrent(int uid, const SessionId& id) const;
     /** @brief 仅删除仍匹配 id 的映射，旧会话关闭不会删除后来登记的会话。 */
     void UnregisterIfCurrent(int uid, const SessionId& id);
+
 private:
     /** @brief 保存用于条件删除的会话标识及不拥有会话的弱引用。 */
-    struct Entry { SessionId id; std::weak_ptr<CSession> session; };
+    struct Entry {
+        SessionId id;
+        std::weak_ptr<CSession> session;
+    };
     mutable std::mutex _mutex;
     std::unordered_map<int, Entry> _entries;
 };

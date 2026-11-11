@@ -1,0 +1,22 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+ContinuationIndentWidth: 4
+AccessModifierOffset: -4
+UseTab: Never
+ColumnLimit: 120
+LineEnding: LF
+PointerAlignment: Left
+AlignAfterOpenBracket: AlwaysBreak
+BinPackParameters: false
+BinPackArguments: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowAllArgumentsOnNextLine: false
+PenaltyReturnTypeOnItsOwnLine: 10000
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortLambdasOnASingleLine: None
+SortIncludes: Never
+SortUsingDeclarations: Never
+FixNamespaceComments: false
+ReflowComments: false
+BreakStringLiterals: false
+StatementMacros: [Q_UNUSED, QT_REQUIRE_VERSION, Q_OBJECT, Q_GADGET, Q_DISABLE_COPY, Q_DECLARE_METATYPE, Q_PROPERTY]

@@ -3,8 +3,7 @@
 #include <QtTest>
 
 /** @brief 验证认证状态推进、结果去重与过期流程隔离。 */
-class AuthFlowTests : public QObject
-{
+class AuthFlowTests : public QObject {
     Q_OBJECT
 
 private slots:
@@ -35,8 +34,7 @@ private slots:
 namespace {
 
 /** @brief 为测试创建指定类型的认证流程。 */
-AuthAction begin(AuthFlowCoordinator &coordinator, Modules module, ReqId requestId)
-{
+AuthAction begin(AuthFlowCoordinator& coordinator, Modules module, ReqId requestId) {
     AuthOutcome outcome;
     outcome.kind = AuthOutcomeKind::BeginHttp;
     outcome.module = static_cast<int>(module);
@@ -45,8 +43,7 @@ AuthAction begin(AuthFlowCoordinator &coordinator, Modules module, ReqId request
 }
 
 /** @brief 为测试提交有效的选服成功结果。 */
-AuthAction loginHttpSuccess(AuthFlowCoordinator &coordinator, AuthFlowId flowId)
-{
+AuthAction loginHttpSuccess(AuthFlowCoordinator& coordinator, AuthFlowId flowId) {
     ServerInfo server;
     server.Uid = 42;
     server.Host = QStringLiteral("chat.invalid");
@@ -62,8 +59,7 @@ AuthAction loginHttpSuccess(AuthFlowCoordinator &coordinator, AuthFlowId flowId)
 
 } // namespace
 
-void AuthFlowTests::registerNetworkErrorIsReportedOnlyOnce()
-{
+void AuthFlowTests::registerNetworkErrorIsReportedOnlyOnce() {
     AuthFlowCoordinator coordinator;
     const AuthAction started = begin(coordinator, Modules::REGISTERMOD, ReqId::ID_REG_USER);
     QVERIFY(started.accepted);
@@ -85,8 +81,7 @@ void AuthFlowTests::registerNetworkErrorIsReportedOnlyOnce()
     QVERIFY(!duplicate.kind.has_value());
 }
 
-void AuthFlowTests::resetNetworkErrorIsReportedOnlyOnce()
-{
+void AuthFlowTests::resetNetworkErrorIsReportedOnlyOnce() {
     AuthFlowCoordinator coordinator;
     const AuthAction started = begin(coordinator, Modules::RESETMOD, ReqId::ID_RESET_PWD);
     QVERIFY(started.accepted);
@@ -102,8 +97,7 @@ void AuthFlowTests::resetNetworkErrorIsReportedOnlyOnce()
     QVERIFY(!coordinator.reduce(started.flowId, failure).kind.has_value());
 }
 
-void AuthFlowTests::loginNetworkErrorIsReportedOnlyOnce()
-{
+void AuthFlowTests::loginNetworkErrorIsReportedOnlyOnce() {
     AuthFlowCoordinator coordinator;
     const AuthAction started = begin(coordinator, Modules::LOGINMOD, ReqId::ID_LOGIN_UESR);
     QVERIFY(started.accepted);
@@ -119,8 +113,7 @@ void AuthFlowTests::loginNetworkErrorIsReportedOnlyOnce()
     QVERIFY(!coordinator.reduce(started.flowId, failure).kind.has_value());
 }
 
-void AuthFlowTests::unknownModuleOrRequestDoesNotChangeTheActiveFlow()
-{
+void AuthFlowTests::unknownModuleOrRequestDoesNotChangeTheActiveFlow() {
     AuthFlowCoordinator coordinator;
     const AuthAction active = begin(coordinator, Modules::LOGINMOD, ReqId::ID_LOGIN_UESR);
 
@@ -136,8 +129,9 @@ void AuthFlowTests::unknownModuleOrRequestDoesNotChangeTheActiveFlow()
     valid.kind = AuthOutcomeKind::HttpNetworkError;
     valid.module = static_cast<int>(Modules::LOGINMOD);
     valid.requestId = static_cast<int>(ReqId::ID_LOGIN_UESR);
-    QCOMPARE(coordinator.reduce(active.flowId, valid).kind,
-             std::optional<AuthActionKind>(AuthActionKind::StayAndShowError));
+    QCOMPARE(
+        coordinator.reduce(active.flowId, valid).kind,
+        std::optional<AuthActionKind>(AuthActionKind::StayAndShowError));
 
     AuthOutcome unknownBegin;
     unknownBegin.kind = AuthOutcomeKind::BeginHttp;
@@ -146,8 +140,7 @@ void AuthFlowTests::unknownModuleOrRequestDoesNotChangeTheActiveFlow()
     QVERIFY(!coordinator.reduce(0, unknownBegin).accepted);
 }
 
-void AuthFlowTests::malformedJsonProducesOneStableError()
-{
+void AuthFlowTests::malformedJsonProducesOneStableError() {
     AuthFlowCoordinator coordinator;
     const AuthAction active = begin(coordinator, Modules::LOGINMOD, ReqId::ID_LOGIN_UESR);
     AuthOutcome malformed;
@@ -161,8 +154,7 @@ void AuthFlowTests::malformedJsonProducesOneStableError()
     QVERIFY(!coordinator.reduce(active.flowId, malformed).accepted);
 }
 
-void AuthFlowTests::businessErrorDoesNotConnectChat()
-{
+void AuthFlowTests::businessErrorDoesNotConnectChat() {
     AuthFlowCoordinator coordinator;
     const AuthAction active = begin(coordinator, Modules::LOGINMOD, ReqId::ID_LOGIN_UESR);
     AuthOutcome failure;
@@ -177,8 +169,7 @@ void AuthFlowTests::businessErrorDoesNotConnectChat()
     QVERIFY(action.kind != std::optional<AuthActionKind>(AuthActionKind::ConnectChat));
 }
 
-void AuthFlowTests::loginHttpSuccessConnectsOnlyOnce()
-{
+void AuthFlowTests::loginHttpSuccessConnectsOnlyOnce() {
     AuthFlowCoordinator coordinator;
     const AuthAction active = begin(coordinator, Modules::LOGINMOD, ReqId::ID_LOGIN_UESR);
     ServerInfo server;
@@ -200,12 +191,12 @@ void AuthFlowTests::loginHttpSuccessConnectsOnlyOnce()
     QVERIFY(!coordinator.reduce(active.flowId, success).accepted);
 }
 
-void AuthFlowTests::tcpFailureDoesNotCreateChat()
-{
+void AuthFlowTests::tcpFailureDoesNotCreateChat() {
     AuthFlowCoordinator coordinator;
     const AuthAction active = begin(coordinator, Modules::LOGINMOD, ReqId::ID_LOGIN_UESR);
-    QCOMPARE(loginHttpSuccess(coordinator, active.flowId).kind,
-             std::optional<AuthActionKind>(AuthActionKind::ConnectChat));
+    QCOMPARE(
+        loginHttpSuccess(coordinator, active.flowId).kind,
+        std::optional<AuthActionKind>(AuthActionKind::ConnectChat));
 
     AuthOutcome failure;
     failure.kind = AuthOutcomeKind::TcpConnectFailed;
@@ -215,8 +206,7 @@ void AuthFlowTests::tcpFailureDoesNotCreateChat()
     QVERIFY(action.kind != std::optional<AuthActionKind>(AuthActionKind::ShowChat));
 }
 
-void AuthFlowTests::chatLoginFailureDoesNotShowChat()
-{
+void AuthFlowTests::chatLoginFailureDoesNotShowChat() {
     AuthFlowCoordinator coordinator;
     const AuthAction active = begin(coordinator, Modules::LOGINMOD, ReqId::ID_LOGIN_UESR);
     loginHttpSuccess(coordinator, active.flowId);
@@ -235,8 +225,7 @@ void AuthFlowTests::chatLoginFailureDoesNotShowChat()
     QVERIFY(action.kind != std::optional<AuthActionKind>(AuthActionKind::ShowChat));
 }
 
-void AuthFlowTests::chatLoginSuccessShowsChatOnlyOnce()
-{
+void AuthFlowTests::chatLoginSuccessShowsChatOnlyOnce() {
     AuthFlowCoordinator coordinator;
     const AuthAction active = begin(coordinator, Modules::LOGINMOD, ReqId::ID_LOGIN_UESR);
     loginHttpSuccess(coordinator, active.flowId);
@@ -253,8 +242,7 @@ void AuthFlowTests::chatLoginSuccessShowsChatOnlyOnce()
     QVERIFY(!duplicate.kind.has_value());
 }
 
-void AuthFlowTests::duplicateAndLateOldFlowOutcomesAreIgnored()
-{
+void AuthFlowTests::duplicateAndLateOldFlowOutcomesAreIgnored() {
     AuthFlowCoordinator coordinator;
     const AuthAction oldFlow = begin(coordinator, Modules::LOGINMOD, ReqId::ID_LOGIN_UESR);
     const AuthAction currentFlow = begin(coordinator, Modules::LOGINMOD, ReqId::ID_LOGIN_UESR);

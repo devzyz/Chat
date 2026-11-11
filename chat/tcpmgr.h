@@ -13,16 +13,15 @@
 #include "chattcptransport.h"
 
 /** @brief 管理 TCP 传输与业务回包分发，消息持久化和重试交由 MessageService。 */
-class TcpMgr : public QObject, public Singleton<TcpMgr>,
-               public std::enable_shared_from_this<TcpMgr>
-{
+class TcpMgr : public QObject, public Singleton<TcpMgr>, public std::enable_shared_from_this<TcpMgr> {
     Q_OBJECT
 public:
     /** @brief 返回当前连接是否协商了带版本的资料与好友管理。 */
-    bool supportsSocial() const { return _social; }
+    bool supportsSocial() const {
+        return _social;
+    }
     /** @brief 发送有编号和十秒期限的社交请求，接收者销毁或换账号后丢弃回调。 */
-    void socialRequest(ReqId id, QJsonObject request, QObject *context,
-                       std::function<void(QJsonObject)> callback);
+    void socialRequest(ReqId id, QJsonObject request, QObject* context, std::function<void(QJsonObject)> callback);
     /** @brief 串行分页刷新资料、关系和申请；已有刷新时合并请求。 */
     void refreshSocialDirectory();
     /** @brief 复位底层传输并释放连接资源。 */
@@ -38,7 +37,9 @@ public:
     /** @brief 停止消息服务并重置连接；expectedClose 为 true 时暂停待发送消息。 */
     void resetConnection(bool expectedClose);
     /** @brief 返回当前认证标志，用于退出失败后判断是否需要恢复连接。 */
-    bool isAuthenticated() const { return _authenticated; }
+    bool isAuthenticated() const {
+        return _authenticated;
+    }
     /** @brief 复制当前账号的恢复端点与 Token，仅存于当前进程内存。 */
     ServerInfo connectionInfo() const;
 
@@ -80,13 +81,13 @@ signals:
     /** @brief 通知指定会话的历史消息加载失败。 */
     void chatHistoryFailed(int);
     /** @brief 好友申请通过后通知联系人列表更新。 */
-    void friendAdded(std::shared_ptr<AuthInfo> );
+    void friendAdded(std::shared_ptr<AuthInfo>);
     /** @brief 好友申请通过后通知会话列表更新。 */
     void friendChatAdded(std::shared_ptr<ChatInfo>);
     /** @brief 通知服务端已提交消息及 UUID/ID 对应关系，不代表对方已读。 */
     void messagesAcknowledged(int, QVector<MessageAcknowledgement>);
     /** @brief 通知指定会话中发送失败的消息 UUID。 */
-    void messagesFailed(int, const QVector<QString> &);
+    void messagesFailed(int, const QVector<QString>&);
 public slots:
     /** @brief 使用选服结果发起新的 TCP 连接尝试。 */
     void connectToServer(ServerInfo si);
@@ -94,6 +95,7 @@ public slots:
 private slots:
     /** @brief 检查发送及认证状态后发送包体，登记显式旧历史请求；文本请求未发出时标为待核实。 */
     void sendData(ReqId reqId, QByteArray data);
+
 private:
     friend class Singleton<TcpMgr>;
     /** @brief 连接传输及消息服务信号，注册业务回包处理器。 */
@@ -124,7 +126,6 @@ private:
     bool _acceptingSends = false;
     bool _expectedClose = false;
     bool _retainingPending = false;
-
 };
 
 #endif // TCPMGR_H

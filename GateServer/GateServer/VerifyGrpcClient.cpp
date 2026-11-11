@@ -12,10 +12,7 @@ GetVarifyRsp VerifyGrpcClient::GetVarifyCode(std::string email, const std::strin
         request,
         _policy.rpc_deadline,
         // 执行外部 GetVarifyCode RPC，不改变协议名称。
-        [](VarifyService::Stub& stub,
-           ClientContext& context,
-           const GetVarifyReq& req,
-           GetVarifyRsp& rsp) {
+        [](VarifyService::Stub& stub, ClientContext& context, const GetVarifyReq& req, GetVarifyRsp& rsp) {
             return stub.GetVarifyCode(&context, req, &rsp);
         });
     if (!result) {
@@ -35,8 +32,7 @@ VerifyGrpcClient::VerifyGrpcClient() {
         rpc::ParseDurationMs(
             grpc_config["VarifyDeadlineMs"],
             "[Grpc].VarifyDeadlineMs",
-            std::chrono::milliseconds(15000))
-    };
+            std::chrono::milliseconds(15000))};
     _pool = std::make_unique<RPCConnectionPool>(
         5,
         config["VarifyServer"]["Host"],
@@ -49,9 +45,4 @@ VerifyGrpcClient::VerifyGrpcClient(
     const std::string& port,
     rpc::ClientPolicy policy,
     std::size_t pool_size)
-    : _pool(std::make_unique<RPCConnectionPool>(
-          pool_size,
-          host,
-          port,
-          policy.acquire_timeout)),
-      _policy(policy) {}
+    : _pool(std::make_unique<RPCConnectionPool>(pool_size, host, port, policy.acquire_timeout)), _policy(policy) {}

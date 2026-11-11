@@ -2,10 +2,7 @@
 #include "ui_loadingdialog.h"
 #include <QMovie>
 
-LoadingDialog::LoadingDialog(QWidget *parent)
-    : QDialog(parent)
-    , ui(new Ui::LoadingDialog)
-{
+LoadingDialog::LoadingDialog(QWidget* parent) : QDialog(parent), ui(new Ui::LoadingDialog) {
     ui->setupUi(this);
 
     // 设置当前ui的格式，无边框、背景透明等
@@ -15,12 +12,11 @@ LoadingDialog::LoadingDialog(QWidget *parent)
     // 当前窗口的尺寸跟父窗口一样大
     setFixedSize(parent->size());
     // 启动动画
-    QMovie * movie = new QMovie(":/res/loading.gif", QByteArray(), this);
+    QMovie* movie = new QMovie(":/res/loading.gif", QByteArray(), this);
     ui->loading_label->setMovie(movie);
     movie->start();
 }
 
-LoadingDialog::~LoadingDialog()
-{
+LoadingDialog::~LoadingDialog() {
     delete ui;
 }

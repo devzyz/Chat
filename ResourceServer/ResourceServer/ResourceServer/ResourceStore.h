@@ -31,12 +31,18 @@ struct Metadata {
 class ResourceStore {
 public:
     /** @brief 固定绝对根路径并创建目录；max_size 单位为字节且必须大于零，失败抛异常。 */
-    ResourceStore(std::filesystem::path root, std::uint64_t max_size,
+    ResourceStore(
+        std::filesystem::path root,
+        std::uint64_t max_size,
         std::uint64_t total_limit = 64ull * 1024 * 1024 * 1024,
         std::uint64_t owner_limit = 16ull * 1024 * 1024 * 1024);
     /** @brief 校验元数据、创建分块文件后原子发布描述；中断创建由下次 Create 回收。 */
-    Metadata Create(int owner, const std::string& name, const std::string& type,
-                    std::uint64_t size, const std::string& sha256);
+    Metadata Create(
+        int owner,
+        const std::string& name,
+        const std::string& type,
+        std::uint64_t size,
+        const std::string& sha256);
     /** @brief 读取元数据及实际文件长度，不检查调用者权限；不存在抛 404，非法 id 抛 400。 */
     Metadata Inspect(const std::string& id) const;
     /** @brief 读取快照并检查 owner，所有者不符抛 403；未完成任务续租七天保留期。 */
@@ -45,8 +51,7 @@ public:
      * @brief 从当前字节偏移追加至多 BUFFER_SIZE 字节，data 在同步调用期间必须有效。
      * @note 已完成或偏移不符抛 409，超声明长度抛 413；写失败可能已有部分落盘，重试前须查询偏移。
      */
-    Metadata Append(const std::string& id, int owner, std::uint64_t offset,
-                    const char* data, std::size_t size);
+    Metadata Append(const std::string& id, int owner, std::uint64_t offset, const char* data, std::size_t size);
     /**
      * @brief 校验完整长度、摘要及媒体签名后将临时文件重命名为完成文件；已完成时幂等返回。
      * @note 未传完抛 409，摘要不符抛 422，签名不符抛 415；不负责数据库发布或消息通知。
@@ -60,6 +65,7 @@ public:
     /** @brief 分块计算文件的小写 SHA-256；文件不存在抛 404，读取或摘要操作失败抛 500。 */
     static std::string Digest(const std::filesystem::path& path);
     static constexpr std::size_t BUFFER_SIZE = 64 * 1024;
+
 private:
     /** @brief 回收中断创建和七天未活动上传；完成文件保留，删除标记支持中断恢复。 */
     void CollectExpiredUploads();

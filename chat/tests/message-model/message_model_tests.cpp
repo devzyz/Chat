@@ -9,9 +9,7 @@
 
 namespace {
 /** 生成固定会话及发送者的消息样本，按服务端编号选择初始发送状态。 */
-MessageRecord message(qint64 id, const QString &clientId,
-                      const QString &text = QStringLiteral("text"))
-{
+MessageRecord message(qint64 id, const QString& clientId, const QString& text = QStringLiteral("text")) {
     MessageRecord record;
     record.messageId = id;
     record.clientMessageId = clientId;
@@ -27,8 +25,7 @@ MessageRecord message(qint64 id, const QString &clientId,
 } // namespace
 
 /** 验证消息模型的稳定标识、索引、历史去重、状态推进及布局刷新。 */
-class MessageModelTests final : public QObject
-{
+class MessageModelTests final : public QObject {
     Q_OBJECT
 
 private slots:
@@ -50,8 +47,7 @@ private slots:
     void delegateReflowsLongTextForANarrowViewport();
 };
 
-void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized()
-{
+void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized() {
     auto facts = MessageStateReducer::reduce({}, MessageStateReducer::Event::Dispatch, 1);
     facts = MessageStateReducer::reduce(facts, MessageStateReducer::Event::Dispatch, 2);
     QCOMPARE(MessageStateReducer::reduce(facts, MessageStateReducer::Event::Dispatch, 2).phase, SendPhase::InFlight);
@@ -65,17 +61,22 @@ void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized
     int changed = 0;
     int removed = 0;
     // 累计行插入信号次数。
-    connect(&model, &QAbstractItemModel::rowsInserted, [&inserted]() { ++inserted; });
+    connect(&model, &QAbstractItemModel::rowsInserted, [&inserted]() {
+        ++inserted;
+    });
     // 累计数据变化信号次数。
-    connect(&model, &QAbstractItemModel::dataChanged, [&changed]() { ++changed; });
+    connect(&model, &QAbstractItemModel::dataChanged, [&changed]() {
+        ++changed;
+    });
     // 累计行移除信号次数。
-    connect(&model, &QAbstractItemModel::rowsRemoved, [&removed]() { ++removed; });
+    connect(&model, &QAbstractItemModel::rowsRemoved, [&removed]() {
+        ++removed;
+    });
 
     QCOMPARE(model.appendMessage(message(0, QStringLiteral("uuid-1"))), 1);
     QCOMPARE(inserted, 1);
     QCOMPARE(model.rowForClientMessageId(QStringLiteral("uuid-1")), 0);
-    QVERIFY(model.acknowledgeMessage(QStringLiteral("uuid-1"), 42,
-                                     DeliveryStatus::Sent));
+    QVERIFY(model.acknowledgeMessage(QStringLiteral("uuid-1"), 42, DeliveryStatus::Sent));
     QCOMPARE(model.rowForMessageId(42), 0);
     QCOMPARE(changed, 1);
     QVERIFY(model.updateStatusByMessageId(42, DeliveryStatus::Read));
@@ -101,8 +102,7 @@ void MessageModelTests::appendAcknowledgeStatusAndRemovalKeepIndexesSynchronized
     QCOMPARE(model.rowCount(), 1);
 }
 
-void MessageModelTests::unknownStableIdsDoNotMutateTheModel()
-{
+void MessageModelTests::unknownStableIdsDoNotMutateTheModel() {
     MessageListModel sharedUuid(7);
     auto own = message(0, QStringLiteral("shared-uuid"));
     auto peer = message(55, QStringLiteral("shared-uuid"));
@@ -140,26 +140,28 @@ void MessageModelTests::unknownStableIdsDoNotMutateTheModel()
     int changes = 0;
     int removals = 0;
     // 累计拒绝操作期间的数据变化次数。
-    connect(&model, &QAbstractItemModel::dataChanged, [&changes]() { ++changes; });
+    connect(&model, &QAbstractItemModel::dataChanged, [&changes]() {
+        ++changes;
+    });
     // 累计拒绝操作期间的移除次数。
-    connect(&model, &QAbstractItemModel::rowsRemoved, [&removals]() { ++removals; });
+    connect(&model, &QAbstractItemModel::rowsRemoved, [&removals]() {
+        ++removals;
+    });
 
-    QVERIFY(!model.acknowledgeMessage(QStringLiteral("missing-client"), 202,
-                                      DeliveryStatus::Sent));
-    QVERIFY(!model.updateStatusByClientId(QStringLiteral("missing-client"),
-                                          DeliveryStatus::Failed));
+    QVERIFY(!model.acknowledgeMessage(QStringLiteral("missing-client"), 202, DeliveryStatus::Sent));
+    QVERIFY(!model.updateStatusByClientId(QStringLiteral("missing-client"), DeliveryStatus::Failed));
     QVERIFY(!model.updateStatusByMessageId(202, DeliveryStatus::Failed));
     QVERIFY(!model.removeByMessageId(202));
     QCOMPARE(changes, 0);
     QCOMPARE(removals, 0);
     QCOMPARE(model.rowCount(), 1);
     QCOMPARE(model.rowForMessageId(101), 0);
-    QCOMPARE(model.data(model.index(0), MessageListModel::DeliveryStatusRole).toInt(),
-             static_cast<int>(DeliveryStatus::Read));
+    QCOMPARE(
+        model.data(model.index(0), MessageListModel::DeliveryStatusRole).toInt(),
+        static_cast<int>(DeliveryStatus::Read));
 }
 
-void MessageModelTests::historyDeduplicatesAndRemainsChronological()
-{
+void MessageModelTests::historyDeduplicatesAndRemainsChronological() {
     MessageListModel model(7);
     model.appendMessage(message(30, {}));
     QPersistentModelIndex anchor(model.index(0));
@@ -167,8 +169,7 @@ void MessageModelTests::historyDeduplicatesAndRemainsChronological()
         message(20, {}, QStringLiteral("中文")),
         message(10, {}, QStringLiteral("English 😄\nmanual wrap")),
         message(20, {}),
-        message(30, {})
-    };
+        message(30, {})};
 
     QCOMPARE(model.prependHistory(history), 2);
     QCOMPARE(model.rowCount(), 3);
@@ -177,32 +178,29 @@ void MessageModelTests::historyDeduplicatesAndRemainsChronological()
     QCOMPARE(model.data(model.index(2), MessageListModel::MessageIdRole).toLongLong(), 30);
     QCOMPARE(anchor.row(), 2);
     QCOMPARE(anchor.data(MessageListModel::MessageIdRole).toLongLong(), 30);
-    QCOMPARE(model.data(model.index(0), MessageListModel::TextRole).toString(),
-             QStringLiteral("English 😄\nmanual wrap"));
+    QCOMPARE(
+        model.data(model.index(0), MessageListModel::TextRole).toString(),
+        QStringLiteral("English 😄\nmanual wrap"));
 }
 
-void MessageModelTests::multipleHistoryPagesRemainChronological()
-{
+void MessageModelTests::multipleHistoryPagesRemainChronological() {
     MessageListModel model(7);
     model.appendMessage(message(50, QStringLiteral("server-50")));
-    QCOMPARE(model.prependHistory({
-                 message(40, QStringLiteral("server-40")),
-                 message(30, QStringLiteral("server-30"))
-             }),
-             2);
-    QCOMPARE(model.prependHistory({
-                 message(20, QStringLiteral("server-20")),
-                 message(10, QStringLiteral("server-10")),
-                 message(30, QStringLiteral("duplicate-message-id")),
-                 message(15, QStringLiteral("server-20"))
-             }),
-             2);
+    QCOMPARE(
+        model.prependHistory({message(40, QStringLiteral("server-40")), message(30, QStringLiteral("server-30"))}),
+        2);
+    QCOMPARE(
+        model.prependHistory(
+            {message(20, QStringLiteral("server-20")),
+             message(10, QStringLiteral("server-10")),
+             message(30, QStringLiteral("duplicate-message-id")),
+             message(15, QStringLiteral("server-20"))}),
+        2);
 
     const QVector<qint64> expectedIds = {10, 20, 30, 40, 50};
     QCOMPARE(model.rowCount(), expectedIds.size());
     for (int row = 0; row < expectedIds.size(); ++row) {
-        QCOMPARE(model.data(model.index(row), MessageListModel::MessageIdRole).toLongLong(),
-                 expectedIds.at(row));
+        QCOMPARE(model.data(model.index(row), MessageListModel::MessageIdRole).toLongLong(), expectedIds.at(row));
     }
     QCOMPARE(model.oldestMessageId(), 10);
     model.appendMessage(message(0, "pending"));
@@ -213,22 +211,19 @@ void MessageModelTests::multipleHistoryPagesRemainChronological()
     QCOMPARE(model.data(model.index(2), MessageListModel::MessageIdRole).toLongLong(), 25);
 }
 
-void MessageModelTests::removalAndAcknowledgementRebuildShiftedIndexes()
-{
+void MessageModelTests::removalAndAcknowledgementRebuildShiftedIndexes() {
     MessageListModel model(7);
-    model.appendMessages({
-        message(100, QStringLiteral("client-100")),
-        message(200, QStringLiteral("client-200")),
-        message(300, QStringLiteral("client-300"))
-    });
+    model.appendMessages(
+        {message(100, QStringLiteral("client-100")),
+         message(200, QStringLiteral("client-200")),
+         message(300, QStringLiteral("client-300"))});
 
     QVERIFY(model.removeByMessageId(100));
     QCOMPARE(model.rowForMessageId(100), -1);
     QCOMPARE(model.rowForClientMessageId(QStringLiteral("client-100")), -1);
     QCOMPARE(model.rowForMessageId(200), 0);
     QCOMPARE(model.rowForMessageId(300), 1);
-    QVERIFY(!model.acknowledgeMessage(QStringLiteral("client-200"), 250,
-                                     DeliveryStatus::Sent));
+    QVERIFY(!model.acknowledgeMessage(QStringLiteral("client-200"), 250, DeliveryStatus::Sent));
     QCOMPARE(model.rowForMessageId(200), 0);
     QCOMPARE(model.rowForMessageId(250), -1);
     QCOMPARE(model.indexForStableId(0, QStringLiteral("client-200")).row(), 0);
@@ -238,8 +233,7 @@ void MessageModelTests::removalAndAcknowledgementRebuildShiftedIndexes()
     QCOMPARE(model.rowForClientMessageId(QStringLiteral("client-pending")), 2);
 }
 
-void MessageModelTests::textAndChatIdentityRoundTripWithoutNormalization()
-{
+void MessageModelTests::textAndChatIdentityRoundTripWithoutNormalization() {
     MessageReadExposure exposure;
     const QRect viewport(0, 0, 300, 300);
     const QHash<qint64, QRect> visible{{1, QRect(0, 0, 100, 100)}, {3, QRect(0, 200, 100, 100)}};
@@ -259,11 +253,10 @@ void MessageModelTests::textAndChatIdentityRoundTripWithoutNormalization()
 
     MessageListModel model(7);
     const QString unicodeText = QStringLiteral("你好，组合字符 e\u0301，😄\nsecond line");
-    QCOMPARE(model.appendMessages({
-                 message(1, QStringLiteral("unicode"), unicodeText),
-                 message(2, QStringLiteral("empty"), QString())
-             }),
-             2);
+    QCOMPARE(
+        model.appendMessages(
+            {message(1, QStringLiteral("unicode"), unicodeText), message(2, QStringLiteral("empty"), QString())}),
+        2);
     QCOMPARE(model.data(model.index(0), MessageListModel::TextRole).toString(), unicodeText);
     QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), unicodeText);
     QVERIFY(model.data(model.index(1), MessageListModel::TextRole).toString().isEmpty());
@@ -278,10 +271,9 @@ void MessageModelTests::textAndChatIdentityRoundTripWithoutNormalization()
     QCOMPARE(model.rowForMessageId(999), -1);
 }
 
-void MessageModelTests::storeRetainsOneModelAndPaginationStatePerChat()
-{
+void MessageModelTests::storeRetainsOneModelAndPaginationStatePerChat() {
     MessageModelStore store;
-    auto *first = store.getOrCreate(7);
+    auto* first = store.getOrCreate(7);
     QCOMPARE(first, store.getOrCreate(7));
     QVERIFY(first != store.getOrCreate(8));
     QCOMPARE(store.find(7), first);
@@ -301,7 +293,8 @@ void MessageModelTests::storeRetainsOneModelAndPaginationStatePerChat()
     QVERIFY(store.applyHistory(7, {message(20, "server-20"), message(30, "server-30")}, true, 30));
     QVERIFY(store.applyHistory(7, {message(40, "server-40")}, false, 40));
     QCOMPARE(first->rowCount(), 4);
-    for (int row = 0; row < 4; ++row) QCOMPARE(first->recordAt(row)->messageId, qint64((row + 1) * 10));
+    for (int row = 0; row < 4; ++row)
+        QCOMPARE(first->recordAt(row)->messageId, qint64((row + 1) * 10));
     QCOMPARE(anchor.data(MessageListModel::MessageIdRole).toLongLong(), 20);
     QVERIFY(store.applyHistory(7, {message(10, "server-10"), message(20, "server-20")}, true, 20));
     QCOMPARE(first->historyCursor(), 40);
@@ -321,8 +314,7 @@ void MessageModelTests::storeRetainsOneModelAndPaginationStatePerChat()
     QCOMPARE(store.find(8)->rowCount(), 0);
 }
 
-void MessageModelTests::delegateReflowsLongTextForANarrowViewport()
-{
+void MessageModelTests::delegateReflowsLongTextForANarrowViewport() {
     MessageListModel model(7);
     model.appendMessage(message(
         1,

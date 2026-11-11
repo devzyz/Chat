@@ -11,12 +11,16 @@
 #include "MySqlMessageCommitAdapter.h"
 #include "../../schema/SchemaContract.h"
 
-MysqlPool::MysqlPool(const std::string& url, const std::string& user, const std::string& password,
-    const std::string& schema, int pool_size)
+MysqlPool::MysqlPool(
+    const std::string& url,
+    const std::string& user,
+    const std::string& password,
+    const std::string& schema,
+    int pool_size)
     // 用已配置的有限期限创建聊天数据库连接。
     : _connections(std::make_unique<chat_mysql::ConnectionPool<>>(pool_size, [=] {
-        return message_commit::ConnectBounded(url, user, password, schema);
-    })) {
+          return message_commit::ConnectBounded(url, user, password, schema);
+      })) {
     if (pool_size > 0) {
         auto lease = _connections->Acquire();
         chat_schema::Verify(*lease);
@@ -30,648 +34,702 @@ std::unique_ptr<SQLConnection> MysqlPool::GetConnection(message_commit::Deadline
 }
 
 void MysqlPool::ReturnConnection(std::unique_ptr<SQLConnection> connection) noexcept {
-    if (connection) _connections->Return(std::move(connection->_connection));
+    if (connection)
+        _connections->Return(std::move(connection->_connection));
 }
 
-void MysqlPool::Close() { _connections->Close(); }
+void MysqlPool::Close() {
+    _connections->Close();
+}
 
 MysqlDao::MysqlDao() {
-	auto& configMgr = ConfigMgr::GetInstance();
-	std::string host = configMgr["Mysql"]["Host"];
-	std::string port = configMgr["Mysql"]["Port"];
-	std::string user = configMgr["Mysql"]["User"];
-	std::string password = configMgr["Mysql"]["Password"];
-	std::string schema = configMgr["Mysql"]["Schema"];
+    auto& configMgr = ConfigMgr::GetInstance();
+    std::string host = configMgr["Mysql"]["Host"];
+    std::string port = configMgr["Mysql"]["Port"];
+    std::string user = configMgr["Mysql"]["User"];
+    std::string password = configMgr["Mysql"]["Password"];
+    std::string schema = configMgr["Mysql"]["Schema"];
 
-	_pool = std::make_unique<MysqlPool>(host + ":" + port, user, password, schema, 8);
+    _pool = std::make_unique<MysqlPool>(host + ":" + port, user, password, schema, 8);
 }
 
 MysqlDao::~MysqlDao() {
-	_pool->Close();
+    _pool->Close();
 }
 
 std::shared_ptr<UserInfo> MysqlDao::GetUser(int uid) {
-	auto connection = _pool->GetConnection();
+    auto connection = _pool->GetConnection();
 
-	if (connection == nullptr) {
-		return nullptr;
-	}
+    if (connection == nullptr) {
+        return nullptr;
+    }
 
-	// 归还本次借用的数据库连接，退出作用域后不得再使用。
-	Defer defer([this, &connection]() {
-		_pool->ReturnConnection(std::move(connection));
-		});
+    // 归还本次借用的数据库连接，退出作用域后不得再使用。
+    Defer defer([this, &connection]() {
+        _pool->ReturnConnection(std::move(connection));
+    });
 
-	try {
-		// 准备sql语句
-		std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-			prepareStatement("SELECT * FROM user WHERE uid = ?"));
-		pstmt->setInt(1, uid);
+    try {
+        // 准备sql语句
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            connection->_connection->prepareStatement("SELECT * FROM user WHERE uid = ?"));
+        pstmt->setInt(1, uid);
 
-		// 执行查询
-		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-		std::shared_ptr<UserInfo> user_ptr = nullptr;
+        // 执行查询
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+        std::shared_ptr<UserInfo> user_ptr = nullptr;
 
-		while (res->next()) {
-			user_ptr.reset(new UserInfo);
-			user_ptr->_password = res->getString("password");
-			user_ptr->_email = res->getString("email");
-			user_ptr->_name = res->getString("name");
-			user_ptr->_description = res->getString("description");
-			user_ptr->_icon = res->getString("icon");
-			user_ptr->_sex = res->getInt("sex");
-			user_ptr->_uid = uid;
-			break;
-		}
+        while (res->next()) {
+            user_ptr.reset(new UserInfo);
+            user_ptr->_password = res->getString("password");
+            user_ptr->_email = res->getString("email");
+            user_ptr->_name = res->getString("name");
+            user_ptr->_description = res->getString("description");
+            user_ptr->_icon = res->getString("icon");
+            user_ptr->_sex = res->getInt("sex");
+            user_ptr->_uid = uid;
+            break;
+        }
 
-		return user_ptr;
-	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql GetUser failed, uid={}, error={}, code={}, state={}", uid, e.what(), e.getErrorCode(), e.getSQLState().c_str());
-		return nullptr;
-	}
+        return user_ptr;
+    } catch (sql::SQLException& e) {
+        SPDLOG_ERROR(
+            "mysql GetUser failed, uid={}, error={}, code={}, state={}",
+            uid,
+            e.what(),
+            e.getErrorCode(),
+            e.getSQLState().c_str());
+        return nullptr;
+    }
 }
 
 std::shared_ptr<UserInfo> MysqlDao::GetUserByName(const std::string name) {
-	auto connection = _pool->GetConnection();
-	if (connection == nullptr) {
-		return nullptr;
-	}
+    auto connection = _pool->GetConnection();
+    if (connection == nullptr) {
+        return nullptr;
+    }
 
-	// 归还本次借用的数据库连接，退出作用域后不得再使用。
-	Defer defer([this, &connection]() {
-		_pool->ReturnConnection(std::move(connection));
-		});
+    // 归还本次借用的数据库连接，退出作用域后不得再使用。
+    Defer defer([this, &connection]() {
+        _pool->ReturnConnection(std::move(connection));
+    });
 
-	try {
-		// 准备sql语句
-		std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-			prepareStatement("SELECT * FROM user where name = ?"));
-		pstmt->setString(1, name);
+    try {
+        // 准备sql语句
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            connection->_connection->prepareStatement("SELECT * FROM user where name = ?"));
+        pstmt->setString(1, name);
 
-		// 执行查询
-		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-		std::shared_ptr<UserInfo> user_ptr = nullptr;
+        // 执行查询
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+        std::shared_ptr<UserInfo> user_ptr = nullptr;
 
-		while (res->next()) {
-			user_ptr.reset(new UserInfo);
-			user_ptr->_password = res->getString("password");
-			user_ptr->_email = res->getString("email");
-			user_ptr->_name = res->getString("name");
-			user_ptr->_description = res->getString("description");
-			user_ptr->_icon = res->getString("icon");
-			user_ptr->_sex = res->getInt("sex");
-			user_ptr->_uid = res->getInt("uid");
-			break;
-		}
+        while (res->next()) {
+            user_ptr.reset(new UserInfo);
+            user_ptr->_password = res->getString("password");
+            user_ptr->_email = res->getString("email");
+            user_ptr->_name = res->getString("name");
+            user_ptr->_description = res->getString("description");
+            user_ptr->_icon = res->getString("icon");
+            user_ptr->_sex = res->getInt("sex");
+            user_ptr->_uid = res->getInt("uid");
+            break;
+        }
 
-		return user_ptr;
-	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql GetUserByName failed, name={}, error={}", name, e.what());
-		return nullptr;
-	}
+        return user_ptr;
+    } catch (sql::SQLException& e) {
+        SPDLOG_ERROR("mysql GetUserByName failed, name={}, error={}", name, e.what());
+        return nullptr;
+    }
 }
 
 // 插入申请好友列表
-bool MysqlDao::AddFriendApply(const int& from_uid, const int& to_uid, const std::string& description, const std::string& backname) {
-	auto connection = _pool->GetConnection();
-	if (connection == nullptr) {
-		return false;
-	}
+bool MysqlDao::AddFriendApply(
+    const int& from_uid,
+    const int& to_uid,
+    const std::string& description,
+    const std::string& backname) {
+    auto connection = _pool->GetConnection();
+    if (connection == nullptr) {
+        return false;
+    }
 
-	// 归还本次借用的数据库连接，退出作用域后不得再使用。
-	Defer defer([this, &connection]() {
-		_pool->ReturnConnection(std::move(connection));
-		});
+    // 归还本次借用的数据库连接，退出作用域后不得再使用。
+    Defer defer([this, &connection]() {
+        _pool->ReturnConnection(std::move(connection));
+    });
 
-	try {
-		// 准备查询语句
-		std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection
-			->prepareStatement("INSERT INTO apply_friend (from_uid, to_uid, description, backname) values (?, ?, ?, ?) "
-			"ON DUPLICATE KEY UPDATE from_uid = from_uid, to_uid = to_uid, description = description, backname = backname"));
-		pstmt->setInt(1, from_uid);
-		pstmt->setInt(2, to_uid);
-		pstmt->setString(3, description);
-		pstmt->setString(4, backname);
+    try {
+        // 准备查询语句
+        std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(
+            "INSERT INTO apply_friend (from_uid, to_uid, description, backname) values (?, ?, ?, ?) "
+            "ON DUPLICATE KEY UPDATE from_uid = from_uid, to_uid = to_uid, description = description, backname = backname"));
+        pstmt->setInt(1, from_uid);
+        pstmt->setInt(2, to_uid);
+        pstmt->setString(3, description);
+        pstmt->setString(4, backname);
 
-		// 执行
-		int result = pstmt->executeUpdate();
+        // 执行
+        int result = pstmt->executeUpdate();
 
-		if (result < 0) {
-			return false;
-		}
+        if (result < 0) {
+            return false;
+        }
 
-		return true;
-	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql AddFriendApply failed, from_uid={}, to_uid={}, description_size={}, backname_size={}, error={}", from_uid, to_uid, description.size(), backname.size(), e.what());
-		return false;
-	}
+        return true;
+    } catch (sql::SQLException& e) {
+        SPDLOG_ERROR(
+            "mysql AddFriendApply failed, from_uid={}, to_uid={}, description_size={}, backname_size={}, error={}",
+            from_uid,
+            to_uid,
+            description.size(),
+            backname.size(),
+            e.what());
+        return false;
+    }
 
-	return false;
+    return false;
 }
 
 // 获取申请好友列表
-bool MysqlDao::GetApplyFriendList(int to_uid, std::vector<std::shared_ptr<ApplyInfo>>& applylist, int start, int limit) {
-	auto connection = _pool->GetConnection();
-	if (connection == nullptr) {
-		return false;
-	}
+bool MysqlDao::GetApplyFriendList(
+    int to_uid,
+    std::vector<std::shared_ptr<ApplyInfo>>& applylist,
+    int start,
+    int limit) {
+    auto connection = _pool->GetConnection();
+    if (connection == nullptr) {
+        return false;
+    }
 
-	// 归还本次借用的数据库连接，退出作用域后不得再使用。
-	Defer defer([this, &connection]() {
-		_pool->ReturnConnection(std::move(connection));
-		});
+    // 归还本次借用的数据库连接，退出作用域后不得再使用。
+    Defer defer([this, &connection]() {
+        _pool->ReturnConnection(std::move(connection));
+    });
 
-	try {
-		// 准备查询语句, 其中start与limit是为了配合动态加载，每次从start开始加载limit个
-		std::unique_ptr<sql::PreparedStatement> stmt(connection->_connection->prepareStatement(
-			"SELECT apply_friend.from_uid as apply_uid, status, name as apply_name, user.description as apply_description, icon as apply_icon, "
-			"sex as apply_sex, apply_friend.description as description, backname, apply_friend.to_uid as to_uid " 
-			"FROM apply_friend JOIN user ON apply_friend.from_uid = user.uid "
-			"WHERE apply_friend.to_uid = ? and apply_friend.id > ? "
-			"ORDER BY apply_friend.id ASC "
-			"LIMIT ?"));
+    try {
+        // 准备查询语句, 其中start与limit是为了配合动态加载，每次从start开始加载limit个
+        std::unique_ptr<sql::PreparedStatement> stmt(connection->_connection->prepareStatement(
+            "SELECT apply_friend.from_uid as apply_uid, status, name as apply_name, user.description as apply_description, icon as apply_icon, "
+            "sex as apply_sex, apply_friend.description as description, backname, apply_friend.to_uid as to_uid "
+            "FROM apply_friend JOIN user ON apply_friend.from_uid = user.uid "
+            "WHERE apply_friend.to_uid = ? and apply_friend.id > ? "
+            "ORDER BY apply_friend.id ASC "
+            "LIMIT ?"));
 
-		stmt->setInt(1, to_uid);
-		stmt->setInt(2, start);
-		stmt->setInt(3, limit);
+        stmt->setInt(1, to_uid);
+        stmt->setInt(2, start);
+        stmt->setInt(3, limit);
 
-		std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
-		std::shared_ptr<ApplyInfo> info = nullptr;
+        std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+        std::shared_ptr<ApplyInfo> info = nullptr;
 
-		// 遍历结果
-		while (res->next()) {
-			info.reset(new ApplyInfo());
-			info->_apply_uid = res->getInt("apply_uid");
-			info->_apply_name = res->getString("apply_name");
-			info->_apply_description = res->getString("apply_description");
-			info->_apply_icon = res->getString("apply_icon");
-			info->_apply_sex = res->getInt("apply_sex");
-			info->_status = res->getInt("status");
-			info->_to_uid = res->getInt("to_uid");
-			info->_description = res->getString("description");
-			info->_backname = res->getString("backname");
-			applylist.push_back(info);
-		}
+        // 遍历结果
+        while (res->next()) {
+            info.reset(new ApplyInfo());
+            info->_apply_uid = res->getInt("apply_uid");
+            info->_apply_name = res->getString("apply_name");
+            info->_apply_description = res->getString("apply_description");
+            info->_apply_icon = res->getString("apply_icon");
+            info->_apply_sex = res->getInt("apply_sex");
+            info->_status = res->getInt("status");
+            info->_to_uid = res->getInt("to_uid");
+            info->_description = res->getString("description");
+            info->_backname = res->getString("backname");
+            applylist.push_back(info);
+        }
 
-		return true;
-	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql GetApplyFriendList failed, to_uid={}, start={}, limit={}, error={}", to_uid, start, limit, e.what());
-		return false;
-	}
+        return true;
+    } catch (sql::SQLException& e) {
+        SPDLOG_ERROR(
+            "mysql GetApplyFriendList failed, to_uid={}, start={}, limit={}, error={}",
+            to_uid,
+            start,
+            limit,
+            e.what());
+        return false;
+    }
 }
 
 // 更新两个表
-bool MysqlDao::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_backname, std::string apply_backname,
-	std::string apply_description, std::string auth_description, std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, int& _chat_id) {
-	auto connection = _pool->GetConnection();
-	if (connection == nullptr) {
-		return false;
-	}
+bool MysqlDao::AuthFriendApply(
+    int apply_uid,
+    int auth_uid,
+    std::string auth_backname,
+    std::string apply_backname,
+    std::string apply_description,
+    std::string auth_description,
+    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs,
+    int& _chat_id) {
+    auto connection = _pool->GetConnection();
+    if (connection == nullptr) {
+        return false;
+    }
 
-	// 归还本次借用的数据库连接，退出作用域后不得再使用。
-	Defer defer([this, &connection]() {
-		_pool->ReturnConnection(std::move(connection));
-		});
+    // 归还本次借用的数据库连接，退出作用域后不得再使用。
+    Defer defer([this, &connection]() {
+        _pool->ReturnConnection(std::move(connection));
+    });
 
-	try {
-		// 手动提交事务
-		messaging::Transaction transaction(*connection->_connection);
+    try {
+        // 手动提交事务
+        messaging::Transaction transaction(*connection->_connection);
 
-		// 首先查询一下当前申请是否已经完成，如果没有完成，则通过行级锁进行加锁
-		{
-			// 准备修改语句
-			std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-				prepareStatement("SELECT id FROM apply_friend WHERE from_uid = ? AND to_uid = ? AND status = 0 AND revision = 1 FOR UPDATE"));
+        // 首先查询一下当前申请是否已经完成，如果没有完成，则通过行级锁进行加锁
+        {
+            // 准备修改语句
+            std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(
+                "SELECT id FROM apply_friend WHERE from_uid = ? AND to_uid = ? AND status = 0 AND revision = 1 FOR UPDATE"));
 
-			pstmt->setInt(1, apply_uid);
-			pstmt->setInt(2, auth_uid);
+            pstmt->setInt(1, apply_uid);
+            pstmt->setInt(2, auth_uid);
 
-			std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-			if (!res->next()) {
-				return false;
-			}
-		}
+            std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+            if (!res->next()) {
+                return false;
+            }
+        }
 
-		// 设置申请表状态为已经更新
-		{
-			// 准备修改语句
-			std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-				prepareStatement("UPDATE apply_friend SET status = 1 WHERE (from_uid = ? and to_uid = ?) OR (from_uid = ? and to_uid = ?)"));
+        // 设置申请表状态为已经更新
+        {
+            // 准备修改语句
+            std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(
+                "UPDATE apply_friend SET status = 1 WHERE (from_uid = ? and to_uid = ?) OR (from_uid = ? and to_uid = ?)"));
 
-			// 进行双向的更新，因为可以互相申请
-			pstmt->setInt(1, apply_uid);
-			pstmt->setInt(2, auth_uid);
+            // 进行双向的更新，因为可以互相申请
+            pstmt->setInt(1, apply_uid);
+            pstmt->setInt(2, auth_uid);
 
-			pstmt->setInt(3, auth_uid);
-			pstmt->setInt(4, apply_uid);
+            pstmt->setInt(3, auth_uid);
+            pstmt->setInt(4, apply_uid);
 
-			int res = pstmt->executeUpdate();
+            int res = pstmt->executeUpdate();
 
-			// 执行
-			if (res <= 0) {
-				return false;
-			}
-		}
-		
-		// 往好友表中插入数据
-		{
-			// 准备修改语句
-			std::unique_ptr<sql::PreparedStatement> pstmt1(connection->_connection->
-				prepareStatement("INSERT IGNORE INTO friend(self_id, other_id, backname) VALUES (?, ?, ?)"));
-			pstmt1->setInt(1, apply_uid);
-			pstmt1->setInt(2, auth_uid);
-			pstmt1->setString(3, auth_backname);
+            // 执行
+            if (res <= 0) {
+                return false;
+            }
+        }
 
-			// 执行
-			if (pstmt1->executeUpdate() != 1) {
-				return false;
-			}
+        // 往好友表中插入数据
+        {
+            // 准备修改语句
+            std::unique_ptr<sql::PreparedStatement> pstmt1(connection->_connection->prepareStatement(
+                "INSERT IGNORE INTO friend(self_id, other_id, backname) VALUES (?, ?, ?)"));
+            pstmt1->setInt(1, apply_uid);
+            pstmt1->setInt(2, auth_uid);
+            pstmt1->setString(3, auth_backname);
 
-			// 准备修改语句
-			std::unique_ptr<sql::PreparedStatement> pstmt2(connection->_connection->
-				prepareStatement("INSERT IGNORE INTO friend(self_id, other_id, backname) VALUES (?, ?, ?)"));
+            // 执行
+            if (pstmt1->executeUpdate() != 1) {
+                return false;
+            }
 
-			pstmt2->setInt(1, auth_uid);
-			pstmt2->setInt(2, apply_uid);
-			pstmt2->setString(3, apply_backname);
+            // 准备修改语句
+            std::unique_ptr<sql::PreparedStatement> pstmt2(connection->_connection->prepareStatement(
+                "INSERT IGNORE INTO friend(self_id, other_id, backname) VALUES (?, ?, ?)"));
 
-			// 执行
-			if (pstmt2->executeUpdate() != 1) {
-				return false;
-			}
-		}
-		
-		// 插入会话表
-		int chat_id = 0;
-		{
-			// 准备查询语句
-			std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-				prepareStatement("INSERT INTO chat(type) VALUES (?)"));
+            pstmt2->setInt(1, auth_uid);
+            pstmt2->setInt(2, apply_uid);
+            pstmt2->setString(3, apply_backname);
 
-			pstmt->setString(1, "private");
+            // 执行
+            if (pstmt2->executeUpdate() != 1) {
+                return false;
+            }
+        }
 
-			pstmt->executeUpdate();
-			// 获取刚刚生成的 chat_id
-			std::unique_ptr<sql::Statement> stmt(connection->_connection->createStatement());
-			std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID()"));
-			if (res->next()) {
-				chat_id = res->getInt(1);
-			}
-			else {
-				return false;
-			}
-		}
+        // 插入会话表
+        int chat_id = 0;
+        {
+            // 准备查询语句
+            std::unique_ptr<sql::PreparedStatement> pstmt(
+                connection->_connection->prepareStatement("INSERT INTO chat(type) VALUES (?)"));
 
-		_chat_id = chat_id;
+            pstmt->setString(1, "private");
 
-		// 在私聊表中插入数据
-		{
-			// 准备查询语句
-			std::unique_ptr<sql::PreparedStatement> pstmt2(connection->_connection->
-				prepareStatement("INSERT INTO private_chat(chat_id, user1_id, user2_id) VALUES(?, ?, ?)"));
+            pstmt->executeUpdate();
+            // 获取刚刚生成的 chat_id
+            std::unique_ptr<sql::Statement> stmt(connection->_connection->createStatement());
+            std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID()"));
+            if (res->next()) {
+                chat_id = res->getInt(1);
+            } else {
+                return false;
+            }
+        }
 
-			auto min_userid = std::min(apply_uid, auth_uid);
-			auto max_userid = std::max(apply_uid, auth_uid);
+        _chat_id = chat_id;
 
-			// 这里保证同一对人得私聊只插入一次
-			pstmt2->setInt(1, chat_id);
-			pstmt2->setInt(2, min_userid);
-			pstmt2->setInt(3, max_userid);
-			// 执行修改
-			if (pstmt2->executeUpdate() != 1) {
-				_chat_id = 0;
-				return false;
-			}
-		}
+        // 在私聊表中插入数据
+        {
+            // 准备查询语句
+            std::unique_ptr<sql::PreparedStatement> pstmt2(connection->_connection->prepareStatement(
+                "INSERT INTO private_chat(chat_id, user1_id, user2_id) VALUES(?, ?, ?)"));
 
-		// 插入聊天信息
-		{
-			// 申请人发送的申请信息
-			if (!apply_description.empty()) {
-				// 准备查询语句
-				std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-					prepareStatement("INSERT IGNORE INTO chat_message(chat_id, send_id, recv_id, content, status) "
-						"VALUES (?, ?, ?, ?, 1)"));
+            auto min_userid = std::min(apply_uid, auth_uid);
+            auto max_userid = std::max(apply_uid, auth_uid);
 
-				pstmt->setInt(1, chat_id);
-				pstmt->setInt(2, apply_uid);
-				pstmt->setInt(3, auth_uid);
-				pstmt->setString(4, apply_description);
+            // 这里保证同一对人得私聊只插入一次
+            pstmt2->setInt(1, chat_id);
+            pstmt2->setInt(2, min_userid);
+            pstmt2->setInt(3, max_userid);
+            // 执行修改
+            if (pstmt2->executeUpdate() != 1) {
+                _chat_id = 0;
+                return false;
+            }
+        }
 
-				int result = pstmt->executeUpdate();
-				if (result == 0) {
-					_chat_id = 0;
-					return false;
-				}
+        // 插入聊天信息
+        {
+            // 申请人发送的申请信息
+            if (!apply_description.empty()) {
+                // 准备查询语句
+                std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(
+                    "INSERT IGNORE INTO chat_message(chat_id, send_id, recv_id, content, status) "
+                    "VALUES (?, ?, ?, ?, 1)"));
 
-				// 获取刚刚生成的 message_id
-				std::unique_ptr<sql::Statement> stmt(connection->_connection->createStatement());
-				std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID()"));
-				int message_id = -1;
-				if (res->next()) {
-					message_id = res->getInt(1);
-				}
-				else {
-					_chat_id = 0;
-					return false;
-				}
+                pstmt->setInt(1, chat_id);
+                pstmt->setInt(2, apply_uid);
+                pstmt->setInt(3, auth_uid);
+                pstmt->setString(4, apply_description);
 
-				auto chat_msg = std::make_shared<ChatMessage>(message_id, chat_id, apply_uid, auth_uid, apply_description, 1);
-				chat_msgs.push_back(chat_msg);
-			}
+                int result = pstmt->executeUpdate();
+                if (result == 0) {
+                    _chat_id = 0;
+                    return false;
+                }
 
-			SPDLOG_DEBUG("auth friend db message, apply_uid={}, auth_uid={}, auth_description_size={}", apply_uid, auth_uid, auth_description.size());
-			// 被申请人发送的验证信息
-			if (!auth_description.empty()) {
-				// 准备查询语句
-				std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-					prepareStatement("INSERT IGNORE INTO chat_message(chat_id, send_id, recv_id, content, status) "
-						"VALUES (?, ?, ?, ?, 1)"));
+                // 获取刚刚生成的 message_id
+                std::unique_ptr<sql::Statement> stmt(connection->_connection->createStatement());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID()"));
+                int message_id = -1;
+                if (res->next()) {
+                    message_id = res->getInt(1);
+                } else {
+                    _chat_id = 0;
+                    return false;
+                }
 
-				pstmt->setInt(1, chat_id);
-				pstmt->setInt(2, auth_uid);
-				pstmt->setInt(3, apply_uid);
-				pstmt->setString(4, auth_description);
+                auto chat_msg =
+                    std::make_shared<ChatMessage>(message_id, chat_id, apply_uid, auth_uid, apply_description, 1);
+                chat_msgs.push_back(chat_msg);
+            }
 
-				int result = pstmt->executeUpdate();
-				if (result == 0) {
-					_chat_id = 0;
-					return false;
-				}
+            SPDLOG_DEBUG(
+                "auth friend db message, apply_uid={}, auth_uid={}, auth_description_size={}",
+                apply_uid,
+                auth_uid,
+                auth_description.size());
+            // 被申请人发送的验证信息
+            if (!auth_description.empty()) {
+                // 准备查询语句
+                std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(
+                    "INSERT IGNORE INTO chat_message(chat_id, send_id, recv_id, content, status) "
+                    "VALUES (?, ?, ?, ?, 1)"));
 
-				// 获取刚刚生成的 message_id
-				std::unique_ptr<sql::Statement> stmt(connection->_connection->createStatement());
-				std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID()"));
-				int message_id = -1;
-				if (res->next()) {
-					message_id = res->getInt(1);
-				}
-				else {
-					_chat_id = 0;
-					return false;
-				}
+                pstmt->setInt(1, chat_id);
+                pstmt->setInt(2, auth_uid);
+                pstmt->setInt(3, apply_uid);
+                pstmt->setString(4, auth_description);
 
-				auto chat_msg = std::make_shared<ChatMessage>(message_id, chat_id, auth_uid, apply_uid, auth_description, 1);
-				chat_msgs.push_back(chat_msg);
-			}
-		}
+                int result = pstmt->executeUpdate();
+                if (result == 0) {
+                    _chat_id = 0;
+                    return false;
+                }
 
-		// 无错误，则提交事务
-		transaction.Commit();
-		return true;
-	}
-	catch (const std::exception&) {
-		SPDLOG_ERROR("mysql AuthFriendApply failed, apply_uid={}, auth_uid={}", apply_uid, auth_uid);
-		// 有错误，则回滚
-		return false;
-	}
+                // 获取刚刚生成的 message_id
+                std::unique_ptr<sql::Statement> stmt(connection->_connection->createStatement());
+                std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID()"));
+                int message_id = -1;
+                if (res->next()) {
+                    message_id = res->getInt(1);
+                } else {
+                    _chat_id = 0;
+                    return false;
+                }
+
+                auto chat_msg =
+                    std::make_shared<ChatMessage>(message_id, chat_id, auth_uid, apply_uid, auth_description, 1);
+                chat_msgs.push_back(chat_msg);
+            }
+        }
+
+        // 无错误，则提交事务
+        transaction.Commit();
+        return true;
+    } catch (const std::exception&) {
+        SPDLOG_ERROR("mysql AuthFriendApply failed, apply_uid={}, auth_uid={}", apply_uid, auth_uid);
+        // 有错误，则回滚
+        return false;
+    }
 }
 
 // 查找好友列表
 bool MysqlDao::GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& friendList) {
-	auto connection = _pool->GetConnection();
-	if (connection == nullptr) {
-		return false;
-	}
+    auto connection = _pool->GetConnection();
+    if (connection == nullptr) {
+        return false;
+    }
 
-	// 归还本次借用的数据库连接，退出作用域后不得再使用。
-	Defer defer([this, &connection]() {
-		_pool->ReturnConnection(std::move(connection));
-		});
+    // 归还本次借用的数据库连接，退出作用域后不得再使用。
+    Defer defer([this, &connection]() {
+        _pool->ReturnConnection(std::move(connection));
+    });
 
-	try {
-		// 准备查询
-		std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-			prepareStatement("SELECT * FROM friend WHERE self_id = ?"));
-		pstmt->setInt(1, uid);
+    try {
+        // 准备查询
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            connection->_connection->prepareStatement("SELECT * FROM friend WHERE self_id = ?"));
+        pstmt->setInt(1, uid);
 
-		// 执行查询
-		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-		while (res->next()) {
-			auto other_id = res->getInt("other_id");
-			auto backname = res->getString("backname");
-			// 找到uid的好友
-			auto user_info = GetUser(other_id);
-			if (user_info == nullptr) {
-				continue;
-			}
-			// 设置我给uid的备注名
-			user_info->_backname = backname;
-			friendList.push_back(user_info);
-		}
+        // 执行查询
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+        while (res->next()) {
+            auto other_id = res->getInt("other_id");
+            auto backname = res->getString("backname");
+            // 找到uid的好友
+            auto user_info = GetUser(other_id);
+            if (user_info == nullptr) {
+                continue;
+            }
+            // 设置我给uid的备注名
+            user_info->_backname = backname;
+            friendList.push_back(user_info);
+        }
 
-		return true;
-	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql GetFriendList failed, uid={}, error={}", uid, e.what());
-		return false;
-	}
+        return true;
+    } catch (sql::SQLException& e) {
+        SPDLOG_ERROR("mysql GetFriendList failed, uid={}, error={}", uid, e.what());
+        return false;
+    }
 }
 
 // 获取一页的会话列表
-bool MysqlDao::GetUserChatList(int uid, int current_chat_id, int page_size,
-	std::vector<std::shared_ptr<ChatInfoBase>>& chat_list, bool& load_more, int& last_chat_id) {
+bool MysqlDao::GetUserChatList(
+    int uid,
+    int current_chat_id,
+    int page_size,
+    std::vector<std::shared_ptr<ChatInfoBase>>& chat_list,
+    bool& load_more,
+    int& last_chat_id) {
 
-	auto connection = _pool->GetConnection();
+    auto connection = _pool->GetConnection();
 
-	if (connection == nullptr) {
-		return false;
-	}
+    if (connection == nullptr) {
+        return false;
+    }
 
-	// 归还本次借用的数据库连接，退出作用域后不得再使用。
-	Defer defer([this, &connection]() {
-		_pool->ReturnConnection(std::move(connection));
-		});
+    // 归还本次借用的数据库连接，退出作用域后不得再使用。
+    Defer defer([this, &connection]() {
+        _pool->ReturnConnection(std::move(connection));
+    });
 
-	try {
-		// 准备查询语句
-		std::string sql = "WITH all_chat As ( "
-			"SELECT chat_id, 'private' AS type, user1_id, user2_id, 'null' AS group_name "
-			"FROM private_chat "
-			"WHERE (user1_id = ? OR user2_id = ?) AND chat_id > ? "
-			"UNION ALL "
-			"SELECT gc.chat_id as chat_id, 'group' AS type, 0 AS user1_id, 0 AS user2_id, name as group_name "
-			"FROM group_chat as gc JOIN group_chat_member gcm ON gc.chat_id = gcm.chat_id "
-			"WHERE (user_id = ?) AND gc.chat_id > ? "
-			") "
-			"SELECT * FROM all_chat "
-			"ORDER BY chat_id "
-			"LIMIT ?";
+    try {
+        // 准备查询语句
+        std::string sql =
+            "WITH all_chat As ( "
+            "SELECT chat_id, 'private' AS type, user1_id, user2_id, 'null' AS group_name "
+            "FROM private_chat "
+            "WHERE (user1_id = ? OR user2_id = ?) AND chat_id > ? "
+            "UNION ALL "
+            "SELECT gc.chat_id as chat_id, 'group' AS type, 0 AS user1_id, 0 AS user2_id, name as group_name "
+            "FROM group_chat as gc JOIN group_chat_member gcm ON gc.chat_id = gcm.chat_id "
+            "WHERE (user_id = ?) AND gc.chat_id > ? "
+            ") "
+            "SELECT * FROM all_chat "
+            "ORDER BY chat_id "
+            "LIMIT ?";
 
-		std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(sql));
-		
-		pstmt->setInt(1, uid);
-		pstmt->setInt(2, uid);
-		pstmt->setInt(3, current_chat_id);
-		pstmt->setInt(4, uid);
-		pstmt->setInt(5, current_chat_id);
-		// 多取一个用于判断是不是已经取完了
-		page_size = (std::min)(page_size, 4);
+        std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(sql));
+
+        pstmt->setInt(1, uid);
+        pstmt->setInt(2, uid);
+        pstmt->setInt(3, current_chat_id);
+        pstmt->setInt(4, uid);
+        pstmt->setInt(5, current_chat_id);
+        // 多取一个用于判断是不是已经取完了
+        page_size = (std::min)(page_size, 4);
         pstmt->setInt(6, page_size + 1);
 
-		std::unique_ptr<sql::ResultSet> result(pstmt->executeQuery());
+        std::unique_ptr<sql::ResultSet> result(pstmt->executeQuery());
 
-		std::vector<std::shared_ptr<ChatInfoBase>> temp;
-		while (result->next()) {
-			auto type = result->getString("type");
-			if (type == "private") {
-				auto info = std::make_shared<PrivateChatInfo>();
-				info->_chat_id = result->getInt("chat_id");
-				info->_user1_id = result->getInt("user1_id");
-				info->_user2_id = result->getInt("user2_id");
-				info->_type = type;
-				temp.push_back(info);
-			}
-			else if (type == "group") {
-				auto info = std::make_shared<GroupChatInfo>();
-				info->_group_name = result->getString("group_name");
+        std::vector<std::shared_ptr<ChatInfoBase>> temp;
+        while (result->next()) {
+            auto type = result->getString("type");
+            if (type == "private") {
+                auto info = std::make_shared<PrivateChatInfo>();
+                info->_chat_id = result->getInt("chat_id");
+                info->_user1_id = result->getInt("user1_id");
+                info->_user2_id = result->getInt("user2_id");
+                info->_type = type;
+                temp.push_back(info);
+            } else if (type == "group") {
+                auto info = std::make_shared<GroupChatInfo>();
+                info->_group_name = result->getString("group_name");
                 info->_membership = messaging::GroupDirectory(*connection->_connection, result->getInt("chat_id"), uid);
-				info->_chat_id = result->getInt("chat_id");
-				info->_type = type;
-				temp.push_back(info);
-			}
-		}
+                info->_chat_id = result->getInt("chat_id");
+                info->_type = type;
+                temp.push_back(info);
+            }
+        }
 
-		// 如果比page_size大，代表还没有取完
-		if (temp.size() > page_size) {
-			load_more = true;
-			temp.pop_back();
-		}
+        // 如果比page_size大，代表还没有取完
+        if (temp.size() > page_size) {
+            load_more = true;
+            temp.pop_back();
+        }
 
-		// 记录当前当前最后的chat_id
-		if (!temp.empty()) {
-			last_chat_id = temp.back()->_chat_id;
-		}
+        // 记录当前当前最后的chat_id
+        if (!temp.empty()) {
+            last_chat_id = temp.back()->_chat_id;
+        }
 
-		chat_list = std::move(temp);
+        chat_list = std::move(temp);
 
-		return true;
-	}
-	catch (sql::SQLException& e) {
-		SPDLOG_ERROR("mysql GetUserChatList failed, uid={}, current_chat_id={}, page_size={}, error={}", uid, current_chat_id, page_size, e.what());
-		return false;
-	}
+        return true;
+    } catch (sql::SQLException& e) {
+        SPDLOG_ERROR(
+            "mysql GetUserChatList failed, uid={}, current_chat_id={}, page_size={}, error={}",
+            uid,
+            current_chat_id,
+            page_size,
+            e.what());
+        return false;
+    }
 }
 
 // 创建私聊
 bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
-	chat_id = -1;
-	auto connection = _pool->GetConnection();
+    chat_id = -1;
+    auto connection = _pool->GetConnection();
 
-	if (connection == nullptr) {
-		return false;
-	}
+    if (connection == nullptr) {
+        return false;
+    }
 
-	// 归还本次借用的数据库连接，退出作用域后不得再使用。
-	Defer defer([this, &connection]() {
-		_pool->ReturnConnection(std::move(connection));
-		});
+    // 归还本次借用的数据库连接，退出作用域后不得再使用。
+    Defer defer([this, &connection]() {
+        _pool->ReturnConnection(std::move(connection));
+    });
 
-	try {
-		// 手动提交事务
-		messaging::Transaction transaction(*connection->_connection);
+    try {
+        // 手动提交事务
+        messaging::Transaction transaction(*connection->_connection);
 
-		// 先查看一下，是否已经有过聊天数据了
-		{
-			// 准备查询语句
-			std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-				prepareStatement("SELECT * FROM private_chat WHERE user1_id = ? and user2_id = ?"));
+        // 先查看一下，是否已经有过聊天数据了
+        {
+            // 准备查询语句
+            std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(
+                "SELECT * FROM private_chat WHERE user1_id = ? and user2_id = ?"));
 
-			auto minn = std::min(user1_id, user2_id);
-			auto maxn = std::max(user1_id, user2_id);
+            auto minn = std::min(user1_id, user2_id);
+            auto maxn = std::max(user1_id, user2_id);
 
-			pstmt->setInt(1, minn);
-			pstmt->setInt(2, maxn);
+            pstmt->setInt(1, minn);
+            pstmt->setInt(2, maxn);
 
-			std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+            std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 
-			while (res->next()) {
-				chat_id = res->getInt("chat_id");
-				break;
-			}
+            while (res->next()) {
+                chat_id = res->getInt("chat_id");
+                break;
+            }
 
-			if (chat_id != -1) {
-				transaction.Commit();
-				return true;
-			}
-		}
+            if (chat_id != -1) {
+                transaction.Commit();
+                return true;
+            }
+        }
 
-		// 插入chat表
-		{
-			std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->
-				prepareStatement("INSERT INTO chat(type) VALUES (?)"));
-			pstmt->setString(1, "private");
-			pstmt->executeUpdate();   // 注意这里用 executeUpdate，不是 executeQuery
+        // 插入chat表
+        {
+            std::unique_ptr<sql::PreparedStatement> pstmt(
+                connection->_connection->prepareStatement("INSERT INTO chat(type) VALUES (?)"));
+            pstmt->setString(1, "private");
+            pstmt->executeUpdate(); // 注意这里用 executeUpdate，不是 executeQuery
 
-			// 获取刚刚生成的 chat_id
-			std::unique_ptr<sql::Statement> stmt(connection->_connection->createStatement());
-			std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID()"));
-			if (res->next()) {
-				chat_id = res->getInt(1);
-			}
-			else {
-				return false;
-			}
-		}
-		
-		// 插入私聊表
-		{
-			// 准备查询语句
-			std::unique_ptr<sql::PreparedStatement> pstmt2(connection->_connection->
-				prepareStatement("INSERT INTO private_chat(chat_id, user1_id, user2_id) VALUES(?, ?, ?)"));
+            // 获取刚刚生成的 chat_id
+            std::unique_ptr<sql::Statement> stmt(connection->_connection->createStatement());
+            std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID()"));
+            if (res->next()) {
+                chat_id = res->getInt(1);
+            } else {
+                return false;
+            }
+        }
 
-			auto min_userid = std::min(user1_id, user2_id);
-			auto max_userid = std::max(user1_id, user2_id);
+        // 插入私聊表
+        {
+            // 准备查询语句
+            std::unique_ptr<sql::PreparedStatement> pstmt2(connection->_connection->prepareStatement(
+                "INSERT INTO private_chat(chat_id, user1_id, user2_id) VALUES(?, ?, ?)"));
 
-			// 这里保证同一对人得私聊只插入一次
-			pstmt2->setInt(1, chat_id);
-			pstmt2->setInt(2, min_userid);
-			pstmt2->setInt(3, max_userid);
-			// 执行修改
-			if (pstmt2->executeUpdate() != 1) {
-				return false;
-			}
-		}
-		
-		// 无错误，则提交事务
-		transaction.Commit();
-		return true;
-	}
-	catch (const std::exception&) {
-		SPDLOG_ERROR("mysql CreatePrivateChat failed, user1_id={}, user2_id={}", user1_id, user2_id);
-		chat_id = -1;
-		return false;
-	}
+            auto min_userid = std::min(user1_id, user2_id);
+            auto max_userid = std::max(user1_id, user2_id);
+
+            // 这里保证同一对人得私聊只插入一次
+            pstmt2->setInt(1, chat_id);
+            pstmt2->setInt(2, min_userid);
+            pstmt2->setInt(3, max_userid);
+            // 执行修改
+            if (pstmt2->executeUpdate() != 1) {
+                return false;
+            }
+        }
+
+        // 无错误，则提交事务
+        transaction.Commit();
+        return true;
+    } catch (const std::exception&) {
+        SPDLOG_ERROR("mysql CreatePrivateChat failed, user1_id={}, user2_id={}", user1_id, user2_id);
+        chat_id = -1;
+        return false;
+    }
 }
 
 // 插入新的聊天信息
-message_commit::Result MysqlDao::AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
-    int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
-    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline, std::int64_t epoch, std::int64_t relationship) {
+message_commit::Result MysqlDao::AddChatMessageList(
+    message_commit::AuthenticatedPrincipal principal,
+    int from_uid,
+    int to_uid,
+    int chat_id,
+    const message_commit::Batch& cache_msgs,
+    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs,
+    message_commit::Deadline deadline,
+    std::int64_t epoch,
+    std::int64_t relationship) {
     chat_msgs.clear();
     /** @brief 将当前借用的 MySQL 连接适配为消息提交端口，连接有效期由调用方租约保证。 */
     class PooledStore final : public message_commit::Store {
     public:
         /** @brief 初始化PooledStore，将当前借用的 MySQL 连接适配为消息提交端口，连接有效期由调用方租约保证。 */
-        explicit PooledStore(MysqlPool& pool, std::int64_t epoch, std::int64_t relationship) : _pool(pool), _epoch(epoch), _relationship(relationship) {}
+        explicit PooledStore(MysqlPool& pool, std::int64_t epoch, std::int64_t relationship)
+            : _pool(pool), _epoch(epoch), _relationship(relationship) {}
         /** @brief 使用本次借用的连接执行文本提交端口，保留事务及幂等错误分类。 */
-        message_commit::Result Commit(int sender, int recipient, int chat,
-            const message_commit::Batch& batch, message_commit::Deadline end) override {
+        message_commit::Result Commit(
+            int sender,
+            int recipient,
+            int chat,
+            const message_commit::Batch& batch,
+            message_commit::Deadline end) override {
             auto connection = _pool.GetConnection(end);
             if (!connection) {
-                return {std::chrono::steady_clock::now() >= end ? message_commit::Error::DEADLINE_EXCEEDED :
-                    message_commit::Error::STORAGE_UNAVAILABLE, {}};
+                return {
+                    std::chrono::steady_clock::now() >= end ? message_commit::Error::DEADLINE_EXCEEDED
+                                                            : message_commit::Error::STORAGE_UNAVAILABLE,
+                    {}};
             }
             try {
                 message_commit::MySqlMessageCommitAdapter adapter(*connection->_connection);
                 adapter.SetGroupEpoch(_epoch);
                 adapter.SetRelationshipRevision(_relationship);
                 auto result = adapter.Commit(sender, recipient, chat, batch, end);
-                if (!adapter.IsReusable()) { connection->_connection.reset(); }
+                if (!adapter.IsReusable()) {
+                    connection->_connection.reset();
+                }
                 _pool.ReturnConnection(std::move(connection));
                 return result;
             } catch (const std::exception&) {
@@ -682,17 +740,27 @@ message_commit::Result MysqlDao::AddChatMessageList(message_commit::Authenticate
                 return {message_commit::Error::STORAGE_UNAVAILABLE, {}};
             }
         }
+
     private:
         MysqlPool& _pool;
         std::int64_t _epoch;
         std::int64_t _relationship;
     } store(*_pool, epoch, relationship);
-    auto result = message_commit::Commit(store, principal, from_uid, to_uid, chat_id, cache_msgs, deadline, to_uid == 0);
-    if (!result.IsSuccess()) { return result; }
+    auto result =
+        message_commit::Commit(store, principal, from_uid, to_uid, chat_id, cache_msgs, deadline, to_uid == 0);
+    if (!result.IsSuccess()) {
+        return result;
+    }
     for (std::size_t index = 0; index < result.items.size(); ++index) {
         const auto& item = result.items[index];
-        auto message = std::make_shared<ChatMessage>(item.message_id, item.client_msg_uuid,
-            chat_id, principal.uid, to_uid, cache_msgs[index].second, 0);
+        auto message = std::make_shared<ChatMessage>(
+            item.message_id,
+            item.client_msg_uuid,
+            chat_id,
+            principal.uid,
+            to_uid,
+            cache_msgs[index].second,
+            0);
         message->_created_at = item.created_at;
         chat_msgs.push_back(std::move(message));
     }
@@ -701,9 +769,12 @@ message_commit::Result MysqlDao::AddChatMessageList(message_commit::Authenticate
 
 bool MysqlDao::SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response) {
     auto connection = _pool->GetConnection();
-    if (!connection) return false;
+    if (!connection)
+        return false;
     // 归还本次借用的数据库连接，退出作用域后不得再使用。
-    Defer release([this, &connection] { _pool->ReturnConnection(std::move(connection)); });
+    Defer release([this, &connection] {
+        _pool->ReturnConnection(std::move(connection));
+    });
     try {
         messaging::SyncPage(*connection->_connection, uid, chat_id, after, response, MAX_HISTORY_BODY_LENGTH);
         return true;
@@ -714,81 +785,105 @@ bool MysqlDao::SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::
 }
 
 // 增量加载部分聊天数据
-bool MysqlDao::GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
-	std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id) {
+bool MysqlDao::GetChatMessageList(
+    int principal_uid,
+    int chat_id,
+    int current_msg_id,
+    int page_size,
+    std::vector<std::shared_ptr<ChatMessage>>& chat_list,
+    bool& load_more,
+    int& last_msg_id) {
     chat_list.clear();
     load_more = false;
     last_msg_id = current_msg_id;
-    if (principal_uid <= 0 || chat_id <= 0 || current_msg_id < 0 || page_size <= 0) return false;
-	auto connection = _pool->GetConnection();
+    if (principal_uid <= 0 || chat_id <= 0 || current_msg_id < 0 || page_size <= 0)
+        return false;
+    auto connection = _pool->GetConnection();
 
-	if (connection == nullptr) {
-		return false;
-	}
+    if (connection == nullptr) {
+        return false;
+    }
 
-	// 归还本次借用的数据库连接，退出作用域后不得再使用。
-	Defer defer([this, &connection]() {
-		_pool->ReturnConnection(std::move(connection));
-		});
+    // 归还本次借用的数据库连接，退出作用域后不得再使用。
+    Defer defer([this, &connection]() {
+        _pool->ReturnConnection(std::move(connection));
+    });
 
-	try {
+    try {
         messaging::Transaction transaction(*connection->_connection);
         const auto access = messaging::LockConversation(*connection->_connection, chat_id, principal_uid);
         current_msg_id = static_cast<int>((std::max)(std::int64_t(current_msg_id), access.boundary));
 
-		// 准备查询
-		std::string sql = "SELECT *,UNIX_TIMESTAMP(created_at) AS created_epoch FROM chat_message "
-            "WHERE chat_id = ? and message_id > ? ORDER BY message_id LIMIT ?";
-		std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(sql));
+        // 准备查询
+        std::string sql = "SELECT *,UNIX_TIMESTAMP(created_at) AS created_epoch FROM chat_message "
+                          "WHERE chat_id = ? and message_id > ? ORDER BY message_id LIMIT ?";
+        std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(sql));
 
-		pstmt->setInt(1, chat_id);
-		pstmt->setInt(2, current_msg_id);
-		pstmt->setInt(3, page_size + 1); // 多查一个
+        pstmt->setInt(1, chat_id);
+        pstmt->setInt(2, current_msg_id);
+        pstmt->setInt(3, page_size + 1); // 多查一个
 
-		std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 
-		std::vector<std::shared_ptr<ChatMessage>> lists;
+        std::vector<std::shared_ptr<ChatMessage>> lists;
 
-		while (res->next()) {
-			auto message_id = res->getInt("message_id");
-			auto send_id = res->getInt("send_id");
-			auto recv_id = res->getInt("recv_id");
-			auto content = res->getString("content");
-			auto status = res->getInt("status");
-			auto created_at = res->getInt64("created_epoch");
-			auto msg = std::make_shared<ChatMessage>(message_id, chat_id, send_id, recv_id, content, status, created_at);
-			if (!res->isNull("client_msg_uuid")) { msg->_client_msg_id = res->getString("client_msg_uuid"); }
-			
-			lists.push_back(msg);
-		}
+        while (res->next()) {
+            auto message_id = res->getInt("message_id");
+            auto send_id = res->getInt("send_id");
+            auto recv_id = res->getInt("recv_id");
+            auto content = res->getString("content");
+            auto status = res->getInt("status");
+            auto created_at = res->getInt64("created_epoch");
+            auto msg =
+                std::make_shared<ChatMessage>(message_id, chat_id, send_id, recv_id, content, status, created_at);
+            if (!res->isNull("client_msg_uuid")) {
+                msg->_client_msg_id = res->getString("client_msg_uuid");
+            }
 
-		// 如果超过page_size,表示还没有取完，还能够再取
-		if (lists.size() > page_size) {
-			load_more = true;
-			lists.pop_back();
-		}
+            lists.push_back(msg);
+        }
 
-		// 更新当前最后的message_id
-		if (lists.size() != 0) {
-			last_msg_id = lists.back()->_message_id;
-		}
+        // 如果超过page_size,表示还没有取完，还能够再取
+        if (lists.size() > page_size) {
+            load_more = true;
+            lists.pop_back();
+        }
 
-		chat_list = std::move(lists);
+        // 更新当前最后的message_id
+        if (lists.size() != 0) {
+            last_msg_id = lists.back()->_message_id;
+        }
 
-		transaction.Commit();
-		return true;
-	}
-	catch (const std::exception& e) {
-		SPDLOG_ERROR("mysql GetChatMessageList failed, chat_id={}, current_msg_id={}, page_size={}, error={}", chat_id, current_msg_id, page_size, e.what());
-		return false;
-	}
+        chat_list = std::move(lists);
+
+        transaction.Commit();
+        return true;
+    } catch (const std::exception& e) {
+        SPDLOG_ERROR(
+            "mysql GetChatMessageList failed, chat_id={}, current_msg_id={}, page_size={}, error={}",
+            chat_id,
+            current_msg_id,
+            page_size,
+            e.what());
+        return false;
+    }
 }
 
-bool MysqlDao::HandleReceiptRequest(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer) {
+bool MysqlDao::HandleReceiptRequest(
+    int uid,
+    const Json::Value& request,
+    bool report,
+    Json::Value& response,
+    int& peer) {
     auto connection = _pool->GetConnection();
-    if (!connection) { response["receipt_error"] = "StorageUnavailable"; return false; }
+    if (!connection) {
+        response["receipt_error"] = "StorageUnavailable";
+        return false;
+    }
     // 归还本次借用的数据库连接，退出作用域后不得再使用。
-    Defer release([this, &connection] { _pool->ReturnConnection(std::move(connection)); });
+    Defer release([this, &connection] {
+        _pool->ReturnConnection(std::move(connection));
+    });
     try {
         messaging::ReceiptRequest(*connection->_connection, uid, request, report, response, peer);
         return true;
@@ -803,71 +898,103 @@ bool MysqlDao::HandleReceiptRequest(int uid, const Json::Value& request, bool re
     return false;
 }
 
-bool MysqlDao::CreateGroup(int owner, const std::string& name, const std::string& uuid,
-    const std::vector<int>& members, int& chat_id) {
+bool MysqlDao::CreateGroup(
+    int owner,
+    const std::string& name,
+    const std::string& uuid,
+    const std::vector<int>& members,
+    int& chat_id) {
     chat_id = 0;
-    if (owner <= 0 || name.empty() || name.size() > 60 || members.empty() || members.size() > 19
-        || !message_commit::IsCanonicalUuid(uuid)) return false;
+    if (owner <= 0 || name.empty() || name.size() > 60 || members.empty() || members.size() > 19 ||
+        !message_commit::IsCanonicalUuid(uuid))
+        return false;
     std::set<int> expected(members.begin(), members.end());
-    if (expected.size() != members.size() || expected.count(owner) || *expected.begin() <= 0) return false;
+    if (expected.size() != members.size() || expected.count(owner) || *expected.begin() <= 0)
+        return false;
     expected.insert(owner);
     auto connection = _pool->GetConnection();
-    if (!connection) return false;
+    if (!connection)
+        return false;
     // 归还本次群创建借用的连接。
-    Defer release(
-        [this, &connection] { _pool->ReturnConnection(std::move(connection)); });
+    Defer release([this, &connection] {
+        _pool->ReturnConnection(std::move(connection));
+    });
     try {
         auto& db = *connection->_connection;
         messaging::Transaction transaction(db);
         // Serializes creation UUID retries by the same owner across instances.
-        std::unique_ptr<sql::PreparedStatement> owner_lock(db.prepareStatement("SELECT uid FROM user WHERE uid=? FOR UPDATE"));
+        std::unique_ptr<sql::PreparedStatement> owner_lock(
+            db.prepareStatement("SELECT uid FROM user WHERE uid=? FOR UPDATE"));
         owner_lock->setInt(1, owner);
         std::unique_ptr<sql::ResultSet> owner_row(owner_lock->executeQuery());
-        if (!owner_row->next()) return false;
+        if (!owner_row->next())
+            return false;
         owner_row.reset();
         std::unique_ptr<sql::PreparedStatement> prior(db.prepareStatement(
             "SELECT chat_id,original_name FROM group_chat WHERE creator_uid=? AND creation_uuid=?"));
-        prior->setInt(1, owner); prior->setString(2, uuid);
+        prior->setInt(1, owner);
+        prior->setString(2, uuid);
         std::unique_ptr<sql::ResultSet> row(prior->executeQuery());
         if (row->next()) {
             const int existing = row->getInt(1);
-            if (row->getString(2).asStdString() != name) return false;
+            if (row->getString(2).asStdString() != name)
+                return false;
             row.reset();
-            std::unique_ptr<sql::PreparedStatement> query(db.prepareStatement("SELECT user_id FROM group_creation_member WHERE chat_id=?"));
+            std::unique_ptr<sql::PreparedStatement> query(
+                db.prepareStatement("SELECT user_id FROM group_creation_member WHERE chat_id=?"));
             query->setInt(1, existing);
             std::unique_ptr<sql::ResultSet> users(query->executeQuery());
             std::set<int> actual;
-            while (users->next()) actual.insert(users->getInt(1));
-            if (actual != expected) return false;
-            transaction.Commit(); chat_id = existing; return true;
+            while (users->next())
+                actual.insert(users->getInt(1));
+            if (actual != expected)
+                return false;
+            transaction.Commit();
+            chat_id = existing;
+            return true;
         }
         row.reset();
         std::unique_ptr<sql::PreparedStatement> friends(db.prepareStatement(
             "SELECT u.uid FROM user u JOIN friend f ON f.other_id=u.uid WHERE f.self_id=? AND u.uid=?"));
         for (int member : members) {
-            friends->setInt(1, owner); friends->setInt(2, member);
+            friends->setInt(1, owner);
+            friends->setInt(2, member);
             std::unique_ptr<sql::ResultSet> found(friends->executeQuery());
-            if (!found->next()) return false;
+            if (!found->next())
+                return false;
         }
         std::unique_ptr<sql::Statement> insert(db.createStatement());
         insert->execute("INSERT INTO chat(type) VALUES('group')");
         std::unique_ptr<sql::ResultSet> identity(insert->executeQuery("SELECT LAST_INSERT_ID()"));
-        if (!identity->next() || identity->getUInt64(1) > 2147483647ULL) return false;
+        if (!identity->next() || identity->getUInt64(1) > 2147483647ULL)
+            return false;
         const int created = identity->getInt(1);
         identity.reset();
         std::unique_ptr<sql::PreparedStatement> group(db.prepareStatement(
             "INSERT INTO group_chat(chat_id,name,owner_uid,creation_uuid,creator_uid,original_name) VALUES(?,?,?,?,?,?)"));
-        group->setInt(1, created); group->setString(2, name); group->setInt(3, owner); group->setString(4, uuid);
-        group->setInt(5, owner); group->setString(6, name);
+        group->setInt(1, created);
+        group->setString(2, name);
+        group->setInt(3, owner);
+        group->setString(4, uuid);
+        group->setInt(5, owner);
+        group->setString(6, name);
         group->executeUpdate();
-        std::unique_ptr<sql::PreparedStatement> member(db.prepareStatement(
-            "INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(?,?,?)"));
+        std::unique_ptr<sql::PreparedStatement> member(
+            db.prepareStatement("INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(?,?,?)"));
         for (int uid : expected) {
-            member->setInt(1, created); member->setInt(2, uid); member->setInt(3, uid == owner ? 1 : 0);
+            member->setInt(1, created);
+            member->setInt(2, uid);
+            member->setInt(3, uid == owner ? 1 : 0);
             member->executeUpdate();
         }
-        messaging::GroupQuery original(db, "INSERT INTO group_creation_member SELECT chat_id,user_id FROM group_chat_member WHERE chat_id=?", {std::to_string(created)}, false);
-        transaction.Commit(); chat_id = created; return true;
+        messaging::GroupQuery original(
+            db,
+            "INSERT INTO group_creation_member SELECT chat_id,user_id FROM group_chat_member WHERE chat_id=?",
+            {std::to_string(created)},
+            false);
+        transaction.Commit();
+        chat_id = created;
+        return true;
     } catch (const std::exception&) {
         SPDLOG_WARN("group creation failed");
         return false;
@@ -879,47 +1006,79 @@ bool MysqlDao::GroupRequest(int uid, const Json::Value& request, bool manage, Js
     response["request_id"] = request["request_id"];
     response["chat_id"] = request["chat_id"];
     auto connection = _pool->GetConnection();
-    if (!connection) { response["group_error"] = "StorageUnavailable"; return false; }
+    if (!connection) {
+        response["group_error"] = "StorageUnavailable";
+        return false;
+    }
     // 归还请求独占借用的连接。
-    Defer release([this, &connection] { _pool->ReturnConnection(std::move(connection)); });
+    Defer release([this, &connection] {
+        _pool->ReturnConnection(std::move(connection));
+    });
     try {
         if (request["operation"] == "remark") {
             if (!request["target_uid"].isInt() || !request["name"].isString() || request["name"].asString().size() > 60)
                 throw messaging::GroupError("InvalidRequest");
             auto& db = *connection->_connection;
             messaging::Transaction transaction(db);
-            messaging::GroupQuery row(db, "SELECT 1 FROM friend WHERE self_id=? AND other_id=? FOR UPDATE",
-                {std::to_string(uid),std::to_string(request["target_uid"].asInt())});
-            if (!row.rows->next()) throw messaging::GroupError("NotFriend");
-            messaging::GroupQuery change(db, "UPDATE friend SET backname=? WHERE self_id=? AND other_id=?",
-                {request["name"].asString(),std::to_string(uid),std::to_string(request["target_uid"].asInt())}, false);
-            transaction.Commit(); response["target_uid"] = request["target_uid"]; response["name"] = request["name"]; response["error"] = 0;
+            messaging::GroupQuery row(
+                db,
+                "SELECT 1 FROM friend WHERE self_id=? AND other_id=? FOR UPDATE",
+                {std::to_string(uid), std::to_string(request["target_uid"].asInt())});
+            if (!row.rows->next())
+                throw messaging::GroupError("NotFriend");
+            messaging::GroupQuery change(
+                db,
+                "UPDATE friend SET backname=? WHERE self_id=? AND other_id=?",
+                {request["name"].asString(), std::to_string(uid), std::to_string(request["target_uid"].asInt())},
+                false);
+            transaction.Commit();
+            response["target_uid"] = request["target_uid"];
+            response["name"] = request["name"];
+            response["error"] = 0;
         } else if (manage) {
-            if (!request["request_id"].isString() || !message_commit::IsCanonicalUuid(request["request_id"].asString())) throw messaging::GroupError("InvalidRequest");
+            if (!request["request_id"].isString() || !message_commit::IsCanonicalUuid(request["request_id"].asString()))
+                throw messaging::GroupError("InvalidRequest");
             messaging::ManageGroup(*connection->_connection, uid, request, response);
-        } else messaging::ReadGroup(*connection->_connection, uid, request, response);
+        } else
+            messaging::ReadGroup(*connection->_connection, uid, request, response);
         return true;
-    } catch (const messaging::GroupError& error) { response["group_error"] = error.what(); }
-    catch (const std::exception&) { response["group_error"] = "StorageUnavailable"; }
-    response["error"] = ErrorCodes::UidInvalid; return false;
+    } catch (const messaging::GroupError& error) {
+        response["group_error"] = error.what();
+    } catch (const std::exception&) {
+        response["group_error"] = "StorageUnavailable";
+    }
+    response["error"] = ErrorCodes::UidInvalid;
+    return false;
 }
 
 bool MysqlDao::SocialRequest(int uid, const Json::Value& request, int kind, Json::Value& response) {
     auto connection = _pool->GetConnection();
     response["error"] = ErrorCodes::UidInvalid;
     response["request_id"] = request.get("request_id", "");
-    if (!connection) { response["social_error"] = "StorageUnavailable"; return false; }
+    if (!connection) {
+        response["social_error"] = "StorageUnavailable";
+        return false;
+    }
     // 无论查询或写入结果均归还本次连接。
-    Defer release(
-        [this, &connection] { _pool->ReturnConnection(std::move(connection)); });
+    Defer release([this, &connection] {
+        _pool->ReturnConnection(std::move(connection));
+    });
     try {
         response["error"] = 0;
-        if (kind == 1042) social::UpdateProfile(*connection->_connection,uid,request,response);
-        else if (kind == 1044) social::Manage(*connection->_connection,uid,request,response);
-        else social::Read(*connection->_connection,uid,request,response);
+        if (kind == 1042)
+            social::UpdateProfile(*connection->_connection, uid, request, response);
+        else if (kind == 1044)
+            social::Manage(*connection->_connection, uid, request, response);
+        else
+            social::Read(*connection->_connection, uid, request, response);
         return true;
-    } catch (const messaging::GroupError& error) { response["social_error"] = error.what(); }
-    catch (const sql::SQLException& error) { response["social_error"] = error.getErrorCode() == 1062 ? "NameExists" : "StorageUnavailable"; }
-    catch (const std::exception&) { response["social_error"] = "InvalidRequest"; }
-    response["error"] = ErrorCodes::UidInvalid; return false;
+    } catch (const messaging::GroupError& error) {
+        response["social_error"] = error.what();
+    } catch (const sql::SQLException& error) {
+        response["social_error"] = error.getErrorCode() == 1062 ? "NameExists" : "StorageUnavailable";
+    } catch (const std::exception&) {
+        response["social_error"] = "InvalidRequest";
+    }
+    response["error"] = ErrorCodes::UidInvalid;
+    return false;
 }

@@ -15,93 +15,91 @@ using namespace std::chrono_literals;
 // T09-PROC-01
 /** 验证每次运行具有唯一且不可变的身份与命名空间。 */
 TEST(T09_PROC_RunContext, IdentityAndSyntheticNamespaceAreImmutableAndUnique) {
-	auto first = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
-	auto second = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
+    auto first = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
+    auto second = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
 
-	EXPECT_FALSE(first->RunId().empty());
-	EXPECT_NE(first->RunId(), second->RunId());
-	EXPECT_NE(first->SyntheticIdentity("user"), second->SyntheticIdentity("user"));
-	EXPECT_EQ(first->SyntheticIdentity("user"), first->RunId() + "-user");
+    EXPECT_FALSE(first->RunId().empty());
+    EXPECT_NE(first->RunId(), second->RunId());
+    EXPECT_NE(first->SyntheticIdentity("user"), second->SyntheticIdentity("user"));
+    EXPECT_EQ(first->SyntheticIdentity("user"), first->RunId() + "-user");
 }
 
 // T09-PROC-02
 /** 验证同一运行分配不同自有端口，并拒绝重复端口名。 */
 TEST(T09_PROC_RunContext, AllocatesDistinctOwnedLoopbackPortsAndRejectsDuplicateNames) {
-	auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
+    auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
 
-	const auto gate = context->ReserveLoopbackPort("gate");
-	const auto status = context->ReserveLoopbackPort("status");
+    const auto gate = context->ReserveLoopbackPort("gate");
+    const auto status = context->ReserveLoopbackPort("status");
 
-	EXPECT_EQ(gate.address, "127.0.0.1");
-	EXPECT_EQ(status.address, "127.0.0.1");
-	EXPECT_NE(gate.port, 0);
-	EXPECT_NE(status.port, 0);
-	EXPECT_NE(gate.port, status.port);
-	EXPECT_THROW(context->ReserveLoopbackPort("gate"), std::invalid_argument);
+    EXPECT_EQ(gate.address, "127.0.0.1");
+    EXPECT_EQ(status.address, "127.0.0.1");
+    EXPECT_NE(gate.port, 0);
+    EXPECT_NE(status.port, 0);
+    EXPECT_NE(gate.port, status.port);
+    EXPECT_THROW(context->ReserveLoopbackPort("gate"), std::invalid_argument);
 }
 
 // T09-PROC-03
 /** 验证临时根目录只接受本次拥有的路径，拒绝外部或已存在目录。 */
 TEST(T09_PROC_RunContext, CreatesOwnedTempRootAndRefusesOutsideOrPreexistingPaths) {
-	auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
-	const auto root = context->TempRoot();
-	ASSERT_TRUE(std::filesystem::is_directory(root));
+    auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
+    const auto root = context->TempRoot();
+    ASSERT_TRUE(std::filesystem::is_directory(root));
 
-	const auto owned = context->CreateOwnedDirectory("evidence");
-	ASSERT_TRUE(std::filesystem::is_directory(owned));
-	EXPECT_THROW(context->CreateOwnedDirectory("evidence"), std::invalid_argument);
-	EXPECT_THROW(context->CreateOwnedDirectory("..\\outside"), std::invalid_argument);
-	EXPECT_FALSE(context->CleanupOwnedPath(std::filesystem::temp_directory_path()));
+    const auto owned = context->CreateOwnedDirectory("evidence");
+    ASSERT_TRUE(std::filesystem::is_directory(owned));
+    EXPECT_THROW(context->CreateOwnedDirectory("evidence"), std::invalid_argument);
+    EXPECT_THROW(context->CreateOwnedDirectory("..\\outside"), std::invalid_argument);
+    EXPECT_FALSE(context->CleanupOwnedPath(std::filesystem::temp_directory_path()));
 }
 
 // T09-PROC-04
 /** 验证截止时间为未来绝对时间，且清理记录具有明确归属。 */
 TEST(T09_PROC_RunContext, RequiresFutureAbsoluteDeadlineAndCommittedResourceOwnership) {
-	EXPECT_THROW(
-		integration::RunContext::Create(std::chrono::steady_clock::time_point::max()),
-		std::invalid_argument);
-	EXPECT_THROW(
-		integration::RunContext::Create(std::chrono::steady_clock::now() - 1ms),
-		std::invalid_argument);
+    EXPECT_THROW(integration::RunContext::Create(std::chrono::steady_clock::time_point::max()), std::invalid_argument);
+    EXPECT_THROW(integration::RunContext::Create(std::chrono::steady_clock::now() - 1ms), std::invalid_argument);
 
-	auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
-	const auto slot = context->ReserveProcessSlot("helper");
-	integration::ProcessIdentity identity{4242, 123456};
-	EXPECT_FALSE(context->IsOwnedProcess(identity));
-	// 提供成功清理结果供上下文生命周期断言。
-	context->CommitProcess(slot, identity, [] { return integration::CleanupStatus::Success("stopped"); });
-	EXPECT_TRUE(context->IsOwnedProcess(identity));
-	EXPECT_FALSE(context->CleanupProcess(integration::ProcessIdentity{4242, 123457}));
+    auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
+    const auto slot = context->ReserveProcessSlot("helper");
+    integration::ProcessIdentity identity{4242, 123456};
+    EXPECT_FALSE(context->IsOwnedProcess(identity));
+    // 提供成功清理结果供上下文生命周期断言。
+    context->CommitProcess(slot, identity, [] {
+        return integration::CleanupStatus::Success("stopped");
+    });
+    EXPECT_TRUE(context->IsOwnedProcess(identity));
+    EXPECT_FALSE(context->CleanupProcess(integration::ProcessIdentity{4242, 123457}));
 }
 
 // T09-PROC-05
 /** 验证清理按逆序执行，主失败与清理失败均完整保留。 */
 TEST(T09_PROC_RunContext, TeardownIsReverseOrderedAndPreservesPrimaryAndCleanupFailures) {
-	auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
-	std::vector<std::string> order;
-	const auto first = context->ReserveProcessSlot("first");
-	const auto second = context->ReserveProcessSlot("second");
-	// 记录先登记的清理动作，并返回成功。
-	context->CommitProcess(first, {1001, 11}, [&] {
-		order.push_back("first");
-		return integration::CleanupStatus::Success("first stopped");
-	});
-	// 记录后登记的清理动作，并返回独立清理失败。
-	context->CommitProcess(second, {1002, 12}, [&] {
-		order.push_back("second");
-		return integration::CleanupStatus::Failure("cleanup marker");
-	});
-	context->RecordPrimaryFailure("primary marker");
+    auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
+    std::vector<std::string> order;
+    const auto first = context->ReserveProcessSlot("first");
+    const auto second = context->ReserveProcessSlot("second");
+    // 记录先登记的清理动作，并返回成功。
+    context->CommitProcess(first, {1001, 11}, [&] {
+        order.push_back("first");
+        return integration::CleanupStatus::Success("first stopped");
+    });
+    // 记录后登记的清理动作，并返回独立清理失败。
+    context->CommitProcess(second, {1002, 12}, [&] {
+        order.push_back("second");
+        return integration::CleanupStatus::Failure("cleanup marker");
+    });
+    context->RecordPrimaryFailure("primary marker");
 
-	const auto result = context->Teardown();
+    const auto result = context->Teardown();
 
-	EXPECT_EQ(order, (std::vector<std::string>{"second", "first"}));
-	ASSERT_TRUE(result.primary_failure.has_value());
-	EXPECT_EQ(*result.primary_failure, "primary marker");
-	ASSERT_EQ(result.cleanup_failures.size(), 1U);
-	EXPECT_EQ(result.cleanup_failures.front(), "cleanup marker");
-	EXPECT_FALSE(result.complete);
-	EXPECT_FALSE(context->CleanupProcess({1002, 12}));
+    EXPECT_EQ(order, (std::vector<std::string>{"second", "first"}));
+    ASSERT_TRUE(result.primary_failure.has_value());
+    EXPECT_EQ(*result.primary_failure, "primary marker");
+    ASSERT_EQ(result.cleanup_failures.size(), 1U);
+    EXPECT_EQ(result.cleanup_failures.front(), "cleanup marker");
+    EXPECT_FALSE(result.complete);
+    EXPECT_FALSE(context->CleanupProcess({1002, 12}));
 }
 
 } // namespace

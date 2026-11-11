@@ -1,67 +1,114 @@
 #include "MysqlMgr.h"
 
-MysqlMgr::MysqlMgr() {
+MysqlMgr::MysqlMgr() {}
 
-}
-
-MysqlMgr::~MysqlMgr() {
-
-}
+MysqlMgr::~MysqlMgr() {}
 std::shared_ptr<UserInfo> MysqlMgr::GetUserByUid(int uid) {
-	return _dao.GetUser(uid);
+    return _dao.GetUser(uid);
 }
 
 std::shared_ptr<UserInfo> MysqlMgr::GetUserByName(const std::string name) {
-	return _dao.GetUserByName(name);
+    return _dao.GetUserByName(name);
 }
 
-bool MysqlMgr::AddFriendApply(const int& from_uid, const int& to_uid, const std::string& description, const std::string& backname) {
-	return _dao.AddFriendApply(from_uid, to_uid, description, backname);
+bool MysqlMgr::AddFriendApply(
+    const int& from_uid,
+    const int& to_uid,
+    const std::string& description,
+    const std::string& backname) {
+    return _dao.AddFriendApply(from_uid, to_uid, description, backname);
 }
 
-bool MysqlMgr::GetApplyFriendList(int to_uid, std::vector<std::shared_ptr<ApplyInfo>>& applylist, int start, int limit) {
-	return _dao.GetApplyFriendList(to_uid, applylist, start, limit);
+bool MysqlMgr::GetApplyFriendList(
+    int to_uid,
+    std::vector<std::shared_ptr<ApplyInfo>>& applylist,
+    int start,
+    int limit) {
+    return _dao.GetApplyFriendList(to_uid, applylist, start, limit);
 }
 
-bool MysqlMgr::AuthFriendApply(int apply_uid, int auth_uid, std::string auth_backname, std::string apply_backname,
-	std::string apply_description, std::string auth_description, std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, int& chat_id) {
-	return _dao.AuthFriendApply(apply_uid, auth_uid, auth_backname, apply_backname,
-		apply_description, auth_description, chat_msgs, chat_id);
+bool MysqlMgr::AuthFriendApply(
+    int apply_uid,
+    int auth_uid,
+    std::string auth_backname,
+    std::string apply_backname,
+    std::string apply_description,
+    std::string auth_description,
+    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs,
+    int& chat_id) {
+    return _dao.AuthFriendApply(
+        apply_uid,
+        auth_uid,
+        auth_backname,
+        apply_backname,
+        apply_description,
+        auth_description,
+        chat_msgs,
+        chat_id);
 }
 
 bool MysqlMgr::GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& friendList) {
-	return _dao.GetFriendList(uid, friendList);
+    return _dao.GetFriendList(uid, friendList);
 }
 
-bool MysqlMgr::GetUserChatList(int uid, int current_chat_id, int page_size,
-	std::vector<std::shared_ptr<ChatInfoBase>>& chat_list, bool& load_more, int& last_load_id) {
-	return _dao.GetUserChatList(uid, current_chat_id, page_size, chat_list, load_more, last_load_id);
+bool MysqlMgr::GetUserChatList(
+    int uid,
+    int current_chat_id,
+    int page_size,
+    std::vector<std::shared_ptr<ChatInfoBase>>& chat_list,
+    bool& load_more,
+    int& last_load_id) {
+    return _dao.GetUserChatList(uid, current_chat_id, page_size, chat_list, load_more, last_load_id);
 }
 
 bool MysqlMgr::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
-	return _dao.CreatePrivateChat(user1_id, user2_id, chat_id);
+    return _dao.CreatePrivateChat(user1_id, user2_id, chat_id);
 }
 
-message_commit::Result MysqlMgr::AddChatMessageList(message_commit::AuthenticatedPrincipal principal,
-    int from_uid, int to_uid, int chat_id, const message_commit::Batch& cache_msgs,
-    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs, message_commit::Deadline deadline, std::int64_t epoch, std::int64_t relationship) {
-    return _dao.AddChatMessageList(principal, from_uid, to_uid, chat_id, cache_msgs, chat_msgs, deadline, epoch, relationship);
+message_commit::Result MysqlMgr::AddChatMessageList(
+    message_commit::AuthenticatedPrincipal principal,
+    int from_uid,
+    int to_uid,
+    int chat_id,
+    const message_commit::Batch& cache_msgs,
+    std::vector<std::shared_ptr<ChatMessage>>& chat_msgs,
+    message_commit::Deadline deadline,
+    std::int64_t epoch,
+    std::int64_t relationship) {
+    return _dao
+        .AddChatMessageList(principal, from_uid, to_uid, chat_id, cache_msgs, chat_msgs, deadline, epoch, relationship);
 }
 
-bool MysqlMgr::GetChatMessageList(int principal_uid, int chat_id, int current_msg_id, int page_size,
-	std::vector<std::shared_ptr<ChatMessage>>& chat_list, bool& load_more, int& last_msg_id) {
-	return _dao.GetChatMessageList(principal_uid, chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
+bool MysqlMgr::GetChatMessageList(
+    int principal_uid,
+    int chat_id,
+    int current_msg_id,
+    int page_size,
+    std::vector<std::shared_ptr<ChatMessage>>& chat_list,
+    bool& load_more,
+    int& last_msg_id) {
+    return _dao
+        .GetChatMessageList(principal_uid, chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
 }
 bool MysqlMgr::SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::Value& response) {
     return _dao.SyncChatMessages(uid, chat_id, after, response);
 }
 
-bool MysqlMgr::HandleReceiptRequest(int uid, const Json::Value& request, bool report, Json::Value& response, int& peer) {
+bool MysqlMgr::HandleReceiptRequest(
+    int uid,
+    const Json::Value& request,
+    bool report,
+    Json::Value& response,
+    int& peer) {
     return _dao.HandleReceiptRequest(uid, request, report, response, peer);
 }
 
-bool MysqlMgr::CreateGroup(int owner, const std::string& name, const std::string& uuid,
-    const std::vector<int>& members, int& chat_id) {
+bool MysqlMgr::CreateGroup(
+    int owner,
+    const std::string& name,
+    const std::string& uuid,
+    const std::vector<int>& members,
+    int& chat_id) {
     return _dao.CreateGroup(owner, name, uuid, members, chat_id);
 }
 

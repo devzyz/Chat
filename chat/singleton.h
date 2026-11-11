@@ -9,17 +9,18 @@
  * @brief The Singleton class
  * 单例模式
  */
-template <typename T>
-class Singleton {
+template <typename T> class Singleton {
 private:
     static std::shared_ptr<T> _instance;
+
 protected:
     /** @brief 仅允许派生类构造单例基类。 */
     Singleton() = default;
     /** @brief 禁止复制该对象，避免共享可变状态或重复管理资源。 */
     Singleton(const Singleton<T>&) = delete;
     /** @brief 禁止复制赋值，避免产生多个单例状态持有者。 */
-    Singleton<T>& operator = (const Singleton<T>&) = delete;
+    Singleton<T>& operator=(const Singleton<T>&) = delete;
+
 public:
     /** @brief 通过 call_once 初始化共享实例并返回强引用；releaseInstance 后不会再次自动构造。 */
     static std::shared_ptr<T> instance() {
@@ -28,7 +29,7 @@ public:
         // call_once只有当s_flag第一次被定义的时候，才会执行后面的函数
         // 首次调用时创建共享实例，后续调用复用该初始化结果。
         std::call_once(s_flag, [&]() {
-            _instance = std::shared_ptr<T> (new T);
+            _instance = std::shared_ptr<T>(new T);
         });
 
         return _instance;
@@ -51,15 +52,11 @@ public:
     void printAddress() {
         const auto logger = spdlog::default_logger();
         if (logger) {
-            SPDLOG_LOGGER_DEBUG(
-                logger,
-                "singleton address={}",
-                static_cast<const void*>(_instance.get()));
+            SPDLOG_LOGGER_DEBUG(logger, "singleton address={}", static_cast<const void*>(_instance.get()));
         }
     }
 };
 
-template <typename T>
-std::shared_ptr<T> Singleton<T>::_instance = nullptr;
+template <typename T> std::shared_ptr<T> Singleton<T>::_instance = nullptr;
 
 #endif // SINGLETON_H

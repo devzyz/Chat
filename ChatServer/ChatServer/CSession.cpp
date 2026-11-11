@@ -4,17 +4,23 @@
 #include <boost/uuid.hpp>
 #include <spdlog/spdlog.h>
 
-CSession::CSession(boost::asio::io_context& io, std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
-    std::shared_ptr<UserSessionDirectory> directory, Submit submit)
-    : _strand(boost::asio::make_strand(io)), _socket(io), _heartbeat(io),
-      _lifecycle(std::move(lifecycle)), _directory(std::move(directory)), _submit(std::move(submit)),
+CSession::CSession(
+    boost::asio::io_context& io,
+    std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
+    std::shared_ptr<UserSessionDirectory> directory,
+    Submit submit)
+    : _strand(boost::asio::make_strand(io)), _socket(io), _heartbeat(io), _lifecycle(std::move(lifecycle)),
+      _directory(std::move(directory)), _submit(std::move(submit)),
       _id(boost::uuids::to_string(boost::uuids::random_generator()())) {}
 
-boost::asio::ip::tcp::socket& CSession::Socket() { return _socket; }
+boost::asio::ip::tcp::socket& CSession::Socket() {
+    return _socket;
+}
 void CSession::Start() {
     // 在会话执行器激活连接并开始读帧与心跳期限。
     boost::asio::post(_strand, [self = shared_from_this()] {
-        if (self->_state != SessionState::Created) return;
+        if (self->_state != SessionState::Created)
+            return;
         self->_state = SessionState::Active;
         self->_last_activity = std::chrono::steady_clock::now();
         self->ReadHeader();
@@ -29,10 +35,13 @@ void CSession::Inspect(std::function<void(SessionState, std::optional<SessionClo
 }
 void CSession::Close(SessionCloseReason reason) {
     // 在串行执行器开始按指定原因关闭。
-    boost::asio::post(_strand, [self = shared_from_this(), reason] { self->BeginClosing(reason); });
+    boost::asio::post(_strand, [self = shared_from_this(), reason] {
+        self->BeginClosing(reason);
+    });
 }
 void CSession::BeginClosing(SessionCloseReason reason) {
-    if (_state == SessionState::Closing) return;
+    if (_state == SessionState::Closing)
+        return;
     _state = SessionState::Closing;
     _close_reason = reason;
     const int uid = _authenticated_uid.exchange(0);
@@ -52,46 +61,73 @@ void CSession::ReleaseIfIdle() {
     }
 }
 void CSession::ReadHeader() {
-    if (_state != SessionState::Active) return;
+    if (_state != SessionState::Active)
+        return;
     ++_io_pending;
-    boost::asio::async_read(_socket, boost::asio::buffer(_header), boost::asio::bind_executor(_strand,
-        // 帧头读取完成后校验状态和边界，再读取正文。
-        [self = shared_from_this()](boost::system::error_code error, std::size_t) {
-            --self->_io_pending;
-            if (self->_state != SessionState::Active) { self->ReleaseIfIdle(); return; }
-            if (error) {
-                self->BeginClosing(error == boost::asio::error::eof ? SessionCloseReason::PeerClosed
-                    : SessionCloseReason::ReadError);
-                return;
-            }
-            auto header = ChatFrameCodec::DecodeValidatedHeader(self->_header.data(), MAX_LENGTH);
-            if (!header) { self->BeginClosing(SessionCloseReason::ProtocolError); return; }
-            self->ReadBody(header->message_id, header->body_length);
-        }));
+    boost::asio::async_read(
+        _socket,
+        boost::asio::buffer(_header),
+        boost::asio::bind_executor(
+            _strand,
+            // 帧头读取完成后校验状态和边界，再读取正文。
+            [self = shared_from_this()](boost::system::error_code error, std::size_t) {
+                --self->_io_pending;
+                if (self->_state != SessionState::Active) {
+                    self->ReleaseIfIdle();
+                    return;
+                }
+                if (error) {
+                    self->BeginClosing(
+                        error == boost::asio::error::eof ? SessionCloseReason::PeerClosed
+                                                         : SessionCloseReason::ReadError);
+                    return;
+                }
+                auto header = ChatFrameCodec::DecodeValidatedHeader(self->_header.data(), MAX_LENGTH);
+                if (!header) {
+                    self->BeginClosing(SessionCloseReason::ProtocolError);
+                    return;
+                }
+                self->ReadBody(header->message_id, header->body_length);
+            }));
 }
 void CSession::ReadBody(std::uint16_t id, std::size_t length) {
-    if (_state != SessionState::Active) return;
+    if (_state != SessionState::Active)
+        return;
     _body.assign(length, '\0');
-    if (!length) { OnFrame(id); return; }
+    if (!length) {
+        OnFrame(id);
+        return;
+    }
     ++_io_pending;
-    boost::asio::async_read(_socket, boost::asio::buffer(_body), boost::asio::bind_executor(_strand,
-        // 正文读取完成后提交消息，关闭状态下仅清理未完成 I/O。
-        [self = shared_from_this(), id](boost::system::error_code error, std::size_t) {
-            --self->_io_pending;
-            if (self->_state != SessionState::Active) { self->ReleaseIfIdle(); return; }
-            if (error) {
-                self->BeginClosing(error == boost::asio::error::eof ? SessionCloseReason::PeerClosed
-                    : SessionCloseReason::ReadError);
-                return;
-            }
-            self->OnFrame(id);
-        }));
+    boost::asio::async_read(
+        _socket,
+        boost::asio::buffer(_body),
+        boost::asio::bind_executor(
+            _strand,
+            // 正文读取完成后提交消息，关闭状态下仅清理未完成 I/O。
+            [self = shared_from_this(), id](boost::system::error_code error, std::size_t) {
+                --self->_io_pending;
+                if (self->_state != SessionState::Active) {
+                    self->ReleaseIfIdle();
+                    return;
+                }
+                if (error) {
+                    self->BeginClosing(
+                        error == boost::asio::error::eof ? SessionCloseReason::PeerClosed
+                                                         : SessionCloseReason::ReadError);
+                    return;
+                }
+                self->OnFrame(id);
+            }));
 }
 void CSession::OnFrame(std::uint16_t id) {
     _last_activity = std::chrono::steady_clock::now();
     try {
         const auto result = _submit({shared_from_this(), static_cast<std::int16_t>(id), std::move(_body)});
-        if (result == LogicSubmitResult::Closed) { BeginClosing(SessionCloseReason::LogicUnavailable); return; }
+        if (result == LogicSubmitResult::Closed) {
+            BeginClosing(SessionCloseReason::LogicUnavailable);
+            return;
+        }
         if (result == LogicSubmitResult::Full) {
             SPDLOG_WARN("logic message rejected, reason=full, msg_id={}", id);
             BeginClosing(SessionCloseReason::LogicUnavailable);
@@ -108,58 +144,84 @@ void CSession::Send(const std::string& body, std::uint16_t id, SendCompletion co
 }
 void CSession::Send(SessionFrame frame, SendCompletion completion) {
     // 在会话执行器检查状态和写队列容量，完成回调仅确认入队结果。
-    boost::asio::post(_strand, [self = shared_from_this(), frame = std::move(frame),
-        completion = std::move(completion)]() mutable {
-        auto result = SessionSendResult::NotActive;
-        if (self->_state == SessionState::Active) {
-            const auto limit = ResponseBodyLimit(frame.message_id);
-            if (frame.body.size() > limit) {
-                SPDLOG_WARN("outbound frame exceeds limit, msg_id={}, bytes={}, limit={}",
-                    frame.message_id, frame.body.size(), limit);
-                self->BeginClosing(SessionCloseReason::ProtocolError);
-            } else if (self->_frames.size() >= MAX_SENDQUE) {
-                result = SessionSendResult::Full;
-            } else {
-                const auto header = ChatFrameCodec::EncodeHeader(frame.message_id,
-                    static_cast<std::uint16_t>(frame.body.size()));
-                auto buffer = std::make_shared<std::string>(reinterpret_cast<const char*>(header.data()), header.size());
-                buffer->append(frame.body);
-                self->_frames.push_back(std::move(buffer));
-                result = SessionSendResult::Accepted;
-                if (!self->_write_active) self->StartWrite();
+    boost::asio::post(
+        _strand,
+        [self = shared_from_this(), frame = std::move(frame), completion = std::move(completion)]() mutable {
+            auto result = SessionSendResult::NotActive;
+            if (self->_state == SessionState::Active) {
+                const auto limit = ResponseBodyLimit(frame.message_id);
+                if (frame.body.size() > limit) {
+                    SPDLOG_WARN(
+                        "outbound frame exceeds limit, msg_id={}, bytes={}, limit={}",
+                        frame.message_id,
+                        frame.body.size(),
+                        limit);
+                    self->BeginClosing(SessionCloseReason::ProtocolError);
+                } else if (self->_frames.size() >= MAX_SENDQUE) {
+                    result = SessionSendResult::Full;
+                } else {
+                    const auto header =
+                        ChatFrameCodec::EncodeHeader(frame.message_id, static_cast<std::uint16_t>(frame.body.size()));
+                    auto buffer =
+                        std::make_shared<std::string>(reinterpret_cast<const char*>(header.data()), header.size());
+                    buffer->append(frame.body);
+                    self->_frames.push_back(std::move(buffer));
+                    result = SessionSendResult::Accepted;
+                    if (!self->_write_active)
+                        self->StartWrite();
+                }
             }
-        }
-        if (completion) completion(result); // Admission only; callback must not block or throw.
-        else if (result != SessionSendResult::Accepted)
-            SPDLOG_DEBUG("session send rejected, result={}", static_cast<int>(result));
-    });
+            if (completion)
+                completion(result); // Admission only; callback must not block or throw.
+            else if (result != SessionSendResult::Accepted)
+                SPDLOG_DEBUG("session send rejected, result={}", static_cast<int>(result));
+        });
 }
 void CSession::StartWrite() {
-    if (_state != SessionState::Active || _frames.empty()) return;
+    if (_state != SessionState::Active || _frames.empty())
+        return;
     _write_active = true;
     ++_io_pending;
     auto buffer = _frames.front();
-    boost::asio::async_write(_socket, boost::asio::buffer(*buffer), boost::asio::bind_executor(_strand,
-        // 一次写完成后释放缓冲并继续队列或关闭清理。
-        [self = shared_from_this(), buffer](boost::system::error_code error, std::size_t) {
-            --self->_io_pending;
-            self->_write_active = false;
-            if (self->_state != SessionState::Active) { self->ReleaseIfIdle(); return; }
-            if (error) { self->BeginClosing(SessionCloseReason::WriteError); return; }
-            self->_frames.pop_front();
-            self->StartWrite();
-        }));
+    boost::asio::async_write(
+        _socket,
+        boost::asio::buffer(*buffer),
+        boost::asio::bind_executor(
+            _strand,
+            // 一次写完成后释放缓冲并继续队列或关闭清理。
+            [self = shared_from_this(), buffer](boost::system::error_code error, std::size_t) {
+                --self->_io_pending;
+                self->_write_active = false;
+                if (self->_state != SessionState::Active) {
+                    self->ReleaseIfIdle();
+                    return;
+                }
+                if (error) {
+                    self->BeginClosing(SessionCloseReason::WriteError);
+                    return;
+                }
+                self->_frames.pop_front();
+                self->StartWrite();
+            }));
 }
 void CSession::ArmHeartbeat() {
-    if (_state != SessionState::Active) return;
+    if (_state != SessionState::Active)
+        return;
     _heartbeat.expires_after(std::chrono::seconds(60));
     ++_io_pending;
-    _heartbeat.async_wait(boost::asio::bind_executor(_strand,
+    _heartbeat.async_wait(boost::asio::bind_executor(
+        _strand,
         // 心跳期限完成后核对活跃状态并触发超时关闭或再次等待。
         [self = shared_from_this()](boost::system::error_code error) {
             --self->_io_pending;
-            if (self->_state != SessionState::Active) { self->ReleaseIfIdle(); return; }
-            if (error) { self->BeginClosing(SessionCloseReason::LocalRequest); return; }
+            if (self->_state != SessionState::Active) {
+                self->ReleaseIfIdle();
+                return;
+            }
+            if (error) {
+                self->BeginClosing(SessionCloseReason::LocalRequest);
+                return;
+            }
             if (std::chrono::steady_clock::now() - self->_last_activity >
                 std::chrono::seconds(HEARTBEAT_TIME_INTERVAL)) {
                 self->BeginClosing(SessionCloseReason::HeartbeatTimeout);
@@ -170,34 +232,52 @@ void CSession::ArmHeartbeat() {
 }
 void CSession::BindAuthenticatedUser(int uid, BindCompletion completion, std::string authentication_token) {
     // 在会话执行器校验身份绑定前置状态，再交给生命周期协调器。
-    boost::asio::post(_strand, [self = shared_from_this(), uid,
-        completion = std::move(completion), authentication_token =
-        std::move(authentication_token)]() mutable {
-        if (self->_state != SessionState::Active) { completion(SessionBindResult::NotActive); return; }
-        if (uid <= 0 || self->_binding || self->_authenticated_uid.load()) {
-            completion(SessionBindResult::AlreadyBound); return;
-        }
-        self->_binding = true;
-        self->_binding_uid = uid;
-        self->_authentication_token =
-            std::move(authentication_token);
-        self->_lifecycle->OnAuthenticated(self, uid, std::move(completion));
-    });
+    boost::asio::post(
+        _strand,
+        [self = shared_from_this(),
+         uid,
+         completion = std::move(completion),
+         authentication_token = std::move(authentication_token)]() mutable {
+            if (self->_state != SessionState::Active) {
+                completion(SessionBindResult::NotActive);
+                return;
+            }
+            if (uid <= 0 || self->_binding || self->_authenticated_uid.load()) {
+                completion(SessionBindResult::AlreadyBound);
+                return;
+            }
+            self->_binding = true;
+            self->_binding_uid = uid;
+            self->_authentication_token = std::move(authentication_token);
+            self->_lifecycle->OnAuthenticated(self, uid, std::move(completion));
+        });
 }
-void CSession::FinishBinding(int uid, SessionBindResult result, BindCompletion completion,
-    std::shared_ptr<std::atomic<bool>> cancelled, std::function<void(bool)> committed) {
+void CSession::FinishBinding(
+    int uid,
+    SessionBindResult result,
+    BindCompletion completion,
+    std::shared_ptr<std::atomic<bool>> cancelled,
+    std::function<void(bool)> committed) {
     // 接收绑定结果并在当前会话仍可用时提交认证状态。
-    boost::asio::post(_strand, [self = shared_from_this(), uid, result, completion = std::move(completion),
-        cancelled, committed = std::move(committed)]() mutable {
-        self->_binding = false;
-        if (self->_state != SessionState::Active || cancelled->load()) result = SessionBindResult::NotActive;
-        if (result == SessionBindResult::Bound) {
-            auto old = self->_directory->Register(uid, self->_id, self);
-            self->_authenticated_uid.store(uid);
-            if (old && old != self) old->Close(SessionCloseReason::Replaced);
-        }
-        committed(result == SessionBindResult::Bound);
-        completion(result);
-        self->ReleaseIfIdle();
-    });
+    boost::asio::post(
+        _strand,
+        [self = shared_from_this(),
+         uid,
+         result,
+         completion = std::move(completion),
+         cancelled,
+         committed = std::move(committed)]() mutable {
+            self->_binding = false;
+            if (self->_state != SessionState::Active || cancelled->load())
+                result = SessionBindResult::NotActive;
+            if (result == SessionBindResult::Bound) {
+                auto old = self->_directory->Register(uid, self->_id, self);
+                self->_authenticated_uid.store(uid);
+                if (old && old != self)
+                    old->Close(SessionCloseReason::Replaced);
+            }
+            committed(result == SessionBindResult::Bound);
+            completion(result);
+            self->ReleaseIfIdle();
+        });
 }

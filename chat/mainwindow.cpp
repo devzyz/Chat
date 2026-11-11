@@ -9,16 +9,14 @@
 #include "chatwindowplacement.h"
 #include <QScreen>
 
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
-    , ui(new Ui::MainWindow)
-    , _session(this)
-{
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow), _session(this) {
     ui->setupUi(this);
     // 保留会话页面并显示自动恢复提示。
     connect(&_session, &ClientSession::reconnectChanged, this, [this](bool active) {
-        if (active) statusBar()->showMessage(tr("连接中断，正在重新连接…"));
-        else statusBar()->clearMessage();
+        if (active)
+            statusBar()->showMessage(tr("连接中断，正在重新连接…"));
+        else
+            statusBar()->clearMessage();
     });
     // 恢复被拒绝或尝试耗尽后明确返回登录页。
     connect(&_session, &ClientSession::reconnectFailed, this, [this] {
@@ -36,9 +34,13 @@ MainWindow::MainWindow(QWidget *parent)
             QMessageBox::warning(this, tr("退出未完成"), tr("服务器尚未确认退出，请检查连接后重试。"));
             return;
         }
-        _chat_dlg.clear(); _activeAuthFlowId = 0;
-        if (_closeAfterLogout) { _closeAfterLogout = false; close(); }
-        else offlineLogin();
+        _chat_dlg.clear();
+        _activeAuthFlowId = 0;
+        if (_closeAfterLogout) {
+            _closeAfterLogout = false;
+            close();
+        } else
+            offlineLogin();
     });
 
     _login_dlg = new LoginDialog(_authFlow, this);
@@ -54,27 +56,25 @@ MainWindow::MainWindow(QWidget *parent)
     // 连接登录界面转重置界面信号
     connect(_login_dlg, &LoginDialog::passwordResetRequested, this, &MainWindow::loginSwitchReset);
     // 连接登录界面转聊天界面信号
-    connect(_login_dlg, &LoginDialog::loginSucceeded,
-            this, &MainWindow::loginSwitchChat);
+    connect(_login_dlg, &LoginDialog::loginSucceeded, this, &MainWindow::loginSwitchChat);
     // 连接服务器通知下线信号
     connect(TcpMgr::instance().get(), &TcpMgr::forcedOffline, this, &MainWindow::notifyOffline);
     // 连接结束后区分预期关闭与异常断线。
     connect(TcpMgr::instance().get(), &TcpMgr::connectionClosed, this, &MainWindow::connectionClose);
 }
 
-MainWindow::~MainWindow()
-{
+MainWindow::~MainWindow() {
     _session.resetSession(SessionResetReason::Logout);
     delete ui;
-//     if (_login_dlg) {
-//         delete _login_dlg;
-//         _login_dlg = nullptr;
-//     }
+    //     if (_login_dlg) {
+    //         delete _login_dlg;
+    //         _login_dlg = nullptr;
+    //     }
 
-//     if (_register_dlg) {
-//         delete _register_dlg;
-//         _register_dlg = nullptr;
-//     }
+    //     if (_register_dlg) {
+    //         delete _register_dlg;
+    //         _register_dlg = nullptr;
+    //     }
 }
 
 void MainWindow::loginSwitchReg() {
@@ -91,8 +91,7 @@ void MainWindow::loginSwitchReg() {
     _ui_status = UIStatus::REGISTER_UI;
 }
 
-void MainWindow::loginSwitchReset()
-{
+void MainWindow::loginSwitchReset() {
     _reset_dlg = new ResetDialog(_authFlow, this);
     _reset_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     setCentralWidget(_reset_dlg);
@@ -116,8 +115,7 @@ void MainWindow::regSwitchLogin() {
     connect(_login_dlg, &LoginDialog::registrationRequested, this, &MainWindow::loginSwitchReg);
     // 连接登录界面和忘记密码界面
     connect(_login_dlg, &LoginDialog::passwordResetRequested, this, &MainWindow::loginSwitchReset);
-    connect(_login_dlg, &LoginDialog::loginSucceeded,
-            this, &MainWindow::loginSwitchChat);
+    connect(_login_dlg, &LoginDialog::loginSucceeded, this, &MainWindow::loginSwitchChat);
     _ui_status = UIStatus::LOGIN_UI;
 }
 
@@ -133,19 +131,21 @@ void MainWindow::resetSwitchLogin() {
     connect(_login_dlg, &LoginDialog::registrationRequested, this, &MainWindow::loginSwitchReg);
     // 连接登录界面和忘记密码界面
     connect(_login_dlg, &LoginDialog::passwordResetRequested, this, &MainWindow::loginSwitchReset);
-    connect(_login_dlg, &LoginDialog::loginSucceeded,
-            this, &MainWindow::loginSwitchChat);
+    connect(_login_dlg, &LoginDialog::loginSucceeded, this, &MainWindow::loginSwitchChat);
     _ui_status = UIStatus::LOGIN_UI;
 }
 
 void MainWindow::loginSwitchChat(AuthFlowId flowId) {
     _activeAuthFlowId = flowId;
     _chat_dlg = new ChatDialog(this);
-    connect(_chat_dlg, &ChatDialog::logoutRequested, this,
+    connect(
+        _chat_dlg,
+        &ChatDialog::logoutRequested,
+        this,
         // 账号按钮复用统一退出保护及完整会话清理。
         [this](bool change) {
-        resetSession(change ? SessionResetReason::SwitchAccount : SessionResetReason::Logout);
-    });
+            resetSession(change ? SessionResetReason::SwitchAccount : SessionResetReason::Logout);
+        });
     _chat_dlg->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     setCentralWidget(_chat_dlg);
 
@@ -157,9 +157,9 @@ void MainWindow::loginSwitchChat(AuthFlowId flowId) {
     _session.beginSession(_chat_dlg);
 }
 
-void MainWindow::notifyOffline()
-{
-    if (_session.isLoggingOut()) return;
+void MainWindow::notifyOffline() {
+    if (_session.isLoggingOut())
+        return;
     if (!_session.isActive()) {
         return;
     }
@@ -168,8 +168,7 @@ void MainWindow::notifyOffline()
     resetSession(SessionResetReason::Kicked);
 }
 
-void MainWindow::connectionClose(bool expectedClose)
-{
+void MainWindow::connectionClose(bool expectedClose) {
     if (expectedClose || !_session.isActive() || _session.isReconnecting() || _session.isLoggingOut()) {
         return;
     }
@@ -184,14 +183,17 @@ void MainWindow::connectionClose(bool expectedClose)
     resetSession(SessionResetReason::UnexpectedDisconnect);
 }
 
-bool MainWindow::resetSession(SessionResetReason reason)
-{
-    if ((reason == SessionResetReason::Logout || reason == SessionResetReason::SwitchAccount)
-        && !confirmSubmissionExit(this, UserMgr::instance()->hasPendingSubmissions()
-            || (_chat_dlg && _chat_dlg->hasDrafts()))) return false;
+bool MainWindow::resetSession(SessionResetReason reason) {
+    if ((reason == SessionResetReason::Logout || reason == SessionResetReason::SwitchAccount) &&
+        !confirmSubmissionExit(
+            this,
+            UserMgr::instance()->hasPendingSubmissions() || (_chat_dlg && _chat_dlg->hasDrafts())))
+        return false;
     if (reason == SessionResetReason::Logout || reason == SessionResetReason::SwitchAccount) {
-        if (!_session.requestLogout(reason)) return false;
-        setEnabled(false); return true;
+        if (!_session.requestLogout(reason))
+            return false;
+        setEnabled(false);
+        return true;
     }
     if (!_session.resetSession(reason)) {
         return false;
@@ -203,8 +205,7 @@ bool MainWindow::resetSession(SessionResetReason reason)
 }
 
 // 离线后切换到登录状态
-void MainWindow::offlineLogin()
-{
+void MainWindow::offlineLogin() {
     if (_ui_status == UIStatus::LOGIN_UI) {
         return;
     }
@@ -215,7 +216,8 @@ void MainWindow::offlineLogin()
     setCentralWidget(_login_dlg);
 
     // 设置当前minwindow的最大值与最小值
-    if (isMaximized()) showNormal();
+    if (isMaximized())
+        showNormal();
     setFixedSize(300, 500);
     setWindowFlag(Qt::CustomizeWindowHint, false);
     show();
@@ -225,21 +227,24 @@ void MainWindow::offlineLogin()
     connect(_login_dlg, &LoginDialog::registrationRequested, this, &MainWindow::loginSwitchReg);
     // 连接登录界面和忘记密码界面
     connect(_login_dlg, &LoginDialog::passwordResetRequested, this, &MainWindow::loginSwitchReset);
-    connect(_login_dlg, &LoginDialog::loginSucceeded,
-            this, &MainWindow::loginSwitchChat);
+    connect(_login_dlg, &LoginDialog::loginSucceeded, this, &MainWindow::loginSwitchChat);
     _ui_status = UIStatus::LOGIN_UI;
 }
 
-void MainWindow::closeEvent(QCloseEvent *event)
-{
-    if (!confirmSubmissionExit(this, UserMgr::instance()->hasPendingSubmissions()
-        || (_chat_dlg && _chat_dlg->hasDrafts()))) {
-        event->ignore(); return;
+void MainWindow::closeEvent(QCloseEvent* event) {
+    if (!confirmSubmissionExit(
+            this,
+            UserMgr::instance()->hasPendingSubmissions() || (_chat_dlg && _chat_dlg->hasDrafts()))) {
+        event->ignore();
+        return;
     }
     if (_session.isActive()) {
-        event->ignore(); _closeAfterLogout = true;
-        if (_session.requestLogout(SessionResetReason::Logout)) setEnabled(false);
-        else _closeAfterLogout = false;
+        event->ignore();
+        _closeAfterLogout = true;
+        if (_session.requestLogout(SessionResetReason::Logout))
+            setEnabled(false);
+        else
+            _closeAfterLogout = false;
         return;
     }
     QMainWindow::closeEvent(event);

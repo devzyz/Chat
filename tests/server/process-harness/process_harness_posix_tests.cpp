@@ -19,17 +19,21 @@ int main() {
             const auto deadline = std::chrono::steady_clock::now() + 2s;
             bool first_probe = true;
             // 固定退出发生在首次探针旧结果与存活检查之间，保护最终完成观察。
-            if (!exited->WaitReady([&] {
-                if (first_probe) {
-                    first_probe = false;
-                    while (!exited->CollectEvidence().exit_code.has_value() && std::chrono::steady_clock::now() < deadline) {
-                        std::this_thread::yield();
-                    }
-                    return false;
-                }
-                return exited->CollectEvidence().exit_code.has_value();
-            }, deadline) || exited->CollectEvidence().exit_code != 23 ||
-                !exited->Stop(deadline).Complete() || !race_context->Teardown().complete) {
+            if (!exited->WaitReady(
+                    [&] {
+                        if (first_probe) {
+                            first_probe = false;
+                            while (!exited->CollectEvidence().exit_code.has_value() &&
+                                   std::chrono::steady_clock::now() < deadline) {
+                                std::this_thread::yield();
+                            }
+                            return false;
+                        }
+                        return exited->CollectEvidence().exit_code.has_value();
+                    },
+                    deadline) ||
+                exited->CollectEvidence().exit_code != 23 || !exited->Stop(deadline).Complete() ||
+                !race_context->Teardown().complete) {
                 throw std::runtime_error("completion probe lost final exit evidence");
             }
         }
@@ -41,13 +45,17 @@ int main() {
         spec.working_directory = root;
         auto harness = integration::ProcessHarness::Start(*context, spec);
         // 以子进程输出 ready 作为本场景的就绪条件。
-        if (!harness->WaitReady([&] { return harness->CollectEvidence().stdout_text == "ready"; },
+        if (!harness->WaitReady(
+                [&] {
+                    return harness->CollectEvidence().stdout_text == "ready";
+                },
                 std::chrono::steady_clock::now() + 2s)) {
             throw std::runtime_error("harness did not observe child handshake");
         }
         auto stale = harness->Identity();
         ++stale.creation_time;
-        if (context->CleanupProcess(stale)) throw std::runtime_error("context accepted stale identity");
+        if (context->CleanupProcess(stale))
+            throw std::runtime_error("context accepted stale identity");
         if (!harness->Stop(std::chrono::steady_clock::now() + 50ms).Complete()) {
             throw std::runtime_error("harness escalation failed");
         }

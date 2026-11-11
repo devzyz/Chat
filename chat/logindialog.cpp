@@ -4,11 +4,8 @@
 #include <QPainter>
 #include <QPainterPath>
 
-LoginDialog::LoginDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
-    : QDialog(parent)
-    , ui(new Ui::LoginDialog)
-    , _loginFlow(authFlow, this)
-{
+LoginDialog::LoginDialog(AuthFlowCoordinator& authFlow, QWidget* parent)
+    : QDialog(parent), ui(new Ui::LoginDialog), _loginFlow(authFlow, this) {
     ui->setupUi(this);
 
     // 页面切换逻辑，登录切换注册，登录切换忘记密码
@@ -17,55 +14,82 @@ LoginDialog::LoginDialog(AuthFlowCoordinator &authFlow, QWidget *parent)
     connect(ui->forget_label, &ClickedLabel::clicked, this, &LoginDialog::passwordResetRequested);
 
     // 忘记密码高亮显示逻辑
-    ui->forget_label->setState("invisible_leave","invisible_hover","invisible_press","visible_leave","visible_hover","visible_press");
+    ui->forget_label->setState(
+        "invisible_leave",
+        "invisible_hover",
+        "invisible_press",
+        "visible_leave",
+        "visible_hover",
+        "visible_press");
 
     // 错误提示信息颜色
     ui->err_tip->setProperty("state", "normal");
     repolish(ui->err_tip);
     // 绑定email和password实时检验信号
-    connect(ui->email_edit, &QLineEdit::editingFinished,
+    connect(
+        ui->email_edit,
+        &QLineEdit::editingFinished,
         /** @brief 邮箱编辑结束时更新校验提示。 */
         [this]() {
-        checkEmailValid();
-    });
-    connect(ui->password_edit, &QLineEdit::editingFinished,
+            checkEmailValid();
+        });
+    connect(
+        ui->password_edit,
+        &QLineEdit::editingFinished,
         /** @brief 密码编辑结束时更新校验提示。 */
         [this]() {
-        checkPasswordValid();
-    });
+            checkPasswordValid();
+        });
 
     // 密码隐藏逻辑
-    ui->password_visible->setState("invisible_leave","invisible_hover","invisible_press","visible_leave","visible_hover","visible_presss");
+    ui->password_visible->setState(
+        "invisible_leave",
+        "invisible_hover",
+        "invisible_press",
+        "visible_leave",
+        "visible_hover",
+        "visible_presss");
     ui->password_edit->setEchoMode(QLineEdit::Password);
-    connect(ui->password_visible, &ClickedLabel::clicked,
+    connect(
+        ui->password_visible,
+        &ClickedLabel::clicked,
         /** @brief 根据可见性标签状态切换密码显示模式。 */
-        [this](){
-        auto curState = ui->password_visible->getCurState();
+        [this]() {
+            auto curState = ui->password_visible->getCurState();
 
-        if (curState == ClickLabelState::Normal) {
-            ui->password_edit->setEchoMode(QLineEdit::Password);
-        }else {
-            ui->password_edit->setEchoMode(QLineEdit::Normal);
-        }
-    });
+            if (curState == ClickLabelState::Normal) {
+                ui->password_edit->setEchoMode(QLineEdit::Password);
+            } else {
+                ui->password_edit->setEchoMode(QLineEdit::Normal);
+            }
+        });
 
     // 头像处理逻辑
     initHead();
-    connect(&_loginFlow, &ClientLoginFlow::failed, this,
-            /** @brief 展示当前认证流程失败的错误。 */
-            [this](AuthFlowId, AuthError error) { showAuthError(error); });
-    connect(&_loginFlow, &ClientLoginFlow::connected, this,
-            /** @brief 展示聊天连接成功但尚待登录确认的状态。 */
-            [this] { showTip(tr("聊天服务器连接成功，正在登录..."), true); });
-    connect(&_loginFlow, &ClientLoginFlow::authenticated,
-            this, &LoginDialog::loginSucceeded);
+    connect(
+        &_loginFlow,
+        &ClientLoginFlow::failed,
+        this,
+        /** @brief 展示当前认证流程失败的错误。 */
+        [this](AuthFlowId, AuthError error) {
+            showAuthError(error);
+        });
+    connect(
+        &_loginFlow,
+        &ClientLoginFlow::connected,
+        this,
+        /** @brief 展示聊天连接成功但尚待登录确认的状态。 */
+        [this] {
+            showTip(tr("聊天服务器连接成功，正在登录..."), true);
+        });
+    connect(&_loginFlow, &ClientLoginFlow::authenticated, this, &LoginDialog::loginSucceeded);
 }
 
 // 用于显示错误信息
 void LoginDialog::showTip(QString str, bool isOk) {
     if (isOk) {
         ui->err_tip->setProperty("state", "normal");
-    }else {
+    } else {
         ui->err_tip->setProperty("state", "err");
     }
 
@@ -84,7 +108,7 @@ void LoginDialog::delTipErr(TipErr te) {
     _tip_errs.remove(te);
     if (_tip_errs.empty()) {
         ui->err_tip->setText("");
-        return ;
+        return;
     }
     showTip(_tip_errs.first(), false);
 }
@@ -143,8 +167,7 @@ bool LoginDialog::checkPasswordValid() {
  * 加载原图片 --> 缩放原图片与显示框匹配 --> 创建与缩放后图片尺寸等大的新透明画布 --> 创建绘画者绑定透明画布
  * --> 对绘画者添加裁剪区域限制 --> 通过绘画者的drawPixmap函数，将原始图像绘制到其绑定的画布上
  */
-void LoginDialog::initHead()
-{
+void LoginDialog::initHead() {
     // 加载图片
     QPixmap originalPixmap(":/res/head_1.jpg");
     // 设置图片自动缩放
@@ -156,8 +179,7 @@ void LoginDialog::initHead()
         ui->head_label->height());
 
     // 缩放到head_label的尺寸。保持原来的宽高比。采用平滑缩放算法，避免锯齿
-    originalPixmap = originalPixmap.scaled(ui->head_label->size(),
-                                           Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    originalPixmap = originalPixmap.scaled(ui->head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
     // 创建一个和原始图片相同大小的QPixmap, 用于绘制圆角图片
     QPixmap rounderPixmap(originalPixmap.size());
@@ -165,7 +187,7 @@ void LoginDialog::initHead()
 
     // 绑定画布，以及设置以后变换时的策略
     QPainter painter(&rounderPixmap);
-    painter.setRenderHint(QPainter::Antialiasing); // 开启抗锯齿
+    painter.setRenderHint(QPainter::Antialiasing);          // 开启抗锯齿
     painter.setRenderHint(QPainter::SmoothPixmapTransform); // 采用平滑算法
 
     // 使用QPainterPath设置圆角
@@ -180,24 +202,21 @@ void LoginDialog::initHead()
     ui->head_label->setPixmap(rounderPixmap);
 }
 
-void LoginDialog::showAuthError(AuthError error)
-{
+void LoginDialog::showAuthError(AuthError error) {
     showTip(authErrorMessage(error), false);
     ui->login_btn->setEnabled(true);
 }
 
-LoginDialog::~LoginDialog()
-{
+LoginDialog::~LoginDialog() {
     delete ui;
 }
 
-void LoginDialog::on_login_btn_clicked()
-{
+void LoginDialog::on_login_btn_clicked() {
     if (!checkEmailValid()) {
-        return ;
+        return;
     }
     if (!checkPasswordValid()) {
-        return ;
+        return;
     }
 
     ui->login_btn->setEnabled(false);

@@ -26,59 +26,73 @@ public:
     /** @brief 持久化当前已展示快照的本地查看边界，成功后刷新提醒。 */
     void markConversationSeen(int chatId, qint64 throughLocalId);
     /** @brief 排队合并目录，提交后发布本地结果并调用完成通知；失败不更新界面。 */
-    void saveDirectory(const QJsonObject &directory, std::function<void()> completion = {}, std::function<void()> failure = {});
+    void saveDirectory(
+        const QJsonObject& directory,
+        std::function<void()> completion = {},
+        std::function<void()> failure = {});
     /** @brief 在当前目录版本中持久化管理请求，避免并发刷新丢掉待确认身份。 */
-    void saveGroupOperation(int chatId, const QJsonObject &request, std::function<void()> completion = {});
+    void saveGroupOperation(int chatId, const QJsonObject& request, std::function<void()> completion = {});
     /** @brief 异步查询本地目录页；额外查询一条以报告是否还有数据。 */
-    void loadDirectoryPage(const QString &kind, int after, int limit);
+    void loadDirectoryPage(const QString& kind, int after, int limit);
     /** @brief 异步筛选完整本地联系人或群目录，每页最多50条。 */
-    void findDirectory(const QString &kind, const QString &text, int after = 0);
+    void findDirectory(const QString& kind, const QString& text, int after = 0);
     /** @brief 初始化对象，用于在所属 Qt 线程协调账号消息，SQLite 操作排队至单一工作线程。 */
-    explicit MessageService(QObject *parent = nullptr);
+    explicit MessageService(QObject* parent = nullptr);
     /** @brief 使账号任务失效，排队关闭数据库及退出工作线程，并等待线程结束。 */
     ~MessageService() override;
     /** @brief 结束旧账号代并异步打开新账号存储；uid 或路径无效则保持停用，receipts 控制回执协商能力。 */
-    void start(const QString &accountRoot, int uid, bool receipts = false, bool social = false);
+    void start(const QString& accountRoot, int uid, bool receipts = false, bool social = false);
     /** @brief 停止定时任务并递增账号代号，丢弃旧账号完成回调；关闭存储按工作队列顺序执行。 */
     void stop();
     /** @brief 查询当前是否关联有效账号，不等同于数据库异步打开成功。 */
-    bool isActive() const { return _uid > 0; }
+    bool isActive() const {
+        return _uid > 0;
+    }
     /** @brief 登记需要同步的会话，首次登记启动消息和回执同步。 */
     void registerChat(int chatId, bool group = false);
     /** @brief 读取已提交游标后请求消息增量；同一会话已有请求时不重复启动。 */
     void synchronize(int chatId);
     /** @brief 验证响应关联、游标及格式后排队落盘，成功才通知模型刷新和后续同步。 */
-    void acceptSyncPage(const QJsonObject &response);
+    void acceptSyncPage(const QJsonObject& response);
     /** @brief 将请求排队落盘，成功后交给 outbox；retention 指定失败时的唯一草稿所有者。 */
     void send(QJsonObject request, DraftRetention retention = DraftRetention::Service);
     /** @brief 将指定 UUID 的服务器 ID 排队合并至当前账号本地存储。 */
-    void acknowledge(int chatId, const QString &uuid, qint64 messageId);
+    void acknowledge(int chatId, const QString& uuid, qint64 messageId);
     /** @brief 将指定 UUID 的未确认发送状态记为不确定，保留以后对账所需身份。 */
-    void markUncertain(int chatId, const QVector<QString> &uuids);
+    void markUncertain(int chatId, const QVector<QString>& uuids);
     /** @brief 在存储工作线程查询历史，通过 historyLoaded 返回消息值，旧账号回调被丢弃。 */
     void loadHistory(int chatId, qint64 before = 0, qint64 from = 0);
     /** @brief 将匹配 UUID 与发送批次的 ACK 合并到本地事实，保留幂等身份。 */
-    void acceptSendResponse(const QJsonObject &response);
+    void acceptSendResponse(const QJsonObject& response);
     /** @brief 核对回执请求及 revision 后异步合并，按结果继续同步或重试。 */
-    void acceptReceiptResponse(const QJsonObject &response);
+    void acceptReceiptResponse(const QJsonObject& response);
     /** @brief 为已登记会话请求独立 revision 回执增量。 */
     void synchronizeReceipts(int chatId);
     /** @brief 保存当前会话已满足可见性条件的消息已读意图，不直接发送网络请求。 */
-    void observeRead(int chatId, const QVector<qint64> &ids);
+    void observeRead(int chatId, const QVector<qint64>& ids);
     /** @brief 请求重试指定本地消息，保留客户端 UUID 并由持久化状态决定是否可再次发送。 */
-    void retry(int chatId, const QString &uuid);
+    void retry(int chatId, const QString& uuid);
     /** @brief 暂停自动发送，保留本地消息及批次供以后恢复。 */
     void pauseOutgoing();
     /** @brief 返回当前已落盘群状态快照。 */
-    QJsonObject groupState(int chatId) const { return _groupStates.value(chatId); }
+    QJsonObject groupState(int chatId) const {
+        return _groupStates.value(chatId);
+    }
     /** @brief 返回已落盘的私聊关系版本。 */
-    QJsonObject privateState(int chatId) const { return _privateStates.value(chatId); }
+    QJsonObject privateState(int chatId) const {
+        return _privateStates.value(chatId);
+    }
     /** @brief 首轮目录完整落盘后允许持久化批次调度。 */
-    void setSocialReady() { _socialReady = true; dispatchOutgoing(); }
+    void setSocialReady() {
+        _socialReady = true;
+        dispatchOutgoing();
+    }
     /** @brief 返回本轮关系目录是否已验证，供提交入口阻止过早发送。 */
-    bool socialReady() const { return _socialReady; }
+    bool socialReady() const {
+        return _socialReady;
+    }
     /** @brief 在存储线程搜索当前会话，结果通过 searchLoaded 返回。 */
-    void search(int chatId, const QString &text, qint64 before = 0);
+    void search(int chatId, const QString& text, qint64 before = 0);
 signals:
     /** @brief 返回当前账号全部会话的轻量摘要和稳定顺序。 */
     void conversationSummariesLoaded(QJsonArray rows);
@@ -118,9 +132,10 @@ signals:
     void sendFailed(int chatId, QVector<QString> uuids);
     /** @brief 通知指定会话的存储或同步操作失败，旧账号任务不发出此信号。 */
     void failed(int chatId, QString reason);
+
 private:
     /** @brief 将已落盘群目录应用于轮询及请求代次，退出群停止同步。 */
-    void applyGroups(const QJsonObject &directory);
+    void applyGroups(const QJsonObject& directory);
     /** @brief 串行读取到期批次，存储完成后发出网络发送请求。 */
     void dispatchOutgoing();
     /** @brief 请求上报指定会话尚未提交的本地回执意图。 */
@@ -130,8 +145,11 @@ private:
     /** @brief 安排指定会话回执失败后的有界重试。 */
     void receiptRetry(int chatId);
     /** @brief 将 operation 排入 SQLite 工作线程；完成或失败回到所属线程，仅当前账号代接收回调，回调不可抛异常。 */
-    void execute(int chatId, std::function<void(LocalMessageStore &)> operation,
-                 std::function<void()> completion = {}, std::function<void()> failure = {});
+    void execute(
+        int chatId,
+        std::function<void(LocalMessageStore&)> operation,
+        std::function<void()> completion = {},
+        std::function<void()> failure = {});
     int _uid = 0;
     QString _accountRoot;
     QHash<QString, QJsonObject> _failedDrafts;
@@ -145,12 +163,12 @@ private:
     QHash<int, QString> _requests;
     QSet<int> _committing;
     QThread _thread;
-    MessageStorageWorker *_worker;
+    MessageStorageWorker* _worker;
     QTimer _syncTimer;
     QTimer _outgoingTimer;
     bool _dispatching = false;
     bool _socialReady = true;
-    QHash<int,QJsonObject> _privateStates;
+    QHash<int, QJsonObject> _privateStates;
     bool _receipts = false;
     QHash<QString, QJsonObject> _receiptRequests;
     QSet<int> _receiptSync;

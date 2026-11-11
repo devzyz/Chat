@@ -2,23 +2,18 @@
 #include <QStyleOption>
 #include <QPainter>
 
-ListItemBase::ListItemBase(QWidget* parent) : QWidget(parent){
+ListItemBase::ListItemBase(QWidget* parent) : QWidget(parent) {}
 
-}
-
-void ListItemBase::setItemType(ListItemType itemType)
-{
+void ListItemBase::setItemType(ListItemType itemType) {
     _itemType = itemType;
 }
 
-ListItemType ListItemBase::getItemType()
-{
+ListItemType ListItemBase::getItemType() {
     return _itemType;
 }
 
 // 让 ListItemBase 能完整显示样式表定义的背景颜色、背景图片、边框
-void ListItemBase::paintEvent(QPaintEvent *event)
-{
+void ListItemBase::paintEvent(QPaintEvent* event) {
     QStyleOption opt;
     opt.initFrom(this);
     QPainter p(this);

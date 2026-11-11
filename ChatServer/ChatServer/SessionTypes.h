@@ -6,8 +6,15 @@
 using SessionId = std::string;
 enum class SessionState { Created, Active, Closing };
 enum class SessionCloseReason {
-    ServerShutdown, PeerClosed, ReadError, WriteError, HeartbeatTimeout,
-    ProtocolError, LogicUnavailable, Replaced, LocalRequest
+    ServerShutdown,
+    PeerClosed,
+    ReadError,
+    WriteError,
+    HeartbeatTimeout,
+    ProtocolError,
+    LogicUnavailable,
+    Replaced,
+    LocalRequest
 };
 enum class SessionSendResult { Accepted, Full, NotActive };
 enum class SessionBindResult { Bound, NotActive, AlreadyBound, Unavailable };

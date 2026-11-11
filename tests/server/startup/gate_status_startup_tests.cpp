@@ -39,8 +39,8 @@ public:
         const auto base = std::filesystem::temp_directory_path();
         for (int attempt = 0; attempt < 100; ++attempt) {
             const auto suffix = std::to_string(GetCurrentProcessId()) + "-" +
-                std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "-" +
-                std::to_string(attempt);
+                                std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "-" +
+                                std::to_string(attempt);
             _path = base / ("gate-status-startup-tests-" + suffix);
             std::error_code error;
             if (std::filesystem::create_directory(_path, error)) {
@@ -55,8 +55,7 @@ public:
         std::error_code error;
         std::filesystem::remove_all(_path, error);
         if (error) {
-            ADD_FAILURE() << "failed to remove owned temp directory " << _path.string()
-                << ": " << error.message();
+            ADD_FAILURE() << "failed to remove owned temp directory " << _path.string() << ": " << error.message();
         }
     }
 
@@ -124,14 +123,26 @@ public:
         security_attributes.bInheritHandle = TRUE;
 
         HANDLE stdout_handle = CreateFileW(
-            _stdout_path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-            &security_attributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            _stdout_path.c_str(),
+            GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            &security_attributes,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr);
         HANDLE stderr_handle = CreateFileW(
-            _stderr_path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-            &security_attributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            _stderr_path.c_str(),
+            GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            &security_attributes,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr);
         if (stdout_handle == INVALID_HANDLE_VALUE || stderr_handle == INVALID_HANDLE_VALUE) {
-            if (stdout_handle != INVALID_HANDLE_VALUE) CloseHandle(stdout_handle);
-            if (stderr_handle != INVALID_HANDLE_VALUE) CloseHandle(stderr_handle);
+            if (stdout_handle != INVALID_HANDLE_VALUE)
+                CloseHandle(stdout_handle);
+            if (stderr_handle != INVALID_HANDLE_VALUE)
+                CloseHandle(stderr_handle);
             throw std::runtime_error("unable to create child output files");
         }
 
@@ -150,9 +161,16 @@ public:
         startup_info.hStdError = stderr_handle;
 
         const BOOL created = CreateProcessW(
-            _executable.c_str(), mutable_command.data(), nullptr, nullptr, TRUE,
-            CREATE_NEW_PROCESS_GROUP, nullptr, working_directory.c_str(),
-            &startup_info, &_process_info);
+            _executable.c_str(),
+            mutable_command.data(),
+            nullptr,
+            nullptr,
+            TRUE,
+            CREATE_NEW_PROCESS_GROUP,
+            nullptr,
+            working_directory.c_str(),
+            &startup_info,
+            &_process_info);
         CloseHandle(stdout_handle);
         CloseHandle(stderr_handle);
         if (!created) {
@@ -170,14 +188,17 @@ public:
         if (IsRunning()) {
             if (!IdentityMatches()) {
                 ADD_FAILURE() << "refusing to terminate an unverified process identity, pid="
-                    << _process_info.dwProcessId;
-            } else if (!TerminateProcess(_process_info.hProcess, 98) ||
-                       WaitForSingleObject(_process_info.hProcess, STOP_TIMEOUT_MS) != WAIT_OBJECT_0) {
+                              << _process_info.dwProcessId;
+            } else if (
+                !TerminateProcess(_process_info.hProcess, 98) ||
+                WaitForSingleObject(_process_info.hProcess, STOP_TIMEOUT_MS) != WAIT_OBJECT_0) {
                 ADD_FAILURE() << "failed to terminate owned process, pid=" << _process_info.dwProcessId;
             }
         }
-        if (_process_info.hThread) CloseHandle(_process_info.hThread);
-        if (_process_info.hProcess) CloseHandle(_process_info.hProcess);
+        if (_process_info.hThread)
+            CloseHandle(_process_info.hThread);
+        if (_process_info.hProcess)
+            CloseHandle(_process_info.hProcess);
     }
 
     /** 返回本对象启动的进程编号。 */
@@ -221,9 +242,13 @@ public:
     }
 
     /** 读取所属进程的标准输出证据。 */
-    std::string Stdout() const { return ReadAll(_stdout_path); }
+    std::string Stdout() const {
+        return ReadAll(_stdout_path);
+    }
     /** 读取所属进程的标准错误证据。 */
-    std::string Stderr() const { return ReadAll(_stderr_path); }
+    std::string Stderr() const {
+        return ReadAll(_stderr_path);
+    }
 
 private:
     /** 核对句柄对应 PID 与可执行文件路径，拒绝不匹配的进程。 */
@@ -240,8 +265,11 @@ private:
         const auto expected = std::filesystem::weakly_canonical(_executable).wstring();
         const auto actual = std::filesystem::weakly_canonical(image_path.data()).wstring();
         return CompareStringOrdinal(
-            expected.c_str(), static_cast<int>(expected.size()),
-            actual.c_str(), static_cast<int>(actual.size()), TRUE) == CSTR_EQUAL;
+                   expected.c_str(),
+                   static_cast<int>(expected.size()),
+                   actual.c_str(),
+                   static_cast<int>(actual.size()),
+                   TRUE) == CSTR_EQUAL;
     }
 
     std::filesystem::path _executable;
@@ -290,8 +318,11 @@ unsigned short ReservePort(boost::asio::ip::tcp::acceptor& acceptor, bool wildca
     acceptor.open(boost::asio::ip::tcp::v4());
     const BOOL exclusive = TRUE;
     if (setsockopt(
-            acceptor.native_handle(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
-            reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) == SOCKET_ERROR) {
+            acceptor.native_handle(),
+            SOL_SOCKET,
+            SO_EXCLUSIVEADDRUSE,
+            reinterpret_cast<const char*>(&exclusive),
+            sizeof(exclusive)) == SOCKET_ERROR) {
         throw std::runtime_error("unable to reserve an exclusive loopback port");
     }
     acceptor.bind({wildcard ? boost::asio::ip::address_v4::any() : boost::asio::ip::address_v4::loopback(), 0});
@@ -319,11 +350,11 @@ void WriteServiceConfig(
     // Status routing must start without any MySQL configuration.
     if (service == ServiceKind::Gate) {
         config << "[Mysql]\n"
-           << "Host = 127.0.0.1\n"
-           << "Port = 1\n"
-           << "Password = fixture-placeholder\n"
-           << "User = fixture-user\n"
-           << "Schema = fixture-schema\n";
+               << "Host = 127.0.0.1\n"
+               << "Port = 1\n"
+               << "Password = fixture-placeholder\n"
+               << "User = fixture-user\n"
+               << "Schema = fixture-schema\n";
     }
     config << "[GateServer]\n"
            << "Port = " << (service == ServiceKind::Gate ? service_port : "1") << "\n"
@@ -362,15 +393,17 @@ bool ProbeGateHttp(unsigned short port) {
     boost::asio::ip::tcp::socket socket(context);
     boost::system::error_code error;
     socket.connect({boost::asio::ip::address_v4::loopback(), port}, error);
-    if (error) return false;
+    if (error)
+        return false;
 
-    const std::string request =
-        "GET /get_test HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+    const std::string request = "GET /get_test HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
     boost::asio::write(socket, boost::asio::buffer(request), error);
-    if (error) return false;
+    if (error)
+        return false;
 
     socket.non_blocking(true, error);
-    if (error) return false;
+    if (error)
+        return false;
     std::string response;
     std::array<char, 1024> buffer{};
     const auto deadline = std::chrono::steady_clock::now() + 250ms;
@@ -394,8 +427,7 @@ bool ProbeGateHttp(unsigned short port) {
 
 /** 通过有界 gRPC 通道连接确认 Status 协议就绪。 */
 bool ProbeStatusGrpc(unsigned short port) {
-    auto channel = grpc::CreateChannel(
-        "127.0.0.1:" + std::to_string(port), grpc::InsecureChannelCredentials());
+    auto channel = grpc::CreateChannel("127.0.0.1:" + std::to_string(port), grpc::InsecureChannelCredentials());
     return channel->WaitForConnected(std::chrono::system_clock::now() + 250ms);
 }
 
@@ -403,7 +435,8 @@ bool ProbeStatusGrpc(unsigned short port) {
 bool WaitForReady(ServiceKind service, unsigned short port, const OwnedProcess& process) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(STARTUP_TIMEOUT_MS);
     while (std::chrono::steady_clock::now() < deadline) {
-        if (!process.IsRunning()) return false;
+        if (!process.IsRunning())
+            return false;
         if ((service == ServiceKind::Gate && ProbeGateHttp(port)) ||
             (service == ServiceKind::Status && ProbeStatusGrpc(port))) {
             return true;
@@ -444,10 +477,8 @@ CompletedProcess RunToExit(
 
 /** 断言进程自行以非零退出，失败时附带输出诊断。 */
 void ExpectFailure(const CompletedProcess& result) {
-    EXPECT_FALSE(result.timed_out)
-        << "stdout:\n" << result.stdout_text << "\nstderr:\n" << result.stderr_text;
-    EXPECT_NE(result.exit_code, 0U)
-        << "stdout:\n" << result.stdout_text << "\nstderr:\n" << result.stderr_text;
+    EXPECT_FALSE(result.timed_out) << "stdout:\n" << result.stdout_text << "\nstderr:\n" << result.stderr_text;
+    EXPECT_NE(result.exit_code, 0U) << "stdout:\n" << result.stdout_text << "\nstderr:\n" << result.stderr_text;
 }
 
 /** 对 Gate 与 Status 复用同一组正式启动合同。 */
@@ -466,8 +497,10 @@ TEST_P(GateStatusStartupTests, MissingConfigValueReturnsNonZeroWithUsage) {
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
     const auto result = RunToExit(GetParam(), {L"--config"}, fixture.Path());
     ExpectFailure(result);
-    EXPECT_NE(result.stderr_text.find("Usage: " + std::string(ServiceName(GetParam())) + ".exe [--config <path>]"),
-        std::string::npos) << result.stderr_text;
+    EXPECT_NE(
+        result.stderr_text.find("Usage: " + std::string(ServiceName(GetParam())) + ".exe [--config <path>]"),
+        std::string::npos)
+        << result.stderr_text;
 }
 
 // S02-CLI-02 / S03-CLI-02
@@ -477,8 +510,10 @@ TEST_P(GateStatusStartupTests, UnknownArgumentReturnsNonZeroWithUsage) {
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
     const auto result = RunToExit(GetParam(), {L"--unknown"}, fixture.Path());
     ExpectFailure(result);
-    EXPECT_NE(result.stderr_text.find("Usage: " + std::string(ServiceName(GetParam())) + ".exe [--config <path>]"),
-        std::string::npos) << result.stderr_text;
+    EXPECT_NE(
+        result.stderr_text.find("Usage: " + std::string(ServiceName(GetParam())) + ".exe [--config <path>]"),
+        std::string::npos)
+        << result.stderr_text;
 }
 
 // S02-CFG-01 / S03-CFG-01
@@ -596,10 +631,17 @@ TEST_P(GateStatusStartupTests, OccupiedPortFailsWithoutProtocolReadyAndReleasesO
     released.open(boost::asio::ip::tcp::v4(), error);
     ASSERT_FALSE(error) << error.message();
     const BOOL exclusive = TRUE;
-    ASSERT_NE(setsockopt(
-        released.native_handle(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
-        reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)), SOCKET_ERROR);
-    released.bind({wildcard ? boost::asio::ip::address_v4::any() : boost::asio::ip::address_v4::loopback(), port}, error);
+    ASSERT_NE(
+        setsockopt(
+            released.native_handle(),
+            SOL_SOCKET,
+            SO_EXCLUSIVEADDRUSE,
+            reinterpret_cast<const char*>(&exclusive),
+            sizeof(exclusive)),
+        SOCKET_ERROR);
+    released.bind(
+        {wildcard ? boost::asio::ip::address_v4::any() : boost::asio::ip::address_v4::loopback(), port},
+        error);
     EXPECT_FALSE(error) << "port " << port << " was not released: " << error.message();
 }
 
@@ -616,15 +658,14 @@ TEST_P(GateStatusStartupTests, ProtocolReadyThenCtrlBreakStopsWithinDeadlineAndR
     ASSERT_TRUE(std::filesystem::is_regular_file(executable)) << executable.string();
     OwnedProcess process(executable, {L"--config", config.wstring()}, fixture.Path(), ServiceName(GetParam()));
 
-    ASSERT_TRUE(WaitForReady(GetParam(), port, process))
-        << "pid=" << process.Pid() << " stdout:\n" << process.Stdout()
-        << "\nstderr:\n" << process.Stderr();
+    ASSERT_TRUE(WaitForReady(GetParam(), port, process)) << "pid=" << process.Pid() << " stdout:\n"
+                                                         << process.Stdout() << "\nstderr:\n"
+                                                         << process.Stderr();
     ASSERT_TRUE(process.SendCtrlBreak()) << "GenerateConsoleCtrlEvent failed with " << GetLastError();
-    ASSERT_TRUE(process.WaitForExit(STOP_TIMEOUT_MS))
-        << "pid=" << process.Pid() << " stdout:\n" << process.Stdout()
-        << "\nstderr:\n" << process.Stderr();
-    EXPECT_EQ(process.ExitCode(), 0U)
-        << "stdout:\n" << process.Stdout() << "\nstderr:\n" << process.Stderr();
+    ASSERT_TRUE(process.WaitForExit(STOP_TIMEOUT_MS)) << "pid=" << process.Pid() << " stdout:\n"
+                                                      << process.Stdout() << "\nstderr:\n"
+                                                      << process.Stderr();
+    EXPECT_EQ(process.ExitCode(), 0U) << "stdout:\n" << process.Stdout() << "\nstderr:\n" << process.Stderr();
 
     boost::asio::io_context context;
     boost::asio::ip::tcp::acceptor released(context);
@@ -632,10 +673,17 @@ TEST_P(GateStatusStartupTests, ProtocolReadyThenCtrlBreakStopsWithinDeadlineAndR
     released.open(boost::asio::ip::tcp::v4(), error);
     ASSERT_FALSE(error) << error.message();
     const BOOL exclusive = TRUE;
-    ASSERT_NE(setsockopt(
-        released.native_handle(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
-        reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)), SOCKET_ERROR);
-    released.bind({wildcard ? boost::asio::ip::address_v4::any() : boost::asio::ip::address_v4::loopback(), port}, error);
+    ASSERT_NE(
+        setsockopt(
+            released.native_handle(),
+            SOL_SOCKET,
+            SO_EXCLUSIVEADDRUSE,
+            reinterpret_cast<const char*>(&exclusive),
+            sizeof(exclusive)),
+        SOCKET_ERROR);
+    released.bind(
+        {wildcard ? boost::asio::ip::address_v4::any() : boost::asio::ip::address_v4::loopback(), port},
+        error);
     EXPECT_FALSE(error) << "port " << port << " was not released: " << error.message();
 }
 

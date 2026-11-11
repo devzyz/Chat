@@ -26,32 +26,28 @@ constexpr int kBottomMargin = 8;
 constexpr int kMaximumBubbleWidth = 400;
 
 /** @brief 构造消息正文绘制字体。 */
-QFont textFont()
-{
+QFont textFont() {
     QFont font(QStringLiteral("Microsoft YaHei"));
     font.setPixelSize(16);
     return font;
 }
 
 /** @brief 构造发送者名称绘制字体。 */
-QFont nameFont()
-{
+QFont nameFont() {
     QFont font(QStringLiteral("Microsoft YaHei"));
     font.setPointSize(9);
     return font;
 }
 
 /** @brief 构造时间标签绘制字体。 */
-QFont timeFont()
-{
+QFont timeFont() {
     QFont font(QStringLiteral("Microsoft YaHei"));
     font.setPixelSize(10);
     return font;
 }
 
 /** @brief 按纯文本和最大宽度计算换行后的文档尺寸。 */
-QSize textDocumentSize(const QString &text, int maximumWidth)
-{
+QSize textDocumentSize(const QString& text, int maximumWidth) {
     QTextDocument document;
     document.setDocumentMargin(0);
     document.setDefaultFont(textFont());
@@ -67,53 +63,45 @@ QSize textDocumentSize(const QString &text, int maximumWidth)
 }
 }
 
-MessageItemDelegate::MessageItemDelegate(QListView *view)
-    : QStyledItemDelegate(view), _view(view),
-      _sendingPixmap(QStringLiteral(":/res/status_no_read.png")),
+MessageItemDelegate::MessageItemDelegate(QListView* view)
+    : QStyledItemDelegate(view), _view(view), _sendingPixmap(QStringLiteral(":/res/status_no_read.png")),
       _failedPixmap(QStringLiteral(":/res/status_send_failure.png")),
-      _readPixmap(QStringLiteral(":/res/status_already_read.png"))
-{
-}
+      _readPixmap(QStringLiteral(":/res/status_already_read.png")) {}
 
-void MessageItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
-                                const QModelIndex &index) const
-{
+void MessageItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
     const MessageRecord message = recordFromIndex(index);
     const Metrics metrics = calculateMetrics(message, option.rect.width());
     const QPoint origin = option.rect.topLeft();
 
     painter->save();
-    painter->setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing |
-                            QPainter::SmoothPixmapTransform);
+    painter->setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
     painter->translate(origin);
 
     if (option.state.testFlag(QStyle::State_Selected)) {
-        painter->fillRect(QRect(QPoint(0, 0), QSize(metrics.itemWidth, metrics.itemHeight)),
-                          QColor(0, 0, 0, 10));
+        painter->fillRect(QRect(QPoint(0, 0), QSize(metrics.itemWidth, metrics.itemHeight)), QColor(0, 0, 0, 10));
     } else if (option.state.testFlag(QStyle::State_MouseOver)) {
-        painter->fillRect(QRect(QPoint(0, 0), QSize(metrics.itemWidth, metrics.itemHeight)),
-                          QColor(255, 255, 255, 28));
+        painter->fillRect(QRect(QPoint(0, 0), QSize(metrics.itemWidth, metrics.itemHeight)), QColor(255, 255, 255, 28));
     }
 
     if (!message.avatar.isNull()) {
-        painter->drawPixmap(metrics.avatarRect,
-                            message.avatar.scaled(metrics.avatarRect.size(), Qt::KeepAspectRatioByExpanding,
-                                                  Qt::SmoothTransformation));
+        painter->drawPixmap(
+            metrics.avatarRect,
+            message.avatar.scaled(metrics.avatarRect.size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
     } else {
         painter->setPen(Qt::NoPen);
         painter->setBrush(QColor(205, 208, 212));
         painter->drawEllipse(metrics.avatarRect);
         painter->setPen(QColor(90, 90, 90));
         painter->setFont(nameFont());
-        painter->drawText(metrics.avatarRect, Qt::AlignCenter,
-                          message.senderName.left(1).toUpper());
+        painter->drawText(metrics.avatarRect, Qt::AlignCenter, message.senderName.left(1).toUpper());
     }
 
     painter->setFont(nameFont());
     painter->setPen(QColor(0, 0, 0));
-    painter->drawText(metrics.nameRect,
-                      (message.isSelf ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter,
-                      message.senderName);
+    painter->drawText(
+        metrics.nameRect,
+        (message.isSelf ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter,
+        message.senderName);
 
     const QColor bubbleColor = message.isSelf ? QColor(158, 234, 106) : QColor(Qt::white);
     painter->setPen(Qt::NoPen);
@@ -124,42 +112,60 @@ void MessageItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     if (!message.resourcePreview.isNull()) {
         painter->drawPixmap(metrics.textRect, message.resourcePreview);
     } else {
-    QTextDocument document;
-    document.setDocumentMargin(0);
-    document.setDefaultFont(textFont());
-    QTextOption textOption;
-    textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
-    document.setDefaultTextOption(textOption);
-    document.setPlainText(message.text);
-    document.setTextWidth(metrics.textRect.width());
-    QAbstractTextDocumentLayout::PaintContext context;
-    context.palette.setColor(QPalette::Text, QColor(0, 0, 0));
-    painter->save();
-    painter->translate(metrics.textRect.topLeft());
-    painter->setClipRect(QRect(QPoint(0, 0), metrics.textRect.size()));
-    document.documentLayout()->draw(painter, context);
-    painter->restore();
-
+        QTextDocument document;
+        document.setDocumentMargin(0);
+        document.setDefaultFont(textFont());
+        QTextOption textOption;
+        textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+        document.setDefaultTextOption(textOption);
+        document.setPlainText(message.text);
+        document.setTextWidth(metrics.textRect.width());
+        QAbstractTextDocumentLayout::PaintContext context;
+        context.palette.setColor(QPalette::Text, QColor(0, 0, 0));
+        painter->save();
+        painter->translate(metrics.textRect.topLeft());
+        painter->setClipRect(QRect(QPoint(0, 0), metrics.textRect.size()));
+        document.documentLayout()->draw(painter, context);
+        painter->restore();
     }
 
     painter->setFont(timeFont());
     painter->setPen(QColor(140, 140, 140));
-    painter->drawText(metrics.timeRect,
-                      (message.isSelf ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter,
-                      message.sentAt.isValid() ? message.sentAt.toString(QStringLiteral("HH:mm")) : QString());
+    painter->drawText(
+        metrics.timeRect,
+        (message.isSelf ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter,
+        message.sentAt.isValid() ? message.sentAt.toString(QStringLiteral("HH:mm")) : QString());
 
     if (message.isSelf && message.deliveryStatus != DeliveryStatus::None) {
         QString glyph;
         QColor color(100, 100, 100);
         switch (message.deliveryStatus) {
-        case DeliveryStatus::Queued: glyph = QStringLiteral("○"); break;
-        case DeliveryStatus::Sending: glyph = QStringLiteral("…"); break;
-        case DeliveryStatus::Sent: glyph = QStringLiteral("✓"); break;
-        case DeliveryStatus::Delivered: glyph = QStringLiteral("✓✓"); break;
-        case DeliveryStatus::Read: glyph = QStringLiteral("✓✓"); color = QColor(20, 120, 220); break;
-        case DeliveryStatus::Uncertain: glyph = QStringLiteral("?"); color = QColor(190, 120, 0); break;
-        case DeliveryStatus::Failed: glyph = QStringLiteral("!"); color = QColor(200, 40, 40); break;
-        default: break;
+        case DeliveryStatus::Queued:
+            glyph = QStringLiteral("○");
+            break;
+        case DeliveryStatus::Sending:
+            glyph = QStringLiteral("…");
+            break;
+        case DeliveryStatus::Sent:
+            glyph = QStringLiteral("✓");
+            break;
+        case DeliveryStatus::Delivered:
+            glyph = QStringLiteral("✓✓");
+            break;
+        case DeliveryStatus::Read:
+            glyph = QStringLiteral("✓✓");
+            color = QColor(20, 120, 220);
+            break;
+        case DeliveryStatus::Uncertain:
+            glyph = QStringLiteral("?");
+            color = QColor(190, 120, 0);
+            break;
+        case DeliveryStatus::Failed:
+            glyph = QStringLiteral("!");
+            color = QColor(200, 40, 40);
+            break;
+        default:
+            break;
         }
         painter->setPen(color);
         painter->drawText(metrics.statusRect.adjusted(-5, 0, 2, 0), Qt::AlignCenter, glyph);
@@ -167,9 +173,7 @@ void MessageItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     painter->restore();
 }
 
-QSize MessageItemDelegate::sizeHint(const QStyleOptionViewItem &option,
-                                    const QModelIndex &index) const
-{
+QSize MessageItemDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
     const MessageRecord message = recordFromIndex(index);
     int width = option.rect.width();
     if (width <= 0 && _view && _view->viewport()) {
@@ -187,13 +191,11 @@ QSize MessageItemDelegate::sizeHint(const QStyleOptionViewItem &option,
     return size;
 }
 
-void MessageItemDelegate::clearSizeCache()
-{
+void MessageItemDelegate::clearSizeCache() {
     _sizeCache.clear();
 }
 
-MessageRecord MessageItemDelegate::recordFromIndex(const QModelIndex &index) const
-{
+MessageRecord MessageItemDelegate::recordFromIndex(const QModelIndex& index) const {
     MessageRecord message;
     message.messageId = index.data(MessageListModel::MessageIdRole).toLongLong();
     message.clientMessageId = index.data(MessageListModel::ClientMessageIdRole).toString();
@@ -211,67 +213,60 @@ MessageRecord MessageItemDelegate::recordFromIndex(const QModelIndex &index) con
     return message;
 }
 
-MessageItemDelegate::Metrics MessageItemDelegate::calculateMetrics(const MessageRecord &message,
-                                                                   int width) const
-{
+MessageItemDelegate::Metrics MessageItemDelegate::calculateMetrics(const MessageRecord& message, int width) const {
     Metrics metrics;
     metrics.itemWidth = qMax(width, 160);
     const int contentLimit = qMax(56, metrics.itemWidth - (2 * kOuterMargin + kAvatarSize + kAvatarGap));
-    const int bubbleLimit = qMin(kMaximumBubbleWidth,
-                                 qMin(qMax(80, qRound(metrics.itemWidth * 0.63)),
-                                      contentLimit));
+    const int bubbleLimit = qMin(kMaximumBubbleWidth, qMin(qMax(80, qRound(metrics.itemWidth * 0.63)), contentLimit));
     const int maximumTextWidth = qMax(32, bubbleLimit - kTriangleWidth - 2 * kBubblePadding);
-    const QSize textSize = message.resourcePreview.isNull() ? textDocumentSize(message.text, maximumTextWidth)
-        : message.resourcePreview.size().scaled(QSize(maximumTextWidth, 180), Qt::KeepAspectRatio);
+    const QSize textSize =
+        message.resourcePreview.isNull()
+            ? textDocumentSize(message.text, maximumTextWidth)
+            : message.resourcePreview.size().scaled(QSize(maximumTextWidth, 180), Qt::KeepAspectRatio);
     const int bubbleWidth = textSize.width() + 2 * kBubblePadding + kTriangleWidth;
     const int bubbleHeight = textSize.height() + 2 * kBubblePadding;
-    const int avatarX = message.isSelf
-        ? metrics.itemWidth - kOuterMargin - kAvatarSize
-        : kOuterMargin;
+    const int avatarX = message.isSelf ? metrics.itemWidth - kOuterMargin - kAvatarSize : kOuterMargin;
     metrics.avatarRect = QRect(avatarX, kAvatarTop, kAvatarSize, kAvatarSize);
 
     int bodyX = 0;
     if (message.isSelf) {
         const int overallRight = metrics.avatarRect.left() - kAvatarGap;
         bodyX = overallRight - bubbleWidth;
-        metrics.bubbleBodyRect = QRect(bodyX, kBubbleTop,
-                                       bubbleWidth - kTriangleWidth, bubbleHeight);
+        metrics.bubbleBodyRect = QRect(bodyX, kBubbleTop, bubbleWidth - kTriangleWidth, bubbleHeight);
         const int right = metrics.bubbleBodyRect.right() + 1;
-        metrics.triangle = QPolygon({QPoint(right, kBubbleTop + 12),
-                                     QPoint(right, kBubbleTop + 20),
-                                     QPoint(right + kTriangleWidth, kBubbleTop + 16)});
-        metrics.textRect = metrics.bubbleBodyRect.adjusted(kBubblePadding, kBubblePadding,
-                                                           -kBubblePadding, -kBubblePadding);
-        metrics.nameRect = QRect(metrics.bubbleBodyRect.left(), 4,
-                                 metrics.bubbleBodyRect.width(), kNameHeight);
-        metrics.statusRect = QRect(metrics.bubbleBodyRect.left() - kStatusSize - 6,
-                                   metrics.bubbleBodyRect.bottom() - kStatusSize + 1,
-                                   kStatusSize, kStatusSize);
+        metrics.triangle = QPolygon(
+            {QPoint(right, kBubbleTop + 12),
+             QPoint(right, kBubbleTop + 20),
+             QPoint(right + kTriangleWidth, kBubbleTop + 16)});
+        metrics.textRect =
+            metrics.bubbleBodyRect.adjusted(kBubblePadding, kBubblePadding, -kBubblePadding, -kBubblePadding);
+        metrics.nameRect = QRect(metrics.bubbleBodyRect.left(), 4, metrics.bubbleBodyRect.width(), kNameHeight);
+        metrics.statusRect = QRect(
+            metrics.bubbleBodyRect.left() - kStatusSize - 6,
+            metrics.bubbleBodyRect.bottom() - kStatusSize + 1,
+            kStatusSize,
+            kStatusSize);
     } else {
         const int overallLeft = metrics.avatarRect.right() + 1 + kAvatarGap;
         bodyX = overallLeft + kTriangleWidth;
-        metrics.bubbleBodyRect = QRect(bodyX, kBubbleTop,
-                                       bubbleWidth - kTriangleWidth, bubbleHeight);
+        metrics.bubbleBodyRect = QRect(bodyX, kBubbleTop, bubbleWidth - kTriangleWidth, bubbleHeight);
         const int left = metrics.bubbleBodyRect.left();
-        metrics.triangle = QPolygon({QPoint(left, kBubbleTop + 12),
-                                     QPoint(left, kBubbleTop + 20),
-                                     QPoint(left - kTriangleWidth, kBubbleTop + 16)});
-        metrics.textRect = metrics.bubbleBodyRect.adjusted(kBubblePadding, kBubblePadding,
-                                                           -kBubblePadding, -kBubblePadding);
-        metrics.nameRect = QRect(metrics.bubbleBodyRect.left(), 4,
-                                 metrics.bubbleBodyRect.width(), kNameHeight);
+        metrics.triangle = QPolygon(
+            {QPoint(left, kBubbleTop + 12),
+             QPoint(left, kBubbleTop + 20),
+             QPoint(left - kTriangleWidth, kBubbleTop + 16)});
+        metrics.textRect =
+            metrics.bubbleBodyRect.adjusted(kBubblePadding, kBubblePadding, -kBubblePadding, -kBubblePadding);
+        metrics.nameRect = QRect(metrics.bubbleBodyRect.left(), 4, metrics.bubbleBodyRect.width(), kNameHeight);
     }
 
     const int timeTop = metrics.bubbleBodyRect.bottom() + 3;
-    metrics.timeRect = QRect(metrics.bubbleBodyRect.left(), timeTop,
-                             metrics.bubbleBodyRect.width(), kTimeHeight);
-    metrics.itemHeight = qMax(metrics.avatarRect.bottom() + 1,
-                              metrics.timeRect.bottom() + 1) + kBottomMargin;
+    metrics.timeRect = QRect(metrics.bubbleBodyRect.left(), timeTop, metrics.bubbleBodyRect.width(), kTimeHeight);
+    metrics.itemHeight = qMax(metrics.avatarRect.bottom() + 1, metrics.timeRect.bottom() + 1) + kBottomMargin;
     return metrics;
 }
 
-QString MessageItemDelegate::sizeCacheKey(const MessageRecord &message, int width) const
-{
+QString MessageItemDelegate::sizeCacheKey(const MessageRecord& message, int width) const {
     return QStringLiteral("%1:%2:%3:%4:%5:%6")
         .arg(message.chatId)
         .arg(message.messageId)
@@ -281,7 +276,6 @@ QString MessageItemDelegate::sizeCacheKey(const MessageRecord &message, int widt
         .arg(qHash(message.senderName));
 }
 
-QRect MessageItemDelegate::bubbleRect(const QModelIndex &index, const QRect &rowRect) const
-{
+QRect MessageItemDelegate::bubbleRect(const QModelIndex& index, const QRect& rowRect) const {
     return calculateMetrics(recordFromIndex(index), rowRect.width()).bubbleBodyRect.translated(rowRect.topLeft());
 }

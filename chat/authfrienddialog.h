@@ -10,13 +10,12 @@ class AuthFriendDialog;
 }
 
 /** @brief 展示好友申请并提交同意添加好友的操作。 */
-class AuthFriendDialog : public QDialog
-{
+class AuthFriendDialog : public QDialog {
     Q_OBJECT
 
 public:
     /** @brief 初始化对象，用于编辑好友审批资料并发送确认请求。 */
-    explicit AuthFriendDialog(QWidget *parent = nullptr);
+    explicit AuthFriendDialog(QWidget* parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~AuthFriendDialog();
     /**
@@ -34,8 +33,8 @@ private slots:
 
 private:
     /** @brief 使用打开表单时的版本执行同意或拒绝。 */
-    void manageApplication(const QString &operation);
-    Ui::AuthFriendDialog *ui;
+    void manageApplication(const QString& operation);
+    Ui::AuthFriendDialog* ui;
     QString _revision;
     bool _busy = false;
     // 用于保存申请人的信息

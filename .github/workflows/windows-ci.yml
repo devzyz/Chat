@@ -44,6 +44,13 @@ jobs:
           python -m pip install --disable-pip-version-check --no-deps --only-binary=:all: --target build/conventions/python -r scripts/conventions/requirements.txt
           if ($LASTEXITCODE -ne 0) { throw 'Convention parser installation failed.' }
 
+      - name: Check first-party C++ formatting
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check --no-deps --only-binary=:all: --target build/conventions/formatter clang-format==19.1.5
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/conventions/cpp_format.py --binary build/conventions/formatter/clang_format/data/bin/clang-format.exe
+
       - name: Test incremental convention contracts
         shell: pwsh
         run: ./scripts/windows-local.ps1 -Task RunConventionTests

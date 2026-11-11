@@ -10,13 +10,12 @@ class UserInfoPage;
 }
 
 /** @brief 展示当前账号资料，协调头像裁剪和上传入口。 */
-class UserInfoPage : public QWidget
-{
+class UserInfoPage : public QWidget {
     Q_OBJECT
 
 public:
     /** @brief 初始化对象，用于展示当前账号资料，协调头像裁剪和上传入口。 */
-    explicit UserInfoPage(QWidget *parent = nullptr);
+    explicit UserInfoPage(QWidget* parent = nullptr);
     /** @brief 释放本对象持有的界面或运行资源，Qt 子对象按所有权关系清理。 */
     ~UserInfoPage();
 signals:
@@ -28,7 +27,7 @@ private slots:
     void on_user_info_page_upload_btn_clicked();
 
 private:
-    Ui::UserInfoPage *ui;
+    Ui::UserInfoPage* ui;
     QString _profileRevision;
     bool _profileBusy = false;
     /** @brief 等待操作结果期间固定表单输入，结束后恢复编辑。 */
