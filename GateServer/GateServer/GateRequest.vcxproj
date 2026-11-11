@@ -34,7 +34,7 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
   </ItemDefinitionGroup>
-  <ItemGroup><ClCompile Include="GateRequest.cpp" /><ClCompile Include="GateRequestProduction.cpp" /></ItemGroup>
+  <ItemGroup><ClCompile Include="GateRouting.cpp" /><ClCompile Include="GateRequest.cpp" /><ClCompile Include="GateRequestProduction.cpp" /></ItemGroup>
   <ItemGroup><ClInclude Include="GateRequest.h" /><ClInclude Include="GateRequestInternal.h" /><ClInclude Include="GateRequestProduction.h" /></ItemGroup>
   <ItemGroup>
     <ProjectReference Include="GateGrpcClients.vcxproj">

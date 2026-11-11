@@ -16,7 +16,7 @@ disabled and run `python -B tests/server/resource/catalog_integration.py --catal
 This includes killed-idle-connection recovery in the real ResourceCatalog pool and
 the Chat DAO symmetry/rollback tests owned by `../data`. Results are written to
 `build/resource/catalog.xml`; the native child is limited to 30 seconds. This
-focused option does not claim production Redis/Status or TCP-flow coverage.
+focused option does not claim production Redis or TCP-flow coverage.
 
 - `StoreTest.*`: restart/resume, offset conflict, owner isolation, incomplete upload, checksum mismatch,
   size/buffer bounds, path validation and media signature. Actual temporary files, no database.
@@ -33,9 +33,9 @@ focused option does not claim production Redis/Status or TCP-flow coverage.
   Version 3 adds the resource/avatar tables; native schema verification stays enabled. Avatar references persist across catalog recreation and the
   production HTTP flow restarts ResourceServer to verify the published avatar survives.
 - `chat_flow_integration.py`: two production ChatServer processes, production ResourceServer, real MySQL,
-  real HTTP/TCP/gRPC, with explicitly scoped Redis/Status fixtures. Exercises cross-instance notification,
+  real HTTP/TCP/gRPC, with explicitly scoped Redis fixtures. Exercises cross-instance notification,
   retry, receiver download authorization, relogin/history and same-instance delivery. This is NOT evidence
-  of real Redis or production Status adapter behavior.
+  of real Redis server behavior.
 - `schema_upgrade.js`: prepares the verified version-2 schema in its own temporary MySQL,
   applies migrations 3 through 6, verifies old user/message data and repeat application, then proves
   a missing avatar table is still rejected by schema verification. Uses `CHAT_MYSQL_BIN`.
@@ -56,7 +56,7 @@ catalog/transfer paths. These are protocol/media evidence, not Qt card-display o
 基础社交扩展后的 UUID 重试只确认原消息，不再次推送。`chat_flow_integration.py` 在重试 ACK 后使用接收方心跳响应作为有序边界，确认没有插入重复通知，并对所有收到的帧检查 2048 字节上限。
 
 本轮存储回归补充账号/总量预算隔离与超限拒绝；ResourceCatalog 在建连时核验完整 schema，
-部署 smoke 必须先运行发布包内版本化迁移。`/ready` 与真实 Status/MySQL 的组合由 hosted 测试核验。
+部署 smoke 必须先运行发布包内版本化迁移。`/ready` 与真实 Redis/MySQL 的组合由 hosted 测试核验。
 
 `StoreTest.DeclaredLengthAndBufferAreBounded` now fills the 32-upload quota, ages abandoned uploads eight days, verifies an active upload survives, preserves completed bytes, and resumes interrupted discard cleanup. The owned fixture directory is removed at teardown.
 

@@ -15,9 +15,9 @@ const requireVarify = createRequire(path.resolve(__dirname, '../../VarifyServer/
 const grpc = requireVarify('@grpc/grpc-js');
 const loader = requireVarify('@grpc/proto-loader');
 
-/** 对同机 Status 或 Varify 执行有界 gRPC 请求，成功与错误路径都关闭本次客户端。 */
+/** 对同机 Varify 执行有界 gRPC 请求，成功与错误路径都关闭本次客户端。 */
 async function rpcRequest(port, service, method, request) {
-    const file = service === 'StatusService' ? 'status.proto' : 'varify.proto';
+    const file = 'varify.proto';
     const definition = grpc.loadPackageDefinition(loader.loadSync(path.resolve(__dirname, '../../proto', file), { defaults: true }));
     const client = new definition.message[service](`127.0.0.1:${port}`, grpc.credentials.createInsecure());
     try {
@@ -121,9 +121,7 @@ async function runFourProcessCases(coordinator, record) {
     /** 生成对应正式服务的隔离配置，指向本次依赖和数据库。 */
     function writeConfig(name) {
         const common = `[Redis]\nHost=127.0.0.1\nPort=${coordinator.config.ports.redis}\nPassword=${coordinator.password}\n` +
-            (name === 'StatusServer' ? '' : `[Mysql]\nHost=127.0.0.1\nPort=${coordinator.config.ports.mysql}\nUser=root\nPassword=${coordinator.password}\nSchema=${database}\n`
-            ) +
-            `[StatusServer]\nHost=127.0.0.1\nPort=${ports.StatusServer}\n` +
+            `[Mysql]\nHost=127.0.0.1\nPort=${coordinator.config.ports.mysql}\nUser=root\nPassword=${coordinator.password}\nSchema=${database}\n` +
             `[Log]\nName=${name}\nLogDir=${root}/logs\nMaxSizeMB=1\nMaxTotalFiles=2\nLevel=warn\nFlushLevel=warn\n`;
         const extra = name === 'ChatServer'
             ? `[SelfServer]\nName=${runName}\nHost=127.0.0.1\nPort=${ports.ChatServer}\nRPCPort=${ports.ChatRPC}\n[PeerServer]\nServers=\n`
@@ -167,7 +165,7 @@ async function runFourProcessCases(coordinator, record) {
     }
     /** 根据服务名选择本次隔离端口，复用有界 RPC 调用。 */
     async function rpcReady(service, method, request) {
-        return rpcRequest(ports[service === 'StatusService' ? 'StatusServer' : 'VarifyServer'], service, method, request);
+        return rpcRequest(ports.VarifyServer, service, method, request);
     }
     /** 通过真实邮件验证码注册并登录本次唯一用户，保存后续协议身份。 */
     async function register(index) {
@@ -205,7 +203,7 @@ async function runFourProcessCases(coordinator, record) {
         users.push({ uid: login.uid, token: login.token, email, password });
     }
     try {
-        for (const name of ['VarifyServer', 'StatusServer', 'ChatServer', 'ChatRPC', 'GateServer']) {
+        for (const name of ['VarifyServer', 'ChatServer', 'ChatRPC', 'GateServer']) {
             leases[name] = await reserve(); ports[name] = leases[name].port;
         }
         // 创建本次四进程数据库并执行正式迁移。
@@ -220,27 +218,28 @@ async function runFourProcessCases(coordinator, record) {
             // 检查验证码请求返回成功。
             await poll(async () => (await rpcReady('VarifyService', 'GetVarifyCode', { email })).error === 0, 30000);
         });
-        // 启动 Status 并等待非法登录返回业务拒绝。
-        await test('Status production gRPC ready', async () => {
-            await native('StatusServer');
-            // 检查 Status 已能处理并拒绝非法登录。
-            await poll(async () => Number((await rpcReady('StatusService', 'Login', { uid: -1, token: 'invalid' })).error) !== 0, 30000);
-        });
+        await test('Gate production HTTP ready',
+            // 启动 Gate 并等待公开测试路由响应。
+            async () => { await native('GateServer'); await poll(
+            // 检查 Gate 测试路由返回非空响应。
+            async () => Boolean(await http('/get_test')), 30000); });
         // 启动 Chat 并等待原生协议登录拒绝响应。
         await test('Chat production TCP ready', async () => {
             await native('ChatServer');
             // 检查 Chat 已能处理并拒绝非法登录。
             await poll(async () => (await wire({ uid: -1, token: 'invalid' })).error !== 0, 30000);
         });
-        await test('Gate production HTTP ready',
-            // 启动 Gate 并等待公开测试路由响应。
-            async () => { await native('GateServer'); await poll(
-            // 检查 Gate 测试路由返回非空响应。
-            async () => Boolean(await http('/get_test')), 30000); });
+        // 保留 TCP 初验错误码，分别覆盖空凭据和无效 UID。
+        await test('Chat preserves credential rejection codes', async () => {
+            assert.equal((await wire({ uid: 1, token:
+                '' })).error, 1011);
+            assert.equal((await wire({ uid: -1, token:
+                '' })).error, 1010);
+        });
         // 通过真实入口注册两个用户并验证完整凭据生命周期。
         await test('mail registration login and server selection', async () => {
             await register(1); await register(2);
-            await verifySessionLifecycle({ coordinator, http, rpcReady, user: users[0], port: ports.ChatServer });
+            await verifySessionLifecycle({ coordinator, http, user: users[0], port: ports.ChatServer });
         });
         let chat;
         // 通过 Chat 协议创建双方私聊并核对正的会话标识。
@@ -297,8 +296,10 @@ async function runFourProcessCases(coordinator, record) {
         // 停止 Redis 验证登录失败，最终恢复 Redis 及本次认证设置。
         await test('Redis outage fails closed', async () => {
             await coordinator.lifecycle('redis', 'stop');
-            try { assert.notEqual((await http('/user_login', { email: users[0].email, password: users[0].password })).error, 0); }
-            finally {
+            try {
+                assert.equal((await wire(users[0])).error, 1010);
+                assert.notEqual((await http('/user_login', { email: users[0].email, password: users[0].password })).error, 0);
+            } finally {
                 await coordinator.lifecycle('redis', 'start');
                 // 恢复 Redis 认证设置，结束后断开临时连接。
                 await poll(async () => {
@@ -311,7 +312,7 @@ async function runFourProcessCases(coordinator, record) {
         // 逆序停止并重启全部服务，核对原用户能重新登录 Chat。
         await test('application recovery after dependency port remap', async () => {
             for (const owned of [...children].reverse()) await stop(owned);
-            await varify(); await native('StatusServer'); await native('ChatServer'); await native('GateServer');
+            await varify(); await native('ChatServer'); await native('GateServer');
             // 通过 Gate 重新取得 Token 后验证 Chat 登录成功。
             await poll(async () => {
                 const login = await http('/user_login', { email: users[0].email, password: users[0].password });

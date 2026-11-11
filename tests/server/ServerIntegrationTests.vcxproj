@@ -44,7 +44,7 @@
       <SDLCheck>false</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\ChatServer\ChatServer;$(MSBuildThisFileDirectory)..\..\GateServer\GateServer;$(MSBuildThisFileDirectory)..\..\StatusServer\StatusServer;$(MSBuildThisFileDirectory)..\support;$(MSBuildThisFileDirectory)..\..\generated\proto\cpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\ChatServer\ChatServer;$(MSBuildThisFileDirectory)..\..\GateServer\GateServer;$(MSBuildThisFileDirectory)..\support;$(MSBuildThisFileDirectory)..\..\generated\proto\cpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32_WINNT=0x0601;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -64,7 +64,6 @@
     <ClCompile Include="..\support\Win32ProcessAdapter.cpp" />
     <ClCompile Include="integration-host\integration_host_contract_tests.cpp" />
     <ClCompile Include="integration-host\gate_http_transport_tests.cpp" />
-    <ClCompile Include="integration-host\status_grpc_transport_tests.cpp" />
     <ClCompile Include="integration-host\chat_tcp_transport_tests.cpp" />
     <ClCompile Include="integration-host\production_composition_tests.cpp" />
     <ClCompile Include="process-harness\run_context_tests.cpp" />
@@ -94,12 +93,6 @@
     </ProjectReference>
     <ProjectReference Include="..\..\GateServer\GateServer\GateRequest.vcxproj">
       <Project>{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\..\StatusServer\StatusServer\StatusRouting.vcxproj">
-      <Project>{7C67B8A2-A0A4-44A0-9020-5D87915CE3E2}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\..\StatusServer\StatusServer\StatusTransport.vcxproj">
-      <Project>{D7D17A26-B23D-4B8D-A1D5-BA789D882B03}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

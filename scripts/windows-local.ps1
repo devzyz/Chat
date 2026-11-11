@@ -40,16 +40,13 @@ $clientSource = Join-Path $repoRoot 'chat'
 $clientBuild = Join-Path $repoRoot "build\windows-client\$Configuration"
 $varifySource = Join-Path $repoRoot 'VarifyServer'
 $gateServerExecutable = Join-Path $repoRoot "build\windows-servers\$Configuration\GateServer\GateServer.exe"
-$statusServerExecutable = Join-Path $repoRoot "build\windows-servers\$Configuration\StatusServer\StatusServer.exe"
 $chatServerExecutable = Join-Path $repoRoot "build\windows-servers\$Configuration\ChatServer\ChatServer.exe"
 $serverTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\server_unit_tests.exe"
 $serverComponentTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\server_component_tests.exe"
 $serverIntegrationTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\server_integration_tests.exe"
 $chatGrpcClientTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\chat_grpc_client_tests.exe"
 $gateAsioTestProject = Join-Path $repoRoot 'tests\server\lifecycle\GateAsioPoolTests.vcxproj'
-$statusAsioTestProject = Join-Path $repoRoot 'tests\server\lifecycle\StatusAsioPoolTests.vcxproj'
 $gateAsioTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\gate_asio_pool_tests.exe"
-$statusAsioTestExecutable = Join-Path $repoRoot "build\windows-tests\$Configuration\status_asio_pool_tests.exe"
 $resourceTestProject = Join-Path $repoRoot 'tests\server\resource\ResourceTests.vcxproj'
 $resourceTestExecutable = Join-Path $repoRoot 'build\resource\ResourceTests.exe'
 if ($Configuration -eq 'Debug') { $resourceTestExecutable = Join-Path $repoRoot 'build\resource\Debug\ResourceTests.exe' }
@@ -75,12 +72,11 @@ $scriptTestGroups = @(
     }
 )
 $regressionReportGroups = @(
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 78 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 59 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 107 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 72 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 56 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 83 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_gate_unit.xml'; ExpectedCount = 2 }
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_status_unit.xml'; ExpectedCount = 2 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_resource_integration.xml'; ExpectedCount = 9 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_unit.xml'; ExpectedCount = 25 }
     [pscustomobject]@{ Lane = 'client'; Name = 'client_component.xml'; ExpectedCount = 20 }
@@ -96,7 +92,6 @@ $legacyRegressionReportGroups = @(
     [pscustomobject]@{ Name = 'server_integration.xml'; MinimumCount = 34 }
     [pscustomobject]@{ Name = 'server_chat_grpc_integration.xml'; MinimumCount = 4 }
     [pscustomobject]@{ Name = 'server_gate_unit.xml'; MinimumCount = 2 }
-    [pscustomobject]@{ Name = 'server_status_unit.xml'; MinimumCount = 2 }
     [pscustomobject]@{ Name = 'client_unit.xml'; MinimumCount = 18 }
     [pscustomobject]@{ Name = 'client_component.xml'; MinimumCount = 6 }
     [pscustomobject]@{ Name = 'varify_unit.xml'; MinimumCount = 18 }
@@ -336,7 +331,7 @@ function Build-Servers {
     $arguments = @(
         $solution
         '/m'
-        '/t:GateServer;StatusServer;ChatServer;ResourceServer'
+        '/t:GateServer;ChatServer;ResourceServer'
         "/p:Configuration=$Configuration"
         '/p:Platform=x64'
         "/p:VcpkgRoot=$($vcpkg.Root)"
@@ -368,7 +363,7 @@ function Run-ServerTests {
     $arguments = @(
         $solution
         '/m'
-        '/t:GateServer;StatusServer;ChatServer;ResourceServer;ServerUnitTests;ServerComponentTests;ServerIntegrationTests;ChatGrpcClientTests'
+        '/t:GateServer;ChatServer;ResourceServer;ServerUnitTests;ServerComponentTests;ServerIntegrationTests;ChatGrpcClientTests'
         "/p:Configuration=$Configuration"
         '/p:Platform=x64'
         "/p:VcpkgRoot=$($vcpkg.Root)"
@@ -384,7 +379,6 @@ function Run-ServerTests {
         (Join-Path $testResults 'server_integration.xml')
         (Join-Path $testResults 'server_chat_grpc_integration.xml')
         (Join-Path $testResults 'server_gate_unit.xml')
-        (Join-Path $testResults 'server_status_unit.xml')
         (Join-Path $testResults 'server_resource_integration.xml')
     )
     [void](New-Item -ItemType Directory -Path $testResults -Force)
@@ -402,7 +396,7 @@ function Run-ServerTests {
     Invoke-ProtocolCompatibility 'check'
 
     $installedRoot = $VcpkgInstalledRoot
-    foreach ($project in @($gateAsioTestProject, $statusAsioTestProject, $resourceTestProject)) {
+    foreach ($project in @($gateAsioTestProject, $resourceTestProject)) {
         $poolArguments = @(
             $project
             '/m'
@@ -431,7 +425,6 @@ function Run-ServerTests {
     }
     foreach ($productionBinary in @(
         (Require-File $gateServerExecutable 'Build the GateServer target first.')
-        (Require-File $statusServerExecutable 'Build the StatusServer target first.')
         (Require-File $chatServerExecutable 'Build the ChatServer target first.')
         (Require-File $resourceServerExecutable 'Build the ResourceServer target first.')
     )) {
@@ -452,9 +445,8 @@ function Run-ServerTests {
         @{ Binary = $integrationBinary; Report = $reports[2] }
         @{ Binary = $chatGrpcClientBinary; Report = $reports[3] }
         @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4] }
-        @{ Binary = (Require-File $statusAsioTestExecutable 'Build the Status Asio lifecycle test target first.'); Report = $reports[5] }
     )
-    $executions += @{ Binary = (Require-File $resourceTestExecutable 'Build ResourceTests first.'); Report = $reports[6]; Filter = 'StoreTest.*' }
+    $executions += @{ Binary = (Require-File $resourceTestExecutable 'Build ResourceTests first.'); Report = $reports[5]; Filter = 'StoreTest.*' }
     $failures = @()
     foreach ($execution in $executions) {
         & $vcpkg.Exe z-applocal "--target-binary=$($execution.Binary)" "--installed-bin-dir=$installedBin"
@@ -681,8 +673,8 @@ function Confirm-RegressionReports {
         }
         $legacyTotal += $legacyGroup.MinimumCount
     }
-    if ($legacyRegressionReportGroups.Count -ne 12 -or $legacyTotal -ne 232) {
-        throw 'Legacy regression floor must remain exactly 12 reports and 232 testcases.'
+    if ($legacyRegressionReportGroups.Count -ne 11 -or $legacyTotal -ne 230) {
+        throw 'Legacy regression floor must remain exactly 11 reports and 230 testcases.'
     }
     Assert-RegressionCleanupEvidence
     Write-Host "Regression report audit passed: $total testcases across $($regressionReportGroups.Count) reports."
@@ -847,9 +839,6 @@ function Confirm-TestStructure {
     $chatTransportProject = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatTransport.vcxproj') -Raw
     $chatGrpcProject = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatGrpcClients.vcxproj') -Raw
     $logicDispatcherProject = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\LogicDispatcher.vcxproj') -Raw
-    $statusProject = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusServer.vcxproj') -Raw
-    $statusRoutingProject = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusRouting.vcxproj') -Raw
-    $statusTransportProject = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusTransport.vcxproj') -Raw
     $solutionRegistration = Get-Content -LiteralPath (Join-Path $repoRoot 'Chat.sln') -Raw
     $unitProject = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\ServerUnitTests.vcxproj') -Raw
     $componentProject = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\ServerComponentTests.vcxproj') -Raw
@@ -937,64 +926,13 @@ function Confirm-TestStructure {
         @([regex]::Matches($chatTcpTransportTests, 'T09-CTCP-(?:0[1-9]|1[0-6])')).Count -ne 16) {
         throw 'Chat TCP transport tests must register exactly T09-CTCP-01..16 as sixteen Server Integration testcases.'
     }
-    if ($chatTransportProject -match '(?i)RedisMgr|MysqlMgr|StatusGrpcClient|ChatGrpcClient') {
+    if ($chatTransportProject -match '(?i)RedisMgr|MysqlMgr|ChatGrpcClient') {
         throw 'ChatTransport must remain isolated from Redis, MySQL, Status, and peer-RPC dependency managers.'
     }
-    $statusRoutingHeader = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusRouting.h') -Raw
-    $statusServiceSource = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusServiceImpl.cpp') -Raw
-    $statusUnitTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\status-routing\status_routing_unit_tests.cpp') -Raw
-    $statusComponentTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\status-routing\status_routing_component_tests.cpp') -Raw
-    $statusGrpcTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\integration-host\status_grpc_transport_tests.cpp') -Raw
-    if (@([regex]::Matches($statusUnitTests, 'TEST\(StatusRoutingUnitTests,')).Count -ne 8 -or
-        @([regex]::Matches($statusComponentTests, 'TEST\(StatusRoutingComponentTests,')).Count -ne 6 -or
-        @([regex]::Matches($statusUnitTests + $statusComponentTests, 'T08-STATUS-(?:0[1-9]|1[0-4])')).Count -ne 14) {
-        throw 'Status routing tests must register exactly T08-STATUS-01..14 as eight Unit and six Component testcases.'
-    }
-    foreach ($registration in @(
-        @{ Text = $statusProject; Pattern = 'ProjectReference Include="StatusRouting\.vcxproj"'; Owner = 'StatusServer' }
-        @{ Text = $unitProject; Pattern = 'status-routing\\status_routing_unit_tests\.cpp'; Owner = 'Server Unit tests' }
-        @{ Text = $unitProject; Pattern = 'StatusRouting\.vcxproj'; Owner = 'Server Unit tests' }
-        @{ Text = $componentProject; Pattern = 'status-routing\\status_routing_component_tests\.cpp'; Owner = 'Server Component tests' }
-        @{ Text = $componentProject; Pattern = 'StatusRouting\.vcxproj'; Owner = 'Server Component tests' }
-        @{ Text = $statusRoutingProject; Pattern = 'ClCompile Include="StatusRouting\.cpp"'; Owner = 'Status routing library' }
-        @{ Text = $statusRoutingProject; Pattern = 'ClCompile Include="StatusRoutingProduction\.cpp"'; Owner = 'Status routing production Adapter' }
-    )) {
-        if ($registration.Text -notmatch $registration.Pattern) {
-            throw "$($registration.Owner) must share the production StatusRouting Module with its tests."
-        }
-    }
-    foreach ($registration in @(
-        @{ Text = $statusTransportProject; Pattern = 'ClCompile Include="StatusGrpcServer\.cpp"'; Owner = 'Status transport library' }
-        @{ Text = $statusTransportProject; Pattern = 'ClCompile Include="StatusServiceImpl\.cpp"'; Owner = 'Status transport library' }
-        @{ Text = $statusTransportProject; Pattern = 'ClCompile Include="\$\(ProtocolGeneratedDir\)\\status\.grpc\.pb\.cc"'; Owner = 'Status gRPC generated transport' }
-        @{ Text = $statusTransportProject; Pattern = 'ClCompile Include="\$\(ProtocolGeneratedDir\)\\status\.pb\.cc"'; Owner = 'Status protobuf generated transport' }
-        @{ Text = $statusProject; Pattern = 'ProjectReference Include="StatusTransport\.vcxproj"'; Owner = 'StatusServer' }
-        @{ Text = $integrationProject; Pattern = 'StatusServer\\StatusServer\\StatusTransport\.vcxproj'; Owner = 'Server Integration tests' }
-        @{ Text = $solutionRegistration; Pattern = '"StatusTransport", "StatusServer\\StatusServer\\StatusTransport\.vcxproj"'; Owner = 'Chat solution' }
-    )) {
-        if ($registration.Text -notmatch $registration.Pattern) {
-            throw "$($registration.Owner) must share and register the production StatusTransport target."
-        }
-    }
-    foreach ($consumer in @(
-        @{ Text = $statusProject; Owner = 'StatusServer' }
-        @{ Text = $integrationProject; Owner = 'Server Integration tests' }
-    )) {
-        if ($consumer.Text -match 'ClCompile Include="[^\"]*StatusServer\\StatusServer\\(?:StatusGrpcServer|StatusServiceImpl)\.cpp"' -or
-            $consumer.Text -match 'ClCompile Include="(?:StatusGrpcServer|StatusServiceImpl)\.cpp"') {
-            throw "$($consumer.Owner) must not compile StatusTransport production sources directly."
-        }
-    }
-    if (@([regex]::Matches($statusGrpcTests, 'TEST(?:_F)?\s*\(\s*T09_SGRPC_')).Count -ne 12 -or
-        @([regex]::Matches($statusGrpcTests, 'T09-SGRPC-(?:0[1-9]|1[0-2])')).Count -ne 12) {
-        throw 'Status gRPC transport tests must register exactly T09-SGRPC-01..12 as twelve Server Integration testcases.'
-    }
-    if ($statusRoutingHeader -notmatch 'AssignmentResult\s+Assign\s*\(int uid, long long auth_version = 0\)' -or
-        $statusRoutingHeader -notmatch 'LoginResult\s+Validate\s*\(int uid, const std::string& token\)' -or
-        $statusServiceSource -notmatch 'routing_\.Assign\s*\(' -or
-        $statusServiceSource -notmatch 'routing_\.Validate\s*\(' -or
-        $statusServiceSource -match 'RedisMgr|_servers|\.begin\(\)') {
-        throw 'StatusServiceImpl must call only the two-method production StatusRouting Interface.'
+    if ($unitProject -notmatch 'gate_routing_unit_tests\.cpp' -or
+        $componentProject -notmatch 'gate_routing_component_tests\.cpp' -or
+        $gateRequestProject -notmatch 'GateRouting\.cpp') {
+        throw 'Gate routing and its unit/component contracts must be registered.'
     }
     $chatSessionTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\chat-session-state\chat_session_state_tests.cpp') -Raw
     $sessionRuntimeTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\chat-session-state\session_runtime_integration_tests.cpp') -Raw
@@ -1058,11 +996,11 @@ function Confirm-TestStructure {
             throw "Gate route '$($route.Key)' must call the shared GateRequest Module through the GateResponse Interface with endpoint $($route.Value)."
         }
     }
-    if ($gateLogic -match 'VerifyGrpcClient|RedisMgr|MysqlMgr|StatusGrpcClient') {
+    if ($gateLogic -match 'VerifyGrpcClient|RedisMgr|MysqlMgr') {
         throw 'LogicSystem routes must not bypass the GateRequest production Adapters.'
     }
     if ($integrationProject -notmatch 'startup\\gate_status_startup_tests\.cpp') {
-        throw 'Server Integration tests must register the Gate/Status production process contracts.'
+        throw 'Server Integration tests must register the Gate production process contracts.'
     }
     $integrationHostTests = Get-Content -LiteralPath `
         (Join-Path $repoRoot 'tests\server\integration-host\integration_host_contract_tests.cpp') -Raw
@@ -1081,21 +1019,20 @@ function Confirm-TestStructure {
         @{ Pattern = 'LogicDispatcher\.vcxproj'; Owner = 'LogicDispatcher shared target' }
         @{ Pattern = 'ChatTransport\.vcxproj'; Owner = 'ChatSessionState shared target' }
         @{ Pattern = 'GateRequest\.vcxproj'; Owner = 'GateRequest shared target' }
-        @{ Pattern = 'StatusRouting\.vcxproj'; Owner = 'StatusRouting shared target' }
     )) {
         if ($integrationProject -notmatch $registration.Pattern) {
             throw "Server Integration tests must register the $($registration.Owner)."
         }
     }
-    if ($integrationProject -match 'ClCompile Include="[^"]*(?:LogicDispatcher|ChatSessionState|GateRequest|StatusRouting)(?:Production)?\.cpp"') {
+    if ($integrationProject -match 'ClCompile Include="[^"]*(?:LogicDispatcher|ChatSessionState|GateRequest|GateRouting)(?:Production)?\.cpp"') {
         throw 'Server Integration tests must link shared Phase 3A targets instead of compiling production implementations directly.'
     }
     $formalCompositionTests = Get-Content -LiteralPath `
         (Join-Path $repoRoot 'tests\server\integration-host\production_composition_tests.cpp') -Raw
-    if (@([regex]::Matches($formalCompositionTests, 'TEST\(T09_COMP_Formal,')).Count -ne 6) {
-        throw 'Formal composition tests must register exactly six actual T09-COMP Server Integration testcases.'
+    if (@([regex]::Matches($formalCompositionTests, 'TEST\(T09_COMP_Formal,')).Count -ne 4) {
+        throw 'Formal composition tests must register exactly four actual T09-COMP Server Integration testcases.'
     }
-    foreach ($compositionId in 1..6) {
+    foreach ($compositionId in @(1, 2, 5, 6)) {
         $testId = 'T09-COMP-{0:D2}' -f $compositionId
         if (@([regex]::Matches($formalCompositionTests, [regex]::Escape($testId))).Count -ne 1) {
             throw "Formal composition tests must register $testId exactly once."
@@ -1107,10 +1044,6 @@ function Confirm-TestStructure {
         @{ Text = $gateProject; Pattern = 'ProjectReference Include="GateRequest\.vcxproj"'; Owner = 'formal Gate business Module' }
         @{ Text = $integrationProject; Pattern = [regex]::Escape('GateServer\GateServer\GateTransport.vcxproj'); Owner = 'Gate Integration transport' }
         @{ Text = $integrationProject; Pattern = [regex]::Escape('GateServer\GateServer\GateRequest.vcxproj'); Owner = 'Gate Integration business Module' }
-        @{ Text = $statusProject; Pattern = 'ProjectReference Include="StatusTransport\.vcxproj"'; Owner = 'formal Status transport' }
-        @{ Text = $statusProject; Pattern = 'ProjectReference Include="StatusRouting\.vcxproj"'; Owner = 'formal Status business Module' }
-        @{ Text = $integrationProject; Pattern = [regex]::Escape('StatusServer\StatusServer\StatusTransport.vcxproj'); Owner = 'Status Integration transport' }
-        @{ Text = $integrationProject; Pattern = [regex]::Escape('StatusServer\StatusServer\StatusRouting.vcxproj'); Owner = 'Status Integration business Module' }
         @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatTransport\.vcxproj"'; Owner = 'formal Chat transport' }
         @{ Text = $chatProject; Pattern = 'ProjectReference Include="LogicDispatcher\.vcxproj"'; Owner = 'formal Chat dispatcher Module' }
         @{ Text = $chatProject; Pattern = 'ProjectReference Include="ChatTransport\.vcxproj"'; Owner = 'formal Chat session Module' }
@@ -1123,18 +1056,16 @@ function Confirm-TestStructure {
         }
     }
     $gateFormalSource = Get-Content -LiteralPath (Join-Path $repoRoot 'GateServer\GateServer\GateServer.cpp') -Raw
-    $statusFormalSource = Get-Content -LiteralPath (Join-Path $repoRoot 'StatusServer\StatusServer\StatusServer.cpp') -Raw
     $chatFormalSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\ChatServer.cpp') -Raw
     if ($gateFormalSource -notmatch 'gate::CreateProductionGateRequest\s*\(' -or
-        $statusFormalSource -notmatch 'CreateProductionStatusRouting\s*\(' -or
         $chatFormalSource -notmatch 'make_unique<LogicSystem>\s*\(' -or
         $chatFormalSource -notmatch 'make_shared<RedisUserPresenceStore>\s*\(' -or
         $chatFormalSource -notmatch 'RedisMgr::GetInstance\s*\(') {
-        throw 'Formal Gate, Status, and Chat composition roots must select their real production Adapters and Modules.'
+        throw 'Formal Gate and Chat composition roots must select their real production Adapters and Modules.'
     }
     $formalCompositionSurface = @(
-        $gateFormalSource, $statusFormalSource, $chatFormalSource,
-        $gateProject, $statusProject, $chatProject
+        $gateFormalSource, $chatFormalSource,
+        $gateProject, $chatProject
     ) -join "`n"
     if ($formalCompositionSurface -match '(?i)--fake-dependenc(?:y|ies)|\b(?:CHAT_)?FAKE_DEPENDENC(?:Y|IES)\b|\bTEST_ONLY\b|#\s*if(?:def)?\s+[^\r\n]*\bTEST(?:ING)?\b') {
         throw 'Formal production composition must not expose a fake-dependency mode, test macro, or test-only Interface.'
@@ -1158,8 +1089,6 @@ function Confirm-TestStructure {
     }
     foreach ($source in @(
         'GateServer\GateServer\VerifyGrpcClient.cpp'
-        'GateServer\GateServer\StatusGrpcClient.cpp'
-        'ChatServer\ChatServer\StatusGrpcClient.cpp'
         'ChatServer\ChatServer\ChatGrpcClient.cpp'
     )) {
         $grpcClientSource = Get-Content -LiteralPath (Join-Path $repoRoot $source) -Raw
@@ -1439,7 +1368,7 @@ function Confirm-TestStructure {
         $runServerTests.Groups['body'].Value -notmatch "(?m)^\s*Invoke-ProtocolCompatibility\s+'check'\s*$") {
         throw "RunServerTests must execute Invoke-ProtocolCompatibility 'check' so generated and descriptor drift block develop."
     }
-    foreach ($requiredProductionTarget in @('GateServer', 'StatusServer', 'ChatServer', 'ResourceServer')) {
+    foreach ($requiredProductionTarget in @('GateServer', 'ChatServer', 'ResourceServer')) {
         if ($runServerTests.Groups['body'].Value -notmatch [regex]::Escape($requiredProductionTarget)) {
             throw "RunServerTests must build and deploy $requiredProductionTarget for its process Integration contracts."
         }
@@ -1477,9 +1406,9 @@ function Confirm-TestStructure {
     foreach ($group in $regressionReportGroups) {
         [void](Get-RegressionExpectedCount -Report $group.Name)
     }
-    if ($legacyRegressionReportGroups.Count -ne 12 -or
-        ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 232) {
-        throw 'The original regression floor must remain exactly 12 reports and 232 testcases.'
+    if ($legacyRegressionReportGroups.Count -ne 11 -or
+        ($legacyRegressionReportGroups | Measure-Object -Property MinimumCount -Sum).Sum -ne 230) {
+        throw 'The original regression floor must remain exactly 11 reports and 230 testcases.'
     }
     foreach ($residuePrefix in @(
         'chat-config-test-', 'chat-startup-tests-', 'gate-status-startup-tests-',

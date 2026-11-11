@@ -16,7 +16,6 @@
     <VcpkgXUseBuiltInApplocalDeps>true</VcpkgXUseBuiltInApplocalDeps>
 
     <ServerUnitName Condition="'$(MSBuildProjectName)' == 'GateServer'">GateServer</ServerUnitName>
-    <ServerUnitName Condition="'$(MSBuildProjectName)' == 'StatusServer'">StatusServer</ServerUnitName>
     <ServerUnitName Condition="'$(MSBuildProjectName)' == 'ChatServer'">ChatServer</ServerUnitName>
     <ServerUnitName Condition="'$(MSBuildProjectName)' == 'ResourceServer'">ResourceServer</ServerUnitName>
     <ServerIntermediateRoot Condition="'$(ServerIntermediateRoot)' == '' and '$(CHAT_SERVER_INTERMEDIATE_ROOT)' != ''">$(CHAT_SERVER_INTERMEDIATE_ROOT)</ServerIntermediateRoot>

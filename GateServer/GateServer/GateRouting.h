@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StatusRouting.h"
+#include "GateRequestInternal.h"
 
 #include <memory>
 #include <optional>
@@ -14,19 +14,26 @@ struct RoutingServer {
     std::string port;
 };
 
-namespace status_routing_internal {
+/** @brief 选择有效实例并发布当前用户的登录凭据。 */
+class GateRouting {
+public:
+    /** @brief 经选服接口释放存储与凭据生成器。 */
+    virtual ~GateRouting() = default;
+    /** @brief 发布成功才返回凭据及地址；无候选或存储异常时返回空失败结果。 */
+    virtual gate::internal::StatusAssignment Assign(int uid, long long auth_version = 0) = 0;
+};
+
+namespace gate_routing {
 
 /** @brief 隔离实例负载和用户 Token 的同步存储；并发路由要求实现支持并发。 */
-class StatusStore {
+class AssignmentStore {
 public:
     /** @brief 允许经存储端口销毁适配器。 */
-    virtual ~StatusStore() = default;
+    virtual ~AssignmentStore() = default;
     /** @brief 返回原始计数字符串；空值或非法计数按未知处理，抛异常则令整个分配失败。 */
     virtual std::optional<std::string> ReadCount(const std::string& server_name) = 0;
     /** @brief 认证代次匹配才覆盖登录 Token，失败阻止返回地址和凭据。 */
     virtual bool PutToken(int uid, const std::string& token, long long auth_version) = 0;
-    /** @brief 返回 Token 副本，nullopt 在校验层映射为 UidInvalid。 */
-    virtual std::optional<std::string> GetToken(int uid) = 0;
 };
 
 /** @brief 提供登录 Token，生产实现使用 UUID，测试可注入确定结果。 */
@@ -39,9 +46,9 @@ public:
 };
 
 /** @brief 拥有候选实例副本并共享持有有效的存储及 Token 源，不修改调用方实例列表。 */
-std::unique_ptr<StatusRouting> CreateStatusRouting(
+std::unique_ptr<GateRouting> CreateGateRouting(
     std::vector<RoutingServer> servers,
-    std::shared_ptr<StatusStore> store,
+    std::shared_ptr<AssignmentStore> store,
     std::shared_ptr<TokenSource> token_source);
 
-} // namespace status_routing_internal
+} // namespace gate_routing

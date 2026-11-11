@@ -14,7 +14,7 @@ and scoped in-memory test Adapters that only inject outcomes and record calls.
 | T08-GATE-01..03 | Missing email, verification success, and verification failure |
 | T08-GATE-04..08 | Confirmation mismatch, expired/mismatched code, existing user, and registration success |
 | T08-GATE-09..13 | Expired/mismatched code, identity mismatch, update failure, and reset success |
-| T08-GATE-14..16 | Credential failure, Status failure, and successful assignment |
+| T08-GATE-14..16 | Credential failure, assignment failure, and successful assignment |
 
 Every case verifies ordered calls, zero later calls after an early return, and one
 returned `Result`. Dependency false/error/exception paths fail closed through the
@@ -22,7 +22,7 @@ existing public `ErrorCodes`. The scoped in-memory Adapters record calls and inj
 results or exceptions; they do not reproduce orchestration decisions.
 
 Runner/report: `RunServerTests` / `server_component.xml`; counts come from the runner registry.
-The adapters are scoped test doubles; real Redis/MySQL/Status behavior is covered by the
+The adapters are scoped test doubles; real Redis/MySQL behavior is covered by the
 hosted four-process acceptance, not inferred from these component cases.
 T08-GATE-17 covers logout input, current-credential revocation, and dependency failure.
 Verification cases also enforce registration/reset purpose separation.
@@ -32,3 +32,5 @@ Verification cases also enforce registration/reset purpose separation.
 本模块替身不能证明真实 Redis 原子性。报告数量以 runner 注册表为准，上述阶段历史总数不作为门禁。
 
 口令派生属于 Unit，源码 `password_hash_unit_tests.cpp`，由 `ServerUnitTests` 编译并写入 `server_unit.xml`。
+
+GateRouting selects live instances by count then name. Unit and component tests cover malformed counts, ties, concurrent selection and failed token publication.

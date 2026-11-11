@@ -35,14 +35,12 @@
     <ClCompile Include="ConfigMgr.cpp" />
     <ClCompile Include="Const.cpp" />
     <ClCompile Include="PeerServerRouting.cpp" />
-    <ClCompile Include="StatusGrpcClient.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\common\grpc\GrpcClientRuntime.h" />
     <ClInclude Include="ChatGrpcClient.h" />
     <ClInclude Include="ConfigMgr.h" />
     <ClInclude Include="PeerServerRouting.h" />
-    <ClInclude Include="StatusGrpcClient.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

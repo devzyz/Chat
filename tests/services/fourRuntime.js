@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { pack, verify } = require('./messageRuntime');
-const entries = { driver: 'FourProcessDriver', GateServer: 'GateServer', StatusServer: 'StatusServer', ChatServer: 'ChatServer' };
+const entries = { driver: 'FourProcessDriver', GateServer: 'GateServer', ChatServer: 'ChatServer' };
 if (process.env.CHAT_REAL_ACCEPTANCE === '1') entries.ResourceServer = 'ResourceServer';
 assert.ok(['0', '1', undefined].includes(process.env.CHAT_REAL_ACCEPTANCE), 'invalid acceptance flag');
 const [action, binaries, destination, installed] = process.argv.slice(2);

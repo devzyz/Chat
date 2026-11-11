@@ -1,7 +1,7 @@
 # Server concurrency test ownership
 
 This directory does not own a separate test source or Test ID. The shared
-ChatServer/GateServer/StatusServer `AsioIOServicePool` contracts, their single
+ChatServer/GateServer `AsioIOServicePool` contracts, their single
 source file, Level metadata, runners, reports, timeouts, and known gaps are
 owned by the [`lifecycle`](../lifecycle/README.md) Module.
 

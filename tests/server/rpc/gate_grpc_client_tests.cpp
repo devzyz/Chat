@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include "../../../GateServer/GateServer/StatusGrpcClient.h"
 #include "../../../GateServer/GateServer/VerifyGrpcClient.h"
 
 #include <boost/asio.hpp>
@@ -43,22 +42,7 @@ public:
     std::atomic<bool> delay{false};
 };
 
-/** 提供固定聊天端点的 Status 选服测试服务。 */
-class ControlledStatusService final : public message::StatusService::Service {
-public:
-    /** 返回固定测试聊天地址与端口。 */
-    grpc::Status GetChatServer(
-        grpc::ServerContext*,
-        const message::GetChatServerReq*,
-        message::GetChatServerRsp* response) override {
-        response->set_error(ErrorCodes::Success);
-        response->set_host("127.0.0.1");
-        response->set_port("9001");
-        return grpc::Status::OK;
-    }
-};
-
-/** 拥有同一随机回环监听器上的验证码与 Status 服务。 */
+/** 拥有同一随机回环监听器上的验证码服务。 */
 class GateLoopbackServer {
 public:
     /** 注册测试服务并启动监听，失败抛异常。 */
@@ -66,7 +50,6 @@ public:
         grpc::ServerBuilder builder;
         builder.AddListeningPort("127.0.0.1:0", grpc::InsecureServerCredentials(), &_port);
         builder.RegisterService(&_varify);
-        builder.RegisterService(&_status);
         _server = builder.BuildAndStart();
         if (!_server || _port == 0) {
             throw std::runtime_error("failed to start Gate gRPC loopback fixture");
@@ -98,20 +81,17 @@ public:
 private:
     int _port = 0;
     ControlledVarifyService _varify;
-    ControlledStatusService _status;
     std::unique_ptr<grpc::Server> _server;
 };
 }
 
-/** 验证生产验证码与 Status 客户端可调用真实动态回环服务。 */
-TEST(GateGrpcClientIntegrationTests, VarifyAndStatusClientsCallDynamicLoopbackServices) {
+/** 验证生产验证码客户端可调用真实动态回环服务。 */
+TEST(GateGrpcClientIntegrationTests, VarifyClientCallsDynamicLoopbackService) {
     GateLoopbackServer server;
     const rpc::ClientPolicy policy{50ms, 200ms};
     VerifyGrpcClient varify("127.0.0.1", server.Port(), policy, 1);
-    StatusGrpcClient status("127.0.0.1", server.Port(), policy, 1);
 
     EXPECT_EQ(varify.GetVarifyCode("bounded@example.test").error(), ErrorCodes::Success);
-    EXPECT_EQ(status.GetChatServer(42).error(), ErrorCodes::Success);
 }
 
 /** 验证验证码 RPC 延时在配置期限内映射为 RPCFailed。 */

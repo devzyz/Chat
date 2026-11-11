@@ -51,7 +51,7 @@ class Environment {
         for (const service of ['redis', 'mysql', 'mailpit']) await this.coordinator.inspect(service);
         await this.coordinator.bootstrap();
         const ports = {}, leases = {};
-        for (const name of ['gate', 'status', 'varify', 'chatA', 'rpcA', 'chatB', 'rpcB']) {
+        for (const name of ['gate', 'varify', 'chatA', 'rpcA', 'chatB', 'rpcB']) {
             leases[name] = await this.port(); ports[name] = leases[name].port;
         }
         this.topology = createTopology(this.config.runId, ports);
@@ -84,8 +84,8 @@ class Environment {
         this.start('VarifyServer', process.execPath, [path.resolve(__dirname, '../../../VarifyServer/server.js'), '--config', varify],
             { CHAT_VARIFY_BIND_ADDRESS: `127.0.0.1:${ports.varify}`, CHAT_VARIFY_EMAIL_USER: 'fixture@example.invalid',
                 CHAT_VARIFY_MYSQL_PASSWORD: this.coordinator.password, CHAT_VARIFY_REDIS_PASSWORD: this.coordinator.password });
-        for (const role of ['StatusServer', 'ChatA', 'ChatB', 'GateServer']) {
-            const keys = { StatusServer: ['status'], ChatA: ['chatA', 'rpcA'], ChatB: ['chatB', 'rpcB'], GateServer: ['gate'] }[role];
+        for (const role of ['ChatA', 'ChatB', 'GateServer']) {
+            const keys = { ChatA: ['chatA', 'rpcA'], ChatB: ['chatB', 'rpcB'], GateServer: ['gate'] }[role];
             for (const key of keys) { await leases[key].release(); leases[key].released = true; }
             const file = path.join(this.root, `${role}.ini`);
             fs.writeFileSync(file, nativeConfig(this.topology, role, { password: this.coordinator.password,
@@ -97,7 +97,7 @@ class Environment {
         await resource.release(); resource.released = true;
         const file = path.join(this.root, 'ResourceServer.ini');
         fs.writeFileSync(file, `[ResourceServer]\nHost=127.0.0.1\nPort=${resource.port}\nStorageRoot=${this.root}/resources\n` +
-            `[StatusServer]\nHost=127.0.0.1\nPort=${ports.status}\n[Mysql]\nHost=127.0.0.1\n` +
+            `[Redis]\nHost=127.0.0.1\nPort=${this.config.ports.redis}\nPassword=` + this.coordinator.password + `\n[Mysql]\nHost=127.0.0.1\n` +
             `Port=${this.config.ports.mysql}\nUser=root\nPassword=${this.coordinator.password}\nSchema=${this.config.database}\n` +
             `[Log]\nLogDir=${this.root}/logs\nLevel=warn\n`, { mode: 0o600 });
         this.start('ResourceServer', path.join(this.bundle, 'ResourceServer', 'ResourceServer'), ['--config', file]);
@@ -162,7 +162,7 @@ class Environment {
             for (const server of this.topology.servers) assert.ok(await redis.ttl(`chatlease_${server.name}`) > 0, 'instance-expiry');
         } finally { redis.disconnect(); sender.close(); receiver.close(); }
     }
-    /** 经 Gate/Status 服务发现建立真实 TCP 会话，验证返回端点属于本次拓扑。 */
+    /** 经 Gate 服务发现建立真实 TCP 会话，验证返回端点属于本次拓扑。 */
     async login(account) {
         this.signal?.throwIfAborted();
         const auth = await post(`${this.gate}/user_login`, { email: account.email, password: account.password });

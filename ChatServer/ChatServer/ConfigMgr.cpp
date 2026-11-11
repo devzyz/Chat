@@ -121,14 +121,12 @@ ConfigMgr::ConfigMgr() {
     ValidateEndpoint((*this)["Mysql"], "Mysql");
     RequireValue((*this)["Mysql"], "Mysql", "User");
     RequireValue((*this)["Mysql"], "Mysql", "Schema");
-    ValidateEndpoint((*this)["StatusServer"], "StatusServer");
 
     auto grpc = (*this)["Grpc"];
     (void)rpc::ParseDurationMs(
         grpc["PoolAcquireTimeoutMs"],
         "[Grpc].PoolAcquireTimeoutMs",
         std::chrono::milliseconds(1000));
-    (void)rpc::ParseDurationMs(grpc["StatusDeadlineMs"], "[Grpc].StatusDeadlineMs", std::chrono::milliseconds(3000));
     (void)rpc::ParseDurationMs(grpc["ChatDeadlineMs"], "[Grpc].ChatDeadlineMs", std::chrono::milliseconds(3000));
 
     auto log = (*this)["Log"];

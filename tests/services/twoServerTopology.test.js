@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { createTopology, nativeConfig, assertConnectedClients } = require('./twoServerTopology');
-const ports = { gate: 31001, status: 31002, varify: 31003, chatA: 31004, rpcA: 31005, chatB: 31006, rpcB: 31007 };
+const ports = { gate: 31001, varify: 31003, chatA: 31004, rpcA: 31005, chatB: 31006, rpcB: 31007 };
 const runId = 'a'.repeat(32);
 
 // 验证拓扑保留固定夹具身份，但每次运行的数据库和用户隔离且端口合法。
@@ -25,22 +25,22 @@ test('fixed fixture preserves logical identities while namespacing physical reso
     assert.throws(() => createTopology(runId, { ...ports, rpcB: 0 }));
 });
 
-// 验证双实例互为 RPC 对端且 Status 选服配置一致，拒绝路径换行注入。
+// 验证双实例互为 RPC 对端且 Gate 选服配置一致，拒绝路径换行注入。
 test('native configs use reciprocal peer RPC ports and both discoverable client endpoints', () => {
     const topology = createTopology(runId, ports);
     const dependencies = { password: 'c'.repeat(64), redis: 32001, mysql: 32002 };
     const first = nativeConfig(topology, 'ChatA', dependencies, '/owned/logs');
     const second = nativeConfig(topology, 'ChatB', dependencies, '/owned/logs');
-    const status = nativeConfig(topology, 'StatusServer', dependencies, '/owned/logs');
+    const gate = nativeConfig(topology, 'GateServer', dependencies, '/owned/logs');
     assert.match(first, /Port=31004\nRPCPort=31005/);
     assert.match(first, /\[Peer\]\nName=chat-e2e-b-[a-f0-9]+\nHost=127.0.0.1\nPort=31007/);
     assert.match(second, /\[Peer\]\nName=chat-e2e-a-[a-f0-9]+\nHost=127.0.0.1\nPort=31005/);
-    assert.match(status, /\[ChatServers\]\nName=ChatA,ChatB/);
-    assert.doesNotMatch(status, /\[Mysql\]/);
+    assert.match(gate, /\[ChatServers\]\nName=ChatA,ChatB/);
+    assert.doesNotMatch(gate, /\[StatusServer\]/);
     assert.match(first, /\[Mysql\]/);
     assert.match(second, /\[Mysql\]/);
-    assert.match(status, /Port=31004/);
-    assert.match(status, /Port=31006/);
+    assert.match(gate, /Port=31004/);
+    assert.match(gate, /Port=31006/);
     assert.ok(!JSON.stringify(topology).includes(dependencies.password));
     // 在日志路径中注入换行，验证不能生成额外配置项。
     assert.throws(() => nativeConfig(topology, 'ChatA', dependencies, '/owned\nPassword=bad'));

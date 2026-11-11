@@ -3,7 +3,6 @@
 #include "SessionLifecycleCoordinator.h"
 #include "GateRequest.h"
 #include "LogicDispatcher.h"
-#include "StatusRouting.h"
 
 #include <array>
 #include <charconv>
@@ -65,8 +64,6 @@ bool HasRequiredModules(HostFamily family, const ProductionModules& modules) {
     switch (family) {
     case HostFamily::GateHttp:
         return modules.gate_request != nullptr;
-    case HostFamily::StatusGrpc:
-        return modules.status_routing != nullptr;
     case HostFamily::ChatTcp:
         return modules.logic_dispatcher != nullptr && modules.chat_sessions != nullptr;
     }

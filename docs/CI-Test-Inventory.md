@@ -17,7 +17,7 @@
 
 ## Windows 回归
 
-Windows 的 static-check 作业包含第 1、5、6 类。其成功后，服务端、Qt 和 Varify 三个作业可以并行。四条模块回归通道共要求 **14 份报告、410 条用例**；第 1、6 类另行校验。配置见 [Windows 工作流](../.github/workflows/windows-ci.yml) 和 [报告注册表](../scripts/windows-local.ps1)。
+Windows 的 static-check 作业包含第 1、5、6 类。其成功后，服务端、Qt 和 Varify 三个作业可以并行。四条模块回归通道共要求 **13 份报告、375 条用例**；第 1、6 类另行校验。配置见 [Windows 工作流](../.github/workflows/windows-ci.yml) 和 [报告注册表](../scripts/windows-local.ps1)。
 
 ### 1. 静态配置与 CI 自检
 
@@ -33,16 +33,16 @@ Windows 的 static-check 作业包含第 1、5、6 类。其成功后，服务�
 
 ### 2. C++ 服务端
 
-作业 servers-release 调用 RunServerTests。7 份报告分为通用单元 78、组件 59、集成 107、Chat gRPC 集成 4、Gate 和 Status 单元各 2、资源存储集成 9，共 **261 条**。[模块与报告映射](../tests/server/README.md)
+作业 servers-release 调用 RunServerTests。6 份报告覆盖通用单元、组件、集成、Chat gRPC 集成、Gate 单元和资源存储集成。各组精确数量由 `$regressionReportGroups` 校验。[模块与报告映射](../tests/server/README.md)
 
 - 协议与消息：验证帧编解码、消息分发、回执处理，以及 protobuf 兼容性和生成文件漂移。
 - Gate：验证注册、登录、重置密码请求的编排、依赖失败时的响应，以及请求到响应的交付。
-- Status：验证实例选择、路由和 Token 校验，覆盖存储边界。
+- Gate 选服与签发涵盖实例租约、负载并列和写入失败。Chat 与 Resource 通过 Redis 校验当前凭据。
 - Chat：验证会话注册与发送状态、Redis 连接池生命周期、异步处理与关闭。
 - 本机通信：用回环连接测试协议和生产 gRPC 客户端，包含 C++ 到 Node Varify 的调用。
 - 进程生命周期：测试命令行、配置加载、端口绑定、就绪与关闭；运行器检查子进程回收。
 - ResourceStore：用临时文件测试上传归属、重启续传、内容完整性和路径校验。Windows 常规报告覆盖存储层。
-- 构建产物：编译 Gate、Status、Chat、Resource，核验各服务独立目录及运行库；full 额外生成各自的 ZIP。
+- 构建产物：编译 Gate、Chat、Resource，核验各服务独立目录及运行库；full 额外生成各自的 ZIP。
 
 ### 3. Qt 客户端
 
@@ -92,18 +92,18 @@ static-check 用临时 ZIP 运行发布合同，输出 release_candidate_contrac
 
 - posix-process-contracts 运行真实子进程，检查生命周期与回收，可独立于数据库执行。
 - linux-preflight 检查编译器版本、恢复依赖、配置、编译、链接和启动；另跑 schema 迁移脚本的合同测试。
-- 显式关闭 Qt 和客户端构建，单独编译 Gate、Status、Chat 三个服务。
+- 显式关闭 Qt 和客户端构建，单独编译 Gate、Chat 两个服务。
 - 测试共享生产目标和进程监督器，验证监听端口被占用，以及主动关闭后重新绑定。
 - 构建同一提交的启动器、驱动和服务运行包，为后续作业提供带 SHA 和摘要的产物。
 
-### 8. 真实依赖与四进程集成
+### 8. 真实依赖与多进程集成
 
-disposable-services 使用临时 MySQL、Redis、Mailpit，运行 3C-07。[适配器和四进程用例表](../tests/services/README.md)
+disposable-services 使用临时 MySQL、Redis、Mailpit，运行 3C-07。[适配器和多进程用例表](../tests/services/README.md)
 
 - MySQL：验证从空库迁移、注册数据及消息持久化；迁移、消息报告分别要求 12 和 20 项。
 - Redis：分别运行 C++ hiredis 的 9 项与 Node ioredis 的 6 项适配器检查，覆盖真实数据操作和故障恢复。
 - SMTP：运行 12 项适配器检查，通过 Mailpit 验证邮件投递及故障行为。
-- 四进程联动共 18 项：检查 Varify、Status、Chat、Gate 就绪，从邮件取得验证码，注册、登录、选服，经 TCP 认证后私聊，并核对消息持久化和重试 ID。
+- 多进程联动共 18 项：检查 Varify、Chat、Gate 就绪和 TCP 登录拒绝码，从邮件取得验证码，注册、登录、选服，经 TCP 认证后私聊，并核对消息持久化和重试 ID。
 - 故障注入：重复绑定 Gate 端口，令 SMTP 或 Redis 中断后恢复，验证断开客户端后的 Redis 实例计数归零。
 - 关闭与回收：用 MySQL 表锁阻塞 Gate 读取，检查进程能在时限内关闭；最后检查进程、监听端口和临时数据清理。
 
@@ -139,7 +139,7 @@ two-server-contract 使用真实依赖、两个 ChatServer 和独立 Qt 客户�
 
 ### 12. 服务端性能
 
-手动 performance 单独构建并运行 Gate、Status、双 Chat、Resource、Varify 和真实依赖。三个档位复用场景，改变负载。[性能测试说明](../tests/services/performance/README.md) · [固定负载配置](../tests/services/performance/profiles.json)
+手动 performance 单独构建并运行 Gate、双 Chat、Resource、Varify 和真实依赖。三个档位复用场景，改变负载。[性能测试说明](../tests/services/performance/README.md) · [固定负载配置](../tests/services/performance/profiles.json)
 
 | 档位 | 连接数 | 目标速率（请求/秒） | 预热 | 正式采样 | 资源并发 |
 | --- | ---: | ---: | ---: | --- | ---: |
@@ -165,8 +165,8 @@ two-server-contract 使用真实依赖、两个 ChatServer 和独立 Qt 客户�
 
 仅 master push 全量通过后执行 package → smoke → publish。[发布工作流](../.github/workflows/release.yml) · [发布包验证](../tests/release/contracts/README.md)
 
-- 取同次 CI 产生的 Gate、Status、Chat、Resource、Qt 客户端和 Varify 六个 ZIP，组装发行包并核验文件、版本与摘要。
+- 取同次 CI 产生的 Gate、Chat、Resource、Qt 客户端和 Varify 五个 ZIP，组装发行包并核验文件、版本与摘要。
 - 在全新 Windows runner 下载该包，在源码树外启动程序，验证包内运行库齐全。
-- 验证 Gate HTTP、Status 与 Chat 监听启动和控制台停止；检查 Qt 窗口和包内 Node/gRPC 模块加载。
+- 验证 Gate HTTP 与 Chat 监听启动和控制台停止；检查 Qt 窗口和包内 Node/gRPC 模块加载。
 - 为 ResourceServer 启动独立临时 MySQL，测试 HTTP 拒绝未认证请求及正常停止。
 - 冒烟通过后上传同一 ZIP，回验上传内容后发布。

@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include "../../../GateServer/GateServer/StatusGrpcClient.h"
 #include "../../../GateServer/GateServer/VerifyGrpcClient.h"
 
 #include <chrono>
@@ -60,13 +59,6 @@ auto VarifyPoolFactory() {
     };
 }
 
-/** 返回创建Gate 的 Status单容量短期限池的工厂。 */
-auto GateStatusPoolFactory() {
-    // 创建Gate 的 Status生产 RPC 池，无需实际调用远端。
-    return [] {
-        return std::make_unique<RPCConnection>(1, "127.0.0.1", "1", 50ms);
-    };
-}
 }
 
 /** 验证Gate 的验证码池借用归还合同。 */
@@ -80,17 +72,4 @@ TEST(GateVarifyPoolContractTests, ExhaustionIsBounded) {
 /** 验证Gate 的验证码池关闭唤醒与幂等合同。 */
 TEST(GateVarifyPoolContractTests, CloseIsIdempotentAndWakesBorrowers) {
     VerifyCloseLifecycle(VarifyPoolFactory());
-}
-
-/** 验证Gate 的 Status池借用归还合同。 */
-TEST(GateStatusPoolContractTests, BorrowReturn) {
-    VerifyBorrowReturn(GateStatusPoolFactory());
-}
-/** 验证Gate 的 Status池耗尽有界合同。 */
-TEST(GateStatusPoolContractTests, ExhaustionIsBounded) {
-    VerifyExhaustion(GateStatusPoolFactory());
-}
-/** 验证Gate 的 Status池关闭唤醒与幂等合同。 */
-TEST(GateStatusPoolContractTests, CloseIsIdempotentAndWakesBorrowers) {
-    VerifyCloseLifecycle(GateStatusPoolFactory());
 }

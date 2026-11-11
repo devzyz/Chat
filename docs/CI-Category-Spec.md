@@ -32,7 +32,7 @@
 | 05 | 运维脚本与进程管理 | Windows 实例脚本 | 同左 | 另含 Linux POSIX 进程检查 | 同左 | — |
 | 06 | 真实依赖与服务集成 | — | — | Linux 3C | Linux 3C | — |
 | 07 | 真实业务 E2E | — | — | Linux 3D；手动可加四账号验收 | Linux 3D | — |
-| 08 | 打包与成品冒烟 | 打包合同 | 打包合同 | 合同 + 六个应用 ZIP | 再加发行包组装、下载冒烟 | — |
+| 08 | 打包与成品冒烟 | 打包合同 | 打包合同 | 合同 + 五个应用 ZIP | 再加发行包组装、下载冒烟 | — |
 | 09 | 性能测试 | — | — | — | — | 按选定档位实测 |
 | 10 | 报告与失败定位 | 已选静态作业及其报告 | Windows 门禁 | 双平台门禁，按需验收门禁 | 双平台门禁；成品冒烟另行报告 | 专项报告校验 |
 
@@ -56,7 +56,7 @@
 
 ### 03 · Platform Builds · 平台构建
 
-- **当前测试内容**：Windows 编译 Gate、Status、Chat、Resource 和 Qt Release 目标，核对原生服务独立运行目录。Linux 检查配置、编译、链接、启动，另以关闭 Qt 的配置编译 Gate、Status、Chat。性能模式单独构建服务端和监督器。
+- **当前测试内容**：Windows 编译 Gate、Chat、Resource 和 Qt Release 目标，核对原生服务独立运行目录。Linux 检查配置、编译、链接、启动，另以关闭 Qt 的配置编译 Gate、Chat。性能模式单独构建服务端和监督器。
 - **范围协议**：通过结论绑定目标、操作系统、工具链和构建选项。Linux 无 Qt 变体以实际列出的目标为限；发行包在干净机器启动归 08。
 - **入口与证据**：保留平台、构建目标、失败阶段和编译器首条有效诊断。见 [Windows](../.github/workflows/windows-ci.yml)、[Linux](../.github/workflows/linux-ci.yml)。
 
@@ -65,9 +65,8 @@
 | 结果归属（英文 / 中文） | 当前测试内容 |
 | --- | --- |
 | Qt Client / Qt 客户端 | 登录与退出、会话重置、消息模型和分页、草稿与 SQLite 持久化、控件信号、头像、客户端收发与重试 |
-| GateServer / 网关服务 | 注册、登录和重置密码的请求校验、依赖调用顺序、异常传播与 HTTP 响应 |
-| StatusServer / 状态服务 | 选服、路由、Token 校验、存储缺失与故障 |
-| ChatServer / 聊天服务 | 连接与会话、分发、发送与回执、重复提交、生产 gRPC 客户端及回环协议 |
+| GateServer / 网关服务 | 注册、登录和重置密码的请求校验、依赖调用顺序、异常传播、HTTP 响应、实例选择与凭据签发 |
+| ChatServer / 聊天服务 | TCP 凭据初验、连接与会话、分发、发送与回执、重复提交、生产 gRPC 客户端及回环协议 |
 | ResourceServer / 资源服务 | 临时文件上的上传归属、分片偏移、重启续传、完整性、大小边界、路径及媒体签名 |
 | VarifyServer / 验证码服务 | 注册与重置用途隔离、并发去重、冷却与消费、错误响应、本机 gRPC 和 TLS |
 | Shared Protocols and Runtime / 共享协议与运行库 | 帧边界与字节序、半帧与粘包、protobuf 兼容与生成文件漂移、通用生命周期 |
@@ -95,7 +94,7 @@
 
 ### 08 · Packaging and Artifact Smoke Tests · 打包与成品冒烟
 
-- **当前测试内容**：静态作业内用临时 ZIP 验证缺文件、错版本、摘要、配置清理与布局。full 生成四个 C++ 服务、Qt 客户端及 Varify 六个 ZIP。仅 master push 在全量门禁通过后组装发行包、重新下载，在新 Windows runner 探测窗口、监听端口、HTTP 或运行库加载。
+- **当前测试内容**：静态作业内用临时 ZIP 验证缺文件、错版本、摘要、配置清理与布局。full 生成三个 C++ 服务、Qt 客户端及 Varify 五个 ZIP。仅 master push 在全量门禁通过后组装发行包、重新下载，在新 Windows runner 探测窗口、监听端口、HTTP 或运行库加载。
 - **范围协议**：打包规则、应用 ZIP 和成品启动分别记录。测试范围止于已验证制品；公开发布改造、目标环境自动部署留待后续审核。当前发布工作流在冒烟通过后仍执行上传回验和公开发布。
 - **入口与证据**：原始 ZIP、源码 SHA、发行包摘要、冒烟报告与程序启动日志。见 [发布包验证](../tests/release/contracts/README.md)、[当前发布链](../.github/workflows/release.yml)。
 
@@ -107,7 +106,7 @@
 
 ### 10 · Test Reporting and Failure Diagnostics · 报告完整性与失败定位
 
-- **当前测试内容**：Windows 模块运行器校验其负责的报告。普通 Windows 回归的注册基线为 14 份报告、410 条用例；纯文档只核验选中的作业。Linux full 校验 3C/3D 场景、源码 SHA、报告摘要与环境清理；性能模式独立校验采样和报告。
+- **当前测试内容**：Windows 模块运行器校验其负责的报告。普通 Windows 回归的注册基线为 13 份报告、375 条用例；纯文档只核验选中的作业。Linux full 校验 3C/3D 场景、源码 SHA、报告摘要与环境清理；性能模式独立校验采样和报告。
 - **范围协议**：Regression checks 汇总策略与 Windows；Full regression checks 汇总双平台；显式请求四账号验收时另有 Real environment acceptance。master push 的发行包冒烟在 full 门禁之后出结果。测试失败、实际未运行与上游阻塞须分别解释。
 - **查看失败**：在运行页 Summary 找到对应通道，按模块查看用例、原始报告、作业日志和当前 job 复跑命令。GoogleTest 提供仓库内文件/行号时可直接打开该提交的源码。摘要只摘录受支持的诊断类别和数值比较，详细输出留在原始日志。无 JUnit 的准备、编译或工件错误从 Failure diagnostics 进入本次 attempt 的具体步骤。来源见 [门禁条件](../.github/workflows/ci.yml) 和 [报告规则](../tests/README.md)。
 

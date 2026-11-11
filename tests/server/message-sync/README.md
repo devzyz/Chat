@@ -27,9 +27,7 @@ The Python entry creates its own MySQL data directory under `build/message-sync`
 applies migrations twice, runs production persistence tests, starts two ChatServer
 processes, and cleans up only its own processes/files. `mysql` and `mysqld` must
 already be on PATH. Binaries need their app-local runtime dependencies.
-The existing ResourceTests executable provides the Status fixture; Redis also
-uses the existing deterministic fixture. This is real MySQL/TCP/gRPC evidence,
-not production Status/Redis or a full desktop E2E claim.
+The suite uses real MySQL, TCP and peer gRPC, with a deterministic Redis fixture for Chat authentication and session state.
 
 MySQL results: `build/message-sync/mysql.xml`; TCP failures propagate as nonzero
 exit. These opt-in Integration cases are outside the quick CI aggregate defined by
@@ -71,7 +69,7 @@ epochs, transfer/leave/dissolve and resource authorization.
 requires exactly one success. The existing lock-wait test protects group/message serialization.
 `integration.py` adds four-account TCP management, late-generation rejection, creation
 retry after rename, tombstone discovery, and direction-specific friend remarks.
-All tests retain the real-MySQL/fixture-Status/fixture-Redis boundary described above.
+All tests retain the real-MySQL/fixture-Redis boundary described above.
 
 `MembershipChangesWaitForCommittedMessages` observes real InnoDB lock waits for
 add/remove behind a message transaction, then verifies the join boundary and revoked
@@ -83,7 +81,7 @@ the target's leave and requires exactly one success and one active owner.
 基础社交扩展使用迁移 007。`tcp_flow` 覆盖能力协商、资料更新/重名/版本冲突、公开投影、双向删除、
 删除后的历史与旧 UUID 确认、拒绝/重新申请/接受、复用原 chat_id、旧版本发送拒绝、在线大正文通知与同步、
 申请目录按字节连续分页以及重新登录恢复。`IncrementalByteBoundedPagesAndResourceIdentity` 进一步验证删除后
-资源引用仍可读、旧 UUID 仍可确认、旧版本不能创建引用而当前版本可提交。仍只使用自建临时 MySQL 与 Redis/Status 替身。
+资源引用仍可读、旧 UUID 仍可确认、旧版本不能创建引用而当前版本可提交。仍只使用自建临时 MySQL 与 Redis 替身。
 
 社交长字段回归通过真实 TCP 组合 255 字符中文姓名、个人描述、申请说明和备注，验证申请、联系人及资料响应完整可读，目录仍按 8000 字节分页。
 申请分页还验证接收者 UID 与备注字段完整，避免目录刷新后旧审批请求丢失内嵌身份。

@@ -74,9 +74,6 @@ std::string ValidConfig(const std::string& peer_servers = "") {
            "Port=3306\n"
            "User=test-user\n"
            "Schema=test-schema\n"
-           "[StatusServer]\n"
-           "Host=127.0.0.1\n"
-           "Port=50052\n"
            "[SelfServer]\n"
            "Name=ChatTest\n"
            "Host=127.0.0.1\n"
@@ -163,8 +160,8 @@ TEST(ConfigMgrTests, MissingConfigFileIsRejected) {
 
 /** 验证缺失必需配置节被拒绝。 */
 TEST(ConfigMgrTests, MissingRequiredSectionIsRejected) {
-    const auto invalid = ReplaceOnce(ValidConfig(), "[StatusServer]\nHost=127.0.0.1\nPort=50052\n", "");
-    ExpectInvalidConfig(invalid, "[StatusServer].Host");
+    const auto invalid = ReplaceOnce(ValidConfig(), "[Redis]\nHost=127.0.0.1\nPort=6379\n", "");
+    ExpectInvalidConfig(invalid, "[Redis].Host");
 }
 
 /** 验证缺失必需配置键被拒绝。 */

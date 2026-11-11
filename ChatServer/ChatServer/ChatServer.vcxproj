@@ -141,8 +141,6 @@
     <ClCompile Include="LogMgr.cpp" />
     <ClCompile Include="$(ProtocolGeneratedDir)\chat.grpc.pb.cc" />
     <ClCompile Include="$(ProtocolGeneratedDir)\chat.pb.cc" />
-    <ClCompile Include="$(ProtocolGeneratedDir)\status.grpc.pb.cc" />
-    <ClCompile Include="$(ProtocolGeneratedDir)\status.pb.cc" />
     <ClCompile Include="MysqlDao.cpp" />
     <ClCompile Include="MysqlMgr.cpp" />
     <ClCompile Include="RedisMgr.cpp" />
@@ -164,8 +162,6 @@
     <ClInclude Include="LogMgr.h" />
     <ClInclude Include="$(ProtocolGeneratedDir)\chat.grpc.pb.h" />
     <ClInclude Include="$(ProtocolGeneratedDir)\chat.pb.h" />
-    <ClInclude Include="$(ProtocolGeneratedDir)\status.grpc.pb.h" />
-    <ClInclude Include="$(ProtocolGeneratedDir)\status.pb.h" />
     <ClInclude Include="MsgNode.h" />
     <ClInclude Include="MysqlDao.h" />
     <ClInclude Include="MysqlMgr.h" />
@@ -173,14 +169,12 @@
     <ClInclude Include="RedisMgr.h" />
     <ClInclude Include="RedisUserPresenceStore.h" />
     <ClInclude Include="Singleton.h" />
-    <ClInclude Include="StatusGrpcClient.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="config.ini" />
     <None Include="configs\chat-01.ini" />
     <None Include="configs\chat-02.ini" />
     <None Include="..\..\proto\chat.proto" />
-    <None Include="..\..\proto\status.proto" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="ChatTransport.vcxproj">

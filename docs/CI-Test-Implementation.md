@@ -1,13 +1,13 @@
 # CI 自动测试如何实现
 
-2026-11-09 按现有工作流、测试注册和代表性源码核对。下表描述配置和实现。Windows 的 410 条是 14 份报告中要求的 testcase 数，其中 C++ 服务端 261、Qt 79、Varify 57、实例脚本 13。一个 testcase 可以执行多个断言；某个源文件也可能同时包含常规和专项用例。[注册与报告校验](../scripts/windows-local.ps1) · [执行范围清单](CI-Test-Inventory.md)
+2026-11-11 按现有工作流、测试注册和代表性源码核对。下表描述配置和实现。Windows 的 375 条是 13 份报告中要求的 testcase 数，其中 C++ 服务端 226、Qt 79、Varify 57、实例脚本 13。一个 testcase 可以执行多个断言；某个源文件也可能同时包含常规和专项用例。[注册与报告校验](../scripts/windows-local.ps1) · [执行范围清单](CI-Test-Inventory.md)
 
 ## 从 CI 到断言
 
 | 范围 | 实际调用链 | 具体怎么判定 |
 | --- | --- | --- |
 | Gate | Windows → RunServerTests → MSBuild → GoogleTest 组件程序 → XML | 测试调用生产请求处理，注入可记录调用的验证码、账户等适配器。两次密码不一致时，既检查错误结果，也检查依赖调用记录为空。[Gate 用例](../tests/server/gate-request/gate_request_component_tests.cpp) |
-| Status | 同一服务端运行器 → 单元及组件测试二进制 | 用 C++ 测路由选择和 Token 行为，在组件测试中控制存储状态；另有真实本机 gRPC 传输测试。[路由单测](../tests/server/status-routing/status_routing_unit_tests.cpp) · [组件用例](../tests/server/status-routing/status_routing_component_tests.cpp) · [gRPC 集成](../tests/server/integration-host/status_grpc_transport_tests.cpp) |
+| Gate 选服与签发 | RunServerTests → 单元及组件测试 | 验证租约计数选择、并列排序、存储错误和凭据发布。[路由单测](../tests/server/gate-request/gate_routing_unit_tests.cpp) · [组件用例](../tests/server/gate-request/gate_routing_component_tests.cpp) |
 | Chat | 同一运行器 → 单元、组件、集成以及独立 gRPC 客户端测试程序 | C++ 直接测会话状态与协议；集成用例走运行中的连接。Linux 专项另用 C++ 驱动调用生产消息提交适配器，在真实 MySQL 下核对结果，部分断言用自定义 Require。[会话测试](../tests/server/chat-session-state/chat_session_state_tests.cpp) · [TCP 测试](../tests/server/integration-host/chat_tcp_transport_tests.cpp) · [消息提交驱动](../tests/server/message-commit/message_commit_integration.cpp) |
 | Resource | Windows → ResourceTests → 过滤 StoreTest.* | GoogleTest fixture 建独立临时目录，直接调用生产 ResourceStore，验证续传、越权、摘要和重启。常规报告收 9 条。独立资源专项还用 Python 发真实 HTTP、断开连接、比对下载字节和解码视频。[C++ 存储测试](../tests/server/resource/resource_tests.cpp) · [专项及边界](../tests/server/resource/README.md) |
 | Qt | RunClientTests → CMake/CTest 按层级选用例 → C++ 测试程序 → CTest JUnit | 头像用 Qt Test 的 QCOMPARE 比较像素、用 QSignalSpy 观察模型通知；CMake 可把同一程序的不同方法注册成独立用例。帧解码仍采用自定义 main/expect，一次进程运行内检查多个分片条件。[头像测试](../chat/tests/local-avatar/local_avatar_tests.cpp) · [帧解码](../chat/tests/network-state/tcp_frame_decoder_tests.cpp) · [注册](../chat/CMakeLists.txt) |
@@ -19,7 +19,7 @@
 
 ## 十类测试的内容、方式与范围
 
-以下是用例归属建议。Gate、Status、Chat、Resource 的进程内业务规则仍由各模块的 C++ GoogleTest 直接验证。例如，Gate 注册时两次密码不同，应在调用账户存储之前返回错误。下面十类补充控件、协议、外部依赖、跨进程和交付等观察点。每条用例按决定它通过或失败的主要断言归类；实际接入 CI 的项目见[测试清单](CI-Test-Inventory.md)。
+以下是用例归属建议。Gate、Chat、Resource 的进程内业务规则仍由各模块的 C++ GoogleTest 直接验证。例如，Gate 注册时两次密码不同，应在调用账户存储之前返回错误。下面十类补充控件、协议、外部依赖、跨进程和交付等观察点。每条用例按决定它通过或失败的主要断言归类；实际接入 CI 的项目见[测试清单](CI-Test-Inventory.md)。
 
 | 类别 | 具体测试项 | 测试方式 | 范围限定 |
 | --- | --- | --- | --- |

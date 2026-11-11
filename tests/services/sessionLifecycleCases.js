@@ -5,7 +5,7 @@ const { Client } = require('./performance/client');
 const { contractStep } = require('./dependencyCoordinator');
 
 /** 在真实服务组合中核对用途隔离、改密撤销、迟到登录栅栏、活跃续期和条件退出；凭据只留在内存。 */
-async function verifySessionLifecycle({ coordinator, http, rpcReady, user, port }) {
+async function verifySessionLifecycle({ coordinator, http, user, port }) {
     const redis = await coordinator.redis();
     const peers = [];
     let stage = 'auth-renewal';
@@ -17,6 +17,9 @@ async function verifySessionLifecycle({ coordinator, http, rpcReady, user, port 
     try {
         const original = { uid: user.uid, token:
             user.token };
+        const wrong = { ...original, token:
+            randomUUID() };
+        await assert.rejects(connect(wrong), /business-1006-1011/);
         const active = await connect(original);
         await redis.expire(String(user.uid), 2);
         await active.request(1020, 1021, { uid: user.uid });
@@ -40,10 +43,10 @@ async function verifySessionLifecycle({ coordinator, http, rpcReady, user, port 
         assert.equal((await http('/reset_pwd', reset)).error, 0);
         assert.equal(await redis.exists(`code_reset_${user.email}`), 0);
         assert.equal(await redis.exists(`code_${user.email}`), 1);
-        assert.notEqual((await rpcReady('StatusService', 'Login', original)).error, 0);
+        await assert.rejects(connect(original), /business-1006-1010/);
         await assert.rejects(active.request(1020, 1021, { uid: user.uid }), /closed|replaced|write-failed/);
         stage = 'auth-stale-issue';
-        assert.notEqual((await rpcReady('StatusService', 'GetChatServer', { uid: user.uid, authVersion: version })).error, 0);
+        assert.ok(Number(await redis.get(`auth_version_${user.uid}`)) > Number(version));
         assert.notEqual((await http('/user_login', { email:
             user.email, password:
             user.password })).error, 0);
@@ -57,12 +60,20 @@ async function verifySessionLifecycle({ coordinator, http, rpcReady, user, port 
         const current = await connect(login);
         stage = 'auth-logout';
         assert.equal((await http('/logout', original)).error, 1011);
-        assert.equal((await rpcReady('StatusService', 'Login', login)).error, 0);
+        assert.equal(await redis.hget(String(login.uid), `utoken_${login.uid}`), login.token);
         assert.equal((await http('/logout', { uid: user.uid, token:
             login.token })).error, 0);
         assert.equal((await http('/logout', { uid: user.uid, token:
             login.token })).error, 0);
-        assert.notEqual((await rpcReady('StatusService', 'Login', login)).error, 0);
+        await assert.rejects(connect(login), /business-1006-1010/);
+        // 对已撤销的测试账号注入 WRONGTYPE，验证 Redis 协议错误沿用缺失凭据的 TCP 返回码。
+        const accountKey = String(login.uid);
+        assert.equal(await redis.set(accountKey, 'fixture-wrong-type', 'EX', 20, 'NX'), 'OK');
+        try {
+            await assert.rejects(connect(login), /business-1006-1010/);
+        } finally {
+            await redis.del(accountKey);
+        }
         await assert.rejects(current.request(1020, 1021, { uid: user.uid }), /closed|replaced|write-failed/);
         const resumed = await http('/user_login', { email:
             user.email, password:

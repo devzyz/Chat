@@ -2,7 +2,7 @@
 
 ## 被测代码与契约
 
-- 生产契约：仓库级 `proto/varify.proto`、`proto/status.proto`、`proto/chat.proto`，以及只由固定命令生成的 `generated/proto/cpp/*`。
+- 生产契约：仓库级 `proto/varify.proto`、`proto/chat.proto`，以及只由固定命令生成的 `generated/proto/cpp/*`。
 - 契约：共享 package/message/service/RPC/field wire 语义与初始 release descriptor 兼容；当前 C++ 能消费旧 Varify payload 和未知字段；C++ client 能调用真实 Node Varify service。
 
 ## 用例、依赖与隔离

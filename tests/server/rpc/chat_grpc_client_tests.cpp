@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
 #include "ChatGrpcClient.h"
-#include "StatusGrpcClient.h"
 
 #include <boost/asio.hpp>
 #include <grpcpp/grpcpp.h>
@@ -24,17 +23,6 @@ unsigned short FindUnavailableLoopbackPort() {
     acceptor.close();
     return port;
 }
-
-/** 提供确定性的 Status 登录 RPC 测试服务。 */
-class ControlledStatusService final : public message::StatusService::Service {
-public:
-    /** 回显请求 UID 并返回登录成功。 */
-    grpc::Status Login(grpc::ServerContext*, const message::LoginReq* request, message::LoginRsp* response) override {
-        response->set_error(ErrorCodes::Success);
-        response->set_uid(request->uid());
-        return grpc::Status::OK;
-    }
-};
 
 /** 提供可延时的 Chat RPC 测试服务以覆盖身份和期限。 */
 class ControlledChatService final : public message::ChatService::Service {
@@ -66,14 +54,13 @@ public:
     std::atomic<bool> delay{false};
 };
 
-/** 拥有在随机回环端口共享监听的 Status 和 Chat 服务。 */
+/** 拥有在随机回环端口共享监听的 Chat 服务。 */
 class ChatLoopbackServer {
 public:
     /** 注册测试服务并启动回环监听，绑定失败抛异常。 */
     ChatLoopbackServer() {
         grpc::ServerBuilder builder;
         builder.AddListeningPort("127.0.0.1:0", grpc::InsecureServerCredentials(), &_port);
-        builder.RegisterService(&_status);
         builder.RegisterService(&_chat);
         _server = builder.BuildAndStart();
         if (!_server || _port == 0) {
@@ -105,7 +92,6 @@ public:
 
 private:
     int _port = 0;
-    ControlledStatusService _status;
     ControlledChatService _chat;
     std::unique_ptr<grpc::Server> _server;
 };
@@ -125,14 +111,12 @@ message::AddFriendReq AddFriendRequest() {
 }
 }
 
-/** 验证生产 Status 与 Chat 客户端调用真实回环服务并保留会话身份。 */
-TEST(ChatGrpcClientIntegrationTests, StatusAndChatClientsCallDynamicLoopbackServices) {
+/** 验证生产 Chat 客户端调用真实回环服务并保留会话身份。 */
+TEST(ChatGrpcClientIntegrationTests, ChatClientCallsDynamicLoopbackService) {
     ChatLoopbackServer server;
     const rpc::ClientPolicy policy{50ms, 200ms};
-    StatusGrpcClient status("127.0.0.1", server.Port(), policy, 1);
     auto chat = MakeChatClient(server.Port(), policy);
 
-    EXPECT_EQ(status.Login(42, "synthetic-token").error(), ErrorCodes::Success);
     EXPECT_EQ(chat.NotifyOtherAddFriend("peer", AddFriendRequest()).error(), ErrorCodes::Success);
     message::KickUserReq kick;
     kick.set_uid(42);

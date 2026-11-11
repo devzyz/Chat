@@ -173,7 +173,7 @@ test('Windows builds production servers once and validates registration before a
     }
     const runner = fs.readFileSync(path.join(__dirname, '../../scripts/windows-local.ps1'), 'utf8');
     const server = runner.split('function Run-ServerTests {')[1].split('function ')[0];
-    assert.match(server, /\/t:GateServer;StatusServer;ChatServer;ResourceServer;ServerUnitTests/);
+    assert.match(server, /\/t:GateServer;ChatServer;ResourceServer;ServerUnitTests/);
     assert.match(server, /Assert-RegressionReport/);
 });
 
@@ -216,7 +216,7 @@ test('Linux retains PASS validation without the retired compatibility selector o
 test('ResourceServer participates in build, storage regression and release staging', () => {
     const windows = workflow('windows-ci.yml');
     const runner = fs.readFileSync(path.join(__dirname, '../../scripts/windows-local.ps1'), 'utf8');
-    assert.match(runner, /\/t:GateServer;StatusServer;ChatServer;ResourceServer'/);
+    assert.match(runner, /\/t:GateServer;ChatServer;ResourceServer'/);
     assert.match(runner, /\$resourceTestProject\)/);
     assert.match(runner, /server_resource_integration\.xml/);
     assert.match(runner, /Filter = 'StoreTest\.\*'/);
@@ -237,7 +237,7 @@ test('full Linux CI keeps client coverage and separately builds without Qt', () 
     const linux = workflow('linux-ci.yml');
     assert.match(linux, /-DCHAT_BUILD_CLIENT=OFF -DBUILD_TESTING=OFF/);
     assert.match(linux, /-DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE/);
-    assert.match(linux, /cmake --build out\/build\/linux-server-only --target GateServer StatusServer ChatServer/);
+    assert.match(linux, /cmake --build out\/build\/linux-server-only --target GateServer ChatServer/);
     assert.match(workflow('windows-ci.yml'), /tests\/build\/server_only_configuration\.cmake/);
 });
 

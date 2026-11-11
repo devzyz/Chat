@@ -44,7 +44,7 @@
       <SDLCheck>false</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\ChatServer\ChatServer;$(MSBuildThisFileDirectory)..\..\StatusServer\StatusServer;$(MSBuildThisFileDirectory)..\..\generated\proto\cpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\ChatServer\ChatServer;$(MSBuildThisFileDirectory)..\..\generated\proto\cpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32_WINNT=0x0601;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -63,7 +63,7 @@
     <ClCompile Include="messaging\msg_node_tests.cpp" />
     <ClCompile Include="lifecycle\asio_pool_contract_tests.cpp" />
     <ClCompile Include="logic-dispatcher\logic_dispatcher_tests.cpp" />
-    <ClCompile Include="status-routing\status_routing_unit_tests.cpp" />
+    <ClCompile Include="gate-request\gate_routing_unit_tests.cpp" />
     <ClCompile Include="transport\chat_frame_codec_tests.cpp" />
     <ClCompile Include="rpc\peer_server_routing_tests.cpp" />
     <ClCompile Include="rpc\bounded_grpc_pool_tests.cpp" />
@@ -75,21 +75,19 @@
     <ClCompile Include="..\..\ChatServer\ChatServer\Const.cpp" />
     <ClCompile Include="..\..\generated\proto\cpp\chat.pb.cc" />
     <ClCompile Include="..\..\generated\proto\cpp\chat.grpc.pb.cc" />
-    <ClCompile Include="..\..\generated\proto\cpp\status.pb.cc" />
-    <ClCompile Include="..\..\generated\proto\cpp\status.grpc.pb.cc" />
     <ClCompile Include="..\..\generated\proto\cpp\varify.pb.cc" />
     <ClCompile Include="..\..\generated\proto\cpp\varify.grpc.pb.cc" />
     <ClCompile Include="..\..\ChatServer\ChatServer\PeerServerRouting.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\GateServer\GateServer\GateRequest.vcxproj">
+      <Project>{0D4BA4D3-8B77-4BD6-A550-4E3BC4114704}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\..\ChatServer\ChatServer\ChatTransport.vcxproj">
       <Project>{4B7AD04F-6F24-45BC-BF1B-3B0400000001}</Project>
     </ProjectReference>
     <ProjectReference Include="..\..\ChatServer\ChatServer\LogicDispatcher.vcxproj">
       <Project>{B251FB8A-0C7D-4BFA-8F1B-31C75DFBDA01}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\..\StatusServer\StatusServer\StatusRouting.vcxproj">
-      <Project>{7C67B8A2-A0A4-44A0-9020-5D87915CE3E2}</Project>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

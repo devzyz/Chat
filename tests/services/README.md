@@ -31,15 +31,14 @@ The existing report writers and real business cases are retained. Missing/failed
 modified reports, wrong SHA and incomplete cleanup still fail. `phase3dEvidence.js` owns
 business evidence validation; `gate.py` owns service report validation.
 
-## Four production processes (3C-07)
+## Gate, Chat and Varify processes (3C-07)
 
-Four/five-process fixtures omit `[Mysql]` for StatusServer. The topology unit
-contract checks its absence while retaining MySQL for Chat; real routing and
-token scenarios continue to use the production Status process with Redis.
+The Gate fixture lists the discoverable Chat instances. Chat and Resource authenticate
+against Redis. The existing report identifiers are retained for historical comparison.
 
 Selector `3C-07` retains the adapter reports and adds `linux_four_process.xml`
 with eighteen `T10-4PROC` cases. The same-SHA artifact contains formal
-Gate/Status/Chat binaries and `FourProcessDriver`, with the existing dynamic
+Gate/Chat binaries and `FourProcessDriver`, with the existing dynamic
 dependency manifest verifier applied to each relocated bundle. Varify runs
 from the same checkout and locked Node dependencies; no service-job native
 rebuild or dependency restore is needed.
@@ -68,7 +67,7 @@ failure categories even when failure occurs between business test records.
 
 | IDs | Contracts |
 | --- | --- |
-| 01..05 | Fresh migration and Varify/Status/Chat/Gate protocol readiness |
+| 01..05 | Fresh migration and Varify/Gate/Chat readiness and TCP credential rejection codes |
 | 06..09 | Mailpit code, registration/login/selection, TCP authentication/private chat, durable message and stable-ID retry |
 | 10 | Occupied Gate listener rejects the second formal process |
 | 11..12 | SMTP outage failure and refreshed-port recovery |
@@ -348,7 +347,7 @@ bash scripts/linux-ci.sh --phase 3D --configuration Release --selector 3D-01
 
 `phase3d.fixture.json` fixes the logical users, server identities, seed, journey
 and deadlines. `twoServerTopology.js` namespaces physical resources by run ID,
-renders reciprocal peer RPC and Status discovery configuration, and rejects
+renders reciprocal peer RPC and Gate discovery configuration, and rejects
 missing clients, shared PID/account, or incorrect observed endpoints.
 Configuration strings contain a generated credential and must only be written
 to private run-owned files; the topology descriptor contains no credential.
@@ -369,11 +368,11 @@ message database using only deployed plugins, and must fail with SQLite removed.
 No GUI platform plugin is needed by this QCoreApplication entry point.
 
 `fiveProcessCases.js` reuses RunContext/ProcessHarness supervisors, the real
-schema migration and dependency coordinator. It runs Varify, Status, Gate,
+schema migration and dependency coordinator. It runs Varify, Gate,
 Chat A/B and two production client processes; account credentials stay in
 private run-owned configuration/control channels. It registers and logs in
 Alice before Bob, observes real Redis connection counts, checks distinct
-Status endpoints, and correlates one cross-instance message by UUID/server ID
+Gate-assigned endpoints, and correlates one cross-instance message by UUID/server ID
 and text hash in both production models and MySQL. It stops one client while
 the other remains active, then stops all owned processes and removes owned data.
 
@@ -419,7 +418,7 @@ gh workflow run ci.yml --ref <candidate-branch> -f real_acceptance=true -f refre
 分支继续提交后，先前结果不能证明新 SHA；使用运行页的 head SHA 和证据中的 source SHA 核对。
 开关默认关闭，普通提交/PR和周检不新增昂贵的首版专项。原完整 Linux 回归仍按既有规则执行。
 
-显式启用后复用当前 3D 的 MySQL、Redis、Mailpit、Gate、Status、Varify、双 Chat 和 Qt 客户端，
+显式启用后复用当前 3D 的 MySQL、Redis、Mailpit、Gate、Varify、双 Chat 和 Qt 客户端，
 增加生产 ResourceServer。四个额外账号通过真实验证码邮件注册、登录、好友申请和通过，
 完成群管理、入群边界、旧代次拒绝、离线重登、三类资源、独立私聊资源引用、备注和本地查找。
 服务端已成功而 SQLite 写入失败使用第二个真实 SQLite 连接持写锁触发，解锁后按原请求重试恢复。
@@ -445,7 +444,7 @@ node --test tests/build/ciBudget.test.js tests/services/phase3dEvidence.test.js 
 
 手动性能基线见 [performance/README.md](performance/README.md)，独立生成指标与正确性报告。
 
-The existing `T10-4PROC-06` additionally runs `sessionLifecycleCases.js` against real Gate/Status/Chat/MySQL/Redis/SMTP: purpose separation, password reset and logout revocation, stale issuance epoch rejection, and heartbeat renewal. It owns all client sockets; the parent suite removes its account, code, epoch and presence keys. This is separate from TLS and GUI loopback tests.
+The existing `T10-4PROC-06` additionally runs `sessionLifecycleCases.js` against real Gate/Chat/MySQL/Redis/SMTP: purpose separation, password reset and logout revocation, revocation epoch advancement, and heartbeat renewal. It owns all client sockets; the parent suite removes its account, code, epoch and presence keys. This is separate from TLS and GUI loopback tests.
 
 `fourProcess.test.js` uses a real loopback gRPC server to check the same RPC request helper as
 four-process acceptance. Proto3 omitted scalar success codes are decoded with defaults;

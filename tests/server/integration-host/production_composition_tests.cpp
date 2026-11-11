@@ -21,15 +21,13 @@
 namespace {
 using namespace std::chrono_literals;
 
-enum class FormalService { Gate, Status, Chat };
+enum class FormalService { Gate, Chat };
 
 /** 将正式服务枚举映射为产物名称，未知值返回诊断名称。 */
 const char* ServiceName(FormalService service) {
     switch (service) {
     case FormalService::Gate:
         return "GateServer";
-    case FormalService::Status:
-        return "StatusServer";
     case FormalService::Chat:
         return "ChatServer";
     }
@@ -98,7 +96,7 @@ void WriteText(const std::filesystem::path& path, const std::string& content) {
 }
 
 /** 生成 Gate 或 Status 的隔离配置，以本次身份填充合成凭据。 */
-void WriteGateStatusConfig(
+void WriteGateConfig(
     FormalService service,
     const std::filesystem::path& path,
     std::uint16_t port,
@@ -108,7 +106,6 @@ void WriteGateStatusConfig(
            << "\n[VarifyServer]\nHost = 127.0.0.1\nPort = 1"
            << "\n[Redis]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity
            << "\n[Mysql]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity << "\nUser = local\nSchema = local"
-           << "\n[StatusServer]\nHost = 127.0.0.1\nPort = " << (service == FormalService::Status ? port : 1)
            << "\n[ChatServers]\nName = LocalChat"
            << "\n[LocalChat]\nHost = 127.0.0.1\nPort = 1\nName = LocalChat"
            << "\n[Log]\nName = " << ServiceName(service)
@@ -128,7 +125,6 @@ void WriteChatConfig(
            << "\nPort = " << tcp_port << "\nRPCPort = " << grpc_port
            << "\n[Redis]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity
            << "\n[Mysql]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity << "\nUser = local\nSchema = local"
-           << "\n[StatusServer]\nHost = 127.0.0.1\nPort = 1"
            << "\n[PeerServer]\nServers ="
            << "\n[Log]\nName = ChatComposition\nLogDir = logs\nMaxSizeMB = 1"
            << "\nMaxTotalFiles = 2\nLevel = info\nFlushLevel = warn\n";
@@ -184,12 +180,6 @@ bool ProbeGate(std::uint16_t port) {
         }
     }
     return false;
-}
-
-/** 在限定时间内检查 Status gRPC 通道建立。 */
-bool ProbeStatus(std::uint16_t port) {
-    auto channel = grpc::CreateChannel("127.0.0.1:" + std::to_string(port), grpc::InsecureChannelCredentials());
-    return channel->WaitForConnected(std::chrono::system_clock::now() + 300ms);
 }
 
 /** 通过独占重新绑定验证正式服务已释放监听端口。 */
@@ -250,14 +240,14 @@ void ExpectReadyAndGracefulStop(FormalService service) {
     const auto reservation = context->ReserveLoopbackPort("formal-listener");
     ASSERT_TRUE(context->ReleaseLoopbackPort("formal-listener"));
     const auto config = working / "ready.ini";
-    WriteGateStatusConfig(service, config, reservation.port, context->SyntheticIdentity("credential"));
+    WriteGateConfig(service, config, reservation.port, context->SyntheticIdentity("credential"));
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
     auto process = StartFormal(*context, service, config, working);
 
     const auto ready = process->WaitReady(
         // 按正式服务类型执行对应的协议就绪探针。
         [service, port = reservation.port] {
-            return service == FormalService::Gate ? ProbeGate(port) : ProbeStatus(port);
+            return ProbeGate(port);
         },
         std::chrono::steady_clock::now() + 10s);
     ASSERT_TRUE(ready) << process->CollectEvidence().stderr_text;
@@ -324,18 +314,6 @@ TEST(T09_COMP_Formal, GateExplicitConfigWinsAndInvalidSelectionFailsClosed) {
 /** 验证正式 Gate 协议就绪、温和信号停止及端口释放。 */
 TEST(T09_COMP_Formal, GateProtocolReadyGracefulSignalAndPortReleaseAreBounded) {
     ExpectReadyAndGracefulStop(FormalService::Gate);
-}
-
-// T09-COMP-03
-/** 验证正式 Status 显式配置优先，错误选项关闭启动路径。 */
-TEST(T09_COMP_Formal, StatusExplicitConfigWinsAndInvalidSelectionFailsClosed) {
-    ExpectSelectedInvalidConfig(FormalService::Status);
-}
-
-// T09-COMP-04
-/** 验证正式 Status 协议就绪、温和信号停止及端口释放。 */
-TEST(T09_COMP_Formal, StatusProtocolReadyGracefulSignalAndPortReleaseAreBounded) {
-    ExpectReadyAndGracefulStop(FormalService::Status);
 }
 
 // T09-COMP-05

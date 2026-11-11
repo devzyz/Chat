@@ -30,7 +30,7 @@ test('loaded protobuf exposes the verification RPC request and response types', 
 // V02-PROTO-03
 // 验证协议源集中在 proto 目录且没有遗留可编辑副本。
 test('repository canonical proto module is the sole editable wire authority', () => {
-    const canonicalFiles = ['varify.proto', 'status.proto', 'chat.proto'];
+    const canonicalFiles = ['varify.proto', 'chat.proto'];
     for (const file of canonicalFiles) {
         assert.equal(
             fs.existsSync(path.join(repositoryRoot, 'proto', file)),
@@ -73,7 +73,7 @@ test('compatibility command rejects isolated descriptor drift and unregistered a
     // 清理本用例创建的临时协议目录。
     t.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
 
-    for (const file of ['varify.proto', 'status.proto', 'chat.proto']) {
+    for (const file of ['varify.proto', 'chat.proto']) {
         fs.copyFileSync(
             path.join(repositoryRoot, 'proto', file),
             path.join(temporaryRoot, file)
@@ -90,6 +90,19 @@ test('compatibility command rejects isolated descriptor drift and unregistered a
         ],
         { cwd: repositoryRoot, encoding: 'utf8', timeout: 15000 }
     );
+
+    const chatPath = path.join(temporaryRoot, 'chat.proto');
+    const originalChat = fs.readFileSync(chatPath, 'utf8');
+    fs.writeFileSync(chatPath, originalChat.replace('service ChatService', 'service RenamedChatService'));
+    const removedService = runCompatibility();
+    assert.notEqual(removedService.status, 0);
+    assert.match(removedService.stderr, /service removed or renamed: \.message\.ChatService/);
+
+    fs.writeFileSync(chatPath, originalChat.replaceAll('AddFriendReq', 'RenamedAddFriendReq'));
+    const removedMessage = runCompatibility();
+    assert.notEqual(removedMessage.status, 0);
+    assert.match(removedMessage.stderr, /message removed or renamed: \.message\.AddFriendReq/);
+    fs.writeFileSync(chatPath, originalChat);
 
     const varifyPath = path.join(temporaryRoot, 'varify.proto');
     const originalVarify = fs.readFileSync(varifyPath, 'utf8');

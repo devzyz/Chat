@@ -142,7 +142,7 @@ write_runtime_evidence() {
     "  \"node\": \"${node_version}\"," \
     "  \"vcpkg_baseline\": \"${vcpkg_commit}\"," \
     '  "triplet": "x64-linux-chat-release",' \
-    '  "targets": ["GateServer", "StatusServer", "ChatServer", "chat_network_core", "chat_message_model", "chat_session_core", "chat_protocol_cpp"],' \
+    '  "targets": ["GateServer", "ChatServer", "chat_network_core", "chat_message_model", "chat_session_core", "chat_protocol_cpp"],' \
     "  \"diagnostic\": \"${diagnostic}\"" \
     '}' > "$evidence_path"
 }
@@ -415,7 +415,7 @@ case "$selector" in
     cmake --preset linux-x64-release
     current_step="cmake-compile-link"
     cmake --build --preset linux-x64-release --target \
-      GateServer StatusServer ChatServer \
+      GateServer ChatServer \
       chat_network_core chat_message_model chat_session_core chat_protocol_cpp
 
     current_step="varify-npm-ci"
@@ -424,7 +424,6 @@ case "$selector" in
     current_step="loader-startup"
     binary_root="$repo_root/out/build/linux-x64-release/bin"
     run_cpp_startup_probe GateServer "$binary_root/GateServer"
-    run_cpp_startup_probe StatusServer "$binary_root/StatusServer"
     run_cpp_startup_probe ChatServer "$binary_root/ChatServer"
     run_varify_startup_probe
 

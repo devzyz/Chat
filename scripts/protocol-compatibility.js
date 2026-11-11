@@ -39,7 +39,11 @@ function resolvePinnedTool(relativePath) {
 
 const protoc = resolvePinnedTool(path.join('tools', 'protobuf', 'protoc.exe'));
 const grpcCppPlugin = resolvePinnedTool(path.join('tools', 'grpc', 'grpc_cpp_plugin.exe'));
-const canonicalFiles = ['varify.proto', 'status.proto', 'chat.proto'];
+const canonicalFiles = ['varify.proto', 'chat.proto'];
+// 首版描述符保持原样；仅允许下列已退役的内部接口从当前协议消失。
+const retiredStatusMessages = new Set([
+    '.message.GetChatServerReq', '.message.GetChatServerRsp', '.message.LoginReq', '.message.LoginRsp'
+]);
 const initialReleaseProtoBlob = 'a8a34ebd17d5378376cf611762e5943a4c1bff45';
 // 从权威协议源名生成应有的 C++ 消息与 gRPC 文件名。
 const generatedFiles = canonicalFiles.flatMap((file) => {
@@ -393,6 +397,7 @@ function numberIsReserved(message, number) {
 function compareCompatibilityModels(baseline, current) {
     for (const [messageName, oldMessage] of baseline.messages) {
         const newMessage = current.messages.get(messageName);
+        if (!newMessage && retiredStatusMessages.has(messageName)) continue;
         if (!newMessage) {
             fail(`message removed or renamed: ${messageName}`);
         }
@@ -420,6 +425,7 @@ function compareCompatibilityModels(baseline, current) {
 
     for (const [serviceName, oldMethods] of baseline.services) {
         const newMethods = current.services.get(serviceName);
+        if (!newMethods && serviceName === '.message.StatusService') continue;
         if (!newMethods) {
             fail(`service removed or renamed: ${serviceName}`);
         }

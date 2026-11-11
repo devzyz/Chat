@@ -195,7 +195,7 @@ jobs:
             -DCHAT_BUILD_CLIENT=OFF -DBUILD_TESTING=OFF \
             -DVCPKG_MANIFEST_INSTALL=OFF \
             -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_Qt5=TRUE
-          cmake --build out/build/linux-server-only --target GateServer StatusServer ChatServer --parallel 2
+          cmake --build out/build/linux-server-only --target GateServer ChatServer --parallel 2
 
       - name: Verify shared production targets and ProcessHarness
         run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-01

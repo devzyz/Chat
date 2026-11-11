@@ -13,7 +13,7 @@ ChatServer 的 TCP Session 由 `CServer` 持有，`CSession` 在独立 strand �
 停机等待 accept、Session 的在途 I/O 与绑定完成，再排空生命周期任务，最后停 I/O 和依赖。
 
 
-Chat 是由 Qt 桌面客户端和多个独立服务组成的分布式聊天项目。当前 Windows 发布基线包含 GateServer、StatusServer、ChatServer、ResourceServer、VarifyServer 和 Qt 客户端；Server 之间通过 HTTP/TCP、gRPC、Redis 和 MySQL 协作。
+Chat 是由 Qt 桌面客户端和多个独立服务组成的分布式聊天项目。当前 Windows 发布基线包含 GateServer、ChatServer、ResourceServer、VarifyServer 和 Qt 客户端；Server 之间通过 HTTP/TCP、gRPC、Redis 和 MySQL 协作。
 
 ```text
 Qt Client
@@ -21,9 +21,7 @@ Qt Client
   v
 GateServer ------gRPC------> VarifyServer
   |                           | Redis / SMTP
-  | gRPC
-  v
-StatusServer --------Redis
+  | Redis：实例租约、负载、凭据
   |
   | 返回 ChatServer endpoint/token
   v
@@ -32,36 +30,32 @@ ChatServer instance A <---gRPC---> ChatServer instance B ... N
   +-------------- Qt Client ----------+
 
 Qt Client ------HTTP------> ResourceServer
-                              | gRPC -> StatusServer
+                              | Redis：校验当前凭据
                               | MySQL metadata / filesystem bytes
 ```
 
-图示生产通信主路径；Gate/Chat 的数据访问也使用 MySQL/Redis。Status 当前选服与 Token 路径使用 Redis，
-旧 MySQL DAO、链接和必填配置已移除。图不代表所有链路已完成当前版本的真实依赖验收；
-Linux 根构建默认包含 Gate/Status/Chat，`CHAT_BUILD_ACCEPTANCE_RESOURCES=ON` 增加生产 ResourceServer
+图示生产通信主路径；Gate/Chat 的数据访问也使用 MySQL/Redis。Gate 根据 Redis 中的实例租约和连接数选服并签发凭据。
+Linux 根构建默认包含 Gate/Chat，`CHAT_BUILD_ACCEPTANCE_RESOURCES=ON` 增加生产 ResourceServer
 及资源验收目标。统一可分发包仍以 Windows 为基线。
 
 ## 发布单元
 
-1. GateServer、StatusServer、ChatServer、ResourceServer 和 VarifyServer MUST 视为独立发布单元。
+1. GateServer、ChatServer、ResourceServer 和 VarifyServer MUST 视为独立发布单元。
 2. 每个发布单元 MUST 携带自身运行所需的配置、DLL 或 `node_modules`，不得依赖另一个服务的输出目录。
 3. Qt 客户端 MUST 作为独立目录发布，并由 `windeployqt` 补齐 Qt 和编译器运行时。
 4. 服务 MUST NOT 依赖目标机器的全局第三方 DLL。
-5. `ResourceServer` 与其余三个 C++ Server 一同通过 `scripts/windows-local.ps1` 构建；Windows CI 运行资源存储合同并生成独立 ZIP，发布组装和包启动冒烟必须包含该服务。数据库、视频和跨服务资源业务集成仍使用独立入口，其证据不由存储合同替代。
+5. `ResourceServer` 与其余两个 C++ Server 一同通过 `scripts/windows-local.ps1` 构建；Windows CI 运行资源存储合同并生成独立 ZIP，发布组装和包启动冒烟必须包含该服务。数据库、视频和跨服务资源业务集成仍使用独立入口，其证据不由存储合同替代。
 
 ## 服务职责
 
 ### GateServer
 
 - 负责面向客户端的 HTTP 入口、注册、登录、密码相关流程和服务发现协作。
-- MAY 调用 StatusServer 和 VarifyServer 的公开 gRPC 接口。
+- MAY 调用 VarifyServer 的公开 gRPC 接口。
 - MUST NOT 承担长连接聊天会话和跨 ChatServer 消息路由。
 
-### StatusServer
-
-- 负责 ChatServer 选择、登录 Token/Session 校验所需的状态服务。
-- MUST 通过明确配置识别可用 ChatServer；选择策略属于 StatusServer，不得散落到 GateServer。
-- MUST NOT 直接拥有客户端 TCP 聊天会话。
+- Gate 读取配置的 ChatServer 列表并选择有租约、有效连接数最少的实例；同负载按名称排序。
+- Gate 原子校验撤销代次并发布有期限的登录凭据。Chat 与 Resource 直接从 Redis 校验当前凭据。
 
 ### ChatServer
 
@@ -96,7 +90,7 @@ Linux 根构建默认包含 Gate/Status/Chat，`CHAT_BUILD_ACCEPTANCE_RESOURCES=
 ## 多实例规则
 
 - 所有 ChatServer 实例共享同一二进制，但 MUST 使用唯一的 `SelfServer.Name`、TCP Port、RPC Port、`Log.Name` 和工作目录。
-- Peer 和 StatusServer 实例列表当前手工维护；修改实例集合时 MUST 同步所有相关配置。
+- Peer 和 Gate 的候选实例列表当前手工维护；修改实例集合时 MUST 同步所有相关配置。
 - 实例之间 MUST NOT 通过共享工作目录交换文件。
 - 用户到实例的映射、登录计数等共享状态可通过 Redis 维护，但 key 语义 MUST 在 [Protocol.md](Protocol.md) 的规则下演进。
 - 本地端口绑定失败和无效配置 MUST 在实例登记共享状态前失败。
