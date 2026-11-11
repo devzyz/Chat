@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const fixture = require('./phase3d.fixture.json');
 
-const portNames = ['gate', 'status', 'varify', 'chatA', 'rpcA', 'chatB', 'rpcB'];
+const portNames = ['gate', 'varify', 'chatA', 'rpcA', 'chatB', 'rpcB'];
 
 /** 校验运行身份和独立端口，生成双 Chat 实例及测试用户的隔离拓扑。 */
 function createTopology(runId, ports) {
@@ -25,7 +25,7 @@ function createTopology(runId, ports) {
 
 /** 按角色生成生产 INI，拒绝非法凭据、路径及重叠依赖端口。 */
 function nativeConfig(topology, role, dependencies, logDirectory) {
-    assert.ok(['GateServer', 'StatusServer', 'ChatA', 'ChatB'].includes(role));
+    assert.ok(['GateServer', 'ChatA', 'ChatB'].includes(role));
     // Only a run-generated credential and single-line owned path can enter INI.
     assert.match(dependencies.password, /^[a-f0-9]{64}$/);
     for (const key of ['redis', 'mysql']) {
@@ -40,9 +40,8 @@ function nativeConfig(topology, role, dependencies, logDirectory) {
         // 把已校验的单个键值编码为配置行。
         ([key, value]) => `${key}=${value}\n`).join('');
     let result = section('Redis', { Host: topology.host, Port: dependencies.redis, Password: dependencies.password }) +
-        (role === 'StatusServer' ? '' : section('Mysql', { Host: topology.host, Port: dependencies.mysql, User: 'root',
-            Password: dependencies.password, Schema: topology.database })) +
-        section('StatusServer', { Host: topology.host, Port: topology.ports.status }) +
+        section('Mysql', { Host: topology.host, Port: dependencies.mysql, User: 'root',
+            Password: dependencies.password, Schema: topology.database }) +
         section('Log', { Name: role, LogDir: logDirectory, MaxSizeMB: 1, MaxTotalFiles: 2, Level: 'warn', FlushLevel: 'warn' });
     if (role === 'ChatA' || role === 'ChatB') {
         const index = role === 'ChatA' ? 0 : 1;

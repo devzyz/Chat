@@ -18,7 +18,7 @@ function(chat_register_linux_preflight_contract)
     if(NOT CHAT_LINUX_PRODUCTION_TARGETS_READY)
         message(FATAL_ERROR
             "LINUX_PREFLIGHT_BLOCKED: production target registry is incomplete; "
-            "GateServer, StatusServer, ChatServer, Qt modules, canonical proto, and Varify startup proof are required")
+            "GateServer, ChatServer, Qt modules, canonical proto, and Varify startup proof are required")
     endif()
 
     foreach(required_target IN LISTS CHAT_LINUX_EXPECTED_TARGETS)

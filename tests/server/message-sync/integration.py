@@ -1,6 +1,6 @@
 """Isolated MySQL + production persistence and TCP incremental-sync contracts.
 
-Reuses the existing Redis/Status fixtures; never connects to a personal database.
+Reuses the existing Redis fixtures; never connects to a personal database.
 """
 import os
 import pathlib
@@ -31,16 +31,11 @@ def tcp_flow(directory, mysql_command, mysql_port):
     thread.start()
     processes, sockets, logs = [], [], []
     try:
-        status = subprocess.Popen([str(ROOT / "build/resource/ResourceTests.exe"), "--serve-status-fixture"],
-            stdout=subprocess.PIPE, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        processes.append(status)
-        status_port = int(process_line(status))
         tcp_ports = [port(), port()]
         rpc_ports = [port(), port()]
         for index in range(2):
             config = directory / f"chat-{index}.ini"
             config.write_text(f"[SelfServer]\nName=sync-{index}\nHost=127.0.0.1\nPort={tcp_ports[index]}\nRPCPort={rpc_ports[index]}\n"
-                f"[StatusServer]\nHost=127.0.0.1\nPort={status_port}\n"
                 f"[Redis]\nHost=127.0.0.1\nPort={redis.server_address[1]}\nPassword=fixture\n"
                 f"[PeerServer]\nServers=Peer\n[Peer]\nName=sync-{1-index}\nHost=127.0.0.1\nPort={rpc_ports[1-index]}\n"
                 f"[Mysql]\nHost=127.0.0.1\nPort={mysql_port}\nUser=root\nPassword=\nSchema=message_sync_test\n"

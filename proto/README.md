@@ -5,7 +5,7 @@ The three editable protobuf authorities are split by owning service:
 | Source | Owner and consumers |
 | --- | --- |
 | `varify.proto` | Varify owns; Gate C++ and Varify Node consume |
-| `status.proto` | Status owns; Gate, Status, Chat, and Resource C++ consume |
+| `status.proto` | Archived internal service contract; retained for descriptor and generated snapshot checks only |
 | `chat.proto` | Chat owns; Chat C++ alone consumes |
 
 All files retain `package message` and the migration-preexisting service, RPC,
@@ -58,8 +58,7 @@ not a delivery/read acknowledgement. Existing fields and RPCs are unchanged. See
 [message state protocol](../docs/MessageStates.md#回执与同步).
 
 `varify.proto` adds `GetVarifyReq.purpose` (field 2): empty means registration;
-`reset_password` uses an independent code namespace. `status.proto` adds
-`GetChatServerReq.auth_version` (field 2): Status atomically compares the current
-revocation epoch before issuing a token. These additive fields preserve the wire
-schema but require coordinated Gate/Status/Chat/Varify/client deployment for the
-new authentication contract; see [Protocol](../docs/Protocol.md).
+`reset_password` uses an independent code namespace. The archived `status.proto`
+retains `GetChatServerReq.auth_version` at field 2 for descriptor compatibility.
+Gate now compares the revocation epoch and writes the expiring token in one Redis
+operation. Chat and Resource check that token directly. See the [authentication contract](../docs/Protocol.md).

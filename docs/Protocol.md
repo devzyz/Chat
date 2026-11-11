@@ -47,14 +47,14 @@ ResourceServer HTTP、头像权限、用户目录和资源消息合同见 [Resou
 - 新字段 SHOULD 为可选兼容扩展，并定义旧客户端未发送时的默认行为。
 - 命名使用清晰的 PascalCase message/service 和 lower_snake_case 字段。
 - 不得用数据库表的内部列顺序决定 proto 字段设计。
-- proto 修改 MUST 核对全部消费者并同步生成结果；GateServer、StatusServer、ChatServer、ResourceServer 和 VarifyServer 按 [proto README](../proto/README.md) 消费共享权威源，禁止创建服务内协议副本或只更新单个消费者。
+- proto 修改 MUST 核对全部消费者并同步生成结果；GateServer、ChatServer、ResourceServer 和 VarifyServer 按 [proto README](../proto/README.md) 消费共享权威源，禁止创建服务内协议副本或只更新单个消费者。
 - 生成的 `.pb.cc/.pb.h`、`.grpc.pb.cc/.grpc.pb.h` MUST 由固定工具链生成，不得手工修改。
 - 生成结果和 proto 变更 SHOULD 在同一提交中完成，便于审核来源一致性。
 
 ## gRPC
 
 - 每个 RPC MUST 定义成功、业务失败、依赖失败、超时和远端不可用的行为。
-- 客户端调用 MUST 设置有限 deadline。当前生产默认值为：连接池借用 1000 ms、Status/Chat RPC 3000 ms、Varify RPC 15000 ms；配置值必须为 100..60000 ms 的正整数。
+- 客户端调用 MUST 设置有限 deadline。当前生产默认值为：连接池借用 1000 ms、Chat RPC 3000 ms、Varify RPC 15000 ms；配置值必须为 100..60000 ms 的正整数。
 - callback 或 completion MUST 只完成一次。
 - 服务启动 MUST 检查 `BuildAndStart()` 或 `bindAsync` 的结果，端口绑定失败不得报告 ready。
 - 连接池 MUST 遵循 [Concurrency.md](Concurrency.md) 的借用、归还和关闭规则。
@@ -63,6 +63,8 @@ ResourceServer HTTP、头像权限、用户目录和资源消息合同见 [Resou
 - 连接池耗尽、连接池关闭、deadline exceeded、unavailable 与 cancelled 在内部保留稳定分类；当前公开兼容行为统一映射为 `RPCFailed`，且不自动重试。
 
 ## ChatServer TCP
+
+TCP 登录初验按 UID、凭据顺序检查。UID 非正、Redis 记录缺失或 HGET 失败返回 `1010`；有效 UID 携带空凭据或凭据不匹配返回 `1011`。Redis 故障另外写入内部日志。初验通过后，绑定会话时再次原子核验凭据。
 
 ChatServer 的 Linux TCP 监听器在 bind 前启用 SO_REUSEADDR，使旧会话主动关闭后可以立即重启或接管
 已释放的监听端口；不启用 SO_REUSEPORT，已有存活监听器仍必须使新绑定失败。Windows 保留原有
@@ -233,18 +235,18 @@ periodic authoritative synchronization and is sent only to a session that negoti
 缺失视为已退出，旧凭据不能删除新登录，返回 `1011`；依赖失败返回错误，客户端保留账号供重试。
 改密先在账号级 MySQL 咨询锁内提升认证代次、撤销旧 Token，再写密码；撤销失败不改密码，
 密码写入失败则保守地保持撤销。登录在同一账号锁内校验口令并完成选服。
-`GetChatServerReq.auth_version` 与 Redis 中的认证代次不匹配时禁止发布 Token，阻止迟到 RPC 恢复旧认证。
+Gate 签发时原子比较认证代次，代次已变化时拒绝写入。
 
 Token 是 24 小时空闲租约：当前 Chat 会话的业务请求、心跳及推送接收校验原子核对绑定 Token 后续期。
 改密、退出、替换登录后，旧连接下一次收发校验失败并关闭；已开始的事务和已写出的字节不承诺撤回。
-资源请求继续经 Status 校验。强制终止客户端不能保证发送退出请求，凭据最终由撤销或空闲到期失效。
+Resource 直接从 Redis 校验请求凭据。强制终止客户端不能保证发送退出请求，凭据最终由撤销或空闲到期失效。
 暂时断线使用原 Token 和原端点，按 1/2/4/8/16 秒退避最多五次，每次认证十秒超时；
 恢复时保留当前页面、草稿和原消息 UUID。被踢、凭据失效和主动退出不触发自动重连。
 客户端每十秒发送心跳，首个未确认心跳启动三十秒回复期限，后续发送不延长期限。
 仅当前认证连接中数值类型且等于零的 `error` 回复解除期限；超时进入同一有限重连流程。
 退出、被踢及账号重置取消心跳期限，退出撤销失败且连接仍认证时恢复心跳。
 
-升级需同时部署 Gate、Status、Chat、Varify 与客户端：新增 protobuf 字段保持线格式兼容，
+原认证协议升级需同时部署 Gate、Chat、Varify 与客户端：新增 protobuf 字段保持线格式兼容，
 但旧 Gate 不传认证代次、旧客户端不传重置用途，不能满足新认证行为合同。部署前断开旧会话。
 
 ## Qt 验证码表单

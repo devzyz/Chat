@@ -1,6 +1,6 @@
 # Chat
 
-This repository contains a Qt chat client and the GateServer, StatusServer,
+This repository contains a Qt chat client and the GateServer,
 ChatServer, ResourceServer and VarifyServer services.
 
 ## Current status and development
@@ -39,7 +39,7 @@ Each instance configuration must have a unique `[SelfServer].Name` and
 `[Log].Name`; every TCP/RPC listener port must also be unique across all managed
 instances. The management
 script also gives every instance a separate working directory, so relative
-`LogDir` values do not cause log files to overlap. Peer and StatusServer entries
+`LogDir` values do not cause log files to overlap. Peer and Gate discovery entries
 are maintained manually for now. A temporarily unavailable peer does not block
 startup; invalid local configuration or a local port bind failure does.
 

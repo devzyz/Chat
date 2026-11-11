@@ -1,5 +1,10 @@
 # 当前自动测试合同矩阵
 
+### Status 进程退役后的合同归属
+
+T08-STATUS 的选服与签发用例已迁入 Gate 的 gate_routing 单元和组件测试。凭据初验归属 Chat TCP 和 Resource HTTP 鉴权。T09-SGRPC、T09-COMP-03/04、Status 启动及专属 RPC 池用例随进程退役，下面阶段记录保留原始编号。当前报告组以 [windows-local.ps1](../scripts/windows-local.ps1) 为准。T10-4PROC 的 TCP 初验和 Redis 中断用例校验有效 UID 的空凭据或错误凭据返回 1011，缺失 UID 记录或 Redis 读取失败返回 1010。
+
+
 > CI 精简后的执行范围以 [CI-GOVERNANCE](CI-GOVERNANCE.md) 为准。
 > 业务 Test ID 和覆盖说明保留；旧 R-00 审批/版本占用、跨 workflow admission、N-1 bootstrap 发布阻断已退出当前 CI。
 > 发布测试通过 unittest 自动发现，不再维护独立的 release-reports.json 数量账本。
@@ -116,10 +121,9 @@ branch protection 在该记录时仍需由 3A-06/实际 GitHub check 证明；�
 
 | Suite | 主要合同 | Level | Report |
 | --- | --- | --- | --- |
-| Server unit | config、codec、dispatcher、Status selection、连接池与消息/回执规则 | Unit | `server_unit.xml` |
+| Server unit | config、codec、dispatcher、Gate 选服、连接池与消息/回执规则 | Unit | `server_unit.xml` |
 | Gate Asio | Gate 生命周期 | Unit | `server_gate_unit.xml` |
-| Status Asio | Status 生命周期 | Unit | `server_status_unit.xml` |
-| Server component | session、Gate request/response、Status store、Redis 回复 | Component | `server_component.xml` |
+| Server component | session、Gate 请求、响应与凭据签发、Redis 回复 | Component | `server_component.xml` |
 | Server integration | CLI/config/ready/stop、loopback transport、process harness、production composition | Integration | `server_integration.xml` |
 | Chat gRPC | 生产客户端与动态 loopback | Integration | `server_chat_grpc_integration.xml` |
 | Resource storage | 临时文件、续传、摘要和路径验证 | Integration | `server_resource_integration.xml` |
@@ -233,10 +237,9 @@ Domain/Level：Architecture / Unit。
 | T08-LOGIC-06 | `ClosedDispatcherRejectsImmediatelyAndRepeatedStopIsIdempotent` | 关闭后立即 `Closed`，重复 Stop 幂等 |
 | T08-LOGIC-07 | `UnknownIdDoesNotBlockValidMessageAndLogOmitsBody` | 未知 ID 不阻断后续有效消息且日志不含 body |
 
-### 3.7 Status routing/token（14）
+### 3.7 Gate 选服与签发（8 项单元、3 项组件）
 
-Interface：production `StatusRouting::Assign/Validate`；`StatusServiceImpl` 只 shape 现有 proto reply。
-Domain/Level：Business/Architecture；01..07/14 为 Unit，08..13 为 Component。
+当前入口为 `GateRouting::Assign`。沿用 T08-STATUS 编号，01..07 和 14 为 Unit，08..10 为 Component。11..13 是原 Status 校验用例；现由 Chat TCP 登录和 Resource HTTP 鉴权覆盖。
 报告：Unit 写入 `server_unit.xml`，Component 写入 `server_component.xml`；无真实 Redis。
 
 | Test ID | Runner testcase | 合同 |
@@ -245,9 +248,9 @@ Domain/Level：Business/Architecture；01..07/14 为 Unit，08..13 为 Component
 | T08-STATUS-08 | `SuccessfulStoreProducesCompleteAssignment` | token 成功持久化后才返回完整 assignment |
 | T08-STATUS-09 | `StoreFalseFailsClosedAndClearsAssignment` | store false 映射 `RPCFailed` 并清空公开字段 |
 | T08-STATUS-10 | `StoreExceptionUsesStableFailClosedEnvelope` | store exception 使用同一 fail-closed envelope |
-| T08-STATUS-11 | `MissingUidIsDistinctFromMismatch` | UID 不存在映射 `UidInvalid` |
-| T08-STATUS-12 | `TokenMismatchIsRejected` | Token 不匹配映射 `TokenInvalid` |
-| T08-STATUS-13 | `MatchingTokenSucceeds` | Token 匹配返回成功 UID/token |
+| T08-STATUS-11 | 原 `MissingUidIsDistinctFromMismatch` | UID 不存在映射 `UidInvalid` |
+| T08-STATUS-12 | 原 `TokenMismatchIsRejected` | Token 不匹配映射 `TokenInvalid` |
+| T08-STATUS-13 | 原 `MatchingTokenSucceeds` | Token 匹配返回成功 UID/token |
 | T08-STATUS-14 | `ConcurrentSelectionIsDeterministic` | barrier 并发选择确定且无 container-order 依赖 |
 
 ### 3.8 Chat Session lifecycle (11 Component + 13 Integration)
@@ -356,7 +359,7 @@ Domain/Level：Architecture / Integration。
 | --- | --- | --- |
 | T05-GRPC-02 | `CrossLanguageProtocolTests.CppClientCallsNodeVarifyOnDynamicLoopbackPort` | `127.0.0.1:0` 动态端口、2 秒 client deadline、所有结果清理 Node process/server/pipe |
 
-### 3.16 Gate/Status startup process（21）
+### 3.16 启动进程（当前 Gate 11 项，原 Status 10 项已退役）
 
 Interface：真实 Gate/Status EXE 的 CLI/config 优先级、fail-fast、本地协议 ready、bind/start 失败和 Windows 等价 graceful stop。
 Domain/Level：Architecture / Integration。
@@ -417,7 +420,7 @@ Domain/Level：Architecture/Business / Integration。
 | T09-GHTTP-06 | `FragmentedMaximumBodyIsAcceptedExactlyOnce` | 分片的精确 8 KiB body 被 production Beast parser 接受一次 |
 | T09-GHTTP-07 | `OverLimitMalformedAndInterruptedRequestsNeverDispatch` | max+1、畸形与中断请求 fail closed 且不进入业务 dispatch |
 
-### 3.20 Status gRPC transport（12）
+### 3.20 Status gRPC transport（历史 12 项，已退役）
 
 Interface：generated `StatusService::Stub` 经 shared `StatusTransport.vcxproj` 调用 production `StatusServiceImpl` 与 Phase 3A `StatusRouting`。
 Domain/Level：Architecture/Business / Integration。
@@ -463,7 +466,7 @@ Domain/Level：Architecture / Integration。
 | T09-CTCP-15 | `T09_CTCP_Stream.StopCancelsPendingAcceptAndReleasesThePort` | stop 取消 pending accept，主动关闭真实连接后立即重绑定；Linux 与 T09-CTCP-14 一同接入 phase3d-chat-rebind，仍拒绝抢占存活监听器 |
 | T09-CTCP-16 | `T09_CTCP_Stream.StopReleasesSessionsThreadsSocketsAndServerOwnership` | stop 完整释放 session/thread/socket/server/port ownership |
 
-### 3.22 Formal production composition（6 actual；2 planned-only）
+### 3.22 Formal production composition（当前执行 01、02、05、06；03、04 随 Status 退役）
 
 Interface：GateServer、StatusServer、ChatServer formal EXE 经 production CLI/config、shared transport target 与 Phase 3A business target 的真实 composition root。
 Domain/Level：Architecture / Integration。
@@ -858,7 +861,7 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 | S05-RESOURCE-13 | 同上 / test_keep_alive_and_authentication | Keep-Alive 与鉴权 |
 | S05-RESOURCE-14 | catalog_tests.cpp / CommitRetryMembershipAndDownloadAuthorization | 临时 MySQL 消息幂等与参与者权限 |
 | S05-RESOURCE-15 | 同上 / AvatarPublicationIsOwnedPersistentAndSeparateFromMessages | 头像归属、持久引用与附件授权隔离 |
-| S05-RESOURCE-16 | chat_flow_integration.py | 生产 Resource/双 Chat、真实 MySQL，头像重启恢复、跨实例附件及历史；Status/Redis 为替身 |
+| S05-RESOURCE-16 | chat_flow_integration.py | 生产 Resource/双 Chat、真实 MySQL，头像重启恢复、跨实例附件及历史；Redis 为替身 |
 | S05-RESOURCE-17 | schema_upgrade.js | 真实受管 schema 2→4、旧用户/消息保留、重复应用及资源表漂移拒绝 |
 
 ## 8. 矩阵维护规则
@@ -873,7 +876,7 @@ E2E; actual accepted status belongs to the main workspace's `docs/Status.md`.
 
 Q05-STORE-01..07 are mapped in [message-storage](../chat/tests/message-storage/README.md), aggregated as one component CTest case. Current report groups and counts are owned by `scripts/windows-local.ps1`.
 
-S06-SYNC-01..05 are opt-in real MySQL / production ChatServer / Qt-SQLite contracts in [message-sync](server/message-sync/README.md), outside that aggregate. Local conflict rollback, original-ID retry, ordered commit/cursor behavior and process restart are covered; production Status/Redis and full GUI workflows are not claimed.
+S06-SYNC-01..05 are opt-in real MySQL / production ChatServer / Qt-SQLite contracts in [message-sync](server/message-sync/README.md), outside that aggregate. Local conflict rollback, original-ID retry, ordered commit/cursor behavior and process restart are covered; production Redis and full GUI workflows are not claimed.
 
 Session FSM contracts remain part of their owning Server/Qt suites. Registration and report integrity are checked by the public runner; execution evidence belongs to [Status](../docs/Status.md).
 

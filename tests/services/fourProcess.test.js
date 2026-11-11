@@ -142,14 +142,14 @@ test('four-process RPC preserves omitted proto3 success and explicit rejection c
     const requireVarify = createRequire(path.resolve(__dirname, '../../VarifyServer/package.json'));
     const grpc = requireVarify('@grpc/grpc-js');
     const loader = requireVarify('@grpc/proto-loader');
-    const definition = grpc.loadPackageDefinition(loader.loadSync(path.resolve(__dirname, '../../proto/status.proto')));
+    const definition = grpc.loadPackageDefinition(loader.loadSync(path.resolve(__dirname, '../../proto/varify.proto')));
     const { rpcRequest } = require('./fourProcessCases');
     const server = new grpc.Server();
-    server.addService(definition.message.StatusService.service, {
+    server.addService(definition.message.VarifyService.service, {
         /** 省略 error 字段模拟 C++ proto3 零值编码，其他分支保留明确业务错误。 */
-        login(call, callback) {
-            if (call.request.uid === 1) callback(null, { uid: 1 });
-            else if (call.request.uid === 2) callback(null, { error: 1011 });
+        getVarifyCode(call, callback) {
+            if (call.request.email === 'one') callback(null, {});
+            else if (call.request.email === 'two') callback(null, { error: 1011 });
             else callback({ code: grpc.status.UNAVAILABLE, message: 'fixture unavailable' });
         }
     });
@@ -160,9 +160,12 @@ test('four-process RPC preserves omitted proto3 success and explicit rejection c
                 // 将真实绑定结果返回测试。
                 (error, bound) => error ? reject(error) : resolve(bound));
         });
-        assert.equal((await rpcRequest(port, 'StatusService', 'Login', { uid: 1 })).error, 0);
-        assert.equal((await rpcRequest(port, 'StatusService', 'Login', { uid: 2 })).error, 1011);
-        await assert.rejects(rpcRequest(port, 'StatusService', 'Login', { uid: 3 }),
+        assert.equal((await rpcRequest(port, 'VarifyService', 'GetVarifyCode', { email:
+            'one' })).error, 0);
+        assert.equal((await rpcRequest(port, 'VarifyService', 'GetVarifyCode', { email:
+            'two' })).error, 1011);
+        await assert.rejects(rpcRequest(port, 'VarifyService', 'GetVarifyCode', { email:
+            'three' }),
             // 传输失败不能被解释成零值成功。
             error => error.code === grpc.status.UNAVAILABLE);
     } finally { server.forceShutdown(); }

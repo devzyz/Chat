@@ -26,8 +26,6 @@
     <ClCompile Include="../../../ChatServer/ChatServer/MySqlMessageCommitAdapter.cpp" />
     <ClCompile Include="../../../ChatServer/ChatServer/ConfigMgr.cpp" />
     <ClCompile Include="../../../ChatServer/ChatServer/Const.cpp" />
-    <ClCompile Include="..\..\..\generated\proto\cpp\status.pb.cc" />
-    <ClCompile Include="..\..\..\generated\proto\cpp\status.grpc.pb.cc" />
     <ClCompile Include="..\..\..\ResourceServer\ResourceServer\ResourceServer\ResourceStore.cpp" />
     <ClCompile Include="..\..\..\ResourceServer\ResourceServer\ResourceServer\ResourceHttpServer.cpp" />
   </ItemGroup>

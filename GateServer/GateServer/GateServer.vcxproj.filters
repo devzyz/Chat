@@ -33,12 +33,6 @@
     <ClCompile Include="VerifyGrpcClient.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="$(ProtocolGeneratedDir)\status.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="$(ProtocolGeneratedDir)\status.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="$(ProtocolGeneratedDir)\varify.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -58,9 +52,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="MysqlMgr.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="StatusGrpcClient.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="LogMgr.cpp">
@@ -89,12 +80,6 @@
     <ClInclude Include="VerifyGrpcClient.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="$(ProtocolGeneratedDir)\status.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="$(ProtocolGeneratedDir)\status.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="$(ProtocolGeneratedDir)\varify.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -114,9 +99,6 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="MysqlMgr.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="StatusGrpcClient.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="LogMgr.h">

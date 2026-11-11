@@ -2,15 +2,15 @@
 
 本模块提供头像、图片、视频和普通附件的字节流传输。Qt 文件按钮选择文件，上传后通过现有
 Chat TCP 和跨服 gRPC 通道发送资源描述。图片在消息列表展示；视频下载后双击由系统播放器打开。
-不新增播放器、对象存储或 Redis。头像校验直接使用现有依赖树的 zlib，根 manifest 显式声明它。
+资源字节存储在本地文件系统，登录凭据从共享 Redis 读取。头像校验直接使用现有依赖树的 zlib，根 manifest 显式声明它。
 头像发布、安装目录用户隔离和兼容合同见 [Resources](../docs/Resources.md)。
 
 ## 存储与复用
 
 - `common/asio/IOServicePool.h` 是三个现有 Server 和资源服务共用的线程池实现；服务原接口保留。
-- 资源服务沿用 Boost.PropertyTree INI、spdlog 轮转日志、Status `Login` 鉴权。
+- 资源服务沿用 Boost.PropertyTree INI、spdlog 轮转日志、Redis 当前凭据鉴权。
 - `common/resource/ResourceCatalog.h` 使用 `common/mysql/ConnectionPool.h` 的有界 MySQL 池和 RAII 租约，
-  借出前检查连接，归还时清理事务；Status RPC 另使用 `common/grpc/GrpcClientRuntime.h` 的有界 stub 池。
+  借出前检查连接，归还时清理事务；凭据查询使用 common/redis/RedisPool.h 的有界连接池。
 - 上传任务元数据以 JSON 伴随文件保存，`.part` 实际长度是续传偏移；完成时校验 SHA-256 和媒体签名，
   重命名为不可变 `.data`。已完成资源与消息引用保存在 MySQL。
 - 一个存储执行线程处理磁盘/摘要/数据库操作；网络上下文保持响应。最多 32 个连接，文件读写块为 64 KiB，
@@ -59,7 +59,7 @@ Chat TCP 和跨服 gRPC 通道发送资源描述。图片在消息列表展示�
 ## 本地运行
 
 1. 按 [Data 的迁移入口](../docs/Data.md#operational-entry) 应用 manifest 中全部待执行迁移。当前二进制校验完整业务结构，不能只应用资源表 migration 003；目标版本以 manifest 为准。升级前备份并停止写入，迁移后更新全部 Gate/Chat/Resource 实例。不要直接执行旧工作树的独立 SQL。
-2. 复制示例 INI，填写本机 MySQL/Status 配置和存储目录，不提交真实凭据。
+2. 复制示例 INI，填写本机 MySQL/Redis 配置和存储目录，不提交真实凭据。
 3. 编译后运行 `ResourceServer.exe --config <配置路径>`。
 4. 客户端 `config.ini` 可设置 `[ResourceServer] Url=http://127.0.0.1:8090`，默认即此地址。
 5. 登录后通过附件按钮、拖入文件或粘贴图片加入草稿，点击发送或 Enter 后上传并提交。

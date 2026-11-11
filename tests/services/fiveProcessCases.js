@@ -75,7 +75,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
     /** 释放角色端口后写隔离 INI，并启动对应正式服务。 */
     async function native(role, configuredTopology = topology) {
         const binary = role.startsWith('Chat') ? 'ChatServer' : role;
-        const keys = { GateServer: ['gate'], StatusServer: ['status'], ChatA: ['chatA', 'rpcA'], ChatB: ['chatB', 'rpcB'] };
+        const keys = { GateServer: ['gate'], ChatA: ['chatA', 'rpcA'], ChatB: ['chatB', 'rpcB'] };
         await release(...keys[role]);
         const file = path.join(root, `${role}.ini`);
         fs.writeFileSync(file, nativeConfig(configuredTopology, role, { password: coordinator.password,
@@ -83,11 +83,11 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
         servers[role] = start(role, path.join(bundle, binary, binary), ['--config', file]);
         return servers[role];
     }
-    /** 通过生成 gRPC 接口有界调用 Status 或 Varify，结束后关闭客户端。 */
+    /** 通过生成 gRPC 接口有界调用 Varify，结束后关闭客户端。 */
     async function rpc(service, method, request) {
         const definition = grpc.loadPackageDefinition(loader.loadSync(path.resolve(__dirname, '../../proto',
-            service === 'StatusService' ? 'status.proto' : 'varify.proto')));
-        const client = new definition.message[service](`127.0.0.1:${service === 'StatusService' ? ports.status : ports.varify}`,
+            'varify.proto')));
+        const client = new definition.message[service](`127.0.0.1:${ports.varify}`,
             grpc.credentials.createInsecure());
         try {
             // 把有截止时间的 gRPC 调用转换为 Promise。
@@ -159,7 +159,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
     }
     let alice, bob;
     try {
-        for (const name of ['gate', 'status', 'varify', 'chatA', 'rpcA', 'chatB', 'rpcB']) {
+        for (const name of ['gate', 'varify', 'chatA', 'rpcA', 'chatB', 'rpcB']) {
             leases[name] = await reserve(); ports[name] = leases[name].port;
         }
         topology = createTopology(coordinator.config.runId, ports);
@@ -171,7 +171,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             await new SchemaMigration(sql, topology.database).apply();
         });
         // 写入隔离邮件配置并启动正式 Varify，等待验证码 RPC 就绪。
-        await test('five native service protocol readiness', async () => {
+        await test('Gate, Varify and both Chat instances are ready', async () => {
             await release('varify');
             const file = path.join(root, 'varify.json');
             fs.writeFileSync(file, JSON.stringify({ email: { host: '127.0.0.1', port: coordinator.config.ports.smtp,
@@ -182,9 +182,6 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             const email = `ready-${topology.runId}@example.invalid`; recipients.push(email);
             // 通过真实验证码 RPC 判断 Varify 已可服务。
             await poll(async () => Number((await rpc('VarifyService', 'GetVarifyCode', { email })).error) === 0, 30000);
-            await native('StatusServer');
-            // 用非法用户登录获得业务拒绝，确认 Status 协议就绪。
-            await poll(async () => Number((await rpc('StatusService', 'Login', { uid: -1, token: 'invalid' })).error) > 0, 30000);
             for (const role of ['ChatA', 'ChatB']) {
                 await native(role);
                 const port = role === 'ChatA' ? ports.chatA : ports.chatB;
@@ -207,7 +204,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             for (const instance of [alice, bob]) assert.equal((await instance.control.command('snapshot')).active, false);
         });
         // 创建本次用户并认证到各自实例，按选择器准备额外权限测试用户。
-        await test('public registration and real distinct Status discovery', async () => {
+        await test('public registration and real distinct Gate discovery', async () => {
             for (const user of topology.users) {
                 const password = randomUUID().replaceAll('-', '').slice(0, 12);
                 users.push({ ...user, password }); secrets.push(password);
@@ -292,7 +289,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             await release('resource');
             const file = path.join(root, 'ResourceServer.ini');
             fs.writeFileSync(file, `[ResourceServer]\nHost=127.0.0.1\nPort=${resourcePort}\nStorageRoot=${path.join(root, 'resources')}\n` +
-                `[StatusServer]\nHost=127.0.0.1\nPort=${ports.status}\n` +
+                `[Redis]\nHost=127.0.0.1\nPort=${coordinator.config.ports.redis}\nPassword=` + coordinator.password + `\n` +
                 `[Mysql]\nHost=127.0.0.1\nPort=${coordinator.config.ports.mysql}\nUser=root\nPassword=` +
                 coordinator.password + `\nSchema=${topology.database}\n` +
                 `[Log]\nLogDir=${path.join(root, 'logs')}\nLevel=warn\n`, { mode: 0o600 });

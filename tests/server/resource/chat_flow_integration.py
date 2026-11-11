@@ -1,6 +1,6 @@
-"""Production Chat/Resource processes + real MySQL; explicit Redis/Status fixtures.
+"""Production Chat/Resource processes + real MySQL; explicit Redis fixtures.
 
-This verifies resource wiring and cross-Chat gRPC, not real Redis/Status adapters.
+This verifies resource wiring and cross-Chat gRPC, not real Redis adapters.
 """
 import hashlib
 import http.client
@@ -161,23 +161,19 @@ def run_flow(directory, mysql_command, mysql_port):
                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         processes.append(process); return process
     try:
-        status = subprocess.Popen([str(ROOT / "build/resource/ResourceTests.exe"), "--serve-status-fixture"],
-                                  stdout=subprocess.PIPE, text=True,
-                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        processes.append(status); status_port = int(process_line(status))
         resource_port, chat_a, rpc_a, chat_b, rpc_b = [port() for _ in range(5)]
         database = f"[Mysql]\nHost=127.0.0.1\nPort={mysql_port}\nUser=root\nPassword=\nSchema=resource_test\n"
+        redis_config = f"[Redis]\nHost=127.0.0.1\nPort={redis.server_address[1]}\nPassword=fixture\n"
         resource_config = directory / "resource.ini"
         resource_config.write_text(f"[ResourceServer]\nHost=127.0.0.1\nPort={resource_port}\nStorageRoot={directory / 'resources'}\n"
-            f"[StatusServer]\nHost=127.0.0.1\nPort={status_port}\n[Log]\nLogDir={directory / 'logs'}\n" + database)
+            + redis_config + f"[Log]\nLogDir={directory / 'logs'}\n" + database)
         resource = launch(ROOT / "build/windows-servers/Release/ResourceServer/ResourceServer.exe", resource_config, "resource")
         wait_port(resource_port, resource)
         for name, tcp, rpc, peer, peer_rpc in (("resource-a", chat_a, rpc_a, "resource-b", rpc_b),
                                                ("resource-b", chat_b, rpc_b, "resource-a", rpc_a)):
             config = directory / (name + ".ini")
             config.write_text(f"[SelfServer]\nName={name}\nHost=127.0.0.1\nPort={tcp}\nRPCPort={rpc}\n"
-                f"[StatusServer]\nHost=127.0.0.1\nPort={status_port}\n"
-                f"[Redis]\nHost=127.0.0.1\nPort={redis.server_address[1]}\nPassword=fixture\n"
+                + redis_config +
                 f"[PeerServer]\nServers=Peer\n[Peer]\nName={peer}\nHost=127.0.0.1\nPort={peer_rpc}\n"
                 f"[Log]\nName={name}\nLogDir={directory / 'logs'}\nMaxSizeMB=2\nMaxTotalFiles=2\nLevel=debug\nFlushLevel=debug\n" + database)
             process = launch(ROOT / "build/windows-servers/Release/ChatServer/ChatServer.exe", config, name)

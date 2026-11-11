@@ -6,21 +6,6 @@
 #include <iostream>
 #include <thread>
 #include <map>
-#include "status.grpc.pb.h"
-#include <grpcpp/grpcpp.h>
-
-/** 仅在测试可执行文件中提供固定用户与 Token 的 Status 认证替身。 */
-class FixtureStatus final : public message::StatusService::Service {
-    /** 核对测试 Token 和用户范围后回显认证结果。 */
-    grpc::Status Login(grpc::ServerContext*, const message::LoginReq* request, message::LoginRsp* response) override {
-        response->set_error(
-            request->token() == "fixture-token" && request->uid() >= 7 && request->uid() <= 9 ? 0 : 1010);
-        response->set_uid(request->uid());
-        response->set_token(request->token());
-        return grpc::Status::OK;
-    }
-};
-
 namespace {
 /** 拥有资源测试临时目录、原始字节及摘要，供真实文件存储合同使用。 */
 class StoreTest : public testing::Test {
@@ -196,19 +181,6 @@ TEST_F(StoreTest, MediaSignatureIsChecked) {
 }
 /** 按显式参数运行测试认证服务、真实资源 HTTP 夹具或 GTest 合同。 */
 int main(int argc, char** argv) {
-    if (argc == 2 && std::string(argv[1]) == "--serve-status-fixture") {
-        FixtureStatus service;
-        grpc::ServerBuilder builder;
-        int port = 0;
-        builder.AddListeningPort("127.0.0.1:0", grpc::InsecureServerCredentials(), &port);
-        builder.RegisterService(&service);
-        auto server = builder.BuildAndStart();
-        if (!server)
-            return 1;
-        std::cout << port << std::endl;
-        server->Wait();
-        return 0;
-    }
     if ((argc == 3 || argc == 4) && std::string(argv[1]) == "--serve-test") {
         // Test executable only: real HTTP/storage with a deterministic authentication fake.
         boost::asio::io_context context;

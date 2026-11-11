@@ -5,7 +5,7 @@
 
 ## 适用范围
 
-- `GateServer/`、`StatusServer/`、`ChatServer/`、`ResourceServer/` 中的 C++ 代码。
+- `GateServer/`、`ChatServer/`、`ResourceServer/` 中的 C++ 代码。
 - `chat/` 中的 Qt 客户端代码。
 - `VarifyServer/` 中的 Node.js 代码。
 - `scripts/`、`.github/workflows/`、MSBuild、CMake、vcpkg 和 triplet 配置。

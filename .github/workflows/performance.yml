@@ -132,7 +132,7 @@ jobs:
           cmake --preset linux-x64-release -B out/build/performance \
             -DCHAT_BUILD_CLIENT=OFF -DCHAT_ENABLE_HOSTED_PREFLIGHT=OFF \
             -DCHAT_BUILD_ACCEPTANCE_RESOURCES=ON -DVCPKG_MANIFEST_INSTALL=OFF
-          cmake --build out/build/performance --target GateServer StatusServer ChatServer ResourceServer FourProcessDriver --parallel 2
+          cmake --build out/build/performance --target GateServer ChatServer ResourceServer FourProcessDriver --parallel 2
           CHAT_REAL_ACCEPTANCE=1 node tests/services/fourRuntime.js pack out/build/performance/bin out/performance-runtime .ci/vcpkg_installed
           git rev-parse HEAD > out/performance-runtime/source-sha.txt
           (cd out/performance-runtime && find . -type f ! -name manifest.sha256 -print0 | sort -z | xargs -0 sha256sum > manifest.sha256)

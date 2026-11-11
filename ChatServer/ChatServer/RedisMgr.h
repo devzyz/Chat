@@ -1,6 +1,7 @@
 #pragma once
 #include "../../common/redis/RedisPool.h"
 #include "Singleton.h"
+#include "../../common/auth/RedisToken.h"
 #include <queue>
 #include <mutex>
 #include <condition_variable>
@@ -24,6 +25,10 @@ public:
     /** @brief 接回借出的连接所有权，关闭或不可用连接由底层池丢弃；归还后不得继续访问。 */
     void ReturnConnection(redisContext* connection) {
         _transport.Return(connection);
+    }
+    /** @brief 使用本池读取 UID 当前凭据，不刷新 TTL。 */
+    chat_auth::TokenResult ValidateToken(int uid, const std::string& token) {
+        return chat_auth::ValidateToken(_transport, uid, token);
     }
     /** @brief 停止接受新的借用并释放空闲连接，唤醒等待者；借出资源仍须按原协议归还。 */
     void Close() {
@@ -73,6 +78,10 @@ public:
         const std::string& script,
         const std::vector<std::string>& keys,
         const std::vector<std::string>& arguments);
+    /** @brief 校验 TCP 登录凭据，区分用户缺失、凭据错误及依赖失败。 */
+    chat_auth::TokenResult ValidateToken(int uid, const std::string& token) {
+        return _pool->ValidateToken(uid, token);
+    }
     /** @brief 停止接受新的借用并释放空闲连接，唤醒等待者；借出资源仍须按原协议归还。 */
     void Close();
 

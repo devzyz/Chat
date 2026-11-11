@@ -5,7 +5,6 @@
 #include "GateRequestInternal.h"
 #include "IntegrationHostFactory.h"
 #include "LogicDispatcher.h"
-#include "StatusRoutingInternal.h"
 
 #include <atomic>
 #include <chrono>
@@ -79,34 +78,6 @@ public:
     }
 };
 
-/** 提供最小 Status 存储接口替身，隔离真实 Redis。 */
-class InMemoryStatusStore final : public status_routing_internal::StatusStore {
-public:
-    /** 返回缺失负载，供默认路由装配使用。 */
-    std::optional<std::string> ReadCount(const std::string&) override {
-        return std::nullopt;
-    }
-
-    /** 接受 Token 写入但不持久化，仅满足宿主装配接口。 */
-    bool PutToken(int, const std::string&, long long) override {
-        return true;
-    }
-
-    /** 返回缺失 Token，不模拟真实登录成功。 */
-    std::optional<std::string> GetToken(int) override {
-        return std::nullopt;
-    }
-};
-
-/** 提供可重复的测试 Token 来源。 */
-class FixedTokenSource final : public status_routing_internal::TokenSource {
-public:
-    /** 返回宿主合同专用的合成 Token。 */
-    std::string Next() override {
-        return "host-contract-token";
-    }
-};
-
 /** 组装真实生产模块及外部端口替身，供宿主生命周期测试。 */
 integration::ProductionModules CreateProductionModules() {
     integration::ProductionModules modules;
@@ -124,10 +95,6 @@ integration::ProductionModules CreateProductionModules() {
         std::make_shared<InMemoryCodeStore>(),
         std::make_shared<InMemoryUserStore>(),
         std::make_shared<InMemoryStatusPort>());
-    modules.status_routing = status_routing_internal::CreateStatusRouting(
-        std::vector<RoutingServer>{},
-        std::make_shared<InMemoryStatusStore>(),
-        std::make_shared<FixedTokenSource>());
     return modules;
 }
 

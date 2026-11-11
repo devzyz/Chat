@@ -22,8 +22,6 @@
     <ClCompile Include="rpc\chat_grpc_client_tests.cpp" />
     <ClCompile Include="..\..\generated\proto\cpp\chat.grpc.pb.cc" />
     <ClCompile Include="..\..\generated\proto\cpp\chat.pb.cc" />
-    <ClCompile Include="..\..\generated\proto\cpp\status.grpc.pb.cc" />
-    <ClCompile Include="..\..\generated\proto\cpp\status.pb.cc" />
   </ItemGroup>
   <ItemGroup><ProjectReference Include="..\..\ChatServer\ChatServer\ChatGrpcClients.vcxproj"><Project>{65DC3290-A9BB-4FAD-9930-096BC5B82102}</Project></ProjectReference></ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

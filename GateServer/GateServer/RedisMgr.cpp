@@ -3,6 +3,43 @@
 #include "ConfigMgr.h"
 #include <stdexcept>
 
+bool RedisMgr::PutExpiringToken(int uid, const std::string& value, long long auth_version) {
+    const auto key = std::to_string(uid);
+    const auto field = "utoken_" + key;
+    auto* connection = _redis_pool->GetConnection();
+    if (!connection)
+        return false;
+    // 归还独占 Redis 连接。
+    Defer release([this, connection] {
+        _redis_pool->ReturnConnection(connection);
+    });
+    const std::string script = "if (redis.call('GET',KEYS[2]) or '0')~=ARGV[3] then return 0 end; "
+                               "redis.call('HSET',KEYS[1],ARGV[1],ARGV[2]); return redis.call('EXPIRE',KEYS[1],86400)";
+    const auto version_key = "auth_version_" + key;
+    const auto version = std::to_string(auth_version);
+    auto* reply = static_cast<redisReply*>(redisCommand(
+        connection,
+        "EVAL %b 2 %b %b %b %b %b",
+        script.data(),
+        script.size(),
+        key.data(),
+        key.size(),
+        version_key.data(),
+        version_key.size(),
+        field.data(),
+        field.size(),
+        value.data(),
+        value.size(),
+        version.data(),
+        version.size()));
+    // 释放命令回复。
+    Defer free_reply([reply] {
+        if (reply)
+            freeReplyObject(reply);
+    });
+    return reply && reply->type == REDIS_REPLY_INTEGER && reply->integer == 1;
+}
+
 long long RedisMgr::EvalNumber(const std::string& script, const std::string& key, const std::string& value) {
     auto* connection = _redis_pool->GetConnection();
     if (!connection)

@@ -15,7 +15,8 @@ import time
 import urllib.request
 import xml.etree.ElementTree as ET
 
-from package import APPS, sha256, verify
+from package import sha256, verify
+import threading
 
 
 def mysql_tools():
@@ -107,7 +108,7 @@ Port={mysql_port}
 User=root
 Password=
 Schema=resource_smoke
-[StatusServer]
+[Redis]
 Host=127.0.0.1
 Port=1
 [Log]
@@ -222,18 +223,15 @@ finally:
         raise RuntimeError('Packaged application did not stop cleanly')
 
 
-def server_config(app, port, rpc_port):
+def server_config(app, port, rpc_port, redis_port):
     config = f'''[GateServer]
 Port={port}
 [VarifyServer]
 Host=127.0.0.1
 Port=1
-[StatusServer]
-Host=127.0.0.1
-Port={port}
 [Redis]
 Host=127.0.0.1
-Port=1
+Port={redis_port}
 Password=package-smoke
 [SelfServer]
 Name=PackageChat
@@ -256,8 +254,7 @@ MaxTotalFiles=2
 Level=info
 FlushLevel=warn
 '''
-    if app != 'StatusServer':
-        config += '''[Mysql]
+    config += '''[Mysql]
 Host=127.0.0.1
 Port=1
 Password=package-smoke
@@ -295,30 +292,40 @@ def run(directory, source_sha, report):
                            if not key.startswith(('CHAT_', 'QT_', 'QML_', 'NODE_'))}
             # Do not let the build toolchain or runner's Node/Qt satisfy missing package DLLs.
             environment['PATH'] = str(Path(os.environ['SystemRoot']) / 'System32')
-            for app in APPS[:3]:
-                def server(app=app):
-                    folder = root / app
-                    port, rpc_port = free_port(), free_port()
-                    (folder / 'config.ini').write_text(server_config(app, port, rpc_port), encoding='utf-8')
-                    with (root / (app + '.log')).open('wb') as log:
-                        process = start([str(folder / (app + '.exe')), '--config', str(folder / 'config.ini')],
-                                        folder, environment, log)
-                        try:
-                            if app == 'GateServer':
-                                def ready():
-                                    with urllib.request.urlopen(f'http://127.0.0.1:{port}/get_test', timeout=1) as response:
-                                        return response.status == 200 and b'receive get_test req' in response.read()
-                            else:
-                                ready = lambda: tcp_ready(port)
-                            wait_until(ready, process)
-                            stop(process)
-                            with socket.socket() as listener:
-                                listener.bind(('127.0.0.1', port))
-                        finally:
-                            if process.poll() is None:
-                                process.kill()
-                                process.wait(timeout=10)
-                case(app + ' startup and shutdown', server)
+            # Chat acquires its instance lease before accepting TCP connections.
+            sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tests/server/resource'))
+            from chat_flow_integration import RedisFixture
+            with RedisFixture() as redis:
+                thread = threading.Thread(target=redis.serve_forever, daemon=True)
+                thread.start()
+                try:
+                    for app in ('GateServer', 'ChatServer'):
+                        def server(app=app):
+                            folder = root / app
+                            port, rpc_port = free_port(), free_port()
+                            (folder / 'config.ini').write_text(server_config(app, port, rpc_port, redis.server_address[1]), encoding='utf-8')
+                            with (root / (app + '.log')).open('wb') as log:
+                                process = start([str(folder / (app + '.exe')), '--config', str(folder / 'config.ini')],
+                                                folder, environment, log)
+                                try:
+                                    if app == 'GateServer':
+                                        def ready():
+                                            with urllib.request.urlopen(f'http://127.0.0.1:{port}/get_test', timeout=1) as response:
+                                                return response.status == 200 and b'receive get_test req' in response.read()
+                                    else:
+                                        ready = lambda: tcp_ready(port)
+                                    wait_until(ready, process)
+                                    stop(process)
+                                    with socket.socket() as listener:
+                                        listener.bind(('127.0.0.1', port))
+                                finally:
+                                    if process.poll() is None:
+                                        process.kill()
+                                        process.wait(timeout=10)
+                        case(app + ' startup and shutdown', server)
+                finally:
+                    redis.shutdown()
+                    thread.join()
             case('ResourceServer startup, authentication rejection and shutdown',
                  lambda: resource_smoke(root, environment, report.parent / (report.stem + '-logs')))
             def client():

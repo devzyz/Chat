@@ -130,8 +130,6 @@
   <ItemGroup>
     <ClCompile Include="ResourceStore.cpp" />
     <ClCompile Include="ResourceHttpServer.cpp" />
-    <ClCompile Include="..\..\..\generated\proto\cpp\status.pb.cc" />
-    <ClCompile Include="..\..\..\generated\proto\cpp\status.grpc.pb.cc" />
     <ClCompile Include="ResourceServer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

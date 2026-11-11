@@ -37,7 +37,7 @@ def module(report, case, source):
         "client_": "Qt Client", "varify_": "VarifyServer", "script_": "Instance scripts",
         "release_candidate_": "Packaging", "linux_migration": "MySQL migration",
         "linux_message": "MySQL message commit", "linux_redis": "Redis",
-        "linux_four_process": "Four production services", "linux_first_release": "Four-account E2E",
+        "linux_four_process": "Gate, Chat and Varify integration", "linux_first_release": "Four-account E2E",
         "linux_phase3d_": "Two-server E2E", "performance": "Performance",
     }
     for prefix, owner in owners.items():
@@ -46,13 +46,13 @@ def module(report, case, source):
     if report.startswith("server_"):
         identity = (source + " " + case.get("classname", "")).lower()
         if "gate_status_startup" in identity and "GateGrpc" not in case.get("classname", ""):
-            return "GateServer / StatusServer"
+            return "GateServer"
         if "gate" in identity:
             return "GateServer"
         if any(part in identity for part in ("status-routing", "status_grpc_transport", "statusrouting")):
             return "StatusServer"
         if any(part in identity for part in ("/chat-session-state/", "/messaging/", "/logic-dispatcher/",
-                                              "/message-receipt/", "chat_grpc", "peer_server_routing",
+                                              "/message-receipt/", "chat_grpc", "chatgrpcclient", "peer_server_routing",
                                               "chat_tcp_transport", "history_response", "server_redis_pool_tests")):
             return "ChatServer"
         return "Shared protocols and runtime"

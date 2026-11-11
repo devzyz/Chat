@@ -38,6 +38,8 @@ public:
     bool Get(const std::string& key, std::string& value);
     /** @brief 执行单键 Lua 并返回整数；依赖失败抛异常，不自动重放写操作。 */
     long long EvalNumber(const std::string& script, const std::string& key, const std::string& value);
+    /** @brief 原子比较撤销代次并写入带空闲期限的当前凭据。 */
+    bool PutExpiringToken(int uid, const std::string& token, long long auth_version);
     /** @brief 写入 Redis 字符串并验证 OK 响应，失败返回 false。 */
     bool Set(const std::string& key, const std::string& value);
     /** @brief 向 Redis 列表左端压入数据，并核对返回的列表长度。 */

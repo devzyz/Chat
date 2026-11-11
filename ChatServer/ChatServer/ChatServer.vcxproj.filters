@@ -45,19 +45,10 @@
     <ClCompile Include="RedisMgr.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="StatusGrpcClient.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="$(ProtocolGeneratedDir)\chat.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="$(ProtocolGeneratedDir)\chat.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="$(ProtocolGeneratedDir)\status.grpc.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="$(ProtocolGeneratedDir)\status.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="ChatGrpcClient.cpp">
@@ -104,9 +95,6 @@
     <ClInclude Include="RedisMgr.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="StatusGrpcClient.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="Data.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -114,12 +102,6 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="$(ProtocolGeneratedDir)\chat.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="$(ProtocolGeneratedDir)\status.grpc.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="$(ProtocolGeneratedDir)\status.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="ChatGrpcClient.h">

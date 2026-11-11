@@ -1,6 +1,6 @@
 # Chat Windows x64
 
-本包包含 Qt 客户端、GateServer、StatusServer、ChatServer、ResourceServer 和带 Node.js 的 VarifyServer。
+本包包含 Qt 客户端、GateServer、ChatServer、ResourceServer 和带 Node.js 的 VarifyServer。
 版本与源码提交见 release-manifest.json；下载后可使用 SHA256SUMS 校验 ZIP。
 
 ## 配置与启动
@@ -15,11 +15,11 @@
    填写本机地址、端口、数据库和日志设置。C++ 服务凭据填入对应 INI；Varify 凭据通过环境变量
    `CHAT_VARIFY_EMAIL_USER`、`CHAT_VARIFY_EMAIL_PASS`、`CHAT_VARIFY_MYSQL_PASSWORD`、
    `CHAT_VARIFY_REDIS_PASSWORD` 提供，不写入 JSON。模板不包含开发者连接信息。
-4. 配置 StatusServer 中的 ChatServer 列表，实例名称保持一致；TLS 部署时公布外部 TCP 入口，
+4. 配置 GateServer 中的 ChatServer 列表，实例名称保持一致；TLS 部署时公布外部 TCP 入口，
    ChatServer 监听内部端口，RPC 仍使用本机地址。
    多实例参考 ChatServer/configs/ 中的模板。
-5. 填写 ResourceServer 的监听地址、StatusServer、MySQL 和可写 StorageRoot；相对存储路径以配置目录为基准。
-   在各应用目录启动 VarifyServer（node.exe server.js）、StatusServer.exe、ChatServer.exe、ResourceServer.exe、GateServer.exe。
+5. 填写 ResourceServer 的监听地址、Redis、MySQL 和可写 StorageRoot；相对存储路径以配置目录为基准。
+   在各应用目录启动 VarifyServer（node.exe server.js）、ChatServer.exe、ResourceServer.exe、GateServer.exe。
    C++ 服务支持 --config <文件>；Varify 支持 CHAT_CONFIG 和 CHAT_VARIFY_BIND_ADDRESS。
 6. 填写 chat-client/config.ini 中的 GateServer 地址及 `[ResourceServer] Url`，启动 chat.exe。
 
@@ -41,6 +41,6 @@ LAN 客户端需通过 TLS 入口访问三类业务服务。复制 `VarifyServer
 ```
 
 Gate/Resource/Chat 明文监听必须改为 loopback；仅对外开放
-示例中的 8443、8444、8445、8446。Status 公布的是外部 Chat TLS 端口，Chat 自身监听内部端口。
+示例中的 8443、8444、8445、8446。Gate 公布的是外部 Chat TLS 端口，Chat 自身监听内部端口。
 客户端需 `GateServer/scheme=https`、HTTPS Resource URL，并信任对应 CA；不得关闭证书验证。
 完整字段、端口映射与关闭规则见仓库 `docs/Operations.md`。升级时同步替换全部服务和客户端，断开旧会话。

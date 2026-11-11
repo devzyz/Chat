@@ -5,7 +5,7 @@
 
 | 单元 | 工具链 | 依赖方式 | 发布方式 |
 | --- | --- | --- | --- |
-| GateServer、StatusServer、ChatServer、ResourceServer | Visual Studio 2022 v143、MSBuild、C++17 | 根 `vcpkg.json` manifest | 每个 Server 独立 app-local 目录和 ZIP |
+| GateServer、ChatServer、ResourceServer | Visual Studio 2022 v143、MSBuild、C++17 | 根 `vcpkg.json` manifest | 每个 Server 独立 app-local 目录和 ZIP |
 | Qt 客户端 | Qt 6.5.3 MinGW、CMake、Ninja | Qt kit 与仓库内 spdlog | `windeployqt` 后独立 ZIP |
 | VarifyServer | Node.js 22（CI） | `package-lock.json` + `npm ci` | JS/JSON/proto 与 `node_modules` 独立 ZIP |
 
@@ -96,7 +96,7 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 
 ## 发布单元
 
-- 上游 develop 检查中的 GateServer、StatusServer、ChatServer、ResourceServer 各自目录 MUST 包含自身 EXE、`config.ini` 和运行所需 app-local DLL。
+- 上游 develop 检查中的 GateServer、ChatServer、ResourceServer 各自目录 MUST 包含自身 EXE、`config.ini` 和运行所需 app-local DLL。
 - ChatServer 发布目录 MUST 包含受支持的实例示例配置。
 - 每个 Server ZIP 解压后不得依赖另一个 Server ZIP 的文件。
 - Qt ZIP MUST 自包含；最终合并包 MUST 包含 VarifyServer 运行库及其相邻 proto 目录。

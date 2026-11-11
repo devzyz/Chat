@@ -1,3 +1,7 @@
+# Historical Status routing tests
+
+The active selection and publication tests now belong to [Gate](../gate-request/README.md). The original phase evidence follows.
+
 # Status routing and token contract
 
 `StatusRouting::Assign/Validate` is the single production Interface shared by `StatusServiceImpl` and these tests. It hides connection-count reads, deterministic server selection, token generation, token persistence/readback, and stable public error mapping. `StatusServiceImpl` only shapes existing protobuf replies.

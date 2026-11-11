@@ -4,7 +4,7 @@ This document describes the shared Windows baseline used by local development
 and the phase-two GitHub Actions workflow. It builds the existing projects
 without changing their build systems:
 
-- GateServer, StatusServer, ChatServer and ResourceServer: Visual Studio/MSBuild
+- GateServer, ChatServer and ResourceServer: Visual Studio/MSBuild
 - chat: CMake with the existing Qt 6.5.3 MinGW 64-bit kit
 - VarifyServer: npm ci
 
@@ -192,7 +192,7 @@ Run all commands from the repository root:
     # Restore the root manifest into vcpkg_installed\x64-windows-chat.
     .\scripts\windows-local.ps1 -Task RestoreServers
 
-    # Build the four C++ service executables.
+    # Build the three C++ service executables.
     .\scripts\windows-local.ps1 -Task BuildServers -Configuration Debug
     .\scripts\windows-local.ps1 -Task BuildServers -Configuration Release
 
@@ -233,8 +233,8 @@ Test reports are grouped by execution Level rather than by source directory:
 
 - Server: `server_unit.xml`, `server_component.xml`,
   `server_integration.xml`, `server_chat_grpc_integration.xml`,
-  `server_gate_unit.xml`, `server_status_unit.xml`.
-- Qt client: `client_unit.xml`, `client_component.xml`.
+  `server_gate_unit.xml`, `server_resource_integration.xml`.
+- Qt client: `client_unit.xml`, `client_component.xml`, `client_integration.xml`.
 - VarifyServer: `varify_unit.xml`, `varify_integration.xml`.
 - PowerShell: `script_component.xml`, `script_integration.xml`.
 
@@ -276,7 +276,7 @@ stopping them, and gives every config a separate working directory:
 
 You can pass selected files with repeated/array `-Config` values instead of
 `-ConfigDirectory`. To add more instances, copy an example and manually update
-the peer and StatusServer configuration. Every simultaneously running instance
+the peer and Gate discovery configuration. Every simultaneously running instance
 must use a unique `[SelfServer].Name` and `[Log].Name`; every TCP/RPC listener
 port must also be unique across all managed instances. Relative `LogDir` values
 are isolated by the management script's per-instance working directories.

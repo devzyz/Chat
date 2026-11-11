@@ -1,4 +1,7 @@
 #include "ConfigMgr.h"
+#include <boost/algorithm/string/trim.hpp>
+#include <set>
+#include <sstream>
 #include "LogMgr.h"
 #include "../../common/grpc/GrpcClientRuntime.h"
 #include <boost/filesystem.hpp>
@@ -128,14 +131,31 @@ ConfigMgr::ConfigMgr() {
     ValidateEndpoint((*this)["Mysql"], "Mysql");
     RequireValue((*this)["Mysql"], "Mysql", "User");
     RequireValue((*this)["Mysql"], "Mysql", "Schema");
-    ValidateEndpoint((*this)["StatusServer"], "StatusServer");
+    auto server_list = (*this)["ChatServers"]["Name"];
+    if (server_list.empty()) {
+        throw std::invalid_argument("[ChatServers].Name must not be empty");
+    }
+    std::set<std::string> runtime_names;
+    std::stringstream stream(server_list);
+    std::string section_name;
+    while (std::getline(stream, section_name, ',')) {
+        boost::algorithm::trim(section_name);
+        if (section_name.empty()) {
+            throw std::invalid_argument("[ChatServers].Name contains an empty section name");
+        }
+        auto server = (*this)[section_name];
+        RequireValue(server, section_name.c_str(), "Name");
+        ValidateEndpoint(server, section_name.c_str());
+        if (!runtime_names.insert(server["Name"]).second) {
+            throw std::invalid_argument("[ChatServers].Name contains duplicate runtime server name " + server["Name"]);
+        }
+    }
 
     auto grpc = (*this)["Grpc"];
     (void)rpc::ParseDurationMs(
         grpc["PoolAcquireTimeoutMs"],
         "[Grpc].PoolAcquireTimeoutMs",
         std::chrono::milliseconds(1000));
-    (void)rpc::ParseDurationMs(grpc["StatusDeadlineMs"], "[Grpc].StatusDeadlineMs", std::chrono::milliseconds(3000));
     (void)rpc::ParseDurationMs(grpc["VarifyDeadlineMs"], "[Grpc].VarifyDeadlineMs", std::chrono::milliseconds(15000));
 
     auto log = (*this)["Log"];

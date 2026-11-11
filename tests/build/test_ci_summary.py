@@ -28,13 +28,13 @@ class SummaryTests(unittest.TestCase):
         source.parent.mkdir(parents=True)
         source.touch()
         (self.root / "server_component.xml").write_text(
-            '<testsuites><testsuite><testcase classname="StatusRoutingTests" name="route"/>'
+            '<testsuites><testsuite><testcase classname="ChatGrpcClientIntegrationTests" name="loopback"/>'
             '<testcase classname="Endpoints/Login" name="WrongPassword" '
             'file="tests/server/gate-request/example.cpp" line="20">'
             '<failure message="tests/server/gate-request/example.cpp:25&#10;Expected: 1&#10;Actual: 2"/>'
             '</testcase></testsuite></testsuites>', encoding="utf-8")
         summary = self.summary()
-        for label in ("StatusServer", "GateServer", "Endpoints/Login.WrongPassword", "example.cpp#L25",
+        for label in ("ChatServer", "GateServer", "Endpoints/Login.WrongPassword", "example.cpp#L25",
                       "Expected: 1", "Actual: 2", "job/1", "artifacts/2"):
             self.assertIn(label, summary)
 

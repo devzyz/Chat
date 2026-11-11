@@ -17,8 +17,8 @@ Gate 的 MySQL Connector 连接、读取和写入超时均为 2 秒，关闭池�
 
 ## 配置校验
 
-StatusServer 的选服与 Token 路径依赖 Redis，不要求 `[Mysql]`；旧配置中保留该段不会恢复数据库访问。
-Gate、Chat 与 Resource 的 MySQL 配置要求不变。Gate/Status 的滚动日志行为共用
+Gate 的 [ChatServers] 列出候选实例配置节。Gate 选服与签发凭据、Chat 和 Resource 校验凭据都使用 Redis。
+Gate、Chat 与 Resource 的 MySQL 配置要求不变。Gate 的滚动日志使用
 `common/logging/RotatingLog.h`，各服务 `LogMgr` 只读取本服务配置；关闭仍仅刷新，保留注册表供静态析构记录日志。
 
 Gate 的 `GET /get_test` 保留为发布冒烟和服务回归的 HTTP 就绪探针。
@@ -31,7 +31,7 @@ HTTP 200 与响应正文只证明 Gate 监听可用，不代表 Redis、MySQL �
 - 枚举、布尔、超时、容量和长度 MUST 拒绝尾随垃圾字符与越界值。
 - 新配置项 MUST 同步默认值策略、示例配置、发布复制规则和自动测试。
 - 配置结构变化涉及多个服务时 MUST 搜索所有消费者，不允许只更新一份复制的 INI。
-- Gate/Chat 的可选 `[Grpc]` 毫秒配置包括 `PoolAcquireTimeoutMs`、`StatusDeadlineMs`、`ChatDeadlineMs` 与 `VarifyDeadlineMs`；缺省时采用协议规范默认值，显式值必须在 100..60000 范围内并在监听前验证。
+- Gate/Chat 的可选 `[Grpc]` 毫秒配置包括 `PoolAcquireTimeoutMs`、`ChatDeadlineMs` 与 `VarifyDeadlineMs`；缺省时采用协议规范默认值，显式值必须在 100..60000 范围内并在监听前验证。
 
 ## Varify SMTP 运行配置
 
@@ -144,7 +144,7 @@ getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超�
 
 ### Redis adapter 生命周期与期限（3C-04）
 
-- Gate、Status、Chat 使用同一个纯技术 hiredis pool，业务 key/field 和锁 owner 规则不变。
+- Gate、Resource、Chat 使用同一个纯技术 hiredis pool，业务 key/field 和锁 owner 规则不变。
   默认借用、连接与命令 socket timeout 为 2000 ms；每次借用最多创建一个替代连接，
   不重放业务命令。空闲连接借出前以 PING 重新验证，错误 context 归还时丢弃。
 - C++ Redis Host 必须是数字 IPv4/IPv6 或 `localhost`（映射为 `127.0.0.1`）；
@@ -163,13 +163,13 @@ getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超�
 - 测试只使用本次 RunContext 的动态地址、合成密码和 key prefix；真实服务验收状态见
   主工作区 `docs/Status.md`，本地 loopback fault 测试不代表真实 Redis 数据/重启测试已通过。
 
-ChatServer 已具有较完整的 fail-fast 配置和异常清理。GateServer、StatusServer 和 VarifyServer 的历史启动逻辑仍可能存在校验或错误传播差异；新改动 MUST 朝统一契约收敛，不能把现有差异复制为新的正确行为。
+ChatServer 已具有较完整的 fail-fast 配置和异常清理。GateServer 和 VarifyServer 的历史启动逻辑仍可能存在校验或错误传播差异；新改动 MUST 朝统一契约收敛，不能把现有差异复制为新的正确行为。
 
 ## 资源服务启用
 
 按 [Data 的迁移入口](Data.md#operational-entry) 应用 manifest 中全部待执行迁移；
 资源服务校验完整业务 schema，不能仅应用资源表迁移。升级前备份并停止写入，迁移后更新全部
-Gate/Chat/Resource 实例，再配置 ResourceServer 的 MySQL、Status 和存储根目录。
+Gate/Chat/Resource 实例，再配置 ResourceServer 的 MySQL、Redis 和存储根目录。
 构建和本地验证命令见 [资源服务说明](../ResourceServer/README.md)，
 目录、头像发布与失败语义见 [Resources](Resources.md)。
 自动集成测试仅初始化自己的临时 MySQL，不修改个人数据库。
@@ -178,21 +178,21 @@ Gate/Chat/Resource 实例，再配置 ResourceServer 的 MySQL、Status 和存�
 
 首版拓扑是同一台机器运行全部服务，局域网客户端连接 Gate/Chat/Resource。
 Gate `[GateServer] Host` 可选，默认 `0.0.0.0`；Chat `[SelfServer] Host` 是对客户端公布的地址，
-可另设 `BindHost` 作为监听地址。Status 配置中的 Chat 地址须为客户端可达的局域网 IP。
-Chat `[SelfServer] RpcHost` 默认 `127.0.0.1`，与 Status 监听地址都只允许数值 loopback；
+可另设 `BindHost` 作为监听地址。Gate 配置中的 Chat 地址须为客户端可达的局域网 IP。
+Chat `[SelfServer] RpcHost` 默认 `127.0.0.1`，只允许数值 loopback；
 Varify 默认 `127.0.0.1:50051`。不得向客户端开放内部 RPC、MySQL 或 Redis。
 外部入口统一使用下述 TLS 网关，业务服务只监听本机；禁止在 LAN 暴露解密后的业务端口。
 
 Chat 每实例最多接收 1024 个 TCP 会话，业务队列满时关闭连接并记录原因。
 实例以随机启动身份取得 `chatlease_<name>` 的 90 秒租约，60 秒更新连接数；
 不同监听端点的同名活动实例启动失败，关闭只清理自己仍持有的租约。
-成功独占绑定同一 TCP/RPC 端点的新进程可接管该端点的残留租约，避免 Redis 端口变更后旧进程无法清理而阻塞重启。Status 跳过无租约或无有效计数的实例。
+成功独占绑定同一 TCP/RPC 端点的新进程可接管该端点的残留租约，避免 Redis 端口变更后旧进程无法清理而阻塞重启。Gate 跳过无租约或无有效计数的实例。
 会话路由双键也有 90 秒 TTL，当前会话每次业务消息/心跳原子确认归属并续租；
 失去归属或 Redis 不可用时关闭会话。客户端保持十秒心跳；暂时断线自动有限重连，凭据失效则回到登录。
 租约是请求入口保护，不能把已经开始的数据库事务解释为全局即时撤销。
 
 Resource `/health` 仅报告进程 HTTP 存活；`/ready` 在有界工作执行器核验 MySQL schema 和
-Status RPC，可用返回 200，否则 503。二者不要求用户凭据；不能把 `/health` 当业务就绪。
+Redis 连接，可用返回 200，否则 503。二者不要求用户凭据；不能把 `/health` 当业务就绪。
 
 ### TLS 入口配置
 
@@ -211,7 +211,7 @@ node VarifyServer/tlsGateway.js --config VarifyServer/tls.config.json
 先启动业务服务，再启动网关；SIGINT/SIGTERM 关闭所属监听和连接，证书更新需重启网关。
 
 部署时将 Gate `Host`、Resource `Host` 和 Chat `BindHost` 配置为 `127.0.0.1`，
-Chat `Port` 保留内部 8091/8092；Status 的 Chat 节点 `Host/Port` 则公布证书覆盖的外部主机名及
+Chat `Port` 保留内部 8091/8092；Gate 的 Chat 节点 `Host/Port` 则公布证书覆盖的外部主机名及
 8445/8446，节点名称与 Chat 保持一致。防火墙只开放网关端口，RPC/MySQL/Redis 保持本机。
 客户端配置如下（地址为文档示例，须替换为自己的证书名称）：
 

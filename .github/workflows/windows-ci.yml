@@ -87,7 +87,6 @@ jobs:
           $projectFiles = @(
               'GateServer/GateServer/GateServer.vcxproj'
               'GateServer/GateServer/GateGrpcClients.vcxproj'
-              'StatusServer/StatusServer/StatusServer.vcxproj'
               'ChatServer/ChatServer/ChatServer.vcxproj'
               'ChatServer/ChatServer/ChatGrpcClients.vcxproj'
               'ResourceServer/ResourceServer/ResourceServer/ResourceServer.vcxproj'
@@ -510,7 +509,7 @@ jobs:
               'zlib1.dll'
           )
 
-          foreach ($serverName in @('GateServer', 'StatusServer', 'ChatServer', 'ResourceServer')) {
+          foreach ($serverName in @('GateServer', 'ChatServer', 'ResourceServer')) {
               $serverDirectory = Join-Path $releaseRoot $serverName
               $requiredDlls = if ($serverName -eq 'ResourceServer') {
                   $coreAppLocalDlls | Where-Object { $_ -ne 'hiredis.dll' }
@@ -541,7 +540,7 @@ jobs:
           $packageRoot = Join-Path $env:GITHUB_WORKSPACE 'dist\windows-servers'
           [void](New-Item -ItemType Directory -Path $packageRoot -Force)
 
-          foreach ($serverName in @('GateServer', 'StatusServer', 'ChatServer', 'ResourceServer')) {
+          foreach ($serverName in @('GateServer', 'ChatServer', 'ResourceServer')) {
               $source = Join-Path $releaseRoot $serverName
               $stage = Join-Path $packageRoot $serverName
               [void](New-Item -ItemType Directory -Path $stage -Force)

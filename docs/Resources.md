@@ -48,7 +48,7 @@
 会话中已查看的用户每 30 秒刷新一次，自己发布后立即更新；本版没有新增 TCP 推送消息 ID。
 断网时显示已缓存头像，首次无缓存使用默认头像。
 
-除 `/health`、`/ready` 外沿用 `X-User-Id` 和 Bearer token，由生产 Status Login RPC 鉴权。
+除 `/health`、`/ready` 外沿用 `X-User-Id` 和 Bearer token，由 Resource 读取 Redis 当前凭据鉴权。
 
 | 请求 | 合同 |
 | --- | --- |
@@ -84,7 +84,7 @@ HTTP/数据库/跨服务资源专项仍有独立入口；上述接线不代表�
 - `chat/tests/resource-transfer`：真实 HTTP 上传与续传、两个 Qt 控制器共享头像、独立用户目录、重新创建缓存恢复、失败保留旧图。
 - `tests/server/resource`：真实文件、HTTP 权限、PNG 校验、临时 MySQL 发布持久化、资源服务重启、跨 Chat 实例附件与历史。
 
-资源集成测试使用明确的 Status/Redis fixture；不能记为真实全依赖或人工窗口验收。
+资源集成测试使用明确的 Redis fixture；不能记为真实全依赖或人工窗口验收。
 
 ## 群资源权限
 

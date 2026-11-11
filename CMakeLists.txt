@@ -47,7 +47,7 @@ set(CHAT_PROTOCOL_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/proto/cpp")
 file(MAKE_DIRECTORY "${CHAT_PROTOCOL_OUTPUT_DIR}")
 set(CHAT_PROTOCOL_SOURCES "")
 set(CHAT_PROTOCOL_HEADERS "")
-foreach(proto_relative IN ITEMS proto/varify.proto proto/status.proto proto/chat.proto)
+foreach(proto_relative IN ITEMS proto/varify.proto proto/chat.proto)
     get_filename_component(proto_name "${proto_relative}" NAME_WE)
     set(proto_file "${CMAKE_CURRENT_SOURCE_DIR}/${proto_relative}")
     set(proto_source "${CHAT_PROTOCOL_OUTPUT_DIR}/${proto_name}.pb.cc")
@@ -104,9 +104,7 @@ function(chat_configure_server_target target source_root)
         spdlog::spdlog
         Threads::Threads
     )
-    if(NOT source_root MATCHES "^StatusServer/")
-        target_link_libraries(${target} PUBLIC ${CHAT_MYSQL_TARGET})
-    endif()
+    target_link_libraries(${target} PUBLIC ${CHAT_MYSQL_TARGET})
 endfunction()
 
 include(cmake/ServerSourceOwnership.cmake)
@@ -122,15 +120,6 @@ target_link_libraries(gate_server_modules PUBLIC GateTransport GateRequest GateG
 add_library(chat::gate_server_modules ALIAS gate_server_modules)
 add_executable(GateServer GateServer/GateServer/GateServer.cpp)
 target_link_libraries(GateServer PRIVATE "$<LINK_GROUP:RESCAN,gate_server_modules,GateTransport,GateRequest,GateGrpcClients>")
-
-chat_add_project_library(StatusRouting StatusServer/StatusServer/StatusRouting)
-chat_add_project_library(StatusTransport StatusServer/StatusServer/StatusTransport)
-target_link_libraries(StatusTransport PUBLIC StatusRouting)
-chat_add_project_library(status_server_modules StatusServer/StatusServer/StatusServer StatusServer/StatusServer/StatusServer.cpp)
-target_link_libraries(status_server_modules PUBLIC StatusTransport StatusRouting)
-add_library(chat::status_server_modules ALIAS status_server_modules)
-add_executable(StatusServer StatusServer/StatusServer/StatusServer.cpp)
-target_link_libraries(StatusServer PRIVATE "$<LINK_GROUP:RESCAN,status_server_modules,StatusTransport,StatusRouting>")
 
 chat_add_project_library(ChatTransport ChatServer/ChatServer/ChatTransport)
 chat_add_project_library(LogicDispatcher ChatServer/ChatServer/LogicDispatcher)
@@ -170,7 +159,7 @@ target_link_libraries(process_harness PUBLIC Boost::filesystem Threads::Threads)
 add_library(integration_host STATIC tests/support/IntegrationHostFactory.cpp)
 target_include_directories(integration_host PUBLIC tests/support)
 target_link_libraries(integration_host PUBLIC
-    GateTransport GateRequest StatusTransport StatusRouting ChatTransport LogicDispatcher)
+    GateTransport GateRequest ChatTransport LogicDispatcher)
 find_package(GTest CONFIG REQUIRED)
 if(CHAT_BUILD_ACCEPTANCE_RESOURCES)
     add_executable(resource_http_test_host tests/server/resource/resource_tests.cpp)
@@ -227,10 +216,8 @@ endif()
 set(CHAT_LINUX_EXPECTED_TARGETS
     chat_protocol_cpp
     gate_server_modules
-    status_server_modules
     chat_server_modules
     GateServer
-    StatusServer
     ChatServer
 )
 if(CHAT_BUILD_CLIENT)

@@ -52,8 +52,8 @@ endmacro()
 
 set(targets_present TRUE)
 foreach(target IN ITEMS
-        chat_protocol_cpp gate_server_modules status_server_modules chat_server_modules
-        GateServer StatusServer ChatServer chat_network_core chat_message_model chat_session_core)
+        chat_protocol_cpp gate_server_modules chat_server_modules
+        GateServer ChatServer chat_network_core chat_message_model chat_session_core)
     has_text(root_cmake "${target}" target_present)
     if(NOT target_present)
         set(targets_present FALSE)
@@ -171,7 +171,7 @@ record_case("T10-LNX-06-vcpkg-identity" vcpkg_ok
 set(proto_ok FALSE)
 if(root_cmake MATCHES "protobuf_generate|protoc" AND
    root_cmake MATCHES "proto/varify\\.proto" AND
-   root_cmake MATCHES "proto/status\\.proto" AND
+   NOT root_cmake MATCHES "proto/status\\.proto" AND
    root_cmake MATCHES "proto/chat\\.proto")
     set(proto_ok TRUE)
 endif()

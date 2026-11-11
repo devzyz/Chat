@@ -7,7 +7,7 @@ import re
 import tempfile
 import zipfile
 
-SERVERS = ('GateServer', 'StatusServer', 'ChatServer', 'ResourceServer')
+SERVERS = ('GateServer', 'ChatServer', 'ResourceServer')
 APPS = (*SERVERS, 'chat-client', 'VarifyServer')
 REQUIRED = [*(f'{app}/{app}.exe' for app in SERVERS),
             *(f'{app}/{dll}' for app in SERVERS
@@ -95,7 +95,7 @@ def assemble(source, artifacts, output, source_sha):
                 raise ValueError('Expected one CI ZIP for ' + app)
             unpack(archives[0], stage / app)
         # Production Varify resolves ../proto/varify.proto, shared with the servers.
-        for file in (source / 'proto').glob('*.proto'):
+        for file in (source / 'proto' / 'varify.proto', source / 'proto' / 'chat.proto'):
             target = stage / 'proto' / file.name
             target.parent.mkdir(exist_ok=True)
             target.write_bytes(file.read_bytes())

@@ -17,7 +17,7 @@
 #include "MessageCommit.h"
 #include "HistoryResponse.h"
 #include <chrono>
-#include "StatusGrpcClient.h"
+
 #include "RedisMgr.h"
 #include "ConfigMgr.h"
 #include "UserSessionDirectory.h"
@@ -228,7 +228,7 @@ void LogicSystem::RegisterCallbacks() {
             SPDLOG_INFO("user login request, uid={}", uid);
 
             // 主要目的是查询状态，看是否满足token条件
-            auto rsp = StatusGrpcClient::GetInstance()->Login(uid, token);
+            const auto validation = RedisMgr::GetInstance()->ValidateToken(uid, token);
 
             Json::Value return_value;
             // 自动返回函数，当函数执行到右括号后，局部变量会被析构，此时defer被析构，其析构时，回调用lambda函数
@@ -241,10 +241,20 @@ void LogicSystem::RegisterCallbacks() {
                 session->Send(return_str, MSG_CHAT_LOGIN_RSP);
             });
 
-            // 如果状态服务查询出错误，则返回
-            return_value["error"] = rsp.error();
-            if (rsp.error() != ErrorCodes::Success) {
+            // 初验沿用既有 TCP 错误码，绑定时再次原子检查当前凭据。
+            switch (validation) {
+            case chat_auth::TokenResult::Invalid:
+                return_value["error"] = 1011;
                 return;
+            case chat_auth::TokenResult::Unavailable:
+                SPDLOG_WARN("login credential store unavailable, uid={}", uid);
+                // 旧 Status 对 Redis HGET 失败与缺失用户均返回 1010。
+                [[fallthrough]];
+            case chat_auth::TokenResult::MissingUser:
+                return_value["error"] = 1010;
+                return;
+            case chat_auth::TokenResult::Valid:
+                break;
             }
             // 这里查询的是用户的基本信息，先查redis，redis查不到，则会查mysql
             // 这里如果更在变更信息，同时又去读取。但并不会产生很大的错误，最多只会出现读取的是旧的数据

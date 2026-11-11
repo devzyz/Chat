@@ -52,7 +52,6 @@ def run():
                 "[Mysql]", "Host=127.0.0.1", f"Port={port}", "User=root", "Password=", "Schema=resource_test",
                 "[SelfServer]", "Name=dao-fixture", "Host=127.0.0.1", "Port=18080", "RPCPort=18081",
                 "[Redis]", "Host=127.0.0.1", "Port=16379",
-                "[StatusServer]", "Host=127.0.0.1", "Port=18082",
                 "[Log]", "Name=dao-fixture", f"LogDir={path / 'logs'}", ""]), encoding="utf-8")
             env["MYSQL_DAO_TEST_CONFIG"] = str(config)
             subprocess.run([str(ROOT / "build/resource/ResourceTests.exe"),

@@ -1,8 +1,7 @@
 #include "ResourceHttpServer.h"
 #include "../../../common/asio/IOServicePool.h"
-#include "../../../common/grpc/GrpcClientRuntime.h"
+#include "../../../common/auth/RedisToken.h"
 #include "../../../common/resource/ResourceCatalog.h"
-#include "status.grpc.pb.h"
 #include <boost/property_tree/ini_parser.hpp>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/spdlog.h>
@@ -44,12 +43,11 @@ int main(int argc, char** argv) {
             config.get<std::string>("Mysql.User"),
             config.get<std::string>("Mysql.Password", ""),
             config.get<std::string>("Mysql.Schema"));
-        const auto endpoint =
-            config.get<std::string>("StatusServer.Host") + ":" + config.get<std::string>("StatusServer.Port");
-        // 按配置端点创建 StatusService stub。
-        rpc::BoundedPool<message::StatusService::Stub> status(2, std::chrono::milliseconds(1000), [endpoint] {
-            return message::StatusService::NewStub(grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials()));
-        });
+        chat_redis::RedisPool redis(
+            config.get<std::string>("Redis.Host"),
+            config.get<int>("Redis.Port"),
+            config.get<std::string>("Redis.Password", ""),
+            2);
         common::IOServicePool pool(1);
         auto& context = pool.GetIOService();
         resource::ResourceHttpServer server(
@@ -57,20 +55,12 @@ int main(int argc, char** argv) {
             config.get<std::string>("ResourceServer.Host"),
             static_cast<unsigned short>(port),
             store,
-            // 通过 Status 登录 RPC 验证请求 UID 与 Token。
-            [&status](int uid, const std::string& token) {
-                message::LoginReq request;
-                request.set_uid(uid);
-                request.set_token(token);
-                auto result = rpc::InvokeUnary<decltype(status), message::LoginReq, message::LoginRsp>(
-                    status,
-                    request,
-                    std::chrono::milliseconds(3000),
-                    // 执行已设置截止时间的 Status 登录调用。
-                    [](auto& stub, auto& context, const auto& input, auto& output) {
-                        return stub.Login(&context, input, &output);
-                    });
-                return result && result.response.error() == 0 && result.response.uid() == uid;
+            // 读取当前 Redis 凭据，不延长登录有效期。
+            [&redis](int uid, const std::string& token) {
+                const auto result = chat_auth::ValidateToken(redis, uid, token);
+                if (result == chat_auth::TokenResult::Unavailable)
+                    SPDLOG_WARN("credential store unavailable");
+                return result == chat_auth::TokenResult::Valid;
                 // 通过共享目录检查用户读取资源的权限。
             },
             [&catalog](int uid, const resource::Metadata& metadata) {
@@ -94,21 +84,15 @@ int main(int argc, char** argv) {
             [&catalog](int uid, const std::string& id) {
                 catalog.SetAvatar(uid, id);
             },
-            // 同时核对数据库 schema 和 Status RPC 可用性，不把监听成功等同业务就绪。
-            [&catalog, &status] {
+            // 借用时连接池验证认证及 PING，同时检查目录 schema。
+            [&catalog, &redis] {
                 if (!catalog.IsReady())
                     return false;
-                message::LoginReq request;
-                request.set_uid(0);
-                const auto result = rpc::InvokeUnary<decltype(status), message::LoginReq, message::LoginRsp>(
-                    status,
-                    request,
-                    std::chrono::milliseconds(1000),
-                    // 使用无效身份探测 RPC，预期获得明确身份拒绝。
-                    [](auto& stub, auto& context, const auto& input, auto& output) {
-                        return stub.Login(&context, input, &output);
-                    });
-                return result && result.response.error() == 1010;
+                auto* connection = redis.Borrow(std::chrono::milliseconds(1000));
+                if (!connection)
+                    return false;
+                redis.Return(connection);
+                return true;
             });
         std::promise<void> stopped;
         auto future = stopped.get_future();

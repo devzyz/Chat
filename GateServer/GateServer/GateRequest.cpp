@@ -1,151 +1,170 @@
 #include "GateRequestInternal.h"
 
-#include "const.h"
-
 #include <utility>
+
+#include "const.h"
 
 namespace gate::internal {
 namespace {
 
-/** @brief 共享持有四个业务端口，按端点顺序调用并统一映射异常。 */
+constexpr char kRegisterPurpose[] = "register";
+constexpr char kResetPasswordPurpose[] = "reset_password";
+
+// 请求协议按字节限制非空字符串，缺少字段时 JSON 值为 null。
+bool IsValidText(const Json::Value& value, std::size_t max_bytes) {
+    if (!value.isString())
+        return false;
+    const auto size = value.asString().size();
+    return size > 0 && size <= max_bytes;
+}
+
+// 组织账号请求的处理顺序，共享持有下方四个业务依赖。
 class GateRequestImpl final : public GateRequest {
 public:
-    /** @brief 保存四个非空依赖，供后续同步请求复用。 */
+    // 四个依赖分别负责发送验证码、管理一次性验证码、读写账号和管理登录会话。
     GateRequestImpl(
-        std::shared_ptr<VerificationPort> verification,
-        std::shared_ptr<CodeStore> code_store,
-        std::shared_ptr<UserStore> user_store,
-        std::shared_ptr<StatusPort> status)
-        : verification_(std::move(verification)), code_store_(std::move(code_store)),
-          user_store_(std::move(user_store)), status_(std::move(status)) {}
+        std::shared_ptr<VerificationPort> verification_sender,
+        std::shared_ptr<CodeStore> verification_codes,
+        std::shared_ptr<UserStore> accounts,
+        std::shared_ptr<StatusPort> session_service)
+        : verification_sender_(std::move(verification_sender)), verification_codes_(std::move(verification_codes)),
+          accounts_(std::move(accounts)), session_service_(std::move(session_service)) {}
 
-    /** @brief 执行业务校验及依赖调用；首个失败立即返回，异常统一映射为 RPCFailed。 */
+    // 校验公共字段后分派请求，依赖抛出的异常统一返回 RPCFailed。
     Result Handle(Endpoint endpoint, const Json::Value& request) override {
         try {
             if (!request.isObject())
                 return {ErrorCodes::Error_Json};
-            // 校验字符串类型、非空和编码字节上限，不读取无关字段。
-            const auto text = [&request](const char* key, std::size_t limit) {
-                return request[key].isString() && !request[key].asString().empty() &&
-                       request[key].asString().size() <= limit;
-            };
-            if (endpoint == Endpoint::Logout) {
-                if (!request["uid"].isInt() || request["uid"].asInt() <= 0 || !text("token", 128))
-                    return {ErrorCodes::Error_Json};
-                return {
-                    status_->Revoke(request["uid"].asInt(), request["token"].asString()) ? ErrorCodes::Success
-                                                                                         : ErrorCodes::TokenInvalid};
-            }
-            if (!text("email", 254) || request["email"].asString().find('@') == std::string::npos)
-                return {ErrorCodes::Error_Json};
-            if (endpoint == Endpoint::UserRegister &&
-                (!text("user", 1020) || !text("passwd", 255) || !text("confirm", 255) || !text("varifycode", 64)))
-                return {ErrorCodes::Error_Json};
-            if (endpoint == Endpoint::ResetPassword &&
-                (!text("user", 1020) || !text("password", 255) || !text("varify", 64)))
-                return {ErrorCodes::Error_Json};
-            if (endpoint == Endpoint::UserLogin && !text("password", 255))
-                return {ErrorCodes::Error_Json};
-            std::string purpose = endpoint == Endpoint::ResetPassword ? "reset_password" : "register";
-            if (endpoint == Endpoint::GetVarifyCode && request.isMember("purpose")) {
-                if (!request["purpose"].isString())
-                    return {ErrorCodes::Error_Json};
-                purpose = request["purpose"].asString();
-                if (purpose != "register" && purpose != "reset_password")
-                    return {ErrorCodes::Error_Json};
-            }
-            if (endpoint == Endpoint::GetVarifyCode) {
-                if (!request.isMember("email")) {
+            if (endpoint != Endpoint::Logout) {
+                const auto& email = request["email"];
+                if (!IsValidText(email, 254) || email.asString().find('@') == std::string::npos) {
                     return {ErrorCodes::Error_Json};
                 }
-                return {verification_->RequestCode(request["email"].asString(), purpose)};
             }
-            if (endpoint == Endpoint::UserRegister) {
-                if (request["passwd"].asString() != request["confirm"].asString()) {
-                    return {ErrorCodes::PasswdErr};
-                }
-                const auto code = code_store_->ReadCode(request["email"].asString(), purpose);
-                if (!code.has_value()) {
-                    return {ErrorCodes::VarifyExpired};
-                }
-                if (*code != request["varifycode"].asString()) {
-                    return {ErrorCodes::VarifyCodeErr};
-                }
-                if (!code_store_->ConsumeCode(request["email"].asString(), *code, purpose))
-                    return {ErrorCodes::VarifyExpired};
-                const auto uid = user_store_->CreateUser(
-                    request["user"].asString(),
-                    request["email"].asString(),
-                    request["passwd"].asString());
-                if (uid == 0 || uid == -1) {
-                    return {ErrorCodes::UserExist};
-                }
-                return {ErrorCodes::Success};
+
+            switch (endpoint) {
+            case Endpoint::GetVarifyCode:
+                return RequestVerificationCode(request);
+            case Endpoint::UserRegister:
+                return RegisterUser(request);
+            case Endpoint::ResetPassword:
+                return ResetPassword(request);
+            case Endpoint::UserLogin:
+                return LogIn(request);
+            case Endpoint::Logout:
+                return LogOut(request);
             }
-            if (endpoint == Endpoint::ResetPassword) {
-                const auto code = code_store_->ReadCode(request["email"].asString(), purpose);
-                if (!code.has_value()) {
-                    return {ErrorCodes::VarifyExpired};
-                }
-                if (*code != request["varify"].asString()) {
-                    return {ErrorCodes::VarifyCodeErr};
-                }
-                if (!user_store_->IdentityMatches(request["user"].asString(), request["email"].asString())) {
-                    return {ErrorCodes::EmailNotMatch};
-                }
-                if (!code_store_->ConsumeCode(request["email"].asString(), *code, purpose))
-                    return {ErrorCodes::VarifyExpired};
-                if (!user_store_->UpdatePassword(
-                        request["user"].asString(),
-                        request["password"].asString(),
-                        request["email"].asString())) {
-                    return {ErrorCodes::PasswdUpFailed};
-                }
-                return {ErrorCodes::Success};
-            }
-            if (endpoint == Endpoint::UserLogin) {
-                const auto user =
-                    user_store_->CheckCredentials(request["email"].asString(), request["password"].asString());
-                if (!user.has_value()) {
-                    return {ErrorCodes::PasswdInvalid};
-                }
-                const auto assignment = status_->Assign(user->uid, user->auth_version);
-                if (assignment.error != ErrorCodes::Success) {
-                    return {ErrorCodes::RPCFailed};
-                }
-                return {
-                    ErrorCodes::Success,
-                    user->uid,
-                    assignment.token,
-                    assignment.host,
-                    assignment.port,
-                };
-            }
+            return {ErrorCodes::RPCFailed};
         } catch (...) {
             return {ErrorCodes::RPCFailed};
         }
-        return {ErrorCodes::RPCFailed};
     }
 
 private:
-    std::shared_ptr<VerificationPort> verification_;
-    std::shared_ptr<CodeStore> code_store_;
-    std::shared_ptr<UserStore> user_store_;
-    std::shared_ptr<StatusPort> status_;
+    // 缺省用途为注册，找回密码需显式指定用途。
+    Result RequestVerificationCode(const Json::Value& request) {
+        const auto purpose = request.get("purpose", kRegisterPurpose);
+        if (!purpose.isString())
+            return {ErrorCodes::Error_Json};
+        const auto purpose_name = purpose.asString();
+        if (purpose_name != kRegisterPurpose && purpose_name != kResetPasswordPurpose) {
+            return {ErrorCodes::Error_Json};
+        }
+        return {verification_sender_->RequestCode(request["email"].asString(), purpose_name)};
+    }
+
+    // 仅读取并比对验证码，调用方在账号检查通过后再消费。
+    ErrorCodes CheckVerificationCode(const std::string& email, const std::string& code, const char* purpose) {
+        const auto stored_code = verification_codes_->ReadCode(email, purpose);
+        if (!stored_code)
+            return ErrorCodes::VarifyExpired;
+        return *stored_code == code ? ErrorCodes::Success : ErrorCodes::VarifyCodeErr;
+    }
+
+    // 两次密码一致且注册验证码消费成功后才创建账号。
+    Result RegisterUser(const Json::Value& request) {
+        if (!IsValidText(request["user"], 1020) || !IsValidText(request["passwd"], 255) ||
+            !IsValidText(request["confirm"], 255) || !IsValidText(request["varifycode"], 64)) {
+            return {ErrorCodes::Error_Json};
+        }
+        const auto password = request["passwd"].asString();
+        if (password != request["confirm"].asString())
+            return {ErrorCodes::PasswdErr};
+
+        const auto email = request["email"].asString();
+        const auto code = request["varifycode"].asString();
+        const auto error = CheckVerificationCode(email, code, kRegisterPurpose);
+        if (error != ErrorCodes::Success)
+            return {error};
+        if (!verification_codes_->ConsumeCode(email, code, kRegisterPurpose))
+            return {ErrorCodes::VarifyExpired};
+
+        const int uid = accounts_->CreateUser(request["user"].asString(), email, password);
+        return {uid == 0 || uid == -1 ? ErrorCodes::UserExist : ErrorCodes::Success};
+    }
+
+    // 先核对验证码和账号归属，再消费验证码并更新密码。
+    Result ResetPassword(const Json::Value& request) {
+        if (!IsValidText(request["user"], 1020) || !IsValidText(request["password"], 255) ||
+            !IsValidText(request["varify"], 64)) {
+            return {ErrorCodes::Error_Json};
+        }
+        const auto email = request["email"].asString();
+        const auto username = request["user"].asString();
+        const auto code = request["varify"].asString();
+        const auto error = CheckVerificationCode(email, code, kResetPasswordPurpose);
+        if (error != ErrorCodes::Success)
+            return {error};
+        if (!accounts_->IdentityMatches(username, email))
+            return {ErrorCodes::EmailNotMatch};
+        if (!verification_codes_->ConsumeCode(email, code, kResetPasswordPurpose))
+            return {ErrorCodes::VarifyExpired};
+
+        const bool updated = accounts_->UpdatePassword(username, request["password"].asString(), email);
+        return {updated ? ErrorCodes::Success : ErrorCodes::PasswdUpFailed};
+    }
+
+    // 凭据通过后，为客户端取得 ChatServer 地址和登录令牌。
+    Result LogIn(const Json::Value& request) {
+        if (!IsValidText(request["password"], 255))
+            return {ErrorCodes::Error_Json};
+        const auto user = accounts_->CheckCredentials(request["email"].asString(), request["password"].asString());
+        if (!user)
+            return {ErrorCodes::PasswdInvalid};
+
+        const auto assignment = session_service_->Assign(user->uid, user->auth_version);
+        if (assignment.error != ErrorCodes::Success)
+            return {ErrorCodes::RPCFailed};
+        return {ErrorCodes::Success, user->uid, assignment.token, assignment.host, assignment.port};
+    }
+
+    // 仅撤销与该用户当前会话匹配的令牌。
+    Result LogOut(const Json::Value& request) {
+        const auto& uid = request["uid"];
+        if (!uid.isInt() || uid.asInt() <= 0 || !IsValidText(request["token"], 128))
+            return {ErrorCodes::Error_Json};
+        const bool revoked = session_service_->Revoke(uid.asInt(), request["token"].asString());
+        return {revoked ? ErrorCodes::Success : ErrorCodes::TokenInvalid};
+    }
+
+    std::shared_ptr<VerificationPort> verification_sender_;
+    std::shared_ptr<CodeStore> verification_codes_;
+    std::shared_ptr<UserStore> accounts_;
+    std::shared_ptr<StatusPort> session_service_;
 };
 
 } // namespace
 
 std::unique_ptr<GateRequest> CreateGateRequest(
-    std::shared_ptr<VerificationPort> verification,
-    std::shared_ptr<CodeStore> code_store,
-    std::shared_ptr<UserStore> user_store,
-    std::shared_ptr<StatusPort> status) {
+    std::shared_ptr<VerificationPort> verification_sender,
+    std::shared_ptr<CodeStore> verification_codes,
+    std::shared_ptr<UserStore> accounts,
+    std::shared_ptr<StatusPort> session_service) {
     return std::make_unique<GateRequestImpl>(
-        std::move(verification),
-        std::move(code_store),
-        std::move(user_store),
-        std::move(status));
+        std::move(verification_sender),
+        std::move(verification_codes),
+        std::move(accounts),
+        std::move(session_service));
 }
 
 } // namespace gate::internal

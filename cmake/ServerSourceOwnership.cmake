@@ -44,9 +44,6 @@ set(CHAT_SERVER_SOURCE_OWNERS
     GateServer/GateServer/GateRequest
     GateServer/GateServer/GateGrpcClients
     GateServer/GateServer/GateServer
-    StatusServer/StatusServer/StatusRouting
-    StatusServer/StatusServer/StatusTransport
-    StatusServer/StatusServer/StatusServer
     ChatServer/ChatServer/ChatTransport
     ChatServer/ChatServer/LogicDispatcher
     ChatServer/ChatServer/ChatGrpcClients

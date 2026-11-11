@@ -23,12 +23,11 @@ constexpr DWORD STOP_TIMEOUT_MS = 5000;
 
 enum class ServiceKind {
     Gate,
-    Status,
 };
 
 /** 将参数化服务类型映射为正式产物名称。 */
 const char* ServiceName(ServiceKind service) {
-    return service == ServiceKind::Gate ? "GateServer" : "StatusServer";
+    return "GateServer";
 }
 
 /** 独占本次启动测试的临时目录，并在作用域结束时清理。 */
@@ -347,7 +346,7 @@ void WriteServiceConfig(
     bool include_critical_endpoint = true,
     const std::string& grpc_settings = {}) {
     std::ostringstream config;
-    // Status routing must start without any MySQL configuration.
+    // Gate validates the account database endpoint at startup.
     if (service == ServiceKind::Gate) {
         config << "[Mysql]\n"
                << "Host = 127.0.0.1\n"
@@ -365,16 +364,10 @@ void WriteServiceConfig(
            << "Host = 127.0.0.1\n"
            << "Port = 1\n"
            << "Password = fixture-placeholder\n"
-           << "[StatusServer]\n";
-    if (include_critical_endpoint) {
+           << "[ChatServers]\nName = FixtureChat\n[FixtureChat]\n";
+    if (include_critical_endpoint)
         config << "Host = 127.0.0.1\n";
-    }
-    config << "Port = " << (service == ServiceKind::Status ? service_port : "1") << "\n"
-           << "[ChatServers]\n"
-           << "Name = FixtureChat\n"
-           << "[FixtureChat]\n"
-           << "Host = 127.0.0.1\n"
-           << "Port = 1\n"
+    config << "Port = 1\n"
            << "Name = FixtureChat\n"
            << "[Log]\n"
            << "Name = " << ServiceName(service) << "StartupTest\n"
@@ -425,20 +418,13 @@ bool ProbeGateHttp(unsigned short port) {
     return false;
 }
 
-/** 通过有界 gRPC 通道连接确认 Status 协议就绪。 */
-bool ProbeStatusGrpc(unsigned short port) {
-    auto channel = grpc::CreateChannel("127.0.0.1:" + std::to_string(port), grpc::InsecureChannelCredentials());
-    return channel->WaitForConnected(std::chrono::system_clock::now() + 250ms);
-}
-
 /** 在启动期限内轮询协议就绪，进程提前退出则立即失败。 */
 bool WaitForReady(ServiceKind service, unsigned short port, const OwnedProcess& process) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(STARTUP_TIMEOUT_MS);
     while (std::chrono::steady_clock::now() < deadline) {
         if (!process.IsRunning())
             return false;
-        if ((service == ServiceKind::Gate && ProbeGateHttp(port)) ||
-            (service == ServiceKind::Status && ProbeStatusGrpc(port))) {
+        if (ProbeGateHttp(port)) {
             return true;
         }
         std::this_thread::sleep_for(50ms);
@@ -548,7 +534,7 @@ TEST_P(GateStatusStartupTests, MissingCriticalEndpointReturnsNonZero) {
     WriteServiceConfig(GetParam(), config, std::to_string(FindAvailablePort()), false);
     const auto result = RunToExit(GetParam(), {L"--config", config.wstring()}, fixture.Path());
     ExpectFailure(result);
-    EXPECT_NE(result.stderr_text.find("[StatusServer].Host"), std::string::npos) << result.stderr_text;
+    EXPECT_NE(result.stderr_text.find("[FixtureChat].Host"), std::string::npos) << result.stderr_text;
 }
 
 // S02-CFG-04 / S03-CFG-04
@@ -623,7 +609,7 @@ TEST_P(GateStatusStartupTests, OccupiedPortFailsWithoutProtocolReadyAndReleasesO
 
     const auto result = RunToExit(GetParam(), {L"--config", config.wstring()}, fixture.Path());
     ExpectFailure(result);
-    EXPECT_FALSE(GetParam() == ServiceKind::Gate ? ProbeGateHttp(port) : ProbeStatusGrpc(port));
+    EXPECT_FALSE(ProbeGateHttp(port));
 
     holder.close();
     boost::asio::ip::tcp::acceptor released(context);
@@ -690,5 +676,5 @@ TEST_P(GateStatusStartupTests, ProtocolReadyThenCtrlBreakStopsWithinDeadlineAndR
 INSTANTIATE_TEST_SUITE_P(
     ProductionExecutables,
     GateStatusStartupTests,
-    testing::Values(ServiceKind::Gate, ServiceKind::Status),
+    testing::Values(ServiceKind::Gate),
     ServiceParameterName);

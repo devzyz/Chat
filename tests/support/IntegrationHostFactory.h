@@ -9,7 +9,6 @@
 
 class SessionLifecycleCoordinator;
 class LogicDispatcher;
-class StatusRouting;
 
 namespace gate {
 class GateRequest;
@@ -33,7 +32,6 @@ struct CleanupResult {
 
 enum class HostFamily {
     GateHttp,
-    StatusGrpc,
     ChatTcp,
 };
 
@@ -72,7 +70,6 @@ struct ProductionModules {
     std::unique_ptr<LogicDispatcher> logic_dispatcher;
     std::unique_ptr<SessionLifecycleCoordinator> chat_sessions;
     std::unique_ptr<gate::GateRequest> gate_request;
-    std::unique_ptr<StatusRouting> status_routing;
 };
 
 /** 定义集成传输宿主的绑定、真实协议就绪及有界停机接口。 */

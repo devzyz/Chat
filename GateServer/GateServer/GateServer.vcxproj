@@ -134,8 +134,6 @@
   <ItemGroup>
     <ClCompile Include="GateServer.cpp" />
     <ClCompile Include="LogMgr.cpp" />
-    <ClCompile Include="$(ProtocolGeneratedDir)\status.grpc.pb.cc" />
-    <ClCompile Include="$(ProtocolGeneratedDir)\status.pb.cc" />
     <ClCompile Include="$(ProtocolGeneratedDir)\varify.grpc.pb.cc" />
     <ClCompile Include="$(ProtocolGeneratedDir)\varify.pb.cc" />
     <ClCompile Include="MysqlDao.cpp" />
@@ -151,15 +149,12 @@
     <ClInclude Include="HttpConnection.h" />
     <ClInclude Include="LogicSystem.h" />
     <ClInclude Include="LogMgr.h" />
-    <ClInclude Include="$(ProtocolGeneratedDir)\status.grpc.pb.h" />
-    <ClInclude Include="$(ProtocolGeneratedDir)\status.pb.h" />
     <ClInclude Include="$(ProtocolGeneratedDir)\varify.grpc.pb.h" />
     <ClInclude Include="$(ProtocolGeneratedDir)\varify.pb.h" />
     <ClInclude Include="MysqlDao.h" />
     <ClInclude Include="MysqlMgr.h" />
     <ClInclude Include="RedisMgr.h" />
     <ClInclude Include="Singleton.h" />
-    <ClInclude Include="StatusGrpcClient.h" />
     <ClInclude Include="VerifyGrpcClient.h" />
   </ItemGroup>
   <ItemGroup>

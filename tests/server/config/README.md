@@ -23,5 +23,5 @@ CI job 为 `servers-release`，合并报告为 `build/test-results/server_unit.x
 
 ## 已知缺口
 
-- GateServer、StatusServer 的配置入口尚无等价 seam，未在此复制其私有解析逻辑。
+- GateServer 的配置入口尚无等价 seam，未在此复制其私有解析逻辑。
 - 尚未以独立子进程验证 ChatServer `main` 的所有命令行错误路径。

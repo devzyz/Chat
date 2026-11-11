@@ -152,7 +152,7 @@ PBKDF2-HMAC-SHA256 派生，盐为 16 字节安全随机值的十六进制编码
 
 Redis 的 UID 哈希保存当前 Token，空闲 TTL 24 小时；`auth_version_<uid>` 保存撤销代次，
 不能随 Token 过期删除。`usessiontoken_<uid>` 与在线位置同为 90 秒租约，用于匹配会话绑定凭据。
-Gate 改密/退出提升代次并删除 Token；Status 比较请求代次后原子发布，Chat 匹配当前会话及凭据后续期。
+Gate 改密/退出提升代次并删除 Token；Gate 比较请求代次后原子发布，Chat 匹配当前会话及凭据后续期。
 Gate 在 MySQL 独占连接上持有 `chat-auth-<uid>` 咨询锁，覆盖登录校验和选服，或撤销和密码更新；
 释放锁失败时销毁连接，禁止把残留会话锁还给池。无需新增 schema migration。
 

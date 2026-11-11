@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
 #include "../../../ChatServer/ChatServer/ChatGrpcClient.h"
-#include "../../../ChatServer/ChatServer/StatusGrpcClient.h"
 
 #include <chrono>
 #include <future>
@@ -52,14 +51,6 @@ template <typename Factory> void VerifyCloseLifecycle(Factory factory) {
     EXPECT_EQ(pool->Acquire().failure, rpc::Failure::Closed);
 }
 
-/** 返回创建Chat 的 Status单容量短期限池的工厂。 */
-auto ChatStatusPoolFactory() {
-    // 创建Chat 的 Status生产 RPC 池，无需实际调用远端。
-    return [] {
-        return std::make_unique<StatusConnectionPool>("127.0.0.1", "1", 1, 50ms);
-    };
-}
-
 /** 返回创建Chat 对端单容量短期限池的工厂。 */
 auto ChatPeerPoolFactory() {
     // 创建Chat 对端生产 RPC 池，无需实际调用远端。
@@ -67,19 +58,6 @@ auto ChatPeerPoolFactory() {
         return std::make_unique<ChatConnectionPool>("127.0.0.1", "1", 1, 50ms);
     };
 }
-}
-
-/** 验证Chat 的 Status池借用归还合同。 */
-TEST(ChatStatusPoolContractTests, BorrowReturn) {
-    VerifyBorrowReturn(ChatStatusPoolFactory());
-}
-/** 验证Chat 的 Status池耗尽有界合同。 */
-TEST(ChatStatusPoolContractTests, ExhaustionIsBounded) {
-    VerifyExhaustion(ChatStatusPoolFactory());
-}
-/** 验证Chat 的 Status池关闭唤醒与幂等合同。 */
-TEST(ChatStatusPoolContractTests, CloseIsIdempotentAndWakesBorrowers) {
-    VerifyCloseLifecycle(ChatStatusPoolFactory());
 }
 
 /** 验证Chat 对端池借用归还合同。 */

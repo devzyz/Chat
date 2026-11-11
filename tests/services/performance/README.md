@@ -4,7 +4,7 @@
 GitHub CI 手动选择 `mode=performance`，`performance_profile=smoke|baseline|stress`，默认 baseline。
 固定负载以 [profiles.json](profiles.json) 为唯一来源。仅手动运行，不加入 required checks。
 
-正式 Gate、Status、双 Chat、Resource、Varify 在 Ubuntu 同机运行，复用临时 MySQL、Redis、Mailpit。
+正式 Gate、双 Chat、Resource、Varify 在 Ubuntu 同机运行，复用临时 MySQL、Redis、Mailpit。
 每轮独立账号通过公开验证码、注册、登录、好友与群接口准备。固定种子 chat-performance-v1。
 测量登录、同服/跨服 256 字节文本、二十人群两秒补拉、离线一百条恢复、PNG 和 1/10 MiB 附件及混合负载。
 准备和预热不进入正式样本；离线积压准备在恢复动作计时外。吞吐按实际完成及排空时间计算。

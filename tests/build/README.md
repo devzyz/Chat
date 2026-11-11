@@ -161,7 +161,7 @@ for later PRs. The first target-branch build may therefore be cold.
 
 Production source ownership is shared with the explicit MSBuild project entries
 through `cmake/ServerSourceOwnership.cmake`. Linux builds the same GateTransport,
-GateRequest, GateGrpcClients, StatusTransport, StatusRouting, ChatTransport,
+GateRequest, GateGrpcClients, ChatTransport,
 ChatSessionState, LogicDispatcher and ChatGrpcClients libraries used upstream;
 formal servers and IntegrationHost consumers link those targets. Generated proto
 remains owned by `chat_protocol_cpp`. Conditional or property-expanded source
@@ -253,7 +253,7 @@ explicitly enables client, tests and hosted checks to preserve full CI coverage.
 cmake --preset linux-x64-release -B out/build/linux-server-only \
   -DCHAT_BUILD_CLIENT=OFF -DBUILD_TESTING=OFF -DVCPKG_MANIFEST_INSTALL=OFF \
   -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_Qt5=TRUE
-cmake --build out/build/linux-server-only --target GateServer StatusServer ChatServer
+cmake --build out/build/linux-server-only --target GateServer ChatServer
 ```
 
 This reuses an existing Linux dependency installation; it does not restore packages.

@@ -3,7 +3,13 @@
 #include "GateRequestInternal.h"
 #include "MysqlMgr.h"
 #include "RedisMgr.h"
-#include "StatusGrpcClient.h"
+#include "ConfigMgr.h"
+#include <boost/algorithm/string/trim.hpp>
+#include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include "GateRouting.h"
+#include <sstream>
+#include <vector>
 #include "VerifyGrpcClient.h"
 #include "const.h"
 
@@ -87,9 +93,52 @@ public:
     }
 };
 
-/** @brief 将选服端口适配到共享 Status gRPC 客户端。 */
-class GrpcStatusAdapter final : public gate::internal::StatusPort {
+/** @brief 读取 Chat 租约与计数，通过代次检查发布凭据。 */
+class AssignmentStore final : public gate_routing::AssignmentStore {
 public:
+    /** @brief 租约缺失或计数不可读时跳过该实例。 */
+    std::optional<std::string> ReadCount(const std::string& name) override {
+        auto redis = RedisMgr::GetInstance();
+        std::string value;
+        if (!redis->Get("chatlease_" + name, value) || !redis->HGet("logincount", name, value))
+            return {};
+        return value;
+    }
+    /** @brief 仅当前代次可覆盖凭据。 */
+    bool PutToken(int uid, const std::string& token, long long version) override {
+        return RedisMgr::GetInstance()->PutExpiringToken(uid, token, version);
+    }
+};
+
+/** @brief 每次签发使用独立 UUID 生成器，可由多个登录请求并发调用。 */
+class UuidTokenSource final : public gate_routing::TokenSource {
+public:
+    /** @brief 生成新的随机登录凭据。 */
+    std::string Next() override {
+        return boost::uuids::to_string(boost::uuids::random_generator()());
+    }
+};
+
+/** @brief 对配置的实例按在线租约与负载选服，原子发布和撤销凭据。 */
+class RedisAssignmentAdapter final : public gate::internal::StatusPort {
+public:
+    /** @brief 读取经过启动校验的不可变候选表。 */
+    RedisAssignmentAdapter() {
+        auto& config = ConfigMgr::GetInstance();
+        std::stringstream names(config["ChatServers"]["Name"]);
+        std::vector<RoutingServer> servers;
+        std::string name;
+        while (std::getline(names, name, ',')) {
+            boost::algorithm::trim(name);
+            auto section = config[name];
+            servers.push_back({section["Name"], section["Host"], section["Port"]});
+        }
+        routing_ = gate_routing::CreateGateRouting(
+            std::move(servers),
+            std::make_shared<AssignmentStore>(),
+            std::make_shared<UuidTokenSource>());
+    }
+
     /** @brief 匹配当前凭据才撤销；缺失视为已退出，旧凭据不能删除新登录。 */
     bool Revoke(int uid, const std::string& token) override {
         return RedisMgr::GetInstance()->EvalNumber(
@@ -99,16 +148,13 @@ public:
                    std::to_string(uid),
                    token) == 1;
     }
-    /** @brief 同步获取选服响应并复制业务码、Token 和地址，不额外推断成功。 */
+    /** @brief 仅在找到有效实例并成功发布当前代次的凭据后返回地址。 */
     gate::internal::StatusAssignment Assign(int uid, long long auth_version) override {
-        const auto response = StatusGrpcClient::GetInstance()->GetChatServer(uid, auth_version);
-        return {
-            response.error(),
-            response.token(),
-            response.host(),
-            response.port(),
-        };
+        return routing_->Assign(uid, auth_version);
     }
+
+private:
+    std::unique_ptr<GateRouting> routing_;
 };
 
 } // namespace
@@ -120,7 +166,7 @@ std::unique_ptr<GateRequest> CreateProductionGateRequest() {
         std::make_shared<GrpcVerificationAdapter>(),
         std::make_shared<RedisCodeStoreAdapter>(),
         std::make_shared<MysqlUserStoreAdapter>(),
-        std::make_shared<GrpcStatusAdapter>());
+        std::make_shared<RedisAssignmentAdapter>());
 }
 
 } // namespace gate

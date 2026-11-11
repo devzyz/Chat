@@ -42,6 +42,8 @@ class ReleaseContracts(unittest.TestCase):
         metadata = package.verify(archive, destination, self.sha)
         self.assertEqual(metadata['version'], package.read_version(ROOT))
         self.assertTrue((destination / 'proto/varify.proto').is_file())
+        self.assertFalse((destination / 'StatusServer').exists())
+        self.assertFalse((destination / 'proto/status.proto').exists())
         for name in ('migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'):
             self.assertEqual((destination / 'migrations' / name).read_bytes(),
                              (ROOT / 'schema' / name).read_bytes())

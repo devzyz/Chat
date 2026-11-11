@@ -20,7 +20,7 @@ test('foundation evidence binds exact cases, bytes, SHA, distinct clients and cl
     const cases = Array.from({ length: 7 }, (_, index) => ({ id: `E03-CONTRACT-${String(index + 6).padStart(2, '0')}`,
         name: 'synthetic validator input', pass: true }));
     const topology = createTopology('b'.repeat(32), {
-        gate: 30001, status: 30002, varify: 30003, chatA: 30004, rpcA: 30005, chatB: 30006, rpcB: 30007 });
+        gate: 30001, varify: 30003, chatA: 30004, rpcA: 30005, chatB: 30006, rpcB: 30007 });
     // 为每个逻辑用户生成独立客户端身份和匹配实例端点。
     topology.clients = topology.users.map((user, index) => ({ logical: user.logical, pid: index + 100,
         uid: index + 1, active: true, host: topology.host, port: topology.servers[index].port }));
@@ -164,7 +164,7 @@ test('requested release acceptance fails closed on evidence and teardown gaps', 
             id: `${group.prefix}${String(index + (groupIndex === 0 ? 6 : 1)).padStart(2, '0')}`,
             name: 'synthetic validator input', pass: true })));
     const topology = createTopology('e'.repeat(32), {
-        gate: 31001, status: 31002, varify: 31003, chatA: 31004, rpcA: 31005, chatB: 31006, rpcB: 31007 });
+        gate: 31001, varify: 31003, chatA: 31004, rpcA: 31005, chatB: 31006, rpcB: 31007 });
     // 构造互不共享的客户端身份。
     topology.clients = topology.users.map((user, index) => ({ logical: user.logical,
         pid: 100 + index, uid: index + 1, active: true, host: topology.host, port: topology.servers[index].port }));
