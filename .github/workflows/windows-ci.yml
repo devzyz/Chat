@@ -491,20 +491,19 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $releaseRoot = Join-Path $env:GITHUB_WORKSPACE 'build\windows-servers\Release'
           $coreAppLocalDlls = @(
-              'abseil_dll.dll',
               'hiredis.dll',
               'libcrypto-3-x64.dll',
-              'libprotobuf.dll',
               'libssl-3-x64.dll',
               'zlib1.dll'
           )
+          $grpcAppLocalDlls = @('abseil_dll.dll', 'libprotobuf.dll')
 
           foreach ($serverName in @('GateServer', 'ChatServer', 'ResourceServer')) {
               $serverDirectory = Join-Path $releaseRoot $serverName
-              $requiredDlls = if ($serverName -eq 'ResourceServer') {
-                  $coreAppLocalDlls | Where-Object { $_ -ne 'hiredis.dll' }
-              } else { $coreAppLocalDlls }
-              $requiredFiles = @("$serverName.exe", 'config.ini') + $requiredDlls
+              $requiredFiles = @("$serverName.exe", 'config.ini') + $coreAppLocalDlls
+              if ($serverName -in @('GateServer', 'ChatServer')) {
+                  $requiredFiles += $grpcAppLocalDlls
+              }
               foreach ($fileName in $requiredFiles) {
                   $filePath = Join-Path $serverDirectory $fileName
                   if (-not (Test-Path -LiteralPath $filePath -PathType Leaf)) {
