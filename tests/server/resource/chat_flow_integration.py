@@ -27,6 +27,7 @@ class RedisFixture(socketserver.ThreadingTCPServer):
         self.values, self.hashes = {}, {}
         self.lock = threading.Lock()
         self.refresh_events = {}
+        self.refresh_barriers = {}
         for uid in uids:
             self.hashes[str(uid).encode()] = {f"utoken_{uid}".encode(): b"fixture-token"}
 
@@ -46,6 +47,7 @@ class RedisHandler(socketserver.StreamRequestHandler):
             for _ in range(int(header[1:])):
                 size = int(self.rfile.readline()[1:]); values.append(self.rfile.read(size)); self.rfile.read(2)
             command, *args = values
+            barrier = None
             with self.server.lock:
                 data, hashes = self.server.values, self.server.hashes
                 result = b"+OK\r\n"
@@ -79,6 +81,7 @@ class RedisHandler(socketserver.StreamRequestHandler):
                         previous = [data.get(key, b"") for key in keys[:2]]
                         credential = hashes.get(keys[2], {}).get(b"utoken_" + keys[2])
                         if b"return {'current'}" in script:
+                            barrier = self.server.refresh_barriers.pop(keys[2], None)
                             result = b"*1\r\n" + self.bulk(b"current") if previous[1] == argv[0] and previous[0] and credential and credential == data.get(keys[3]) else b"*0\r\n"
                             event = self.server.refresh_events.pop(keys[2], None)
                             if event is not None and result.startswith(b"*1"):
@@ -101,6 +104,11 @@ class RedisHandler(socketserver.StreamRequestHandler):
                     else:
                         result = b"-ERR unsupported fixture script\r\n"
                 elif command != b"AUTH": result = b"-ERR unsupported fixture command\r\n"
+            if barrier is not None:
+                entered, release = barrier
+                entered.set()
+                if not release.wait(3):
+                    return
             self.wfile.write(result)
 
     @staticmethod

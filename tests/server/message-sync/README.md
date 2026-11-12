@@ -32,6 +32,14 @@ processes, and cleans up only its own processes/files. `mysql` and `mysqld` must
 already be on PATH. Binaries need their app-local runtime dependencies.
 The suite uses real MySQL, TCP and peer gRPC, with a deterministic Redis fixture for Chat authentication and session state.
 
+While both database workers wait, the Redis fixture withholds one heartbeat's authentication reply outside its lock.
+A different session must complete its heartbeat before that reply is released.
+An inbound Chat gRPC receipt call is held at Redis until its deadline; the next frame on the recipient connection must be
+a heartbeat response rather than a late push. The probe uses the repository's existing VarifyServer gRPC JS dependencies.
+The notification isolation case also directs one outbound RPC to a test peer withholding its HTTP/2 handshake.
+Another connection logs in while that RPC waits. After filling all 64 notification slots the sender still gets a commit ACK,
+the receiver syncs the skipped message, and the 64 accepted notifications reach it in order after the sender disconnects.
+
 The TCP flow holds the user table in its isolated database until two login queries are observed waiting on the same
 ChatServer. An authenticated third connection must receive a heartbeat response while the lock is held. Revoking one
 token before releasing the lock must prevent that login from binding. A pipelined send and history request on one

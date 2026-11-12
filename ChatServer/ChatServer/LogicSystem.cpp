@@ -35,29 +35,64 @@ LogicDispatcher::Completion Reply(std::shared_ptr<CSession> session, short id, s
 }
 }
 
-void LogicSystem::QueueDatabase(const std::shared_ptr<CSession>& session, DatabaseWork work) {
+void LogicSystem::QueueDatabase(const std::shared_ptr<CSession>& session, ExternalWork work) {
     const int uid = session->AuthenticatedUid();
-    // 登录另由绑定时校验 token；已认证请求等到数据库线程可用时再次核实凭据。
-    auto checked = [this, session, uid, work = std::move(work)]() -> Completion {
-        if (session->Closing())
-            return {};
-        if (uid &&
-            (!_directory->IsCurrent(uid, session->Id()) || !RefreshAuthenticatedSession(*_presence, uid, session)))
-            return {};
-        return work();
-    };
+    std::function<bool()> check;
+    if (uid) {
+        // 已取得 SQL 名额后才在 Redis 池复核，期间不借数据库连接。
+        check = [this, uid, session] {
+            return !session->Closing() && _directory->IsCurrent(uid, session->Id()) &&
+                   RefreshAuthenticatedSession(*_presence, uid, session);
+        };
+    }
+    // Redis 复核通过后直接使用预留名额，在执行 SQL 前重新检查本地状态。
+    QueueRequest(
+        ExternalTask::MySQL,
+        session,
+        [this, session, uid, work = std::move(work)]() -> Completion {
+            if (session->Closing() || (uid && !_directory->IsCurrent(uid, session->Id())))
+                return {};
+            return work();
+        },
+        std::move(check));
+}
+
+void LogicSystem::QueueRequest(
+    ExternalTask kind,
+    const std::shared_ptr<CSession>& session,
+    ExternalWork work,
+    std::function<bool()> sql_check) {
     // 未知结果不冒充永久失败，客户端按原 UUID 核实。
     auto failed = [session] {
         session->Close(SessionCloseReason::LogicUnavailable);
     };
-    if (SubmitDatabase(session, std::move(checked), failed) != LogicSubmitResult::Accepted)
+    if (SubmitExternal(kind, session, std::move(work), failed, std::move(sql_check)) != LogicSubmitResult::Accepted)
         failed();
 }
-LogicSystem::LogicSystem(std::shared_ptr<UserSessionDirectory> directory, std::shared_ptr<UserPresenceStore> presence)
+
+LogicDispatcher::Completion LogicSystem::ReplyAndNotify(
+    std::shared_ptr<CSession> session,
+    short id,
+    const Json::Value& response,
+    ExternalWork route) {
+    // 分发线程先确认提交。通知不持有发送者连接，队满时依赖权威同步恢复。
+    return [this,
+            reply = Reply(std::move(session), id, messaging::CompactJson(response)),
+            route = std::move(route)]() mutable {
+        reply();
+        QueueNotification(std::move(route));
+    };
+}
+LogicSystem::LogicSystem(
+    std::shared_ptr<UserSessionDirectory> directory,
+    std::shared_ptr<UserPresenceStore> presence,
+    std::shared_ptr<DependencyExecutor> dependencies)
     // 把队列消息路由到已登记业务处理器。
-    : LogicDispatcher([this](const LogicMessage& message) {
-          return Dispatch(message);
-      }),
+    : LogicDispatcher(
+          [this](const LogicMessage& message) {
+              return Dispatch(message);
+          },
+          std::move(dependencies)),
       _directory(std::move(directory)), _presence(std::move(presence)) {
     RegisterCallbacks();
 }
@@ -78,21 +113,212 @@ bool LogicSystem::Dispatch(const LogicMessage& message) {
         const int uid = message.session->AuthenticatedUid();
         if (uid <= 0 || message.received_uid != uid || !_directory->IsCurrent(uid, message.session->Id()))
             return true;
-        if (!RefreshAuthenticatedSession(*_presence, uid, message.session))
-            return true;
-        Json::Value request;
-        Json::Reader reader;
-        if (!reader.parse(message.body, request) || !request.isObject())
-            return true;
-        for (const auto* field : {"uid", "fromuid", "authuid", "from_uid", "self_id"}) {
-            if (request.isMember(field) && (!request[field].isInt() || request[field].asInt() != uid)) {
-                message.session->Close(SessionCloseReason::ProtocolError);
-                return true;
-            }
-        }
+        // 认证与慢 SQL 分开排队，等待期间只占用当前连接的顺序位置。
+        QueueRequest(ExternalTask::Redis, message.session, [this, message, uid]() -> Completion {
+            if (message.session->Closing() || !RefreshAuthenticatedSession(*_presence, uid, message.session))
+                return {};
+            // 回到分发线程后才执行原业务入口。
+            return [this, message, uid] {
+                DispatchAuthenticated(message, uid);
+            };
+        });
+        return true;
     }
     callback->second(message.session, message.id, message.body);
     return true;
+}
+
+void LogicSystem::DispatchAuthenticated(const LogicMessage& message, int uid) {
+    if (message.session->Closing() || message.session->AuthenticatedUid() != uid ||
+        !_directory->IsCurrent(uid, message.session->Id()))
+        return;
+    Json::Value request;
+    Json::Reader reader;
+    if (!reader.parse(message.body, request) || !request.isObject())
+        return;
+    for (const auto* field : {"uid", "fromuid", "authuid", "from_uid", "self_id"}) {
+        if (request.isMember(field) && (!request[field].isInt() || request[field].asInt() != uid)) {
+            message.session->Close(SessionCloseReason::ProtocolError);
+            return;
+        }
+    }
+    _fun_callbacks.at(message.id)(message.session, message.id, message.body);
+}
+
+void LogicSystem::QueueLoginData(
+    std::shared_ptr<CSession> session,
+    int uid,
+    std::string credential,
+    Json::Value capabilities) {
+    // 在数据库线程执行本次请求的同步存取。
+    QueueDatabase(
+        session,
+        [this, session, capabilities = std::move(capabilities), uid, credential = std::move(credential)]() mutable
+            -> Completion {
+            Json::Value return_value;
+            auto user_info = MysqlMgr::GetInstance()->GetUserByUid(uid);
+            if (!user_info) {
+                return_value["error"] = ErrorCodes::UidInvalid;
+                return Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(return_value));
+            }
+
+            return_value["error"] = ErrorCodes::Success;
+            return_value["uid"] = uid;
+            return_value["name"] = user_info->_name;
+            return_value["description"] = user_info->_description;
+            return_value["icon"] = user_info->_icon;
+            return_value["email"] = user_info->_email;
+            return_value["sex"] = user_info->_sex;
+            return_value["token"] = credential;
+
+            bool social = false;
+            if (capabilities.isArray())
+                for (const auto& value : capabilities)
+                    if (value.isString() && value.asString() == "basic_social_v1")
+                        social = true;
+            // 新客户端通过目录分页加载，登录响应不随好友和申请数量增长。
+            if (social) {
+                return_value["load_more"] = true;
+                return_value["current_chat_id"] = 0;
+                return_value["chat_list"] = Json::Value(Json::arrayValue);
+            } else {
+                // 同样的，这里也不需要添加分布式锁
+                // 因为刚好有两个相同uid=1的客户端，然后另一个客户端uid=2要添加uid=1为好友，但是我们一定会写入到数据库中
+                // 所以即使我查到的是旧的serverip信息，也能够接受，当下一次上线的时候，会重新收到好友请求信息
+                // 获取好友申请列表
+                std::vector<std::shared_ptr<ApplyInfo>> apply_list;
+                auto b_apply = GetApplyFriendList(uid, apply_list);
+                if (b_apply) {
+                    for (auto& info : apply_list) {
+                        Json::Value apply;
+                        apply["fromuid"] = info->_apply_uid;
+                        apply["touid"] = info->_to_uid;
+                        apply["applyname"] = info->_apply_name;
+                        apply["applydescription"] = info->_apply_description;
+                        apply["applyicon"] = info->_apply_icon;
+                        apply["applysex"] = info->_apply_sex;
+                        apply["status"] = info->_status;
+                        apply["description"] = info->_description;
+                        apply["backname"] = info->_backname;
+                        return_value["apply_list"].append(apply);
+                    }
+                }
+
+                // 同样的，一定会被更新到数据库中，因此如果查不到可以接受
+                // 获取好友列表
+                std::vector<std::shared_ptr<UserInfo>> friend_list;
+                auto b_user = GetFriendList(uid, friend_list);
+                if (b_user) {
+                    for (auto& info : friend_list) {
+                        Json::Value friends;
+                        friends["name"] = info->_name;
+                        friends["description"] = info->_description;
+                        friends["sex"] = info->_sex;
+                        friends["icon"] = info->_icon;
+                        friends["uid"] = info->_uid;
+                        friends["backname"] = info->_backname;
+                        return_value["friend_list"].append(friends);
+                    }
+                }
+
+                // 初始获取一部分会话列表
+                {
+                    std::vector<std::shared_ptr<ChatInfoBase>> chat_list;
+
+                    // 是否能够加载更多
+                    bool load_more = false;
+                    int last_load_id = 0;
+                    bool success = GetUserChatList(uid, 0, PAGE_SIZE, chat_list, load_more, last_load_id);
+
+                    if (!success) {
+                        return_value["error"] = ErrorCodes::UidInvalid;
+                        return Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(return_value));
+                    }
+
+                    return_value["load_more"] = load_more;
+                    return_value["current_chat_id"] = last_load_id;
+
+                    for (auto& chat : chat_list) {
+                        Json::Value item;
+
+                        item["type"] = chat->_type;
+                        item["chat_id"] = chat->_chat_id;
+
+                        if (chat->_type == "private") {
+                            auto child = std::dynamic_pointer_cast<PrivateChatInfo>(chat);
+                            item["user1_id"] = child->_user1_id;
+                            item["user2_id"] = child->_user2_id;
+                        } else if (chat->_type == "group") {
+                            auto child = std::dynamic_pointer_cast<GroupChatInfo>(chat);
+                            item = child->_membership;
+                        }
+
+                        return_value["chat_list"].append(item);
+                    }
+                }
+            }
+            bool receipts = false;
+            if (capabilities.isArray()) {
+                for (const auto& capability : capabilities)
+                    if (capability.isString() && capability.asString() == "message_receipts_v1")
+                        receipts = true;
+            }
+
+            return_value["capabilities"] = Json::Value(Json::arrayValue);
+            if (receipts)
+                return_value["capabilities"].append("message_receipts_v1");
+            bool groups = false;
+            if (capabilities.isArray())
+                for (const auto& value : capabilities)
+                    if (value.isString() && value.asString() == "group_membership_v1")
+                        groups = true;
+
+            if (groups)
+                return_value["capabilities"].append("group_membership_v1");
+
+            if (social)
+                return_value["capabilities"].append("basic_social_v1");
+            if (messaging::CompactJson(return_value).size() > ResponseBodyLimit(MSG_CHAT_LOGIN_RSP)) {
+                return_value = Json::Value(Json::objectValue);
+                return_value["error"] = ErrorCodes::Error_Json;
+                return_value["login_error"] = "UpgradeRequired";
+                return Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(return_value));
+            }
+            // 绑定完成前继续占用本连接的顺序位置。
+            return [this,
+                    session,
+                    uid,
+                    credential,
+                    receipts,
+                    groups,
+                    social,
+                    response = std::move(return_value)]() mutable {
+                if (session->Closing())
+                    return;
+                auto resume = AwaitCompletion(session);
+                try {
+                    // 绑定结束后才释放本连接，并按协商能力回复。
+                    session->BindAuthenticatedUser(
+                        uid,
+                        [session, resume, response = std::move(response), receipts, groups, social](
+                            SessionBindResult result) mutable {
+                            if (result == SessionBindResult::Bound) {
+                                session->EnableReceipts(receipts);
+                                session->EnableGroups(groups);
+                                session->EnableSocial(social);
+                            } else {
+                                response = Json::Value(Json::objectValue);
+                                response["error"] = ErrorCodes::RPCFailed;
+                            }
+                            resume(Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(response)));
+                        },
+                        credential);
+                } catch (...) {
+                    resume({});
+                    session->Close(SessionCloseReason::LogicUnavailable);
+                }
+            };
+        });
 }
 
 void LogicSystem::RegisterCallbacks() {
@@ -253,237 +479,90 @@ void LogicSystem::RegisterCallbacks() {
                     } catch (const messaging::ReceiptError& error) {
                         response["receipt_error"] = error.what();
                     }
-                    // 提交后的回执通知在分发线程路由。
-                    return [this, session, request, response = std::move(response), report, success, peer] {
-                        session->Send(
-                            messaging::CompactJson(response),
-                            report ? MSG_MESSAGE_RECEIPT_REPORT_RSP : MSG_MESSAGE_RECEIPT_SYNC_RSP);
-                        if (!success || !report)
-                            return;
-                        Json::Value notification;
-                        notification["chat_id"] = request["chat_id"];
-                        notification["latest_revision"] = response["latest_revision"];
-                        if (auto local = FindAuthorizedRecipient(*_directory, *_presence, peer)) {
-                            if (local->SupportsReceipts())
-                                local->Send(messaging::CompactJson(notification), MSG_MESSAGE_RECEIPT_CHANGED_NOTIFY);
-                            return;
-                        }
-                        const auto presence = _presence->Find(peer);
-                        if (presence.status != PresenceStatus::Found || !presence.presence)
-                            return;
-                        message::ReceiptChangedReq hint;
-                        hint.set_uid(peer);
-                        hint.set_chat_id(request["chat_id"].asInt());
-                        hint.set_revision(messaging::ReceiptRevision(response["latest_revision"]));
-                        const auto result = ChatGrpcClient::GetInstance()->NotifyMessageReceiptChanged(
-                            presence.presence->server_id,
-                            hint);
-                        if (result.error() != 0)
-                            SPDLOG_WARN("receipt notification unavailable, chat_id={}", hint.chat_id());
-                    };
+                    const short response_id = report ? MSG_MESSAGE_RECEIPT_REPORT_RSP : MSG_MESSAGE_RECEIPT_SYNC_RSP;
+                    if (!success || !report)
+                        return Reply(session, response_id, messaging::CompactJson(response));
+                    // 仅对成功提交的回执排入通知队列。
+                    return ReplyAndNotify(
+                        session,
+                        response_id,
+                        response,
+                        [this, request, response, peer]() -> Completion {
+                            Json::Value notification;
+                            notification["chat_id"] = request["chat_id"];
+                            notification["latest_revision"] = response["latest_revision"];
+                            if (auto local = FindAuthorizedRecipient(*_directory, *_presence, peer)) {
+                                if (local->SupportsReceipts())
+                                    local->Send(
+                                        messaging::CompactJson(notification),
+                                        MSG_MESSAGE_RECEIPT_CHANGED_NOTIFY);
+                                return {};
+                            }
+                            const auto presence = _presence->Find(peer);
+                            if (presence.status != PresenceStatus::Found || !presence.presence)
+                                return {};
+                            message::ReceiptChangedReq hint;
+                            hint.set_uid(peer);
+                            hint.set_chat_id(request["chat_id"].asInt());
+                            hint.set_revision(messaging::ReceiptRevision(response["latest_revision"]));
+                            // 远端通知只在出站池调用。
+                            return [server = presence.presence->server_id, hint = std::move(hint)] {
+                                const auto result =
+                                    ChatGrpcClient::GetInstance()->NotifyMessageReceiptChanged(server, hint);
+                                if (result.error() != 0)
+                                    SPDLOG_WARN("receipt notification unavailable, chat_id={}", hint.chat_id());
+                            };
+                        });
                 });
         };
     }
     // 处理用户登录请求
     // 解析聊天登录并校验身份及状态服务结果。
-    _fun_callbacks[MSG_CHAT_LOGIN_REQ] = [this](
-                                             std::shared_ptr<CSession> session,
-                                             const short& msg_id,
-                                             const std::string& msg_data) {
-        // 解析msg_data对应的json数据
-        Json::Reader reader;
-        Json::Value root;
-        auto err = reader.parse(msg_data, root);
-        if (!err) {
-            SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
-            return;
-        }
-
-        int uid = root["uid"].asInt();
-        std::string token = root["token"].asString();
-        SPDLOG_INFO("user login request, uid={}", uid);
-
-        // 主要目的是查询状态，看是否满足token条件
-        const auto validation = RedisMgr::GetInstance()->ValidateToken(uid, token);
-
-        Json::Value return_value;
-        // 初验沿用既有 TCP 错误码，绑定时再次原子检查当前凭据。
-        switch (validation) {
-        case chat_auth::TokenResult::Invalid:
-            return_value["error"] = 1011;
-            session->Send(messaging::CompactJson(return_value), MSG_CHAT_LOGIN_RSP);
-            return;
-        case chat_auth::TokenResult::Unavailable:
-            SPDLOG_WARN("login credential store unavailable, uid={}", uid);
-            // 旧 Status 对 Redis HGET 失败与缺失用户均返回 1010。
-            [[fallthrough]];
-        case chat_auth::TokenResult::MissingUser:
-            return_value["error"] = 1010;
-            session->Send(messaging::CompactJson(return_value), MSG_CHAT_LOGIN_RSP);
-            return;
-        case chat_auth::TokenResult::Valid:
-            break;
-        }
-        // 在数据库线程执行本次请求的同步存取。
-        QueueDatabase(session, [this, session, root, uid, token]() mutable -> Completion {
-            Json::Value return_value;
-            auto user_info = MysqlMgr::GetInstance()->GetUserByUid(uid);
-            if (!user_info) {
-                return_value["error"] = ErrorCodes::UidInvalid;
-                return Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(return_value));
+    _fun_callbacks[MSG_CHAT_LOGIN_REQ] =
+        [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
+            // 解析msg_data对应的json数据
+            Json::Reader reader;
+            Json::Value root;
+            auto err = reader.parse(msg_data, root);
+            if (!err) {
+                SPDLOG_WARN("json parse failure, msg_id={}", msg_id);
+                return;
             }
 
-            return_value["error"] = ErrorCodes::Success;
-            return_value["uid"] = uid;
-            return_value["name"] = user_info->_name;
-            return_value["description"] = user_info->_description;
-            return_value["icon"] = user_info->_icon;
-            return_value["email"] = user_info->_email;
-            return_value["sex"] = user_info->_sex;
-            return_value["token"] = token;
+            int uid = root["uid"].asInt();
+            std::string credential = root["token"].asString();
+            SPDLOG_INFO("user login request, uid={}", uid);
 
-            bool social = false;
-            if (root["capabilities"].isArray())
-                for (const auto& value : root["capabilities"])
-                    if (value.isString() && value.asString() == "basic_social_v1")
-                        social = true;
-            // 新客户端通过目录分页加载，登录响应不随好友和申请数量增长。
-            if (social) {
-                return_value["load_more"] = true;
-                return_value["current_chat_id"] = 0;
-                return_value["chat_list"] = Json::Value(Json::arrayValue);
-            } else {
-                // 同样的，这里也不需要添加分布式锁
-                // 因为刚好有两个相同uid=1的客户端，然后另一个客户端uid=2要添加uid=1为好友，但是我们一定会写入到数据库中
-                // 所以即使我查到的是旧的serverip信息，也能够接受，当下一次上线的时候，会重新收到好友请求信息
-                // 获取好友申请列表
-                std::vector<std::shared_ptr<ApplyInfo>> apply_list;
-                auto b_apply = GetApplyFriendList(uid, apply_list);
-                if (b_apply) {
-                    for (auto& info : apply_list) {
-                        Json::Value apply;
-                        apply["fromuid"] = info->_apply_uid;
-                        apply["touid"] = info->_to_uid;
-                        apply["applyname"] = info->_apply_name;
-                        apply["applydescription"] = info->_apply_description;
-                        apply["applyicon"] = info->_apply_icon;
-                        apply["applysex"] = info->_apply_sex;
-                        apply["status"] = info->_status;
-                        apply["description"] = info->_description;
-                        apply["backname"] = info->_backname;
-                        return_value["apply_list"].append(apply);
+            // 登录凭据初验在 Redis 池运行，绑定阶段仍原子复核 token。
+            QueueRequest(
+                ExternalTask::Redis,
+                session,
+                [this,
+                 session,
+                 uid,
+                 credential = std::move(credential),
+                 capabilities = std::move(root["capabilities"])]() mutable -> Completion {
+                    if (session->Closing())
+                        return {};
+                    const auto validation = RedisMgr::GetInstance()->ValidateToken(uid, credential);
+                    if (validation != chat_auth::TokenResult::Valid) {
+                        if (validation == chat_auth::TokenResult::Unavailable)
+                            SPDLOG_WARN("login credential store unavailable, uid={}", uid);
+                        Json::Value response;
+                        response["error"] = validation == chat_auth::TokenResult::Invalid ? 1011 : 1010;
+                        return Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(response));
                     }
-                }
-
-                // 同样的，一定会被更新到数据库中，因此如果查不到可以接受
-                // 获取好友列表
-                std::vector<std::shared_ptr<UserInfo>> friend_list;
-                auto b_user = GetFriendList(uid, friend_list);
-                if (b_user) {
-                    for (auto& info : friend_list) {
-                        Json::Value friends;
-                        friends["name"] = info->_name;
-                        friends["description"] = info->_description;
-                        friends["sex"] = info->_sex;
-                        friends["icon"] = info->_icon;
-                        friends["uid"] = info->_uid;
-                        friends["backname"] = info->_backname;
-                        return_value["friend_list"].append(friends);
-                    }
-                }
-
-                // 初始获取一部分会话列表
-                {
-                    std::vector<std::shared_ptr<ChatInfoBase>> chat_list;
-
-                    // 是否能够加载更多
-                    bool load_more = false;
-                    int last_load_id = 0;
-                    bool success = GetUserChatList(uid, 0, PAGE_SIZE, chat_list, load_more, last_load_id);
-
-                    if (!success) {
-                        return_value["error"] = ErrorCodes::UidInvalid;
-                        return Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(return_value));
-                    }
-
-                    return_value["load_more"] = load_more;
-                    return_value["current_chat_id"] = last_load_id;
-
-                    for (auto& chat : chat_list) {
-                        Json::Value item;
-
-                        item["type"] = chat->_type;
-                        item["chat_id"] = chat->_chat_id;
-
-                        if (chat->_type == "private") {
-                            auto child = std::dynamic_pointer_cast<PrivateChatInfo>(chat);
-                            item["user1_id"] = child->_user1_id;
-                            item["user2_id"] = child->_user2_id;
-                        } else if (chat->_type == "group") {
-                            auto child = std::dynamic_pointer_cast<GroupChatInfo>(chat);
-                            item = child->_membership;
-                        }
-
-                        return_value["chat_list"].append(item);
-                    }
-                }
-            }
-            bool receipts = false;
-            if (root["capabilities"].isArray()) {
-                for (const auto& capability : root["capabilities"])
-                    if (capability.isString() && capability.asString() == "message_receipts_v1")
-                        receipts = true;
-            }
-
-            return_value["capabilities"] = Json::Value(Json::arrayValue);
-            if (receipts)
-                return_value["capabilities"].append("message_receipts_v1");
-            bool groups = false;
-            if (root["capabilities"].isArray())
-                for (const auto& value : root["capabilities"])
-                    if (value.isString() && value.asString() == "group_membership_v1")
-                        groups = true;
-
-            if (groups)
-                return_value["capabilities"].append("group_membership_v1");
-
-            if (social)
-                return_value["capabilities"].append("basic_social_v1");
-            if (messaging::CompactJson(return_value).size() > ResponseBodyLimit(MSG_CHAT_LOGIN_RSP)) {
-                return_value = Json::Value(Json::objectValue);
-                return_value["error"] = ErrorCodes::Error_Json;
-                return_value["login_error"] = "UpgradeRequired";
-                return Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(return_value));
-            }
-            // 绑定完成前继续占用本连接的顺序位置。
-            return [this, session, uid, token, receipts, groups, social, response = std::move(return_value)]() mutable {
-                if (session->Closing())
-                    return;
-                auto resume = AwaitCompletion(session);
-                try {
-                    // 绑定结束后才释放本连接，并按协商能力回复。
-                    session->BindAuthenticatedUser(
-                        uid,
-                        [session, resume, response = std::move(response), receipts, groups, social](
-                            SessionBindResult result) mutable {
-                            if (result == SessionBindResult::Bound) {
-                                session->EnableReceipts(receipts);
-                                session->EnableGroups(groups);
-                                session->EnableSocial(social);
-                            } else {
-                                response = Json::Value(Json::objectValue);
-                                response["error"] = ErrorCodes::RPCFailed;
-                            }
-                            resume(Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(response)));
-                        },
-                        token);
-                } catch (...) {
-                    resume({});
-                    session->Close(SessionCloseReason::LogicUnavailable);
-                }
-            };
-        });
-    };
+                    // 排队期间关闭的登录不再加载资料。
+                    return [this,
+                            session,
+                            uid,
+                            credential = std::move(credential),
+                            capabilities = std::move(capabilities)]() mutable {
+                        if (!session->Closing())
+                            QueueLoginData(session, uid, std::move(credential), std::move(capabilities));
+                    };
+                });
+        };
 
     // 处理搜索用户的请求
     // 按查询条件搜索用户并形成响应。
@@ -585,76 +664,78 @@ void LogicSystem::RegisterCallbacks() {
                         return_value["error"] = ErrorCodes::UidInvalid;
                         return Reply(session, MSG_ADD_FRIEND_RSP, messaging::CompactJson(return_value));
                     }
-                    // 查询一下自己的信息
+                    // 只把通知所需的公开资料交给通知队列。
                     auto user_info = MysqlMgr::GetInstance()->GetUserByUid(fromuid);
-                    // 数据库已提交，回包和对端路由交给分发线程。
-                    return [this,
-                            session,
-                            fromuid,
-                            touid,
-                            description,
-                            backname,
-                            applyname,
-                            applydescription,
-                            applyicon,
-                            applysex,
-                            user_info,
-                            return_value] {
-                        session->Send(messaging::CompactJson(return_value), MSG_ADD_FRIEND_RSP);
-                        std::string to_ip_value = "";
-                        const auto presence = _presence->Find(touid);
-                        if (presence.status == PresenceStatus::Unavailable) {
-                            SPDLOG_WARN("presence lookup unavailable");
-                            return;
-                        }
-                        bool b_to_ip = presence.status == PresenceStatus::Found;
-                        if (presence.presence)
-                            to_ip_value = presence.presence->server_id;
-                        if (!b_to_ip) {
-                            return;
-                        }
-
-                        // 接下来判断是否跟自己在同一份服务器
-                        auto& configMgr = ConfigMgr::GetInstance();
-                        auto self_name = configMgr["SelfServer"]["Name"];
-
-                        // 查询到在同一服务器
-                        if (to_ip_value == self_name) {
-                            auto sessions = _directory;
-                            auto touid_session = FindAuthorizedRecipient(*sessions, *_presence, touid);
-                            if (touid_session) {
-                                // 直接通知对方
-                                Json::Value notify;
-                                notify["error"] = ErrorCodes::Success;
-                                notify["fromuid"] = fromuid;
-                                notify["applyname"] = applyname;
-                                notify["applydescription"] = applydescription;
-                                notify["applyicon"] = applyicon;
-                                notify["applysex"] = applysex;
-                                notify["touid"] = touid;
-                                notify["description"] = description;
-                                notify["backname"] = backname;
-                                std::string notity_str = notify.toStyledString();
-                                touid_session->Send({MSG_NOTIFY_ADD_FRIEND_REQ, notity_str});
+                    AddFriendReq req;
+                    req.set_applyuid(fromuid);
+                    req.set_touid(touid);
+                    req.set_description(description);
+                    req.set_backname(backname);
+                    if (user_info) {
+                        req.set_applyname(user_info->_name);
+                        req.set_applydescription(user_info->_description);
+                        req.set_applyicon(user_info->_icon);
+                        req.set_applysex(user_info->_sex);
+                    }
+                    // 提交后确认发送方；Redis 池查找接收者，远端投递交给出站 gRPC 池。
+                    return ReplyAndNotify(
+                        session,
+                        MSG_ADD_FRIEND_RSP,
+                        return_value,
+                        [this,
+                         fromuid,
+                         touid,
+                         description,
+                         backname,
+                         applyname,
+                         applydescription,
+                         applyicon,
+                         applysex,
+                         req = std::move(req)]() -> Completion {
+                            std::string to_ip_value = "";
+                            const auto presence = _presence->Find(touid);
+                            if (presence.status == PresenceStatus::Unavailable) {
+                                SPDLOG_WARN("presence lookup unavailable");
+                                return {};
                             }
-                            return;
-                        }
-                        // 通过grpc通知另一个服务器添加好友
-                        AddFriendReq req;
-                        req.set_applyuid(fromuid);
-                        req.set_touid(touid);
-                        req.set_description(description);
-                        req.set_backname(backname);
-                        if (user_info) {
-                            req.set_applyname(user_info->_name);
-                            req.set_applydescription(user_info->_description);
-                            req.set_applyicon(user_info->_icon);
-                            req.set_applysex(user_info->_sex);
-                        }
+                            bool b_to_ip = presence.status == PresenceStatus::Found;
+                            if (presence.presence)
+                                to_ip_value = presence.presence->server_id;
+                            if (!b_to_ip) {
+                                return {};
+                            }
 
-                        // 发送grpc请求
-                        ChatGrpcClient::GetInstance()->NotifyOtherAddFriend(to_ip_value, req);
-                    };
+                            // 接下来判断是否跟自己在同一份服务器
+                            auto& configMgr = ConfigMgr::GetInstance();
+                            auto self_name = configMgr["SelfServer"]["Name"];
+
+                            // 查询到在同一服务器
+                            if (to_ip_value == self_name) {
+                                auto sessions = _directory;
+                                auto touid_session = FindAuthorizedRecipient(*sessions, *_presence, touid);
+                                if (touid_session) {
+                                    // 直接通知对方
+                                    Json::Value notify;
+                                    notify["error"] = ErrorCodes::Success;
+                                    notify["fromuid"] = fromuid;
+                                    notify["applyname"] = applyname;
+                                    notify["applydescription"] = applydescription;
+                                    notify["applyicon"] = applyicon;
+                                    notify["applysex"] = applysex;
+                                    notify["touid"] = touid;
+                                    notify["description"] = description;
+                                    notify["backname"] = backname;
+                                    std::string notity_str = notify.toStyledString();
+                                    touid_session->Send({MSG_NOTIFY_ADD_FRIEND_REQ, notity_str});
+                                }
+                                return {};
+                            }
+                            // 发送grpc请求
+                            // 将路由结果和请求所有权交给出站池。
+                            return [server = to_ip_value, request = std::move(req)] {
+                                ChatGrpcClient::GetInstance()->NotifyOtherAddFriend(server, request);
+                            };
+                        });
                 });
         };
 
@@ -735,101 +816,106 @@ void LogicSystem::RegisterCallbacks() {
                         msg_info["status"] = msg->_status;
                         return_value["chat_msgs"].append(msg_info);
                     }
-                    // 事务完成后发布好友变更。
-                    return [this,
-                            session,
-                            applyuid,
-                            authuid,
-                            applyinfo,
-                            authinfo,
-                            return_value,
-                            chat_id,
-                            _chat_msgs = std::move(_chat_msgs)] {
-                        session->Send(messaging::CompactJson(return_value), MSG_AUTH_FRIEND_RSP);
-                        std::string applyuid_ip_value = "";
-                        const auto presence = _presence->Find(applyuid);
-                        if (presence.status == PresenceStatus::Unavailable) {
-                            SPDLOG_WARN("presence lookup unavailable");
-                            return;
-                        }
-                        bool isSuccess = presence.status == PresenceStatus::Found;
-                        if (presence.presence)
-                            applyuid_ip_value = presence.presence->server_id;
-                        // 查询不到，说明对方已离线，则不对界面进行更新。因为已经对数据库更新了，因此下次登录是正确结果
-                        if (!isSuccess) {
-                            return;
-                        }
-
-                        // 拿出自己的server_ip查看是否相同
-                        auto& configMgr = ConfigMgr::GetInstance();
-                        auto self_server_name = configMgr["SelfServer"]["Name"];
-
-                        // 两个人在同一个服务器上，则直接找到对方的session，并发送请求
-                        if (self_server_name == applyuid_ip_value) {
-                            auto sessions = _directory;
-                            auto session = FindAuthorizedRecipient(*sessions, *_presence, applyuid);
-                            if (session) {
-                                Json::Value notify;
-                                notify["error"] = ErrorCodes::Success;
-                                notify["applyuid"] = applyuid;
-                                notify["authuid"] = authuid;
-                                notify["applyinfo"] = applyinfo;
-                                notify["authinfo"] = authinfo;
-                                notify["chatid"] = chat_id;
-
-                                for (auto& msg : return_value["chat_msgs"]) {
-                                    notify["chat_msgs"].append(msg);
-                                }
-
-                                // 通过session发送
-                                std::string notify_str = messaging::BoundedNotification(notify);
-                                session->Send({MSG_NOTIFY_AUTH_FRIEND_REQ, notify_str});
+                    // 提交后确认发送方；Redis 池查找接收者，远端投递交给出站 gRPC 池。
+                    return ReplyAndNotify(
+                        session,
+                        MSG_AUTH_FRIEND_RSP,
+                        return_value,
+                        [this,
+                         applyuid,
+                         authuid,
+                         applyinfo,
+                         authinfo,
+                         return_value,
+                         chat_id,
+                         _chat_msgs = std::move(_chat_msgs)]() -> Completion {
+                            std::string applyuid_ip_value = "";
+                            const auto presence = _presence->Find(applyuid);
+                            if (presence.status == PresenceStatus::Unavailable) {
+                                SPDLOG_WARN("presence lookup unavailable");
+                                return {};
+                            }
+                            bool isSuccess = presence.status == PresenceStatus::Found;
+                            if (presence.presence)
+                                applyuid_ip_value = presence.presence->server_id;
+                            // 查询不到，说明对方已离线，则不对界面进行更新。因为已经对数据库更新了，因此下次登录是正确结果
+                            if (!isSuccess) {
+                                return {};
                             }
 
-                            return;
-                        }
+                            // 拿出自己的server_ip查看是否相同
+                            auto& configMgr = ConfigMgr::GetInstance();
+                            auto self_server_name = configMgr["SelfServer"]["Name"];
 
-                        // 两个人不在同一个服务器上，通过grpc发送请求
-                        AuthFriendReq auth_req;
-                        auth_req.set_applyuid(applyuid);
-                        auth_req.set_authuid(authuid);
-                        auth_req.set_chatid(chat_id);
+                            // 两个人在同一个服务器上，则直接找到对方的session，并发送请求
+                            if (self_server_name == applyuid_ip_value) {
+                                auto sessions = _directory;
+                                auto session = FindAuthorizedRecipient(*sessions, *_presence, applyuid);
+                                if (session) {
+                                    Json::Value notify;
+                                    notify["error"] = ErrorCodes::Success;
+                                    notify["applyuid"] = applyuid;
+                                    notify["authuid"] = authuid;
+                                    notify["applyinfo"] = applyinfo;
+                                    notify["authinfo"] = authinfo;
+                                    notify["chatid"] = chat_id;
 
-                        auto message_applyinfo = auth_req.mutable_applyinfo();
-                        message_applyinfo->set_applyuid(applyinfo["applyuid"].asInt());
-                        message_applyinfo->set_applyname(applyinfo["applyname"].asString());
-                        message_applyinfo->set_applydescription(applyinfo["applydescription"].asString());
-                        message_applyinfo->set_applyicon(applyinfo["applyicon"].asString());
-                        message_applyinfo->set_applysex(applyinfo["applysex"].asInt());
-                        message_applyinfo->set_status(applyinfo["status"].asInt());
-                        message_applyinfo->set_touid(applyinfo["touid"].asInt());
-                        message_applyinfo->set_description(applyinfo["description"].asString());
-                        message_applyinfo->set_backname(applyinfo["backname"].asString());
+                                    for (auto& msg : return_value["chat_msgs"]) {
+                                        notify["chat_msgs"].append(msg);
+                                    }
 
-                        auto message_authinfo = auth_req.mutable_authinfo();
-                        message_authinfo->set_authuid(authinfo["authuid"].asInt());
-                        message_authinfo->set_authname(authinfo["authname"].asString());
-                        message_authinfo->set_authdescription(authinfo["authdescription"].asString());
-                        message_authinfo->set_authicon(authinfo["authicon"].asString());
-                        message_authinfo->set_authsex(authinfo["authsex"].asInt());
-                        message_authinfo->set_status(authinfo["status"].asInt());
-                        message_authinfo->set_touid(authinfo["touid"].asInt());
-                        message_authinfo->set_description(authinfo["description"].asString());
-                        message_authinfo->set_backname(authinfo["backname"].asString());
+                                    // 通过session发送
+                                    std::string notify_str = messaging::BoundedNotification(notify);
+                                    session->Send({MSG_NOTIFY_AUTH_FRIEND_REQ, notify_str});
+                                }
 
-                        for (auto& msg : _chat_msgs) {
-                            auto* message_chat_message = auth_req.add_chatmessage();
-                            message_chat_message->set_messageid(msg->_message_id);
-                            message_chat_message->set_chatid(msg->_chat_id);
-                            message_chat_message->set_sendid(msg->_send_id);
-                            message_chat_message->set_recvid(msg->_recv_id);
-                            message_chat_message->set_content(msg->_content);
-                            message_chat_message->set_status(msg->_status);
-                            message_chat_message->set_client_msg_uuid(msg->_client_msg_id);
-                        }
+                                return {};
+                            }
 
-                        ChatGrpcClient::GetInstance()->NotifyOtherAuthFriend(applyuid_ip_value, auth_req);
-                    };
+                            // 两个人不在同一个服务器上，通过grpc发送请求
+                            AuthFriendReq auth_req;
+                            auth_req.set_applyuid(applyuid);
+                            auth_req.set_authuid(authuid);
+                            auth_req.set_chatid(chat_id);
+
+                            auto message_applyinfo = auth_req.mutable_applyinfo();
+                            message_applyinfo->set_applyuid(applyinfo["applyuid"].asInt());
+                            message_applyinfo->set_applyname(applyinfo["applyname"].asString());
+                            message_applyinfo->set_applydescription(applyinfo["applydescription"].asString());
+                            message_applyinfo->set_applyicon(applyinfo["applyicon"].asString());
+                            message_applyinfo->set_applysex(applyinfo["applysex"].asInt());
+                            message_applyinfo->set_status(applyinfo["status"].asInt());
+                            message_applyinfo->set_touid(applyinfo["touid"].asInt());
+                            message_applyinfo->set_description(applyinfo["description"].asString());
+                            message_applyinfo->set_backname(applyinfo["backname"].asString());
+
+                            auto message_authinfo = auth_req.mutable_authinfo();
+                            message_authinfo->set_authuid(authinfo["authuid"].asInt());
+                            message_authinfo->set_authname(authinfo["authname"].asString());
+                            message_authinfo->set_authdescription(authinfo["authdescription"].asString());
+                            message_authinfo->set_authicon(authinfo["authicon"].asString());
+                            message_authinfo->set_authsex(authinfo["authsex"].asInt());
+                            message_authinfo->set_status(authinfo["status"].asInt());
+                            message_authinfo->set_touid(authinfo["touid"].asInt());
+                            message_authinfo->set_description(authinfo["description"].asString());
+                            message_authinfo->set_backname(authinfo["backname"].asString());
+
+                            for (auto& msg : _chat_msgs) {
+                                auto* message_chat_message = auth_req.add_chatmessage();
+                                message_chat_message->set_messageid(msg->_message_id);
+                                message_chat_message->set_chatid(msg->_chat_id);
+                                message_chat_message->set_sendid(msg->_send_id);
+                                message_chat_message->set_recvid(msg->_recv_id);
+                                message_chat_message->set_content(msg->_content);
+                                message_chat_message->set_status(msg->_status);
+                                message_chat_message->set_client_msg_uuid(msg->_client_msg_id);
+                            }
+
+                            // 将路由结果和请求所有权交给出站池。
+                            return [server = applyuid_ip_value, request = std::move(auth_req)] {
+                                ChatGrpcClient::GetInstance()->NotifyOtherAuthFriend(server, request);
+                            };
+                        });
                 });
         };
 
@@ -1070,83 +1156,87 @@ void LogicSystem::RegisterCallbacks() {
                         data_array = std::move(created);
                         _chat_msgs = std::move(messages);
                     }
-                    // 权威消息已提交，在分发线程确认发送并通知接收者。
-                    return [this,
-                            session,
-                            return_value,
-                            from_uid,
-                            to_uid,
-                            chat_id,
-                            data_array = std::move(data_array),
-                            _chat_msgs = std::move(_chat_msgs)] {
-                        session->Send(messaging::CompactJson(return_value), MSG_TEXT_CHAT_MSG_RSP);
-                        // 查询redis查看对方的ip
+                    // 提交后确认发送方；Redis 池查找接收者，远端投递交给出站 gRPC 池。
+                    return ReplyAndNotify(
+                        session,
+                        MSG_TEXT_CHAT_MSG_RSP,
+                        return_value,
+                        [this,
+                         from_uid,
+                         to_uid,
+                         chat_id,
+                         data_array = std::move(data_array),
+                         _chat_msgs = std::move(_chat_msgs)]() -> Completion {
+                            // 查询redis查看对方的ip
 
-                        std::string touid_ip_value = "";
-                        const auto presence = _presence->Find(to_uid);
-                        if (presence.status == PresenceStatus::Unavailable) {
-                            SPDLOG_WARN("presence lookup unavailable");
-                            return;
-                        }
-                        bool b_success = presence.status == PresenceStatus::Found;
-                        if (presence.presence)
-                            touid_ip_value = presence.presence->server_id;
-                        if (!b_success) {
-                            // Routing failure cannot revoke the already committed acknowledgement.
-                            return;
-                        }
-
-                        auto& configMgr = ConfigMgr::GetInstance();
-                        auto self_server_name = configMgr["SelfServer"]["Name"];
-
-                        // 两者在同一个服务器，则直接发送
-                        if (self_server_name == touid_ip_value) {
-                            auto sessions = _directory;
-                            auto session = FindAuthorizedRecipient(*sessions, *_presence, to_uid);
-                            if (session) {
-                                // 这是往另一个客户端的通知信息
-                                Json::Value notify;
-                                notify["error"] = ErrorCodes::Success;
-                                notify["from_uid"] = from_uid;
-                                notify["to_uid"] = to_uid;
-                                notify["chat_id"] = chat_id;
-                                Json::Value notify_msgs;
-                                for (auto& msg : _chat_msgs) {
-                                    Json::Value info;
-                                    info["message_id"] = msg->_message_id;
-                                    info["msg_uuid"] = msg->_client_msg_id;
-                                    info["msg_content"] = msg->_content;
-                                    notify_msgs.append(info);
-                                }
-
-                                notify["notify_msgs"] = notify_msgs;
-
-                                // 直接在这里通知
-                                std::string notify_str = messaging::BoundedNotification(notify);
-                                session->Send({MSG_NOTIFY_CHAT_MSG_REQ, notify_str});
+                            std::string touid_ip_value = "";
+                            const auto presence = _presence->Find(to_uid);
+                            if (presence.status == PresenceStatus::Unavailable) {
+                                SPDLOG_WARN("presence lookup unavailable");
+                                return {};
+                            }
+                            bool b_success = presence.status == PresenceStatus::Found;
+                            if (presence.presence)
+                                touid_ip_value = presence.presence->server_id;
+                            if (!b_success) {
+                                // Routing failure cannot revoke the already committed acknowledgement.
+                                return {};
                             }
 
-                            return;
-                        }
+                            auto& configMgr = ConfigMgr::GetInstance();
+                            auto self_server_name = configMgr["SelfServer"]["Name"];
 
-                        // 两者不在同一个服务器，则通过grpc发送
-                        TextChatMsgReq send_req;
-                        send_req.set_fromuid(from_uid);
-                        send_req.set_touid(to_uid);
-                        send_req.set_chatid(chat_id);
-                        int j = 0; // 同步对应的插入数据库得到的messageId
-                        for (const auto& text_obj : data_array) {
-                            auto msg_content = text_obj["msg_content"].asString();
-                            auto uuid = text_obj["msg_uuid"].asString();
-                            // 创建多个内部的变量
-                            auto* text_msg = send_req.add_textmsgs();
-                            text_msg->set_uuid(uuid);
-                            text_msg->set_msgcontent(msg_content);
-                            text_msg->set_msgid(_chat_msgs[j]->_message_id);
-                            j++;
-                        }
-                        ChatGrpcClient::GetInstance()->NotifyOtherReceiveTextChatMsg(touid_ip_value, send_req);
-                    };
+                            // 两者在同一个服务器，则直接发送
+                            if (self_server_name == touid_ip_value) {
+                                auto sessions = _directory;
+                                auto session = FindAuthorizedRecipient(*sessions, *_presence, to_uid);
+                                if (session) {
+                                    // 这是往另一个客户端的通知信息
+                                    Json::Value notify;
+                                    notify["error"] = ErrorCodes::Success;
+                                    notify["from_uid"] = from_uid;
+                                    notify["to_uid"] = to_uid;
+                                    notify["chat_id"] = chat_id;
+                                    Json::Value notify_msgs;
+                                    for (auto& msg : _chat_msgs) {
+                                        Json::Value info;
+                                        info["message_id"] = msg->_message_id;
+                                        info["msg_uuid"] = msg->_client_msg_id;
+                                        info["msg_content"] = msg->_content;
+                                        notify_msgs.append(info);
+                                    }
+
+                                    notify["notify_msgs"] = notify_msgs;
+
+                                    // 直接在这里通知
+                                    std::string notify_str = messaging::BoundedNotification(notify);
+                                    session->Send({MSG_NOTIFY_CHAT_MSG_REQ, notify_str});
+                                }
+
+                                return {};
+                            }
+
+                            // 两者不在同一个服务器，则通过grpc发送
+                            TextChatMsgReq send_req;
+                            send_req.set_fromuid(from_uid);
+                            send_req.set_touid(to_uid);
+                            send_req.set_chatid(chat_id);
+                            int j = 0; // 同步对应的插入数据库得到的messageId
+                            for (const auto& text_obj : data_array) {
+                                auto msg_content = text_obj["msg_content"].asString();
+                                auto uuid = text_obj["msg_uuid"].asString();
+                                // 创建多个内部的变量
+                                auto* text_msg = send_req.add_textmsgs();
+                                text_msg->set_uuid(uuid);
+                                text_msg->set_msgcontent(msg_content);
+                                text_msg->set_msgid(_chat_msgs[j]->_message_id);
+                                j++;
+                            }
+                            // 将路由结果和请求所有权交给出站池。
+                            return [server = touid_ip_value, request = std::move(send_req)] {
+                                ChatGrpcClient::GetInstance()->NotifyOtherReceiveTextChatMsg(server, request);
+                            };
+                        });
                 });
         };
 

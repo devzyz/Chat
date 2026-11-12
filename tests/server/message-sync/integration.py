@@ -71,13 +71,26 @@ def verify_database_dispatch(mysql_command, tcp_port, sender, observer, redis):
                     credential = redis.hashes[str(uid).encode()][f"utoken_{uid}".encode()].decode()
                 send(sock, 1005, {"uid": uid, "token": credential, "capabilities": ["basic_social_v1"]})
             wait_count(mysql_command, blocked, 2)
+            # Keep one Redis refresh reply pending outside the fixture lock. The other auth worker
+            # must answer a heartbeat while both database workers are also blocked.
+            entered, release = threading.Event(), threading.Event()
+            with redis.lock:
+                redis.refresh_barriers[b"7"] = (entered, release)
+            try:
+                send(sender, 1020, {"uid": 7})
+                assert entered.wait(2), "first heartbeat did not enter Redis"
+                send(observer, 1020, {"uid": 10})
+                receive(observer, 1021)
+            finally:
+                release.set()
+            receive(sender, 1021)
             admitted = threading.Event()
             with redis.lock:
                 redis.refresh_events[b"7"] = admitted
             send(sender, 1016, dict(from_uid=7, to_uid=8, chat_id=201,
                  text_array=[dict(msg_uuid=message_uuid, msg_content="queued before logout")]))
             assert admitted.wait(3), "sender did not reach ingress authentication"
-            # The same dispatcher can answer this heartbeat only after it has submitted the write.
+            # Keep both workers held until ingress has observed the original credential.
             send(observer, 1020, {"uid": 10})
             receive(observer, 1021)
             with redis.lock:
@@ -119,11 +132,75 @@ def verify_concurrent_private_chat(mysql_command, first, second):
     assert receive(second, 1024)["chat_id"] == first_id
 
 
+def verify_inbound_deadline(rpc_port, observer, redis):
+    """Hold inbound RPC authorization in Redis across the caller's deadline; no late TCP push."""
+    entered, release = threading.Event(), threading.Event()
+    with redis.lock:
+        redis.refresh_barriers[b"10"] = (entered, release)
+    child = subprocess.Popen(["node", str(pathlib.Path(__file__).with_name("receipt-deadline.cjs")), str(rpc_port)])
+    try:
+        assert entered.wait(5), "inbound RPC did not reach Redis"
+        assert child.wait(timeout=3) == 0
+    finally:
+        release.set()
+        if child.poll() is None:
+            child.kill()
+            child.wait(timeout=3)
+    send(observer, 1020, {"uid": 10})
+    receive(observer, 1021)
+
+
 def verify_failed_binding(sock):
     """An already-bound socket gets only the public error, even with valid credentials for another user."""
     send(sock, 1005, {"uid": 9, "token": "fixture-token"})
     failure = receive(sock, 1006, success=False)
     assert failure == {"error": 1002}, sorted(failure)
+
+
+def verify_notification_overload(listener, sender, receiver, redis, login, sync, revision):
+    """Keep outbound gRPC waiting while all 64 waiting slots fill, then recover the skipped push by sync."""
+    import uuid
+
+    def commit(sock):
+        request = dict(from_uid=7, to_uid=8, chat_id=201, relationship_revision=revision,
+                       text_array=[dict(msg_uuid=str(uuid.uuid4()), msg_content="notification isolation")])
+        send(sock, 1016, request)
+        return receive(sock, 1017)["uuid_msgId"][0]["message_id"]
+
+    with redis.lock:
+        original = redis.values[b"uip_8"]
+        redis.values[b"uip_8"] = b"held-peer"
+    try:
+        commit(sender)
+        stalled, _ = listener.accept()
+        with stalled:
+            stalled.settimeout(5)
+            with stalled.makefile("rb") as handshake:
+                assert handshake.read(24) == b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+            # Route queued notifications to the real second ChatServer when the first RPC is released.
+            with redis.lock:
+                redis.values[b"uip_8"] = original
+            with login(0, 10, social=True) as observer:
+                send(observer, 1020, {"uid": 10})
+                receive(observer, 1021)
+            queued = [commit(sender) for _ in range(64)]
+            skipped = commit(sender)
+            send(sender, 1020, {"uid": 7})
+            receive(sender, 1021)
+            sender.shutdown(socket.SHUT_RDWR)
+            sender.close()
+            page = sync(receiver, queued[-1])
+            assert [row["message_id"] for row in page["msgs"]] == [skipped]
+    finally:
+        with redis.lock:
+            redis.values[b"uip_8"] = original
+
+    delivered = [receive(receiver, 1018)["notify_msgs"][0]["message_id"] for _ in queued]
+    assert delivered == queued
+    # A later marker on the FIFO proves the skipped push was not delivered after the queue drained.
+    with login(0, 7, social=True) as replacement:
+        marker = commit(replacement)
+        assert receive(receiver, 1018)["notify_msgs"][0]["message_id"] == marker
 
 
 def tcp_flow(directory, mysql_command, mysql_port):
@@ -138,14 +215,19 @@ def tcp_flow(directory, mysql_command, mysql_port):
     thread = threading.Thread(target=redis.serve_forever, daemon=True)
     thread.start()
     processes, sockets, logs = [], [], []
+    held_peer = socket.socket()
     try:
+        held_peer.bind(("127.0.0.1", 0))
+        held_peer.listen()
+        held_peer.settimeout(5)
         tcp_ports = [port(), port()]
         rpc_ports = [port(), port()]
         for index in range(2):
             config = directory / f"chat-{index}.ini"
             config.write_text(f"[SelfServer]\nName=sync-{index}\nHost=127.0.0.1\nPort={tcp_ports[index]}\nRPCPort={rpc_ports[index]}\n"
                 f"[Redis]\nHost=127.0.0.1\nPort={redis.server_address[1]}\nPassword=fixture\n"
-                f"[PeerServer]\nServers=Peer\n[Peer]\nName=sync-{1-index}\nHost=127.0.0.1\nPort={rpc_ports[1-index]}\n"
+                f"[PeerServer]\nServers=Peer,Held\n[Peer]\nName=sync-{1-index}\nHost=127.0.0.1\nPort={rpc_ports[1-index]}\n"
+                f"[Held]\nName=held-peer\nHost=127.0.0.1\nPort={held_peer.getsockname()[1]}\n[Grpc]\nChatDeadlineMs=30000\n"
                 f"[Mysql]\nHost=127.0.0.1\nPort={mysql_port}\nUser=root\nPassword=\nSchema=message_sync_test\n"
                 f"[Log]\nName=sync-{index}\nLogDir={directory / 'logs'}\nMaxSizeMB=2\nMaxTotalFiles=2\nLevel=debug\nFlushLevel=debug\n")
             log = open(directory / f"chat-{index}.stdout", "wb")
@@ -207,6 +289,7 @@ def tcp_flow(directory, mysql_command, mysql_port):
         print(f"Legacy login: 1 and 3 friends each used {one_count} prepared statement executions")
         with login(0, 10, social=True) as observer:
             verify_database_dispatch(mysql_command, tcp_ports[0], sender, observer, redis)
+            verify_inbound_deadline(rpc_ports[0], observer, redis)
             verify_failed_binding(observer)
         sender.close()
         sender = login(0, 7)
@@ -463,7 +546,9 @@ def tcp_flow(directory, mysql_command, mysql_port):
         send(sender,1016,stale); assert receive(sender,1017,success=False)["error"] != 0
         stale["relationship_revision"] = "3"
         stale["text_array"][0] = dict(msg_uuid=str(uuid.uuid4()),msg_content="fresh explicit send")
-        send(sender,1016,stale); receive(sender,1017)
+        send(sender,1016,stale)
+        fresh = receive(sender,1017)["uuid_msgId"][0]["message_id"]
+        assert receive(receiver,1018)["notify_msgs"][0]["message_id"] == fresh
         receiver.close(); receiver=login(1,8,True)
         contacts=social(receiver,1046,kind="contacts",after="0")["items"]
         assert any(row["uid"] == 7 and row["relationship_revision"] == "3" for row in contacts)
@@ -471,7 +556,8 @@ def tcp_flow(directory, mysql_command, mysql_port):
         large=dict(from_uid=7,to_uid=8,chat_id=201,relationship_revision="3",
             text_array=[dict(msg_uuid=str(uuid.uuid4()),msg_content="z"*1850)])
         send(sender,1016,large); committed=receive(sender,1017)["uuid_msgId"][0]["message_id"]
-        assert receive(receiver,1018)["chat_id"] == 201
+        pushed = receive(receiver,1018)
+        assert pushed["chat_id"] == 201 and pushed["notify_msgs"][0]["message_id"] == committed
         assert sync(receiver,committed-1)["msgs"][0]["content"] == "z"*1850
         # Each legal UTF-8 field fits its write frame, their combined read row exceeds the ordinary frame limit.
         social(sender,1042,name="名"*255,description="述"*255,expected_revision="2")
@@ -516,8 +602,11 @@ def tcp_flow(directory, mysql_command, mysql_port):
             assert pages < 25
         assert pages > 1 and seen == {7,*range(20,36)}
         print("Basic social TCP: profile conflict, safe projection, bilateral deletion, history/UUID confirmation, reject/reapply/accept and stale-send denial passed")
+        verify_notification_overload(held_peer, sender, receiver, redis, login, sync, contacts[0]["relationship_revision"])
+        print("Notification isolation: stalled outbound RPC, independent login, full queue, sync and sender disconnect passed")
 
     finally:
+        held_peer.close()
         if sys.exc_info()[0] is not None:
             evidence = ROOT / "build/message-sync/failed-flow"
             evidence.mkdir(parents=True, exist_ok=True)

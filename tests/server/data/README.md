@@ -15,7 +15,8 @@ This test is separate from quick CI; it does not access a personal database.
 
 The existing Redis Component executable also verifies shared production reply
 decoding: null/NIL/error are false, integer success is true, and binary strings
-preserve their length. Both Gate and Status use these helpers for their wrappers.
+preserve their length. ChatServer's business-facing Redis operations are token validation and Lua
+evaluation. The pool lifecycle cases below exercise the underlying connection pool directly.
 
 ## Redis pool lifecycle
 

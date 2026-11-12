@@ -18,7 +18,7 @@ inline bool RefreshAuthenticatedSession(
     return false;
 }
 
-/** @brief 在业务或 RPC 工作线程验证推送接收者仍持有当前凭据；失效或存储异常时关闭并拒绝推送。 */
+/** @brief 在 Redis 工作线程验证推送接收者仍持有当前凭据；失效或存储异常时关闭并拒绝推送。 */
 inline std::shared_ptr<CSession> FindAuthorizedRecipient(
     UserSessionDirectory& directory,
     UserPresenceStore& presence,

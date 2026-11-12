@@ -72,12 +72,18 @@ struct Harness {
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> guard{io.get_executor()};
     std::shared_ptr<UserSessionDirectory> directory = std::make_shared<UserSessionDirectory>();
     std::shared_ptr<MemoryPresence> presence = std::make_shared<MemoryPresence>();
+    std::shared_ptr<DependencyExecutor> dependencies = std::make_shared<DependencyExecutor>();
     std::shared_ptr<SessionLifecycleCoordinator> lifecycle;
     std::vector<std::shared_ptr<CSession>> sessions;
     std::thread first, second;
     /** 组合会话目录和在线存储，启动两条 I/O 工作线程。 */
     explicit Harness(SessionLifecycleCoordinator::Kick kick = {})
-        : lifecycle(std::make_shared<SessionLifecycleCoordinator>(directory, presence, "test-server", std::move(kick))),
+        : lifecycle(std::make_shared<SessionLifecycleCoordinator>(
+              directory,
+              presence,
+              "test-server",
+              dependencies,
+              std::move(kick))),
           first(
               // 运行第一条 I/O 消费线程。
               [this] {

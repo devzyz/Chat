@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DependencyExecutor.h"
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -16,19 +17,15 @@ struct LogicMessage {
     int received_uid = 0; // 收帧时的认证快照，等待期间的登录不能追认旧请求。
 };
 
-enum class LogicSubmitResult {
-    Accepted,
-    Full,
-    Closed,
-};
-
-// 单线程按就绪顺序分发请求；有界数据库工作池并行处理不同连接，同连接等待在途操作完成。
+// 单线程分发就绪请求；认证及数据库操作占用连接顺序位置，已提交的通知独立执行。
 class LogicDispatcher {
 public:
     using Handler = std::function<bool(const LogicMessage&)>;
 
     /** @brief 保存有效 handler 并启动工作线程；handler 返回 false 表示无处理器，异常被记录后继续。 */
-    explicit LogicDispatcher(Handler handler, std::size_t database_workers = 2, std::size_t database_capacity = 64);
+    explicit LogicDispatcher(Handler handler, std::size_t database_workers = 2, std::size_t capacity_per_pool = 64);
+    // 由进程所有者注入同一组依赖池。
+    LogicDispatcher(Handler handler, std::shared_ptr<DependencyExecutor> dependencies);
     /** @brief 停止接收并等待已接受消息排空；不能在 handler 所在线程析构。 */
     ~LogicDispatcher();
 
@@ -43,15 +40,26 @@ public:
     void Stop();
 
     using Completion = std::function<void()>;
-    using DatabaseWork = std::function<Completion()>;
+    using ExternalWork = std::function<Completion()>;
     using Resume = std::function<void(Completion)>;
 
-    // 分发线程投递数据库操作，完成与异常均回到分发线程，队满时未受理。
-    LogicSubmitResult SubmitDatabase(std::shared_ptr<CSession> session, DatabaseWork work, Completion failed);
+    // 从分发线程投递依赖步骤；关联连接时保序，完成和异常回到分发线程。已提交的通知走 QueueNotification。
+    LogicSubmitResult SubmitExternal(
+        ExternalTask kind,
+        std::shared_ptr<CSession> session,
+        ExternalWork work,
+        Completion failed,
+        std::function<bool()> sql_check = {});
     // 暂停同一连接的后续请求，调用方在异步绑定结束时必须恰好一次交回完成通知。
     Resume AwaitCompletion(std::shared_ptr<CSession> session);
 
+protected:
+    // 从分发线程投递已提交的通知，路由在 Redis 上执行，返回可选的出站 RPC 工作。
+    void QueueNotification(ExternalWork route);
+
 private:
+    // 串行启动下一笔通知，前一笔本地发送或 RPC 已结束。
+    void StartNotification(ExternalWork route);
     struct Impl;
     std::unique_ptr<Impl> _impl;
 };
