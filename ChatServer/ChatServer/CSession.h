@@ -31,6 +31,10 @@ public:
     const SessionId& Id() const noexcept {
         return _id;
     }
+    // 在请求关闭时立即失效，供排队任务检查。
+    bool Closing() const noexcept {
+        return _closing.load();
+    }
     /** @brief 返回已绑定 UID 的原子快照；未绑定或进入关闭时为 0。 */
     int AuthenticatedUid() const noexcept {
         return _authenticated_uid.load();
@@ -96,7 +100,7 @@ private:
     void ReadHeader();
     /** @brief 在 strand 读取已校验 length 字节；零长度直接分发，失败关闭。 */
     void ReadBody(std::uint16_t id, std::size_t length);
-    /** @brief 在 strand 提交完整帧；队列满丢弃本帧并继续读，分发关闭或异常则关闭会话。 */
+    /** @brief 在 strand 提交完整帧；队列满时关闭连接，分发关闭或异常则关闭会话。 */
     void OnFrame(std::uint16_t id);
     /** @brief 在 strand 串行写队首，回调独立持有缓冲；成功续写，失败关闭。 */
     void StartWrite();
@@ -111,6 +115,7 @@ private:
     const SessionId _id;
     SessionState _state = SessionState::Created;
     std::optional<SessionCloseReason> _close_reason;
+    std::atomic<bool> _closing{false};
     std::atomic<bool> _receipts{false};
     std::atomic<bool> _groups{false};
     std::atomic<bool> _social{false};

@@ -18,6 +18,58 @@ from chat_flow_integration import RedisFixture, port, wait_port, send, receive
 from stream_integration import process_line
 
 
+def verify_database_dispatch(mysql_command, tcp_port, sender, redis):
+    """Hold both MySQL workers in login and verify the same server still processes a heartbeat."""
+    def wait_count(statement, count):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            result = subprocess.check_output(mysql_command + ["-BN", "-e", statement], text=True, timeout=3)
+            if int(result.strip()) >= count:
+                return
+            time.sleep(0.05)
+        raise TimeoutError(f"expected {count} for {statement}")
+
+    with socket.create_connection(("127.0.0.1", tcp_port), timeout=8) as valid, \
+            socket.create_connection(("127.0.0.1", tcp_port), timeout=8) as revoked:
+        # The named lock identifies only this connection, after it has acquired the table lock.
+        owner = "IS_USED_LOCK('chat_dispatch_test_holder')"
+        holder = subprocess.Popen(mysql_command + ["message_sync_test", "-e",
+            "LOCK TABLES user WRITE; DO GET_LOCK('chat_dispatch_test_holder', 0); DO SLEEP(20)"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            wait_count(f"SELECT {owner} IS NOT NULL", 1)
+            for sock, uid in ((valid, 8), (revoked, 9)):
+                with redis.lock:
+                    credential = redis.hashes[str(uid).encode()][f"utoken_{uid}".encode()].decode()
+                send(sock, 1005, {"uid": uid, "token": credential, "capabilities": ["basic_social_v1"]})
+            wait_count("SELECT COUNT(*) FROM information_schema.processlist WHERE DB='message_sync_test' "
+                       "AND STATE LIKE 'Waiting for table%lock'", 2)
+            send(sender, 1020, {"uid": 7})
+            receive(sender, 1021)
+            with redis.lock:
+                previous = redis.hashes[b"9"].pop(b"utoken_9")
+        finally:
+            connection_id = subprocess.check_output(mysql_command + ["-BN", "-e", f"SELECT {owner}"],
+                                                    text=True, timeout=3).strip()
+            if connection_id.isdecimal():
+                subprocess.run(mysql_command + ["-e", f"KILL CONNECTION {int(connection_id)}"], check=True, timeout=3)
+            try:
+                holder.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                holder.kill()
+                holder.wait(timeout=5)
+        receive(valid, 1006)
+        # Failed presence publication closes the socket; its best-effort error frame can arrive first.
+        try:
+            receive(revoked, 1006, success=False)
+            assert revoked.recv(1) == b""
+        except ConnectionError:
+            pass
+        with redis.lock:
+            assert b"usessionid_9" not in redis.values
+            redis.hashes[b"9"][b"utoken_9"] = previous
+
+
 def tcp_flow(directory, mysql_command, mysql_port):
     schema = """USE message_sync_test;
     DELETE FROM private_chat WHERE chat_id=101;
@@ -97,6 +149,7 @@ def tcp_flow(directory, mysql_command, mysql_port):
         sender, three_count = measured_login(friends)
         assert three_count == one_count > 0, (one_count, three_count)
         print(f"Legacy login: 1 and 3 friends each used {one_count} prepared statement executions")
+        verify_database_dispatch(mysql_command, tcp_ports[0], sender, redis)
         subprocess.run(mysql_command, input="""USE message_sync_test;
             DELETE FROM friend WHERE self_id=7 AND other_id IN (9,10);
             UPDATE user SET description='',icon='',sex=0 WHERE uid=9;""", text=True, check=True, timeout=10)
@@ -123,7 +176,10 @@ def tcp_flow(directory, mysql_command, mysql_port):
         payload = dict(from_uid=7, to_uid=8, chat_id=201,
             text_array=[dict(msg_uuid="00000000-0000-4000-8000-000000000201", msg_content="x" * 1850)])
         send(sender, 1016, payload)
+        send(sender, 1027, dict(mode="sync_v1", uid=7, chat_id=201, after_id=0, request_id="read-after-write"))
         first = receive(sender, 1017)["uuid_msgId"][0]["message_id"]
+        page = receive(sender, 1028)
+        assert page["request_id"] == "read-after-write" and page["msgs"][0]["message_id"] == first
         # Offline recipient no longer turns a committed submission into failure.
         send(sender, 1016, payload)
         assert receive(sender, 1017)["uuid_msgId"][0]["message_id"] == first

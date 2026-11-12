@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -12,6 +13,7 @@ struct LogicMessage {
     std::shared_ptr<CSession> session;
     std::int16_t id;
     std::string body;
+    int received_uid = 0; // 收帧时的认证快照，等待期间的登录不能追认旧请求。
 };
 
 enum class LogicSubmitResult {
@@ -26,7 +28,7 @@ public:
     using Handler = std::function<bool(const LogicMessage&)>;
 
     /** @brief 保存有效 handler 并启动工作线程；handler 返回 false 表示无处理器，异常被记录后继续。 */
-    explicit LogicDispatcher(Handler handler);
+    explicit LogicDispatcher(Handler handler, std::size_t database_workers = 2, std::size_t database_capacity = 64);
     /** @brief 停止接收并等待已接受消息排空；不能在 handler 所在线程析构。 */
     ~LogicDispatcher();
 
@@ -39,6 +41,15 @@ public:
     LogicSubmitResult Submit(LogicMessage message);
     /** @brief 幂等停止入队并排空队列后 join；必须从工作线程之外调用，不可与自身析构竞争。 */
     void Stop();
+
+    using Completion = std::function<void()>;
+    using DatabaseWork = std::function<Completion()>;
+    using Resume = std::function<void(Completion)>;
+
+    // 分发线程投递数据库操作，完成与异常均回到分发线程，队满时未受理。
+    LogicSubmitResult SubmitDatabase(std::shared_ptr<CSession> session, DatabaseWork work, Completion failed);
+    // 暂停同一连接的后续请求，调用方在异步绑定结束时必须恰好一次交回完成通知。
+    Resume AwaitCompletion(std::shared_ptr<CSession> session);
 
 private:
     struct Impl;

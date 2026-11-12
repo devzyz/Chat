@@ -330,4 +330,104 @@ TEST(LogicDispatcherTests, ThrowingHandlerDoesNotTerminateWorkerOrExposePayload)
     EXPECT_EQ(logs.Text().find("PRIVATE_"), std::string::npos);
 }
 
+// 为不依赖 socket 的调度测试创建单独的连接所有权。
+std::shared_ptr<CSession> SessionKey() {
+    return {std::make_shared<int>(0), nullptr};
+}
+
+// T08-LOGIC-09：暂停两笔数据库工作时，第三个连接可以处理心跳，同连接读取必须在写完成后运行。
+TEST(LogicDispatcherTests, SlowWritesAllowOtherSessionsAndPreserveReadAfterWrite) {
+    std::promise<void> first, second, heartbeat, release;
+    auto gate = release.get_future().share();
+    bool committed = false;
+    bool observed = false;
+    const auto writer = SessionKey();
+    LogicDispatcher* executor = nullptr;
+    // 记录心跳、写入和后续读取的处理顺序。
+    LogicDispatcher dispatcher([&](const LogicMessage& message) {
+        if (message.id == 3) {
+            heartbeat.set_value();
+        } else if (message.id == 4) {
+            observed = committed;
+        } else {
+            const auto id = message.id;
+            const auto thread = std::this_thread::get_id();
+            // 工作线程暂停到测试释放门闩；回调必须回到业务线程。
+            EXPECT_EQ(
+                executor->SubmitDatabase(
+                    message.session,
+                    [&, id, thread]() -> LogicDispatcher::Completion {
+                        EXPECT_NE(thread, std::this_thread::get_id());
+                        (id == 1 ? first : second).set_value();
+                        EXPECT_EQ(gate.wait_for(2s), std::future_status::ready);
+                        // 检查写入完成回到分发线程。
+                        return [&, id, thread] {
+                            EXPECT_EQ(thread, std::this_thread::get_id());
+                            if (id == 1)
+                                committed = true;
+                        };
+                    },
+                    {}),
+                LogicSubmitResult::Accepted);
+        }
+        return true;
+    });
+    executor = &dispatcher;
+    dispatcher.Submit({writer, 1, {}});
+    dispatcher.Submit({writer, 4, {}});
+    dispatcher.Submit({SessionKey(), 2, {}});
+    dispatcher.Submit({SessionKey(), 3, {}});
+    EXPECT_EQ(first.get_future().wait_for(2s), std::future_status::ready);
+    EXPECT_EQ(second.get_future().wait_for(2s), std::future_status::ready);
+    EXPECT_EQ(heartbeat.get_future().wait_for(2s), std::future_status::ready);
+    release.set_value();
+    dispatcher.Stop();
+    EXPECT_TRUE(observed);
+}
+
+// T08-LOGIC-10：一个在执行、一个在排队时拒绝第三笔；停服仍交回异常并排空已受理任务。
+TEST(LogicDispatcherTests, DatabaseCapacityRejectsWithoutWritingAndDrainsFailures) {
+    std::promise<void> started, release, full;
+    auto gate = release.get_future().share();
+    int writes = 0;
+    int failures = 0;
+    LogicDispatcher* executor = nullptr;
+    // 记录满载时的受理结果并检查异常回传。
+    LogicDispatcher dispatcher(
+        [&](const LogicMessage& message) {
+            const auto id = message.id;
+            // 第一笔故意抛错，第二笔应正常执行，第三笔不应进入数据库。
+            auto result = executor->SubmitDatabase(
+                message.session,
+                [&, id]() -> LogicDispatcher::Completion {
+                    if (id == 1) {
+                        started.set_value();
+                        EXPECT_EQ(gate.wait_for(2s), std::future_status::ready);
+                        throw std::runtime_error("synthetic failure");
+                    }
+                    ++writes;
+                    return {};
+                },
+                [&] {
+                    ++failures;
+                });
+            EXPECT_EQ(result, id == 3 ? LogicSubmitResult::Full : LogicSubmitResult::Accepted);
+            if (id == 3)
+                full.set_value();
+            return true;
+        },
+        1,
+        1);
+    executor = &dispatcher;
+    dispatcher.Submit({SessionKey(), 1, {}});
+    ASSERT_EQ(started.get_future().wait_for(2s), std::future_status::ready);
+    dispatcher.Submit({SessionKey(), 2, {}});
+    dispatcher.Submit({SessionKey(), 3, {}});
+    EXPECT_EQ(full.get_future().wait_for(2s), std::future_status::ready);
+    release.set_value();
+    dispatcher.Stop();
+    EXPECT_EQ(writes, 1);
+    EXPECT_EQ(failures, 1);
+}
+
 } // namespace

@@ -34,6 +34,7 @@ void CSession::Inspect(std::function<void(SessionState, std::optional<SessionClo
     });
 }
 void CSession::Close(SessionCloseReason reason) {
+    _closing.store(true);
     // 在串行执行器开始按指定原因关闭。
     boost::asio::post(_strand, [self = shared_from_this(), reason] {
         self->BeginClosing(reason);
@@ -42,6 +43,7 @@ void CSession::Close(SessionCloseReason reason) {
 void CSession::BeginClosing(SessionCloseReason reason) {
     if (_state == SessionState::Closing)
         return;
+    _closing.store(true);
     _state = SessionState::Closing;
     _close_reason = reason;
     const int uid = _authenticated_uid.exchange(0);
@@ -123,7 +125,8 @@ void CSession::ReadBody(std::uint16_t id, std::size_t length) {
 void CSession::OnFrame(std::uint16_t id) {
     _last_activity = std::chrono::steady_clock::now();
     try {
-        const auto result = _submit({shared_from_this(), static_cast<std::int16_t>(id), std::move(_body)});
+        const auto result =
+            _submit({shared_from_this(), static_cast<std::int16_t>(id), std::move(_body), AuthenticatedUid()});
         if (result == LogicSubmitResult::Closed) {
             BeginClosing(SessionCloseReason::LogicUnavailable);
             return;
@@ -238,7 +241,7 @@ void CSession::BindAuthenticatedUser(int uid, BindCompletion completion, std::st
          uid,
          completion = std::move(completion),
          authentication_token = std::move(authentication_token)]() mutable {
-            if (self->_state != SessionState::Active) {
+            if (self->Closing() || self->_state != SessionState::Active) {
                 completion(SessionBindResult::NotActive);
                 return;
             }
@@ -268,7 +271,7 @@ void CSession::FinishBinding(
          cancelled,
          committed = std::move(committed)]() mutable {
             self->_binding = false;
-            if (self->_state != SessionState::Active || cancelled->load())
+            if (self->_state != SessionState::Active || self->Closing() || cancelled->load())
                 result = SessionBindResult::NotActive;
             if (result == SessionBindResult::Bound) {
                 auto old = self->_directory->Register(uid, self->_id, self);

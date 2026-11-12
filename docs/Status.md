@@ -1,5 +1,10 @@
 # 项目当前状态
 
+2026-11-12：ChatServer 数据库分发任务分支已通过 Windows Release Server 回归（6 份报告，228 项）。
+隔离 MySQL 的 10 项持久化测试和双实例 TCP 流程通过。两个登录查询同时等表锁时，同一实例的第三条连接仍能收到心跳响应；
+解锁前撤销凭据会阻止绑定。同连接连续发送消息及拉取历史时，先收到 ACK，随后能读到该消息。
+TCP 测试使用真实 MySQL 和 Redis 替身；本次未运行负载基准。见[调度合同](Concurrency.md)及[集成入口](../tests/server/message-sync/README.md)。
+
 2026-11-11：StatusServer 已从运行、构建及发布拓扑退役。Gate 负责选服和签发，Chat 与 Resource 读取 Redis 校验凭据。已移除旧服务工程、专属客户端、协议源及生成快照；旧实现通过 Git 历史查阅。初始发布描述符继续用于检查在用协议。
 
 Windows Release 的正式 Server 回归通过 226 项（6 份报告），包冒烟通过 6 项。解包服务连接隔离 MySQL 与 Redis 后，双实例消息、资源上传下载、实例租约失效切换及 Resource 就绪恢复通过。通过在 Redis 回复与调用方之间注入撤销，验证 Gate 拒绝迟到签发、Chat 拒绝绑定已撤销凭据。Linux 已验证 CMake 构建图和 preflight 合同，本轮未执行 Linux 原生构建或部署。

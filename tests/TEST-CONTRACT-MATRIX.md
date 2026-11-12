@@ -229,13 +229,15 @@ Domain/Level：Architecture / Unit。
 
 | Test ID | Runner testcase | 合同 |
 | --- | --- | --- |
-| T08-LOGIC-01 | `AcceptedMessagesDispatchInFifoOrder` | accepted message 按全局 FIFO dispatch |
+| T08-LOGIC-01 | `AcceptedMessagesDispatchInFifoOrder` | 无在途异步操作时按入口 FIFO 分发 |
 | T08-LOGIC-02 | `ConcurrentProducersDispatchEveryAcceptedMessageExactlyOnce` | 多 producer accepted node 不丢失、不重复 |
 | T08-LOGIC-03 | `ExactPendingCapacityRejectsOnlyTheNextMessage` | 精确 `MAX_DEALQUE` pending 容量，下一条 `Full` 且不破坏旧队列 |
 | T08-LOGIC-04 | `WaitingWorkerWakesForMessageAndStop` | 空闲 worker 由 message 或 stop 唤醒 |
 | T08-LOGIC-05 | `StopDrainsAcceptedMessagesWithinTwoSeconds` | Stop 排空 accepted message 并在两秒内结束 |
 | T08-LOGIC-06 | `ClosedDispatcherRejectsImmediatelyAndRepeatedStopIsIdempotent` | 关闭后立即 `Closed`，重复 Stop 幂等 |
 | T08-LOGIC-07 | `UnknownIdDoesNotBlockValidMessageAndLogOmitsBody` | 未知 ID 不阻断后续有效消息且日志不含 body |
+| T08-LOGIC-09 | `SlowWritesAllowOtherSessionsAndPreserveReadAfterWrite` | 两笔数据库任务并发、第三连接可分发、写后读按连接有序 |
+| T08-LOGIC-10 | `DatabaseCapacityRejectsWithoutWritingAndDrainsFailures` | 数据库容量、异常回传和关闭排空 |
 
 ### 3.7 Gate 选服与签发（8 项单元、3 项组件）
 
