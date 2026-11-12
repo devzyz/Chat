@@ -7,7 +7,6 @@
 #include <condition_variable>
 #include <list>
 #include <set>
-#include <vector>
 #include <stdexcept>
 #include <mutex>
 #include <queue>
