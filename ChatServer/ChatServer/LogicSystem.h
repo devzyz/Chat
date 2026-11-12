@@ -44,8 +44,8 @@ private:
         short id,
         const Json::Value& response,
         ExternalWork route);
-    /** @brief 注册登录、好友、消息、回执和历史查询处理器。 */
-    void RegisterCallbacks();
+    // 构造唯一一份处理器表，发布后所有分片只读访问。
+    std::map<short, MessageHandler> CreateHandlers();
 
     /** @brief 按 UID 从 MySQL 查询并写入公开资料，避免缓存遮蔽资料更新。 */
     void GetUserByUid(std::string uid, Json::Value& value);
@@ -75,7 +75,7 @@ private:
 
     /** @brief 判断所有字符是否均为数字；空字符串也返回 true。 */
     bool IsOnlyDigit(std::string& uid_name);
-    std::map<short, MessageHandler> _fun_callbacks;
+    const std::map<short, MessageHandler> _fun_callbacks;
 
     std::shared_ptr<UserSessionDirectory> _directory;
     std::shared_ptr<UserPresenceStore> _presence;

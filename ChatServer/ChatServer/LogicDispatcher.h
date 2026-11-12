@@ -14,18 +14,20 @@ struct LogicMessage {
     std::shared_ptr<CSession> session;
     std::int16_t id;
     std::string body;
-    int received_uid = 0; // 收帧时的认证快照，等待期间的登录不能追认旧请求。
+    int received_uid = 0;            // 收帧时的认证快照，等待期间的登录不能追认旧请求。
+    std::size_t connection_hash = 0; // 服务端在建连时从不可变 SessionId 计算。
 };
 
-// 单线程分发就绪请求；认证及数据库操作占用连接顺序位置，已提交的通知独立执行。
+// 按连接固定分片；每片单线程执行完整请求的就绪步骤，阻塞 I/O 由共享依赖池承担。
 class LogicDispatcher {
 public:
     using Handler = std::function<bool(const LogicMessage&)>;
 
-    /** @brief 保存有效 handler 并启动工作线程；handler 返回 false 表示无处理器，异常被记录后继续。 */
-    explicit LogicDispatcher(Handler handler, std::size_t database_workers = 2, std::size_t capacity_per_pool = 64);
-    // 由进程所有者注入同一组依赖池。
-    LogicDispatcher(Handler handler, std::shared_ptr<DependencyExecutor> dependencies);
+    // 默认两个业务分片，handler 可被不同分片并发调用。生产使用进程共享依赖池。
+    explicit LogicDispatcher(
+        Handler handler,
+        std::shared_ptr<DependencyExecutor> dependencies = std::make_shared<DependencyExecutor>(),
+        std::size_t business_workers = 2);
     /** @brief 停止接收并等待已接受消息排空；不能在 handler 所在线程析构。 */
     ~LogicDispatcher();
 
@@ -50,7 +52,7 @@ public:
         ExternalWork work,
         Completion failed,
         std::function<bool()> sql_check = {});
-    // 暂停同一连接的后续请求，调用方在异步绑定结束时必须恰好一次交回完成通知。
+    // 暂停当前请求，在原分片恢复绑定结果。调用方必须恰好一次交回完成通知。
     Resume AwaitCompletion(std::shared_ptr<CSession> session);
 
 protected:

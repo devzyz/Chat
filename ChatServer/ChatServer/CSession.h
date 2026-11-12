@@ -113,6 +113,7 @@ private:
     std::shared_ptr<UserSessionDirectory> _directory;
     Submit _submit;
     const SessionId _id;
+    const std::size_t _dispatch_hash;
     SessionState _state = SessionState::Created;
     std::optional<SessionCloseReason> _close_reason;
     std::atomic<bool> _closing{false};

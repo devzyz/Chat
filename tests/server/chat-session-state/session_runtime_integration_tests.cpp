@@ -11,6 +11,7 @@ TEST(SessionRuntimeIntegrationTests, SplitHeaderBodyAndCoalescedFrames) {
     auto bodies = std::make_shared<std::vector<std::string>>();
     // 累计正文并在三个消息均到达后通知等待者。
     Connected c(h, [done, bodies](LogicMessage message) {
+        EXPECT_EQ(message.connection_hash, std::hash<SessionId>{}(message.session->Id()));
         bodies->push_back(message.body);
         if (bodies->size() == 3)
             done->set_value(*bodies);

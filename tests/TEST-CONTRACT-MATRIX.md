@@ -221,7 +221,7 @@ Domain/Level：Foundation / Unit。
 | T03-STATUS-01 | Status / `server_status_unit.xml` | 同一 contract testcase 1 | Status 任务执行合同 |
 | T03-STATUS-02 | Status / `server_status_unit.xml` | 同一 contract testcase 2 | Status 重复停止/析构合同 |
 
-### 3.6 Chat Logic dispatcher（14）
+### 3.6 Chat Logic dispatcher（16）
 
 Interface：production `LogicDispatcher::Submit/Stop`；`LogicSystem` 复用同一 Interface 保留 handler registry，`CSession` 观察 `Accepted/Full/Closed`。
 Domain/Level：Architecture / Unit。
@@ -229,9 +229,9 @@ Domain/Level：Architecture / Unit。
 
 | Test ID | Runner testcase | 合同 |
 | --- | --- | --- |
-| T08-LOGIC-01 | `AcceptedMessagesDispatchInFifoOrder` | 无在途异步操作时按入口 FIFO 分发 |
+| T08-LOGIC-01 | `SameConnectionDispatchesInFifoOrder` | 同连接入口 FIFO 分发 |
 | T08-LOGIC-02 | `ConcurrentProducersDispatchEveryAcceptedMessageExactlyOnce` | 多 producer accepted node 不丢失、不重复 |
-| T08-LOGIC-03 | `ExactPendingCapacityRejectsOnlyTheNextMessage` | 精确 `MAX_DEALQUE` pending 容量，下一条 `Full` 且不破坏旧队列 |
+| T08-LOGIC-03 | `ShardsShareOneExactAdmissionLimit` | 两片并行且全进程精确 `MAX_DEALQUE` pending 容量，下一条 `Full` 且不破坏旧队列 |
 | T08-LOGIC-04 | `WaitingWorkerWakesForMessageAndStop` | 空闲 worker 由 message 或 stop 唤醒 |
 | T08-LOGIC-05 | `StopDrainsAcceptedMessagesWithinTwoSeconds` | Stop 排空 accepted message 并在两秒内结束 |
 | T08-LOGIC-06 | `ClosedDispatcherRejectsImmediatelyAndRepeatedStopIsIdempotent` | 关闭后立即 `Closed`，重复 Stop 幂等 |
@@ -243,6 +243,8 @@ Domain/Level：Architecture / Unit。
 | T08-LOGIC-12 | `RedisReservesCriticalCapacityAndRejectsGuardedWritesWhenFull` | Redis 普通路由限额，关键请求预留及写前复核拒绝 |
 | T08-LOGIC-13 | `ReservedSqlResumesAheadOfLaterWorkDuringDrain` | Redis/MySQL 线程归属、预留名额顺序与停机排空 |
 | T08-LOGIC-14 | `InstanceLeaseUsesRedisAndUnregistersAfterRenewal` | 实例租约归属 Redis，按 owner 在最后一笔续租后注销 |
+| T08-LOGIC-15 | `ReadWaitsForFinalContinuationOnItsOwningShard` | 同片心跳可推进，原连接跨多个异步步骤保序 |
+| T08-LOGIC-16 | `NotificationsFromBothShardsDrainOneFifo` | 两片共同提交的独立通知串行排空 |
 
 ### 3.7 Gate 选服与签发（8 项单元、3 项组件）
 

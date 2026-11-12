@@ -59,7 +59,7 @@ Linux 根构建默认包含 Gate/Chat，`CHAT_BUILD_ACCEPTANCE_RESOURCES=ON` 增
 
 ### ChatServer
 
-ChatServer 每进程共享 Redis、MySQL、出站 gRPC 三个有界依赖池。TCP 分发线程维护请求顺序；
+ChatServer 每进程共享 Redis、MySQL、出站 gRPC 三个有界依赖池。两个业务 worker 按不可变 SessionId 的哈希固定分配 TCP 连接，每个分片维护连接内请求及回调的顺序；
 会话绑定和清理、实例租约以及入站 RPC 的接收者鉴权也使用同一 Redis 池。写库前先取得 MySQL 执行名额，
 在 Redis 池完成凭据复核后直接启动 SQL。消息提交后先回 ACK，通知按序在 Redis 查位置，必要时再投出站 gRPC。
 容量、过载及停服见 [Concurrency](Concurrency.md)。

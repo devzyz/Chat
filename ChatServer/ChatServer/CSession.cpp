@@ -11,7 +11,7 @@ CSession::CSession(
     Submit submit)
     : _strand(boost::asio::make_strand(io)), _socket(io), _heartbeat(io), _lifecycle(std::move(lifecycle)),
       _directory(std::move(directory)), _submit(std::move(submit)),
-      _id(boost::uuids::to_string(boost::uuids::random_generator()())) {}
+      _id(boost::uuids::to_string(boost::uuids::random_generator()())), _dispatch_hash(std::hash<SessionId>{}(_id)) {}
 
 boost::asio::ip::tcp::socket& CSession::Socket() {
     return _socket;
@@ -125,8 +125,8 @@ void CSession::ReadBody(std::uint16_t id, std::size_t length) {
 void CSession::OnFrame(std::uint16_t id) {
     _last_activity = std::chrono::steady_clock::now();
     try {
-        const auto result =
-            _submit({shared_from_this(), static_cast<std::int16_t>(id), std::move(_body), AuthenticatedUid()});
+        const auto result = _submit(
+            {shared_from_this(), static_cast<std::int16_t>(id), std::move(_body), AuthenticatedUid(), _dispatch_hash});
         if (result == LogicSubmitResult::Closed) {
             BeginClosing(SessionCloseReason::LogicUnavailable);
             return;

@@ -20,7 +20,7 @@ TCP tests T09-SESSION-04, 05, and 13 respectively; they are not removed or teste
 
 | ID | Contract |
 | --- | --- |
-| T09-SESSION-01 | Split header/body, adjacent frames, empty body, maximum receive body |
+| T09-SESSION-01 | Split header/body, adjacent frames, empty body, maximum receive body; every frame carries the hash of its server-assigned SessionId |
 | T09-SESSION-02 | Oversized body rejected before dispatch |
 | T09-SESSION-03 | Repeated Start creates only one read chain |
 | T09-SESSION-04 | FIFO writes and admission semantics |
