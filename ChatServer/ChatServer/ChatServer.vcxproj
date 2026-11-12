@@ -134,7 +134,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="AsioIOServicePool.cpp" />
     <ClCompile Include="ChatServer.cpp" />
     <ClCompile Include="ChatServiceImpl.cpp" />
     <ClCompile Include="LogicSystem.cpp" />
@@ -145,7 +144,6 @@
     <ClCompile Include="MysqlMgr.cpp" />
     <ClCompile Include="RedisMgr.cpp" />
     <ClCompile Include="RedisUserPresenceStore.cpp" />
-    <ClCompile Include="Singleton.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AsioIOServicePool.h" />

@@ -510,8 +510,7 @@ std::map<short, MessageHandler> LogicSystem::CreateHandlers() {
                 });
         };
     }
-    // 处理用户登录请求
-    // 解析聊天登录并校验身份及状态服务结果。
+    // 解析登录请求，在 Redis 校验凭据后加载资料并绑定会话。
     handlers[MSG_CHAT_LOGIN_REQ] =
         [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
             // 解析msg_data对应的json数据

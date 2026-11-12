@@ -1,4 +1,5 @@
 #include "MysqlDao.h"
+#include <spdlog/spdlog.h>
 #include "ConfigMgr.h"
 #include "../../schema/SchemaContract.h"
 #include "../../common/auth/PasswordHash.h"

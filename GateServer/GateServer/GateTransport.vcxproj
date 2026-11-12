@@ -33,7 +33,6 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="AsioIOServicePool.cpp" />
     <ClCompile Include="CServer.cpp" />
     <ClCompile Include="GateResponse.cpp" />
     <ClCompile Include="HttpConnection.cpp" />

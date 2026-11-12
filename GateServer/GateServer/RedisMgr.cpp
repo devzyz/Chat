@@ -1,4 +1,5 @@
 #include "RedisMgr.h"
+#include <spdlog/spdlog.h>
 #include "../../common/redis/Reply.h"
 #include "ConfigMgr.h"
 #include <stdexcept>

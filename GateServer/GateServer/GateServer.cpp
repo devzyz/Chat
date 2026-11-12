@@ -1,4 +1,5 @@
 #include "CServer.h"
+#include <spdlog/spdlog.h>
 #include "const.h"
 #include "ConfigMgr.h"
 #include "LogMgr.h"

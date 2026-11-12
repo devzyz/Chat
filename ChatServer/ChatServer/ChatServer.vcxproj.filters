@@ -21,12 +21,6 @@
     <ClCompile Include="ConfigMgr.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Singleton.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="AsioIOServicePool.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="LogicSystem.cpp">
       <Filter>源文件</Filter>
     </ClCompile>

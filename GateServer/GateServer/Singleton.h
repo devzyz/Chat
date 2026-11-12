@@ -1,7 +1,5 @@
 #pragma once
-#include <iostream>
 #include <memory>
-#include <spdlog/spdlog.h>
 
 /** @brief 以共享指针提供一次初始化的进程内实例，具体并发操作由派生类负责。 */
 template <typename T> class Singleton {
@@ -12,11 +10,6 @@ public:
         return _instance;
     }
 
-    //void PrintAddress() {
-    //	std::cout << _instance.get() << std::endl;
-    //}
-
-    // A singleton can outlive the logging registry during static destruction.
     /** @brief 默认销毁无资源的单例基类，派生对象负责自身资源清理。 */
     ~Singleton() = default;
 
