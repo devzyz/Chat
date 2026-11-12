@@ -37,9 +37,12 @@ LogicDispatcher::Completion Reply(std::shared_ptr<CSession> session, short id, s
 
 void LogicSystem::QueueDatabase(const std::shared_ptr<CSession>& session, DatabaseWork work) {
     const int uid = session->AuthenticatedUid();
-    // 排队期间已关闭或被替换的连接不能再启动写入。已提交的通知仍独立完成。
-    auto checked = [session, uid, directory = _directory, work = std::move(work)]() -> Completion {
-        if (session->Closing() || (uid && !directory->IsCurrent(uid, session->Id())))
+    // 登录另由绑定时校验 token；已认证请求等到数据库线程可用时再次核实凭据。
+    auto checked = [this, session, uid, work = std::move(work)]() -> Completion {
+        if (session->Closing())
+            return {};
+        if (uid &&
+            (!_directory->IsCurrent(uid, session->Id()) || !RefreshAuthenticatedSession(*_presence, uid, session)))
             return {};
         return work();
     };
@@ -75,10 +78,8 @@ bool LogicSystem::Dispatch(const LogicMessage& message) {
         const int uid = message.session->AuthenticatedUid();
         if (uid <= 0 || message.received_uid != uid || !_directory->IsCurrent(uid, message.session->Id()))
             return true;
-        if (!_presence->RefreshIfCurrent(uid, message.session->Id())) {
-            message.session->Close(SessionCloseReason::Replaced);
+        if (!RefreshAuthenticatedSession(*_presence, uid, message.session))
             return true;
-        }
         Json::Value request;
         Json::Reader reader;
         if (!reader.parse(message.body, request) || !request.isObject())
@@ -470,6 +471,7 @@ void LogicSystem::RegisterCallbacks() {
                                 session->EnableGroups(groups);
                                 session->EnableSocial(social);
                             } else {
+                                response = Json::Value(Json::objectValue);
                                 response["error"] = ErrorCodes::RPCFailed;
                             }
                             resume(Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(response)));

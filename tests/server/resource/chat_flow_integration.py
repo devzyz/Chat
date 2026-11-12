@@ -22,11 +22,12 @@ class RedisFixture(socketserver.ThreadingTCPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self):
+    def __init__(self, uids=(7, 8, 9)):
         super().__init__(("127.0.0.1", 0), RedisHandler)
         self.values, self.hashes = {}, {}
         self.lock = threading.Lock()
-        for uid in (7, 8, 9):
+        self.refresh_events = {}
+        for uid in uids:
             self.hashes[str(uid).encode()] = {f"utoken_{uid}".encode(): b"fixture-token"}
 
 
@@ -79,6 +80,9 @@ class RedisHandler(socketserver.StreamRequestHandler):
                         credential = hashes.get(keys[2], {}).get(b"utoken_" + keys[2])
                         if b"return {'current'}" in script:
                             result = b"*1\r\n" + self.bulk(b"current") if previous[1] == argv[0] and previous[0] and credential and credential == data.get(keys[3]) else b"*0\r\n"
+                            event = self.server.refresh_events.pop(keys[2], None)
+                            if event is not None and result.startswith(b"*1"):
+                                event.set()
                         elif b"MSET" in script:
                             if credential != argv[2]: result = b"*0\r\n"
                             else:

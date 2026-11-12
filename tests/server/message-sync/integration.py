@@ -2,6 +2,7 @@
 
 Reuses the existing Redis fixtures; never connects to a personal database.
 """
+from contextlib import contextmanager
 import os
 import pathlib
 import shutil
@@ -18,56 +19,92 @@ from chat_flow_integration import RedisFixture, port, wait_port, send, receive
 from stream_integration import process_line
 
 
-def verify_database_dispatch(mysql_command, tcp_port, sender, redis):
-    """Hold both MySQL workers in login and verify the same server still processes a heartbeat."""
-    def wait_count(statement, count):
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline:
-            result = subprocess.check_output(mysql_command + ["-BN", "-e", statement], text=True, timeout=3)
-            if int(result.strip()) >= count:
-                return
-            time.sleep(0.05)
-        raise TimeoutError(f"expected {count} for {statement}")
+def mysql_value(command, statement):
+    """Read one scalar from the disposable suite database."""
+    return subprocess.check_output(command + ["message_sync_test", "-BN", "-e", statement],
+                                   text=True, timeout=3).strip()
 
-    with socket.create_connection(("127.0.0.1", tcp_port), timeout=8) as valid, \
-            socket.create_connection(("127.0.0.1", tcp_port), timeout=8) as revoked:
-        # The named lock identifies only this connection, after it has acquired the table lock.
-        owner = "IS_USED_LOCK('chat_dispatch_test_holder')"
-        holder = subprocess.Popen(mysql_command + ["message_sync_test", "-e",
-            "LOCK TABLES user WRITE; DO GET_LOCK('chat_dispatch_test_holder', 0); DO SLEEP(20)"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+def wait_count(command, statement, count):
+    """Bound the wait for an observed lock holder or blocked query."""
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if int(mysql_value(command, statement)) >= count:
+            return
+        time.sleep(0.05)
+    raise TimeoutError(f"expected {count} for {statement}")
+
+
+@contextmanager
+def hold_table(command, table):
+    """Keep a test-owned MySQL connection locked until both workers reach the barrier."""
+    owner = "IS_USED_LOCK('chat_dispatch_test_holder')"
+    holder = subprocess.Popen(command + ["message_sync_test", "-e",
+        f"LOCK TABLES {table} WRITE; DO GET_LOCK('chat_dispatch_test_holder', 0); DO SLEEP(30)"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        wait_count(command, f"SELECT {owner} IS NOT NULL", 1)
+        yield
+    finally:
         try:
-            wait_count(f"SELECT {owner} IS NOT NULL", 1)
-            for sock, uid in ((valid, 8), (revoked, 9)):
-                with redis.lock:
-                    credential = redis.hashes[str(uid).encode()][f"utoken_{uid}".encode()].decode()
-                send(sock, 1005, {"uid": uid, "token": credential, "capabilities": ["basic_social_v1"]})
-            wait_count("SELECT COUNT(*) FROM information_schema.processlist WHERE DB='message_sync_test' "
-                       "AND STATE LIKE 'Waiting for table%lock'", 2)
-            send(sender, 1020, {"uid": 7})
-            receive(sender, 1021)
-            with redis.lock:
-                previous = redis.hashes[b"9"].pop(b"utoken_9")
-        finally:
-            connection_id = subprocess.check_output(mysql_command + ["-BN", "-e", f"SELECT {owner}"],
-                                                    text=True, timeout=3).strip()
+            connection_id = mysql_value(command, f"SELECT {owner}")
             if connection_id.isdecimal():
-                subprocess.run(mysql_command + ["-e", f"KILL CONNECTION {int(connection_id)}"], check=True, timeout=3)
+                mysql_value(command, f"KILL CONNECTION {int(connection_id)}")
+        finally:
             try:
                 holder.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 holder.kill()
                 holder.wait(timeout=5)
+
+
+def verify_database_dispatch(mysql_command, tcp_port, sender, observer, redis):
+    """Revoke both a loading login and an authenticated queued writer while both SQL workers wait."""
+    blocked = ("SELECT COUNT(*) FROM information_schema.processlist WHERE DB='message_sync_test' "
+               "AND STATE LIKE 'Waiting for table%lock'")
+    message_uuid = "b125aa01-fb89-4602-9403-170000000001"
+    with socket.create_connection(("127.0.0.1", tcp_port), timeout=8) as valid, \
+            socket.create_connection(("127.0.0.1", tcp_port), timeout=8) as revoked:
+        with hold_table(mysql_command, "user"):
+            for sock, uid in ((valid, 8), (revoked, 9)):
+                with redis.lock:
+                    credential = redis.hashes[str(uid).encode()][f"utoken_{uid}".encode()].decode()
+                send(sock, 1005, {"uid": uid, "token": credential, "capabilities": ["basic_social_v1"]})
+            wait_count(mysql_command, blocked, 2)
+            admitted = threading.Event()
+            with redis.lock:
+                redis.refresh_events[b"7"] = admitted
+            send(sender, 1016, dict(from_uid=7, to_uid=8, chat_id=201,
+                 text_array=[dict(msg_uuid=message_uuid, msg_content="queued before logout")]))
+            assert admitted.wait(3), "sender did not reach ingress authentication"
+            # The same dispatcher can answer this heartbeat only after it has submitted the write.
+            send(observer, 1020, {"uid": 10})
+            receive(observer, 1021)
+            with redis.lock:
+                writer_credential = redis.hashes[b"7"].pop(b"utoken_7")
+                login_credential = redis.hashes[b"9"].pop(b"utoken_9")
         receive(valid, 1006)
         # Failed presence publication closes the socket; its best-effort error frame can arrive first.
         try:
-            receive(revoked, 1006, success=False)
+            failure = receive(revoked, 1006, success=False)
+            assert failure == {"error": 1002}
             assert revoked.recv(1) == b""
         except ConnectionError:
             pass
+        assert sender.recv(1) == b"", "revoked queued writer received a frame"
+        assert mysql_value(mysql_command, "SELECT COUNT(*) FROM chat_message WHERE send_id=7 "
+                           f"AND client_msg_uuid='{message_uuid}'") == "0"
         with redis.lock:
             assert b"usessionid_9" not in redis.values
-            redis.hashes[b"9"][b"utoken_9"] = previous
+            redis.hashes[b"7"][b"utoken_7"] = writer_credential
+            redis.hashes[b"9"][b"utoken_9"] = login_credential
+
+
+def verify_failed_binding(sock):
+    """An already-bound socket gets only the public error, even with valid credentials for another user."""
+    send(sock, 1005, {"uid": 9, "token": "fixture-token"})
+    failure = receive(sock, 1006, success=False)
+    assert failure == {"error": 1002}, sorted(failure)
 
 
 def tcp_flow(directory, mysql_command, mysql_port):
@@ -78,7 +115,7 @@ def tcp_flow(directory, mysql_command, mysql_port):
     INSERT INTO chat(chat_id,type) VALUES(201,'private');
     """
     subprocess.run(mysql_command, input=schema, text=True, check=True, timeout=10)
-    redis = RedisFixture()
+    redis = RedisFixture(uids=(7, 8, 9, 10))
     thread = threading.Thread(target=redis.serve_forever, daemon=True)
     thread.start()
     processes, sockets, logs = [], [], []
@@ -149,7 +186,11 @@ def tcp_flow(directory, mysql_command, mysql_port):
         sender, three_count = measured_login(friends)
         assert three_count == one_count > 0, (one_count, three_count)
         print(f"Legacy login: 1 and 3 friends each used {one_count} prepared statement executions")
-        verify_database_dispatch(mysql_command, tcp_ports[0], sender, redis)
+        with login(0, 10, social=True) as observer:
+            verify_database_dispatch(mysql_command, tcp_ports[0], sender, observer, redis)
+            verify_failed_binding(observer)
+        sender.close()
+        sender = login(0, 7)
         subprocess.run(mysql_command, input="""USE message_sync_test;
             DELETE FROM friend WHERE self_id=7 AND other_id IN (9,10);
             UPDATE user SET description='',icon='',sex=0 WHERE uid=9;""", text=True, check=True, timeout=10)
