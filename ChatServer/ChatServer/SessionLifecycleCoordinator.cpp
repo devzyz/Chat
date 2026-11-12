@@ -8,9 +8,10 @@ SessionLifecycleCoordinator::SessionLifecycleCoordinator(
     std::shared_ptr<UserSessionDirectory> directory,
     std::shared_ptr<UserPresenceStore> presence,
     std::string server_id,
+    std::shared_ptr<DependencyExecutor> dependencies,
     Kick kick)
     : _directory(std::move(directory)), _presence(std::move(presence)), _server_id(std::move(server_id)),
-      _kick(std::move(kick)) {}
+      _dependencies(std::move(dependencies)), _kick(std::move(kick)) {}
 SessionLifecycleCoordinator::~SessionLifecycleCoordinator() {
     _worker.join();
 }
@@ -36,7 +37,11 @@ void SessionLifecycleCoordinator::OnAuthenticated(
             const chat_session::UserPresence current{_server_id, session->Id(), authentication_token};
             PresenceResult result;
             try {
-                result = _presence->Publish(uid, current);
+                // 协调线程保持发布顺序，Redis worker 不等待本地绑定回调。
+                auto publish = [this, uid, current] {
+                    return _presence->Publish(uid, current);
+                };
+                result = _dependencies->SubmitFuture(ExternalTask::Redis, std::move(publish)).get();
             } catch (const std::exception& error) {
                 SPDLOG_ERROR("presence publish failed: {}", error.what());
             }
@@ -64,7 +69,11 @@ void SessionLifecycleCoordinator::OnAuthenticated(
                 cancelled->store(true);
                 session->Close(SessionCloseReason::LocalRequest);
                 try {
-                    if (!_presence->RemoveIfCurrent(uid, current))
+                    // 删除仍属于失败绑定的在线位置。
+                    auto remove = [this, uid, current] {
+                        return _presence->RemoveIfCurrent(uid, current);
+                    };
+                    if (!_dependencies->SubmitFuture(ExternalTask::Redis, std::move(remove)).get())
                         SPDLOG_WARN("presence rollback failed, uid={}", uid);
                 } catch (const std::exception& error) {
                     SPDLOG_WARN("presence rollback failed: {}", error.what());
@@ -78,7 +87,14 @@ void SessionLifecycleCoordinator::OnAuthenticated(
                         old->Close(SessionCloseReason::Replaced);
                 } else if (_kick) {
                     try {
-                        _kick(uid, *result.presence);
+                        // 保留远端替换顺序，由出站池执行阻塞 RPC。
+                        _dependencies
+                            ->SubmitFuture(
+                                ExternalTask::OutboundGrpc,
+                                [this, uid, old = *result.presence] {
+                                    _kick(uid, old);
+                                })
+                            .get();
                     } catch (const std::exception& error) {
                         SPDLOG_WARN("remote replacement failed: {}", error.what());
                     }
@@ -108,7 +124,11 @@ void SessionLifecycleCoordinator::OnClosing(const SessionId& id, int uid) {
     // 只有仍属于此服务和会话的在线记录才被删除。
     boost::asio::post(_worker, [this, id, uid] {
         try {
-            if (!_presence->RemoveIfCurrent(uid, {_server_id, id}))
+            // 协调线程等条件删除完成后再处理下一笔绑定。
+            auto remove = [this, uid, id] {
+                return _presence->RemoveIfCurrent(uid, {_server_id, id});
+            };
+            if (!_dependencies->SubmitFuture(ExternalTask::Redis, std::move(remove)).get())
                 SPDLOG_WARN("presence cleanup failed, uid={}", uid);
         } catch (const std::exception& error) {
             SPDLOG_WARN("presence cleanup failed: {}", error.what());

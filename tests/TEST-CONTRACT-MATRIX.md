@@ -238,6 +238,10 @@ Domain/Level：Architecture / Unit。
 | T08-LOGIC-07 | `UnknownIdDoesNotBlockValidMessageAndLogOmitsBody` | 未知 ID 不阻断后续有效消息且日志不含 body |
 | T08-LOGIC-09 | `SlowWritesAllowOtherSessionsAndPreserveReadAfterWrite` | 两笔数据库任务并发、第三连接可分发、写后读按连接有序 |
 | T08-LOGIC-10 | `DatabaseCapacityRejectsWithoutWritingAndDrainsFailures` | 数据库容量、异常回传和关闭排空 |
+| T08-LOGIC-11 | `AuthenticationAndNotificationHaveIndependentCapacityAndDrain` | 慢认证与慢通知并行、通知满载后其他连接继续认证和查库、停服排空通知 |
+| T08-LOGIC-12 | `RedisReservesCriticalCapacityAndRejectsGuardedWritesWhenFull` | Redis 普通路由限额，关键请求预留及写前复核拒绝 |
+| T08-LOGIC-13 | `ReservedSqlResumesAheadOfLaterWorkDuringDrain` | Redis/MySQL 线程归属、预留名额顺序与停机排空 |
+| T08-LOGIC-14 | `InstanceLeaseUsesRedisAndUnregistersAfterRenewal` | 实例租约归属 Redis，按 owner 在最后一笔续租后注销 |
 
 ### 3.7 Gate 选服与签发（8 项单元、3 项组件）
 

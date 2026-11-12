@@ -2,6 +2,9 @@
 #include "grpcpp/grpcpp.h"
 #include "chat.grpc.pb.h"
 #include <memory>
+#include <atomic>
+#include "DependencyExecutor.h"
+class CSession;
 
 using grpc::Server;
 using grpc::Status;
@@ -38,7 +41,12 @@ public:
     ChatServiceImpl(
         std::shared_ptr<UserSessionDirectory> directory,
         std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
-        std::shared_ptr<UserPresenceStore> presence);
+        std::shared_ptr<UserPresenceStore> presence,
+        std::shared_ptr<DependencyExecutor> dependencies);
+    // 立即拒绝新入站投递，已有调用在受控期限内退出。
+    void StopAdmission() {
+        _stopping.store(true);
+    }
     /** @brief 接收跨实例好友申请，向本实例接收方在线会话推送通知。 */
     virtual Status NotifyOtherAddFriend(ServerContext* context, const AddFriendReq* request, AddFriendRsp* response)
         override;
@@ -55,6 +63,12 @@ public:
         override;
 
 private:
+    // 入站线程等待 Redis 池的鉴权结果，超时或取消禁止通过迟到回调发送。
+    Status AuthorizeRecipient(ServerContext* context, int uid, std::shared_ptr<CSession>& session);
+    // 发送前检查 RPC 是否仍有效。
+    bool CanDeliver(ServerContext* context) const;
+    std::atomic<bool> _stopping{false};
+    std::shared_ptr<DependencyExecutor> _dependencies;
     std::shared_ptr<UserSessionDirectory> _directory;
     std::shared_ptr<SessionLifecycleCoordinator> _lifecycle;
     std::shared_ptr<UserPresenceStore> _presence;

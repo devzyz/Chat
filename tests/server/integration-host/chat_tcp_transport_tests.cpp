@@ -92,7 +92,8 @@ protected:
         lifecycle_ = std::make_shared<SessionLifecycleCoordinator>(
             directory_,
             std::make_shared<session_test::MemoryPresence>(),
-            "transport-test");
+            "transport-test",
+            std::make_shared<DependencyExecutor>());
         dispatcher_ = std::make_shared<LogicDispatcher>(
             // 记录分发后的逻辑消息并执行测试响应器。
             [this](const LogicMessage& message) {

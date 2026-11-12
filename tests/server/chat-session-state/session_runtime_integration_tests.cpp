@@ -152,6 +152,7 @@ TEST(SessionRuntimeIntegrationTests, CloseDuringPublicationRollsBackAndNeverAuth
     auto released = release->get_future().share();
     // 在发布前建立有界屏障以制造关闭竞态。
     h.presence->before_publish = [entered, released] {
+        EXPECT_TRUE(DependencyExecutor::RunningOn(ExternalTask::Redis));
         entered->set_value();
         released.wait_for(3s);
     };
@@ -192,6 +193,7 @@ TEST(SessionRuntimeIntegrationTests, SlowCleanupDoesNotBlockSocketClose) {
     auto released = release->get_future().share();
     // 在在线清理前建立有界屏障。
     h.presence->before_remove = [entered, released] {
+        EXPECT_TRUE(DependencyExecutor::RunningOn(ExternalTask::Redis));
         entered->set_value();
         released.wait_for(3s);
     };
@@ -209,6 +211,7 @@ TEST(SessionRuntimeIntegrationTests, RemoteReplacementCarriesOldSessionIdentity)
     auto future = kicked->get_future();
     // 核对踢出用户并保存旧在线归属。
     Harness h([kicked](int uid, const chat_session::UserPresence& old) {
+        EXPECT_TRUE(DependencyExecutor::RunningOn(ExternalTask::OutboundGrpc));
         EXPECT_EQ(uid, 42);
         kicked->set_value(old);
     });

@@ -27,7 +27,7 @@ RedisMgr::~RedisMgr() {
  * 3. 返回值类型必须为string
  */
 bool RedisMgr::Get(const std::string& key, std::string& value) {
-    auto connection = _pool->GetConnection();
+    auto connection = WorkerPool().GetConnection();
     if (connection == nullptr) {
         value = "";
         return false;
@@ -75,7 +75,7 @@ bool RedisMgr::Get(const std::string& key, std::string& value) {
  * 3. status的内容状态为ok
  */
 bool RedisMgr::Set(const std::string& key, const std::string& value) {
-    auto connection = _pool->GetConnection();
+    auto connection = WorkerPool().GetConnection();
     if (connection == nullptr) {
         return false;
     }
@@ -114,7 +114,7 @@ bool RedisMgr::Set(const std::string& key, const std::string& value) {
  * 3. 返回类型必须为string
  */
 bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key, std::string& value) {
-    auto connection = _pool->GetConnection();
+    auto connection = WorkerPool().GetConnection();
     if (connection == nullptr) {
         value = "";
         return false;
@@ -166,7 +166,7 @@ bool RedisMgr::HGet(const std::string& first_key, const std::string& second_key,
  * 2. 返回类型必须为integer （1为新增，0为更新已有）
  */
 bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key, const std::string& value) {
-    auto connection = _pool->GetConnection();
+    auto connection = WorkerPool().GetConnection();
     if (connection == nullptr) {
         return false;
     }
@@ -214,7 +214,7 @@ bool RedisMgr::HSet(const std::string& first_key, const std::string& second_key,
  * 2. 返回类型必须为整数
  */
 bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key) {
-    auto connection = _pool->GetConnection();
+    auto connection = WorkerPool().GetConnection();
     if (connection == nullptr) {
         return false;
     }
@@ -255,7 +255,7 @@ bool RedisMgr::HDel(const std::string& first_key, const std::string& second_key)
  * 2. 返回类型必须为整数
  */
 bool RedisMgr::Del(const std::string& key) {
-    auto connection = _pool->GetConnection();
+    auto connection = WorkerPool().GetConnection();
     if (connection == nullptr) {
         return false;
     }
@@ -296,7 +296,7 @@ std::optional<std::vector<std::string>> RedisMgr::Eval(
     const std::string& script,
     const std::vector<std::string>& keys,
     const std::vector<std::string>& arguments) {
-    auto* connection = _pool->GetConnection();
+    auto* connection = WorkerPool().GetConnection();
     if (!connection)
         return std::nullopt;
     // 归还本次借用的数据库连接，退出作用域后不得再使用。

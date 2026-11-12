@@ -16,39 +16,30 @@
 
 /** @brief 拥有外层服务的运行状态和异步操作所需资源，生命周期由外层实现约束。 */
 struct LogicDispatcher::Impl {
-    // 启动消费者；构造失败也回收已启动的数据库线程。
-    Impl(Handler callback, std::size_t count, std::size_t capacity)
-        : handler(std::move(callback)), database_capacity(capacity) {
-        if (!count || !capacity)
-            throw std::invalid_argument("invalid database executor capacity");
-        try {
-            for (std::size_t i = 0; i < count; ++i)
-                // 数据库消费者在各自线程运行。
-                database_workers.emplace_back([this] {
-                    RunDatabase();
-                });
-            // 一个分发线程统一处理入口和完成回调。
-            worker = std::thread([this] {
-                Run();
-            });
-        } catch (...) {
-            StopDatabase();
-            throw;
-        }
-    }
+    // 已完成的通知不关联发送连接；请求完成时才释放会话的顺序位置。
+    struct Result {
+        std::shared_ptr<CSession> session;
+        Completion next;
+        bool ordered;
+    };
+
+    // 分发线程只负责请求编排，依赖池由进程共享。
+    Impl(Handler callback, std::shared_ptr<DependencyExecutor> executor)
+        : handler(std::move(callback)), dependencies(std::move(executor)), worker(&Impl::Run, this) {}
 
     // 锁内以连接所有权登记在途操作；通知执行前不会复用该连接的身份。
-    Resume Suspend(std::shared_ptr<CSession> session) {
+    Resume Suspend(std::shared_ptr<CSession> session, bool ordered = true) {
         // 异步生产者仅交回后续操作，分发线程取走后才解除占用。
-        Resume resume = [this, session](Completion next) {
+        Resume resume = [this, session, ordered](Completion next) {
             {
                 std::lock_guard<std::mutex> lock(mutex);
-                completions.emplace(session, std::move(next));
+                completions.push({session, std::move(next), ordered});
             }
             condition.notify_one();
         };
-        if (!busy.insert(session).second)
+        if (ordered && !busy.insert(session).second)
             throw std::logic_error("session already suspended");
+        ++in_flight;
         return resume;
     }
 
@@ -62,7 +53,7 @@ struct LogicDispatcher::Impl {
                 auto ready = messages.end();
                 // 完成事件优先，入口关闭后仍等待在途操作。
                 condition.wait(lock, [&] {
-                    if (!completions.empty() || (stopping && messages.empty() && busy.empty()))
+                    if (!completions.empty() || (stopping && messages.empty() && in_flight == 0))
                         return true;
                     // 选择未被在途操作占用的连接。
                     ready = std::find_if(messages.begin(), messages.end(), [&](const LogicMessage& item) {
@@ -73,14 +64,17 @@ struct LogicDispatcher::Impl {
                 if (!completions.empty()) {
                     auto item = std::move(completions.front());
                     completions.pop();
-                    busy.erase(item.first);
-                    completion = std::move(item.second);
+                    if (item.ordered)
+                        busy.erase(item.session);
+                    --in_flight;
+                    completion = std::move(item.next);
                     if (!completion)
                         continue;
                 } else if (ready != messages.end()) {
                     message = std::move(*ready);
                     messages.erase(ready);
                 } else {
+                    drained = true;
                     return;
                 }
             }
@@ -95,89 +89,140 @@ struct LogicDispatcher::Impl {
         }
     }
 
-    // 数据库工作线程在锁外执行同步操作。
-    void RunDatabase() {
-        for (;;) {
-            Completion task;
-            {
-                std::unique_lock<std::mutex> lock(mutex);
-                // 等待新数据库任务或停机信号。
-                database_ready.wait(lock, [this] {
-                    return database_stopping || !database.empty();
-                });
-                if (database.empty())
-                    return;
-                task = std::move(database.front());
-                database.pop();
-            }
-            task();
-        }
-    }
-
-    // 在所有在途操作交回结果后回收数据库线程。
-    void StopDatabase() {
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            database_stopping = true;
-        }
-        database_ready.notify_all();
-        for (auto& thread : database_workers)
-            thread.join();
-    }
-
     Handler handler;
-    const std::size_t database_capacity;
+    std::shared_ptr<DependencyExecutor> dependencies;
+    std::queue<ExternalWork> notifications;
+    bool notifying = false;
+    std::uint64_t skipped = 0;
     std::mutex mutex;
-    std::condition_variable condition, database_ready;
+    std::condition_variable condition;
     std::list<LogicMessage> messages;
     std::set<std::shared_ptr<CSession>, std::owner_less<std::shared_ptr<CSession>>> busy;
-    std::queue<std::pair<std::shared_ptr<CSession>, Completion>> completions;
-    std::queue<Completion> database;
+    std::queue<Result> completions;
+    std::size_t in_flight = 0;
     bool stopping{false};
-    bool database_stopping{false};
+    bool drained{false};
+
     std::once_flag stop_once;
-    std::vector<std::thread> database_workers;
     std::thread worker;
 };
 
-LogicDispatcher::LogicDispatcher(Handler handler, std::size_t database_workers, std::size_t database_capacity)
-    : _impl(std::make_unique<Impl>(std::move(handler), database_workers, database_capacity)) {}
+LogicDispatcher::LogicDispatcher(Handler handler, std::size_t database_workers, std::size_t capacity_per_pool)
+    : LogicDispatcher(std::move(handler), std::make_shared<DependencyExecutor>(database_workers, capacity_per_pool)) {}
+
+LogicDispatcher::LogicDispatcher(Handler handler, std::shared_ptr<DependencyExecutor> dependencies)
+    : _impl(std::make_unique<Impl>(std::move(handler), std::move(dependencies))) {}
 
 LogicDispatcher::Resume LogicDispatcher::AwaitCompletion(std::shared_ptr<CSession> session) {
     std::lock_guard<std::mutex> lock(_impl->mutex);
     return _impl->Suspend(std::move(session));
 }
 
-LogicSubmitResult LogicDispatcher::SubmitDatabase(
+LogicSubmitResult LogicDispatcher::SubmitExternal(
+    ExternalTask kind,
     std::shared_ptr<CSession> session,
-    DatabaseWork work,
-    Completion failed) {
-    {
-        std::lock_guard<std::mutex> lock(_impl->mutex);
-        if (_impl->database_stopping)
-            return LogicSubmitResult::Closed;
-        if (_impl->database.size() >= _impl->database_capacity)
-            return LogicSubmitResult::Full;
-        auto resume = _impl->Suspend(session);
-        try {
-            // 异常和正常结果共用完成通道。
-            _impl->database.emplace([work = std::move(work), failed = std::move(failed), resume = std::move(resume)] {
+    ExternalWork work,
+    Completion failed,
+    std::function<bool()> sql_check) {
+    const bool ordered = session.use_count() != 0;
+    std::lock_guard<std::mutex> lock(_impl->mutex);
+    if (_impl->drained)
+        return LogicSubmitResult::Closed;
+    auto resume = _impl->Suspend(session, ordered);
+    LogicSubmitResult result;
+    try {
+        DependencyExecutor::SqlGuard guard;
+        if (sql_check) {
+            guard.check = std::move(sql_check);
+            // 复核未通过或者无法入队，依旧完成原请求。
+            guard.denied = [resume, failed] {
+                resume(failed);
+            };
+        }
+        // 所有后续业务都在分发线程恢复。
+        result = _impl->dependencies->SubmitExternal(
+            kind,
+            [resume, work = std::move(work), failed]() mutable {
                 Completion next;
                 try {
                     next = work();
                 } catch (...) {
-                    SPDLOG_ERROR("database task failed");
                     next = failed;
+                    SPDLOG_ERROR("external request failed");
                 }
                 resume(std::move(next));
-            });
-        } catch (...) {
+            },
+            RedisAdmission::Critical,
+            std::move(guard));
+    } catch (...) {
+        if (ordered)
             _impl->busy.erase(session);
-            throw;
-        }
+        --_impl->in_flight;
+        throw;
     }
-    _impl->database_ready.notify_one();
-    return LogicSubmitResult::Accepted;
+    if (result != LogicSubmitResult::Accepted) {
+        if (ordered)
+            _impl->busy.erase(session);
+        --_impl->in_flight;
+    }
+    return result;
+}
+
+void LogicDispatcher::QueueNotification(ExternalWork route) {
+    if (!_impl->notifying) {
+        _impl->notifying = true;
+        StartNotification(std::move(route));
+    } else if (_impl->notifications.size() < 64) {
+        _impl->notifications.push(std::move(route));
+    } else {
+        const auto count = ++_impl->skipped;
+        if ((count & (count - 1)) == 0)
+            SPDLOG_WARN("notification backlog full, skipped={}", count);
+    }
+}
+
+void LogicDispatcher::StartNotification(ExternalWork route) {
+    Resume resume;
+    {
+        std::lock_guard<std::mutex> lock(_impl->mutex);
+        resume = _impl->Suspend({}, false);
+    }
+    // 仅在分发线程访问通知 FIFO，发送者断开不会取消已提交的通知。
+    auto next = [this] {
+        if (_impl->notifications.empty()) {
+            _impl->notifying = false;
+            return;
+        }
+        auto route = std::move(_impl->notifications.front());
+        _impl->notifications.pop();
+        StartNotification(std::move(route));
+    };
+    // 路由完成后将远端调用交给 gRPC 池，本机发送已由会话 strand 接管。
+    auto resolve = [this, route = std::move(route), resume, next]() mutable {
+        try {
+            auto rpc = route();
+            if (rpc) {
+                // 调用结束后释放逻辑通知位置。
+                auto send = [rpc = std::move(rpc), resume, next] {
+                    try {
+                        rpc();
+                    } catch (...) {
+                        SPDLOG_WARN("notification RPC failed");
+                    }
+                    resume(next);
+                };
+                if (_impl->dependencies->SubmitExternal(ExternalTask::OutboundGrpc, std::move(send)) ==
+                    LogicSubmitResult::Accepted)
+                    return;
+            }
+        } catch (...) {
+            SPDLOG_WARN("notification routing failed");
+        }
+        resume(next);
+    };
+    if (_impl->dependencies->SubmitExternal(ExternalTask::Redis, std::move(resolve), RedisAdmission::Routing) !=
+        LogicSubmitResult::Accepted)
+        resume(next);
 }
 
 LogicDispatcher::~LogicDispatcher() {
@@ -209,7 +254,6 @@ void LogicDispatcher::Stop() {
         _impl->condition.notify_one();
         if (_impl->worker.joinable()) {
             _impl->worker.join();
-            _impl->StopDatabase();
         }
     });
 }

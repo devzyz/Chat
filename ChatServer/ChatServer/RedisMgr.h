@@ -1,6 +1,7 @@
 #pragma once
 #include "../../common/redis/RedisPool.h"
 #include "Singleton.h"
+#include "DependencyExecutor.h"
 #include "../../common/auth/RedisToken.h"
 #include <queue>
 #include <mutex>
@@ -80,7 +81,7 @@ public:
         const std::vector<std::string>& arguments);
     /** @brief 校验 TCP 登录凭据，区分用户缺失、凭据错误及依赖失败。 */
     chat_auth::TokenResult ValidateToken(int uid, const std::string& token) {
-        return _pool->ValidateToken(uid, token);
+        return WorkerPool().ValidateToken(uid, token);
     }
     /** @brief 停止接受新的借用并释放空闲连接，唤醒等待者；借出资源仍须按原协议归还。 */
     void Close();
@@ -88,5 +89,11 @@ public:
 private:
     /** @brief 初始化RedisMgr，执行模块 Redis 命令并检查响应类型；命令失败不自动重放写入。 */
     RedisMgr();
+    // 所有生产命令均在 Redis 工作线程借连接，防止新调用点绕过准入。
+    RedisConnectionPool& WorkerPool() {
+        if (!DependencyExecutor::RunningOn(ExternalTask::Redis))
+            throw std::logic_error("Redis command outside Redis pool");
+        return *_pool;
+    }
     std::unique_ptr<RedisConnectionPool> _pool;
 };

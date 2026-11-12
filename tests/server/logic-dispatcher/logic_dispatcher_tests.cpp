@@ -4,6 +4,7 @@
 #include <spdlog/spdlog.h>
 
 #include "LogicDispatcher.h"
+#include "InstanceLease.h"
 #include "Const.h"
 
 #include <algorithm>
@@ -354,7 +355,8 @@ TEST(LogicDispatcherTests, SlowWritesAllowOtherSessionsAndPreserveReadAfterWrite
             const auto thread = std::this_thread::get_id();
             // 工作线程暂停到测试释放门闩；回调必须回到业务线程。
             EXPECT_EQ(
-                executor->SubmitDatabase(
+                executor->SubmitExternal(
+                    ExternalTask::MySQL,
                     message.session,
                     [&, id, thread]() -> LogicDispatcher::Completion {
                         EXPECT_NE(thread, std::this_thread::get_id());
@@ -397,7 +399,8 @@ TEST(LogicDispatcherTests, DatabaseCapacityRejectsWithoutWritingAndDrainsFailure
         [&](const LogicMessage& message) {
             const auto id = message.id;
             // 第一笔故意抛错，第二笔应正常执行，第三笔不应进入数据库。
-            auto result = executor->SubmitDatabase(
+            auto result = executor->SubmitExternal(
+                ExternalTask::MySQL,
                 message.session,
                 [&, id]() -> LogicDispatcher::Completion {
                     if (id == 1) {
@@ -428,6 +431,214 @@ TEST(LogicDispatcherTests, DatabaseCapacityRejectsWithoutWritingAndDrainsFailure
     dispatcher.Stop();
     EXPECT_EQ(writes, 1);
     EXPECT_EQ(failures, 1);
+}
+
+// T08-LOGIC-11：认证线程彼此独立；通知满载只拒绝新通知，Stop 等待独立通知和后续已受理步骤。
+TEST(LogicDispatcherTests, AuthenticationAndNotificationHaveIndependentCapacityAndDrain) {
+    std::promise<void> auth_started, notification_started, second_auth, release, submitted;
+    auto gate = release.get_future().share();
+    std::vector<int> delivered;
+    LogicDispatcher* executor = nullptr;
+    // 在两个不同的池内建立屏障，另一个认证及有序后续数据库步骤仍能完成。
+    LogicDispatcher dispatcher(
+        [&](const LogicMessage& msg) {
+            if (msg.id == 1) {
+                // 暂停一笔认证，验证另一条连接能使用第二个认证线程。
+                executor->SubmitExternal(
+                    ExternalTask::Redis,
+                    msg.session,
+                    [&]() -> LogicDispatcher::Completion {
+                        auth_started.set_value();
+                        EXPECT_EQ(gate.wait_for(2s), std::future_status::ready);
+                        return {};
+                    },
+                    {});
+            } else if (msg.id == 2) {
+                // 模拟对端 RPC 未返回。
+                executor->SubmitExternal(
+                    ExternalTask::OutboundGrpc,
+                    {},
+                    [&]() -> LogicDispatcher::Completion {
+                        notification_started.set_value();
+                        EXPECT_EQ(gate.wait_for(2s), std::future_status::ready);
+                        delivered.push_back(1);
+                        return {};
+                    },
+                    {});
+            } else {
+                for (int index : {2, 3}) {
+                    // 满队列拒绝的第三笔不能执行。
+                    auto status = executor->SubmitExternal(
+                        ExternalTask::OutboundGrpc,
+                        {},
+                        [&, index]() -> LogicDispatcher::Completion {
+                            delivered.push_back(index);
+                            return {};
+                        },
+                        {});
+                    EXPECT_EQ(status, index == 2 ? LogicSubmitResult::Accepted : LogicSubmitResult::Full);
+                }
+                // 从认证完成事件继续查询；不占用被阻塞的通知线程。
+                executor->SubmitExternal(
+                    ExternalTask::Redis,
+                    msg.session,
+                    [&, session = msg.session]() -> LogicDispatcher::Completion {
+                        // 回到分发线程后再提交同一连接的数据库操作。
+                        return [&, session] {
+                            // 查询开始即证明通知和慢认证没有耗尽数据库容量。
+                            executor->SubmitExternal(
+                                ExternalTask::MySQL,
+                                session,
+                                [&]() -> LogicDispatcher::Completion {
+                                    second_auth.set_value();
+                                    return {};
+                                },
+                                {});
+                        };
+                    },
+                    {});
+                submitted.set_value();
+            }
+            return true;
+        },
+        1,
+        1);
+    executor = &dispatcher;
+    dispatcher.Submit({SessionKey(), 1, {}});
+    dispatcher.Submit({SessionKey(), 2, {}});
+    EXPECT_EQ(auth_started.get_future().wait_for(2s), std::future_status::ready);
+    EXPECT_EQ(notification_started.get_future().wait_for(2s), std::future_status::ready);
+    dispatcher.Submit({SessionKey(), 3, {}});
+    EXPECT_EQ(submitted.get_future().wait_for(2s), std::future_status::ready);
+    EXPECT_EQ(second_auth.get_future().wait_for(2s), std::future_status::ready);
+    // 入口关闭后，通知仍需按入队顺序排空。
+    auto stopped = std::async(std::launch::async, [&] {
+        dispatcher.Stop();
+    });
+    release.set_value();
+    EXPECT_EQ(stopped.wait_for(2s), std::future_status::ready);
+    stopped.get();
+    EXPECT_EQ(delivered, (std::vector<int>{1, 2}));
+}
+
+// T08-LOGIC-12：阻塞两个 Redis worker，56 笔普通路由之后仍能接纳 8 笔关键任务。
+TEST(LogicDispatcherTests, RedisReservesCriticalCapacityAndRejectsGuardedWritesWhenFull) {
+    DependencyExecutor executor;
+    std::promise<void> first, second, release, denied;
+    auto gate = release.get_future().share();
+    // 每个屏障由一个不同的 Redis 工作者占用。
+    auto block = [&](std::promise<void>& entered) {
+        EXPECT_TRUE(DependencyExecutor::RunningOn(ExternalTask::Redis));
+        entered.set_value();
+        EXPECT_EQ(gate.wait_for(2s), std::future_status::ready);
+    };
+    executor.SubmitExternal(ExternalTask::Redis, std::bind(block, std::ref(first)));
+    executor.SubmitExternal(ExternalTask::Redis, std::bind(block, std::ref(second)));
+    ASSERT_EQ(first.get_future().wait_for(2s), std::future_status::ready);
+    ASSERT_EQ(second.get_future().wait_for(2s), std::future_status::ready);
+    // 普通路由与关键任务共用队列，仅准入配额不同。
+    auto noop = [] {
+    };
+    for (int n = 0; n < 56; ++n)
+        EXPECT_EQ(
+            executor.SubmitExternal(ExternalTask::Redis, noop, RedisAdmission::Routing),
+            LogicSubmitResult::Accepted);
+    EXPECT_EQ(executor.SubmitExternal(ExternalTask::Redis, noop, RedisAdmission::Routing), LogicSubmitResult::Full);
+    for (int n = 0; n < 8; ++n)
+        EXPECT_EQ(executor.SubmitExternal(ExternalTask::Redis, noop), LogicSubmitResult::Accepted);
+    // 复核连入队都失败时不能执行 SQL，拒绝回调仍完成。
+    DependencyExecutor::SqlGuard guard;
+    // 若资源隔离错误而进入复核，该检查会成功。
+    guard.check = [] {
+        return true;
+    };
+    // 让等待者确认这笔写入已被拒绝。
+    guard.denied = [&] {
+        denied.set_value();
+    };
+    // 被拒绝的任务不可产生数据库副作用。
+    auto sql = [] {
+        ADD_FAILURE() << "unexpected SQL";
+    };
+    EXPECT_EQ(
+        executor.SubmitExternal(ExternalTask::MySQL, sql, RedisAdmission::Critical, guard),
+        LogicSubmitResult::Accepted);
+    EXPECT_EQ(denied.get_future().wait_for(2s), std::future_status::ready);
+    release.set_value();
+    executor.Stop();
+    EXPECT_EQ(executor.SubmitExternal(ExternalTask::Redis, noop), LogicSubmitResult::Closed);
+}
+
+// T08-LOGIC-13：轮到执行后才复核，等待中的 SQL 不得越过已预留名额；停服仍排空后续操作。
+TEST(LogicDispatcherTests, ReservedSqlResumesAheadOfLaterWorkDuringDrain) {
+    DependencyExecutor executor(1, 4);
+    std::promise<void> checking, release;
+    auto gate = release.get_future().share();
+    std::vector<int> order;
+    // 复核在 Redis 上执行，MySQL 上不持有等待 Redis 的调用栈。
+    DependencyExecutor::SqlGuard guard;
+    // 记录复核实际所属线程并控制放行顺序。
+    guard.check = [&] {
+        EXPECT_TRUE(DependencyExecutor::RunningOn(ExternalTask::Redis));
+        checking.set_value();
+        return gate.wait_for(2s) == std::future_status::ready;
+    };
+    // 正常放行后不应触发拒绝回调。
+    guard.denied = [] {
+        ADD_FAILURE() << "lost SQL reservation";
+    };
+    // 检查结果必须返回 MySQL 线程执行写入。
+    auto write = [&] {
+        EXPECT_TRUE(DependencyExecutor::RunningOn(ExternalTask::MySQL));
+        order.push_back(1);
+    };
+    executor.SubmitExternal(ExternalTask::MySQL, write, RedisAdmission::Critical, guard);
+    ASSERT_EQ(checking.get_future().wait_for(2s), std::future_status::ready);
+    // 这笔读取应排在预留写入之后。
+    executor.SubmitExternal(ExternalTask::MySQL, [&] {
+        order.push_back(2);
+    });
+    // 从所有者线程验证带预留名额的停服。
+    auto stopped = std::async(std::launch::async, [&] {
+        executor.Stop();
+    });
+    release.set_value();
+    ASSERT_EQ(stopped.wait_for(2s), std::future_status::ready);
+    stopped.get();
+    EXPECT_EQ(order, (std::vector<int>{1, 2}));
+}
+
+// T08-LOGIC-14：维护适配器记录执行线程、所有者与顺序，排队续租不能在注销后复活实例。
+TEST(LogicDispatcherTests, InstanceLeaseUsesRedisAndUnregistersAfterRenewal) {
+    DependencyExecutor executor;
+    std::vector<std::string> actions;
+    // 登记、续租和注销使用同一 owner；记录 Redis 返回值及操作次序。
+    InstanceLease lease(
+        executor,
+        [&](const auto& script, const auto& keys, const auto& args) -> std::optional<InstanceLease::Values> {
+            EXPECT_TRUE(DependencyExecutor::RunningOn(ExternalTask::Redis));
+            EXPECT_EQ(keys.back(), "chatlease_test");
+            if (script.find("registered") != std::string::npos) {
+                EXPECT_EQ(args[1], "endpoint|nonce");
+                actions.push_back("registered");
+                return InstanceLease::Values{"registered"};
+            }
+            if (script.find("renewed") != std::string::npos) {
+                EXPECT_EQ(args[2], "endpoint|nonce");
+                actions.push_back("renewed");
+                return InstanceLease::Values{"renewed"};
+            }
+            EXPECT_EQ(args[1], "endpoint|nonce");
+            actions.push_back("removed");
+            return InstanceLease::Values{};
+        },
+        "test",
+        "endpoint|",
+        "nonce");
+    ASSERT_TRUE(lease.Register());
+    lease.Renew(2);
+    lease.Unregister();
+    EXPECT_EQ(actions, (InstanceLease::Values{"registered", "renewed", "removed"}));
 }
 
 } // namespace

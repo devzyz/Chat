@@ -89,7 +89,8 @@ integration::ProductionModules CreateProductionModules() {
     modules.chat_sessions = std::make_unique<SessionLifecycleCoordinator>(
         std::make_shared<UserSessionDirectory>(),
         std::make_shared<session_test::MemoryPresence>(),
-        "host-contract");
+        "host-contract",
+        std::make_shared<DependencyExecutor>());
     modules.gate_request = gate::internal::CreateGateRequest(
         std::make_shared<InMemoryVerification>(),
         std::make_shared<InMemoryCodeStore>(),

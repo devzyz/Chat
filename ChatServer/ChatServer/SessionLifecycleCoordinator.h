@@ -1,5 +1,6 @@
 #pragma once
 #include "UserPresenceStore.h"
+#include "DependencyExecutor.h"
 #include "UserSessionDirectory.h"
 #include <boost/asio.hpp>
 #include <memory>
@@ -17,6 +18,7 @@ public:
         std::shared_ptr<UserSessionDirectory> directory,
         std::shared_ptr<UserPresenceStore> presence,
         std::string server_id,
+        std::shared_ptr<DependencyExecutor> dependencies,
         Kick kick = {});
     /** @brief 等待工作队列退出；销毁前应停止任务生产，且不得从工作线程销毁自身。 */
     ~SessionLifecycleCoordinator();
@@ -36,6 +38,7 @@ private:
     std::shared_ptr<UserSessionDirectory> _directory;
     std::shared_ptr<UserPresenceStore> _presence;
     std::string _server_id;
+    std::shared_ptr<DependencyExecutor> _dependencies;
     Kick _kick;
     std::weak_ptr<chat_transport::CServer> _server;
     std::mutex _binding_mutex;

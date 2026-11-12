@@ -36,9 +36,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="LogicDispatcher.cpp" />
+    <ClCompile Include="DependencyExecutor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="LogicDispatcher.h" />
+    <ClInclude Include="DependencyExecutor.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

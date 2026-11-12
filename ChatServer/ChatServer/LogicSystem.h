@@ -18,13 +18,32 @@ public:
     /** @brief 停止业务分发线程并等待已接受任务结束。 */
     ~LogicSystem();
     /** @brief 接入会话目录与在线状态存储，并注册业务处理器。 */
-    LogicSystem(std::shared_ptr<UserSessionDirectory> directory, std::shared_ptr<UserPresenceStore> presence);
+    LogicSystem(
+        std::shared_ptr<UserSessionDirectory> directory,
+        std::shared_ptr<UserPresenceStore> presence,
+        std::shared_ptr<DependencyExecutor> dependencies);
 
 private:
     /** @brief 校验会话身份并分发消息；仅未知消息类型返回 false。 */
     bool Dispatch(const LogicMessage& message);
     // 在工作线程复核排队请求的绑定凭据后执行数据库操作；满载或异常时关闭发起连接。
-    void QueueDatabase(const std::shared_ptr<CSession>& session, DatabaseWork work);
+    void QueueDatabase(const std::shared_ptr<CSession>& session, ExternalWork work);
+    // 受理与连接有序关联的外部步骤，过载或异常时关闭原连接。
+    void QueueRequest(
+        ExternalTask kind,
+        const std::shared_ptr<CSession>& session,
+        ExternalWork work,
+        std::function<bool()> sql_check = {});
+    // Redis 复核完成后重新确认连接归属，再调用原业务处理器。
+    void DispatchAuthenticated(const LogicMessage& message, int uid);
+    // 登录初验通过后按客户端能力加载资料，并在绑定成功后回复。
+    void QueueLoginData(std::shared_ptr<CSession> session, int uid, std::string credential, Json::Value capabilities);
+    // 返回事务提交的后续操作；先回包，再独立投递通知，队满不改变已提交结果。
+    Completion ReplyAndNotify(
+        std::shared_ptr<CSession> session,
+        short id,
+        const Json::Value& response,
+        ExternalWork route);
     /** @brief 注册登录、好友、消息、回执和历史查询处理器。 */
     void RegisterCallbacks();
 

@@ -1,6 +1,6 @@
 # CI 自动测试如何实现
 
-2026-11-12 按现有工作流、测试注册和代表性源码核对。下表描述配置和实现。Windows 的 377 条是 13 份报告中要求的 testcase 数，其中 C++ 服务端 228、Qt 79、Varify 57、实例脚本 13。一个 testcase 可以执行多个断言；某个源文件也可能同时包含常规和专项用例。[注册与报告校验](../scripts/windows-local.ps1) · [执行范围清单](CI-Test-Inventory.md)
+2026-11-12 按现有工作流、测试注册和代表性源码核对。下表描述配置和实现。Windows 的 381 条是 13 份报告中要求的 testcase 数，其中 C++ 服务端 232、Qt 79、Varify 57、实例脚本 13。一个 testcase 可以执行多个断言；某个源文件也可能同时包含常规和专项用例。[注册与报告校验](../scripts/windows-local.ps1) · [执行范围清单](CI-Test-Inventory.md)
 
 ## 从 CI 到断言
 
