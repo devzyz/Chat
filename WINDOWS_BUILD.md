@@ -63,7 +63,7 @@ weekly and manual full runs always build. See [CI governance](tests/CI-GOVERNANC
    target and host dependencies with `x64-windows-chat-release`, and invokes
    `RunServerTests` to build production servers and test targets together in Release. It verifies that each
    app-local directory contains its executable, configuration and required
-   DLLs, then uploads four independent ZIP files in the
+   DLLs, then uploads three independent server ZIP files in the
    `windows-servers-release` artifact.
 3. `client-release` installs Qt 6.5.3 with its MinGW toolchain, invokes the same
    `RunClientTests -Configuration Release` entry point used locally, builds and runs CTest,

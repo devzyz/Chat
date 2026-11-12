@@ -17,7 +17,7 @@ public:
         : servers_(std::move(servers)), store_(std::move(store)), token_source_(std::move(token_source)) {}
 
     /** @brief 按有效计数和名称选服，Token 持久化成功才返回地址；所有异常返回空失败结果。 */
-    gate::internal::StatusAssignment Assign(int uid, long long auth_version) override {
+    gate::internal::ChatAssignment Assign(int uid, long long auth_version) override {
         try {
             if (uid <= 0 || auth_version < 0)
                 return {};

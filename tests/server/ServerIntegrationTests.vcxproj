@@ -56,7 +56,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="chat-session-state\session_runtime_integration_tests.cpp" />
-    <ClCompile Include="startup\gate_status_startup_tests.cpp" />
+    <ClCompile Include="startup\gate_startup_tests.cpp" />
     <ClCompile Include="startup\startup_config_tests.cpp" />
     <ClCompile Include="..\support\IntegrationHostFactory.cpp" />
     <ClCompile Include="..\support\RunContext.cpp" />

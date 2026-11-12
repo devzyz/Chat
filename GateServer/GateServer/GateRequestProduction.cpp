@@ -120,7 +120,7 @@ public:
 };
 
 /** @brief 对配置的实例按在线租约与负载选服，原子发布和撤销凭据。 */
-class RedisAssignmentAdapter final : public gate::internal::StatusPort {
+class RedisAssignmentAdapter final : public gate::internal::SessionAssignmentPort {
 public:
     /** @brief 读取经过启动校验的不可变候选表。 */
     RedisAssignmentAdapter() {
@@ -149,7 +149,7 @@ public:
                    token) == 1;
     }
     /** @brief 仅在找到有效实例并成功发布当前代次的凭据后返回地址。 */
-    gate::internal::StatusAssignment Assign(int uid, long long auth_version) override {
+    gate::internal::ChatAssignment Assign(int uid, long long auth_version) override {
         return routing_->Assign(uid, auth_version);
     }
 

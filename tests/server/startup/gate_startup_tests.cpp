@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 
 #include <boost/asio.hpp>
-#include <grpcpp/grpcpp.h>
 
 #include <Windows.h>
 
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -21,15 +21,6 @@ using namespace std::chrono_literals;
 constexpr DWORD STARTUP_TIMEOUT_MS = 15000;
 constexpr DWORD STOP_TIMEOUT_MS = 5000;
 
-enum class ServiceKind {
-    Gate,
-};
-
-/** 将参数化服务类型映射为正式产物名称。 */
-const char* ServiceName(ServiceKind service) {
-    return "GateServer";
-}
-
 /** 独占本次启动测试的临时目录，并在作用域结束时清理。 */
 class TempDirectory {
 public:
@@ -40,13 +31,13 @@ public:
             const auto suffix = std::to_string(GetCurrentProcessId()) + "-" +
                                 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "-" +
                                 std::to_string(attempt);
-            _path = base / ("gate-status-startup-tests-" + suffix);
+            _path = base / ("gate-startup-tests-" + suffix);
             std::error_code error;
             if (std::filesystem::create_directory(_path, error)) {
                 return;
             }
         }
-        throw std::runtime_error("unable to create a unique Gate/Status startup test directory");
+        throw std::runtime_error("unable to create a unique Gate startup test directory");
     }
 
     /** 只移除自身创建的临时目录，清理失败记为测试失败。 */
@@ -112,11 +103,9 @@ public:
     OwnedProcess(
         const std::filesystem::path& executable,
         const std::vector<std::wstring>& arguments,
-        const std::filesystem::path& working_directory,
-        const std::string& output_prefix)
-        : _executable(std::filesystem::absolute(executable)),
-          _stdout_path(working_directory / (output_prefix + ".stdout.txt")),
-          _stderr_path(working_directory / (output_prefix + ".stderr.txt")) {
+        const std::filesystem::path& working_directory)
+        : _executable(std::filesystem::absolute(executable)), _stdout_path(working_directory / "GateServer.stdout.txt"),
+          _stderr_path(working_directory / "GateServer.stderr.txt") {
         SECURITY_ATTRIBUTES security_attributes{};
         security_attributes.nLength = sizeof(security_attributes);
         security_attributes.bInheritHandle = TRUE;
@@ -277,20 +266,8 @@ private:
     PROCESS_INFORMATION _process_info{};
 };
 
-/** 根据测试产物布局定位仓库根目录。 */
-std::filesystem::path RepositoryRoot() {
-    std::vector<wchar_t> module_path(32768, L'\0');
-    const DWORD length = GetModuleFileNameW(nullptr, module_path.data(), static_cast<DWORD>(module_path.size()));
-    if (length == 0 || length == module_path.size()) {
-        throw std::runtime_error("unable to resolve the test executable path");
-    }
-    module_path.resize(length);
-    const std::filesystem::path test_executable(module_path.data());
-    return test_executable.parent_path().parent_path().parent_path().parent_path();
-}
-
-/** 按测试当前构建配置定位 Gate 或 Status 正式产物。 */
-std::filesystem::path FindServiceExecutable(ServiceKind service) {
+/** 按测试当前构建配置定位 Gate 正式产物。 */
+std::filesystem::path FindGateExecutable() {
     std::vector<wchar_t> module_path(32768, L'\0');
     const DWORD length = GetModuleFileNameW(nullptr, module_path.data(), static_cast<DWORD>(module_path.size()));
     if (length == 0 || length == module_path.size()) {
@@ -299,8 +276,8 @@ std::filesystem::path FindServiceExecutable(ServiceKind service) {
     module_path.resize(length);
     const std::filesystem::path test_executable(module_path.data());
     const auto configuration = test_executable.parent_path().filename();
-    const auto name = ServiceName(service);
-    return RepositoryRoot() / "build" / "windows-servers" / configuration / name / (std::string(name) + ".exe");
+    const auto root = test_executable.parent_path().parent_path().parent_path().parent_path();
+    return root / "build" / "windows-servers" / configuration / "GateServer" / "GateServer.exe";
 }
 
 /** 写入本用例的配置文件，写入失败抛异常。 */
@@ -340,23 +317,19 @@ unsigned short FindAvailablePort(bool wildcard = false) {
 
 /** 写入隔离的服务启动配置，支持缺失端点和非法 gRPC 参数场景。 */
 void WriteServiceConfig(
-    ServiceKind service,
     const std::filesystem::path& path,
     const std::string& service_port,
     bool include_critical_endpoint = true,
     const std::string& grpc_settings = {}) {
     std::ostringstream config;
-    // Gate validates the account database endpoint at startup.
-    if (service == ServiceKind::Gate) {
-        config << "[Mysql]\n"
-               << "Host = 127.0.0.1\n"
-               << "Port = 1\n"
-               << "Password = fixture-placeholder\n"
-               << "User = fixture-user\n"
-               << "Schema = fixture-schema\n";
-    }
+    config << "[Mysql]\n"
+           << "Host = 127.0.0.1\n"
+           << "Port = 1\n"
+           << "Password = fixture-placeholder\n"
+           << "User = fixture-user\n"
+           << "Schema = fixture-schema\n";
     config << "[GateServer]\n"
-           << "Port = " << (service == ServiceKind::Gate ? service_port : "1") << "\n"
+           << "Port = " << service_port << "\n"
            << "[VarifyServer]\n"
            << "Host = 127.0.0.1\n"
            << "Port = 1\n"
@@ -370,7 +343,7 @@ void WriteServiceConfig(
     config << "Port = 1\n"
            << "Name = FixtureChat\n"
            << "[Log]\n"
-           << "Name = " << ServiceName(service) << "StartupTest\n"
+           << "Name = GateServerStartupTest\n"
            << "LogDir = logs\n"
            << "MaxSizeMB = 1\n"
            << "MaxTotalFiles = 2\n"
@@ -419,7 +392,7 @@ bool ProbeGateHttp(unsigned short port) {
 }
 
 /** 在启动期限内轮询协议就绪，进程提前退出则立即失败。 */
-bool WaitForReady(ServiceKind service, unsigned short port, const OwnedProcess& process) {
+bool WaitForReady(unsigned short port, const OwnedProcess& process) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(STARTUP_TIMEOUT_MS);
     while (std::chrono::steady_clock::now() < deadline) {
         if (!process.IsRunning())
@@ -441,15 +414,12 @@ struct CompletedProcess {
 };
 
 /** 启动正式服务并有界等待退出，超时时终止所属进程后收集证据。 */
-CompletedProcess RunToExit(
-    ServiceKind service,
-    const std::vector<std::wstring>& arguments,
-    const std::filesystem::path& working_directory) {
-    const auto executable = FindServiceExecutable(service);
+CompletedProcess RunToExit(const std::vector<std::wstring>& arguments, const std::filesystem::path& working_directory) {
+    const auto executable = FindGateExecutable();
     if (!std::filesystem::is_regular_file(executable)) {
         throw std::runtime_error("missing production executable " + executable.string());
     }
-    OwnedProcess process(executable, arguments, working_directory, ServiceName(service));
+    OwnedProcess process(executable, arguments, working_directory);
     CompletedProcess result;
     if (!process.WaitForExit(STARTUP_TIMEOUT_MS)) {
         result.timed_out = true;
@@ -467,147 +437,130 @@ void ExpectFailure(const CompletedProcess& result) {
     EXPECT_NE(result.exit_code, 0U) << "stdout:\n" << result.stdout_text << "\nstderr:\n" << result.stderr_text;
 }
 
-/** 对 Gate 与 Status 复用同一组正式启动合同。 */
-class GateStatusStartupTests : public testing::TestWithParam<ServiceKind> {};
-
-/** 以正式服务名称生成稳定的参数化测试标识。 */
-std::string ServiceParameterName(const testing::TestParamInfo<ServiceKind>& info) {
-    return ServiceName(info.param);
-}
 }
 
-// S02-CLI-01 / S03-CLI-01
+// S02-CLI-01
 /** 验证 config 参数缺值返回非零并显示用法。 */
-TEST_P(GateStatusStartupTests, MissingConfigValueReturnsNonZeroWithUsage) {
+TEST(GateStartupTests, MissingConfigValueReturnsNonZeroWithUsage) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
-    const auto result = RunToExit(GetParam(), {L"--config"}, fixture.Path());
+    const auto result = RunToExit({L"--config"}, fixture.Path());
     ExpectFailure(result);
-    EXPECT_NE(
-        result.stderr_text.find("Usage: " + std::string(ServiceName(GetParam())) + ".exe [--config <path>]"),
-        std::string::npos)
+    EXPECT_NE(result.stderr_text.find("Usage: GateServer.exe [--config <path>]"), std::string::npos)
         << result.stderr_text;
 }
 
-// S02-CLI-02 / S03-CLI-02
+// S02-CLI-02
 /** 验证未知参数返回非零并显示用法。 */
-TEST_P(GateStatusStartupTests, UnknownArgumentReturnsNonZeroWithUsage) {
+TEST(GateStartupTests, UnknownArgumentReturnsNonZeroWithUsage) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
-    const auto result = RunToExit(GetParam(), {L"--unknown"}, fixture.Path());
+    const auto result = RunToExit({L"--unknown"}, fixture.Path());
     ExpectFailure(result);
-    EXPECT_NE(
-        result.stderr_text.find("Usage: " + std::string(ServiceName(GetParam())) + ".exe [--config <path>]"),
-        std::string::npos)
+    EXPECT_NE(result.stderr_text.find("Usage: GateServer.exe [--config <path>]"), std::string::npos)
         << result.stderr_text;
 }
 
-// S02-CFG-01 / S03-CFG-01
+// S02-CFG-01
 /** 验证显式选择的配置文件缺失时启动失败。 */
-TEST_P(GateStatusStartupTests, MissingConfigFileReturnsNonZero) {
+TEST(GateStartupTests, MissingConfigFileReturnsNonZero) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
     const auto missing = fixture.Path() / "missing-selected.ini";
-    const auto result = RunToExit(GetParam(), {L"--config", missing.wstring()}, fixture.Path());
+    const auto result = RunToExit({L"--config", missing.wstring()}, fixture.Path());
     ExpectFailure(result);
     EXPECT_NE(result.stderr_text.find("missing-selected.ini"), std::string::npos) << result.stderr_text;
 }
 
-// S02-CFG-02 / S03-CFG-02
+// S02-CFG-02
 /** 验证非法服务端口在启动时被拒绝。 */
-TEST_P(GateStatusStartupTests, InvalidServicePortReturnsNonZero) {
+TEST(GateStartupTests, InvalidServicePortReturnsNonZero) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
     const auto config = fixture.Path() / "invalid-port.ini";
-    WriteServiceConfig(GetParam(), config, "65536junk");
-    const auto result = RunToExit(GetParam(), {L"--config", config.wstring()}, fixture.Path());
+    WriteServiceConfig(config, "65536junk");
+    const auto result = RunToExit({L"--config", config.wstring()}, fixture.Path());
     ExpectFailure(result);
     EXPECT_NE(result.stderr_text.find("Port"), std::string::npos) << result.stderr_text;
 }
 
-// S02-CFG-03 / S03-CFG-03
+// S02-CFG-03
 /** 验证缺少关键端点时启动失败并指出配置字段。 */
-TEST_P(GateStatusStartupTests, MissingCriticalEndpointReturnsNonZero) {
+TEST(GateStartupTests, MissingCriticalEndpointReturnsNonZero) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
     const auto config = fixture.Path() / "missing-endpoint.ini";
-    WriteServiceConfig(GetParam(), config, std::to_string(FindAvailablePort()), false);
-    const auto result = RunToExit(GetParam(), {L"--config", config.wstring()}, fixture.Path());
+    WriteServiceConfig(config, std::to_string(FindAvailablePort()), false);
+    const auto result = RunToExit({L"--config", config.wstring()}, fixture.Path());
     ExpectFailure(result);
     EXPECT_NE(result.stderr_text.find("[FixtureChat].Host"), std::string::npos) << result.stderr_text;
 }
 
-// S02-CFG-04 / S03-CFG-04
+// S02-CFG-04
 /** 验证显式配置路径优先于环境变量。 */
-TEST_P(GateStatusStartupTests, ExplicitConfigPathOverridesEnvironment) {
+TEST(GateStartupTests, ExplicitConfigPathOverridesEnvironment) {
     TempDirectory fixture;
     const auto explicit_config = fixture.Path() / "explicit-selected.ini";
     const auto environment_config = fixture.Path() / "environment-not-selected.ini";
     WriteText(explicit_config, "not an ini document\n");
     WriteText(environment_config, "also not an ini document\n");
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", environment_config.wstring());
-    const auto result = RunToExit(GetParam(), {L"--config", explicit_config.wstring()}, fixture.Path());
+    const auto result = RunToExit({L"--config", explicit_config.wstring()}, fixture.Path());
     ExpectFailure(result);
     EXPECT_NE(result.stderr_text.find("explicit-selected.ini"), std::string::npos) << result.stderr_text;
     EXPECT_EQ(result.stderr_text.find("environment-not-selected.ini"), std::string::npos) << result.stderr_text;
 }
 
-// S02-CFG-05 / S03-CFG-05
+// S02-CFG-05
 /** 验证环境配置路径优先于工作目录默认文件。 */
-TEST_P(GateStatusStartupTests, EnvironmentConfigPathOverridesWorkingDirectoryDefault) {
+TEST(GateStartupTests, EnvironmentConfigPathOverridesWorkingDirectoryDefault) {
     TempDirectory fixture;
     const auto environment_config = fixture.Path() / "environment-selected.ini";
     WriteText(environment_config, "not an ini document\n");
     WriteText(fixture.Path() / "config.ini", "default-not-selected\n");
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", environment_config.wstring());
-    const auto result = RunToExit(GetParam(), {}, fixture.Path());
+    const auto result = RunToExit({}, fixture.Path());
     ExpectFailure(result);
     EXPECT_NE(result.stderr_text.find("environment-selected.ini"), std::string::npos) << result.stderr_text;
 }
 
-// S02-CFG-06 / S03-CFG-06
+// S02-CFG-06
 /** 验证未显式选路时使用工作目录的默认配置。 */
-TEST_P(GateStatusStartupTests, WorkingDirectoryConfigIsTheDefault) {
+TEST(GateStartupTests, WorkingDirectoryConfigIsTheDefault) {
     TempDirectory fixture;
     WriteText(fixture.Path() / "config.ini", "default-selected-not-ini\n");
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
-    const auto result = RunToExit(GetParam(), {}, fixture.Path());
+    const auto result = RunToExit({}, fixture.Path());
     ExpectFailure(result);
     EXPECT_NE(result.stderr_text.find("config.ini"), std::string::npos) << result.stderr_text;
 }
 
 // S02-GRPC-CFG-01
 /** 验证越界 gRPC 借用超时在监听前被拒绝。 */
-TEST(GateGrpcStartupTests, OutOfRangeGrpcTimeoutReturnsNonZeroBeforeListening) {
+TEST(GateStartupTests, OutOfRangeGrpcTimeoutReturnsNonZeroBeforeListening) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
     const auto config = fixture.Path() / "invalid-grpc-timeout.ini";
-    WriteServiceConfig(
-        ServiceKind::Gate,
-        config,
-        std::to_string(FindAvailablePort(true)),
-        true,
-        "[Grpc]\nPoolAcquireTimeoutMs = 99\n");
+    WriteServiceConfig(config, std::to_string(FindAvailablePort(true)), true, "[Grpc]\nPoolAcquireTimeoutMs = 99\n");
 
-    const auto result = RunToExit(ServiceKind::Gate, {L"--config", config.wstring()}, fixture.Path());
+    const auto result = RunToExit({L"--config", config.wstring()}, fixture.Path());
 
     ExpectFailure(result);
     EXPECT_NE(result.stderr_text.find("PoolAcquireTimeoutMs"), std::string::npos) << result.stderr_text;
 }
 
-// S02-BIND-01 / S03-BIND-01
+// S02-BIND-01
 /** 验证占用端口导致启动失败且不影响原端口拥有者。 */
-TEST_P(GateStatusStartupTests, OccupiedPortFailsWithoutProtocolReadyAndReleasesOwnership) {
+TEST(GateStartupTests, OccupiedPortFailsWithoutProtocolReadyAndReleasesOwnership) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
     boost::asio::io_context context;
     boost::asio::ip::tcp::acceptor holder(context);
-    const bool wildcard = GetParam() == ServiceKind::Gate;
-    const auto port = ReservePort(holder, wildcard);
+    const auto port = ReservePort(holder, true);
     const auto config = fixture.Path() / "occupied-port.ini";
-    WriteServiceConfig(GetParam(), config, std::to_string(port));
+    WriteServiceConfig(config, std::to_string(port));
 
-    const auto result = RunToExit(GetParam(), {L"--config", config.wstring()}, fixture.Path());
+    const auto result = RunToExit({L"--config", config.wstring()}, fixture.Path());
     ExpectFailure(result);
     EXPECT_FALSE(ProbeGateHttp(port));
 
@@ -625,28 +578,25 @@ TEST_P(GateStatusStartupTests, OccupiedPortFailsWithoutProtocolReadyAndReleasesO
             reinterpret_cast<const char*>(&exclusive),
             sizeof(exclusive)),
         SOCKET_ERROR);
-    released.bind(
-        {wildcard ? boost::asio::ip::address_v4::any() : boost::asio::ip::address_v4::loopback(), port},
-        error);
+    released.bind({boost::asio::ip::address_v4::any(), port}, error);
     EXPECT_FALSE(error) << "port " << port << " was not released: " << error.message();
 }
 
-// S02-LIFE-01 / S03-LIFE-01
+// S02-LIFE-01
 /** 验证协议就绪后 CTRL_BREAK 可在期限内关闭服务并释放端口。 */
-TEST_P(GateStatusStartupTests, ProtocolReadyThenCtrlBreakStopsWithinDeadlineAndReleasesPort) {
+TEST(GateStartupTests, ProtocolReadyThenCtrlBreakStopsWithinDeadlineAndReleasesPort) {
     TempDirectory fixture;
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
-    const bool wildcard = GetParam() == ServiceKind::Gate;
-    const auto port = FindAvailablePort(wildcard);
+    const auto port = FindAvailablePort(true);
     const auto config = fixture.Path() / "ready-stop.ini";
-    WriteServiceConfig(GetParam(), config, std::to_string(port));
-    const auto executable = FindServiceExecutable(GetParam());
+    WriteServiceConfig(config, std::to_string(port));
+    const auto executable = FindGateExecutable();
     ASSERT_TRUE(std::filesystem::is_regular_file(executable)) << executable.string();
-    OwnedProcess process(executable, {L"--config", config.wstring()}, fixture.Path(), ServiceName(GetParam()));
+    OwnedProcess process(executable, {L"--config", config.wstring()}, fixture.Path());
 
-    ASSERT_TRUE(WaitForReady(GetParam(), port, process)) << "pid=" << process.Pid() << " stdout:\n"
-                                                         << process.Stdout() << "\nstderr:\n"
-                                                         << process.Stderr();
+    ASSERT_TRUE(WaitForReady(port, process)) << "pid=" << process.Pid() << " stdout:\n"
+                                             << process.Stdout() << "\nstderr:\n"
+                                             << process.Stderr();
     ASSERT_TRUE(process.SendCtrlBreak()) << "GenerateConsoleCtrlEvent failed with " << GetLastError();
     ASSERT_TRUE(process.WaitForExit(STOP_TIMEOUT_MS)) << "pid=" << process.Pid() << " stdout:\n"
                                                       << process.Stdout() << "\nstderr:\n"
@@ -667,14 +617,6 @@ TEST_P(GateStatusStartupTests, ProtocolReadyThenCtrlBreakStopsWithinDeadlineAndR
             reinterpret_cast<const char*>(&exclusive),
             sizeof(exclusive)),
         SOCKET_ERROR);
-    released.bind(
-        {wildcard ? boost::asio::ip::address_v4::any() : boost::asio::ip::address_v4::loopback(), port},
-        error);
+    released.bind({boost::asio::ip::address_v4::any(), port}, error);
     EXPECT_FALSE(error) << "port " << port << " was not released: " << error.message();
 }
-
-INSTANTIATE_TEST_SUITE_P(
-    ProductionExecutables,
-    GateStatusStartupTests,
-    testing::Values(ServiceKind::Gate),
-    ServiceParameterName);

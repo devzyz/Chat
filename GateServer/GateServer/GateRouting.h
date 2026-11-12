@@ -20,7 +20,7 @@ public:
     /** @brief 经选服接口释放存储与凭据生成器。 */
     virtual ~GateRouting() = default;
     /** @brief 发布成功才返回凭据及地址；无候选或存储异常时返回空失败结果。 */
-    virtual gate::internal::StatusAssignment Assign(int uid, long long auth_version = 0) = 0;
+    virtual gate::internal::ChatAssignment Assign(int uid, long long auth_version = 0) = 0;
 };
 
 namespace gate_routing {
