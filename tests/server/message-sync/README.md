@@ -29,6 +29,11 @@ processes, and cleans up only its own processes/files. `mysql` and `mysqld` must
 already be on PATH. Binaries need their app-local runtime dependencies.
 The suite uses real MySQL, TCP and peer gRPC, with a deterministic Redis fixture for Chat authentication and session state.
 
+The TCP flow holds the user table in its isolated database until two login queries are observed waiting on the same
+ChatServer. An authenticated third connection must receive a heartbeat response while the lock is held. Revoking one
+token before releasing the lock must prevent that login from binding. A pipelined send and history request on one
+connection must return the ACK first and then a page containing that committed message.
+
 MySQL results: `build/message-sync/mysql.xml`; TCP failures propagate as nonzero
 exit. These opt-in Integration cases are outside the quick CI aggregate defined by
 `scripts/windows-local.ps1`; current report counts are maintained there.

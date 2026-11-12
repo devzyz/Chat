@@ -23,6 +23,8 @@ public:
 private:
     /** @brief 校验会话身份并分发消息；仅未知消息类型返回 false。 */
     bool Dispatch(const LogicMessage& message);
+    // 为已验证的请求排队执行数据库操作，满载或异常时关闭发起连接。
+    void QueueDatabase(const std::shared_ptr<CSession>& session, DatabaseWork work);
     /** @brief 注册登录、好友、消息、回执和历史查询处理器。 */
     void RegisterCallbacks();
 

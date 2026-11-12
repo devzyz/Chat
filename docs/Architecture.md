@@ -59,6 +59,10 @@ Linux 根构建默认包含 Gate/Chat，`CHAT_BUILD_ACCEPTANCE_RESOURCES=ON` 增
 
 ### ChatServer
 
+TCP 业务由一个分发线程校验身份、路由请求和处理完成通知。MySQL 查询及提交事务在独立的有界工作池执行。
+同一连接的后续请求等前一笔业务完成再启动；不同连接可以并行查库。登录成功以凭据复核和绑定完成为准，
+消息成功以数据库提交为准。Redis 和跨服 gRPC 仍按现有同步接口调用。调度和停服约束见 [Concurrency](Concurrency.md)。
+
 - 负责客户端 TCP 长连接、Session、聊天业务和 ChatServer 间 gRPC 通知。
 - 项目 MUST 只维护一个 ChatServer 源码目标和一个可执行文件。
 - 每个进程 MUST 代表一个实例，实例差异只来自配置。

@@ -17,7 +17,7 @@
 
 ## Windows 回归
 
-Windows 的 static-check 作业包含第 1、5、6 类。其成功后，服务端、Qt 和 Varify 三个作业可以并行。四条模块回归通道共要求 **13 份报告、375 条用例**；第 1、6 类另行校验。配置见 [Windows 工作流](../.github/workflows/windows-ci.yml) 和 [报告注册表](../scripts/windows-local.ps1)。
+Windows 的 static-check 作业包含第 1、5、6 类。其成功后，服务端、Qt 和 Varify 三个作业可以并行。四条模块回归通道共要求 **13 份报告、377 条用例**；第 1、6 类另行校验。配置见 [Windows 工作流](../.github/workflows/windows-ci.yml) 和 [报告注册表](../scripts/windows-local.ps1)。
 
 ### 1. 静态配置与 CI 自检
 

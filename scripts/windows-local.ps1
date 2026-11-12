@@ -72,7 +72,7 @@ $scriptTestGroups = @(
     }
 )
 $regressionReportGroups = @(
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 72 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 74 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 56 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 83 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
@@ -873,9 +873,9 @@ function Confirm-TestStructure {
     $logicSystemSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\LogicSystem.cpp') -Raw
     $chatSessionSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\CSession.cpp') -Raw
     $logicDispatcherTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\logic-dispatcher\logic_dispatcher_tests.cpp') -Raw
-    if (@([regex]::Matches($logicDispatcherTests, 'TEST\(LogicDispatcherTests,')).Count -ne 8 -or
-        @([regex]::Matches($logicDispatcherTests, 'T08-LOGIC-0[1-8]')).Count -ne 8) {
-        throw 'Logic dispatcher tests must register exactly T08-LOGIC-01..08 as eight Server Unit testcases.'
+    if (@([regex]::Matches($logicDispatcherTests, 'TEST\(LogicDispatcherTests,')).Count -ne 10 -or
+        @([regex]::Matches($logicDispatcherTests, 'T08-LOGIC-(?:0[1-9]|10)')).Count -ne 10) {
+        throw 'Logic dispatcher tests must register T08-LOGIC-01..10 as ten Server Unit testcases.'
     }
     if ($logicDispatcherSource -notmatch 'messages\.size\(\)\s*>=\s*MAX_DEALQUE' -or
         $logicDispatcherSource -notmatch 'stopping\s*&&\s*messages\.empty\(\)' -or
