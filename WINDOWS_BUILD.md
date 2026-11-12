@@ -1,7 +1,7 @@
 # Windows local build and CI
 
 This document describes the shared Windows baseline used by local development
-and the phase-two GitHub Actions workflow. It builds the existing projects
+and the Windows GitHub Actions workflow. It builds the existing projects
 without changing their build systems:
 
 - GateServer, ChatServer and ResourceServer: Visual Studio/MSBuild
@@ -34,8 +34,7 @@ Each server has an independent output directory under
 `config.ini` is copied there as well. ChatServer is built once; multiple server
 instances are separate processes of that executable using different explicit
 configuration files. Object and incremental-build files are isolated by server
-unit. The helper script places them under
-`D:\vcpkg-chat-temp\msbuild` by default.
+unit. The helper defaults to `build\windows-msbuild-obj`; set `CHAT_SERVER_INTERMEDIATE_ROOT` to override it.
 The unused legacy MySQL DLL copies have been removed from source control.
 Builds use the vcpkg connector and app-local deployment; do not copy legacy DLLs into output folders.
 
@@ -156,12 +155,11 @@ be omitted when exactly one Qt MinGW 64-bit toolchain exists under the same Qt
 installation.
 
 VarifyServer keeps only non-secret hosts and ports in `VarifyServer\config.json`.
-The following credentials are required at runtime and must be supplied through
+The following credentials (SMTP password only for login authentication) are used at runtime and must be supplied through
 the process environment, a Windows user environment, or CI/deployment secrets:
 
     CHAT_VARIFY_EMAIL_USER
     CHAT_VARIFY_EMAIL_PASS
-    CHAT_VARIFY_MYSQL_PASSWORD
     CHAT_VARIFY_REDIS_PASSWORD
 
 Do not add these values to JSON, source files, command history, or committed
@@ -175,7 +173,6 @@ PowerShell process without displaying values:
     $names = @(
       'CHAT_VARIFY_EMAIL_USER',
       'CHAT_VARIFY_EMAIL_PASS',
-      'CHAT_VARIFY_MYSQL_PASSWORD',
       'CHAT_VARIFY_REDIS_PASSWORD'
     )
     foreach ($name in $names) {
@@ -298,7 +295,7 @@ The following paths are derived, but they are not disposable cleanup residue:
 - `build\windows-client\Debug` and `build\windows-client\Release`, including
   the `windeployqt` runtime and plugin directories beside `chat.exe`.
 - `VarifyServer\node_modules`, so the Node service remains directly runnable.
-- `D:\vcpkg-chat-temp\msbuild` when incremental Server development is expected.
+- The configured Server intermediate directory when incremental builds are expected.
 - The selected Qt installation, the pinned vcpkg checkout, vcpkg downloads and
   vcpkg binary archives.
 
@@ -354,8 +351,8 @@ If RestoreServers reports a shallow checkout, complete it and retry:
 ## Avatar and resource integration
 
 ResourceServer is built by `BuildServers` and `RunServerTests`. The latter also runs
-the eight filesystem-backed `StoreTest` contracts with a 60-second process timeout
-and writes `server_resource_integration.xml`. Windows CI stages ResourceServer.zip
+the filesystem-backed `StoreTest` contracts with a 60-second process timeout
+and writes `server_resource_integration.xml`. Full Windows runs stage ResourceServer.zip
 and release assembly requires it. Avatar Unit/Component cases run through `RunClientTests`.
 The database, HTTP/video and cross-service resource integrations retain the separate
 `scripts/resource-local.ps1` entry; see [ResourceServer](ResourceServer/README.md).
