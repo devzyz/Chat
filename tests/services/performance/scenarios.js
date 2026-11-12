@@ -109,6 +109,7 @@ async function prepare(env, clients) {
     for (const client of clients) { if (!byPort.has(client.port)) byPort.set(client.port, []); byPort.get(client.port).push(client); }
     assert.equal(byPort.size, 2, 'two-live-instances');
     const [left, right] = [...byPort.values()];
+    assert.equal(left.length, right.length, 'uneven-instance-populations');
     const known = new Map();
     // 复用已建立好友的私聊身份，避免重复申请。
     const pair = async (first, second) => {

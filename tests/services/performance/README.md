@@ -8,6 +8,7 @@ GitHub CI 手动选择 `mode=performance`，`performance_profile=smoke|baseline|
 每轮独立账号通过公开验证码、注册、登录、好友与群接口准备。固定种子 chat-performance-v1。
 测量登录、同服/跨服 256 字节文本、二十人群两秒补拉、离线一百条恢复、PNG 和 1/10 MiB 附件及混合负载。
 准备和预热不进入正式样本；离线积压准备在恢复动作计时外。吞吐按实际完成及排空时间计算。
+登录测量结束后，按实际 TCP 端点核对连接分布。若实例人数不等，关闭较忙实例超出一半的连接，等待 Redis 中两个实例的连接数均已更新，再经 Gate 重新登录。两边人数相等才建立同服和跨服配对。
 开环定速负载具有在途上限，记录调度滞后、未发送数量、各服务 CPU ticks/RSS 和压测端事件循环延迟。
 
 输出 metrics.json、performance.xml、测试.md，工件 performance-results 保留三十天。

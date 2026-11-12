@@ -85,7 +85,7 @@ async function run() {
                     report.results.push(row); write(root, report);
                     // Continue other scenes to preserve diagnostic coverage; final verification fails closed.
                 };
-                // 固定账号集合登录一次，登录包含 Gate/Status 与 Chat 认证。
+                // 固定账号集合登录一次，覆盖 Gate 选服及 Chat 凭据校验。
                 await scenario('login', seconds => measure({
                     seconds, rate: accounts.length / seconds, plannedCount: accounts.length, maxPending: accounts.length, signal: controller.signal,
                     // 保持每账号单会话语义。

@@ -2,7 +2,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { options, validateRun } = require('../../../scripts/ci/performance');
-const { sync } = require('./scenarios');
+const { prepare, sync } = require('./scenarios');
+
+// 两个端点都有连接仍可能严重偏斜，场景准备须在创建好友或发送消息前拒绝。
+test('relationship setup rejects unequal populations across two live instances', async () => {
+    await assert.rejects(prepare({}, [{ port: 1 }, { port: 1 }, { port: 1 }, { port: 2 }]),
+        /uneven-instance-populations/);
+});
 
 // 验证技能不会下载另一场运行的证据。
 test('skill validates source and exact run and refuses malformed options', () => {

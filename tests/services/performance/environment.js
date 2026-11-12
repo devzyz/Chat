@@ -183,19 +183,32 @@ class Environment {
             authinfo: { authuid: second.uid, touid: first.uid, backname: 'peer', description: 'fixture' } });
         assert.ok(accepted.chatid > 0); return accepted.chatid;
     }
-    /** 等待生产六十秒连接数发布后重新登录半数账号，避免把短时选服滞后伪作双实例负载。 */
+    /** 等待真实连接数发布，将较忙实例的多余账号经 Gate 重新登录到另一实例。 */
     async balance(accounts) {
-        // 取实际登录端点。
-        if (new Set(accounts.map(account => account.client.port)).size === 2) return;
-        const existing = accounts[0].client.port;
-        // 查找当前承载实例。
-        const selected = this.topology.servers.find(server => server.port === existing);
-        const migrating = accounts.slice(accounts.length / 2);
+        const [first, second] = this.topology.servers;
+        const firstAccounts = [], secondAccounts = [];
+        for (const account of accounts) {
+            assert.ok(account.client && !account.client.closed, 'missing-connections');
+            if (account.client.port === first.port) firstAccounts.push(account);
+            else {
+                assert.equal(account.client.port, second.port, 'unexpected-chat-endpoint');
+                secondAccounts.push(account);
+            }
+        }
+        const half = accounts.length / 2;
+        assert.ok(Number.isInteger(half) && half > 0, 'invalid-connection-count');
+        if (firstAccounts.length === half) return;
+        const fromFirst = firstAccounts.length > half;
+        const migrating = (fromFirst ? firstAccounts : secondAccounts).slice(half);
         for (const account of migrating) account.client.close();
-        await waitForConnectionCount(this.coordinator, selected.name, accounts.length - migrating.length, [], this.signal);
-        for (const account of migrating) await this.login(account);
-        // 核对真实分配的端点。
-        assert.equal(new Set(accounts.map(account => account.client.port)).size, 2, 'two-live-instances');
+        await Promise.all([
+            waitForConnectionCount(this.coordinator, first.name, Math.min(half, firstAccounts.length), [], this.signal),
+            waitForConnectionCount(this.coordinator, second.name, Math.min(half, secondAccounts.length), [], this.signal)
+        ]);
+        for (const account of migrating) {
+            const client = await this.login(account);
+            assert.equal(client.port, fromFirst ? second.port : first.port, 'unexpected-rebalance-endpoint');
+        }
     }
     /** 采样实际服务子进程的 Linux CPU 计数及 RSS，PID 来源于监督器身份。 */
     sample() {
