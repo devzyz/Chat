@@ -125,8 +125,8 @@ void CSession::ReadBody(std::uint16_t id, std::size_t length) {
 void CSession::OnFrame(std::uint16_t id) {
     _last_activity = std::chrono::steady_clock::now();
     try {
-        const auto result = _submit(
-            {shared_from_this(), static_cast<std::int16_t>(id), std::move(_body), AuthenticatedUid(), _dispatch_hash});
+        const auto result =
+            _submit({shared_from_this(), static_cast<std::int16_t>(id), std::move(_body), AuthenticatedUid()});
         if (result == LogicSubmitResult::Closed) {
             BeginClosing(SessionCloseReason::LogicUnavailable);
             return;

@@ -440,13 +440,13 @@ function Run-ServerTests {
     $chatGrpcClientBinary = Require-File $chatGrpcClientTestExecutable 'Build the ChatGrpcClientTests target first.'
 
     $executions = @(
-        @{ Binary = $testBinary; Report = $reports[0] }
+        @{ Binary = $testBinary; Report = $reports[0]; TimeoutMs = 60000 }
         @{ Binary = $componentBinary; Report = $reports[1] }
         @{ Binary = $integrationBinary; Report = $reports[2] }
         @{ Binary = $chatGrpcClientBinary; Report = $reports[3] }
         @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4] }
     )
-    $executions += @{ Binary = (Require-File $resourceTestExecutable 'Build ResourceTests first.'); Report = $reports[5]; Filter = 'StoreTest.*' }
+    $executions += @{ Binary = (Require-File $resourceTestExecutable 'Build ResourceTests first.'); Report = $reports[5]; Filter = 'StoreTest.*'; TimeoutMs = 60000 }
     $failures = @()
     foreach ($execution in $executions) {
         & $vcpkg.Exe z-applocal "--target-binary=$($execution.Binary)" "--installed-bin-dir=$installedBin"
@@ -455,18 +455,25 @@ function Run-ServerTests {
         }
         Push-Location (Split-Path -Parent $execution.Binary)
         try {
-            if ($execution.ContainsKey('Filter')) {
-                $process = Start-Process -FilePath $execution.Binary -ArgumentList @(
-                    "--gtest_filter=$($execution.Filter)", "`"--gtest_output=xml:$($execution.Report)`"") `
-                    -WindowStyle Hidden -PassThru
+            if ($execution.ContainsKey('TimeoutMs')) {
+                $testArgs = @("`"--gtest_output=xml:$($execution.Report)`"")
+                if ($execution.ContainsKey('Filter')) { $testArgs += "--gtest_filter=$($execution.Filter)" }
+                $stdoutPath = [IO.Path]::ChangeExtension($execution.Report, '.stdout.log')
+                $stderrPath = [IO.Path]::ChangeExtension($execution.Report, '.stderr.log')
+                $process = Start-Process -FilePath $execution.Binary -ArgumentList $testArgs -WindowStyle Hidden `
+                    -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
                 try {
-                    if (-not $process.WaitForExit(60000)) {
+                    if (-not $process.WaitForExit($execution.TimeoutMs)) {
                         $process.Kill()
-                        $process.WaitForExit()
-                        throw 'Resource storage tests exceeded 60 seconds.'
+                        [void]$process.WaitForExit(5000)
+                        throw "$($execution.Binary) (PID $($process.Id)) exceeded $($execution.TimeoutMs) ms."
                     }
                     $exitCode = $process.ExitCode
-                } finally { $process.Dispose() }
+                } finally {
+                    $process.Dispose()
+                    Get-Content -LiteralPath $stdoutPath -Tail 12
+                    Get-Content -LiteralPath $stderrPath -Tail 12
+                }
             } else {
                 & $execution.Binary "--gtest_output=xml:$($execution.Report)"
                 $exitCode = $LASTEXITCODE

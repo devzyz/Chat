@@ -1,5 +1,6 @@
 #include "LogicDispatcher.h"
 #include "Const.h"
+#include "CSession.h"
 
 #include <spdlog/spdlog.h>
 
@@ -39,8 +40,8 @@ struct LogicDispatcher::Impl {
     };
 
     // 全部分片构造后才启动消费者；启动失败也回收已启动的线程。
-    Impl(Handler callback, std::shared_ptr<DependencyExecutor> executor, std::size_t count)
-        : handler(std::move(callback)), dependencies(std::move(executor)) {
+    Impl(Handler callback, std::shared_ptr<DependencyExecutor> executor, std::size_t count, SessionHash synthetic)
+        : handler(std::move(callback)), dependencies(std::move(executor)), synthetic_hash(std::move(synthetic)) {
         if (!count || !dependencies || !handler)
             throw std::invalid_argument("invalid logic dispatcher");
         for (std::size_t i = 0; i < count; ++i)
@@ -192,6 +193,7 @@ struct LogicDispatcher::Impl {
     inline static thread_local Shard* current_shard = nullptr;
     Handler handler;
     std::shared_ptr<DependencyExecutor> dependencies;
+    const SessionHash synthetic_hash;
     std::vector<std::unique_ptr<Shard>> shards;
     std::mutex mutex;
     std::size_t pending = 0;
@@ -207,7 +209,18 @@ LogicDispatcher::LogicDispatcher(
     Handler handler,
     std::shared_ptr<DependencyExecutor> dependencies,
     std::size_t business_workers)
-    : _impl(std::make_unique<Impl>(std::move(handler), std::move(dependencies), business_workers)) {}
+    : LogicDispatcher(std::move(handler), std::move(dependencies), business_workers, {}) {}
+
+LogicDispatcher::LogicDispatcher(
+    Handler handler,
+    std::shared_ptr<DependencyExecutor> dependencies,
+    std::size_t business_workers,
+    SessionHash synthetic_hash)
+    : _impl(std::make_unique<Impl>(
+          std::move(handler),
+          std::move(dependencies),
+          business_workers,
+          std::move(synthetic_hash))) {}
 
 LogicDispatcher::Resume LogicDispatcher::AwaitCompletion(std::shared_ptr<CSession> session) {
     std::lock_guard<std::mutex> lock(_impl->mutex);
@@ -336,7 +349,12 @@ LogicDispatcher::~LogicDispatcher() {
 }
 
 LogicSubmitResult LogicDispatcher::Submit(LogicMessage message) {
-    auto& shard = *_impl->shards[message.connection_hash % _impl->shards.size()];
+    std::size_t hash = 0;
+    if (message.session)
+        hash = message.session->DispatchHash();
+    else if (_impl->synthetic_hash)
+        hash = _impl->synthetic_hash(message.session);
+    auto& shard = *_impl->shards[hash % _impl->shards.size()];
     {
         std::lock_guard<std::mutex> lock(_impl->mutex);
         if (_impl->stopping)

@@ -31,6 +31,10 @@ public:
     const SessionId& Id() const noexcept {
         return _id;
     }
+    // 返回建连时由 SessionId 计算的固定分片键，所有入站请求共用。
+    std::size_t DispatchHash() const noexcept {
+        return _dispatch_hash;
+    }
     // 在请求关闭时立即失效，供排队任务检查。
     bool Closing() const noexcept {
         return _closing.load();

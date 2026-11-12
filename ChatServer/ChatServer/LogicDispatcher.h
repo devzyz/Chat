@@ -14,8 +14,7 @@ struct LogicMessage {
     std::shared_ptr<CSession> session;
     std::int16_t id;
     std::string body;
-    int received_uid = 0;            // 收帧时的认证快照，等待期间的登录不能追认旧请求。
-    std::size_t connection_hash = 0; // 服务端在建连时从不可变 SessionId 计算。
+    int received_uid = 0; // 收帧时的认证快照，等待期间的登录不能追认旧请求。
 };
 
 // 按连接固定分片；每片单线程执行完整请求的就绪步骤，阻塞 I/O 由共享依赖池承担。
@@ -56,6 +55,13 @@ public:
     Resume AwaitCompletion(std::shared_ptr<CSession> session);
 
 protected:
+    using SessionHash = std::function<std::size_t(const std::shared_ptr<CSession>&)>;
+    // 无 socket 的调度夹具可以在构造时为合成连接提供固定哈希。真实连接始终使用自身的不可变键。
+    LogicDispatcher(
+        Handler handler,
+        std::shared_ptr<DependencyExecutor> dependencies,
+        std::size_t business_workers,
+        SessionHash synthetic_hash);
     // 从分发线程投递已提交的通知，路由在 Redis 上执行，返回可选的出站 RPC 工作。
     void QueueNotification(ExternalWork route);
 
