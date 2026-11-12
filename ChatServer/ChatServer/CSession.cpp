@@ -11,7 +11,7 @@ CSession::CSession(
     Submit submit)
     : _strand(boost::asio::make_strand(io)), _socket(io), _heartbeat(io), _lifecycle(std::move(lifecycle)),
       _directory(std::move(directory)), _submit(std::move(submit)),
-      _id(boost::uuids::to_string(boost::uuids::random_generator()())) {}
+      _id(boost::uuids::to_string(boost::uuids::random_generator()())), _dispatch_hash(std::hash<SessionId>{}(_id)) {}
 
 boost::asio::ip::tcp::socket& CSession::Socket() {
     return _socket;

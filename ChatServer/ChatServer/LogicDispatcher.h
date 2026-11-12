@@ -17,15 +17,16 @@ struct LogicMessage {
     int received_uid = 0; // 收帧时的认证快照，等待期间的登录不能追认旧请求。
 };
 
-// 单线程分发就绪请求；认证及数据库操作占用连接顺序位置，已提交的通知独立执行。
+// 按连接固定分片；每片单线程执行完整请求的就绪步骤，阻塞 I/O 由共享依赖池承担。
 class LogicDispatcher {
 public:
     using Handler = std::function<bool(const LogicMessage&)>;
 
-    /** @brief 保存有效 handler 并启动工作线程；handler 返回 false 表示无处理器，异常被记录后继续。 */
-    explicit LogicDispatcher(Handler handler, std::size_t database_workers = 2, std::size_t capacity_per_pool = 64);
-    // 由进程所有者注入同一组依赖池。
-    LogicDispatcher(Handler handler, std::shared_ptr<DependencyExecutor> dependencies);
+    // 默认两个业务分片，handler 可被不同分片并发调用。生产使用进程共享依赖池。
+    explicit LogicDispatcher(
+        Handler handler,
+        std::shared_ptr<DependencyExecutor> dependencies = std::make_shared<DependencyExecutor>(),
+        std::size_t business_workers = 2);
     /** @brief 停止接收并等待已接受消息排空；不能在 handler 所在线程析构。 */
     ~LogicDispatcher();
 
@@ -50,10 +51,17 @@ public:
         ExternalWork work,
         Completion failed,
         std::function<bool()> sql_check = {});
-    // 暂停同一连接的后续请求，调用方在异步绑定结束时必须恰好一次交回完成通知。
+    // 暂停当前请求，在原分片恢复绑定结果。调用方必须恰好一次交回完成通知。
     Resume AwaitCompletion(std::shared_ptr<CSession> session);
 
 protected:
+    using SessionHash = std::function<std::size_t(const std::shared_ptr<CSession>&)>;
+    // 无 socket 的调度夹具可以在构造时为合成连接提供固定哈希。真实连接始终使用自身的不可变键。
+    LogicDispatcher(
+        Handler handler,
+        std::shared_ptr<DependencyExecutor> dependencies,
+        std::size_t business_workers,
+        SessionHash synthetic_hash);
     // 从分发线程投递已提交的通知，路由在 Redis 上执行，返回可选的出站 RPC 工作。
     void QueueNotification(ExternalWork route);
 

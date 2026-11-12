@@ -106,7 +106,7 @@
 
 ### 10 · Test Reporting and Failure Diagnostics · 报告完整性与失败定位
 
-- **当前测试内容**：Windows 模块运行器校验其负责的报告。普通 Windows 回归的注册基线为 13 份报告、381 条用例；纯文档只核验选中的作业。Linux full 校验 3C/3D 场景、源码 SHA、报告摘要与环境清理；性能模式独立校验采样和报告。
+- **当前测试内容**：Windows 模块运行器校验其负责的报告。普通 Windows 回归的注册基线为 13 份报告、383 条用例；纯文档只核验选中的作业。Linux full 校验 3C/3D 场景、源码 SHA、报告摘要与环境清理；性能模式独立校验采样和报告。
 - **范围协议**：Regression checks 汇总策略与 Windows；Full regression checks 汇总双平台；显式请求四账号验收时另有 Real environment acceptance。master push 的发行包冒烟在 full 门禁之后出结果。测试失败、实际未运行与上游阻塞须分别解释。
 - **查看失败**：在运行页 Summary 找到对应通道，按模块查看用例、原始报告、作业日志和当前 job 复跑命令。GoogleTest 提供仓库内文件/行号时可直接打开该提交的源码。摘要只摘录受支持的诊断类别和数值比较，详细输出留在原始日志。无 JUnit 的准备、编译或工件错误从 Failure diagnostics 进入本次 attempt 的具体步骤。来源见 [门禁条件](../.github/workflows/ci.yml) 和 [报告规则](../tests/README.md)。
 

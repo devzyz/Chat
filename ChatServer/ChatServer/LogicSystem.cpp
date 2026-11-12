@@ -93,9 +93,7 @@ LogicSystem::LogicSystem(
               return Dispatch(message);
           },
           std::move(dependencies)),
-      _directory(std::move(directory)), _presence(std::move(presence)) {
-    RegisterCallbacks();
-}
+      _fun_callbacks(CreateHandlers()), _directory(std::move(directory)), _presence(std::move(presence)) {}
 
 LogicSystem::~LogicSystem() {
     Stop();
@@ -306,11 +304,15 @@ void LogicSystem::QueueLoginData(
                                 session->EnableReceipts(receipts);
                                 session->EnableGroups(groups);
                                 session->EnableSocial(social);
-                            } else {
-                                response = Json::Value(Json::objectValue);
-                                response["error"] = ErrorCodes::RPCFailed;
                             }
-                            resume(Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(response)));
+                            // strand 提交协商状态后，将业务判定和回包交回连接所属分片。
+                            resume([session, result, response = std::move(response)]() mutable {
+                                if (result != SessionBindResult::Bound) {
+                                    response = Json::Value(Json::objectValue);
+                                    response["error"] = ErrorCodes::RPCFailed;
+                                }
+                                session->Send(messaging::CompactJson(response), MSG_CHAT_LOGIN_RSP);
+                            });
                         },
                         credential);
                 } catch (...) {
@@ -321,13 +323,11 @@ void LogicSystem::QueueLoginData(
         });
 }
 
-void LogicSystem::RegisterCallbacks() {
+std::map<short, MessageHandler> LogicSystem::CreateHandlers() {
+    std::map<short, MessageHandler> handlers;
     for (const short request_id : {1042, 1044, 1046}) {
         // 社交请求使用当前认证身份和安全错误信封。
-        _fun_callbacks[request_id] = [this](
-                                         std::shared_ptr<CSession> session,
-                                         const short& id,
-                                         const std::string& body) {
+        handlers[request_id] = [this](std::shared_ptr<CSession> session, const short& id, const std::string& body) {
             Json::Value request, response;
             Json::Reader reader;
             response["error"] = ErrorCodes::Error_Json;
@@ -360,7 +360,7 @@ void LogicSystem::RegisterCallbacks() {
 
     for (const auto id : {MSG_GROUP_INFO_REQ, MSG_GROUP_MANAGE_REQ, MSG_FRIEND_REMARK_REQ}) {
         // 从认证会话取得操作身份并返回有界群业务响应。
-        _fun_callbacks[id] = [this](std::shared_ptr<CSession> session, const short& id, const std::string& body) {
+        handlers[id] = [this](std::shared_ptr<CSession> session, const short& id, const std::string& body) {
             Json::Value request, response;
             Json::Reader reader;
             response["error"] = ErrorCodes::Error_Json;
@@ -384,7 +384,7 @@ void LogicSystem::RegisterCallbacks() {
             session->Send(messaging::CompactJson(response), id + 1);
         };
     }
-    _fun_callbacks[MSG_CREATE_GROUP_REQ] =
+    handlers[MSG_CREATE_GROUP_REQ] =
         /** @brief 校验建群参数，成员与建群身份由数据库事务核对。 */
         [this](std::shared_ptr<CSession> session, const short&, const std::string& body) {
             Json::Value request, response;
@@ -440,10 +440,7 @@ void LogicSystem::RegisterCallbacks() {
     for (const auto id : {MSG_MESSAGE_RECEIPT_REPORT_REQ, MSG_MESSAGE_RECEIPT_SYNC_REQ}) {
         // 处理回执上报或同步，并在成功上报后提示对端补拉。
         // 处理回执上报或增量同步并通知另一参与者。
-        _fun_callbacks[id] = [this](
-                                 std::shared_ptr<CSession> session,
-                                 const short& request_id,
-                                 const std::string& body) {
+        handlers[id] = [this](std::shared_ptr<CSession> session, const short& request_id, const std::string& body) {
             const bool report = request_id == MSG_MESSAGE_RECEIPT_REPORT_REQ;
             Json::Value request;
             Json::Reader reader;
@@ -518,7 +515,7 @@ void LogicSystem::RegisterCallbacks() {
     }
     // 处理用户登录请求
     // 解析聊天登录并校验身份及状态服务结果。
-    _fun_callbacks[MSG_CHAT_LOGIN_REQ] =
+    handlers[MSG_CHAT_LOGIN_REQ] =
         [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
             // 解析msg_data对应的json数据
             Json::Reader reader;
@@ -566,7 +563,7 @@ void LogicSystem::RegisterCallbacks() {
 
     // 处理搜索用户的请求
     // 按查询条件搜索用户并形成响应。
-    _fun_callbacks[MSG_SEARCH_USER_REQ] =
+    handlers[MSG_SEARCH_USER_REQ] =
         [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) -> void {
         // 解析msg_data对应的json数据
         Json::Reader reader;
@@ -603,7 +600,7 @@ void LogicSystem::RegisterCallbacks() {
 
     // 处理申请好友的请求
     // 校验并保存好友申请，必要时通知对端。
-    _fun_callbacks[MSG_ADD_FRIEND_REQ] =
+    handlers[MSG_ADD_FRIEND_REQ] =
         [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
             // 解析msg_data对应的json数据
             Json::Reader reader;
@@ -741,7 +738,7 @@ void LogicSystem::RegisterCallbacks() {
 
     // 处理认证好友的请求
     // 校验并提交好友审批与会话建立。
-    _fun_callbacks[MSG_AUTH_FRIEND_REQ] =
+    handlers[MSG_AUTH_FRIEND_REQ] =
         [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
             SPDLOG_DEBUG("auth friend request, msg_id={}", static_cast<int>(MSG_AUTH_FRIEND_REQ));
             // 解析json数据
@@ -921,7 +918,7 @@ void LogicSystem::RegisterCallbacks() {
 
     // 处理用户发送的文本请求
     // 校验并提交文本批次，保留 UUID 幂等身份。
-    _fun_callbacks[MSG_TEXT_CHAT_MSG_REQ] =
+    handlers[MSG_TEXT_CHAT_MSG_REQ] =
         [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
             SPDLOG_DEBUG("text chat message request, msg_id={}", static_cast<int>(MSG_TEXT_CHAT_MSG_REQ));
             // 解析json数据
@@ -1242,7 +1239,7 @@ void LogicSystem::RegisterCallbacks() {
 
     // 处理客户端心跳请求
     // 核对心跳身份并维持当前会话活跃状态。
-    _fun_callbacks[MSG_HEART_BEAT_REQ] =
+    handlers[MSG_HEART_BEAT_REQ] =
         [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
             SPDLOG_TRACE("heartbeat request, msg_id={}", static_cast<int>(MSG_HEART_BEAT_REQ));
             // 解析json数据
@@ -1264,7 +1261,7 @@ void LogicSystem::RegisterCallbacks() {
 
     // 创建一个私聊请求
     // 校验双方身份并获取或创建私聊会话。
-    _fun_callbacks[MSG_CREATE_PRIVATE_CHAT_REQ] =
+    handlers[MSG_CREATE_PRIVATE_CHAT_REQ] =
         [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
             SPDLOG_DEBUG("create private chat request, msg_id={}", static_cast<int>(MSG_CREATE_PRIVATE_CHAT_REQ));
             // 解析json数据
@@ -1299,7 +1296,7 @@ void LogicSystem::RegisterCallbacks() {
 
     // 加载一部分聊天列表请求
     // 分页读取当前用户会话列表。
-    _fun_callbacks[MSG_LOAD_CHAT_LIST_REQ] =
+    handlers[MSG_LOAD_CHAT_LIST_REQ] =
         [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
             SPDLOG_DEBUG("load chat list request, msg_id={}", static_cast<int>(MSG_LOAD_CHAT_LIST_REQ));
             // 解析json数据
@@ -1357,7 +1354,7 @@ void LogicSystem::RegisterCallbacks() {
 
     // 增量加载部分聊天数据
     // 验证参与资格并分页读取会话历史。
-    _fun_callbacks[MSG_LOAD_CHAT_MESSAGE_REQ] =
+    handlers[MSG_LOAD_CHAT_MESSAGE_REQ] =
         [this](std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data) {
             SPDLOG_DEBUG("load chat message request, msg_id={}", static_cast<int>(MSG_LOAD_CHAT_MESSAGE_REQ));
             // 解析json数据
@@ -1455,6 +1452,7 @@ void LogicSystem::RegisterCallbacks() {
                         SerializeHistoryResponse(return_value, current_msg_id));
                 });
         };
+    return handlers;
 }
 
 /** @brief 只投影可公开用户字段；登录与搜索共享数据库权威资料。 */

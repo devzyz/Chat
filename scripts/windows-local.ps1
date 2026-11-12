@@ -72,7 +72,7 @@ $scriptTestGroups = @(
     }
 )
 $regressionReportGroups = @(
-    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 78 }
+    [pscustomobject]@{ Lane = 'server'; Name = 'server_unit.xml'; ExpectedCount = 80 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_component.xml'; ExpectedCount = 56 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_integration.xml'; ExpectedCount = 83 }
     [pscustomobject]@{ Lane = 'server'; Name = 'server_chat_grpc_integration.xml'; ExpectedCount = 4 }
@@ -440,13 +440,13 @@ function Run-ServerTests {
     $chatGrpcClientBinary = Require-File $chatGrpcClientTestExecutable 'Build the ChatGrpcClientTests target first.'
 
     $executions = @(
-        @{ Binary = $testBinary; Report = $reports[0] }
+        @{ Binary = $testBinary; Report = $reports[0]; TimeoutMs = 60000 }
         @{ Binary = $componentBinary; Report = $reports[1] }
         @{ Binary = $integrationBinary; Report = $reports[2] }
         @{ Binary = $chatGrpcClientBinary; Report = $reports[3] }
         @{ Binary = (Require-File $gateAsioTestExecutable 'Build the Gate Asio lifecycle test target first.'); Report = $reports[4] }
     )
-    $executions += @{ Binary = (Require-File $resourceTestExecutable 'Build ResourceTests first.'); Report = $reports[5]; Filter = 'StoreTest.*' }
+    $executions += @{ Binary = (Require-File $resourceTestExecutable 'Build ResourceTests first.'); Report = $reports[5]; Filter = 'StoreTest.*'; TimeoutMs = 60000 }
     $failures = @()
     foreach ($execution in $executions) {
         & $vcpkg.Exe z-applocal "--target-binary=$($execution.Binary)" "--installed-bin-dir=$installedBin"
@@ -455,18 +455,25 @@ function Run-ServerTests {
         }
         Push-Location (Split-Path -Parent $execution.Binary)
         try {
-            if ($execution.ContainsKey('Filter')) {
-                $process = Start-Process -FilePath $execution.Binary -ArgumentList @(
-                    "--gtest_filter=$($execution.Filter)", "`"--gtest_output=xml:$($execution.Report)`"") `
-                    -WindowStyle Hidden -PassThru
+            if ($execution.ContainsKey('TimeoutMs')) {
+                $testArgs = @("`"--gtest_output=xml:$($execution.Report)`"")
+                if ($execution.ContainsKey('Filter')) { $testArgs += "--gtest_filter=$($execution.Filter)" }
+                $stdoutPath = [IO.Path]::ChangeExtension($execution.Report, '.stdout.log')
+                $stderrPath = [IO.Path]::ChangeExtension($execution.Report, '.stderr.log')
+                $process = Start-Process -FilePath $execution.Binary -ArgumentList $testArgs -WindowStyle Hidden `
+                    -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
                 try {
-                    if (-not $process.WaitForExit(60000)) {
+                    if (-not $process.WaitForExit($execution.TimeoutMs)) {
                         $process.Kill()
-                        $process.WaitForExit()
-                        throw 'Resource storage tests exceeded 60 seconds.'
+                        [void]$process.WaitForExit(5000)
+                        throw "$($execution.Binary) (PID $($process.Id)) exceeded $($execution.TimeoutMs) ms."
                     }
                     $exitCode = $process.ExitCode
-                } finally { $process.Dispose() }
+                } finally {
+                    $process.Dispose()
+                    Get-Content -LiteralPath $stdoutPath -Tail 12
+                    Get-Content -LiteralPath $stderrPath -Tail 12
+                }
             } else {
                 & $execution.Binary "--gtest_output=xml:$($execution.Report)"
                 $exitCode = $LASTEXITCODE
@@ -873,15 +880,13 @@ function Confirm-TestStructure {
     $logicSystemSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\LogicSystem.cpp') -Raw
     $chatSessionSource = Get-Content -LiteralPath (Join-Path $repoRoot 'ChatServer\ChatServer\CSession.cpp') -Raw
     $logicDispatcherTests = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\server\logic-dispatcher\logic_dispatcher_tests.cpp') -Raw
-    if (@([regex]::Matches($logicDispatcherTests, 'TEST\(LogicDispatcherTests,')).Count -ne 14 -or
-        @([regex]::Matches($logicDispatcherTests, 'T08-LOGIC-(?:0[1-9]|1[0-4])')).Count -ne 14) {
-        throw 'Logic dispatcher tests must register T08-LOGIC-01..14 as fourteen Server Unit testcases.'
+    if (@([regex]::Matches($logicDispatcherTests, 'TEST\(LogicDispatcherTests,')).Count -ne 16 -or
+        @([regex]::Matches($logicDispatcherTests, 'T08-LOGIC-(?:0[1-9]|1[0-6])')).Count -ne 16) {
+        throw 'Logic dispatcher tests must register T08-LOGIC-01..16 as sixteen Server Unit testcases.'
     }
-    if ($logicDispatcherSource -notmatch 'messages\.size\(\)\s*>=\s*MAX_DEALQUE' -or
-        $logicDispatcherSource -notmatch 'stopping\s*&&\s*messages\.empty\(\)' -or
-        $logicDispatcherSource -notmatch 'std::call_once' -or
-        $logicDispatcherSource -match 'message\.body[^;]*SPDLOG') {
-        throw 'LogicDispatcher must own exact capacity, drain, idempotent stop, and body-free diagnostics.'
+    # Capacity across shards, FIFO and drain are checked against the production API by T08-LOGIC.
+    if ($logicDispatcherSource -match 'message\.body[^;]*SPDLOG') {
+        throw 'Logic dispatcher diagnostics must not log message bodies.'
     }
     if ($logicSystemHeader -notmatch 'public\s+LogicDispatcher' -or
         $logicSystemHeader -match '_msg_que|_worker_thread|condition_variable|PostMsgToQue|DealMsg' -or
