@@ -1118,11 +1118,6 @@ void TcpMgr::handleMessage(ReqId id, int len, QByteArray data) {
     }
 }
 
-// 关闭tcp连接
-void TcpMgr::closeConnection() {
-    resetConnection(true);
-}
-
 void TcpMgr::beginSession() {
     _acceptingSends = true;
 }

@@ -24,8 +24,6 @@ public:
     bool initLogMgr();
     /** @brief 关闭日志输出并释放日志运行资源。 */
     void close();
-    /** @brief 查询日志管理器是否已完成初始化。 */
-    bool isInitialized() const;
 
     /** @brief 将 Qt 文本转换为 UTF-8 标准字符串供日志使用。 */
     static std::string toUtf8(const QString& value);

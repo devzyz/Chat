@@ -247,9 +247,6 @@ public:
     // 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息
     /** @brief 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息。 */
     std::shared_ptr<ChatDataBase> getChatDataByMsgId(int msg_id);
-    // 获取聊天记录数据
-    /** @brief 获取聊天记录数据。 */
-    QMap<int, std::shared_ptr<ChatDataBase>>& getChatMsgs();
     // 获取缓存聊天记录数据
     /** @brief 获取缓存聊天记录数据。 */
     QMap<QString, std::shared_ptr<ChatDataBase>>& getCacheChatMsgs();

@@ -84,8 +84,6 @@ public:
     void appendFriendApplicationsTo(std::vector<std::shared_ptr<ApplyInfo>>& list);
     /** @brief 判断指定 UID 是否已在好友缓存中。 */
     bool isFriend(int uid);
-    /** @brief 将通过审批的好友资料加入账号缓存。 */
-    void addFriend(std::shared_ptr<AuthInfo>);
     /** @brief 查询缓存中的好友资料，未找到时返回 nullptr。 */
     std::shared_ptr<UserInfo> friendById(int uid);
     /** @brief 返回当前已恢复的联系人值，用于选择建群成员，不推进列表游标。 */
@@ -94,8 +92,6 @@ public:
     }
     /** @brief 返回当前游标对应的一页联系人，不推进游标。 */
     std::vector<std::shared_ptr<UserInfo>> nextContactPage();
-    /** @brief 判断联系人分页游标是否已到列表末尾。 */
-    bool isContactListFullyLoaded();
     /** @brief 按一页大小推进联系人游标，不越过列表末尾。 */
     void advanceContactPage();
     /** @brief 返回当前用户资料，会话清空后返回 nullptr。 */

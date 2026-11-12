@@ -176,10 +176,6 @@ std::shared_ptr<ChatDataBase> ChatInfo::getChatDataByMsgId(int msg_id) {
     return iter_find.value();
 }
 
-QMap<int, std::shared_ptr<ChatDataBase>>& ChatInfo::getChatMsgs() {
-    return _chat_msgs;
-}
-
 // 添加一条聊天缓存数据
 /** @brief 按客户端 UUID 保存待确认会话消息。 */
 void ChatInfo::addCacheChatData(QString uuid, std::shared_ptr<ChatDataBase> chat_data) {

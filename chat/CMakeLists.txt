@@ -194,7 +194,6 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
 
         applyfriendpage.h applyfriendpage.cpp applyfriendpage.ui
         applyfrienditem.h applyfrienditem.cpp applyfrienditem.ui
-        applyfriendlist.h applyfriendlist.cpp
         findfaildialog.h findfaildialog.cpp findfaildialog.ui
         authfrienddialog.h authfrienddialog.cpp authfrienddialog.ui
         chatdetaillist.h chatdetaillist.cpp
@@ -714,7 +713,6 @@ if(BUILD_TESTING)
         grouptipitem.h grouptipitem.cpp
         applyfriendpage.h applyfriendpage.cpp applyfriendpage.ui
         applyfrienditem.h applyfrienditem.cpp applyfrienditem.ui
-        applyfriendlist.h applyfriendlist.cpp
         findfaildialog.h findfaildialog.cpp findfaildialog.ui
         authfrienddialog.h authfrienddialog.cpp authfrienddialog.ui
         friendinfopage.h friendinfopage.cpp friendinfopage.ui

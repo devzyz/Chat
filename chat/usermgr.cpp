@@ -299,19 +299,6 @@ bool UserMgr::isFriend(int uid) {
     return true;
 }
 
-// 添加某个好友
-/** @brief 保存好友资料并更新联系人状态。 */
-void UserMgr::addFriend(std::shared_ptr<AuthInfo> auth_info) {
-    auto friend_info = std::make_shared<UserInfo>(auth_info);
-    if (!_friend_map.contains(auth_info->_auth_uid))
-        _friend_list.push_back(friend_info);
-    else
-        for (auto& existing : _friend_list)
-            if (existing->_uid == auth_info->_auth_uid)
-                existing = friend_info;
-    _friend_map.insert(auth_info->_auth_uid, friend_info);
-}
-
 // 获取某个好友的信息
 std::shared_ptr<UserInfo> UserMgr::friendById(int uid) {
     auto iter_find = _friend_map.find(uid);
@@ -344,11 +331,6 @@ std::vector<std::shared_ptr<UserInfo>> UserMgr::nextContactPage() {
     friend_list = std::vector<std::shared_ptr<UserInfo>>(_friend_list.begin() + l, _friend_list.begin() + r);
 
     return friend_list;
-}
-
-// 判断联系人是否加载完成
-bool UserMgr::isContactListFullyLoaded() {
-    return _contact_load_count >= _friend_list.size();
 }
 
 // 添加成功后，更新已添加的数量

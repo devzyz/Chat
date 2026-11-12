@@ -134,10 +134,6 @@ void LogMgr::close() {
     _logger.reset();
 }
 
-bool LogMgr::isInitialized() const {
-    return _initialized.load();
-}
-
 std::string LogMgr::toUtf8(const QString& value) {
     const QByteArray utf8 = value.toUtf8();
     return std::string(utf8.constData(), static_cast<std::size_t>(utf8.size()));

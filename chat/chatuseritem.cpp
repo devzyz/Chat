@@ -73,11 +73,6 @@ std::shared_ptr<ChatInfo> ChatUserItem::getChatInfo() {
     return _chat_info;
 }
 
-// 设置最后一次聊天记录
-void ChatUserItem::setLastTextChatMsg(QString last_text_msg) {
-    ui->user_chat_label->setText(last_text_msg);
-}
-
 void ChatUserItem::setSummary(const QString& text, qint64 sentAt) {
     ui->user_chat_label->setText(text);
     const auto time = QDateTime::fromMSecsSinceEpoch(sentAt);

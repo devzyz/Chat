@@ -90,8 +90,6 @@ private:
 
     /** @brief 把旧消息对象转换为模型展示值，保留稳定身份和状态。 */
     MessageRecord toMessageRecord(const std::shared_ptr<ChatDataBase>& message);
-    /** @brief 获取发送者头像缓存，用于构造消息展示值。 */
-    QPixmap cachedAvatar(const QString& avatarKey);
     /** @brief 从当前会话的旧消息缓存初始化模型，不重复插入已存在身份。 */
     void seedModelFromLegacyData(MessageListModel* model, const std::shared_ptr<ChatInfo>& chatInfo);
     /** @brief 按当前会话及分页标志发起历史请求，避免同一页重复加载。 */
@@ -120,7 +118,6 @@ private:
     MessageItemDelegate* _messageDelegate = nullptr;
     class MessageReadTracker* _readTracker = nullptr;
     QHash<int, ScrollAnchor> _scrollAnchors;
-    QHash<QString, QPixmap> _avatarCache;
     QSet<int> _legacySeededChats;
     int _currentChatId = 0;
     bool _suppressHistoryRequests = false;
