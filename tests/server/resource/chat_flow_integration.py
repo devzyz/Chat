@@ -28,8 +28,6 @@ class RedisFixture(socketserver.ThreadingTCPServer):
         self.lock = threading.Lock()
         for uid in (7, 8, 9):
             self.hashes[str(uid).encode()] = {f"utoken_{uid}".encode(): b"fixture-token"}
-            self.values[f"ubaseinfo_{uid}".encode()] = json.dumps(dict(uid=uid, name=f"user{uid}",
-                password="fixture", email=f"user{uid}@example.invalid", description="", icon="", sex=0)).encode()
 
 
 class RedisHandler(socketserver.StreamRequestHandler):

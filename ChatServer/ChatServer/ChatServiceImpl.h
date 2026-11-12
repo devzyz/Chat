@@ -1,7 +1,6 @@
 #pragma once
 #include "grpcpp/grpcpp.h"
 #include "chat.grpc.pb.h"
-#include "Data.h"
 #include <memory>
 
 using grpc::Server;
@@ -54,8 +53,6 @@ public:
     /** @brief 接收替换登录通知，按请求中的会话身份关闭本实例对应旧会话。 */
     virtual Status NotifyOtherKickUser(ServerContext* context, const KickUserReq* request, KickUserRsp* reponse)
         override;
-    /** @brief 优先读取 Redis，未命中时回源 MySQL 并回填；查不到用户返回 false。 */
-    bool GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared_ptr<UserInfo>& user_info);
 
 private:
     std::shared_ptr<UserSessionDirectory> _directory;

@@ -6,10 +6,6 @@
 #include "Const.h"
 #include <json/value.h>
 #include "CSession.h"
-#include "MysqlMgr.h"
-#include "RedisMgr.h"
-#include <json/reader.h>
-#include "CServer.h"
 #include "LogMgr.h"
 
 ChatServiceImpl::ChatServiceImpl(
@@ -208,52 +204,6 @@ Status ChatServiceImpl::NotifyOtherKickUser(ServerContext*, const KickUserReq* r
     response->set_uid(request->uid());
     response->set_error(ErrorCodes::Success);
     return Status::OK;
-}
-
-bool ChatServiceImpl::GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared_ptr<UserInfo>& user_info) {
-    std::string info_str = "";
-    bool success = RedisMgr::GetInstance()->Get(baseinfo_key, info_str);
-
-    // 能够从redis中查询到
-    if (success) {
-        SPDLOG_DEBUG("redis user base info loaded, uid={}, key={}, value_size={}", uid, baseinfo_key, info_str.size());
-
-        Json::Reader reader;
-        Json::Value root;
-        int b_parse = reader.parse(info_str, root);
-        if (!b_parse) {
-            SPDLOG_WARN("redis user base info json parse failed, uid={}, key={}", uid, baseinfo_key);
-            return false;
-        }
-        user_info->_uid = uid;
-        user_info->_name = root["name"].asString();
-        user_info->_description = root["description"].asString();
-        user_info->_icon = root["icon"].asString();
-        user_info->_sex = root["sex"].asInt();
-    } else {
-        // 从redis中查询不到，则去mysql中查询
-        std::shared_ptr<UserInfo> userinfo = nullptr;
-        userinfo = MysqlMgr::GetInstance()->GetUserByUid(uid);
-        if (userinfo == nullptr) {
-            return false;
-        }
-
-        // 更改返回值
-        user_info = userinfo;
-
-        // 准备更新redis数据
-        Json::Value redis_root;
-        redis_root["uid"] = userinfo->_uid;
-        redis_root["description"] = userinfo->_description;
-        redis_root["name"] = userinfo->_name;
-        redis_root["icon"] = userinfo->_icon;
-        redis_root["sex"] = userinfo->_sex;
-
-        // 更新redis
-        RedisMgr::GetInstance()->Set(baseinfo_key, redis_root.toStyledString());
-    }
-
-    return true;
 }
 
 /** @brief 接收跨实例回执变化并提示本地目标会话补拉；提示不代替持久化回执事实。 */
