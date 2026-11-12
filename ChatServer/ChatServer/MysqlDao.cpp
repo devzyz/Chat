@@ -614,73 +614,41 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
     });
 
     try {
-        // 手动提交事务
-        messaging::Transaction transaction(*connection->_connection);
+        auto& db = *connection->_connection;
+        const std::string first = std::to_string(std::min(user1_id, user2_id));
+        const std::string second = std::to_string(std::max(user1_id, user2_id));
+        // 每次在自动提交模式下读取，使冲突后能看到另一事务提交的会话。
+        auto find_chat = [&] {
+            social::Query pair(db, "SELECT chat_id FROM private_chat WHERE user1_id=? AND user2_id=?", {first, second});
+            return pair.rows->next() ? pair.rows->getInt(1) : -1;
+        };
+        chat_id = find_chat();
+        if (chat_id != -1)
+            return true;
 
-        // 先查看一下，是否已经有过聊天数据了
-        {
-            // 准备查询语句
-            std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(
-                "SELECT * FROM private_chat WHERE user1_id = ? and user2_id = ?"));
-
-            auto minn = std::min(user1_id, user2_id);
-            auto maxn = std::max(user1_id, user2_id);
-
-            pstmt->setInt(1, minn);
-            pstmt->setInt(2, maxn);
-
-            std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-
-            while (res->next()) {
-                chat_id = res->getInt("chat_id");
-                break;
-            }
-
-            if (chat_id != -1) {
-                transaction.Commit();
-                return true;
-            }
-        }
-
-        // 插入chat表
-        {
-            std::unique_ptr<sql::PreparedStatement> pstmt(
-                connection->_connection->prepareStatement("INSERT INTO chat(type) VALUES (?)"));
-            pstmt->setString(1, "private");
-            pstmt->executeUpdate(); // 注意这里用 executeUpdate，不是 executeQuery
-
-            // 获取刚刚生成的 chat_id
-            std::unique_ptr<sql::Statement> stmt(connection->_connection->createStatement());
-            std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT LAST_INSERT_ID()"));
-            if (res->next()) {
-                chat_id = res->getInt(1);
-            } else {
+        try {
+            messaging::Transaction transaction(db);
+            std::unique_ptr<sql::Statement> insert(db.createStatement());
+            insert->executeUpdate("INSERT INTO chat(type) VALUES('private')");
+            std::unique_ptr<sql::ResultSet> id(insert->executeQuery("SELECT LAST_INSERT_ID()"));
+            if (!id->next())
                 return false;
-            }
+            const int created = id->getInt(1);
+            id.reset();
+            social::Query pair(
+                db,
+                "INSERT INTO private_chat(chat_id,user1_id,user2_id) VALUES(?,?,?)",
+                {std::to_string(created), first, second},
+                false);
+            transaction.Commit();
+            chat_id = created;
+        } catch (const sql::SQLException& error) {
+            if (error.getErrorCode() != 1062)
+                throw;
+            // 唯一键竞争已由 MySQL 裁决；临时 chat 行随事务回滚，只返回该用户对的已提交 ID。
+            chat_id = find_chat();
         }
-
-        // 插入私聊表
-        {
-            // 准备查询语句
-            std::unique_ptr<sql::PreparedStatement> pstmt2(connection->_connection->prepareStatement(
-                "INSERT INTO private_chat(chat_id, user1_id, user2_id) VALUES(?, ?, ?)"));
-
-            auto min_userid = std::min(user1_id, user2_id);
-            auto max_userid = std::max(user1_id, user2_id);
-
-            // 这里保证同一对人得私聊只插入一次
-            pstmt2->setInt(1, chat_id);
-            pstmt2->setInt(2, min_userid);
-            pstmt2->setInt(3, max_userid);
-            // 执行修改
-            if (pstmt2->executeUpdate() != 1) {
-                return false;
-            }
-        }
-
-        // 无错误，则提交事务
-        transaction.Commit();
-        return true;
+        return chat_id != -1;
     } catch (const std::exception&) {
         SPDLOG_ERROR("mysql CreatePrivateChat failed, user1_id={}, user2_id={}", user1_id, user2_id);
         chat_id = -1;

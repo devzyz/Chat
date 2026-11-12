@@ -100,6 +100,25 @@ def verify_database_dispatch(mysql_command, tcp_port, sender, observer, redis):
             redis.hashes[b"9"][b"utoken_9"] = login_credential
 
 
+def verify_concurrent_private_chat(mysql_command, first, second):
+    """Race opposite-direction first creates and verify one chat, one pair and identical replies."""
+    pair = "SELECT chat_id FROM private_chat WHERE user1_id=8 AND user2_id=9"
+    assert not mysql_value(mysql_command, pair)
+    before = int(mysql_value(mysql_command, "SELECT COUNT(*) FROM chat"))
+    with hold_table(mysql_command, "chat"):
+        send(first, 1023, {"self_id": 8, "other_id": 9})
+        send(second, 1023, {"self_id": 9, "other_id": 8})
+        wait_count(mysql_command, "SELECT COUNT(*) FROM information_schema.processlist "
+                   "WHERE DB='message_sync_test' AND STATE LIKE 'Waiting for table%lock' "
+                   "AND INFO LIKE 'INSERT INTO chat(%'", 2)
+    first_id = receive(first, 1024)["chat_id"]
+    second_id = receive(second, 1024)["chat_id"]
+    assert first_id == second_id == int(mysql_value(mysql_command, pair))
+    assert int(mysql_value(mysql_command, "SELECT COUNT(*) FROM chat")) == before + 1
+    send(second, 1023, {"self_id": 9, "other_id": 8})
+    assert receive(second, 1024)["chat_id"] == first_id
+
+
 def verify_failed_binding(sock):
     """An already-bound socket gets only the public error, even with valid credentials for another user."""
     send(sock, 1005, {"uid": 9, "token": "fixture-token"})
@@ -191,6 +210,9 @@ def tcp_flow(directory, mysql_command, mysql_port):
             verify_failed_binding(observer)
         sender.close()
         sender = login(0, 7)
+        with login(0, 8, social=True) as first, login(0, 9, social=True) as second:
+            verify_concurrent_private_chat(mysql_command, first, second)
+        print("Database dispatch: revoked queued write rejected, binding error sanitized, concurrent chat IDs match")
         subprocess.run(mysql_command, input="""USE message_sync_test;
             DELETE FROM friend WHERE self_id=7 AND other_id IN (9,10);
             UPDATE user SET description='',icon='',sex=0 WHERE uid=9;""", text=True, check=True, timeout=10)

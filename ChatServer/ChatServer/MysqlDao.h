@@ -93,8 +93,7 @@ public:
         std::vector<std::shared_ptr<ChatInfoBase>>& chat_list,
         bool& load_more,
         int& last_chat_id);
-    // 创建私聊会话
-    /** @brief 获取或创建双方私聊会话，通过 chat_id 返回结果；失败返回 false。 */
+    // 获取或创建双方唯一私聊；并发创建返回相同的已提交 chat_id，失败置为 -1。
     bool CreatePrivateChat(int user1_id, int user2_id, int& chat_id);
     /**
      * @brief 校验认证发送者后借用独占连接原子提交文本批次；先清空 chat_msgs，成功按输入顺序填充。
