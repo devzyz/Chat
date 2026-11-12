@@ -221,7 +221,7 @@ Domain/Level：Foundation / Unit。
 | T03-STATUS-01 | Status / `server_status_unit.xml` | 同一 contract testcase 1 | Status 任务执行合同 |
 | T03-STATUS-02 | Status / `server_status_unit.xml` | 同一 contract testcase 2 | Status 重复停止/析构合同 |
 
-### 3.6 Chat Logic dispatcher（7）
+### 3.6 Chat Logic dispatcher（14）
 
 Interface：production `LogicDispatcher::Submit/Stop`；`LogicSystem` 复用同一 Interface 保留 handler registry，`CSession` 观察 `Accepted/Full/Closed`。
 Domain/Level：Architecture / Unit。
@@ -236,9 +236,10 @@ Domain/Level：Architecture / Unit。
 | T08-LOGIC-05 | `StopDrainsAcceptedMessagesWithinTwoSeconds` | Stop 排空 accepted message 并在两秒内结束 |
 | T08-LOGIC-06 | `ClosedDispatcherRejectsImmediatelyAndRepeatedStopIsIdempotent` | 关闭后立即 `Closed`，重复 Stop 幂等 |
 | T08-LOGIC-07 | `UnknownIdDoesNotBlockValidMessageAndLogOmitsBody` | 未知 ID 不阻断后续有效消息且日志不含 body |
+| T08-LOGIC-08 | `ThrowingHandlerDoesNotTerminateWorkerOrExposePayload` | 处理器抛错后继续分发，不记录异常或请求正文 |
 | T08-LOGIC-09 | `SlowWritesAllowOtherSessionsAndPreserveReadAfterWrite` | 两笔数据库任务并发、第三连接可分发、写后读按连接有序 |
 | T08-LOGIC-10 | `DatabaseCapacityRejectsWithoutWritingAndDrainsFailures` | 数据库容量、异常回传和关闭排空 |
-| T08-LOGIC-11 | `AuthenticationAndNotificationHaveIndependentCapacityAndDrain` | 慢认证与慢通知并行、通知满载后其他连接继续认证和查库、停服排空通知 |
+| T08-LOGIC-11 | `SlowRedisAndGrpcAllowIndependentSqlAndDrain` | 慢 Redis 和出站 gRPC 隔离，gRPC 队满时另一连接仍可认证后查库，停服排空已受理调用 |
 | T08-LOGIC-12 | `RedisReservesCriticalCapacityAndRejectsGuardedWritesWhenFull` | Redis 普通路由限额，关键请求预留及写前复核拒绝 |
 | T08-LOGIC-13 | `ReservedSqlResumesAheadOfLaterWorkDuringDrain` | Redis/MySQL 线程归属、预留名额顺序与停机排空 |
 | T08-LOGIC-14 | `InstanceLeaseUsesRedisAndUnregistersAfterRenewal` | 实例租约归属 Redis，按 owner 在最后一笔续租后注销 |

@@ -43,7 +43,7 @@ public:
     using ExternalWork = std::function<Completion()>;
     using Resume = std::function<void(Completion)>;
 
-    // 分发线程投递任务；通知须传空连接。成功或异常的后续操作均在分发线程执行，队满不执行任务。
+    // 从分发线程投递依赖步骤；关联连接时保序，完成和异常回到分发线程。已提交的通知走 QueueNotification。
     LogicSubmitResult SubmitExternal(
         ExternalTask kind,
         std::shared_ptr<CSession> session,

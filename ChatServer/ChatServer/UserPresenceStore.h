@@ -16,7 +16,7 @@ struct PresenceResult {
     PresenceStatus status = PresenceStatus::Unavailable;
     std::optional<chat_session::UserPresence> presence;
 };
-/** @brief 提供同步在线位置存取及条件删除；调用可能阻塞，由生命周期工作线程隔离。 */
+/** @brief 提供同步在线位置存取及条件删除；调用可能阻塞，生产调用由进程共享 Redis 池执行。 */
 class UserPresenceStore {
 public:
     /** @brief 允许通过存储接口销毁具体适配器。 */

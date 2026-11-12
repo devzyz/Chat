@@ -433,8 +433,8 @@ TEST(LogicDispatcherTests, DatabaseCapacityRejectsWithoutWritingAndDrainsFailure
     EXPECT_EQ(failures, 1);
 }
 
-// T08-LOGIC-11：认证线程彼此独立；通知满载只拒绝新通知，Stop 等待独立通知和后续已受理步骤。
-TEST(LogicDispatcherTests, AuthenticationAndNotificationHaveIndependentCapacityAndDrain) {
+// T08-LOGIC-11：Redis 复核与出站 gRPC 独立；RPC 队满时仍可处理其他连接的 Redis 和 SQL 步骤。
+TEST(LogicDispatcherTests, SlowRedisAndGrpcAllowIndependentSqlAndDrain) {
     std::promise<void> auth_started, notification_started, second_auth, release, submitted;
     auto gate = release.get_future().share();
     std::vector<int> delivered;
@@ -443,7 +443,7 @@ TEST(LogicDispatcherTests, AuthenticationAndNotificationHaveIndependentCapacityA
     LogicDispatcher dispatcher(
         [&](const LogicMessage& msg) {
             if (msg.id == 1) {
-                // 暂停一笔认证，验证另一条连接能使用第二个认证线程。
+                // 暂停一笔认证，验证另一条连接能使用第二个 Redis worker。
                 executor->SubmitExternal(
                     ExternalTask::Redis,
                     msg.session,
@@ -478,7 +478,7 @@ TEST(LogicDispatcherTests, AuthenticationAndNotificationHaveIndependentCapacityA
                         {});
                     EXPECT_EQ(status, index == 2 ? LogicSubmitResult::Accepted : LogicSubmitResult::Full);
                 }
-                // 从认证完成事件继续查询；不占用被阻塞的通知线程。
+                // 从认证完成事件继续查询；不占用被阻塞的出站 gRPC worker。
                 executor->SubmitExternal(
                     ExternalTask::Redis,
                     msg.session,
@@ -523,7 +523,6 @@ TEST(LogicDispatcherTests, AuthenticationAndNotificationHaveIndependentCapacityA
 
 // T08-LOGIC-12：阻塞两个 Redis worker，56 笔普通路由之后仍能接纳 8 笔关键任务。
 TEST(LogicDispatcherTests, RedisReservesCriticalCapacityAndRejectsGuardedWritesWhenFull) {
-    DependencyExecutor executor;
     std::promise<void> first, second, release, denied;
     auto gate = release.get_future().share();
     // 每个屏障由一个不同的 Redis 工作者占用。
@@ -532,6 +531,7 @@ TEST(LogicDispatcherTests, RedisReservesCriticalCapacityAndRejectsGuardedWritesW
         entered.set_value();
         EXPECT_EQ(gate.wait_for(2s), std::future_status::ready);
     };
+    DependencyExecutor executor;
     executor.SubmitExternal(ExternalTask::Redis, std::bind(block, std::ref(first)));
     executor.SubmitExternal(ExternalTask::Redis, std::bind(block, std::ref(second)));
     ASSERT_EQ(first.get_future().wait_for(2s), std::future_status::ready);
@@ -571,7 +571,6 @@ TEST(LogicDispatcherTests, RedisReservesCriticalCapacityAndRejectsGuardedWritesW
 
 // T08-LOGIC-13：轮到执行后才复核，等待中的 SQL 不得越过已预留名额；停服仍排空后续操作。
 TEST(LogicDispatcherTests, ReservedSqlResumesAheadOfLaterWorkDuringDrain) {
-    DependencyExecutor executor(1, 4);
     std::promise<void> checking, release;
     auto gate = release.get_future().share();
     std::vector<int> order;
@@ -592,6 +591,7 @@ TEST(LogicDispatcherTests, ReservedSqlResumesAheadOfLaterWorkDuringDrain) {
         EXPECT_TRUE(DependencyExecutor::RunningOn(ExternalTask::MySQL));
         order.push_back(1);
     };
+    DependencyExecutor executor(1, 4);
     executor.SubmitExternal(ExternalTask::MySQL, write, RedisAdmission::Critical, guard);
     ASSERT_EQ(checking.get_future().wait_for(2s), std::future_status::ready);
     // 这笔读取应排在预留写入之后。
@@ -602,6 +602,18 @@ TEST(LogicDispatcherTests, ReservedSqlResumesAheadOfLaterWorkDuringDrain) {
     auto stopped = std::async(std::launch::async, [&] {
         executor.Stop();
     });
+    // 等到外部入口可观察地关闭，再释放预留名额，避免 Stop 尚未运行就通过测试。
+    auto probe = [] {
+    };
+    const auto deadline = std::chrono::steady_clock::now() + 2s;
+    auto admission = LogicSubmitResult::Accepted;
+    while (std::chrono::steady_clock::now() < deadline) {
+        admission = executor.SubmitExternal(ExternalTask::OutboundGrpc, probe);
+        if (admission == LogicSubmitResult::Closed)
+            break;
+        stopped.wait_for(1ms);
+    }
+    EXPECT_EQ(admission, LogicSubmitResult::Closed);
     release.set_value();
     ASSERT_EQ(stopped.wait_for(2s), std::future_status::ready);
     stopped.get();
@@ -610,8 +622,11 @@ TEST(LogicDispatcherTests, ReservedSqlResumesAheadOfLaterWorkDuringDrain) {
 
 // T08-LOGIC-14：维护适配器记录执行线程、所有者与顺序，排队续租不能在注销后复活实例。
 TEST(LogicDispatcherTests, InstanceLeaseUsesRedisAndUnregistersAfterRenewal) {
-    DependencyExecutor executor;
     std::vector<std::string> actions;
+    std::mutex actions_mutex;
+    std::promise<void> entered, release;
+    auto gate = release.get_future().share();
+    DependencyExecutor executor;
     // 登记、续租和注销使用同一 owner；记录 Redis 返回值及操作次序。
     InstanceLease lease(
         executor,
@@ -625,7 +640,12 @@ TEST(LogicDispatcherTests, InstanceLeaseUsesRedisAndUnregistersAfterRenewal) {
             }
             if (script.find("renewed") != std::string::npos) {
                 EXPECT_EQ(args[2], "endpoint|nonce");
-                actions.push_back("renewed");
+                if (args[1] == "2") {
+                    entered.set_value();
+                    EXPECT_EQ(gate.wait_for(2s), std::future_status::ready);
+                }
+                std::lock_guard<std::mutex> lock(actions_mutex);
+                actions.push_back("renewed " + args[1]);
                 return InstanceLease::Values{"renewed"};
             }
             EXPECT_EQ(args[1], "endpoint|nonce");
@@ -637,8 +657,12 @@ TEST(LogicDispatcherTests, InstanceLeaseUsesRedisAndUnregistersAfterRenewal) {
         "nonce");
     ASSERT_TRUE(lease.Register());
     lease.Renew(2);
+    EXPECT_EQ(entered.get_future().wait_for(2s), std::future_status::ready);
+    lease.Renew(3);
+    lease.Renew(4);
+    release.set_value();
     lease.Unregister();
-    EXPECT_EQ(actions, (InstanceLease::Values{"registered", "renewed", "removed"}));
+    EXPECT_EQ(actions, (InstanceLease::Values{"registered", "renewed 2", "renewed 4", "removed"}));
 }
 
 } // namespace

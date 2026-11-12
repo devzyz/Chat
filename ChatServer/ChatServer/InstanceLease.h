@@ -3,6 +3,8 @@
 #include "DependencyExecutor.h"
 #include "Const.h"
 #include <spdlog/spdlog.h>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -32,18 +34,17 @@ public:
     }
     // 定时器只投递，不等待网络；队满或所有者变化可观察。
     void Renew(std::size_t count) {
-        // 只续租本进程持有的位置，避免覆盖其他端点。
+        std::lock_guard<std::mutex> lock(_mutex);
+        if (_renewing) {
+            _next_count = count;
+            return;
+        }
+        // 提交和设置在途标记共用一把锁，只有 Redis worker 在锁外写实际计数。
         auto status = _executor.SubmitExternal(ExternalTask::Redis, [this, count] {
-            auto result = _eval(
-                "local owner=redis.call('GET',KEYS[2]); if owner and owner~=ARGV[3] then return {} end; "
-                "redis.call('HSET',KEYS[1],ARGV[1],ARGV[2]); "
-                "redis.call('SET',KEYS[2],ARGV[3],'EX',90); return {'renewed'}",
-                _keys,
-                {_server, std::to_string(count), _owner});
-            if (!result || *result != Values{"renewed"})
-                SPDLOG_WARN("instance renewal unavailable");
+            RenewLatest(count);
         });
-        if (status != LogicSubmitResult::Accepted)
+        _renewing = status == LogicSubmitResult::Accepted;
+        if (!_renewing)
             SPDLOG_WARN("instance renewal not admitted");
     }
     // 调用前停止续租；等待已有任务完成后再条件注销，依赖失败由租约 TTL 兜底。
@@ -63,6 +64,33 @@ public:
     }
 
 private:
+    // 同一实例一次只写一笔。执行期间到达的多次采样合并为最近的连接数。
+    void RenewLatest(std::size_t count) {
+        for (;;) {
+            try {
+                auto result = _eval(
+                    "local owner=redis.call('GET',KEYS[2]); if owner and owner~=ARGV[3] then return {} end; "
+                    "redis.call('HSET',KEYS[1],ARGV[1],ARGV[2]); "
+                    "redis.call('SET',KEYS[2],ARGV[3],'EX',90); return {'renewed'}",
+                    _keys,
+                    {_server, std::to_string(count), _owner});
+                if (!result || *result != Values{"renewed"})
+                    SPDLOG_WARN("instance renewal unavailable");
+            } catch (...) {
+                SPDLOG_WARN("instance renewal failed");
+            }
+            std::lock_guard<std::mutex> lock(_mutex);
+            if (!_next_count) {
+                _renewing = false;
+                return;
+            }
+            count = *_next_count;
+            _next_count.reset();
+        }
+    }
+    std::mutex _mutex;
+    std::optional<std::size_t> _next_count;
+    bool _renewing = false;
     DependencyExecutor& _executor;
     Eval _eval;
     std::string _server, _endpoint, _owner;

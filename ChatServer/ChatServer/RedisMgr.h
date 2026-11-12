@@ -3,12 +3,9 @@
 #include "Singleton.h"
 #include "DependencyExecutor.h"
 #include "../../common/auth/RedisToken.h"
-#include <queue>
-#include <mutex>
-#include <condition_variable>
 #include <memory>
-#include <atomic>
 #include <chrono>
+#include <string>
 #include <optional>
 #include <vector>
 #include <hiredis/hiredis.h>
@@ -50,30 +47,13 @@ private:
     chat_redis::RedisPool _transport;
 };
 
-/**
- *
- * 连接redis的单例类
- */
+// ChatServer 的 Redis 命令入口，在线状态和租约使用 Lua，登录凭据使用 token 校验。
 class RedisMgr : public Singleton<RedisMgr> {
     friend class Singleton<RedisMgr>;
 
 public:
     /** @brief 执行服务关闭流程并释放本对象拥有的运行资源。 */
     ~RedisMgr();
-    // 结果保存到value内
-    /** @brief 读取 Redis 字符串至输出 value，缺失、类型不符或命令失败返回 false。 */
-    bool Get(const std::string& key, std::string& value);
-    /** @brief 写入 Redis 字符串并验证 OK 响应，失败返回 false。 */
-    bool Set(const std::string& key, const std::string& value);
-    // 结果保存到value内
-    /** @brief 读取 Redis 哈希字段至输出 value，缺失、类型不符或命令失败返回 false。 */
-    bool HGet(const std::string& first_key, const std::string& second_key, std::string& value);
-    /** @brief 写入 Redis 哈希字段并校验整数响应，返回命令是否成功。 */
-    bool HSet(const std::string& first_key, const std::string& second_key, const std::string& value);
-    /** @brief 删除 Redis 哈希字段并返回操作结果。 */
-    bool HDel(const std::string& first_key, const std::string& second_key);
-    /** @brief 删除 Redis key 并返回操作结果。 */
-    bool Del(const std::string& key);
     /** @brief 执行给定 Lua 脚本并读取字符串数组，连接或响应失败返回空 optional。 */
     std::optional<std::vector<std::string>> Eval(
         const std::string& script,
@@ -81,7 +61,7 @@ public:
         const std::vector<std::string>& arguments);
     /** @brief 校验 TCP 登录凭据，区分用户缺失、凭据错误及依赖失败。 */
     chat_auth::TokenResult ValidateToken(int uid, const std::string& token) {
-        return WorkerPool().ValidateToken(uid, token);
+        return CheckedConnectionPool().ValidateToken(uid, token);
     }
     /** @brief 停止接受新的借用并释放空闲连接，唤醒等待者；借出资源仍须按原协议归还。 */
     void Close();
@@ -90,7 +70,7 @@ private:
     /** @brief 初始化RedisMgr，执行模块 Redis 命令并检查响应类型；命令失败不自动重放写入。 */
     RedisMgr();
     // 所有生产命令均在 Redis 工作线程借连接，防止新调用点绕过准入。
-    RedisConnectionPool& WorkerPool() {
+    RedisConnectionPool& CheckedConnectionPool() {
         if (!DependencyExecutor::RunningOn(ExternalTask::Redis))
             throw std::logic_error("Redis command outside Redis pool");
         return *_pool;

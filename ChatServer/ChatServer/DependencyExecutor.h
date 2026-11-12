@@ -50,9 +50,9 @@ public:
             throw std::runtime_error("dependency task not admitted");
         return result;
     }
-    // 所有者停止生产后等待在途任务排空，随后仍可投递最后的实例注销。
+    // 由非 worker 所有者在停止生产后等待排空；随后仍可投递最后的实例注销。
     void Drain();
-    // 关闭入口并排空已受理的工作，重复调用安全。
+    // 仅由非 worker 所有者关闭入口并等待线程退出，重复调用安全。
     void Stop();
 
 private:

@@ -533,7 +533,7 @@ void LogicSystem::RegisterCallbacks() {
             std::string credential = root["token"].asString();
             SPDLOG_INFO("user login request, uid={}", uid);
 
-            // 登录的 Redis 初验由认证池运行，绑定阶段仍原子复核 token。
+            // 登录凭据初验在 Redis 池运行，绑定阶段仍原子复核 token。
             QueueRequest(
                 ExternalTask::Redis,
                 session,
@@ -677,7 +677,7 @@ void LogicSystem::RegisterCallbacks() {
                         req.set_applyicon(user_info->_icon);
                         req.set_applysex(user_info->_sex);
                     }
-                    // 提交已完成，通知线程独立查找当前接收者并投递。
+                    // 提交后确认发送方；Redis 池查找接收者，远端投递交给出站 gRPC 池。
                     return ReplyAndNotify(
                         session,
                         MSG_ADD_FRIEND_RSP,
@@ -816,7 +816,7 @@ void LogicSystem::RegisterCallbacks() {
                         msg_info["status"] = msg->_status;
                         return_value["chat_msgs"].append(msg_info);
                     }
-                    // 提交已完成，通知线程独立查找当前接收者并投递。
+                    // 提交后确认发送方；Redis 池查找接收者，远端投递交给出站 gRPC 池。
                     return ReplyAndNotify(
                         session,
                         MSG_AUTH_FRIEND_RSP,
@@ -1156,7 +1156,7 @@ void LogicSystem::RegisterCallbacks() {
                         data_array = std::move(created);
                         _chat_msgs = std::move(messages);
                     }
-                    // 提交已完成，通知线程独立查找当前接收者并投递。
+                    // 提交后确认发送方；Redis 池查找接收者，远端投递交给出站 gRPC 池。
                     return ReplyAndNotify(
                         session,
                         MSG_TEXT_CHAT_MSG_RSP,
