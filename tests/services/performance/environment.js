@@ -46,7 +46,7 @@ class Environment {
     }
     /** 分配临时端口并保存其释放所有权。 */
     async port() { const lease = await reserve(); this.leases.push(lease); return lease; }
-    /** 初始化真实依赖、迁移及六个生产进程，并通过公开端点确认就绪。 */
+    /** 初始化真实依赖、迁移及五个生产进程，并通过公开端点确认就绪。 */
     async setup() {
         for (const service of ['redis', 'mysql', 'mailpit']) await this.coordinator.inspect(service);
         await this.coordinator.bootstrap();

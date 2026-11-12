@@ -18,7 +18,7 @@ async function run() {
     const profile = profiles[profileName];
     const root = path.resolve(process.env.CHAT_PERFORMANCE_OUTPUT || 'out/performance');
     const sha = process.env.GITHUB_SHA; assert.match(sha || '', /^[a-f0-9]{40}$/);
-    const report = { schemaVersion: 1, sha, profile: profileName, parameters: profile,
+    const report = { schemaVersion: 2, sha, profile: profileName, parameters: profile,
         requestId: process.env.CHAT_PERFORMANCE_REQUEST_ID || '', seed: 'chat-performance-v1',
         url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
         environment: { cpus: os.cpus().length, cpuModel: os.cpus()[0].model, memoryBytes: os.totalmem(),

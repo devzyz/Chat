@@ -14,7 +14,8 @@ GitHub CI 手动选择 `mode=performance`，`performance_profile=smoke|baseline|
 缺场景、缺样本、错误 SHA、业务错误、超时、丢失、重复落库、内容不符、清理失败均拒绝通过。
 速度指标暂不设回归阈值；共享运行器同机基线不代表公网体验、Windows 性能或生产容量。
 
-框架验证由 GitHub 性能构建作业执行：
+每次进程采样须覆盖 Gate、两个独立 Chat、Resource 和 Varify，包含各自的 PID、CPU ticks 和 RSS。
+GitHub 性能构建作业在恢复原生依赖之前执行框架验证：
 
 ```sh
 node --test tests/services/performance/*.test.js tests/services/connectionCount.test.js tests/build/ciPolicy.test.js

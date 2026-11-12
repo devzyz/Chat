@@ -149,7 +149,10 @@ test('fixed rate accounts for successful, failed and unsent operations', async (
 test('report rejects missing scenes, duplicate scenes, wrong SHA and incomplete cleanup', () => {
     const sha = 'a'.repeat(40);
     const metric = { pass: true, completed: 1, planned: 1, unsent: 0, errors: {}, latencyMs: { count: 1 } };
-    const report = { sha, status: 'passed', profile: 'smoke', cleanup: { complete: true }, failures: [],
+    const report = { schemaVersion: 2, sha, status: 'passed', profile: 'smoke', cleanup: { complete: true }, failures: [],
+        samples: [{ processes: ['GateServer', 'ChatA', 'ChatB', 'ResourceServer', 'VarifyServer'].map(
+            // 为每个正式服务保留独立进程采样。
+            (name, index) => ({ name, pid: index + 1, cpuTicks: 0, rssKiB: 128 })) }],
         // 为每个场景建立独立预热证据。
         warmups: scenarios.map(name => ({ round: 1, name,
             result: name === 'mixed' ? { metrics: metric, resources: metric } : metric })),
@@ -157,6 +160,14 @@ test('report rejects missing scenes, duplicate scenes, wrong SHA and incomplete 
         results: scenarios.map(name => ({ round: 1, name, metrics: metric,
             ...(name === 'mixed' ? { resources: metric } : {}) })) };
     verify(report, sha);
+    verify({ ...report, schemaVersion: 1, samples: [] }, sha);
+    // 缺样本、缺实例及重复进程均不能通过。
+    assert.throws(() => verify({ ...report, samples: [] }, sha));
+    const processes = report.samples[0].processes;
+    assert.throws(() => verify({ ...report, samples: [{ processes: processes.slice(1) }] }, sha));
+    assert.throws(() => verify({ ...report, samples: [{ processes: [
+        { ...processes[0], pid: processes[1].pid }, ...processes.slice(1)
+    ] }] }, sha));
     // 源码身份不符拒绝。
     assert.throws(() => verify(report, 'b'.repeat(40)));
     // 缺场景拒绝。
