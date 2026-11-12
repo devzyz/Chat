@@ -23,16 +23,11 @@ public:
 private:
     /** @brief 校验会话身份并分发消息；仅未知消息类型返回 false。 */
     bool Dispatch(const LogicMessage& message);
-    // 为已验证的请求排队执行数据库操作，满载或异常时关闭发起连接。
+    // 在工作线程复核排队请求的绑定凭据后执行数据库操作；满载或异常时关闭发起连接。
     void QueueDatabase(const std::shared_ptr<CSession>& session, DatabaseWork work);
     /** @brief 注册登录、好友、消息、回执和历史查询处理器。 */
     void RegisterCallbacks();
 
-    /** @brief 保留的登录处理声明；当前登录由注册回调处理。 */
-    void LoginHandler(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data);
-
-    /** @brief 从 MySQL 读取当前用户资料；保留旧缓存键参数兼容调用，查不到返回 false。 */
-    bool GetUserBaseInfo(std::string baseinfo_key, int uid, std::shared_ptr<UserInfo>& userinfo);
     /** @brief 按 UID 从 MySQL 查询并写入公开资料，避免缓存遮蔽资料更新。 */
     void GetUserByUid(std::string uid, Json::Value& value);
     /** @brief 按用户名从 MySQL 查询并写入公开资料，不暴露账号凭据。 */

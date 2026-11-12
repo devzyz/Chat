@@ -10,6 +10,9 @@ ChatServer's `MysqlDao`; TCP handler is `LogicSystem.cpp`.
 | S06-SYNC-03 | CursorCannotPassAnUncommittedWriter | Observe real InnoDB lock wait; sync sees the committed earlier message |
 | S06-SYNC-04 | integration.py / tcp_flow | Offline send ACK, retry, two production ChatServer instances, push, incremental fetch and relogin |
 | S06-SYNC-05 | integration.py / message_sync_probe | Real Qt coordinator and SQLite; process restart requests only IDs after the persisted cursor |
+| S06-SYNC-06 | integration.py / verify_database_dispatch | Revoke the writer after dispatch while both workers wait on SQL. The socket closes without an ACK and the UUID is absent from MySQL. |
+| S06-SYNC-07 | integration.py / verify_concurrent_private_chat | Two first creates in opposite directions return the same ID. MySQL retains one chat and one pair, and retry returns that ID. |
+| S06-SYNC-08 | integration.py / verify_failed_binding | A second login with valid credentials on an already-bound socket receives only the binding error. |
 
 Use existing dependencies only. From a VS developer shell with `VCPKG_ROOT` set:
 

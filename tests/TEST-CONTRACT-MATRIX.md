@@ -882,6 +882,9 @@ S06-SYNC-01..05 are opt-in real MySQL / production ChatServer / Qt-SQLite contra
 
 Session FSM contracts remain part of their owning Server/Qt suites. Registration and report integrity are checked by the public runner; execution evidence belongs to [Status](../docs/Status.md).
 
+S06-SYNC-06..08 use the same isolated MySQL and production TCP entry to cover revocation while a write is queued,
+opposite-direction concurrent creation of one private chat, and a binding failure response containing only the error.
+
 ## Message state control (2026-09-23)
 
 S07-RECEIPT-01..02 are registered in [message-receipt](server/message-receipt/README.md)

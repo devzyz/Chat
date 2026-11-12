@@ -37,9 +37,12 @@ LogicDispatcher::Completion Reply(std::shared_ptr<CSession> session, short id, s
 
 void LogicSystem::QueueDatabase(const std::shared_ptr<CSession>& session, DatabaseWork work) {
     const int uid = session->AuthenticatedUid();
-    // 排队期间已关闭或被替换的连接不能再启动写入。已提交的通知仍独立完成。
-    auto checked = [session, uid, directory = _directory, work = std::move(work)]() -> Completion {
-        if (session->Closing() || (uid && !directory->IsCurrent(uid, session->Id())))
+    // 登录另由绑定时校验 token；已认证请求等到数据库线程可用时再次核实凭据。
+    auto checked = [this, session, uid, work = std::move(work)]() -> Completion {
+        if (session->Closing())
+            return {};
+        if (uid &&
+            (!_directory->IsCurrent(uid, session->Id()) || !RefreshAuthenticatedSession(*_presence, uid, session)))
             return {};
         return work();
     };
@@ -75,10 +78,8 @@ bool LogicSystem::Dispatch(const LogicMessage& message) {
         const int uid = message.session->AuthenticatedUid();
         if (uid <= 0 || message.received_uid != uid || !_directory->IsCurrent(uid, message.session->Id()))
             return true;
-        if (!_presence->RefreshIfCurrent(uid, message.session->Id())) {
-            message.session->Close(SessionCloseReason::Replaced);
+        if (!RefreshAuthenticatedSession(*_presence, uid, message.session))
             return true;
-        }
         Json::Value request;
         Json::Reader reader;
         if (!reader.parse(message.body, request) || !request.isObject())
@@ -326,10 +327,8 @@ void LogicSystem::RegisterCallbacks() {
         // 在数据库线程执行本次请求的同步存取。
         QueueDatabase(session, [this, session, root, uid, token]() mutable -> Completion {
             Json::Value return_value;
-            std::string baseinfo_key = USER_BASE_INFO + std::to_string(uid);
-            auto user_info = std::make_shared<UserInfo>();
-            bool success = GetUserBaseInfo(baseinfo_key, uid, user_info);
-            if (!success) {
+            auto user_info = MysqlMgr::GetInstance()->GetUserByUid(uid);
+            if (!user_info) {
                 return_value["error"] = ErrorCodes::UidInvalid;
                 return Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(return_value));
             }
@@ -472,6 +471,7 @@ void LogicSystem::RegisterCallbacks() {
                                 session->EnableGroups(groups);
                                 session->EnableSocial(social);
                             } else {
+                                response = Json::Value(Json::objectValue);
                                 response["error"] = ErrorCodes::RPCFailed;
                             }
                             resume(Reply(session, MSG_CHAT_LOGIN_RSP, messaging::CompactJson(response)));
@@ -576,8 +576,7 @@ void LogicSystem::RegisterCallbacks() {
                  applyicon,
                  applysex,
                  return_value]() mutable -> Completion {
-                    auto recipient = std::make_shared<UserInfo>();
-                    if (!GetUserBaseInfo(USER_BASE_INFO + std::to_string(touid), touid, recipient)) {
+                    if (!MysqlMgr::GetInstance()->GetUserByUid(touid)) {
                         return_value["error"] = ErrorCodes::UidInvalid;
                         return Reply(session, MSG_ADD_FRIEND_RSP, messaging::CompactJson(return_value));
                     }
@@ -587,9 +586,7 @@ void LogicSystem::RegisterCallbacks() {
                         return Reply(session, MSG_ADD_FRIEND_RSP, messaging::CompactJson(return_value));
                     }
                     // 查询一下自己的信息
-                    std::string baseinfo_key = USER_BASE_INFO + std::to_string(fromuid);
-                    std::shared_ptr<UserInfo> user_info = std::make_shared<UserInfo>();
-                    bool b_info = GetUserBaseInfo(baseinfo_key, fromuid, user_info);
+                    auto user_info = MysqlMgr::GetInstance()->GetUserByUid(fromuid);
                     // 数据库已提交，回包和对端路由交给分发线程。
                     return [this,
                             session,
@@ -602,7 +599,6 @@ void LogicSystem::RegisterCallbacks() {
                             applyicon,
                             applysex,
                             user_info,
-                            b_info,
                             return_value] {
                         session->Send(messaging::CompactJson(return_value), MSG_ADD_FRIEND_RSP);
                         std::string to_ip_value = "";
@@ -649,7 +645,7 @@ void LogicSystem::RegisterCallbacks() {
                         req.set_touid(touid);
                         req.set_description(description);
                         req.set_backname(backname);
-                        if (b_info) {
+                        if (user_info) {
                             req.set_applyname(user_info->_name);
                             req.set_applydescription(user_info->_description);
                             req.set_applyicon(user_info->_icon);
@@ -1400,12 +1396,6 @@ bool LogicSystem::IsOnlyDigit(std::string& uid_name) {
         }
     }
     return true;
-}
-
-/** @brief 从权威数据库读取公开用户模型，避免旧缓存覆盖资料更新。 */
-bool LogicSystem::GetUserBaseInfo(std::string, int uid, std::shared_ptr<UserInfo>& userinfo) {
-    userinfo = MysqlMgr::GetInstance()->GetUserByUid(uid);
-    return userinfo != nullptr;
 }
 
 bool LogicSystem::GetApplyFriendList(int uid, std::vector<std::shared_ptr<ApplyInfo>>& applylist) {

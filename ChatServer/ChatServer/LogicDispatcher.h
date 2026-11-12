@@ -22,7 +22,7 @@ enum class LogicSubmitResult {
     Closed,
 };
 
-/** @brief 用有界 FIFO 和单工作线程分发业务消息，生产者通过内部锁提交。 */
+// 单线程按就绪顺序分发请求；有界数据库工作池并行处理不同连接，同连接等待在途操作完成。
 class LogicDispatcher {
 public:
     using Handler = std::function<bool(const LogicMessage&)>;

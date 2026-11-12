@@ -96,10 +96,8 @@ inline unsigned int ResponseBodyLimit(unsigned short message_id) {
 #define USER_IP_PREFIX "uip_"
 #define USER_TOKEN_PREFIX "utoken_"
 #define IP_COUNT_PREFIX "ipcount_"
-#define USER_BASE_INFO "ubaseinfo_" // 用户基本信息的uid前缀，ubaseinfo_1，即1号用户的基本信息
-#define LOGIN_COUNT "logincount"    // 用来查询某个chatserver服务器，登录的客户端tcp连接数
-#define USER_NAME_INFO "unameinfo_" // 通过name查询用户信息的前缀，unameinfo_zzzyz
-#define LOCK_PREFIX "lock_"         // 分布式锁的名字前缀，例如lock_1001
+#define LOGIN_COUNT "logincount" // 用来查询某个chatserver服务器，登录的客户端tcp连接数
+#define LOCK_PREFIX "lock_"      // 分布式锁的名字前缀，例如lock_1001
 #define USER_SESSION_KEY "usessionid_"
 
 // 锁的持有时间
