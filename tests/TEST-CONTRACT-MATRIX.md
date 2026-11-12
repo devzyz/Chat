@@ -953,6 +953,7 @@ Qt 控件及资源存储报告的完整用例集合，保留自动控件与真�
 | Q06-DRAFT-01 | composer.interaction / conversationDrafts | 跨会话原生草稿、附件、撤销与重做 |
 | Q06-SUMMARY-01 | conversation_attention.widgets；localHistorySearchWidgets | 最近活动排序、未加载会话提醒与正文复制 |
 | S08-SOCIAL-01 | message-sync/integration.py / tcp_flow | 生产 TCP 资料/好友全生命周期、旧版本拒绝、分页、长正文和安全投影 |
+| S08-SOCIAL-LOGIN-01 | [message-sync](server/message-sync/README.md) / tcp_flow | 旧客户端登录返回好友资料和本方备注；从 1 位好友增加到 3 位时，整次登录的预编译语句执行次数保持相同 |
 | S08-SOCIAL-02 | MessageSync.IncrementalByteBoundedPagesAndResourceIdentity | 真实 MySQL 删除后资源读取及新提交关系校验 |
 
 复用现有测试目标与 CTest 报告分组；本轮人工桌面验收后置，不把接口或控件回归当成完整人工验收。

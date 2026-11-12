@@ -78,6 +78,11 @@ the target's leave and requires exactly one success and one active owner.
 
 用户搜索协议扩展：`tcp_flow` 验证生产 ChatServer 1007/1008 的成功、未知 UID、参数类型错误均保留请求编号，同时兼容不携带编号的旧客户端。
 
+旧版登录回归覆盖未声明 `basic_social_v1` 的客户端。预热后，同一账号分别带 1 位和 3 位好友登录，
+测试核对 1006 回包中每位好友的 UID、姓名、描述、头像、性别及当前账号设置的备注。
+两次登录在独占临时 MySQL 实例上测得的 `Com_stmt_execute` 增量必须相同且大于零，
+以捕获逐个好友追加查询的回归。该计数覆盖整次登录，连接池饱和度不在此项测试范围内。
+
 基础社交扩展使用迁移 007。`tcp_flow` 覆盖能力协商、资料更新/重名/版本冲突、公开投影、双向删除、
 删除后的历史与旧 UUID 确认、拒绝/重新申请/接受、复用原 chat_id、旧版本发送拒绝、在线大正文通知与同步、
 申请目录按字节连续分页以及重新登录恢复。`IncrementalByteBoundedPagesAndResourceIdentity` 进一步验证删除后

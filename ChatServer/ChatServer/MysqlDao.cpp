@@ -480,24 +480,22 @@ bool MysqlDao::GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& fr
     });
 
     try {
-        // 准备查询
-        std::unique_ptr<sql::PreparedStatement> pstmt(
-            connection->_connection->prepareStatement("SELECT * FROM friend WHERE self_id = ?"));
+        std::unique_ptr<sql::PreparedStatement> pstmt(connection->_connection->prepareStatement(
+            "SELECT u.uid, u.name, u.description, u.icon, u.sex, f.backname "
+            "FROM friend f JOIN user u ON u.uid = f.other_id WHERE f.self_id = ?"));
         pstmt->setInt(1, uid);
 
         // 执行查询
         std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
         while (res->next()) {
-            auto other_id = res->getInt("other_id");
-            auto backname = res->getString("backname");
-            // 找到uid的好友
-            auto user_info = GetUser(other_id);
-            if (user_info == nullptr) {
-                continue;
-            }
-            // 设置我给uid的备注名
-            user_info->_backname = backname;
-            friendList.push_back(user_info);
+            auto user_info = std::make_shared<UserInfo>();
+            user_info->_uid = res->getInt("uid");
+            user_info->_name = res->getString("name");
+            user_info->_description = res->getString("description");
+            user_info->_icon = res->getString("icon");
+            user_info->_sex = res->getInt("sex");
+            user_info->_backname = res->getString("backname");
+            friendList.push_back(std::move(user_info));
         }
 
         return true;

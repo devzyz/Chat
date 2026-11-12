@@ -127,6 +127,11 @@ Connection setup and health checks run outside the pool mutex. Close wakes waite
 checked-out work must finish before destroying the pool. Gate no longer needs a
 background keepalive worker. Pool capacity remains 8 for Gate/Chat and 2 for resources.
 
+For clients without `basic_social_v1`, ChatServer builds the login response's
+`friend_list` with one connection and one join of `friend` to `user`. The
+profile comes from the friend's user row, and `backname` comes from the
+relation owned by the logging-in user.
+
 Queue waiting defaults to two seconds. Gate/Chat connector connect/read/write
 timeouts remain two seconds each; resources retain 3/5/5 seconds. Synchronous
 in-flight I/O cannot be cancelled at the queue deadline,
