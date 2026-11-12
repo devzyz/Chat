@@ -603,7 +603,7 @@ Qt runner testcase 合计 46：Unit 18、Component 6、Integration 22。
 
 ## 5. VarifyServer testcase 目录
 
-### 5.1 Configuration process（9）
+### 5.1 Configuration process
 
 Interface：配置来源、凭据环境变量和明文配置拒绝。
 Domain/Level：Foundation / Integration。
@@ -617,11 +617,12 @@ Domain/Level：Foundation / Integration。
 | V01-CFG-04 | `malformed configuration exits with a failure status` | 畸形 JSON 非零退出 |
 | V01-CFG-05 | missing `CHAT_VARIFY_EMAIL_USER` | 缺少变量失败且不输出值 |
 | V01-CFG-06 | missing `CHAT_VARIFY_EMAIL_PASS` | 缺少变量失败且不输出值 |
-| V01-CFG-07 | missing `CHAT_VARIFY_MYSQL_PASSWORD` | 缺少变量失败且不输出值 |
+| V01-CFG-07 | `legacy MySQL addresses are ignored without a database credential` | 无 MySQL 凭据可启动，旧地址不进入运行配置 |
 | V01-CFG-08 | missing `CHAT_VARIFY_REDIS_PASSWORD` | 缺少变量失败且不输出值 |
 | V01-CFG-09 | `plaintext credential fields in config.json are rejected` | 旧明文凭据字段被拒绝 |
+| V01-CFG-10 | `SMTP no-auth configuration needs no SMTP password and retains sender identity` | 无认证 SMTP 模式保留发件人，不要求 SMTP 密码 |
 
-### 5.2 Handler（9）
+### 5.2 Handler
 
 Interface：验证码缓存、生成、TTL、邮件错误、callback 和日志脱敏。
 Domain/Level：Business / Unit。
@@ -632,12 +633,14 @@ Domain/Level：Business / Unit。
 | V06-MOD-01 | `requiring the handler module does not load Redis or SMTP adapters` | 模块加载无外部连接副作用 |
 | V06-HDL-01 | `cached code is reused without UUID generation or Redis write` | 缓存命中复用 code |
 | V06-HDL-07 | `mail uses the sender supplied by runtime configuration` | 发件人来自运行时配置 |
-| V06-HDL-02 | `missing code generates four characters and stores a 600 second TTL` | 缺失时生成四字符并写 600 秒 TTL |
+| V06-HDL-02 | `missing code generates eight characters and stores a 600 second TTL` | 缺失时生成八字符并写 600 秒 TTL |
 | V06-HDL-03 | `failed Redis write returns RedisErr without sending mail` | Redis 写失败不发邮件 |
 | V06-HDL-04 | `false mail result returns Exception` | mailer false 映射 Exception |
 | V06-HDL-05 | `Redis read rejection returns Exception without sending mail` | Redis rejection 不发邮件并映射 Exception |
 | V06-HDL-06 | `mail rejection returns Exception` | SMTP rejection 映射 Exception |
 | V06-LOG-01 | `default handler events never disclose the recipient or verification code` | 默认日志不泄漏收件人或验证码 |
+
+同一 [handler 测试组](../VarifyServer/test/handler/handler.test.js) 还覆盖注册与重置的独立命名空间、并发请求共享与验证码消费后重发，以及结构化 SMTP 结果到唯一 RPC 回调的映射。
 
 ### 5.3 Protocol（6）
 

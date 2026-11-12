@@ -1,6 +1,7 @@
 const fs = require('fs'); // js内的文件读写库
 const { normalizeSmtpConfig } = require('./smtpConfig');
 const { normalizeRedisConfig } = require('./redis');
+const { code_prefix } = require('./const');
 
 /** 读取必需环境变量，缺失或空白时抛异常；错误仅包含变量名。 */
 function requireEnvironment(name) {
@@ -39,13 +40,9 @@ let email_user = requireEnvironment('CHAT_VARIFY_EMAIL_USER');
 let email_pass = (config.email?.auth ?? 'login') === 'none' ? undefined
     : requireEnvironment('CHAT_VARIFY_EMAIL_PASS');
 const smtp = normalizeSmtpConfig(config.email, { user: email_user, pass: email_pass });
-let mysql_host = config.mysql.host;
-let mysql_port = config.mysql.port;
-let mysql_passwd = requireEnvironment('CHAT_VARIFY_MYSQL_PASSWORD');
 let redis_host = config.redis.host;
 let redis_port = config.redis.port;
 let redis_passwd = requireEnvironment('CHAT_VARIFY_REDIS_PASSWORD');
 const redis = normalizeRedisConfig(config.redis, redis_passwd);
-let code_prefix = "code_";
 
-module.exports = {email_pass, email_user, smtp, redis, mysql_host, mysql_port, mysql_passwd, redis_host, redis_passwd, redis_port, code_prefix}
+module.exports = { email_pass, email_user, smtp, redis, redis_host, redis_passwd, redis_port, code_prefix };

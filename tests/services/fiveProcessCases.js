@@ -48,7 +48,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
     // 为基础五进程合同分配连续 Test ID 并委托记录结果。
     const test = (name, action) => record(`E03-CONTRACT-${String(++step).padStart(2, '0')}`, name, action);
     const env = { ...process.env, MYSQL_PWD: coordinator.password,
-        CHAT_VARIFY_EMAIL_USER: 'fixture@example.invalid', CHAT_VARIFY_MYSQL_PASSWORD: coordinator.password,
+        CHAT_VARIFY_EMAIL_USER: 'fixture@example.invalid',
         CHAT_VARIFY_REDIS_PASSWORD: coordinator.password };
     delete env.CHAT_CONFIG;
     delete env.LD_PRELOAD;
@@ -175,7 +175,7 @@ async function runFiveProcessCases(coordinator, record, evidenceRoot, selector =
             await release('varify');
             const file = path.join(root, 'varify.json');
             fs.writeFileSync(file, JSON.stringify({ email: { host: '127.0.0.1', port: coordinator.config.ports.smtp,
-                secure: false, auth: 'none', deadlineMs: 2000 }, mysql: { host: '127.0.0.1', port: coordinator.config.ports.mysql },
+                secure: false, auth: 'none', deadlineMs: 2000 },
                 redis: { host: '127.0.0.1', port: coordinator.config.ports.redis } }), { mode: 0o600 });
             start('VarifyServer', process.execPath, [path.resolve(__dirname, '../../VarifyServer/server.js'), '--config', file],
                 { CHAT_VARIFY_BIND_ADDRESS: `127.0.0.1:${ports.varify}` });
