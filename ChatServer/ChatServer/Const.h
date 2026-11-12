@@ -5,16 +5,11 @@
 // Only server history/sync responses may use the full uint16 wire body length.
 constexpr unsigned int MAX_HISTORY_BODY_LENGTH = 0xffff;
 constexpr unsigned int MAX_SOCIAL_BODY_LENGTH = 8192;
-#define MAX_RECVQUE 10000
 #define MAX_SENDQUE 1000
 #define MAX_DEALQUE 1000
 
 // 头部总长度
 #define HEAD_TOTAL_LEN 4
-// 头部id长度
-#define HEAD_ID_LEN 2
-// 头部数据长度
-#define HEAD_DATA_LEN 2
 
 /** @brief 在作用域结束时调用所保存的清理动作；清理动作不得向析构传播异常。 */
 class Defer {
@@ -94,21 +89,10 @@ inline unsigned int ResponseBodyLimit(unsigned short message_id) {
 }
 
 #define USER_IP_PREFIX "uip_"
-#define USER_TOKEN_PREFIX "utoken_"
-#define IP_COUNT_PREFIX "ipcount_"
 #define LOGIN_COUNT "logincount" // 用来查询某个chatserver服务器，登录的客户端tcp连接数
-#define LOCK_PREFIX "lock_"      // 分布式锁的名字前缀，例如lock_1001
 #define USER_SESSION_KEY "usessionid_"
 
-// 锁的持有时间
-#define LOCK_TIME_OUT 10
-// 获取锁的尝试时间
-#define LOCK_ACQUIRE_TIME_OUT 5
 // 心跳超时的时间间隔 单位秒
 #define HEARTBEAT_TIME_INTERVAL 20
-// 数据库尝试重连的最大重试次数，如果此次不成功，则下次心跳时再进行重试
-#define MYSQL_MAX_RETRIES 5
-// redis尝试重连的最大重试次数，如果此次不成功，则下次心跳时再进行重试
-#define REDIS_MAX_RETRIES 5
 
 #define PAGE_SIZE 10

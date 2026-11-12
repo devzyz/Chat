@@ -22,7 +22,6 @@
 #include "ConfigMgr.h"
 #include "UserSessionDirectory.h"
 #include "ChatGrpcClient.h"
-#include "CServer.h"
 #include "LogMgr.h"
 
 namespace {
@@ -180,12 +179,9 @@ void LogicSystem::QueueLoginData(
                 return_value["current_chat_id"] = 0;
                 return_value["chat_list"] = Json::Value(Json::arrayValue);
             } else {
-                // 同样的，这里也不需要添加分布式锁
-                // 因为刚好有两个相同uid=1的客户端，然后另一个客户端uid=2要添加uid=1为好友，但是我们一定会写入到数据库中
-                // 所以即使我查到的是旧的serverip信息，也能够接受，当下一次上线的时候，会重新收到好友请求信息
-                // 获取好友申请列表
+                // 旧客户端从登录响应读取好友申请和联系人。
                 std::vector<std::shared_ptr<ApplyInfo>> apply_list;
-                auto b_apply = GetApplyFriendList(uid, apply_list);
+                auto b_apply = MysqlMgr::GetInstance()->GetApplyFriendList(uid, apply_list, 0, 10);
                 if (b_apply) {
                     for (auto& info : apply_list) {
                         Json::Value apply;
@@ -205,7 +201,7 @@ void LogicSystem::QueueLoginData(
                 // 同样的，一定会被更新到数据库中，因此如果查不到可以接受
                 // 获取好友列表
                 std::vector<std::shared_ptr<UserInfo>> friend_list;
-                auto b_user = GetFriendList(uid, friend_list);
+                auto b_user = MysqlMgr::GetInstance()->GetFriendList(uid, friend_list);
                 if (b_user) {
                     for (auto& info : friend_list) {
                         Json::Value friends;
@@ -226,7 +222,8 @@ void LogicSystem::QueueLoginData(
                     // 是否能够加载更多
                     bool load_more = false;
                     int last_load_id = 0;
-                    bool success = GetUserChatList(uid, 0, PAGE_SIZE, chat_list, load_more, last_load_id);
+                    bool success =
+                        MysqlMgr::GetInstance()->GetUserChatList(uid, 0, PAGE_SIZE, chat_list, load_more, last_load_id);
 
                     if (!success) {
                         return_value["error"] = ErrorCodes::UidInvalid;
@@ -1321,7 +1318,9 @@ std::map<short, MessageHandler> LogicSystem::CreateHandlers() {
                 // 是否能够加载更多
                 bool load_more = false;
                 int last_load_id = 0;
-                bool success = GetUserChatList(uid, current_chat_id, PAGE_SIZE, chat_list, load_more, last_load_id);
+                bool success =
+                    MysqlMgr::GetInstance()
+                        ->GetUserChatList(uid, current_chat_id, PAGE_SIZE, chat_list, load_more, last_load_id);
 
                 if (!success) {
                     return_value["error"] = ErrorCodes::UidInvalid;
@@ -1419,8 +1418,14 @@ std::map<short, MessageHandler> LogicSystem::CreateHandlers() {
                     // 是否能够加载更多
                     bool load_more = false;
                     int last_msg_id = 0;
-                    bool success =
-                        GetChatMessageList(uid, chat_id, current_msg_id, PAGE_SIZE, chat_msgs, load_more, last_msg_id);
+                    bool success = MysqlMgr::GetInstance()->GetChatMessageList(
+                        uid,
+                        chat_id,
+                        current_msg_id,
+                        PAGE_SIZE,
+                        chat_msgs,
+                        load_more,
+                        last_msg_id);
 
                     if (!success) {
                         return_value["error"] = ErrorCodes::UidInvalid;
@@ -1484,35 +1489,4 @@ bool LogicSystem::IsOnlyDigit(std::string& uid_name) {
         }
     }
     return true;
-}
-
-bool LogicSystem::GetApplyFriendList(int uid, std::vector<std::shared_ptr<ApplyInfo>>& applylist) {
-    return MysqlMgr::GetInstance()->GetApplyFriendList(uid, applylist, 0, 10);
-}
-
-bool LogicSystem::GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& friend_list) {
-    return MysqlMgr::GetInstance()->GetFriendList(uid, friend_list);
-}
-
-bool LogicSystem::GetUserChatList(
-    int uid,
-    int current_chat_id,
-    int page_size,
-    std::vector<std::shared_ptr<ChatInfoBase>>& chat_list,
-    bool& load_more,
-    int& last_chat_id) {
-    return MysqlMgr::GetInstance()
-        ->GetUserChatList(uid, current_chat_id, page_size, chat_list, load_more, last_chat_id);
-}
-
-bool LogicSystem::GetChatMessageList(
-    int principal_uid,
-    int chat_id,
-    int current_msg_id,
-    int page_size,
-    std::vector<std::shared_ptr<ChatMessage>>& chat_list,
-    bool& load_more,
-    int& last_msg_id) {
-    return MysqlMgr::GetInstance()
-        ->GetChatMessageList(principal_uid, chat_id, current_msg_id, page_size, chat_list, load_more, last_msg_id);
 }

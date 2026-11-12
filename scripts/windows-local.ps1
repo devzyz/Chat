@@ -102,7 +102,7 @@ $legacyRegressionReportGroups = @(
 $regressionResiduePrefixes = @(
     'chat-config-test-',
     'chat-startup-tests-',
-    'gate-status-startup-tests-',
+    'gate-startup-tests-',
     'chat-process-harness-',
     'chat-instance-validation-',
     'chat-instance-lifecycle-',
@@ -356,7 +356,7 @@ function Run-ServerTests {
     Confirm-TestStructure
     [void](Require-File (Join-Path $varifySource 'node_modules\@grpc\grpc-js\package.json') `
         'Restore VarifyServer dependencies with RestoreVarify or npm ci before running the C++ to Node loopback contract.')
-    $residuePrefixes = @('chat-config-test-', 'chat-startup-tests-', 'gate-status-startup-tests-')
+    $residuePrefixes = @('chat-config-test-', 'chat-startup-tests-', 'gate-startup-tests-')
     $residueBefore = @(Get-RegressionResidueSnapshot -Prefixes $residuePrefixes)
     $vcpkg = Resolve-Vcpkg
     $msbuild = Resolve-MSBuild
@@ -932,7 +932,7 @@ function Confirm-TestStructure {
         throw 'Chat TCP transport tests must register exactly T09-CTCP-01..16 as sixteen Server Integration testcases.'
     }
     if ($chatTransportProject -match '(?i)RedisMgr|MysqlMgr|ChatGrpcClient') {
-        throw 'ChatTransport must remain isolated from Redis, MySQL, Status, and peer-RPC dependency managers.'
+        throw 'ChatTransport must remain isolated from Redis, MySQL, and peer-RPC dependency managers.'
     }
     if ($unitProject -notmatch 'gate_routing_unit_tests\.cpp' -or
         $componentProject -notmatch 'gate_routing_component_tests\.cpp' -or
@@ -1004,7 +1004,7 @@ function Confirm-TestStructure {
     if ($gateLogic -match 'VerifyGrpcClient|RedisMgr|MysqlMgr') {
         throw 'LogicSystem routes must not bypass the GateRequest production Adapters.'
     }
-    if ($integrationProject -notmatch 'startup\\gate_status_startup_tests\.cpp') {
+    if ($integrationProject -notmatch 'startup\\gate_startup_tests\.cpp') {
         throw 'Server Integration tests must register the Gate production process contracts.'
     }
     $integrationHostTests = Get-Content -LiteralPath `
@@ -1416,7 +1416,7 @@ function Confirm-TestStructure {
         throw 'The original regression floor must remain exactly 11 reports and 230 testcases.'
     }
     foreach ($residuePrefix in @(
-        'chat-config-test-', 'chat-startup-tests-', 'gate-status-startup-tests-',
+        'chat-config-test-', 'chat-startup-tests-', 'gate-startup-tests-',
         'chat-process-harness-', 'chat-instance-validation-', 'chat-instance-lifecycle-',
         'varify-config-', 'varify-startup-', 'chat-proto-mutation-'
     )) {

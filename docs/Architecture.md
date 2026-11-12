@@ -116,7 +116,7 @@ ChatServer 每进程共享 Redis、MySQL、出站 gRPC 三个有界依赖池。�
 ## 头像与资源传输
 
 ResourceServer 现提供头像、图片、视频和附件的 HTTP 上传、续传与下载，
-不再只是占位程序。它复用 Status 鉴权，资源引用存 MySQL，字节存文件系统；
+直接从 Redis 校验当前登录凭据，资源引用存 MySQL，字节存文件系统；
 ChatServer 负责资源消息的参与者权限、事务提交及现有 TCP/gRPC 通知。
 客户端统一存储路径、头像会话与传输管理器的边界见 [Resources](Resources.md)。
 

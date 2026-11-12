@@ -26,7 +26,7 @@ public:
         std::shared_ptr<VerificationPort> verification_sender,
         std::shared_ptr<CodeStore> verification_codes,
         std::shared_ptr<UserStore> accounts,
-        std::shared_ptr<StatusPort> session_service)
+        std::shared_ptr<SessionAssignmentPort> session_service)
         : verification_sender_(std::move(verification_sender)), verification_codes_(std::move(verification_codes)),
           accounts_(std::move(accounts)), session_service_(std::move(session_service)) {}
 
@@ -150,7 +150,7 @@ private:
     std::shared_ptr<VerificationPort> verification_sender_;
     std::shared_ptr<CodeStore> verification_codes_;
     std::shared_ptr<UserStore> accounts_;
-    std::shared_ptr<StatusPort> session_service_;
+    std::shared_ptr<SessionAssignmentPort> session_service_;
 };
 
 } // namespace
@@ -159,7 +159,7 @@ std::unique_ptr<GateRequest> CreateGateRequest(
     std::shared_ptr<VerificationPort> verification_sender,
     std::shared_ptr<CodeStore> verification_codes,
     std::shared_ptr<UserStore> accounts,
-    std::shared_ptr<StatusPort> session_service) {
+    std::shared_ptr<SessionAssignmentPort> session_service) {
     return std::make_unique<GateRequestImpl>(
         std::move(verification_sender),
         std::move(verification_codes),

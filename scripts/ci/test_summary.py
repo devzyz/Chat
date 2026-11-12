@@ -32,7 +32,7 @@ def source_path(value, workspace):
 def module(report, case, source):
     """Use report ownership first, then the source of shared GoogleTest binaries."""
     owners = {
-        "server_gate_": "GateServer", "server_status_": "StatusServer",
+        "server_gate_": "GateServer",
         "server_chat_": "ChatServer", "server_resource_": "ResourceServer",
         "client_": "Qt Client", "varify_": "VarifyServer", "script_": "Instance scripts",
         "release_candidate_": "Packaging", "linux_migration": "MySQL migration",
@@ -45,12 +45,8 @@ def module(report, case, source):
             return owner
     if report.startswith("server_"):
         identity = (source + " " + case.get("classname", "")).lower()
-        if "gate_status_startup" in identity and "GateGrpc" not in case.get("classname", ""):
-            return "GateServer"
         if "gate" in identity:
             return "GateServer"
-        if any(part in identity for part in ("status-routing", "status_grpc_transport", "statusrouting")):
-            return "StatusServer"
         if any(part in identity for part in ("/chat-session-state/", "/messaging/", "/logic-dispatcher/",
                                               "/message-receipt/", "chat_grpc", "chatgrpcclient", "peer_server_routing",
                                               "chat_tcp_transport", "history_response", "server_redis_pool_tests")):

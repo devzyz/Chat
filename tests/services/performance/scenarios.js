@@ -228,7 +228,7 @@ function resourceFixture(index) {
 async function transfer(env, pair, index) {
     const fixture = resourceFixture(index); const sha256 = createHash('sha256').update(fixture.bytes).digest('hex');
     const signal = env.signal ? AbortSignal.any([env.signal, AbortSignal.timeout(60000)]) : AbortSignal.timeout(60000);
-    // 发送具备真实 Status 鉴权的资源 HTTP 请求。
+    // 携带当前登录凭据发送资源 HTTP 请求。
     const request = async (client, route, method, body, extra = {}) => {
         const response = await fetch(`${env.resource}${route}`, { method, body, redirect: 'error', signal,
             headers: { 'X-User-Id': String(client.uid), Authorization: `Bearer ${client.token}`, ...extra } });

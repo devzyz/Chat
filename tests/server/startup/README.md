@@ -11,7 +11,7 @@ Gate 的配置来源依次为 CLI `--config`、`CHAT_CONFIG`、cwd `config.ini`�
 
 ## 用例类型、隔离与清理
 
-Domain 为 Architecture，Level 为 Integration。`startup_config_tests.cpp` 包含 8 个 Chat case；`gate_status_startup_tests.cpp` 包含 11 个 Gate case。新增边界用例通过真实 EXE 证明显式 gRPC 超时配置在监听前按 100..60000 ms 拒绝越界值。真实 socket、gRPC channel 和子进程不会因为只用 loopback 而降级为 Unit/Component。
+Domain 为 Architecture，Level 为 Integration。`startup_config_tests.cpp` 包含 8 个 Chat case；`gate_startup_tests.cpp` 包含 11 个 Gate case。新增边界用例通过真实 EXE 证明显式 gRPC 超时配置在监听前按 100..60000 ms 拒绝越界值。真实 socket、gRPC channel 和子进程不会因为只用 loopback 而降级为 Unit/Component。
 
 每例创建唯一临时目录并分别捕获 stdout/stderr。Gate ready 使用真实 `GET /get_test` HTTP 200/body 探针。配置中的 Redis、MySQL、Varify 与其他 service endpoint 都是不可用 loopback 占位，fail-fast 和 ready/stop 路径不连接它们，也不读取仓库开发配置。
 
@@ -23,7 +23,7 @@ Domain 为 Architecture，Level 为 Integration。`startup_config_tests.cpp` 包
 
 ```powershell
 .\scripts\windows-local.ps1 -Task RunServerTests -Configuration Release
-.\build\windows-tests\Release\server_integration_tests.exe --gtest_filter=StartupConfigTests.*:ProductionExecutables/*
+.\build\windows-tests\Release\server_integration_tests.exe --gtest_filter=StartupConfigTests.*:GateStartupTests.*
 ```
 
 统一 runner 构建并 app-local deploy Gate、Chat 和 Integration test EXE，将本模块用例计入 `server_integration.xml`；整组精确数量以 `scripts/windows-local.ps1` 的报告注册为准。CI 复用服务构建 job 的同一依赖恢复，并由现有 report artifact 路径保留失败诊断。
