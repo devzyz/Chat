@@ -4,7 +4,6 @@
 #include <gtest/gtest.h>
 
 #include <boost/asio.hpp>
-#include <grpcpp/grpcpp.h>
 #include <Windows.h>
 
 #include <array>
@@ -95,21 +94,15 @@ void WriteText(const std::filesystem::path& path, const std::string& content) {
     }
 }
 
-/** 生成 Gate 或 Status 的隔离配置，以本次身份填充合成凭据。 */
-void WriteGateConfig(
-    FormalService service,
-    const std::filesystem::path& path,
-    std::uint16_t port,
-    const std::string& run_identity) {
+/** 生成 Gate 的隔离配置，以本次身份填充合成凭据。 */
+void WriteGateConfig(const std::filesystem::path& path, std::uint16_t port, const std::string& run_identity) {
     std::ostringstream config;
-    config << "[GateServer]\nPort = " << (service == FormalService::Gate ? port : 1)
-           << "\n[VarifyServer]\nHost = 127.0.0.1\nPort = 1"
+    config << "[GateServer]\nPort = " << port << "\n[VarifyServer]\nHost = 127.0.0.1\nPort = 1"
            << "\n[Redis]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity
            << "\n[Mysql]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity << "\nUser = local\nSchema = local"
            << "\n[ChatServers]\nName = LocalChat"
            << "\n[LocalChat]\nHost = 127.0.0.1\nPort = 1\nName = LocalChat"
-           << "\n[Log]\nName = " << ServiceName(service)
-           << "Composition\nLogDir = logs\nMaxSizeMB = 1\nMaxTotalFiles = 2"
+           << "\n[Log]\nName = GateServerComposition\nLogDir = logs\nMaxSizeMB = 1\nMaxTotalFiles = 2"
            << "\nLevel = info\nFlushLevel = warn\n";
     WriteText(path, config.str());
 }
@@ -233,20 +226,20 @@ void ExpectSelectedInvalidConfig(FormalService service) {
     EXPECT_TRUE(context->Teardown().complete);
 }
 
-/** 验证正式 Gate 或 Status 就绪、温和关闭及端口释放均有界完成。 */
-void ExpectReadyAndGracefulStop(FormalService service) {
+/** 验证正式 Gate 就绪、正常关闭及端口释放均有界完成。 */
+void ExpectGateReadyAndGracefulStop() {
     auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 20s);
     const auto working = context->CreateOwnedDirectory("formal-ready");
     const auto reservation = context->ReserveLoopbackPort("formal-listener");
     ASSERT_TRUE(context->ReleaseLoopbackPort("formal-listener"));
     const auto config = working / "ready.ini";
-    WriteGateConfig(service, config, reservation.port, context->SyntheticIdentity("credential"));
+    WriteGateConfig(config, reservation.port, context->SyntheticIdentity("credential"));
     ScopedEnvironmentValue environment(L"CHAT_CONFIG", std::nullopt);
-    auto process = StartFormal(*context, service, config, working);
+    auto process = StartFormal(*context, FormalService::Gate, config, working);
 
     const auto ready = process->WaitReady(
-        // 按正式服务类型执行对应的协议就绪探针。
-        [service, port = reservation.port] {
+        // 通过 Gate HTTP 入口确认服务就绪。
+        [port = reservation.port] {
             return ProbeGate(port);
         },
         std::chrono::steady_clock::now() + 10s);
@@ -261,7 +254,7 @@ void ExpectReadyAndGracefulStop(FormalService service) {
     ASSERT_TRUE(evidence.exit_code.has_value());
     EXPECT_EQ(*evidence.exit_code, 0U) << evidence.stderr_text;
     process.reset();
-    ExpectPortReleased(reservation.port, service == FormalService::Gate);
+    ExpectPortReleased(reservation.port, true);
     EXPECT_TRUE(context->Teardown().complete);
 }
 
@@ -313,7 +306,7 @@ TEST(T09_COMP_Formal, GateExplicitConfigWinsAndInvalidSelectionFailsClosed) {
 // T09-COMP-02
 /** 验证正式 Gate 协议就绪、温和信号停止及端口释放。 */
 TEST(T09_COMP_Formal, GateProtocolReadyGracefulSignalAndPortReleaseAreBounded) {
-    ExpectReadyAndGracefulStop(FormalService::Gate);
+    ExpectGateReadyAndGracefulStop();
 }
 
 // T09-COMP-05

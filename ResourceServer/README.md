@@ -7,7 +7,7 @@ Chat TCP 和跨服 gRPC 通道发送资源描述。图片在消息列表展示�
 
 ## 存储与复用
 
-- `common/asio/IOServicePool.h` 是三个现有 Server 和资源服务共用的线程池实现；服务原接口保留。
+- `common/asio/IOServicePool.h` 是Gate、Chat 和 Resource 三个 C++ 服务共用的线程池实现；服务原接口保留。
 - 资源服务沿用 Boost.PropertyTree INI、spdlog 轮转日志、Redis 当前凭据鉴权。
 - `common/resource/ResourceCatalog.h` 使用 `common/mysql/ConnectionPool.h` 的有界 MySQL 池和 RAII 租约，
   借出前检查连接，归还时清理事务；凭据查询使用 common/redis/RedisPool.h 的有界连接池。
@@ -35,8 +35,7 @@ Chat TCP 和跨服 gRPC 通道发送资源描述。图片在消息列表展示�
 上传连接中断后查询偏移再继续，不能假定客户端已发送的数据全部落盘。服务重启后也能续传。
 409 表示偏移冲突或未完成；401/403 表示身份/权限；413 表示大小超限；415 表示类型/签名不符；
 422 表示摘要不符；507 表示文件写入失败。只做媒体签名检查，不声称验证完整视频编码格式。
-摘要不匹配需创建新上传任务；第一版不提供远程删除接口。未完成任务保留用于续传，管理员需要
-新建上传前自动回收连续七天未活动的未完成上传；查询续传或写入刷新活动时间。
+摘要不匹配需创建新上传任务；不提供远程删除接口。服务在新建上传前自动回收连续七天未活动的未完成上传；查询续传或写入刷新活动时间。
 已完成资源始终保留，引用感知清理尚未实现；客户端对已过期的续传 ID 自动重新上传。
 
 ## 聊天合同
@@ -67,7 +66,7 @@ Chat TCP 和跨服 gRPC 通道发送资源描述。图片在消息列表展示�
    退出账号对未保存内容提示确认；已保存的头像、附件及续传信息保存在安装目录的 `data/` 内，按环境和账号隔离。
 
 统一构建和常规回归入口为 `scripts/windows-local.ps1 -Task BuildServers` / `RunServerTests`。
-Windows CI 构建资源服务、执行八项文件存储合同，并在完整运行中提供独立 ResourceServer.zip。
+Windows CI 构建资源服务、执行[资源存储回归](../tests/server/resource/README.md)，并在完整运行中提供独立 ResourceServer.zip。
 发布包启动冒烟使用隔离临时 MySQL，不代表资源业务全链路验收。
 
 补充本地集成入口（不会恢复依赖或触发 CI）：

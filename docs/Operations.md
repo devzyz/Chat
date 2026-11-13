@@ -39,7 +39,7 @@ HTTP 200 与响应正文只证明 Gate 监听可用，不代表 Redis、MySQL �
 `deadlineMs`。省略字段时保持 `smtp.qq.com:465`、`secure=true`、`auth=login`，
 总发送期限默认 10000 毫秒。显式字段严格校验；端口必须是 JSON 整数 1..65535，
 `secure` 必须是布尔，`auth` 只能为 `login`/`none`，期限必须为 100..60000 毫秒整数。
-配置在默认服务组合创建 Redis/SMTP 对象及监听之前校验。
+验证码服务仅依赖 Redis 与 SMTP，不需要 MySQL 配置或密码。旧配置的 MySQL 地址可保留，JSON 中的明文密码仍被拒绝。配置在创建适配器和监听之前校验。
 
 `CHAT_VARIFY_EMAIL_USER` 仍指定发件地址；`login` 模式的 SMTP 身份及密码来自
 `CHAT_VARIFY_EMAIL_USER` / `CHAT_VARIFY_EMAIL_PASS`，禁止在 JSON 写入凭据。

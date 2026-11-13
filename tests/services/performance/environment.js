@@ -78,12 +78,12 @@ class Environment {
         await this.sql.execute(`USE \`${this.config.database}\``);
         const varify = path.join(this.root, 'varify.json');
         fs.writeFileSync(varify, JSON.stringify({ email: { host: '127.0.0.1', port: this.config.ports.smtp,
-            secure: false, auth: 'none', deadlineMs: 10000 }, mysql: { host: '127.0.0.1', port: this.config.ports.mysql },
+            secure: false, auth: 'none', deadlineMs: 10000 },
         redis: { host: '127.0.0.1', port: this.config.ports.redis } }), { mode: 0o600 });
         await leases.varify.release(); leases.varify.released = true;
         this.start('VarifyServer', process.execPath, [path.resolve(__dirname, '../../../VarifyServer/server.js'), '--config', varify],
             { CHAT_VARIFY_BIND_ADDRESS: `127.0.0.1:${ports.varify}`, CHAT_VARIFY_EMAIL_USER: 'fixture@example.invalid',
-                CHAT_VARIFY_MYSQL_PASSWORD: this.coordinator.password, CHAT_VARIFY_REDIS_PASSWORD: this.coordinator.password });
+                CHAT_VARIFY_REDIS_PASSWORD: this.coordinator.password });
         for (const role of ['ChatA', 'ChatB', 'GateServer']) {
             const keys = { ChatA: ['chatA', 'rpcA'], ChatB: ['chatB', 'rpcB'], GateServer: ['gate'] }[role];
             for (const key of keys) { await leases[key].release(); leases[key].released = true; }

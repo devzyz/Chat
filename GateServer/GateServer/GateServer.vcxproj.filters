@@ -42,9 +42,6 @@
     <ClCompile Include="ConfigMgr.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="AsioIOServicePool.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="RedisMgr.cpp">
       <Filter>源文件</Filter>
     </ClCompile>

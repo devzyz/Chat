@@ -28,16 +28,7 @@ private:
     void loadApplyList();
     QMap<int, ApplyFriendItem*> _apply_items_map;
 
-private:
     Ui::ApplyFriendPage* ui;
-
-signals:
-    /** @brief 通知上层切换到用户搜索入口。 */
-    void searchRequested(bool);
-
-public slots:
-    /** @brief 接收好友审批成功结果并刷新申请状态。 */
-    void authFinish(std::shared_ptr<AuthInfo>);
 };
 
 #endif // APPLYFRIENDPAGE_H

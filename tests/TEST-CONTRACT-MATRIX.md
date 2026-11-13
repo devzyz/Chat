@@ -278,14 +278,14 @@ contracts without removing the existing T09-CTCP-01..16 transport suite.
 
 Interface：production `GateRequest::Handle(Endpoint, Json::Value)`；四条 POST route 经既有 `GateResponse` callback 调用同一 Module。
 Domain/Level：Business / Component。
-报告：`server_component.xml`。verification、code store、user store、status 四个 port 使用 scoped in-memory Adapter；不连接真实 Redis/MySQL/gRPC/SMTP。
+报告：`server_component.xml`。verification、code store、user store、session assignment 四个 port 使用 scoped in-memory Adapter；不连接真实 Redis/MySQL/gRPC/SMTP。
 
 | Test ID | Runner testcase(s) | 合同 |
 | --- | --- | --- |
 | T08-GATE-01..03 | `VerificationWithoutEmailFailsBeforeAdapters` 等 3 case | 缺 email、verification success/failure；早退不调用后续 Adapter |
 | T08-GATE-04..08 | `RegistrationPasswordMismatchStopsBeforeCodeRead` 等 5 case | confirmation、code read/compare、user create 严格有序且失败即停止 |
 | T08-GATE-09..13 | `ResetExpiredCodeStopsBeforeIdentityCheck` 等 5 case | code read/compare、identity match、password update 严格有序且 fail closed |
-| T08-GATE-14..16 | `LoginCredentialFailureStopsBeforeStatusAssignment` 等 3 case | credentials 在 status assignment 前；失败清空 assignment，成功返回完整 assignment |
+| T08-GATE-14..16 | `LoginCredentialFailureStopsBeforeChatAssignment` 等 3 case | 校验凭据后才选服；失败清空 assignment，成功返回完整 assignment |
 
 ### 3.10 Peer routing（2）
 
@@ -298,9 +298,9 @@ Domain/Level：Foundation / Unit。
 | T05-ROUTE-01 | `ConfiguredSectionsResolveToRuntimeNamesAndAddresses` | 多个 section 映射到运行时名称和地址 |
 | T05-ROUTE-02 | `MissingRuntimeNameDoesNotCreateARoute` | 缺少运行时名称时不产生不可用 route |
 
-### 3.11 gRPC client runtime、真实连接池与远端 Adapter（26）
+### 3.11 gRPC client runtime、真实连接池与远端 Adapter（20）
 
-Interface：生产 `GrpcClientRuntime`、Gate/Chat 的四类实际连接池，以及 Gate/Chat 生产 gRPC client public Interface。
+Interface：生产 `GrpcClientRuntime`、Gate 的 Varify 连接池和 Chat 的 peer 连接池，以及 Gate/Chat 生产 gRPC client public Interface。
 Domain：Foundation/Architecture。Unit 报告为 `server_unit.xml`；Gate Integration 为 `server_integration.xml`；Chat Integration 为 `server_chat_grpc_integration.xml`。
 
 | Test ID | Level / runner testcase(s) | 合同 |
@@ -308,10 +308,10 @@ Domain：Foundation/Architecture。Unit 报告为 `server_unit.xml`；Gate Integ
 | T08-RUNTIME-01..04 | Unit / `BoundedGrpcPoolTests.*` | 有限等待、归还复用、close 唤醒、重复 close/关闭后归还 |
 | T08-RUNTIME-05 | Unit / `ClassifiesStableGrpcFailureCategories` | PoolExhausted、Closed、DeadlineExceeded、Unavailable、Cancelled 稳定分类 |
 | T08-RUNTIME-06 | Unit / `DurationUsesDefaultOrValidatesConfiguredRange` | 缺省值与 100..60000 ms 配置边界 |
-| T08-GATE-POOL-01..06 | Unit / `GateVarifyPoolContractTests.*`、`GateStatusPoolContractTests.*` | 两类实际 Gate pool 的借还、耗尽、关闭生命周期 |
-| T08-CHAT-POOL-01..06 | Unit / `ChatStatusPoolContractTests.*`、`ChatPeerPoolContractTests.*` | 两类实际 Chat pool 的借还、耗尽、关闭生命周期 |
+| Gate Varify pool | Unit / `GateVarifyPoolContractTests.*` | Gate Varify pool 的借还、耗尽、关闭生命周期 |
+| Chat peer pool | Unit / `ChatPeerPoolContractTests.*` | Chat peer pool 的借还、耗尽、关闭生命周期 |
 | T08-GATE-RPC-01..04 | Integration / `GateGrpcClientIntegrationTests.*` | 动态 loopback success、deadline、unavailable、peer shutdown 均走生产客户端；失败公开映射 `RPCFailed` |
-| T08-CHAT-RPC-01..04 | Integration / `ChatGrpcClientIntegrationTests.*` | 动态 loopback Status/Chat success、deadline、unavailable、peer shutdown；有限清理且无公网 |
+| T08-CHAT-RPC-01..04 | Integration / `ChatGrpcClientIntegrationTests.*` | 动态 loopback Chat peer success、deadline、unavailable、peer shutdown；有限清理且无公网 |
 
 ### 3.12 Redis pool without service（3）
 
@@ -329,7 +329,7 @@ Domain/Level：Foundation / Component。
 
 Interface：生产 `gate::HandleJsonRequest` 对四个公开 POST 端点的 JSON 解析、精确 allowlist、稳定错误 envelope 和异常收口。
 Domain/Level：Architecture / Component。
-报告：`server_component.xml`。依赖仅为真实生产 shaping Module 和 in-process callback Adapter，不连接 Redis、MySQL、Status 或 Varify。
+报告：`server_component.xml`。依赖仅为真实生产 shaping Module 和 in-process callback Adapter，不连接 Redis、MySQL 或 Varify。
 
 | Test ID | Runner testcase(s) | 合同 |
 | --- | --- | --- |
@@ -370,23 +370,23 @@ Domain/Level：Architecture / Integration。
 
 ### 3.16 启动进程（当前 Gate 11 项，原 Status 10 项已退役）
 
-Interface：真实 Gate/Status EXE 的 CLI/config 优先级、fail-fast、本地协议 ready、bind/start 失败和 Windows 等价 graceful stop。
+Interface：真实 Gate EXE 的 CLI/config 优先级、fail-fast、本地协议 ready、bind/start 失败和 Windows 等价 graceful stop。
 Domain/Level：Architecture / Integration。
-报告：`server_integration.xml`。Gate 11 case、Status 10 case；外部 endpoint 仅为不可用 loopback 占位。
+报告：`server_integration.xml`。Gate 11 case；外部 endpoint 仅为不可用 loopback 占位。
 
 | Test ID | Runner testcase / 服务 | 合同 |
 | --- | --- | --- |
-| S02-CLI-01 / S03-CLI-01 | `MissingConfigValueReturnsNonZeroWithUsage` / Gate、Status | `--config` 缺值显示对应 EXE usage 并非零退出 |
-| S02-CLI-02 / S03-CLI-02 | `UnknownArgumentReturnsNonZeroWithUsage` / Gate、Status | 未知参数显示 usage 并非零退出 |
-| S02-CFG-01 / S03-CFG-01 | `MissingConfigFileReturnsNonZero` / Gate、Status | 显式缺失配置文件 fail-fast，并保留非敏感路径诊断 |
-| S02-CFG-02 / S03-CFG-02 | `InvalidServicePortReturnsNonZero` / Gate、Status | 非规范/越界 listener 端口在 bind 前拒绝 |
-| S02-CFG-03 / S03-CFG-03 | `MissingCriticalEndpointReturnsNonZero` / Gate、Status | 缺少关键 Status endpoint 在外部访问前拒绝 |
-| S02-CFG-04 / S03-CFG-04 | `ExplicitConfigPathOverridesEnvironment` / Gate、Status | CLI 配置高于 `CHAT_CONFIG` |
-| S02-CFG-05 / S03-CFG-05 | `EnvironmentConfigPathOverridesWorkingDirectoryDefault` / Gate、Status | `CHAT_CONFIG` 高于 cwd 默认值 |
-| S02-CFG-06 / S03-CFG-06 | `WorkingDirectoryConfigIsTheDefault` / Gate、Status | 无覆盖时选择 cwd `config.ini` |
+| S02-CLI-01 | `MissingConfigValueReturnsNonZeroWithUsage` / Gate | `--config` 缺值显示对应 EXE usage 并非零退出 |
+| S02-CLI-02 | `UnknownArgumentReturnsNonZeroWithUsage` / Gate | 未知参数显示 usage 并非零退出 |
+| S02-CFG-01 | `MissingConfigFileReturnsNonZero` / Gate | 显式缺失配置文件 fail-fast，并保留非敏感路径诊断 |
+| S02-CFG-02 | `InvalidServicePortReturnsNonZero` / Gate | 非规范/越界 listener 端口在 bind 前拒绝 |
+| S02-CFG-03 | `MissingCriticalEndpointReturnsNonZero` / Gate | 缺少 Chat 实例地址 在外部访问前拒绝 |
+| S02-CFG-04 | `ExplicitConfigPathOverridesEnvironment` / Gate | CLI 配置高于 `CHAT_CONFIG` |
+| S02-CFG-05 | `EnvironmentConfigPathOverridesWorkingDirectoryDefault` / Gate | `CHAT_CONFIG` 高于 cwd 默认值 |
+| S02-CFG-06 | `WorkingDirectoryConfigIsTheDefault` / Gate | 无覆盖时选择 cwd `config.ini` |
 | S02-GRPC-CFG-01 | `OutOfRangeGrpcTimeoutReturnsNonZeroBeforeListening` / Gate | 小于 100 ms 的 pool acquire timeout 在监听前拒绝 |
-| S02-BIND-01 / S03-BIND-01 | `OccupiedPortFailsWithoutProtocolReadyAndReleasesOwnership` / Gate、Status | HTTP bind 或 gRPC `BuildAndStart` 失败不 ready、非零退出、端口可回收 |
-| S02-LIFE-01 / S03-LIFE-01 | `ProtocolReadyThenCtrlBreakStopsWithinDeadlineAndReleasesPort` / Gate、Status | 真实 HTTP/gRPC ready 后，scoped `CTRL_BREAK_EVENT` 5 秒内正常退出并释放端口 |
+| S02-BIND-01 | `OccupiedPortFailsWithoutProtocolReadyAndReleasesOwnership` / Gate | HTTP bind 失败不 ready、非零退出、端口可回收 |
+| S02-LIFE-01 | `ProtocolReadyThenCtrlBreakStopsWithinDeadlineAndReleasesPort` / Gate | 真实 HTTP ready 后，scoped `CTRL_BREAK_EVENT` 5 秒内正常退出并释放端口 |
 
 ### 3.17 Integration host composition（6）
 
@@ -454,7 +454,7 @@ Domain/Level：Architecture/Business / Integration。
 
 Interface：production `chat_transport::CServer` / `CSession` / `ChatFrameCodec` 经唯一 shared `ChatTransport.vcxproj` 调用 Phase 3A `LogicDispatcher`。
 Domain/Level：Architecture / Integration。
-报告：`server_integration.xml`；原始 TCP bytes 仅跨 dynamic numeric loopback，in-memory Adapter 不连接 Redis/MySQL/Status/peer RPC。
+报告：`server_integration.xml`；原始 TCP bytes 仅跨 dynamic numeric loopback，in-memory Adapter 不连接 Redis/MySQL/peer RPC。
 
 | Test ID | Runner testcase | 合同 |
 | --- | --- | --- |
@@ -477,17 +477,17 @@ Domain/Level：Architecture / Integration。
 
 ### 3.22 Formal production composition（当前执行 01、02、05、06；03、04 随 Status 退役）
 
-Interface：GateServer、StatusServer、ChatServer formal EXE 经 production CLI/config、shared transport target 与 Phase 3A business target 的真实 composition root。
+Interface：GateServer、ChatServer formal EXE 经 production CLI/config、shared transport target 与 Phase 3A business target 的真实 composition root。
 Domain/Level：Architecture / Integration。
 报告：`server_integration.xml`；不增加 fake dependency mode、test macro、test-only Interface、固定端口、真实外部服务或 synthetic credential。
 
 | Test ID | Runner testcase | 合同 |
 | --- | --- | --- |
-| T09-COMP-01 | `T09_COMP_Formal.GateExplicitConfigWinsAndInvalidSelectedConfigFails` | Gate 显式 config 优先，所选 invalid config fail closed |
-| T09-COMP-02 | `T09_COMP_Formal.GateProtocolReadyThenGracefulStopIsBoundedAndReleasesPort` | Gate production HTTP protocol-ready、graceful signal、有界退出与 port release |
+| T09-COMP-01 | `T09_COMP_Formal.GateExplicitConfigWinsAndInvalidSelectionFailsClosed` | Gate 显式 config 优先，所选 invalid config fail closed |
+| T09-COMP-02 | `T09_COMP_Formal.GateProtocolReadyGracefulSignalAndPortReleaseAreBounded` | Gate production HTTP protocol-ready、graceful signal、有界退出与 port release |
 | T09-COMP-03 | `T09_COMP_Formal.StatusExplicitConfigWinsAndInvalidSelectedConfigFails` | Status 显式 config 优先，所选 invalid config fail closed |
 | T09-COMP-04 | `T09_COMP_Formal.StatusProtocolReadyThenGracefulStopIsBoundedAndReleasesPort` | Status production gRPC protocol-ready、graceful signal、有界退出与 port release |
-| T09-COMP-05 | `T09_COMP_Formal.ChatExplicitConfigWinsAndInvalidSelectedConfigFails` | Chat 显式 config 优先，所选 invalid config fail closed |
+| T09-COMP-05 | `T09_COMP_Formal.ChatExplicitConfigWinsAndInvalidSelectionFailsClosed` | Chat 显式 config 优先，所选 invalid config fail closed |
 | T09-COMP-06 | `T09_COMP_Formal.ChatRealDependencyBoundaryIsExplicitBoundedAndResidueFree` | 不伪造 Chat ready；明确 G-015/3C real-dependency boundary，并证明 owned stop/pipe/port/temp cleanup 与稳定 nonzero |
 
 冻结的 `T09-COMP-07..08` 保留为 structure-only planned identifiers；它们不对应 fabricated JUnit case，也不计入 313 baseline。
@@ -603,7 +603,7 @@ Qt runner testcase 合计 46：Unit 18、Component 6、Integration 22。
 
 ## 5. VarifyServer testcase 目录
 
-### 5.1 Configuration process（9）
+### 5.1 Configuration process
 
 Interface：配置来源、凭据环境变量和明文配置拒绝。
 Domain/Level：Foundation / Integration。
@@ -617,11 +617,12 @@ Domain/Level：Foundation / Integration。
 | V01-CFG-04 | `malformed configuration exits with a failure status` | 畸形 JSON 非零退出 |
 | V01-CFG-05 | missing `CHAT_VARIFY_EMAIL_USER` | 缺少变量失败且不输出值 |
 | V01-CFG-06 | missing `CHAT_VARIFY_EMAIL_PASS` | 缺少变量失败且不输出值 |
-| V01-CFG-07 | missing `CHAT_VARIFY_MYSQL_PASSWORD` | 缺少变量失败且不输出值 |
+| V01-CFG-07 | `legacy MySQL addresses are ignored without a database credential` | 无 MySQL 凭据可启动，旧地址不进入运行配置 |
 | V01-CFG-08 | missing `CHAT_VARIFY_REDIS_PASSWORD` | 缺少变量失败且不输出值 |
 | V01-CFG-09 | `plaintext credential fields in config.json are rejected` | 旧明文凭据字段被拒绝 |
+| V01-CFG-10 | `SMTP no-auth configuration needs no SMTP password and retains sender identity` | 无认证 SMTP 模式保留发件人，不要求 SMTP 密码 |
 
-### 5.2 Handler（9）
+### 5.2 Handler
 
 Interface：验证码缓存、生成、TTL、邮件错误、callback 和日志脱敏。
 Domain/Level：Business / Unit。
@@ -632,12 +633,14 @@ Domain/Level：Business / Unit。
 | V06-MOD-01 | `requiring the handler module does not load Redis or SMTP adapters` | 模块加载无外部连接副作用 |
 | V06-HDL-01 | `cached code is reused without UUID generation or Redis write` | 缓存命中复用 code |
 | V06-HDL-07 | `mail uses the sender supplied by runtime configuration` | 发件人来自运行时配置 |
-| V06-HDL-02 | `missing code generates four characters and stores a 600 second TTL` | 缺失时生成四字符并写 600 秒 TTL |
+| V06-HDL-02 | `missing code generates eight characters and stores a 600 second TTL` | 缺失时生成八字符并写 600 秒 TTL |
 | V06-HDL-03 | `failed Redis write returns RedisErr without sending mail` | Redis 写失败不发邮件 |
 | V06-HDL-04 | `false mail result returns Exception` | mailer false 映射 Exception |
 | V06-HDL-05 | `Redis read rejection returns Exception without sending mail` | Redis rejection 不发邮件并映射 Exception |
 | V06-HDL-06 | `mail rejection returns Exception` | SMTP rejection 映射 Exception |
 | V06-LOG-01 | `default handler events never disclose the recipient or verification code` | 默认日志不泄漏收件人或验证码 |
+
+同一 [handler 测试组](../VarifyServer/test/handler/handler.test.js) 还覆盖注册与重置的独立命名空间、并发请求共享与验证码消费后重发，以及结构化 SMTP 结果到唯一 RPC 回调的映射。
 
 ### 5.3 Protocol（6）
 
@@ -923,9 +926,9 @@ Q05-STORE-15..17 在 [message-storage](../chat/tests/message-storage/README.md) 
 
 | 入口 | 增量合同 | 边界 |
 | --- | --- | --- |
-| message-sync | DynamicGroupLifecycleAndResources、ConcurrentGroupVersionsSerialize、MembershipChangesWaitForCommittedMessages、TransferAndLeaveCannotRemoveTheOwner、四账号 TCP 流程 | 真 MySQL/ChatServer；Redis/Status 替身 |
+| message-sync | DynamicGroupLifecycleAndResources、ConcurrentGroupVersionsSerialize、MembershipChangesWaitForCommittedMessages、TransferAndLeaveCannotRemoveTheOwner、四账号 TCP 流程 | 真 MySQL/ChatServer；Redis 协议替身 |
 | message_storage.persistence | groupEpochAndLocalSearch、目录筛选/备注合并 | 真 SQLite，账号级存储 |
-| resource chat_flow_integration | PNG、十秒 AVI、普通文件分别提交/同步/UUID重试/摘要校验；入群边界、移除后拒绝、独立私聊引用在解散后保留权限 | 真 HTTP/TCP/MySQL；Redis/Status 替身；视频解码 250 帧 |
+| resource chat_flow_integration | PNG、十秒 AVI、普通文件分别提交/同步/UUID重试/摘要校验；入群边界、移除后拒绝、独立私聊引用在解散后保留权限 | 真 HTTP/TCP/MySQL；Redis 协议替身；视频解码 250 帧 |
 | resource_transfer_tests | 群资料拒绝提示、权限刷新、完整分页门禁、超时原 UUID 重试及真实 TCP 回包落盘顺序；历史第二页定位、70 联系人/70 群筛选打开、备注结果和三类群资源卡片 | 真实控件、临时 SQLite；备注结果/资源下载完成信号由测试驱动，非完整生产依赖或人工桌面 |
 | T10-MIG-10 / S05-RESOURCE-17 | 有数据的旧库升级到 manifest 目标版本、重复迁移及缺失群主用户/成员或角色矛盾拒绝 | 独立临时 MySQL |
 
@@ -981,7 +984,7 @@ Qt 控件及资源存储报告的完整用例集合，保留自动控件与真�
 
 - Gate HTTP 既有就绪用例增加 accept 前空闲超过请求期限的回归，仍须新请求返回 200。
 - Gate 请求组件验证非法字段和一次性消费拒绝；口令 Unit 检查随机盐、错误/损坏/旧格式。
-- Status 无有效候选时失败关闭；Resource Store 既有边界用例增加账号与全局声明容量预算。
+- Gate 无有效候选时拒绝选服；Resource Store 既有边界用例增加账号与全局声明容量预算。
 - GitHub performance 准备阶段使用生产依赖验证 60 秒 Gate 空闲、长中文资料重登、20 条 ACK、
   幂等重试、Redis Token/在线/实例 TTL 与验证码消费；不计入吞吐样本。
 - MySQL 消息提交真实锁等待必须映射为可重试存储错误，不能变成成员权限拒绝。

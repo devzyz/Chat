@@ -91,7 +91,7 @@ async function runFourProcessCases(coordinator, record) {
     const recipients = [];
     const database = `${coordinator.config.database}_four`;
     const environment = { ...process.env, MYSQL_PWD: coordinator.password,
-        CHAT_VARIFY_EMAIL_USER: 'four@example.invalid', CHAT_VARIFY_MYSQL_PASSWORD: coordinator.password,
+        CHAT_VARIFY_EMAIL_USER: 'four@example.invalid',
         CHAT_VARIFY_REDIS_PASSWORD: coordinator.password };
     delete environment.LD_PRELOAD;
     delete environment.CHAT_CONFIG;
@@ -142,7 +142,7 @@ async function runFourProcessCases(coordinator, record) {
         if (leases.VarifyServer) { await leases.VarifyServer.release(); delete leases.VarifyServer; }
         const config = path.join(root, 'varify.json');
         fs.writeFileSync(config, JSON.stringify({ email: { host: '127.0.0.1', port: coordinator.config.ports.smtp,
-            secure: false, auth: 'none', deadlineMs: 2000 }, mysql: { host: '127.0.0.1', port: coordinator.config.ports.mysql },
+            secure: false, auth: 'none', deadlineMs: 2000 },
             redis: { host: '127.0.0.1', port: coordinator.config.ports.redis } }));
         return start('VarifyServer', process.execPath, [path.resolve(__dirname, '../../VarifyServer/server.js'), '--config', config],
             { ...environment, CHAT_VARIFY_BIND_ADDRESS: `127.0.0.1:${ports.VarifyServer}` });

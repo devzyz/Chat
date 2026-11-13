@@ -344,7 +344,6 @@ run_varify_startup_probe() {
     export CHAT_VARIFY_BIND_ADDRESS='127.0.0.1:50051'
     export CHAT_VARIFY_EMAIL_USER='loader-probe@example.invalid'
     export CHAT_VARIFY_EMAIL_PASS='synthetic-loader-probe'
-    export CHAT_VARIFY_MYSQL_PASSWORD='synthetic-loader-probe'
     export CHAT_VARIFY_REDIS_PASSWORD='synthetic-loader-probe'
     timeout --signal=TERM --kill-after=5s 10s node server.js
   ) >"$log_path" 2>&1

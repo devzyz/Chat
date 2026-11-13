@@ -30,8 +30,6 @@ public:
     /** @brief 按消息类型处理完整包体，并通知相应业务请求结果。 */
     void handleMessage(ReqId id, int len, QByteArray data);
 
-    /** @brief 按主动退出语义关闭连接并暂停待发送消息。 */
-    void closeConnection();
     /** @brief 允许新会话提交发送请求。 */
     void beginSession();
     /** @brief 停止消息服务并重置连接；expectedClose 为 true 时暂停待发送消息。 */

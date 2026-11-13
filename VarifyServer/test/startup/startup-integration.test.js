@@ -12,7 +12,6 @@ const serverRoot = path.resolve(__dirname, '..', '..');
 const credentialEnvironment = Object.freeze({
     CHAT_VARIFY_EMAIL_USER: 'test@example.invalid',
     CHAT_VARIFY_EMAIL_PASS: 'test-email-password',
-    CHAT_VARIFY_MYSQL_PASSWORD: 'test-mysql-password',
     CHAT_VARIFY_REDIS_PASSWORD: 'test-redis-password'
 });
 
@@ -25,7 +24,6 @@ test('direct process exits with a failure status when its port is occupied', asy
     const configPath = path.join(root, 'config.json');
     fs.writeFileSync(configPath, JSON.stringify({
         email: {},
-        mysql: { host: '127.0.0.1', port: 3306 },
         redis: { host: '127.0.0.1', port: 1 }
     }));
 

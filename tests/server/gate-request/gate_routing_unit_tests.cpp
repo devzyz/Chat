@@ -69,7 +69,7 @@ TEST(GateRoutingUnitTests, EmptyServerListFailsClosed) {
 }
 
 /** 以指定候选及计数构建真实路由并为固定用户选服。 */
-gate::internal::StatusAssignment AssignWithCounts(
+gate::internal::ChatAssignment AssignWithCounts(
     std::vector<RoutingServer> servers,
     std::unordered_map<std::string, std::optional<std::string>> counts) {
     auto routing = gate_routing::CreateGateRouting(

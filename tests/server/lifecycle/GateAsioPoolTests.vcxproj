@@ -35,7 +35,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="asio_pool_contract_tests.cpp" />
-    <ClCompile Include="..\..\..\GateServer\GateServer\AsioIOServicePool.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -6,10 +6,6 @@
         "auth": "login",
         "deadlineMs": 10000
     },
-    "mysql": {
-        "host": "192.168.18.128",
-        "port": 3308
-    },
     "redis": {
         "host": "192.168.18.128",
         "port": 6380

@@ -12,7 +12,6 @@ const configModule = path.join(serverRoot, 'config.js');
 const credentialEnvironment = Object.freeze({
     CHAT_VARIFY_EMAIL_USER: 'sender@example.test',
     CHAT_VARIFY_EMAIL_PASS: 'fixture-email-secret',
-    CHAT_VARIFY_MYSQL_PASSWORD: 'fixture-mysql-secret',
     CHAT_VARIFY_REDIS_PASSWORD: 'fixture-redis-secret'
 });
 
@@ -22,7 +21,6 @@ function writeConfig(directory, marker) {
     const file = path.join(directory, 'config.json');
     fs.writeFileSync(file, JSON.stringify({
         email: {},
-        mysql: { host: `${marker}-mysql`, port: 3306 },
         redis: { host: `${marker}-redis`, port: 6379 }
     }));
     return file;
@@ -38,6 +36,7 @@ function loadConfigInChild({ cwd, envConfig, argumentConfig, credentials = crede
         args.push('--', '--config', argumentConfig);
     }
     const env = { ...process.env };
+    delete env.CHAT_VARIFY_MYSQL_PASSWORD;
     for (const name of Object.keys(credentialEnvironment)) {
         delete env[name];
     }
@@ -64,9 +63,7 @@ test('explicit --config takes precedence over CHAT_CONFIG', (t) => {
     const config = JSON.parse(result.stdout);
     assert.equal(config.email_user, credentialEnvironment.CHAT_VARIFY_EMAIL_USER);
     assert.equal(config.email_pass, credentialEnvironment.CHAT_VARIFY_EMAIL_PASS);
-    assert.equal(config.mysql_passwd, credentialEnvironment.CHAT_VARIFY_MYSQL_PASSWORD);
     assert.equal(config.redis_passwd, credentialEnvironment.CHAT_VARIFY_REDIS_PASSWORD);
-    assert.equal(config.mysql_host, 'argument-mysql');
     assert.equal(config.redis_host, 'argument-redis');
 });
 
@@ -81,7 +78,7 @@ test('CHAT_CONFIG takes precedence over the working-directory default', (t) => {
     const result = loadConfigInChild({ cwd: root, envConfig: environmentConfig });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).mysql_host, 'environment-mysql');
+    assert.equal(JSON.parse(result.stdout).redis_host, 'environment-redis');
 });
 
 // 验证默认配置路径及验证码键前缀。
@@ -95,7 +92,7 @@ test('config.json is loaded from the working directory by default', (t) => {
 
     assert.equal(result.status, 0, result.stderr);
     const config = JSON.parse(result.stdout);
-    assert.equal(config.mysql_host, 'default-mysql');
+    assert.equal(config.redis_host, 'default-redis');
     assert.equal(config.code_prefix, 'code_');
 });
 
@@ -110,6 +107,25 @@ test('malformed configuration exits with a failure status', (t) => {
     const result = loadConfigInChild({ cwd: root, argumentConfig: malformed });
 
     assert.notEqual(result.status, 0);
+});
+
+// 旧部署可以保留非敏感的 MySQL 地址，但验证码服务不需要数据库凭据。
+test('legacy MySQL addresses are ignored without a database credential', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
+    // 仅回收本次用例创建的配置。
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const file = writeConfig(root, 'legacy');
+    const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+    settings.mysql = { host: 'unused.invalid', port: 3306 };
+    fs.writeFileSync(file, JSON.stringify(settings));
+
+    const result = loadConfigInChild({ cwd: root });
+    assert.equal(result.status, 0, result.stderr);
+    const loaded = JSON.parse(result.stdout);
+    assert.equal(loaded.redis_host, 'legacy-redis');
+    for (const field of ['mysql_host', 'mysql_port', 'mysql_passwd']) {
+        assert.equal(Object.hasOwn(loaded, field), false);
+    }
 });
 
 for (const missingName of Object.keys(credentialEnvironment)) {
@@ -137,19 +153,21 @@ test('plaintext credential fields in config.json are rejected', (t) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'varify-config-'));
     // 删除本用例创建的临时配置目录。
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-    const configPath = path.join(root, 'config.json');
+    const configPath = writeConfig(root, 'plaintext');
+    const baseline = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const legacySecret = 'legacy-fixture-secret';
-    fs.writeFileSync(configPath, JSON.stringify({
+    const forbidden = {
         email: { user: 'legacy@example.test', pass: legacySecret },
         mysql: { host: 'mysql', port: 3306, passwd: legacySecret },
         redis: { host: 'redis', port: 6379, passwd: legacySecret }
-    }));
-
-    const result = loadConfigInChild({ cwd: root });
-
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /environment variables/);
-    assert.equal(result.stderr.includes(legacySecret), false);
+    };
+    for (const [section, fields] of Object.entries(forbidden)) {
+        fs.writeFileSync(configPath, JSON.stringify({ ...baseline, [section]: fields }));
+        const result = loadConfigInChild({ cwd: root });
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /environment variables/);
+        assert.equal(result.stderr.includes(legacySecret), false);
+    }
 });
 
 // 验证显式无认证 SMTP 配置可不提供邮件密码。

@@ -446,19 +446,6 @@ MessageRecord ChatPage::toMessageRecord(const std::shared_ptr<ChatDataBase>& mes
     return record;
 }
 
-QPixmap ChatPage::cachedAvatar(const QString& avatarKey) {
-    if (avatarKey.isEmpty()) {
-        return {};
-    }
-    const auto found = _avatarCache.constFind(avatarKey);
-    if (found != _avatarCache.cend()) {
-        return found.value();
-    }
-    QPixmap avatar(avatarKey);
-    _avatarCache.insert(avatarKey, avatar);
-    return avatar;
-}
-
 void ChatPage::seedModelFromLegacyData(MessageListModel* model, const std::shared_ptr<ChatInfo>& chatInfo) {
     if (!model || _legacySeededChats.contains(model->chatId())) {
         return;

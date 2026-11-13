@@ -66,14 +66,14 @@ public:
 };
 
 /** 提供默认失败的选服端口替身。 */
-class InMemoryStatusPort final : public gate::internal::StatusPort {
+class InMemorySessionAssignmentPort final : public gate::internal::SessionAssignmentPort {
 public:
     /** @brief 为宿主路由测试返回合成撤销成功结果。 */
     bool Revoke(int, const std::string&) override {
         return true;
     }
     /** 返回默认分配结果，不发起外部 RPC。 */
-    gate::internal::StatusAssignment Assign(int, long long) override {
+    gate::internal::ChatAssignment Assign(int, long long) override {
         return {};
     }
 };
@@ -95,7 +95,7 @@ integration::ProductionModules CreateProductionModules() {
         std::make_shared<InMemoryVerification>(),
         std::make_shared<InMemoryCodeStore>(),
         std::make_shared<InMemoryUserStore>(),
-        std::make_shared<InMemoryStatusPort>());
+        std::make_shared<InMemorySessionAssignmentPort>());
     return modules;
 }
 

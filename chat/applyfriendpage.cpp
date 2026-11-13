@@ -1,7 +1,6 @@
 #include "applyfriendpage.h"
 #include "ui_applyfriendpage.h"
-#include "applyfriendlist.h"
-#include "tcpmgr.h"
+#include "listviewbehavior.h"
 #include <QPainter>
 #include <QStyleOption>
 #include "usermgr.h"
@@ -10,8 +9,7 @@
 
 ApplyFriendPage::ApplyFriendPage(QWidget* parent) : QWidget(parent), ui(new Ui::ApplyFriendPage) {
     ui->setupUi(this);
-
-    // connect(ui->apply_friend_list, &ApplyFriendList::searchRequested, this, &ApplyFriendPage::searchRequested);
+    new ListViewBehavior(ui->apply_friend_list);
 
     loadApplyList();
 
@@ -95,15 +93,4 @@ void ApplyFriendPage::loadApplyList() {
 
     for (const auto& application : apply_list)
         addNewApply(application);
-}
-
-// 当本客户端同意认证后，在服务器回包后，将添加按钮，变为已添加
-/** @brief 按认证结果更新对应的申请项。 */
-void ApplyFriendPage::authFinish(std::shared_ptr<AuthInfo> auth_info) {
-    auto uid = auth_info->_auth_uid;
-    auto find_iter = _apply_items_map.find(uid);
-    if (find_iter == _apply_items_map.end()) {
-        return;
-    }
-    (*find_iter)->showAddBtn(false);
 }

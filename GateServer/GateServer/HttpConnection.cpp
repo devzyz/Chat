@@ -1,4 +1,5 @@
 #include "HttpConnection.h"
+#include <spdlog/spdlog.h>
 #include "CServer.h"
 #include "LogicSystem.h"
 #include <stdexcept>

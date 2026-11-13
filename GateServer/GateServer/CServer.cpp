@@ -1,4 +1,5 @@
 #include "CServer.h"
+#include <spdlog/spdlog.h>
 #include "HttpConnection.h"
 #include "AsioIOServicePool.h"
 

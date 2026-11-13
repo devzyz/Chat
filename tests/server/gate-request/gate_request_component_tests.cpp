@@ -134,27 +134,27 @@ private:
 };
 
 /** 模拟选服端口并记录调用顺序，可注入业务失败和异常。 */
-class StatusAdapter final : public gate::internal::StatusPort {
+class SessionAssignmentAdapter final : public gate::internal::SessionAssignmentPort {
 public:
     /** 共享调用顺序记录器。 */
-    explicit StatusAdapter(std::shared_ptr<std::vector<std::string>> calls) : calls_(std::move(calls)) {}
+    explicit SessionAssignmentAdapter(std::shared_ptr<std::vector<std::string>> calls) : calls_(std::move(calls)) {}
 
     /** 记录选服调用后返回预设结果或抛异常。 */
-    gate::internal::StatusAssignment Assign(int, long long version) override {
+    gate::internal::ChatAssignment Assign(int, long long version) override {
         assigned_version = version;
-        calls_->push_back("status.assign");
+        calls_->push_back("sessions.assign");
         if (throw_on_call) {
-            throw std::runtime_error("synthetic status failure");
+            throw std::runtime_error("synthetic sessions failure");
         }
         return assignment;
     }
 
-    gate::internal::StatusAssignment assignment;
+    gate::internal::ChatAssignment assignment;
     long long assigned_version = -1;
     bool revoked = true;
     /** @brief 记录撤销调用并允许模拟依赖错误。 */
     bool Revoke(int, const std::string&) override {
-        calls_->push_back("status.revoke");
+        calls_->push_back("sessions.revoke");
         if (throw_on_call)
             throw std::runtime_error("synthetic revoke failure");
         return revoked;
@@ -173,8 +173,8 @@ protected:
         : calls(std::make_shared<std::vector<std::string>>()),
           verification(std::make_shared<VerificationAdapter>(calls)),
           code_store(std::make_shared<CodeStoreAdapter>(calls)), user_store(std::make_shared<UserStoreAdapter>(calls)),
-          status(std::make_shared<StatusAdapter>(calls)),
-          module(gate::internal::CreateGateRequest(verification, code_store, user_store, status)) {}
+          sessions(std::make_shared<SessionAssignmentAdapter>(calls)),
+          module(gate::internal::CreateGateRequest(verification, code_store, user_store, sessions)) {}
 
     /** 构建字段完整且密码确认一致的注册请求。 */
     Json::Value RegistrationRequest() const {
@@ -214,7 +214,7 @@ protected:
     std::shared_ptr<VerificationAdapter> verification;
     std::shared_ptr<CodeStoreAdapter> code_store;
     std::shared_ptr<UserStoreAdapter> user_store;
-    std::shared_ptr<StatusAdapter> status;
+    std::shared_ptr<SessionAssignmentAdapter> sessions;
     std::unique_ptr<gate::GateRequest> module;
 };
 
@@ -224,11 +224,11 @@ TEST_F(GateRequestComponentTests, LogoutRequiresCredentialsAndPropagatesRevocati
     request["uid"] = 42;
     request["token"] = "synthetic-session-fixture";
     ExpectResult(module->Handle(gate::Endpoint::Logout, request), kSuccess);
-    EXPECT_EQ(*calls, std::vector<std::string>{"status.revoke"});
+    EXPECT_EQ(*calls, std::vector<std::string>{"sessions.revoke"});
     calls->clear();
-    status->revoked = false;
+    sessions->revoked = false;
     ExpectResult(module->Handle(gate::Endpoint::Logout, request), 1011);
-    status->throw_on_call = true;
+    sessions->throw_on_call = true;
     ExpectResult(module->Handle(gate::Endpoint::Logout, request), kRpcFailed);
     calls->clear();
     request["uid"] = "42";
@@ -454,7 +454,7 @@ TEST_F(GateRequestComponentTests, ResetSuccessUsesCodeIdentityThenPasswordUpdate
 }
 
 /** 验证登录凭据失败时不调用选服。 */
-TEST_F(GateRequestComponentTests, LoginCredentialFailureStopsBeforeStatusAssignment) {
+TEST_F(GateRequestComponentTests, LoginCredentialFailureStopsBeforeChatAssignment) {
     // T08-GATE-14
     auto request = LoginRequest();
     user_store->credentials = std::nullopt;
@@ -466,22 +466,22 @@ TEST_F(GateRequestComponentTests, LoginCredentialFailureStopsBeforeStatusAssignm
 }
 
 /** 验证登录选服失败或异常仅在凭据通过后返回失败。 */
-TEST_F(GateRequestComponentTests, LoginStatusFailureFailsClosedAfterCredentials) {
+TEST_F(GateRequestComponentTests, LoginAssignmentFailureFailsClosedAfterCredentials) {
     // T08-GATE-15
     auto request = LoginRequest();
     user_store->credentials = gate::internal::UserRecord{42};
-    status->assignment = gate::internal::StatusAssignment{kRpcFailed, {}, {}, {}};
+    sessions->assignment = gate::internal::ChatAssignment{kRpcFailed, {}, {}, {}};
 
     const auto result = module->Handle(gate::Endpoint::UserLogin, request);
 
     ExpectResult(result, kRpcFailed);
-    EXPECT_EQ(*calls, (std::vector<std::string>{"user.credentials", "status.assign"}));
+    EXPECT_EQ(*calls, (std::vector<std::string>{"user.credentials", "sessions.assign"}));
 
     calls->clear();
-    status->throw_on_call = true;
+    sessions->throw_on_call = true;
     const auto exception_result = module->Handle(gate::Endpoint::UserLogin, request);
     ExpectResult(exception_result, kRpcFailed);
-    EXPECT_EQ(*calls, (std::vector<std::string>{"user.credentials", "status.assign"}));
+    EXPECT_EQ(*calls, (std::vector<std::string>{"user.credentials", "sessions.assign"}));
 }
 
 /** 验证登录成功返回凭据身份及选服端点。 */
@@ -489,7 +489,7 @@ TEST_F(GateRequestComponentTests, LoginSuccessReturnsTheAssignedServerAfterCrede
     // T08-GATE-16
     auto request = LoginRequest();
     user_store->credentials = gate::internal::UserRecord{42};
-    status->assignment = gate::internal::StatusAssignment{kSuccess, "gate-3a04-token", "127.0.0.1", "8090"};
+    sessions->assignment = gate::internal::ChatAssignment{kSuccess, "gate-3a04-token", "127.0.0.1", "8090"};
 
     const auto result = module->Handle(gate::Endpoint::UserLogin, request);
 
@@ -498,7 +498,7 @@ TEST_F(GateRequestComponentTests, LoginSuccessReturnsTheAssignedServerAfterCrede
     EXPECT_EQ(result.token, "gate-3a04-token");
     EXPECT_EQ(result.host, "127.0.0.1");
     EXPECT_EQ(result.port, "8090");
-    EXPECT_EQ(*calls, (std::vector<std::string>{"user.credentials", "status.assign"}));
+    EXPECT_EQ(*calls, (std::vector<std::string>{"user.credentials", "sessions.assign"}));
 }
 
 } // namespace

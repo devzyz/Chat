@@ -15,8 +15,8 @@ struct UserRecord {
     std::shared_ptr<void> credential_lease;
 };
 
-/** @brief 保存 Status 选服结果，只有 error 为成功时地址和 Token 才可使用。 */
-struct StatusAssignment {
+/** @brief 保存 Gate 选服结果，只有 error 为成功时地址和 Token 才可使用。 */
+struct ChatAssignment {
     int error = 1002;
     std::string token;
     std::string host;
@@ -59,12 +59,12 @@ public:
 };
 
 /** @brief 隔离同步 ChatServer 选服和 Token 分配调用。 */
-class StatusPort {
+class SessionAssignmentPort {
 public:
-    /** @brief 允许通过端口销毁 Status 适配器。 */
-    virtual ~StatusPort() = default;
+    /** @brief 允许通过端口销毁会话分配适配器。 */
+    virtual ~SessionAssignmentPort() = default;
     /** @brief 为已认证 UID 分配地址及 Token，非成功错误由 Gate 映射为 RPCFailed。 */
-    virtual StatusAssignment Assign(int uid, long long auth_version) = 0;
+    virtual ChatAssignment Assign(int uid, long long auth_version) = 0;
     /** @brief 原子撤销匹配的当前 Token；旧 Token 不影响新登录，依赖失败抛异常。 */
     virtual bool Revoke(int uid, const std::string& token) = 0;
 };
@@ -74,6 +74,6 @@ std::unique_ptr<GateRequest> CreateGateRequest(
     std::shared_ptr<VerificationPort> verification,
     std::shared_ptr<CodeStore> code_store,
     std::shared_ptr<UserStore> user_store,
-    std::shared_ptr<StatusPort> status);
+    std::shared_ptr<SessionAssignmentPort> session_service);
 
 } // namespace gate::internal

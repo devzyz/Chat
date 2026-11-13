@@ -1,4 +1,5 @@
 #include "ConfigMgr.h"
+#include <spdlog/spdlog.h>
 #include <boost/algorithm/string/trim.hpp>
 #include <set>
 #include <sstream>

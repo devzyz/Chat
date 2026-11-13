@@ -105,9 +105,6 @@ private slots:
     /** @brief 切换到添加新朋友界面。 */
     void switchApplyFriendListPage();
 
-    // 添加新的会话到好友列表
-    /** @brief 添加新的会话到好友列表。 */
-    void tcpAddChatList(std::shared_ptr<ChatInfo>);
     /** @brief 从搜索结果打开已有私聊，必要时请求创建会话。 */
     void fromSearchJumpChatItem(std::shared_ptr<SearchInfo>);
     /** @brief 从好友资料打开私聊，必要时请求创建会话。 */

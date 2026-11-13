@@ -40,26 +40,8 @@ public:
     long long EvalNumber(const std::string& script, const std::string& key, const std::string& value);
     /** @brief 原子比较撤销代次并写入带空闲期限的当前凭据。 */
     bool PutExpiringToken(int uid, const std::string& token, long long auth_version);
-    /** @brief 写入 Redis 字符串并验证 OK 响应，失败返回 false。 */
-    bool Set(const std::string& key, const std::string& value);
-    /** @brief 向 Redis 列表左端压入数据，并核对返回的列表长度。 */
-    bool LPush(const std::string& key, const std::string& value);
-    /** @brief 从 Redis 列表左端取值至输出参数，空列表或失败返回 false。 */
-    bool LPop(const std::string& key, std::string& value);
-    /** @brief 向 Redis 列表右端压入数据，并核对返回的列表长度。 */
-    bool RPush(const std::string& key, const std::string& value);
-    /** @brief 从 Redis 列表右端取值至输出参数，空列表或失败返回 false。 */
-    bool RPop(const std::string& key, std::string& value);
-    /** @brief 写入 Redis 哈希字段并校验整数响应，返回命令是否成功。 */
-    bool HSet(const std::string& key, const std::string& hkey, const std::string& value);
-    /** @brief 写入 Redis 哈希字段并校验整数响应，返回命令是否成功。 */
-    bool HSet(const char* key, const char* hkey, const char* hvalue, size_t hvaluelen);
     /** @brief 读取 Redis 哈希字段至输出 value，缺失、类型不符或命令失败返回 false。 */
     bool HGet(const std::string& key, const std::string& hkey, std::string& value);
-    /** @brief 删除 Redis key 并返回操作结果。 */
-    bool Del(const std::string& key);
-    /** @brief 检查 Redis key 是否存在；不可用连接或非法响应不作为存在处理。 */
-    bool ExistsKey(const std::string& key);
     /** @brief 停止接受新的借用并释放空闲连接，唤醒等待者；借出资源仍须按原协议归还。 */
     void Close();
 

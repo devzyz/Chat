@@ -10,10 +10,9 @@ Credentials are required exclusively through these environment variables:
 
 - `CHAT_VARIFY_EMAIL_USER`
 - `CHAT_VARIFY_EMAIL_PASS` (required for `email.auth=login`, omitted for `none`)
-- `CHAT_VARIFY_MYSQL_PASSWORD`
 - `CHAT_VARIFY_REDIS_PASSWORD`
 
-Missing variables fail fast without printing credential values. Legacy
+MySQL addresses from older configurations are ignored. Missing required variables fail fast without printing credential values. Legacy
 credential fields in JSON are rejected so plaintext secrets cannot silently be
 reintroduced.
 

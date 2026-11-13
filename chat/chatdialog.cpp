@@ -526,15 +526,6 @@ void ChatDialog::addNewChat(std::shared_ptr<ChatInfo> chat_info) {
     UserMgr::instance()->messages()->loadConversationAttention(chat_info->getChatId());
 }
 
-/**
- * @brief 收到会话通知后补充聊天列表。
- * @param chat_info 已认证会话的展示信息。
- */
-void ChatDialog::tcpAddChatList(std::shared_ptr<ChatInfo> chat_info) {
-    SPDLOG_DEBUG("authenticated friend received from TCP");
-    addNewChat(chat_info);
-}
-
 // 搜索到的人是好友后，跳转到与该好友的聊天界面
 /** @brief 从搜索结果打开已有聊天，缺失会话时发起私聊创建。 */
 void ChatDialog::fromSearchJumpChatItem(std::shared_ptr<SearchInfo> si) {

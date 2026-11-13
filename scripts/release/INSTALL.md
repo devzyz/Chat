@@ -13,7 +13,7 @@
    必须通过执行器维护版本、摘要和恢复状态，不能手工逐个导入 SQL 替代迁移。
 3. 将各应用的 config.ini.template / config.json.template 复制为 config.ini / config.json，
    填写本机地址、端口、数据库和日志设置。C++ 服务凭据填入对应 INI；Varify 凭据通过环境变量
-   `CHAT_VARIFY_EMAIL_USER`、`CHAT_VARIFY_EMAIL_PASS`、`CHAT_VARIFY_MYSQL_PASSWORD`、
+   `CHAT_VARIFY_EMAIL_USER`、`CHAT_VARIFY_EMAIL_PASS`（SMTP 登录模式）、
    `CHAT_VARIFY_REDIS_PASSWORD` 提供，不写入 JSON。模板不包含开发者连接信息。
 4. 配置 GateServer 中的 ChatServer 列表，实例名称保持一致；TLS 部署时公布外部 TCP 入口，
    ChatServer 监听内部端口，RPC 仍使用本机地址。
