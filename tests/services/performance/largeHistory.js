@@ -32,14 +32,19 @@ async function historyPairs(env, profile) {
         const first = left[slot].client, second = right[slot].client;
         const chatId = await env.befriend(first, second);
         for (const id of [first.uid, second.uid, chatId]) assert.ok(Number.isSafeInteger(id) && id > 0);
-        pairs.push({ first, second, chatId, slot, prefix: uuidPrefix(slot),
-            size: slot < profile.dataset.longChats ? profile.dataset.longRows : profile.dataset.ordinaryRows });
+        pairs.push({ first, second, chatId });
     }
     return pairs;
 }
 
 // 向本次隔离数据库分批装载，在会话之间交错写入，核实实际行数并缓存权威游标。
 async function seedHistory(env, pairs, dataset) {
+    assert.equal(pairs.length, dataset.longChats + dataset.ordinaryChats, 'dataset-pair-count');
+    for (const [slot, pair] of pairs.entries()) {
+        for (const id of [pair.first.uid, pair.second.uid, pair.chatId]) assert.ok(Number.isSafeInteger(id) && id > 0);
+        Object.assign(pair, { slot, prefix: uuidPrefix(slot),
+            size: slot < dataset.longChats ? dataset.longRows : dataset.ordinaryRows });
+    }
     await env.sql.execute('CREATE TEMPORARY TABLE perf_sequence (n INT PRIMARY KEY)');
     // 此临时数表复用于所有批次，生成有界的单条 INSERT SELECT。
     const sequence = Array.from({ length: batchSize }, (_, index) => `(${index + 1})`);

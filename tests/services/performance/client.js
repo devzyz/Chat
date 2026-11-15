@@ -56,7 +56,7 @@ class Client extends EventEmitter {
             catch { this.fail(new Error('invalid-frame')); }
         });
         await this.request(1005, 1006, { uid: this.uid, token: this.token,
-            capabilities: ['sync_v1', 'group_membership_v1', 'basic_social_v1'] });
+            capabilities: ['sync_v1', 'group_membership_v1', 'basic_social_v1', 'message_receipts_v1'] });
         // 维持生产会话存活并传播心跳失败。
         this.heartbeat = setInterval(() => {
             // 心跳失败终止会话。

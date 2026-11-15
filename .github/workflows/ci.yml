@@ -20,7 +20,7 @@ on:
       performance_profile:
         description: Manual performance load profile
         type: choice
-        options: [smoke, baseline, stress, large-history]
+        options: [smoke, baseline, stress, large-history, comprehensive]
         default: baseline
       performance_request_id:
         description: Unique performance request identity (optional)

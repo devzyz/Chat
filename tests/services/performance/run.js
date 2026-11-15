@@ -11,6 +11,7 @@ const { measure, validate } = require('./metrics');
 const { prepare, privateMessages, groupMessages, prepareOffline, recoverOffline, resources } = require('./scenarios');
 const { write, verify } = require('./report');
 const { historyPairs, seedHistory, historyReads } = require('./largeHistory');
+const { comprehensive } = require('./comprehensive');
 
 /** 运行完整性能矩阵，逐场景保留证据，任何失败都不绕过最终清理。 */
 async function run() {
@@ -32,6 +33,7 @@ async function run() {
     const phase = async (name, action) => {
         if (name !== 'cleanup') controller.signal.throwIfAborted();
         const begin = performance.now(); stage = `${round}-${name}`;
+        if (profileName === 'comprehensive') console.log(`Starting ${stage}`);
         try { return await action(); }
         finally { report.phases.push({ round, name, seconds: (performance.now() - begin) / 1000 }); }
     };
@@ -80,6 +82,12 @@ async function run() {
         };
         // 执行多轮独立账号数据的完整场景集合。
         const execute = async () => {
+            if (profileName === 'comprehensive') {
+                // 同一场景的三轮共享拓扑，全部在线场景结束后才进入最后的断线恢复。
+                return comprehensive(env, profile, report, phase, async (name, action, prepareAction) => {
+                    for (round = 1; round <= profile.repeats; round++) await scenario(name, action, prepareAction);
+                });
+            }
             if (profile.dataset) {
                 // 所有轮次共享已经核对过基数的同一份历史数据。
                 const pairs = await phase('history-relationships', () => historyPairs(env, profile));

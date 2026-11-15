@@ -5,5 +5,11 @@
   "large-history": {
     "connections": 40, "rate": 20, "warmupSeconds": 5, "seconds": 30, "repeats": 3,
     "dataset": { "longChats": 4, "longRows": 200000, "ordinaryChats": 16, "ordinaryRows": 12500, "contentBytes": 256 }
+  },
+  "comprehensive": {
+    "connections": 240, "rate": 200, "warmupSeconds": 6, "seconds": 30, "repeats": 3,
+    "peakRate": 300, "historyRate": 75, "loginRate": 6, "directoryRate": 60, "receiptRate": 30,
+    "resourceConcurrency": 6, "hotPairs": 8,
+    "dataset": { "longChats": 24, "longRows": 200000, "ordinaryChats": 96, "ordinaryRows": 12500, "contentBytes": 256 }
   }
 }

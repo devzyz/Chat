@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const profiles = require('./profiles.json');
 const { validate } = require('./metrics');
 const { historyScenarios, verifyDataset } = require('./largeHistory');
+const { rates, verifyWindow } = require('./comprehensive');
 const scenarios = ['login', 'same-server', 'cross-server', 'group', 'resources', 'mixed', 'offline'];
 
 /** 把动态文本编码为 XML 属性或正文。 */
@@ -43,7 +44,8 @@ function verify(report, sha) {
         assert.deepEqual(report.parameters, profile);
         verifyDataset(report.dataset, profile.dataset);
     }
-    const selected = profile.dataset ? historyScenarios : scenarios;
+    const comprehensive = report.profile === 'comprehensive';
+    const selected = comprehensive ? Object.keys(rates(profile)) : profile.dataset ? historyScenarios : scenarios;
     const expected = Array.from({ length: profile.repeats },
         // 为每轮展开唯一场景集合。
         (_, index) => selected.map(
@@ -55,12 +57,14 @@ function verify(report, sha) {
     assert.deepEqual(report.warmups.map(row => `${row.round}:${row.name}`).sort(), expected);
     for (const row of report.warmups) {
         validate(row.result.metrics || row.result);
-        if (profile.dataset) assert.equal(row.result.planned, profile.rate * profile.warmupSeconds);
+        if (comprehensive) verifyWindow(profile, row.name, row.result, profile.warmupSeconds);
+        else if (profile.dataset) assert.equal(row.result.planned, profile.rate * profile.warmupSeconds);
         if (row.name === 'mixed') validate(row.result.resources);
     }
     for (const row of report.results) {
         validate(row.metrics);
-        if (profile.dataset) {
+        if (comprehensive) verifyWindow(profile, row.name, row, profile.seconds);
+        else if (profile.dataset) {
             assert.equal(row.metrics.planned, profile.rate * profile.seconds, 'large-history-planned');
             if (row.name === 'history-cross-write') {
                 assert.equal(row.metrics.ackMs?.count, row.metrics.planned, 'missing-acks');
@@ -99,7 +103,7 @@ function write(root, report) {
         'JSON 工件包含提交确认/接收百分位、未发送数量、事件循环延迟、资源字节吞吐、各进程 CPU/RSS 与各阶段计时。\n\n' +
         '此结果为 Linux 共享运行器同机基线，不代表公网体验、Windows 性能或生产容量。群聊包含两秒补拉等待。' +
         '速度指标暂不作为回归门禁；业务错误、超时、缺样本、消息或内容错误、清理失败会失败。\n\n' +
-        '调用示例：`$chat-performance 对 develop 运行 baseline 并下载报告`。\n';
+        `调用示例：\`$chat-performance 对目标分支运行 ${report.profile} 并下载报告\`。\n`;
     fs.writeFileSync(path.join(root, '测试.md'), markdown);
     // 生成场景业务正确性用例。
     const cases = report.results.map(row =>
