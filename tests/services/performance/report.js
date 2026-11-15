@@ -10,12 +10,32 @@ const scenarios = ['login', 'same-server', 'cross-server', 'group', 'resources',
 function escapeXml(value) { return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;'); }
 /** 格式化毫秒指标，缺失值明确展示为未获得。 */
 function number(value) { return Number.isFinite(value) ? value.toFixed(2) : '未获得'; }
-/** 验证完整执行矩阵、源码身份和清理结果，防止部分结果被当作通过。 */
+/** 核对本版拓扑每次采样的服务、独立进程身份和 Linux 资源计数。 */
+function verifyProcessSamples(samples) {
+    assert.ok(samples?.length > 0, 'missing-process-samples');
+    const services = new Set(['ChatA', 'ChatB', 'GateServer', 'ResourceServer', 'VarifyServer']);
+    for (const sample of samples) {
+        const names = new Set(), pids = new Set();
+        assert.equal(sample.processes.length, services.size);
+        for (const { name, pid, cpuTicks, rssKiB } of sample.processes) {
+            names.add(name);
+            pids.add(pid);
+            assert.ok(Number.isSafeInteger(pid) && pid > 0);
+            assert.ok(Number.isSafeInteger(cpuTicks) && cpuTicks >= 0);
+            assert.ok(Number.isSafeInteger(rssKiB) && rssKiB > 0);
+        }
+        assert.deepEqual(names, services);
+        assert.equal(pids.size, services.size);
+    }
+}
+/** 验证完整执行矩阵、源码身份和清理结果，保留旧版下载报告的验证合同。 */
 function verify(report, sha) {
     assert.match(sha, /^[a-f0-9]{40}$/); assert.equal(report.sha, sha);
     assert.ok(Object.hasOwn(profiles, report.profile));
     assert.equal(report.status, 'passed'); assert.equal(report.cleanup?.complete, true);
     assert.equal(report.failures.length, 0);
+    assert.ok([1, 2].includes(report.schemaVersion), 'unknown-performance-report-version');
+    if (report.schemaVersion === 2) verifyProcessSamples(report.samples);
     const expected = Array.from({ length: profiles[report.profile].repeats },
         // 为每轮展开唯一场景集合。
         (_, index) => scenarios.map(

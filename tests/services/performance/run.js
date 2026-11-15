@@ -18,7 +18,7 @@ async function run() {
     const profile = profiles[profileName];
     const root = path.resolve(process.env.CHAT_PERFORMANCE_OUTPUT || 'out/performance');
     const sha = process.env.GITHUB_SHA; assert.match(sha || '', /^[a-f0-9]{40}$/);
-    const report = { schemaVersion: 1, sha, profile: profileName, parameters: profile,
+    const report = { schemaVersion: 2, sha, profile: profileName, parameters: profile,
         requestId: process.env.CHAT_PERFORMANCE_REQUEST_ID || '', seed: 'chat-performance-v1',
         url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
         environment: { cpus: os.cpus().length, cpuModel: os.cpus()[0].model, memoryBytes: os.totalmem(),
@@ -85,7 +85,7 @@ async function run() {
                     report.results.push(row); write(root, report);
                     // Continue other scenes to preserve diagnostic coverage; final verification fails closed.
                 };
-                // 固定账号集合登录一次，登录包含 Gate/Status 与 Chat 认证。
+                // 固定账号集合登录一次，覆盖 Gate 选服及 Chat 凭据校验。
                 await scenario('login', seconds => measure({
                     seconds, rate: accounts.length / seconds, plannedCount: accounts.length, maxPending: accounts.length, signal: controller.signal,
                     // 保持每账号单会话语义。
