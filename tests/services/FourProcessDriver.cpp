@@ -165,8 +165,8 @@ int Supervise(int argc, char** argv) {
     // Performance runs retain the same owner/cleanup contract with a bounded longer lease.
     const auto* profile = std::getenv("CHAT_PERFORMANCE_PROFILE");
     if (profile)
-        Require(
-            std::string(profile) == "smoke" || std::string(profile) == "baseline" || std::string(profile) == "stress");
+        Require(std::string(profile) == "smoke" || std::string(profile) == "baseline" ||
+                std::string(profile) == "stress" || std::string(profile) == "large-history");
     auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + (profile ? 2640s : 600s));
     integration::ProcessSpec spec;
     spec.executable = std::filesystem::absolute(argv[2]);

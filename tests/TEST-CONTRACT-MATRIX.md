@@ -976,6 +976,8 @@ Qt 控件及资源存储报告的完整用例集合，保留自动控件与真�
 ## 性能基线合同
 
 独立可选性能 lane：PERF-LOGIN、PERF-SAME、PERF-CROSS、PERF-GROUP、PERF-RESOURCE、PERF-MIXED、PERF-OFFLINE。
+手动 large-history 档位覆盖 PERF-HISTORY-MIDDLE、PERF-HISTORY-TAIL、PERF-HISTORY-CROSS-WRITE。
+逐会话核对百万条预装数据，分别验收深游标读取、尾部补拉和已有历史上的跨服提交与送达。
 各档位重复轮数由 profiles.json 声明；报告门禁逐场景检查完整性、成功样本、SHA 及清理。
 框架合同验证帧分片/合包、关联、截止、断连、背压、统计及报告拒绝路径。
 这些报告不计入 Windows regressionReportGroups。覆盖边界见 [性能入口](services/performance/README.md)。

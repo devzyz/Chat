@@ -4,6 +4,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const profiles = require('./profiles.json');
 const { validate } = require('./metrics');
+const { historyScenarios, verifyDataset } = require('./largeHistory');
 const scenarios = ['login', 'same-server', 'cross-server', 'group', 'resources', 'mixed', 'offline'];
 
 /** 把动态文本编码为 XML 属性或正文。 */
@@ -36,9 +37,16 @@ function verify(report, sha) {
     assert.equal(report.failures.length, 0);
     assert.ok([1, 2].includes(report.schemaVersion), 'unknown-performance-report-version');
     if (report.schemaVersion === 2) verifyProcessSamples(report.samples);
-    const expected = Array.from({ length: profiles[report.profile].repeats },
+    const profile = profiles[report.profile];
+    if (profile.dataset) {
+        assert.equal(report.schemaVersion, 2);
+        assert.deepEqual(report.parameters, profile);
+        verifyDataset(report.dataset, profile.dataset);
+    }
+    const selected = profile.dataset ? historyScenarios : scenarios;
+    const expected = Array.from({ length: profile.repeats },
         // 为每轮展开唯一场景集合。
-        (_, index) => scenarios.map(
+        (_, index) => selected.map(
             // 生成场景结果键。
             name => `${index + 1}:${name}`)).flat().sort();
     // 提取实际场景结果键。
@@ -47,10 +55,18 @@ function verify(report, sha) {
     assert.deepEqual(report.warmups.map(row => `${row.round}:${row.name}`).sort(), expected);
     for (const row of report.warmups) {
         validate(row.result.metrics || row.result);
+        if (profile.dataset) assert.equal(row.result.planned, profile.rate * profile.warmupSeconds);
         if (row.name === 'mixed') validate(row.result.resources);
     }
     for (const row of report.results) {
         validate(row.metrics);
+        if (profile.dataset) {
+            assert.equal(row.metrics.planned, profile.rate * profile.seconds, 'large-history-planned');
+            if (row.name === 'history-cross-write') {
+                assert.equal(row.metrics.ackMs?.count, row.metrics.planned, 'missing-acks');
+                assert.equal(row.metrics.deliveryMs?.count, row.metrics.planned, 'missing-deliveries');
+            }
+        }
         if (row.name === 'mixed') { assert.ok(row.resources, 'missing-mixed-resource-evidence'); validate(row.resources); }
     }
 }
@@ -74,6 +90,7 @@ function write(root, report) {
         `提交：\`${report.sha}\`。运行：[GitHub Actions](${report.url})。\n\n` +
         `环境：GitHub Ubuntu 24.04，同机正式服务与临时依赖；${report.environment?.cpus || '?'} vCPU，` +
         `${number((report.environment?.memoryBytes || 0) / 1073741824)} GiB RAM，Node ${report.environment?.node || '?' }。\n\n` +
+        (report.dataset ? `预装消息 ${report.dataset.totalRows} 条。各私聊实际行数 ${report.dataset.rowsPerChat.join('、')}。\n\n` : '') +
         '| 轮次 / 场景 | 完成/计划 | 业务完成/秒 | p95 ms | p99 ms | 接收 p95 ms | 结果 |\n' +
         '|---|---:|---:|---:|---:|---:|---|\n' + rows.join('\n') + '\n\n' +
         resourceRows.join('\n') + '\n\n' +

@@ -1,5 +1,9 @@
 {
   "smoke": { "connections": 20, "rate": 10, "warmupSeconds": 5, "seconds": 15, "repeats": 1, "resourceConcurrency": 1 },
   "baseline": { "connections": 100, "rate": 50, "warmupSeconds": 15, "seconds": 60, "repeats": 3, "resourceConcurrency": 2 },
-  "stress": { "connections": 500, "rate": 250, "warmupSeconds": 15, "seconds": 60, "repeats": 3, "resourceConcurrency": 4 }
+  "stress": { "connections": 500, "rate": 250, "warmupSeconds": 15, "seconds": 60, "repeats": 3, "resourceConcurrency": 4 },
+  "large-history": {
+    "connections": 40, "rate": 20, "warmupSeconds": 5, "seconds": 30, "repeats": 3,
+    "dataset": { "longChats": 4, "longRows": 200000, "ordinaryChats": 16, "ordinaryRows": 12500, "contentBytes": 256 }
+  }
 }
