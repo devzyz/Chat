@@ -57,13 +57,13 @@ function verify(report, sha) {
     assert.deepEqual(report.warmups.map(row => `${row.round}:${row.name}`).sort(), expected);
     for (const row of report.warmups) {
         validate(row.result.metrics || row.result);
-        if (comprehensive) verifyWindow(profile, row.name, row.result, profile.warmupSeconds);
+        if (comprehensive) verifyWindow(profile, row.name, row.result, profile.warmupSeconds, report.videoBytes);
         else if (profile.dataset) assert.equal(row.result.planned, profile.rate * profile.warmupSeconds);
         if (row.name === 'mixed') validate(row.result.resources);
     }
     for (const row of report.results) {
         validate(row.metrics);
-        if (comprehensive) verifyWindow(profile, row.name, row, profile.seconds);
+        if (comprehensive) verifyWindow(profile, row.name, row, profile.seconds, report.videoBytes);
         else if (profile.dataset) {
             assert.equal(row.metrics.planned, profile.rate * profile.seconds, 'large-history-planned');
             if (row.name === 'history-cross-write') {

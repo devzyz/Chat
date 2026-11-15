@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { randomUUID } = require('node:crypto');
 const { measure, validate } = require('./metrics');
-const { prepare, privateMessages, groupMessages, resources, transfer, prepareOffline, recoverOffline } = require('./scenarios');
+const { prepare, privateMessages, groupMessages, resources, transfer, prepareOffline, recoverOffline,
+    plannedResourceBytes } = require('./scenarios');
 const { seedHistory, historyReads } = require('./largeHistory');
 
 // 每种速率均对应一个完整业务动作，恢复按实际离线账号逐一计数。
@@ -18,7 +19,7 @@ function rates(profile) {
 }
 
 // 校验矩阵中每次预热和正式窗口的目标样本数，以及复合场景的独立指标。
-function verifyWindow(profile, name, value, seconds) {
+function verifyWindow(profile, name, value, seconds, videoBytes) {
     const metrics = value.metrics || value;
     const rate = rates(profile)[name];
     assert.notEqual(rate, undefined);
@@ -33,7 +34,10 @@ function verifyWindow(profile, name, value, seconds) {
         const files = name === 'mixed' ? value.resources : metrics;
         validate(files);
         assert.equal(files.planned, Math.ceil(seconds * profile.resourceConcurrency / 5), 'resource-planned');
-        assert.ok(files.bytes > 0 && files.mibPerSecond > 0, 'missing-resource-bytes');
+        assert.ok(Number.isSafeInteger(videoBytes) && videoBytes > 65536, 'missing-video-size');
+        assert.equal(files.plannedBytes, plannedResourceBytes(files.planned, videoBytes), 'resource-fixture-size');
+        assert.equal(files.bytes, files.plannedBytes, 'resource-byte-count');
+        assert.equal(files.mibPerSecond, files.bytes / 1048576 / files.elapsedSeconds, 'resource-throughput');
     }
 }
 
@@ -104,6 +108,7 @@ async function comprehensive(env, profile, report, phase, repeat) {
     const video = fs.readFileSync(process.env.CHAT_PERFORMANCE_VIDEO);
     const avatar = fs.readFileSync(process.env.CHAT_PERFORMANCE_AVATAR);
     assert.ok(video.length > 65536 && avatar.length > 0, 'missing-media-fixture');
+    report.videoBytes = video.length;
     await phase('accounts', async () => {
         for (let index = 0; index < profile.connections; index++) {
             const account = await env.register(index);

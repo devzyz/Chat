@@ -26,12 +26,16 @@ test('comprehensive windows reject undersized loads and missing delivery and tra
     // 构造只含本门禁需要的固定指标。
     const metric = count => ({ pass: true, planned: count, completed: count, unsent: 0, errors: {},
         latencyMs: { count }, ackMs: { count }, deliveryMs: { count } });
-    const normal = metric(6000), hot = metric(9000), files = { ...metric(36), bytes: 1048576, mibPerSecond: 1 };
+    const normal = metric(6000), hot = metric(9000);
+    const videoBytes = 262144, bytes = 9 * (68 + 1048576 + 10485760 + videoBytes);
+    const files = { ...metric(36), bytes, plannedBytes: bytes, elapsedSeconds: 30, mibPerSecond: bytes / 1048576 / 30 };
     verifyWindow(profile, 'hot-private', hot, 30);
     assert.throws(() => verifyWindow(profile, 'hot-private', normal, 30));
-    verifyWindow(profile, 'mixed', { metrics: normal, resources: files }, 30);
+    verifyWindow(profile, 'mixed', { metrics: normal, resources: files }, 30, videoBytes);
     assert.throws(() => verifyWindow(profile, 'mixed', { metrics: normal }, 30));
-    assert.throws(() => verifyWindow(profile, 'resources', { ...files, bytes: 0 }, 30));
+    assert.throws(() => verifyWindow(profile, 'resources', { ...files, bytes: bytes - videoBytes }, 30, videoBytes));
+    assert.throws(() => verifyWindow(profile, 'resources', { ...files, plannedBytes: 10 }, 30, videoBytes));
+    assert.throws(() => verifyWindow(profile, 'resources', { ...files, mibPerSecond: 1 }, 30, videoBytes));
     verifyWindow(profile, 'group', { ...metric(360), deliveryMs: { count: 6840 } }, 30);
     assert.throws(() => verifyWindow(profile, 'group', metric(360), 30));
     verifyWindow(profile, 'offline', metric(120), 6);

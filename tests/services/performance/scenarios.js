@@ -5,6 +5,8 @@ const { performance } = require('node:perf_hooks');
 const { setTimeout: delay } = require('node:timers/promises');
 const { distribution, measure } = require('./metrics');
 const text = 'p'.repeat(256);
+const pixelPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64');
+const fileSizes = [pixelPng.length, 1048576, 10485760];
 
 /** 跟踪本场景的消息身份、真实确认和接收状态，不把重试通知计作新消息。 */
 class Messages {
@@ -237,9 +239,8 @@ async function recoverOffline(env, pairs, seconds, { messages, expected }) {
 
 /** 使用固定有效 PNG 和确定性附件，不依赖外部文件或网络。 */
 function resourceFixture(index) {
-    if (index % 3 === 0) return { name: 'pixel.png', media: 'image/png',
-        bytes: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64') };
-    return { name: 'payload.bin', media: 'application/octet-stream', bytes: Buffer.alloc(index % 3 === 1 ? 1048576 : 10485760, 79) };
+    if (index % 3 === 0) return { name: 'pixel.png', media: 'image/png', bytes: pixelPng };
+    return { name: 'payload.bin', media: 'application/octet-stream', bytes: Buffer.alloc(fileSizes[index % 3], 79) };
 }
 
 /** 完整上传、提交聊天资源引用并由接收者下载校验，整个动作受六十秒期限约束。 */
@@ -310,17 +311,30 @@ async function transfer(env, pair, index, video, avatar) {
     return download.length;
 }
 
-/** 有限并发与固定节奏测量完整资源传输，不向磁盘无限灌入数据。 */
+// 由固定的轮转顺序和文件实际大小独立计算一个窗口应交付的字节数。
+function plannedResourceBytes(count, videoBytes = 0) {
+    const sizes = videoBytes ? [...fileSizes, videoBytes] : fileSizes;
+    let total = 0;
+    for (let index = 0; index < count; index++) total += sizes[index % sizes.length];
+    return total;
+}
+
+/** 按操作编号保存并发下载的实际字节数，排空后核对并计算吞吐。 */
 async function resources(env, pairs, profile, seconds, video) {
-    let bytes = 0;
+    const downloaded = [];
     const result = await measure({ seconds, rate: profile.resourceConcurrency / 5, maxPending: profile.resourceConcurrency, signal: env.signal,
         // 每个并发槽约五秒尝试一个不同大小资源。
-        action: async index => { bytes += await transfer(env, pairs[index % pairs.length], index, video); } });
-    return { ...result, bytes, mibPerSecond: bytes / 1048576 / result.elapsedSeconds };
+        action: async index => { downloaded[index] = await transfer(env, pairs[index % pairs.length], index, video); } });
+    // 汇总发生在所有在途业务结束后，失败或未启动的编号不会贡献字节。
+    const bytes = downloaded.reduce((sum, value) => sum + value, 0);
+    const plannedBytes = plannedResourceBytes(result.planned, video?.length);
+    if (bytes !== plannedBytes) { result.pass = false; result.errors['resource-byte-count'] = 1; }
+    return { ...result, bytes, plannedBytes, mibPerSecond: bytes / 1048576 / result.elapsedSeconds };
 }
 /** 审计失败保留原始吞吐与延迟，附加明确失败分类。 */
 async function auditResult(messages, sql, result) {
     try { await messages.audit(sql); }
     catch { result.pass = false; result.errors['persistence-or-content-audit'] = 1; }
 }
-module.exports = { Messages, sync, prepare, privateMessages, groupMessages, prepareOffline, recoverOffline, resources, resourceFixture, transfer };
+module.exports = { Messages, sync, prepare, privateMessages, groupMessages, prepareOffline, recoverOffline, resources,
+    resourceFixture, transfer, plannedResourceBytes };
