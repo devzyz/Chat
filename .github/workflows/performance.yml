@@ -36,6 +36,9 @@ jobs:
           cache: npm
           cache-dependency-path: VarifyServer/package-lock.json
 
+      - name: Verify performance contracts
+        run: node --test tests/services/performance/*.test.js tests/services/connectionCount.test.js tests/build/ciPolicy.test.js
+
       - name: Check out repository-pinned vcpkg
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -121,8 +124,6 @@ jobs:
             .ci/vcpkg/buildtrees/detect_compiler/**/*.txt
           if-no-files-found: warn
           retention-days: 7
-      - name: Verify performance contracts
-        run: node --test tests/services/performance/*.test.js tests/services/connectionCount.test.js tests/build/ciPolicy.test.js
       - name: Enable compiler annotations
         run: echo "::add-matcher::scripts/ci/compiler-matchers.json"
 
@@ -148,7 +149,7 @@ jobs:
     name: Measure real service performance
     needs: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: ${{ inputs.profile == 'comprehensive' && 75 || 45 }}
     services:
       redis:
         image: redis:7.4.2@sha256:fbdbaea47b9ae4ecc2082ecdb4e1cea81e32176ffb1dcf643d422ad07427e5d9
@@ -191,6 +192,9 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Run selected bounded performance profile · 09 Performance
         env:
+          LOAD_TIMEOUT: ${{ inputs.profile == 'comprehensive' && '70m' || '41m' }}
+          CHAT_PERFORMANCE_VIDEO: ${{ runner.temp }}/performance.mp4
+          CHAT_PERFORMANCE_AVATAR: ${{ runner.temp }}/performance.png
           CHAT_REDIS_CONTAINER: ${{ job.services.redis.id }}
           CHAT_MYSQL_CONTAINER: ${{ job.services.mysql.id }}
           CHAT_MAILPIT_CONTAINER: ${{ job.services.mailpit.id }}
@@ -198,7 +202,16 @@ jobs:
           CHAT_MYSQL_PORT: ${{ job.services.mysql.ports['3306'] }}
           CHAT_SMTP_PORT: ${{ job.services.mailpit.ports['1025'] }}
           CHAT_MAILPIT_PORT: ${{ job.services.mailpit.ports['8025'] }}
-        run: timeout --signal=TERM --kill-after=90s 41m node tests/services/performance/run.js
+        run: |
+          if [[ "$CHAT_PERFORMANCE_PROFILE" == comprehensive ]]; then
+            if ! command -v ffmpeg >/dev/null; then
+              sudo apt-get update -qq
+              sudo apt-get install -y --no-install-recommends ffmpeg
+            fi
+            ffmpeg -nostdin -v error -f lavfi -i testsrc2=s=320x240:r=25 -t 10 -c:v mpeg4 -y "$CHAT_PERFORMANCE_VIDEO"
+            ffmpeg -nostdin -v error -f lavfi -i color=c=blue:s=256x256 -frames:v 1 -threads 1 -y "$CHAT_PERFORMANCE_AVATAR"
+          fi
+          timeout --signal=TERM --kill-after=90s "$LOAD_TIMEOUT" node tests/services/performance/run.js
       - name: Verify complete report · 10 Report validation
         if: always()
         run: node tests/services/performance/report.js out/performance "$GITHUB_SHA"

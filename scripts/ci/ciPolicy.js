@@ -1,5 +1,6 @@
 'use strict';
 const fs = require('node:fs');
+const profiles = require('../../tests/services/performance/profiles.json');
 
 /** 将 GitHub 手动输入规范化为布尔值，拒绝无法识别的值。 */
 function readBoolean(value) {
@@ -20,7 +21,7 @@ function selectPolicy(eventName, ref, event) {
             throw new Error('Performance requires an isolated manual request');
         }
         const profile = inputs.performance_profile || 'baseline';
-        if (!['smoke', 'baseline', 'stress'].includes(profile)) throw new Error('Invalid performance profile');
+        if (!Object.hasOwn(profiles, profile)) throw new Error('Invalid performance profile');
         return { mode: 'performance', performance_profile: profile, refresh_tools: false,
             cold_linux: false, real_acceptance: false, promoted: false };
     }
