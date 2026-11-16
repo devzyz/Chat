@@ -216,6 +216,9 @@ Run all commands from the repository root:
     .\scripts\windows-local.ps1 -Task CheckTestStructure
     .\scripts\windows-local.ps1 -Task CheckTestReports
     .\scripts\windows-local.ps1 -Task RunScriptTests
+    # Startup integration tests create a disposable PostgreSQL cluster and run the checked-in migrations.
+    # If the tools are outside PATH, set CHAT_PG_BIN to their absolute directory instead.
+    $env:CHAT_PG_BIN = Split-Path (Get-Command initdb.exe -ErrorAction Stop).Source
     .\scripts\windows-local.ps1 -Task RunServerTests -Configuration Release
     .\scripts\windows-local.ps1 -Task RunClientTests -Configuration Release
     .\scripts\windows-local.ps1 -Task RunVarifyTests

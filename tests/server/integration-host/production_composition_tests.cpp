@@ -1,5 +1,6 @@
 #include "../../support/ProcessHarness.h"
 #include "../../support/RunContext.h"
+#include "../startup/FixtureDatabase.h"
 
 #include <gtest/gtest.h>
 
@@ -98,9 +99,8 @@ void WriteText(const std::filesystem::path& path, const std::string& content) {
 void WriteGateConfig(const std::filesystem::path& path, std::uint16_t port, const std::string& run_identity) {
     std::ostringstream config;
     config << "[GateServer]\nPort = " << port << "\n[VarifyServer]\nHost = 127.0.0.1\nPort = 1"
-           << "\n[Redis]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity
-           << "\n[Mysql]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity << "\nUser = local\nSchema = local"
-           << "\n[ChatServers]\nName = LocalChat"
+           << "\n[Redis]\nHost = 127.0.0.1\nPort = 1\nPassword = " << run_identity << "\n"
+           << startup_fixture::DatabaseSection() << "\n[ChatServers]\nName = LocalChat"
            << "\n[LocalChat]\nHost = 127.0.0.1\nPort = 1\nName = LocalChat"
            << "\n[Log]\nName = GateServerComposition\nLogDir = logs\nMaxSizeMB = 1\nMaxTotalFiles = 2"
            << "\nLevel = info\nFlushLevel = warn\n";

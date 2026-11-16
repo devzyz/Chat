@@ -474,6 +474,9 @@ function Run-ServerTests {
                     Get-Content -LiteralPath $stdoutPath -Tail 12
                     Get-Content -LiteralPath $stderrPath -Tail 12
                 }
+            } elseif ($execution.Binary -eq $integrationBinary) {
+                & node (Join-Path $repoRoot 'tests/server/startup/withPostgres.js') $execution.Binary "--gtest_output=xml:$($execution.Report)"
+                $exitCode = $LASTEXITCODE
             } else {
                 & $execution.Binary "--gtest_output=xml:$($execution.Report)"
                 $exitCode = $LASTEXITCODE

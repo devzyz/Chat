@@ -452,6 +452,16 @@ jobs:
       - name: Enable compiler annotations
         run: echo "::add-matcher::scripts/ci/compiler-matchers.json"
 
+      - name: Locate PostgreSQL for isolated startup and storage tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pg = Get-ChildItem (Join-Path $env:ProgramFiles 'PostgreSQL') -Directory |
+              Where-Object { $_.Name -match '^\d+$' } |
+              Sort-Object { [int]$_.Name } -Descending | Select-Object -First 1
+          if (-not $pg) { throw 'PostgreSQL server tools missing from runner' }
+          "CHAT_PG_BIN=$(Join-Path $pg.FullName 'bin')" >> $env:GITHUB_ENV
+
       - name: Build and run layered Server tests · 03 Windows build / 04 Component regression
         # Annotations link native compiler errors to their source lines.
         shell: pwsh
@@ -468,20 +478,25 @@ jobs:
               -ServerHostTriplet x64-windows-chat-release
 
       - name: Verify default PostgreSQL schema and native storage
+        id: postgres-native
         shell: pwsh
         timeout-minutes: 5
         env:
           CHAT_TEST_DATABASES: postgresql
         run: |
           $ErrorActionPreference = 'Stop'
-          $pg = Get-ChildItem (Join-Path $env:ProgramFiles 'PostgreSQL') -Directory |
-              Where-Object { $_.Name -match '^\d+$' } |
-              Sort-Object { [int]$_.Name } -Descending | Select-Object -First 1
-          if (-not $pg) { throw 'PostgreSQL server tools missing from runner' }
-          $env:CHAT_PG_BIN = Join-Path $pg.FullName 'bin'
           $env:CHAT_PG_CONTRACT_BINARY = (Resolve-Path 'build/windows-tests/Release/postgres_contract.exe').Path
           node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=build/test-results/postgresql_native.xml tests/server/schema-migration/postgres.test.js
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload PostgreSQL contract report
+        if: always() && steps.postgres-native.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-postgresql-native
+          path: build/test-results/postgresql_native.xml
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload layered Server test reports
         if: always()
@@ -489,9 +504,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-server-test-results
-          path: |
-            build/test-results/server_*.xml
-            build/test-results/postgresql_native.xml
+          path: build/test-results/server_*.xml
           if-no-files-found: error
           retention-days: 7
 
