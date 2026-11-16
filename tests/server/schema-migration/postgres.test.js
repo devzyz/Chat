@@ -63,17 +63,19 @@ async function verifyMysqlReference(pg) {
     const mysql = await startLocalMysql(process.env.CHAT_MYSQL_BIN);
     try {
         await compareIdentities(pg,mysql);
-        if (process.env.CHAT_PG_CONTRACT_BINARY) {
+        if (process.env.CHAT_PG_CONTRACT_BINARY || process.env.CHAT_DB_SERVICE_BIN) {
             await mysql.execute('CREATE DATABASE chat_pg_reference');
             const session = new MysqlSession(mysql.mysql,[...mysql.args,...mysqlArgs],mysql.env);
             try { await new SchemaMigration(session,'chat_pg_reference').apply(); }
             finally { await session.close(); }
             await mysql.execute("USE chat_pg_reference; CALL reg_user('Alice','one@x','hash',@u); " +
                 "CALL reg_user('Bob','two@x','hash',@u);");
-            execFileSync(process.env.CHAT_PG_CONTRACT_BINARY,[],{
-                env: { ...pg.env, CHAT_MYSQL_FIXTURE_PORT: String(mysql.port) },
-                windowsHide: true, timeout: 45000, stdio: ['ignore','pipe','pipe']
-            });
+            if (process.env.CHAT_PG_CONTRACT_BINARY) {
+                execFileSync(process.env.CHAT_PG_CONTRACT_BINARY,[],{
+                    env: { ...pg.env, CHAT_MYSQL_FIXTURE_PORT: String(mysql.port) },
+                    windowsHide: true, timeout: 45000, stdio: ['ignore','pipe','pipe']
+                });
+            }
             if (process.env.CHAT_DB_SERVICE_BIN) {
                 await backendWire({driver:'mysql',name:'chat_pg_reference',user:'root',password:'',port:mysql.port},portNumber);
             }

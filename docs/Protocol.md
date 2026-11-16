@@ -38,7 +38,7 @@ ResourceServer HTTP、头像权限、用户目录和资源消息合同见 [Resou
 
 ## 范围
 
-本规范覆盖 `proto/chat.proto`、`proto/varify.proto`、gRPC、GateServer/ResourceServer HTTP、ChatServer TCP 包、Redis key/value 和 MySQL 持久化边界。它约束项目定义的契约，不测试或重写第三方库内部实现。
+本规范覆盖 `proto/chat.proto`、`proto/varify.proto`、gRPC、GateServer/ResourceServer HTTP、ChatServer TCP 包、Redis key/value 和 关系数据库持久化边界。它约束项目定义的契约，不测试或重写第三方库内部实现。
 
 ## protobuf
 
@@ -128,7 +128,7 @@ Session ID。查询区分 Found、NotFound、Unavailable；发布失败不报告
 - 多步状态修改需要原子性时 MUST 使用事务、Lua 或等价原子操作，不能依赖进程内 mutex。
 - Redis 不可用时的 fail-fast、重试或降级策略 MUST 在调用接口中明确。
 
-## MySQL
+## 关系数据库
 
 - SQL MUST 使用参数绑定，禁止拼接用户输入。
 - 数据写入跨多表或多步骤时 MUST 明确事务边界和回滚行为。
@@ -145,7 +145,7 @@ Session ID。查询区分 Found、NotFound、Unavailable；发布失败不报告
 2. 新旧版本能否滚动共存？
 3. 默认值、未知字段和未知错误码如何处理？
 4. 是否需要更新示例配置、生成文件、测试和发布包？
-5. 是否增加 Redis/MySQL 清理或迁移步骤？
+5. 是否增加 Redis/数据库清理或迁移步骤？
 
 至少应有项目级 round-trip、handler 或 Integration 测试验证契约，而不是只确认生成代码能编译。
 
@@ -205,7 +205,7 @@ periodic authoritative synchronization and is sent only to a session that negoti
   离群后禁止服务端读取和新发送，本地历史保留；群不产生私聊送达/已读事实。
 - 登录及 1025/1026 目录保留用户曾加入的群，显式返回状态，不根据某页缺失推断删除。
   客户端每 10 秒从起点完整分页，每 2 秒同步有效群；旧版本不覆盖新状态，旧代次响应和 outbox 不重发。
-  同服、跨服及离线恢复以 MySQL 为权威，不新增广播设施。
+  同服、跨服及离线恢复以所选数据库的提交记录为权威，不新增广播设施。
 
 普通响应遵守 2048 字节包体限制，群资料按实际序列化大小分页；1006、1017、1028 和已协商的社交目录 1047 按各自读响应上限处理。
 协议需要 migration 006 及相应二进制合同；迁移入口与恢复边界见 [Data](Data.md)。
@@ -235,13 +235,13 @@ periodic authoritative synchronization and is sent only to a session that negoti
 
 `POST /logout` 只接受正整数 `uid` 和非空 `token`（最多 128 字节）。仅匹配当前 Token 才撤销，
 缺失视为已退出，旧凭据不能删除新登录，返回 `1011`；依赖失败返回错误，客户端保留账号供重试。
-改密先在账号级 MySQL 咨询锁内提升认证代次、撤销旧 Token，再写密码；撤销失败不改密码，
+改密先在账号级数据库会话锁内提升认证代次、撤销旧 Token，再写密码；撤销失败不改密码，
 密码写入失败则保守地保持撤销。登录在同一账号锁内校验口令并完成选服。
 Gate 签发时原子比较认证代次，代次已变化时拒绝写入。
 
 Token 是 24 小时空闲租约：当前 Chat 会话的业务请求、心跳及推送接收校验原子核对绑定 Token 后续期。
 改密、退出、替换登录后，旧连接下一次收发校验失败并关闭；已开始的事务和已写出的字节不承诺撤回。
-Chat 为已认证请求预留 MySQL 执行名额后，在 Redis 池再次校验绑定凭据。复核通过直接使用预留名额，排队期间已撤销凭据的请求不会执行 SQL。
+Chat 为已认证请求预留数据库执行名额后，在 Redis 池再次校验绑定凭据。复核通过直接使用预留名额，排队期间已撤销凭据的请求不会执行 SQL。
 Resource 直接从 Redis 校验请求凭据。强制终止客户端不能保证发送退出请求，凭据最终由撤销或空闲到期失效。
 暂时断线使用原 Token 和原端点，按 1/2/4/8/16 秒退避最多五次，每次认证十秒超时；
 恢复时保留当前页面、草稿和原消息 UUID。被踢、凭据失效和主动退出不触发自动重连。

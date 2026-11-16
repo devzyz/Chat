@@ -31,12 +31,12 @@ struct DependencyExecutor::Impl {
     };
     // 初始化容量后启动三组消费者；构造失败时回收已启动部分。
     Impl(std::size_t count, std::size_t capacity)
-        : mysql(ExternalTask::MySQL, count), capacity(capacity),
+        : sql_pool(ExternalTask::Database, count), capacity(capacity),
           routing_capacity(capacity - std::min<std::size_t>(8, capacity / 2)) {
         if (!capacity || !count)
             throw std::invalid_argument("invalid dependency capacity");
         try {
-            for (auto pool : {&redis, &mysql, &grpc})
+            for (auto pool : {&redis, &sql_pool, &grpc})
                 for (std::size_t i = 0; i < pool->limit; ++i)
                     pool->workers.emplace_back(&Impl::Run, this, std::ref(*pool));
         } catch (...) {
@@ -49,8 +49,8 @@ struct DependencyExecutor::Impl {
         switch (kind) {
         case ExternalTask::Redis:
             return redis;
-        case ExternalTask::MySQL:
-            return mysql;
+        case ExternalTask::Database:
+            return sql_pool;
         case ExternalTask::OutboundGrpc:
             return grpc;
         }
@@ -79,13 +79,13 @@ struct DependencyExecutor::Impl {
         pool.ready.notify_one();
         return LogicSubmitResult::Accepted;
     }
-    // 回填已占用的 MySQL 名额；成功直接运行 SQL，失败只完成请求。
+    // 回填已占用的 数据库 名额；成功直接运行 SQL，失败只完成请求。
     void Approve(Task task) {
         {
             std::lock_guard<std::mutex> lock(mutex);
-            mysql.approved.push(std::move(task));
+            sql_pool.approved.push(std::move(task));
         }
-        mysql.ready.notify_one();
+        sql_pool.ready.notify_one();
     }
     // 把凭据检查交给 Redis；SQL 线程立刻回到取任务循环。
     void CheckSql(Job job) {
@@ -151,7 +151,7 @@ struct DependencyExecutor::Impl {
     }
     // 所有消费者重新检查退出条件。
     void WakeAll() {
-        for (auto pool : {&redis, &mysql, &grpc})
+        for (auto pool : {&redis, &sql_pool, &grpc})
             pool->ready.notify_all();
     }
     // 对外关闭入口后排空，包括内部 Redis 复核。
@@ -161,11 +161,11 @@ struct DependencyExecutor::Impl {
             closed = true;
         }
         WakeAll();
-        for (auto pool : {&redis, &mysql, &grpc})
+        for (auto pool : {&redis, &sql_pool, &grpc})
             for (auto& thread : pool->workers)
                 thread.join();
     }
-    Pool redis{ExternalTask::Redis, 2}, mysql, grpc{ExternalTask::OutboundGrpc, 1};
+    Pool redis{ExternalTask::Redis, 2}, sql_pool, grpc{ExternalTask::OutboundGrpc, 1};
     const std::size_t capacity, routing_capacity;
     std::mutex mutex;
     std::condition_variable idle;
@@ -174,8 +174,8 @@ struct DependencyExecutor::Impl {
     std::once_flag stop_once;
 };
 
-DependencyExecutor::DependencyExecutor(std::size_t mysql_workers, std::size_t capacity)
-    : _impl(std::make_unique<Impl>(mysql_workers, capacity)) {}
+DependencyExecutor::DependencyExecutor(std::size_t database_workers, std::size_t capacity)
+    : _impl(std::make_unique<Impl>(database_workers, capacity)) {}
 DependencyExecutor::~DependencyExecutor() {
     Stop();
 }
@@ -190,7 +190,7 @@ LogicSubmitResult DependencyExecutor::SubmitExternal(
     Task task,
     RedisAdmission admission,
     SqlGuard guard) {
-    if (!task || (guard.check && (kind != ExternalTask::MySQL || !guard.denied)))
+    if (!task || (guard.check && (kind != ExternalTask::Database || !guard.denied)))
         throw std::invalid_argument("invalid dependency task");
     return _impl->Enqueue(kind, {std::move(task), std::move(guard)}, admission);
 }

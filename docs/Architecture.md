@@ -78,7 +78,7 @@ ChatServer 每进程共享 Redis、关系数据库、出站 gRPC 三个有界依
 ### Qt 客户端
 
 - 负责桌面交互、客户端状态和协议调用。
-- UI 层 MUST NOT 直接操作 Server 的 Redis/MySQL 数据结构。
+- UI 层 MUST NOT 直接操作 Server 的 Redis 或关系数据库结构。
 - 网络 DTO、领域状态、Qt Model 和 Widget 展示 SHOULD 分层，避免把业务规则固化在事件处理函数中。
 - `ClientSession` 是 authenticated-session 生命周期的单一 owning Module。返回登录页前 MUST 通过其 `resetSession` 清理 `TcpMgr` connection 状态与 `UserMgr` account transient state，并销毁旧 `ChatDialog` 所有权树；仅隐藏旧页面不构成会话结束。
 - `TcpMgr`/`TcpFrameDecoder` 只拥有 connection 生命周期；主题、窗口策略和服务器配置属于应用级状态，不随账号 reset。已实现的本地消息存储由 `MessageService` 协调，MUST 按账号和 schema version 隔离，见 [MessageStorage](MessageStorage.md)。

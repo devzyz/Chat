@@ -78,7 +78,7 @@ item 含 `message_id`、`recipient_uid`、`level`、`revision`、毫秒 `deliver
 StorageUnavailable、DeadlineExceeded。错误不推进客户端游标。
 上报应答丢失可重放；相同等级不分配新 revision，Read 隐含 Delivered 并保持首次时间。
 
-MySQL `private_chat_receipt_clock` 分配会话 revision，`chat_message_receipt` 只保存当前最高等级。
+服务端数据库中的 `private_chat_receipt_clock` 分配会话 revision，`chat_message_receipt` 只保存当前最高等级。
 写入和分页均锁同一 `private_chat` 行，避免跳过未提交的小 revision；旧消息升级到 Read 时获得新 revision。
 回执与正文使用独立游标，回执可早于正文/发送 ACK 保存，关联身份后投影。
 本地回执页和游标同事务提交；Delivered ACK 不能清除已排队的 Read。
@@ -89,7 +89,7 @@ MySQL `private_chat_receipt_clock` 分配会话 revision，`chat_message_receipt
 
 ## 升级与验证边界
 
-MySQL migration 004 新增两张回执表；Gate、Chat、Resource 使用相同更新后的 schema 校验合同。
+MySQL migration 004 新增两张回执表；PG 基线也包含这两张表；Gate、Chat、Resource 在启动时校验所选后端。
 停止写入、备份数据库、执行 [迁移入口](Data.md#operational-entry)、部署全部相关服务后再更新客户端。
 旧二进制会拒绝新 schema，不能混跑；DDL 失败按迁移恢复合同处理，不自动回滚/删除业务数据。
 

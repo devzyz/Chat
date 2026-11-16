@@ -67,7 +67,7 @@ Chat TCP 和跨服 gRPC 通道发送资源描述。图片在消息列表展示�
 
 统一构建和常规回归入口为 `scripts/windows-local.ps1 -Task BuildServers` / `RunServerTests`。
 Windows CI 构建资源服务、执行[资源存储回归](../tests/server/resource/README.md)，并在完整运行中提供独立 ResourceServer.zip。
-发布包启动冒烟使用隔离临时 MySQL，不代表资源业务全链路验收。
+发布包冒烟默认在临时 PostgreSQL 上运行包内迁移器，并验证资源服务启动、未认证请求拒绝和退出。MySQL 兼容冒烟可通过 `CHAT_SMOKE_DATABASE=mysql` 选择。
 
 补充本地集成入口（不会恢复依赖或触发 CI）：
 
@@ -76,5 +76,5 @@ Windows CI 构建资源服务、执行[资源存储回归](../tests/server/resou
 .\scripts\resource-local.ps1 -Task Test -VcpkgRoot <已有vcpkg路径> -InstalledDir <已有vcpkg_installed路径> -QtRoot <Qt目录> -MinGwRoot <MinGW目录>
 ```
 
-测试要求 Python，视频生成使用本机 OpenCV/NumPy，数据库测试使用已安装的 MySQL 8 `mysqld/mysql`。
+上述资源专项测试使用 Python、OpenCV/NumPy 及临时 MySQL 8。默认 PG 开发验证使用[数据库测试入口](../tests/server/schema-migration/README.md#postgresql-与双库合同)，其中原生用例核对附件授权和头像引用。
 缺少工具时报告失败，不自动安装。测试覆盖和证据边界见 `tests/server/resource/README.md`。

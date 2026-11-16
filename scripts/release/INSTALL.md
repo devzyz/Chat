@@ -21,7 +21,7 @@
 4. 配置 GateServer 中的 ChatServer 列表，实例名称保持一致；TLS 部署时公布外部 TCP 入口，
    ChatServer 监听内部端口，RPC 仍使用本机地址。
    多实例参考 ChatServer/configs/ 中的模板。
-5. 填写 ResourceServer 的监听地址、Redis、MySQL 和可写 StorageRoot；相对存储路径以配置目录为基准。
+5. 填写 ResourceServer 的监听地址、Redis、与 Gate 和 Chat 一致的 `[Database]` 配置和可写 StorageRoot；相对存储路径以配置目录为基准。
    在各应用目录启动 VarifyServer（node.exe server.js）、ChatServer.exe、ResourceServer.exe、GateServer.exe。
    C++ 服务支持 --config <文件>；Varify 支持 CHAT_CONFIG 和 CHAT_VARIFY_BIND_ADDRESS。
 6. 填写 chat-client/config.ini 中的 GateServer 地址及 `[ResourceServer] Url`，启动 chat.exe。

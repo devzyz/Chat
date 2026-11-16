@@ -23,7 +23,8 @@ async function run() {
     const report = { schemaVersion: 2, sha, profile: profileName, parameters: profile,
         requestId: process.env.CHAT_PERFORMANCE_REQUEST_ID || '', seed: 'chat-performance-v1',
         url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
-        environment: { cpus: os.cpus().length, cpuModel: os.cpus()[0].model, memoryBytes: os.totalmem(),
+        environment: { databaseImage: require('../services.lock.json').services.mysql.image,
+            cpus: os.cpus().length, cpuModel: os.cpus()[0].model, memoryBytes: os.totalmem(),
             node: process.version, kernel: os.release(), cpuTicksPerSecond: Number(execFileSync('getconf', ['CLK_TCK'], { encoding: 'utf8' })) },
         status: 'running', results: [], warmups: [], failures: [], phases: [], samples: [] };
     const controller = new AbortController();

@@ -364,7 +364,7 @@ TEST(LogicDispatcherTests, SlowWritesAllowOtherSessionsAndPreserveReadAfterWrite
             // 工作线程暂停到测试释放门闩；回调必须回到业务线程。
             EXPECT_EQ(
                 executor->SubmitExternal(
-                    ExternalTask::MySQL,
+                    ExternalTask::Database,
                     message.session,
                     [&, id, thread]() -> LogicDispatcher::Completion {
                         EXPECT_NE(thread, std::this_thread::get_id());
@@ -408,7 +408,7 @@ TEST(LogicDispatcherTests, DatabaseCapacityRejectsWithoutWritingAndDrainsFailure
             const auto id = message.id;
             // 第一笔故意抛错，第二笔应正常执行，第三笔不应进入数据库。
             auto result = executor->SubmitExternal(
-                ExternalTask::MySQL,
+                ExternalTask::Database,
                 message.session,
                 [&, id]() -> LogicDispatcher::Completion {
                     if (id == 1) {
@@ -495,7 +495,7 @@ TEST(LogicDispatcherTests, SlowRedisAndGrpcAllowIndependentSqlAndDrain) {
                         return [&, session] {
                             // 查询开始即证明通知和慢认证没有耗尽数据库容量。
                             executor->SubmitExternal(
-                                ExternalTask::MySQL,
+                                ExternalTask::Database,
                                 session,
                                 [&]() -> LogicDispatcher::Completion {
                                     second_auth.set_value();
@@ -569,7 +569,7 @@ TEST(LogicDispatcherTests, RedisReservesCriticalCapacityAndRejectsGuardedWritesW
         ADD_FAILURE() << "unexpected SQL";
     };
     EXPECT_EQ(
-        executor.SubmitExternal(ExternalTask::MySQL, sql, RedisAdmission::Critical, guard),
+        executor.SubmitExternal(ExternalTask::Database, sql, RedisAdmission::Critical, guard),
         LogicSubmitResult::Accepted);
     EXPECT_EQ(denied.get_future().wait_for(2s), std::future_status::ready);
     release.set_value();
@@ -582,7 +582,7 @@ TEST(LogicDispatcherTests, ReservedSqlResumesAheadOfLaterWorkDuringDrain) {
     std::promise<void> checking, release;
     auto gate = release.get_future().share();
     std::vector<int> order;
-    // 复核在 Redis 上执行，MySQL 上不持有等待 Redis 的调用栈。
+    // 复核在 Redis 上执行，数据库 上不持有等待 Redis 的调用栈。
     DependencyExecutor::SqlGuard guard;
     // 记录复核实际所属线程并控制放行顺序。
     guard.check = [&] {
@@ -594,16 +594,16 @@ TEST(LogicDispatcherTests, ReservedSqlResumesAheadOfLaterWorkDuringDrain) {
     guard.denied = [] {
         ADD_FAILURE() << "lost SQL reservation";
     };
-    // 检查结果必须返回 MySQL 线程执行写入。
+    // 检查结果必须返回 数据库 线程执行写入。
     auto write = [&] {
-        EXPECT_TRUE(DependencyExecutor::RunningOn(ExternalTask::MySQL));
+        EXPECT_TRUE(DependencyExecutor::RunningOn(ExternalTask::Database));
         order.push_back(1);
     };
     DependencyExecutor executor(1, 4);
-    executor.SubmitExternal(ExternalTask::MySQL, write, RedisAdmission::Critical, guard);
+    executor.SubmitExternal(ExternalTask::Database, write, RedisAdmission::Critical, guard);
     ASSERT_EQ(checking.get_future().wait_for(2s), std::future_status::ready);
     // 这笔读取应排在预留写入之后。
-    executor.SubmitExternal(ExternalTask::MySQL, [&] {
+    executor.SubmitExternal(ExternalTask::Database, [&] {
         order.push_back(2);
     });
     // 从所有者线程验证带预留名额的停服。
@@ -719,7 +719,7 @@ TEST(LogicDispatcherTests, ReadWaitsForFinalContinuationOnItsOwningShard) {
                         };
                     };
                     EXPECT_EQ(
-                        executor->SubmitExternal(ExternalTask::MySQL, writer, write, {}),
+                        executor->SubmitExternal(ExternalTask::Database, writer, write, {}),
                         LogicSubmitResult::Accepted);
                 };
             };

@@ -363,7 +363,7 @@ function Run-ServerTests {
     $arguments = @(
         $solution
         '/m'
-        '/t:GateServer;ChatServer;ResourceServer;ServerUnitTests;ServerComponentTests;ServerIntegrationTests;ChatGrpcClientTests'
+        '/t:GateServer;ChatServer;ResourceServer;ServerUnitTests;ServerComponentTests;ServerIntegrationTests;ChatGrpcClientTests;PostgresContractTests'
         "/p:Configuration=$Configuration"
         '/p:Platform=x64'
         "/p:VcpkgRoot=$($vcpkg.Root)"

@@ -14,7 +14,7 @@ Windows 使用 `tests/server/PostgresContractTests.vcxproj`，按普通测试入
 并提供 redis-server、redis-cli，可在两个后端各起一个网关、两个 Chat 和一个资源服务，跑注册、
 选服、跨实例发送、幂等重试与补拉。此用例启动 VarifyServer 与本机 SMTP 测试对端，通过 Gate 请求验证码，再从独占 Redis 读取该验证码完成注册；需先准备 VarifyServer 的已锁定 Node.js 依赖。
 Windows 的服务目录使用 `build/windows-servers/Release`，每个 EXE 位于其服务子目录内。
-Linux CI 显式选择 both 并设置两个二进制入口。
+面向 develop 的常规 Windows PR 检查运行 PG 迁移和原生存储合同。Linux 全量 CI 显式选择 both 并设置两个二进制入口，两库均验证真实提交成功但确认丢失后的 UUID 重试。原生程序与服务程序可独立指定。
 
 需要短时性能样本时，将 `CHAT_DB_SAMPLE_DIR` 设为输出目录的绝对路径。每个选中的后端在同一条跨实例私聊上
 以每秒 20 条发送 10 秒，记录提交 ACK 延迟和吞吐，并由接收端逐条核验 UUID 和消息 ID。

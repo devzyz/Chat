@@ -105,7 +105,7 @@ jobs:
           })
           $requiredDependencies = @(
               'boost-asio', 'boost-beast', 'boost-filesystem', 'boost-property-tree',
-              'boost-uuid', 'grpc', 'gtest', 'hiredis', 'jsoncpp', 'mysql-connector-cpp',
+              'boost-uuid', 'grpc', 'gtest', 'hiredis', 'jsoncpp', 'libpq', 'mysql-connector-cpp',
               'protobuf', 'spdlog'
           )
           foreach ($dependency in $requiredDependencies) {
@@ -467,13 +467,31 @@ jobs:
               -ServerTriplet x64-windows-chat-release `
               -ServerHostTriplet x64-windows-chat-release
 
+      - name: Verify default PostgreSQL schema and native storage
+        shell: pwsh
+        timeout-minutes: 5
+        env:
+          CHAT_TEST_DATABASES: postgresql
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pg = Get-ChildItem (Join-Path $env:ProgramFiles 'PostgreSQL') -Directory |
+              Where-Object { $_.Name -match '^\d+$' } |
+              Sort-Object { [int]$_.Name } -Descending | Select-Object -First 1
+          if (-not $pg) { throw 'PostgreSQL server tools missing from runner' }
+          $env:CHAT_PG_BIN = Join-Path $pg.FullName 'bin'
+          $env:CHAT_PG_CONTRACT_BINARY = (Resolve-Path 'build/windows-tests/Release/postgres_contract.exe').Path
+          node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=build/test-results/postgresql_native.xml tests/server/schema-migration/postgres.test.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Upload layered Server test reports
         if: always()
         id: evidence_3
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-server-test-results
-          path: build/test-results/server_*.xml
+          path: |
+            build/test-results/server_*.xml
+            build/test-results/postgresql_native.xml
           if-no-files-found: error
           retention-days: 7
 
@@ -483,7 +501,7 @@ jobs:
           CI_JOB_STATUS: ${{ job.status }}
           CI_CHECK_RUN_ID: ${{ job.check_run_id }}
           CI_ARTIFACT_URL: ${{ steps.evidence_3.outputs.artifact-url }}
-        run: python scripts/ci/test_summary.py "04 Server components" "build/test-results/server_*.xml"
+        run: python scripts/ci/test_summary.py "04 Server components and PostgreSQL" "build/test-results/server_*.xml" "build/test-results/postgresql_native.xml"
 
       - name: Verify independent app-local server directories · 03 Windows build
         shell: pwsh
@@ -492,6 +510,7 @@ jobs:
           $releaseRoot = Join-Path $env:GITHUB_WORKSPACE 'build\windows-servers\Release'
           $coreAppLocalDlls = @(
               'hiredis.dll',
+              'libpq.dll',
               'libcrypto-3-x64.dll',
               'libssl-3-x64.dll',
               'zlib1.dll'

@@ -117,7 +117,7 @@ JS 匿名类没有命名要求，具名类仍检查。这些例外都不免除�
 ## 2. 回归测试
 
 保留已有业务行为测试。快速流程的“快速”指不启用 Docker 真实依赖和完整 E2E，不省略单元测试；首次冷依赖构建仍可能较慢。
-全量流程额外运行 POSIX 生命周期、Linux 同源构建、MySQL/Redis/SMTP、四服务和双客户端双服务完整 E2E。
+Windows 快速流程使用临时 PostgreSQL 运行迁移和原生存储合同。全量流程额外在 Linux 运行 PostgreSQL / MySQL 双实例协议对照，并保留既有 MySQL、Redis、SMTP、Qt 等完整业务回归。
 
 Windows 静态 job 统一执行一次 `CheckTestStructure`；其成功后，各测试入口使用
 `-SkipTestStructureCheck` 复用同一提交的检查结果。该参数仅允许 GitHub CI 的四个测试入口使用，
@@ -152,8 +152,8 @@ quick 保留所有 Windows 测试及报告上传，不生成或上传应用 ZIP�
 3. 新 Windows runner 下载并解压候选包，在源码目录之外验证文件、程序加载、启动和清理。
 4. 创建或继续同 SHA 的未发布草稿，上传同一个 ZIP，再下载核对字节后公开 Release。
 
-Windows 冒烟仅为 ResourceServer 启动临时 MySQL，先核验服务端及客户端为 MySQL 8，缺失时失败；
-不提供真实 Redis。完整业务由同 SHA 的 Linux 真实依赖 E2E 验证。
+Windows 发布冒烟默认在隔离 PostgreSQL 上执行包内迁移，验证 Gate、Chat、Resource 的启动与退出；
+发布冒烟使用 Redis 夹具；真实 Redis、验证码邮件和跨实例消息路径由同 SHA 的 Linux 全量流程验证。
 不将包启动冒烟称为 Windows 真实数据库端到端验证。
 未发布构建允许重试，不占用版本或源码；已发布版本和文件不覆盖，需要新的 VERSION。
 定时、PR、手动全量检查均不发布。N-1 完整矩阵暂缓，已有协议和 schema 迁移回归继续运行。

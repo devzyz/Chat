@@ -181,7 +181,7 @@ jobs:
         # Leave time for blocked evidence and artifact upload before the job cap.
         timeout-minutes: 57
         run: |
-          node --test tests/server/schema-migration/migration.test.js
+          node --test tests/server/schema-migration/migration.test.js tests/services/performance/*.test.js
           mkdir -p "$CHAT_EVIDENCE_ROOT"
           set -o pipefail
           timeout --signal=TERM --kill-after=30s 55m \

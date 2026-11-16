@@ -11,7 +11,7 @@ SERVERS = ('GateServer', 'ChatServer', 'ResourceServer')
 APPS = (*SERVERS, 'chat-client', 'VarifyServer')
 REQUIRED = [*(f'{app}/{app}.exe' for app in SERVERS),
             *(f'{app}/{dll}' for app in SERVERS
-              for dll in ('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')),
+              for dll in ('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'libpq.dll')),
             'chat-client/chat.exe', 'chat-client/Qt6Core.dll', 'chat-client/Qt6Widgets.dll',
             'chat-client/platforms/qwindows.dll', 'VarifyServer/node.exe', 'VarifyServer/server.js',
             'VarifyServer/tlsGateway.js', 'VarifyServer/tls.config.example.json',

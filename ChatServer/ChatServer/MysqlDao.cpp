@@ -152,7 +152,7 @@ std::shared_ptr<UserInfo> MysqlDao::GetUserByName(const std::string name) {
 
         return user_ptr;
     } catch (const std::exception& e) {
-        SPDLOG_ERROR("mysql GetUserByName failed, name={}, error={}", name, e.what());
+        SPDLOG_ERROR("database GetUserByName failed, name={}, error={}", name, e.what());
         return nullptr;
     }
 }
@@ -195,7 +195,7 @@ bool MysqlDao::AddFriendApply(
         return true;
     } catch (const std::exception& e) {
         SPDLOG_ERROR(
-            "mysql AddFriendApply failed, from_uid={}, to_uid={}, description_size={}, backname_size={}, error={}",
+            "database AddFriendApply failed, from_uid={}, to_uid={}, description_size={}, backname_size={}, error={}",
             from_uid,
             to_uid,
             description.size(),
@@ -263,7 +263,7 @@ bool MysqlDao::GetApplyFriendList(
         return true;
     } catch (const std::exception& e) {
         SPDLOG_ERROR(
-            "mysql GetApplyFriendList failed, to_uid={}, start={}, limit={}, error={}",
+            "database GetApplyFriendList failed, to_uid={}, start={}, limit={}, error={}",
             to_uid,
             start,
             limit,
@@ -498,7 +498,7 @@ bool MysqlDao::AuthFriendApply(
         transaction.Commit();
         return true;
     } catch (const std::exception&) {
-        SPDLOG_ERROR("mysql AuthFriendApply failed, apply_uid={}, auth_uid={}", apply_uid, auth_uid);
+        SPDLOG_ERROR("database AuthFriendApply failed, apply_uid={}, auth_uid={}", apply_uid, auth_uid);
         // 有错误，则回滚
         return false;
     }
@@ -540,7 +540,7 @@ bool MysqlDao::GetFriendList(int uid, std::vector<std::shared_ptr<UserInfo>>& fr
 
         return true;
     } catch (const std::exception& e) {
-        SPDLOG_ERROR("mysql GetFriendList failed, uid={}, error={}", uid, e.what());
+        SPDLOG_ERROR("database GetFriendList failed, uid={}, error={}", uid, e.what());
         return false;
     }
 }
@@ -630,7 +630,7 @@ bool MysqlDao::GetUserChatList(
         return true;
     } catch (const std::exception& e) {
         SPDLOG_ERROR(
-            "mysql GetUserChatList failed, uid={}, current_chat_id={}, page_size={}, error={}",
+            "database GetUserChatList failed, uid={}, current_chat_id={}, page_size={}, error={}",
             uid,
             current_chat_id,
             page_size,
@@ -687,12 +687,12 @@ bool MysqlDao::CreatePrivateChat(int user1_id, int user2_id, int& chat_id) {
         } catch (const std::exception& error) {
             if (!database::Duplicate(error))
                 throw;
-            // 唯一键竞争已由 MySQL 裁决；临时 chat 行随事务回滚，只返回该用户对的已提交 ID。
+            // 唯一键竞争已由 数据库 裁决；临时 chat 行随事务回滚，只返回该用户对的已提交 ID。
             chat_id = find_chat();
         }
         return chat_id != -1;
     } catch (const std::exception&) {
-        SPDLOG_ERROR("mysql CreatePrivateChat failed, user1_id={}, user2_id={}", user1_id, user2_id);
+        SPDLOG_ERROR("database CreatePrivateChat failed, user1_id={}, user2_id={}", user1_id, user2_id);
         chat_id = -1;
         return false;
     }
@@ -797,7 +797,7 @@ bool MysqlDao::SyncChatMessages(int uid, int chat_id, std::int64_t after, Json::
         messaging::SyncPage(*connection->_connection, uid, chat_id, after, response, MAX_HISTORY_BODY_LENGTH);
         return true;
     } catch (const std::exception&) {
-        SPDLOG_WARN("mysql message synchronization failed, chat_id={}", chat_id);
+        SPDLOG_WARN("database message synchronization failed, chat_id={}", chat_id);
         return false;
     }
 }
@@ -881,7 +881,7 @@ bool MysqlDao::GetChatMessageList(
         return true;
     } catch (const std::exception& e) {
         SPDLOG_ERROR(
-            "mysql GetChatMessageList failed, chat_id={}, current_msg_id={}, page_size={}, error={}",
+            "database GetChatMessageList failed, chat_id={}, current_msg_id={}, page_size={}, error={}",
             chat_id,
             current_msg_id,
             page_size,

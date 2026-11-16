@@ -85,6 +85,19 @@ class ReleaseContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Expected one CI ZIP for ResourceServer'):
             package.assemble(ROOT, self.artifacts, self.root / 'missing-resource', self.sha)
 
+    def test_every_server_requires_its_own_postgres_runtime(self):
+        """每个发布单元都必须能从自身目录加载 PG 驱动。"""
+        root = self.root / 'missing-libpq'
+        package.verify(self.build(), root, self.sha)
+        for server in package.SERVERS:
+            with self.subTest(server=server):
+                dll = root / server / 'libpq.dll'
+                content = dll.read_bytes()
+                dll.unlink()
+                with self.assertRaisesRegex(ValueError, f'Missing runtime file: {server}/libpq'):
+                    package.check_layout(root)
+                dll.write_bytes(content)
+
     def test_resource_runtime_files_cannot_be_omitted(self):
         """资源服务缺少可执行文件或运行库时必须拒绝发布包。"""
         self.assertIn('ResourceServer', package.APPS)

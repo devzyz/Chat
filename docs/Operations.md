@@ -22,7 +22,7 @@ Gate、Chat 与 Resource 使用同一后端和数据库；新配置的驱动、�
 `common/logging/RotatingLog.h`，各服务 `LogMgr` 只读取本服务配置；关闭仍仅刷新，保留注册表供静态析构记录日志。
 
 Gate 的 `GET /get_test` 保留为发布冒烟和服务回归的 HTTP 就绪探针。
-HTTP 200 与响应正文只证明 Gate 监听可用，不代表 Redis、MySQL 或下游服务健康。
+HTTP 200 与响应正文只证明 Gate 监听可用，数据库和依赖服务的健康须分别检查。
 
 - 配置 MUST 在启动监听、创建后台线程和登记 Redis 状态前完成校验。
 - 必填 section、key 和非空值 MUST 逐项校验，错误包含配置路径和字段名。
@@ -133,7 +133,7 @@ getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超�
 
 ### 数据库结构与消息写入
 
-- Gate/Chat 启动前必须已完成 [版本化迁移](Data.md#operational-entry)；服务只验证
+- Gate/Chat 启动前必须已完成 [所选后端的版本化迁移](Data.md)；服务只验证
   version/checksum/结构，不在启动时执行 DDL。旧的无版本开发库会被拒绝，不能直接覆盖导入。
   现有数据须先备份并单独规划接管；当前迁移只接受空库或可信迁移历史。
 - Chat 的 MySQL Host 使用数字 IP 或 `localhost`，IPv6 使用方括号；不接受不可取消的
@@ -180,7 +180,7 @@ Gate/Chat/Resource 实例，再配置 ResourceServer 的数据库、Redis 和存
 Gate `[GateServer] Host` 可选，默认 `0.0.0.0`；Chat `[SelfServer] Host` 是对客户端公布的地址，
 可另设 `BindHost` 作为监听地址。Gate 配置中的 Chat 地址须为客户端可达的局域网 IP。
 Chat `[SelfServer] RpcHost` 默认 `127.0.0.1`，只允许数值 loopback；
-Varify 默认 `127.0.0.1:50051`。不得向客户端开放内部 RPC、MySQL 或 Redis。
+Varify 默认 `127.0.0.1:50051`。不得向客户端开放内部 RPC、数据库或 Redis。
 外部入口统一使用下述 TLS 网关，业务服务只监听本机；禁止在 LAN 暴露解密后的业务端口。
 
 Chat 每实例最多接收 1024 个 TCP 会话，业务队列满时关闭连接并记录原因。
@@ -212,7 +212,7 @@ node VarifyServer/tlsGateway.js --config VarifyServer/tls.config.json
 
 部署时将 Gate `Host`、Resource `Host` 和 Chat `BindHost` 配置为 `127.0.0.1`，
 Chat `Port` 保留内部 8091/8092；Gate 的 Chat 节点 `Host/Port` 则公布证书覆盖的外部主机名及
-8445/8446，节点名称与 Chat 保持一致。防火墙只开放网关端口，RPC/MySQL/Redis 保持本机。
+8445/8446，节点名称与 Chat 保持一致。防火墙只开放网关端口，RPC、数据库和 Redis 保持在内网。
 客户端配置如下（地址为文档示例，须替换为自己的证书名称）：
 
 ```ini

@@ -109,6 +109,49 @@ void SharedOperations(database::Session db) {
         "GroupIdentity");
 }
 
+// 先在 MySQL 完成真实事务，再模拟提交回包在适配器获得确认前丢失。
+class LostMysqlConfirmation final : public message_commit::TransactionCommit {
+public:
+    // 保留服务端已落库的状态，让调用方按未知结果恢复。
+    void Commit(sql::Connection& connection) override {
+        connection.commit();
+        throw std::runtime_error("SyntheticCommitConfirmationLost");
+    }
+};
+
+// 用独立连接核对未确认提交，确认原 UUID 重试取回已持久化的同一 ID。
+void VerifyMysqlCommitRecovery(sql::Connection& observer, const std::string& endpoint) {
+    const int chat = social::Relation(observer, 1, 2)["chat_id"].asInt();
+    const message_commit::Batch batch{{"12345678-1234-1234-1234-000000000123", "retry"}};
+    const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    {
+        auto writer = message_commit::ConnectBounded(endpoint, "root", "", "chat_pg_reference");
+        LostMysqlConfirmation fault;
+        message_commit::MySqlMessageCommitAdapter store(*writer, fault);
+        const auto result = message_commit::Commit(store, {1}, 1, 2, chat, batch, end);
+        Require(
+            result.error == message_commit::Error::STORAGE_UNAVAILABLE && result.items.empty() && !store.IsReusable(),
+            "UnconfirmedMysqlCommit");
+    }
+    social::Query before(
+        observer,
+        "SELECT message_id FROM chat_message WHERE send_id=? AND client_msg_uuid=?",
+        {"1", batch[0].first});
+    Require(before.rows->Next(), "MysqlCommitPersisted");
+    const auto id = before.rows->GetInt(1);
+    message_commit::MySqlMessageCommitAdapter retry(observer);
+    const auto recovered = message_commit::Commit(retry, {1}, 1, 2, chat, batch, end);
+    Require(
+        recovered.IsSuccess() && recovered.items.size() == 1 && recovered.items[0].message_id == id &&
+            recovered.items[0].disposition == message_commit::Disposition::EXISTING,
+        "MysqlCommitRecovery");
+    social::Query count(
+        observer,
+        "SELECT COUNT(*) FROM chat_message WHERE send_id=? AND client_msg_uuid=?",
+        {"1", batch[0].first});
+    Require(count.rows->Next() && count.rows->GetInt(1) == 1, "MysqlCommitSingleRow");
+}
+
 // 在测试所属实例上运行真实驱动合同。
 void Run() {
     if (std::getenv("CHAT_MYSQL_FIXTURE_PORT")) {
@@ -118,6 +161,7 @@ void Run() {
             "",
             "chat_pg_reference");
         SharedOperations(*mysql);
+        VerifyMysqlCommitRecovery(*mysql, "127.0.0.1:" + Env("CHAT_MYSQL_FIXTURE_PORT"));
         return;
     }
     chat_pg::Settings config{
