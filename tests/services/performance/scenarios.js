@@ -5,6 +5,8 @@ const { performance } = require('node:perf_hooks');
 const { setTimeout: delay } = require('node:timers/promises');
 const { distribution, measure } = require('./metrics');
 const text = 'p'.repeat(256);
+const pixelPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64');
+const fileSizes = [pixelPng.length, 1048576, 10485760];
 
 /** 跟踪本场景的消息身份、真实确认和接收状态，不把重试通知计作新消息。 */
 class Messages {
@@ -35,7 +37,7 @@ class Messages {
         // 保存此消息的全部接收完成回调。
         const visible = new Promise(done => { resolve = done; });
         // 取接收者身份。
-        const entry = { targets: new Set(receivers.map(client => client.uid)),
+        const entry = { sender: sender.uid, targets: new Set(receivers.map(client => client.uid)),
             observed: new Set(), ids: new Set(), start: performance.now(), resolve };
         this.entries.set(uuid, entry);
         const fields = { from_uid: sender.uid, to_uid: epoch ? 0 : receivers[0].uid, chat_id: chatId,
@@ -69,8 +71,11 @@ class Messages {
         for (let start = 0; start < uuids.length; start += 200) {
             const batch = uuids.slice(start, start + 200);
             // 只编码内部生成的 UUID，不接收外部 SQL。
-            const ids = batch.map(uuid => `'${uuid}'`).join(',');
-            const value = await sql.execute(`SELECT COUNT(*), COUNT(DISTINCT client_msg_uuid) FROM chat_message WHERE client_msg_uuid IN (${ids})`);
+            const ids = batch.map(
+                // 用发送者和 UUID 的组合定位此批已提交的消息。
+                uuid => `(${this.entries.get(uuid).sender},'${uuid}')`).join(',');
+            const value = await sql.execute(`SELECT COUNT(*), COUNT(DISTINCT client_msg_uuid) FROM chat_message
+                WHERE (send_id,client_msg_uuid) IN (${ids})`);
             assert.equal(value, `${batch.length}\t${batch.length}`, 'persistence-count');
         }
         assert.equal(this.invalid, 0, 'invalid-delivery');
@@ -109,6 +114,7 @@ async function prepare(env, clients) {
     for (const client of clients) { if (!byPort.has(client.port)) byPort.set(client.port, []); byPort.get(client.port).push(client); }
     assert.equal(byPort.size, 2, 'two-live-instances');
     const [left, right] = [...byPort.values()];
+    assert.equal(left.length, right.length, 'uneven-instance-populations');
     const known = new Map();
     // 复用已建立好友的私聊身份，避免重复申请。
     const pair = async (first, second) => {
@@ -153,12 +159,20 @@ async function privateMessages(env, pairs, clients, profile, seconds) {
 /** 以生产两秒周期补拉群消息，分别记录提交确认与所有成员可见延迟。 */
 async function groupMessages(env, groups, profile, seconds) {
     const messages = new Messages([]); let stopped = false; const errors = [];
+    const starts = [];
+    for (const group of groups) {
+        // 复用群的后续轮次从新负载开始前的实际位置补拉。
+        starts.push(profile.peakRate ? Number(await env.sql.execute(
+            `SELECT COALESCE(MAX(message_id),0) FROM chat_message WHERE chat_id=${group.chatId}`)) : 0);
+    }
     // 为每个非发送成员建立独立游标。
-    const pollers = groups.flatMap(group => group.members.slice(1).map(
+    const pollers = groups.flatMap((group, groupIndex) => group.members.slice(1).map(
         // 持续执行有界同步，组内写入和读取走真实服务。
         async (client, index) => {
-            let cursor = 0;
+            let cursor = starts[groupIndex];
             try {
+                // 分散独立桌面客户端的两秒轮询相位，同时保持每人的原有周期。
+                if (profile.peakRate) await delay(Math.floor(2000 * (index * groups.length + groupIndex) / (19 * groups.length)));
                 while (!stopped) {
                     await delay(2000);
                     const value = await sync(client, group.chatId, cursor, group.epochs[index + 1],
@@ -183,17 +197,25 @@ async function groupMessages(env, groups, profile, seconds) {
 }
 
 /** 为每个接收方离线积压一百条，准备阶段独立计时。 */
-async function prepareOffline(env, pairs) {
+async function prepareOffline(env, pairs, seeded = false) {
     const messages = new Messages([]); const expected = new Map();
-    for (const pair of pairs) {
+    // 每个接收者断开后记录起点，随后实际经 TCP 依次提交一百条积压。
+    const preparePair = async pair => {
         env.signal?.throwIfAborted();
         pair.second.close();
-        const prior = await sync(pair.first, pair.chatId);
+        const cursor = seeded ? Number(await env.sql.execute(
+            `SELECT COALESCE(MAX(message_id),0) FROM chat_message WHERE chat_id=${pair.chatId}`)) :
+            (await sync(pair.first, pair.chatId)).cursor;
         const ids = [];
         for (let index = 0; index < 100; index++) {
             env.signal?.throwIfAborted(); ids.push(await messages.send(pair.first, pair.chatId, [pair.second], null, false));
         }
-        expected.set(pair.chatId, { cursor: prior.cursor, ids });
+        expected.set(pair.chatId, { cursor, ids });
+    };
+    const width = seeded ? 8 : 1;
+    for (let index = 0; index < pairs.length; index += width) {
+        const settled = await Promise.allSettled(pairs.slice(index, index + width).map(preparePair));
+        for (const result of settled) if (result.status === 'rejected') throw result.reason;
     }
     return { messages, expected };
 }
@@ -219,14 +241,16 @@ async function recoverOffline(env, pairs, seconds, { messages, expected }) {
 
 /** 使用固定有效 PNG 和确定性附件，不依赖外部文件或网络。 */
 function resourceFixture(index) {
-    if (index % 3 === 0) return { name: 'pixel.png', media: 'image/png',
-        bytes: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64') };
-    return { name: 'payload.bin', media: 'application/octet-stream', bytes: Buffer.alloc(index % 3 === 1 ? 1048576 : 10485760, 79) };
+    if (index % 3 === 0) return { name: 'pixel.png', media: 'image/png', bytes: pixelPng };
+    return { name: 'payload.bin', media: 'application/octet-stream', bytes: Buffer.alloc(fileSizes[index % 3], 79) };
 }
 
 /** 完整上传、提交聊天资源引用并由接收者下载校验，整个动作受六十秒期限约束。 */
-async function transfer(env, pair, index) {
-    const fixture = resourceFixture(index); const sha256 = createHash('sha256').update(fixture.bytes).digest('hex');
+async function transfer(env, pair, index, video, avatar) {
+    const fixture = avatar ? { name: 'avatar.png', media: 'image/png', bytes: avatar } :
+        video && index % 4 === 3 ? { name: 'clip.mp4', media: 'video/mp4', bytes: video } :
+        resourceFixture(video ? index % 4 : index);
+    const sha256 = createHash('sha256').update(fixture.bytes).digest('hex');
     const signal = env.signal ? AbortSignal.any([env.signal, AbortSignal.timeout(60000)]) : AbortSignal.timeout(60000);
     // 携带当前登录凭据发送资源 HTTP 请求。
     const request = async (client, route, method, body, extra = {}) => {
@@ -236,14 +260,31 @@ async function transfer(env, pair, index) {
     };
     const upload = await (await request(pair.first, '/uploads', 'POST', JSON.stringify({ name: fixture.name,
         media_type: fixture.media, size: String(fixture.bytes.length), sha256 }), { 'Content-Type': 'application/json' })).json();
-    for (let offset = 0; offset < fixture.bytes.length; offset += 65536) {
+    for (let offset = 0; offset < fixture.bytes.length;) {
         const bytes = fixture.bytes.subarray(offset, offset + 65536);
         const progress = await (await request(pair.first, `/uploads/${upload.upload_id}`, 'PATCH', bytes,
-            { 'Upload-Offset': String(offset), 'Content-Type': 'application/octet-stream' })).json();
+            { 'Upload-Offset': String(offset), 'Content-Type': 'application/octet-stream',
+                ...(video && offset === 0 ? { Connection: 'close' } : {}) })).json();
         assert.equal(Number(progress.offset), offset + bytes.length);
+        offset += bytes.length;
+        if (video && offset === 65536 && offset < fixture.bytes.length) {
+            const resumed = await (await request(pair.first, `/uploads/${upload.upload_id}`, 'GET')).json();
+            assert.equal(Number(resumed.offset), offset, 'upload-resume-offset');
+            offset = Number(resumed.offset);
+        }
     }
     const ready = await (await request(pair.first, `/uploads/${upload.upload_id}/complete`, 'POST', '')).json();
     assert.equal(ready.sha256, sha256);
+    if (avatar) {
+        const route = `/avatars/${pair.first.uid}`;
+        await (await request(pair.first, route, 'PUT', JSON.stringify({ resource_id: ready.resource_id }),
+            { 'Content-Type': 'application/json' })).arrayBuffer();
+        const published = await (await request(pair.second, route, 'GET')).json();
+        assert.equal(published.resource_id, ready.resource_id, 'avatar-reference');
+        const bytes = Buffer.from(await (await request(pair.second, `/resources/${published.resource_id}`, 'GET')).arrayBuffer());
+        assert.equal(createHash('sha256').update(bytes).digest('hex'), sha256, 'avatar-content');
+        return bytes.length;
+    }
     const uuid = randomUUID();
     await pair.first.request(1016, 1017, { from_uid: pair.first.uid, to_uid: pair.second.uid, chat_id: pair.chatId,
         resource_id: ready.resource_id, text_array: [{ msg_uuid: uuid, msg_content: '' }] },
@@ -251,23 +292,51 @@ async function transfer(env, pair, index) {
     response => response.uuid_msgId?.some(
         // 匹配资源 UUID。
         item => item.msg_uuid === uuid) || response.client_msg_uuids?.includes(uuid));
-    const download = Buffer.from(await (await request(pair.second, `/resources/${ready.resource_id}`, 'GET')).arrayBuffer());
+    const route = `/resources/${ready.resource_id}`;
+    let download;
+    if (video && fixture.bytes.length > 65536) {
+        const initial = await request(pair.second, route, 'GET', undefined, { Connection: 'close' });
+        const reader = initial.body.getReader();
+        let first;
+        try {
+            const block = await reader.read();
+            assert.ok(!block.done && block.value.length > 0);
+            first = Buffer.from(block.value.subarray(0, 65536));
+        } finally { await reader.cancel(); }
+        const rest = await request(pair.second, route, 'GET', undefined, { Range: `bytes=${first.length}-` });
+        assert.equal(rest.status, 206);
+        download = Buffer.concat([first, Buffer.from(await rest.arrayBuffer())]);
+    } else download = Buffer.from(await (await request(pair.second, route, 'GET')).arrayBuffer());
     assert.equal(download.length, fixture.bytes.length); assert.equal(createHash('sha256').update(download).digest('hex'), sha256);
-    assert.equal(await env.sql.execute(`SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid='${uuid}'`), '1');
+    assert.equal(await env.sql.execute(`SELECT COUNT(*) FROM chat_message WHERE send_id=${pair.first.uid}
+        AND client_msg_uuid='${uuid}'`), '1');
     return download.length;
 }
 
-/** 有限并发与固定节奏测量完整资源传输，不向磁盘无限灌入数据。 */
-async function resources(env, pairs, profile, seconds) {
-    let bytes = 0;
+// 由固定的轮转顺序和文件实际大小独立计算一个窗口应交付的字节数。
+function plannedResourceBytes(count, videoBytes = 0) {
+    const sizes = videoBytes ? [...fileSizes, videoBytes] : fileSizes;
+    let total = 0;
+    for (let index = 0; index < count; index++) total += sizes[index % sizes.length];
+    return total;
+}
+
+/** 按操作编号保存并发下载的实际字节数，排空后核对并计算吞吐。 */
+async function resources(env, pairs, profile, seconds, video) {
+    const downloaded = [];
     const result = await measure({ seconds, rate: profile.resourceConcurrency / 5, maxPending: profile.resourceConcurrency, signal: env.signal,
         // 每个并发槽约五秒尝试一个不同大小资源。
-        action: async index => { bytes += await transfer(env, pairs[index % pairs.length], index); } });
-    return { ...result, bytes, mibPerSecond: bytes / 1048576 / result.elapsedSeconds };
+        action: async index => { downloaded[index] = await transfer(env, pairs[index % pairs.length], index, video); } });
+    // 汇总发生在所有在途业务结束后，失败或未启动的编号不会贡献字节。
+    const bytes = downloaded.reduce((sum, value) => sum + value, 0);
+    const plannedBytes = plannedResourceBytes(result.planned, video?.length);
+    if (bytes !== plannedBytes) { result.pass = false; result.errors['resource-byte-count'] = 1; }
+    return { ...result, bytes, plannedBytes, mibPerSecond: bytes / 1048576 / result.elapsedSeconds };
 }
 /** 审计失败保留原始吞吐与延迟，附加明确失败分类。 */
 async function auditResult(messages, sql, result) {
     try { await messages.audit(sql); }
     catch { result.pass = false; result.errors['persistence-or-content-audit'] = 1; }
 }
-module.exports = { Messages, sync, prepare, privateMessages, groupMessages, prepareOffline, recoverOffline, resources, resourceFixture };
+module.exports = { Messages, sync, prepare, privateMessages, groupMessages, prepareOffline, recoverOffline, resources,
+    resourceFixture, transfer, plannedResourceBytes };

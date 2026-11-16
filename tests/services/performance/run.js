@@ -10,6 +10,8 @@ const profiles = require('./profiles.json');
 const { measure, validate } = require('./metrics');
 const { prepare, privateMessages, groupMessages, prepareOffline, recoverOffline, resources } = require('./scenarios');
 const { write, verify } = require('./report');
+const { historyPairs, seedHistory, historyReads } = require('./largeHistory');
+const { comprehensive } = require('./comprehensive');
 
 /** 运行完整性能矩阵，逐场景保留证据，任何失败都不绕过最终清理。 */
 async function run() {
@@ -18,7 +20,7 @@ async function run() {
     const profile = profiles[profileName];
     const root = path.resolve(process.env.CHAT_PERFORMANCE_OUTPUT || 'out/performance');
     const sha = process.env.GITHUB_SHA; assert.match(sha || '', /^[a-f0-9]{40}$/);
-    const report = { schemaVersion: 1, sha, profile: profileName, parameters: profile,
+    const report = { schemaVersion: 2, sha, profile: profileName, parameters: profile,
         requestId: process.env.CHAT_PERFORMANCE_REQUEST_ID || '', seed: 'chat-performance-v1',
         url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
         environment: { cpus: os.cpus().length, cpuModel: os.cpus()[0].model, memoryBytes: os.totalmem(),
@@ -31,6 +33,7 @@ async function run() {
     const phase = async (name, action) => {
         if (name !== 'cleanup') controller.signal.throwIfAborted();
         const begin = performance.now(); stage = `${round}-${name}`;
+        if (profileName === 'comprehensive') console.log(`Starting ${stage}`);
         try { return await action(); }
         finally { report.phases.push({ round, name, seconds: (performance.now() - begin) / 1000 }); }
     };
@@ -60,32 +63,56 @@ async function run() {
             }
             catch { report.failures.push({ stage, category: 'process-sample-failed' }); }
         }, 1000);
+        // 先预热再测量，数据准备独立计时，原始失败指标立即保存。
+        const scenario = async (name, action, prepareAction) => {
+            const warmupFixture = prepareAction ? await phase(`${name}-warmup-prepare`, prepareAction) : undefined;
+            // 使用相同业务路径预热。
+            const warmup = await phase(`${name}-warmup`, () => action(profile.warmupSeconds, warmupFixture));
+            report.warmups.push({ round, name, result: warmup }); write(root, report);
+            try {
+                validate(warmup.metrics || warmup);
+                if (name === 'mixed') validate(warmup.resources);
+            } catch { report.failures.push({ stage: `${round}-${name}-warmup`, category: 'warmup-business-failed' }); }
+            const fixture = prepareAction ? await phase(`${name}-prepare`, prepareAction) : undefined;
+            // 运行所选档位的正式测量窗口。
+            const result = await phase(`${name}-measure`, () => action(profile.seconds, fixture));
+            const row = { round, name, ...(result.metrics ? result : { metrics: result }) };
+            report.results.push(row); write(root, report);
+            // Continue other scenes to preserve diagnostic coverage; final verification fails closed.
+        };
         // 执行多轮独立账号数据的完整场景集合。
         const execute = async () => {
+            if (profileName === 'comprehensive') {
+                // 同一场景的三轮共享拓扑，全部在线场景结束后才进入最后的断线恢复。
+                return comprehensive(env, profile, report, phase, async (name, action, prepareAction) => {
+                    for (round = 1; round <= profile.repeats; round++) await scenario(name, action, prepareAction);
+                });
+            }
+            if (profile.dataset) {
+                // 所有轮次共享已经核对过基数的同一份历史数据。
+                const pairs = await phase('history-relationships', () => historyPairs(env, profile));
+                // 单独记录批量预装时间和实际数据量，再开始测量。
+                report.dataset = await phase('seed-history', () => seedHistory(env, pairs, profile.dataset));
+                write(root, report);
+                // 每个配对的两端均为已认证的真实连接。
+                const clients = pairs.flatMap(pair => [pair.first, pair.second]);
+                for (round = 1; round <= profile.repeats; round++) {
+                    // 从多个深游标连续读取一百条历史。
+                    await scenario('history-middle', seconds => historyReads(env, pairs, profile, seconds, false));
+                    // 从各会话预装数据的尾部恢复一百条。
+                    await scenario('history-tail', seconds => historyReads(env, pairs, profile, seconds, true));
+                    // 在同一组已有大量历史的私聊中测量新消息确认与跨服送达。
+                    await scenario('history-cross-write', seconds => privateMessages(env, pairs, clients, profile, seconds));
+                }
+                return;
+            }
             for (round = 1; round <= profile.repeats; round++) {
                 const accounts = [];
                 // 准备独立账号，不将注册邮件吞吐混入登录指标。
                 await phase('accounts', async () => {
                     for (let index = 0; index < profile.connections; index++) accounts.push(await env.register(round * 10000 + index));
                 });
-                // 先预热再测量，数据准备独立计时，原始失败指标立即保存。
-                const scenario = async (name, action, prepareAction) => {
-                    const warmupFixture = prepareAction ? await phase(`${name}-warmup-prepare`, prepareAction) : undefined;
-                    // 使用相同业务路径预热。
-                    const warmup = await phase(`${name}-warmup`, () => action(profile.warmupSeconds, warmupFixture));
-                    report.warmups.push({ round, name, result: warmup }); write(root, report);
-                    try {
-                        validate(warmup.metrics || warmup);
-                        if (name === 'mixed') validate(warmup.resources);
-                    } catch { report.failures.push({ stage: `${round}-${name}-warmup`, category: 'warmup-business-failed' }); }
-                    const fixture = prepareAction ? await phase(`${name}-prepare`, prepareAction) : undefined;
-                    // 运行所选档位的正式测量窗口。
-                    const result = await phase(`${name}-measure`, () => action(profile.seconds, fixture));
-                    const row = { round, name, ...(result.metrics ? result : { metrics: result }) };
-                    report.results.push(row); write(root, report);
-                    // Continue other scenes to preserve diagnostic coverage; final verification fails closed.
-                };
-                // 固定账号集合登录一次，登录包含 Gate/Status 与 Chat 认证。
+                // 固定账号集合登录一次，覆盖 Gate 选服及 Chat 凭据校验。
                 await scenario('login', seconds => measure({
                     seconds, rate: accounts.length / seconds, plannedCount: accounts.length, maxPending: accounts.length, signal: controller.signal,
                     // 保持每账号单会话语义。

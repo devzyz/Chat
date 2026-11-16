@@ -20,7 +20,7 @@ on:
       performance_profile:
         description: Manual performance load profile
         type: choice
-        options: [smoke, baseline, stress]
+        options: [smoke, baseline, stress, large-history, comprehensive]
         default: baseline
       performance_request_id:
         description: Unique performance request identity (optional)
@@ -143,9 +143,9 @@ jobs:
     uses: ./.github/workflows/release.yml
 
   performance:
-    name: Manual performance baseline
+    name: Manual performance (${{ needs.plan.outputs.performance_profile }})
     needs: plan
-    if: needs.plan.outputs.mode == 'performance'
+    if: github.event_name == 'workflow_dispatch' && needs.plan.outputs.mode == 'performance'
     uses: ./.github/workflows/performance.yml
     with:
       profile: ${{ needs.plan.outputs.performance_profile }}

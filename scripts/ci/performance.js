@@ -4,6 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
+const profiles = require('../../tests/services/performance/profiles.json');
 
 /** 通过参数数组调用 GitHub CLI，不使用 shell 拼接输入。 */
 function gh(args) { return execFileSync('gh', args, { encoding: 'utf8', timeout: 30000, windowsHide: true }).trim(); }
@@ -36,7 +37,7 @@ function main(args) {
     assert.ok(['start', 'status', 'download', 'recover'].includes(action), 'unknown-action');
     if (action === 'start') {
         const repo = JSON.parse(gh(['repo', 'view', '--json', 'nameWithOwner,defaultBranchRef']));
-        const profile = opts['--profile'] || 'baseline'; assert.ok(['smoke', 'baseline', 'stress'].includes(profile));
+        const profile = opts['--profile'] || 'baseline'; assert.ok(Object.hasOwn(profiles, profile), 'invalid-profile');
         assert.ok(!(opts['--ref'] && opts['--pr']), 'ambiguous-source');
         let ref = opts['--ref'] || repo.defaultBranchRef.name; let sha;
         if (opts['--pr']) {
