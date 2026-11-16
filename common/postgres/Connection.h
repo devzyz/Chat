@@ -1,6 +1,9 @@
 #pragma once
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <winsock2.h>
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")
@@ -88,7 +91,7 @@ public:
     }
 
     // 执行单条参数化语句并消费所有协议结果。COMMIT 回包丢失不会重试。
-    Rows Query(const char* sql, const std::vector<std::string>& args = {}, Deadline deadline = Deadline::max()) {
+    Rows Query(const char* sql, const std::vector<std::string>& args = {}, Deadline deadline = (Deadline::max)()) {
         const auto end = (std::min)(deadline, std::chrono::steady_clock::now() + std::chrono::seconds(io_seconds_));
         if (std::chrono::steady_clock::now() >= end)
             throw Error("57014");

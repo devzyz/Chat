@@ -56,6 +56,13 @@ class ReleaseContracts(unittest.TestCase):
         self.assertEqual((self.output / 'SHA256SUMS').read_text(),
                          package.sha256(archive.read_bytes()) + '  ' + archive.name + '\n')
 
+    def test_database_template_preserves_pg_default_and_removes_machine_settings(self):
+        source = self.root / 'config.ini'
+        source.write_text('[Database]\nDriver=postgresql\nHost=old-host\nUser=old-user\nPassword=fixture-only\n',
+                          encoding='utf-8')
+        template = package.blank_config(source)
+        self.assertIn('[Database]\nDriver=postgresql\nHost=\nUser=\nPassword=\n', template)
+
     def test_missing_package_or_runtime_fails(self):
         (self.artifacts / 'GateServer.zip').unlink()
         with self.assertRaisesRegex(ValueError, 'Expected one CI ZIP'):

@@ -57,7 +57,7 @@ HTTP 200 与响应正文只证明 Gate 监听可用，不代表 Redis、MySQL �
 }
 ```
 
-以上只是 email section 示例；完整 JSON 仍需现有 mysql/redis section 与所需环境变量。
+完整 JSON 还需要 Redis 配置和相应的环境变量。验证码服务仅使用 SMTP 与 Redis。
 CI 将示例端口替换为本次服务动态映射，不连接默认公网 SMTP。
 `secure=false` 保留 Nodemailer 的可用时 STARTTLS 行为，不关闭证书验证；
 Mailpit 未配置 TLS 时使用本次隔离 loopback 明文连接。
@@ -131,7 +131,7 @@ getSocket 持有连接，在 deadline 时 destroy，同时设置有限阶段超�
 
 ## 当前迁移要求
 
-### MySQL schema 与消息写入（3C-03/05）
+### 数据库结构与消息写入
 
 - Gate/Chat 启动前必须已完成 [版本化迁移](Data.md#operational-entry)；服务只验证
   version/checksum/结构，不在启动时执行 DDL。旧的无版本开发库会被拒绝，不能直接覆盖导入。
@@ -167,12 +167,12 @@ ChatServer 已具有较完整的 fail-fast 配置和异常清理。GateServer �
 
 ## 资源服务启用
 
-按 [Data 的迁移入口](Data.md#operational-entry) 应用 manifest 中全部待执行迁移；
+按[数据库接入说明](Data.md)初始化所选后端；
 资源服务校验完整业务 schema，不能仅应用资源表迁移。升级前备份并停止写入，迁移后更新全部
-Gate/Chat/Resource 实例，再配置 ResourceServer 的 MySQL、Redis 和存储根目录。
+Gate/Chat/Resource 实例，再配置 ResourceServer 的数据库、Redis 和存储根目录。
 构建和本地验证命令见 [资源服务说明](../ResourceServer/README.md)，
 目录、头像发布与失败语义见 [Resources](Resources.md)。
-自动集成测试仅初始化自己的临时 MySQL，不修改个人数据库。
+双库集成测试在独占的临时 PostgreSQL 和 MySQL 实例上验证资源目录及消息引用。
 
 ## 局域网单机服务部署边界
 

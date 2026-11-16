@@ -58,8 +58,31 @@ function verifyPrivateText(pg) {
     assert.equal(commit([original,item(b,'new')],3).split('\n').length,2);
 }
 
+// 仅在双库验收时创建隔离的 MySQL 参考实例。
+async function verifyMysqlReference(pg) {
+    const mysql = await startLocalMysql(process.env.CHAT_MYSQL_BIN);
+    try {
+        await compareIdentities(pg,mysql);
+        if (process.env.CHAT_PG_CONTRACT_BINARY) {
+            await mysql.execute('CREATE DATABASE chat_pg_reference');
+            const session = new MysqlSession(mysql.mysql,[...mysql.args,...mysqlArgs],mysql.env);
+            try { await new SchemaMigration(session,'chat_pg_reference').apply(); }
+            finally { await session.close(); }
+            await mysql.execute("USE chat_pg_reference; CALL reg_user('Alice','one@x','hash',@u); " +
+                "CALL reg_user('Bob','two@x','hash',@u);");
+            execFileSync(process.env.CHAT_PG_CONTRACT_BINARY,[],{
+                env: { ...pg.env, CHAT_MYSQL_FIXTURE_PORT: String(mysql.port) },
+                windowsHide: true, timeout: 45000, stdio: ['ignore','pipe','pipe']
+            });
+            if (process.env.CHAT_DB_SERVICE_BIN) {
+                await backendWire({driver:'mysql',name:'chat_pg_reference',user:'root',password:'',port:mysql.port},portNumber);
+            }
+        }
+    } finally { await mysql.close(); }
+}
+
 // 贯通真实数据库初始化、行为对比和版本校验。
-test('PostgreSQL bootstrap, account equivalence and private text transactions', async () => {
+test('PostgreSQL bootstrap, account equivalence and private text transactions', async t => {
     const pg = await postgresFixture();
     try {
         assert.equal((await main(pg.env,'plan')).state,'pending');
@@ -71,25 +94,12 @@ test('PostgreSQL bootstrap, account equivalence and private text transactions', 
         assert.equal((await main(pg.env,'apply')).state,'applied');
         assert.equal((await main(pg.env,'apply')).state,'current');
         assert.equal((await main(pg.env,'verify')).state,'current');
-        const mysql = await startLocalMysql(process.env.CHAT_MYSQL_BIN);
-        try {
-            await compareIdentities(pg,mysql);
-            if (process.env.CHAT_PG_CONTRACT_BINARY) {
-                await mysql.execute('CREATE DATABASE chat_pg_reference');
-                const session = new MysqlSession(mysql.mysql,[...mysql.args,...mysqlArgs],mysql.env);
-                try { await new SchemaMigration(session,'chat_pg_reference').apply(); }
-                finally { await session.close(); }
-                await mysql.execute("USE chat_pg_reference; CALL reg_user('Alice','one@x','hash',@u); " +
-                    "CALL reg_user('Bob','two@x','hash',@u);");
-                execFileSync(process.env.CHAT_PG_CONTRACT_BINARY,[],{
-                    env: { ...pg.env, CHAT_MYSQL_FIXTURE_PORT: String(mysql.port) },
-                    windowsHide: true, timeout: 45000, stdio: ['ignore','pipe','pipe']
-                });
-                if (process.env.CHAT_DB_SERVICE_BIN) {
-                    await backendWire({driver:'mysql',name:'chat_pg_reference',user:'root',password:'',port:mysql.port},portNumber);
-                }
-            }
-        } finally { await mysql.close(); }
+        const mode = process.env.CHAT_TEST_DATABASES ?? 'postgresql';
+        assert.ok(['postgresql','both'].includes(mode),'Expected CHAT_TEST_DATABASES=postgresql or both');
+        await t.test('MySQL reference and account comparisons',
+            {skip: mode === 'postgresql' ? 'PG-only development run' : false},
+            // 仅以真实源库核对两个后端的行为。
+            () => verifyMysqlReference(pg));
         assert.equal(pg.query("SELECT chat.reg_user('Alice','one@x','hash');"),'1');
         assert.equal(pg.query("SELECT chat.reg_user('alice ','two@x','hash');"),'0');
         assert.equal(pg.query("SELECT chat.reg_user('Bob','two@x','hash');"),'2');

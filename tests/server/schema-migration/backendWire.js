@@ -10,6 +10,33 @@ const net = require('node:net');
 const { setTimeout: delay } = require('node:timers/promises');
 const { createTopology, nativeConfig } = require('../../services/twoServerTopology');
 const { Client, post } = require('../../services/performance/client');
+const { measure, validate } = require('../../services/performance/metrics');
+const { sync } = require('../../services/performance/scenarios');
+
+// 在已认证的跨实例连接上按固定速率测量提交 ACK，再从接收端按游标逐条核对消息。
+async function samplePrivateText(output, driver, sender, receiver, chat, cursor) {
+    assert.ok(path.isAbsolute(output));
+    const expected = new Map();
+    // 每次提交使用新 UUID 并且只接受与请求匹配的回复。
+    async function submit() {
+        const uuid=randomUUID(), content='p'.repeat(256);
+        const fields={from_uid:sender.uid,to_uid:receiver.uid,chat_id:chat,text_array:[{msg_uuid:uuid,msg_content:content}]};
+        // 匹配此消息的 ACK，使同时在途的请求互不串用。
+        const ack=await sender.request(1016,1017,fields,value=>value.uuid_msgId?.some(
+            // 一个批次中按客户端业务身份定位条目。
+            item=>item.msg_uuid===uuid));
+        expected.set(uuid,ack.uuid_msgId[0].message_id);
+    }
+    const result=await measure({seconds:10,rate:20,maxPending:8,action:submit});
+    const {rows}=await sync(receiver,chat,cursor);
+    for (const row of rows) assert.equal(row.message_id,expected.get(row.msg_uuid));
+    assert.equal(rows.length,expected.size);
+    fs.mkdirSync(output,{recursive:true});
+    fs.writeFileSync(path.join(output,driver+'-private-text.json'),JSON.stringify({
+        driver,bytesPerMessage:256,targetPerSecond:20,verifiedMessages:rows.length,...result
+    },null,2)+'\n');
+    validate(result);
+}
 
 // 在同一场景分别运行两个数据库的正式服务程序；Redis、资源文件和用户均属于本次运行。
 async function runWire(database, reserve, smtp) {
@@ -25,7 +52,7 @@ async function runWire(database, reserve, smtp) {
         const output = fs.openSync(path.join(root,'child-' + children.length + '.log'),'w');
         try {
             const child = spawn(file,args,{ cwd: root, env:{ ...env,...extra }, windowsHide: true, stdio:['ignore',output,output] });
-            const entry = { child, ended: false };
+            const entry = { child, name:path.basename(file), ended: false };
             // 记录子进程完成，供清理路径等待。
             entry.closed = new Promise(
                 // 连接启动失败或进程退出时结束等待。
@@ -39,16 +66,21 @@ async function runWire(database, reserve, smtp) {
         } finally { fs.closeSync(output); }
     }
     // 只重试就绪探测，注册和发送请求均显式断言。
-    async function until(check) {
-        const end = Date.now()+30000;
+    async function until(check, timeoutMs=30000, intervalMs=100) {
+        const end = Date.now()+timeoutMs;
         // 存活探测只针对本次启动的程序。
         while (Date.now()<end && children.every(
                 // 任一必需进程退出时提前结束探测。
                 entry => !entry.ended)) {
             try { if (await check()) return; } catch { /* 服务仍在初始化。 */ }
-            await delay(100);
+            await delay(intervalMs);
         }
-        throw new Error('BackendWireReadinessFailed');
+        const exited = children.filter(
+            // 仅报告已退出的进程和退出码，不回显配置。
+            entry => entry.ended).map(
+            // 启动诊断区分驱动故障和进程装载失败。
+            entry => entry.name + '=' + entry.child.exitCode);
+        throw new Error('BackendWireReadinessFailed:' + (exited.join(',') || 'timeout'));
     }
     try {
         const ports = {};
@@ -65,7 +97,7 @@ async function runWire(database, reserve, smtp) {
         const redisConfig = path.join(root,'redis.conf');
         fs.writeFileSync(redisConfig,'bind 127.0.0.1\nport '+redis+'\nsave ""\nappendonly no\nrequirepass '+password+'\n',
             { mode:0o600 });
-        start(process.env.CHAT_REDIS_SERVER || 'redis-server',[redisConfig]);
+        start(process.env.CHAT_REDIS_SERVER || 'redis-server',[path.basename(redisConfig)]);
         // 在夹具的 Redis 中执行有界命令。
         const redisCommand = (...args) => execFileSync(process.env.CHAT_REDIS_CLI || 'redis-cli',
             ['--raw','-h','127.0.0.1','-p',String(redis),...args],
@@ -89,7 +121,8 @@ async function runWire(database, reserve, smtp) {
         }
         await until(verificationReady);
         // 选择本平台的原生程序路径。
-        const executable = name => path.join(bin,name+(process.platform==='win32'?'.exe':''));
+        const executable = name => process.platform === 'win32' ?
+            path.join(bin,name,name+'.exe') : path.join(bin,name);
         for (const role of ['ChatA','ChatB','GateServer']) {
             const file = path.join(root,role+'.ini');
             fs.writeFileSync(file,nativeConfig(topology,role,{ password,redis,mysql:database.port,driver:database.driver,
@@ -122,8 +155,10 @@ async function runWire(database, reserve, smtp) {
             // 通过客户端连接端口定位真实实例。
             const instance=topology.servers.find(server => server.port===client.port);
             assert.ok(instance);
-            // 等待负载对下一次选服可见。
-            await until(() => Number(redisCommand('HGET','logincount',instance.name))>=1);
+            if (index === 0) {
+                // Chat 每 60 秒发布计数，第二次登录前等待一次完整的正常发布周期。
+                await until(() => Number(redisCommand('HGET','logincount',instance.name))>=1,75000,500);
+            }
         }
         const [first,second]=clients;
         assert.notEqual(first.port,second.port);
@@ -148,6 +183,19 @@ async function runWire(database, reserve, smtp) {
         assert.equal(page.msgs.filter(
             // 按服务端 ID 和客户端 UUID 同时核验同步结果。
             row=>row.msg_uuid===uuid && row.message_id===original.uuid_msgId[0].message_id).length,1);
+        if (process.env.CHAT_DB_SAMPLE_DIR) {
+            await samplePrivateText(process.env.CHAT_DB_SAMPLE_DIR,database.driver,first,second,
+                accepted.chatid,original.uuid_msgId[0].message_id);
+        }
+    } catch (error) {
+        if (process.env.CHAT_DB_WIRE_DIAGNOSTICS) {
+            const output=path.join(process.env.CHAT_DB_WIRE_DIAGNOSTICS,database.driver);
+            fs.mkdirSync(output,{recursive:true});
+            for (const name of fs.readdirSync(root)) {
+                if (/^child-\d+\.log$/.test(name)) fs.copyFileSync(path.join(root,name),path.join(output,name));
+            }
+        }
+        throw error;
     } finally {
         for (const client of clients) client.close();
         for (const entry of children.reverse()) {

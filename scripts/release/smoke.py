@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import socket
 import shutil
 import subprocess
@@ -93,22 +94,70 @@ def resource_database(root, diagnostics=None, fixture_name="resource-smoke-mysql
                         database.wait(timeout=10)
 
 
+@contextmanager
+def smoke_database(root, diagnostics=None, fixture_name="resource-smoke"):
+    """在独占临时数据库上运行包内迁移器，将服务所需配置交给冒烟用例。"""
+    driver = os.environ.get('CHAT_SMOKE_DATABASE', 'postgresql')
+    if driver == 'mysql':
+        with resource_database(root, diagnostics, fixture_name + '-mysql') as port:
+            yield f'[Mysql]\nHost=127.0.0.1\nPort={port}\nUser=root\nPassword=\nSchema=resource_smoke\n', {}
+        return
+    if driver != 'postgresql':
+        raise ValueError('Expected CHAT_SMOKE_DATABASE=postgresql or mysql')
+    selected = os.environ.get('CHAT_PG_BIN')
+    if selected:
+        binary = Path(selected)
+    elif shutil.which('initdb.exe'):
+        binary = Path(shutil.which('initdb.exe')).parent
+    else:
+        candidates = sorted((Path(os.environ['ProgramFiles']) / 'PostgreSQL').glob('*/bin/initdb.exe'),
+                            key=lambda item: item.parent.parent.name)
+        if not candidates:
+            raise RuntimeError('Set CHAT_PG_BIN to an installed PostgreSQL bin directory')
+        binary = candidates[-1].parent
+    initdb, ctl = binary / 'initdb.exe', binary / 'pg_ctl.exe'
+    client = Path(os.environ.get('CHAT_PG_CLIENT', binary / 'psql.exe'))
+    if not all(tool.is_absolute() and tool.is_file() for tool in (initdb, ctl, client)):
+        raise RuntimeError('PostgreSQL smoke tools are missing')
+    port = free_port()
+    password = secrets.token_hex(32)
+    data = root / (fixture_name + '-pg')
+    pwfile = root / (fixture_name + '.pw')
+    pwfile.write_text(password, encoding='ascii')
+    log_dir = diagnostics or root
+    log_dir.mkdir(parents=True, exist_ok=True)
+    options = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                   check=True, timeout=60, creationflags=subprocess.CREATE_NO_WINDOW)
+    try:
+        subprocess.run([initdb, '-D', data, '-E', 'UTF8', '--no-locale', '-A', 'scram-sha-256',
+                        '-U', 'chat_fixture', '--pwfile', pwfile], **options)
+        pwfile.unlink()
+        subprocess.run([ctl, '-D', data, '-l', log_dir / (fixture_name + '-pg.log'),
+                        '-w', '-o', f'-h 127.0.0.1 -p {port}', 'start'], **options)
+        migration_env = {**os.environ, 'CHAT_DB_DRIVER': 'postgresql', 'CHAT_PG_HOST': '127.0.0.1',
+                         'CHAT_PG_PORT': str(port), 'CHAT_PG_DATABASE': 'postgres', 'CHAT_PG_USER': 'chat_fixture',
+                         'CHAT_PG_CLIENT': str(client), 'CHAT_PG_PASSWORD': password}
+        for action in ('apply', 'verify'):
+            subprocess.run([root / 'VarifyServer/node.exe', root / 'migrations/migrate.js', action],
+                           env=migration_env, **options)
+        yield (f'[Database]\nDriver=postgresql\nHost=127.0.0.1\nPort={port}\nUser=chat_fixture\nSchema=postgres\n',
+               {'CHAT_DB_PASSWORD': password})
+    finally:
+        pwfile.unlink(missing_ok=True)
+        if (data / 'postmaster.pid').exists():
+            subprocess.run([ctl, '-D', data, '-m', 'fast', '-w', 'stop'], **options)
+
+
 def resource_smoke(root, environment, diagnostics=None):
     """使用包内资源服务和临时数据库验证监听、未认证请求拒绝及正常停止。"""
-    with resource_database(root, diagnostics) as mysql_port:
+    with smoke_database(root, diagnostics) as (section, credentials):
         folder = root / 'ResourceServer'
         port = free_port()
         config = f'''[ResourceServer]
 Host=127.0.0.1
 Port={port}
 StorageRoot=data/resources
-[Mysql]
-Host=127.0.0.1
-Port={mysql_port}
-User=root
-Password=
-Schema=resource_smoke
-[Redis]
+{section}[Redis]
 Host=127.0.0.1
 Port=1
 [Log]
@@ -117,7 +166,7 @@ LogDir=logs
         (folder / 'config.ini').write_text(config, encoding='utf-8')
         with ((diagnostics if diagnostics is not None else root) / 'ResourceServer.log').open('wb') as log:
             process = start([str(folder / 'ResourceServer.exe'), '--config', str(folder / 'config.ini')],
-                            folder, environment, log)
+                            folder, {**environment, **credentials}, log)
             try:
                 def ready():
                     """通过真实 HTTP 认证拒绝确认资源服务已开始处理请求。"""
@@ -223,7 +272,7 @@ finally:
         raise RuntimeError('Packaged application did not stop cleanly')
 
 
-def server_config(app, port, rpc_port, redis_port, mysql_port):
+def server_config(app, port, rpc_port, redis_port, database_section):
     config = f'''[GateServer]
 Port={port}
 [VarifyServer]
@@ -254,14 +303,7 @@ MaxTotalFiles=2
 Level=info
 FlushLevel=warn
 '''
-    config += f'''[Mysql]
-Host=127.0.0.1
-Port={mysql_port}
-Password=
-User=root
-Schema=resource_smoke
-'''
-    return config
+    return config + database_section
 
 
 def run(directory, source_sha, report):
@@ -295,7 +337,7 @@ def run(directory, source_sha, report):
             # Chat acquires its instance lease before accepting TCP connections.
             sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tests/server/resource'))
             from chat_flow_integration import RedisFixture
-            with RedisFixture() as redis, resource_database(root, fixture_name='server-smoke-mysql') as mysql_port:
+            with RedisFixture() as redis, smoke_database(root, fixture_name='server-smoke') as (section, credentials):
                 thread = threading.Thread(target=redis.serve_forever, daemon=True)
                 thread.start()
                 try:
@@ -303,10 +345,10 @@ def run(directory, source_sha, report):
                         def server(app=app):
                             folder = root / app
                             port, rpc_port = free_port(), free_port()
-                            (folder / 'config.ini').write_text(server_config(app, port, rpc_port, redis.server_address[1], mysql_port), encoding='utf-8')
+                            (folder / 'config.ini').write_text(server_config(app, port, rpc_port, redis.server_address[1], section), encoding='utf-8')
                             with (root / (app + '.log')).open('wb') as log:
                                 process = start([str(folder / (app + '.exe')), '--config', str(folder / 'config.ini')],
-                                                folder, environment, log)
+                                                folder, {**environment, **credentials}, log)
                                 try:
                                     if app == 'GateServer':
                                         def ready():

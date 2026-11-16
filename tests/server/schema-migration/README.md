@@ -2,8 +2,9 @@
 
 ## PostgreSQL 与双库合同
 
-设置 `CHAT_PG_BIN` 为包含 initdb 和 pg_ctl 的绝对目录，`CHAT_PG_CLIENT` 为 psql 路径，
-`CHAT_MYSQL_BIN` 为 mysqld 所在目录。MySQL 客户端单独安装时用 `CHAT_MYSQL_FIXTURE_CLIENT` 指定。
+开发机默认仅运行 PostgreSQL 验收。设置 `CHAT_PG_BIN` 为包含 initdb 和 pg_ctl 的绝对目录，
+`CHAT_PG_CLIENT` 为 psql 路径。需要双库对照时，显式设置 `CHAT_TEST_DATABASES=both` 和
+`CHAT_MYSQL_BIN`（mysqld 所在目录）。MySQL 客户端单独安装时用 `CHAT_MYSQL_FIXTURE_CLIENT` 指定。
 运行 `node --test tests/server/schema-migration/postgres.test.js`，脚本在独占的回环端口创建临时库，
 验证空库和漂移拒绝、账号比较、注册及消息事务。
 
@@ -12,7 +13,12 @@ Windows 使用 `tests/server/PostgresContractTests.vcxproj`，按普通测试入
 将 `CHAT_DB_SERVICE_BIN` 指向包含 GateServer、ChatServer 和 ResourceServer 的绝对目录，
 并提供 redis-server、redis-cli，可在两个后端各起一个网关、两个 Chat 和一个资源服务，跑注册、
 选服、跨实例发送、幂等重试与补拉。此用例启动 VarifyServer 与本机 SMTP 测试对端，通过 Gate 请求验证码，再从独占 Redis 读取该验证码完成注册；需先准备 VarifyServer 的已锁定 Node.js 依赖。
-Linux CI 的双库步骤同时设置两个二进制入口。
+Windows 的服务目录使用 `build/windows-servers/Release`，每个 EXE 位于其服务子目录内。
+Linux CI 显式选择 both 并设置两个二进制入口。
+
+需要短时性能样本时，将 `CHAT_DB_SAMPLE_DIR` 设为输出目录的绝对路径。每个选中的后端在同一条跨实例私聊上
+以每秒 20 条发送 10 秒，记录提交 ACK 延迟和吞吐，并由接收端逐条核验 UUID 和消息 ID。
+每个后端输出一份 JSON。这项测量覆盖当前机器的双连接小负载，百万历史与并发压测另用专项性能入口。
 
 当前 PG 版本 1 从空库初始化。在发布此基线之前修改 SQL 时，执行 `node schema/postgresql/contract.js` 刷新清单及原生常量。已使用该版本的数据库遇到校验漂移会拒绝启动；后续已发布版本需增加有序升级步骤。
 账号权重可以通过 `node tests/server/schema-migration/captureAccountWeights.js` 从隔离 MySQL 重新导出。

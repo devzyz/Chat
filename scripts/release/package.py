@@ -60,12 +60,15 @@ def blank_config(file):
             return {key: blank(child) for key, child in value.items()} if isinstance(value, dict) else None
         return json.dumps(blank(json.loads(file.read_text(encoding='utf-8'))), indent=2) + '\n'
     lines = ['; Fill values for your installation before starting.']
+    section = ''
     for line in file.read_text(encoding='utf-8-sig').splitlines():
         line = line.strip()
         if line.startswith('[') and line.endswith(']'):
+            section = line[1:-1]
             lines.append(line)
         elif '=' in line and not line.startswith((';', '#')):
-            lines.append(line.split('=', 1)[0].strip() + '=')
+            key = line.split('=', 1)[0].strip()
+            lines.append(key + ('=postgresql' if section == 'Database' and key == 'Driver' else '='))
     return '\n'.join(lines) + '\n'
 
 
