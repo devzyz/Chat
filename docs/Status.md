@@ -1,6 +1,6 @@
 # 项目当前状态
 
-**开发分支数据库接入（未合并）**：基于 develop 的 e3ab44e。已在本机隔离 MySQL 和 PostgreSQL 上运行共享原生存储合同，MySQL 消息提交 T10-MSG-01…20、12 项迁移及 10 项消息同步回归通过。使用独立 PG 测试实例检查了 103 条业务 SQL 的解析和参数类型。正式 Windows 构建在受管依赖缺少 libpq 头文件处停止。双实例协议矩阵、发布包启动和性能基线仍待使用正式产物验证。操作说明见[数据库接入](Data.md)。
+**开发分支数据库接入（未合并）**：本机已在 `7ead057` 构建 Debug、Release 三个服务，并用正式 Release 程序通过 PG 与 MySQL 双实例注册、登录、发送、原 UUID 重试和接收端同步验收。80 项服务单元测试通过。两库各以每秒 20 条发送 200 条 256 字节私聊消息，接收端逐条核对成功；本机 PG 提交 ACK 的 P95 为 2.44 ms。解包后的 Windows 程序使用包内 PG 迁移器通过全部 6 项冒烟检查。完整 CI、百万条历史和高并发压测未在这次运行中执行。开发与兼容验证入口见[数据库接入](Data.md)和[双库测试说明](../tests/server/schema-migration/README.md)。
 
 截至 2026-11-12，已合并的开发基线为 [develop 的 1a235b6](https://github.com/devzyz/Chat/commit/1a235b618dcbdcfb0e3428639bc4cba630d8991e)，包含 PR #45。发行版本号由 [VERSION](../VERSION) 定义。
 
