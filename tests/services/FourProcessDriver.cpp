@@ -166,8 +166,9 @@ int Supervise(int argc, char** argv) {
     const auto* profile = std::getenv("CHAT_PERFORMANCE_PROFILE");
     const bool comprehensive = profile && std::string(profile) == "comprehensive";
     if (profile)
-        Require(std::string(profile) == "smoke" || std::string(profile) == "baseline" ||
-                std::string(profile) == "stress" || std::string(profile) == "large-history" || comprehensive);
+        Require(
+            std::string(profile) == "smoke" || std::string(profile) == "baseline" || std::string(profile) == "stress" ||
+            std::string(profile) == "large-history" || comprehensive);
     const auto lifetime = comprehensive ? 4380s : (profile ? 2640s : 600s);
     auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + lifetime);
     integration::ProcessSpec spec;
