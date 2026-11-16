@@ -15,42 +15,51 @@ public:
 class GroupQuery final {
 public:
     /** @brief 绑定内部生成的参数并执行读取或更新，数据库异常交给调用事务处理。 */
-    GroupQuery(sql::Connection& db, const std::string& sql, const std::vector<std::string>& values, bool read = true)
-        : _statement(
-              db.prepareStatement(read && sql.find("FOR UPDATE") == std::string::npos ? sql + " FOR UPDATE" : sql)) {
+    GroupQuery(
+        database::Session db,
+        database::QueryText sql,
+        const std::vector<std::string>& values,
+        bool read = true) {
+        if (read && sql.mysql.find("FOR UPDATE") == std::string::npos) {
+            sql.mysql += " FOR UPDATE";
+            // 聚合读取由调用方已持有的群行锁覆盖。
+            if (sql.postgres.find("COUNT(") == std::string::npos && sql.postgres.find("MAX(") == std::string::npos)
+                sql.postgres += " FOR UPDATE";
+        }
+        _statement.reset(db.PrepareStatement(sql));
         for (std::size_t index = 0; index < values.size(); ++index)
-            _statement->setString(static_cast<int>(index + 1), values[index]);
+            _statement->SetString(static_cast<int>(index + 1), values[index]);
         if (read)
-            rows.reset(_statement->executeQuery());
+            rows.reset(_statement->ExecuteQuery());
         else
-            _statement->executeUpdate();
+            _statement->ExecuteUpdate();
     }
 
 private:
-    std::unique_ptr<sql::PreparedStatement> _statement;
+    std::unique_ptr<database::PreparedStatement> _statement;
 
 public:
-    std::unique_ptr<sql::ResultSet> rows;
+    std::unique_ptr<database::ResultSet> rows;
 };
 
 /** @brief 读取用户曾加入群的目录快照；退出状态保留，缺失不被解释为删除。 */
-inline Json::Value GroupDirectory(sql::Connection& db, int chat, int uid) {
+inline Json::Value GroupDirectory(database::Session db, int chat, int uid) {
     GroupQuery query(
         db,
         "SELECT g.name,g.owner_uid,g.revision,g.dissolved,m.state,m.membership_epoch,m.joined_after_id "
         "FROM group_chat g JOIN group_chat_member m ON m.chat_id=g.chat_id WHERE g.chat_id=? AND m.user_id=?",
         {std::to_string(chat), std::to_string(uid)});
-    if (!query.rows->next())
+    if (!query.rows->Next())
         throw GroupError("NotMember");
     Json::Value result;
     result["chat_id"] = chat;
     result["type"] = "group";
-    result["group_name"] = query.rows->getString(1).asStdString();
-    result["owner_uid"] = query.rows->getInt(2);
-    result["group_revision"] = std::to_string(query.rows->getInt64(3));
-    result["group_state"] = query.rows->getBoolean(4) ? "dissolved" : query.rows->getString(5).asStdString();
-    result["membership_epoch"] = std::to_string(query.rows->getInt64(6));
-    result["joined_after_id"] = Json::Int64(query.rows->getInt64(7));
+    result["group_name"] = query.rows->GetString(1);
+    result["owner_uid"] = query.rows->GetInt(2);
+    result["group_revision"] = std::to_string(query.rows->GetInt64(3));
+    result["group_state"] = query.rows->GetBoolean(4) ? "dissolved" : query.rows->GetString(5);
+    result["membership_epoch"] = std::to_string(query.rows->GetInt64(6));
+    result["joined_after_id"] = Json::Int64(query.rows->GetInt64(7));
     return result;
 }
 
@@ -70,7 +79,7 @@ inline std::int64_t GroupNumber(const Json::Value& value) {
 }
 
 /** @brief 群管理在操作者及群锁下事务执行；原请求的结果先于当前权限检查，实现安全重放。 */
-inline void ManageGroup(sql::Connection& db, int actor, const Json::Value& request, Json::Value& response) {
+inline void ManageGroup(database::Session db, int actor, const Json::Value& request, Json::Value& response) {
     if (!request["chat_id"].isInt() || request["chat_id"].asInt() <= 0 || !request["operation"].isString() ||
         !request["request_id"].isString() || request["request_id"].asString().size() != 36)
         throw GroupError("InvalidRequest");
@@ -79,28 +88,33 @@ inline void ManageGroup(sql::Connection& db, int actor, const Json::Value& reque
     const auto actor_text = std::to_string(actor), chat_text = std::to_string(chat);
     const auto payload = CompactJson(request);
     Transaction transaction(db);
-    GroupQuery actor_lock(db, "SELECT uid FROM user WHERE uid=? FOR UPDATE", {actor_text});
-    if (!actor_lock.rows->next())
+    GroupQuery actor_lock(
+        db,
+        database::QueryText{
+            "SELECT uid FROM user WHERE uid=? FOR UPDATE",
+            "SELECT uid FROM account WHERE uid=? FOR UPDATE"},
+        {actor_text});
+    if (!actor_lock.rows->Next())
         throw GroupError("Forbidden");
     GroupQuery prior(
         db,
         "SELECT payload,result FROM group_operation WHERE actor_uid=? AND request_id=?",
         {actor_text, key});
-    if (prior.rows->next()) {
-        if (prior.rows->getString(1).asStdString() != payload)
+    if (prior.rows->Next()) {
+        if (prior.rows->GetString(1) != payload)
             throw GroupError("RequestConflict");
         Json::Reader reader;
-        if (!reader.parse(prior.rows->getString(2).asStdString(), response))
+        if (!reader.parse(prior.rows->GetString(2), response))
             throw GroupError("StorageUnavailable");
         transaction.Commit();
         return;
     }
     GroupQuery group(db, "SELECT owner_uid,revision,dissolved FROM group_chat WHERE chat_id=? FOR UPDATE", {chat_text});
-    if (!group.rows->next())
+    if (!group.rows->Next())
         throw GroupError("NotMember");
-    const int owner = group.rows->getInt(1);
-    const auto revision = group.rows->getInt64(2);
-    if (group.rows->getBoolean(3))
+    const int owner = group.rows->GetInt(1);
+    const auto revision = group.rows->GetInt64(2);
+    if (group.rows->GetBoolean(3))
         throw GroupError("GroupDissolved");
     const auto directory = GroupDirectory(db, chat, actor);
     if (directory["group_state"].asString() != "active")
@@ -114,8 +128,8 @@ inline void ManageGroup(sql::Connection& db, int actor, const Json::Value& reque
         if (!request["members"].isArray() || request["members"].empty() || request["members"].size() > 19)
             throw GroupError("InvalidRequest");
         GroupQuery count(db, "SELECT COUNT(*) FROM group_chat_member WHERE chat_id=? AND state='active'", {chat_text});
-        count.rows->next();
-        if (count.rows->getInt(1) + request["members"].size() > 20)
+        count.rows->Next();
+        if (count.rows->GetInt(1) + request["members"].size() > 20)
             throw GroupError("MemberLimit");
         std::set<int> members;
         for (const auto& value : request["members"]) {
@@ -124,26 +138,32 @@ inline void ManageGroup(sql::Connection& db, int actor, const Json::Value& reque
             const auto target = std::to_string(value.asInt());
             GroupQuery friend_row(
                 db,
-                "SELECT 1 FROM friend f JOIN user u ON u.uid=f.other_id WHERE f.self_id=? AND f.other_id=?",
+                database::QueryText{
+                    "SELECT 1 FROM friend f JOIN user u ON u.uid=f.other_id WHERE f.self_id=? AND f.other_id=?",
+                    "SELECT 1 FROM friend f JOIN account u ON u.uid=f.other_id WHERE f.self_id=? AND f.other_id=?"},
                 {actor_text, target});
-            if (!friend_row.rows->next())
+            if (!friend_row.rows->Next())
                 throw GroupError("NotFriend");
             GroupQuery existing(
                 db,
                 "SELECT state FROM group_chat_member WHERE chat_id=? AND user_id=?",
                 {chat_text, target});
-            if (existing.rows->next() && existing.rows->getString(1) == "active")
+            if (existing.rows->Next() && existing.rows->GetString(1) == "active")
                 throw GroupError("MembershipChanged");
         }
         GroupQuery boundary(db, "SELECT COALESCE(MAX(message_id),0) FROM chat_message WHERE chat_id=?", {chat_text});
-        boundary.rows->next();
+        boundary.rows->Next();
         for (const int member : members) {
             GroupQuery insert(
                 db,
-                "INSERT INTO group_chat_member(chat_id,user_id,role,state,membership_epoch,joined_after_id) "
-                "VALUES(?,?,0,'active',1,?) ON DUPLICATE KEY UPDATE state='active',role=0,"
-                "membership_epoch=membership_epoch+1,joined_after_id=VALUES(joined_after_id)",
-                {chat_text, std::to_string(member), std::to_string(boundary.rows->getInt64(1))},
+                database::QueryText{
+                    "INSERT INTO group_chat_member(chat_id,user_id,role,state,membership_epoch,joined_after_id) "
+                    "VALUES(?,?,0,'active',1,?) ON DUPLICATE KEY UPDATE state='active',role=0,"
+                    "membership_epoch=membership_epoch+1,joined_after_id=VALUES(joined_after_id)",
+                    "INSERT INTO group_chat_member(chat_id,user_id,role,state,membership_epoch,joined_after_id) "
+                    "VALUES(?,?,0,'active',1,?) ON CONFLICT (chat_id,user_id) DO UPDATE SET "
+                    "state='active',role=0,membership_epoch=group_chat_member.membership_epoch+1,joined_after_id=EXCLUDED.joined_after_id"},
+                {chat_text, std::to_string(member), std::to_string(boundary.rows->GetInt64(1))},
                 false);
         }
     } else if (operation == "remove" || operation == "transfer" || operation == "leave") {
@@ -156,7 +176,7 @@ inline void ManageGroup(sql::Connection& db, int actor, const Json::Value& reque
             db,
             "SELECT 1 FROM group_chat_member WHERE chat_id=? AND user_id=? AND state='active'",
             {chat_text, std::to_string(target)});
-        if (!member.rows->next())
+        if (!member.rows->Next())
             throw GroupError("MembershipChanged");
         if (operation == "transfer") {
             GroupQuery change(
@@ -166,7 +186,9 @@ inline void ManageGroup(sql::Connection& db, int actor, const Json::Value& reque
                 false);
             GroupQuery roles(
                 db,
-                "UPDATE group_chat_member SET role=(user_id=?) WHERE chat_id=?",
+                database::QueryText{
+                    "UPDATE group_chat_member SET role=(user_id=?) WHERE chat_id=?",
+                    "UPDATE group_chat_member SET role=(user_id=?)::int WHERE chat_id=?"},
                 {std::to_string(target), chat_text},
                 false);
         } else {
@@ -183,11 +205,19 @@ inline void ManageGroup(sql::Connection& db, int actor, const Json::Value& reque
             throw GroupError("InvalidRequest");
         GroupQuery rename(
             db,
-            "UPDATE group_chat SET name=? WHERE chat_id=?",
+            database::QueryText{
+                "UPDATE group_chat SET name=? WHERE chat_id=?",
+                "UPDATE group_chat SET name=?b WHERE chat_id=?"},
             {request["name"].asString(), chat_text},
             false);
     } else if (operation == "dissolve") {
-        GroupQuery dissolve(db, "UPDATE group_chat SET dissolved=1 WHERE chat_id=?", {chat_text}, false);
+        GroupQuery dissolve(
+            db,
+            database::QueryText{
+                "UPDATE group_chat SET dissolved=1 WHERE chat_id=?",
+                "UPDATE group_chat SET dissolved=true WHERE chat_id=?"},
+            {chat_text},
+            false);
     } else
         throw GroupError("InvalidRequest");
     GroupQuery version(db, "UPDATE group_chat SET revision=revision+1 WHERE chat_id=?", {chat_text}, false);
@@ -203,7 +233,7 @@ inline void ManageGroup(sql::Connection& db, int actor, const Json::Value& reque
 }
 
 /** @brief 在一致群快照中按 UID 分页读取成员，完整响应遵守普通 TCP 帧上限。 */
-inline void ReadGroup(sql::Connection& db, int uid, const Json::Value& request, Json::Value& response) {
+inline void ReadGroup(database::Session db, int uid, const Json::Value& request, Json::Value& response) {
     if (!request["chat_id"].isInt() || request["chat_id"].asInt() <= 0 || !request["after_uid"].isInt() ||
         request["after_uid"].asInt() < 0)
         throw GroupError("InvalidRequest");
@@ -224,18 +254,21 @@ inline void ReadGroup(sql::Connection& db, int uid, const Json::Value& request, 
         db,
         "SELECT COUNT(*) FROM group_chat_member WHERE chat_id=? AND state='active'",
         {std::to_string(chat)});
-    count.rows->next();
-    response["member_count"] = count.rows->getInt(1);
+    count.rows->Next();
+    response["member_count"] = count.rows->GetInt(1);
     GroupQuery members(
         db,
-        "SELECT m.user_id,m.role,u.name FROM group_chat_member m JOIN user u ON u.uid=m.user_id "
-        "WHERE m.chat_id=? AND m.state='active' AND m.user_id>? ORDER BY m.user_id",
+        database::QueryText{
+            "SELECT m.user_id,m.role,u.name FROM group_chat_member m JOIN user u ON u.uid=m.user_id "
+            "WHERE m.chat_id=? AND m.state='active' AND m.user_id>? ORDER BY m.user_id",
+            "SELECT m.user_id,m.role,u.name FROM group_chat_member m JOIN account u ON u.uid=m.user_id WHERE "
+            "m.chat_id=? AND m.state='active' AND m.user_id>? ORDER BY m.user_id"},
         {std::to_string(chat), std::to_string(after)});
-    while (members.rows->next()) {
+    while (members.rows->Next()) {
         Json::Value item;
-        item["uid"] = members.rows->getInt(1);
-        item["role"] = members.rows->getInt(2);
-        item["name"] = members.rows->getString(3).asStdString();
+        item["uid"] = members.rows->GetInt(1);
+        item["role"] = members.rows->GetInt(2);
+        item["name"] = members.rows->GetString(3);
         auto candidate = response;
         candidate["members"].append(item);
         candidate["next_uid"] = item["uid"];

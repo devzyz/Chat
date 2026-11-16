@@ -1046,11 +1046,15 @@ std::map<short, MessageHandler> LogicSystem::CreateHandlers() {
                                 !message_commit::IsCanonicalUuid(data_array[0]["msg_uuid"].asString()))
                                 throw std::runtime_error("invalid resource sender");
                             auto& config = ConfigMgr::GetInstance();
+                            auto database = config["Database"];
+                            const auto driver = database["Driver"];
                             static resource::ResourceCatalog catalog(
-                                config["Mysql"]["Host"] + ":" + config["Mysql"]["Port"],
-                                config["Mysql"]["User"],
-                                config["Mysql"]["Password"],
-                                config["Mysql"]["Schema"]);
+                                driver == "mysql" ? database["Host"] + ":" + database["Port"] : database["Host"],
+                                database["User"],
+                                database["Password"],
+                                database["Schema"],
+                                driver,
+                                database["Port"]);
                             auto saved = catalog.CommitMessage(
                                 from_uid,
                                 to_uid,

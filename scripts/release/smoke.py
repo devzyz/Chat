@@ -44,10 +44,10 @@ def mysql_tools():
 
 
 @contextmanager
-def resource_database(root, diagnostics=None):
+def resource_database(root, diagnostics=None, fixture_name="resource-smoke-mysql"):
     """创建隔离 MySQL 并关闭所属进程；调用方可指定外部目录保留失败日志。"""
     binary, mysql = mysql_tools()
-    data = root / 'resource-smoke-mysql'
+    data = root / fixture_name
     port = free_port()
     environment = {key: value for key, value in os.environ.items() if not key.startswith('MYSQL')}
     environment['MYSQL_TEST_LOGIN_FILE'] = str(root / 'no-mysql-login-file')
@@ -72,7 +72,7 @@ def resource_database(root, diagnostics=None):
             wait_until(ready, database, timeout=45)
             subprocess.run([*client, '--execute=CREATE DATABASE resource_smoke'], env=environment,
                            check=True, capture_output=True, timeout=5, creationflags=subprocess.CREATE_NO_WINDOW)
-            migration_env = {**environment, 'CHAT_MYSQL_CLIENT': str(mysql),
+            migration_env = {**environment, 'CHAT_DB_DRIVER': 'mysql', 'CHAT_MYSQL_CLIENT': str(mysql),
                              'CHAT_MYSQL_HOST': '127.0.0.1', 'CHAT_MYSQL_PORT': str(port),
                              'CHAT_MYSQL_USER': 'root', 'CHAT_MYSQL_PASSWORD': '',
                              'CHAT_MYSQL_DATABASE': 'resource_smoke'}
@@ -223,7 +223,7 @@ finally:
         raise RuntimeError('Packaged application did not stop cleanly')
 
 
-def server_config(app, port, rpc_port, redis_port):
+def server_config(app, port, rpc_port, redis_port, mysql_port):
     config = f'''[GateServer]
 Port={port}
 [VarifyServer]
@@ -254,12 +254,12 @@ MaxTotalFiles=2
 Level=info
 FlushLevel=warn
 '''
-    config += '''[Mysql]
+    config += f'''[Mysql]
 Host=127.0.0.1
-Port=1
-Password=package-smoke
-User=package-smoke
-Schema=package_smoke
+Port={mysql_port}
+Password=
+User=root
+Schema=resource_smoke
 '''
     return config
 
@@ -295,7 +295,7 @@ def run(directory, source_sha, report):
             # Chat acquires its instance lease before accepting TCP connections.
             sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tests/server/resource'))
             from chat_flow_integration import RedisFixture
-            with RedisFixture() as redis:
+            with RedisFixture() as redis, resource_database(root, fixture_name='server-smoke-mysql') as mysql_port:
                 thread = threading.Thread(target=redis.serve_forever, daemon=True)
                 thread.start()
                 try:
@@ -303,7 +303,7 @@ def run(directory, source_sha, report):
                         def server(app=app):
                             folder = root / app
                             port, rpc_port = free_port(), free_port()
-                            (folder / 'config.ini').write_text(server_config(app, port, rpc_port, redis.server_address[1]), encoding='utf-8')
+                            (folder / 'config.ini').write_text(server_config(app, port, rpc_port, redis.server_address[1], mysql_port), encoding='utf-8')
                             with (root / (app + '.log')).open('wb') as log:
                                 process = start([str(folder / (app + '.exe')), '--config', str(folder / 'config.ini')],
                                                 folder, environment, log)

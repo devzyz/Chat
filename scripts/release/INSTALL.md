@@ -5,14 +5,17 @@
 
 ## 配置与启动
 
-1. 准备 MySQL、Redis 和 SMTP。它们是外部服务，不包含在本包中。
+1. 准备 PostgreSQL（默认）或 MySQL、Redis 和 SMTP。它们是外部服务，不包含在本包中。
 2. 首次安装创建空数据库；升级前停止写入并备份数据库与 ResourceServer 存储目录。
-   设置 `CHAT_MYSQL_CLIENT`（MySQL 8 客户端绝对路径）、`CHAT_MYSQL_HOST`、`CHAT_MYSQL_PORT`、
+   PostgreSQL 设置 `CHAT_DB_DRIVER=postgresql`、`CHAT_PG_CLIENT`（psql 路径）、`CHAT_PG_HOST`、
+   `CHAT_PG_PORT`、`CHAT_PG_USER`、`CHAT_PG_PASSWORD` 和 `CHAT_PG_DATABASE`。
+   使用 MySQL 时设置 `CHAT_DB_DRIVER=mysql`、`CHAT_MYSQL_CLIENT`（MySQL 8 客户端路径）、`CHAT_MYSQL_HOST`、`CHAT_MYSQL_PORT`、
    `CHAT_MYSQL_USER`、`CHAT_MYSQL_PASSWORD`、`CHAT_MYSQL_DATABASE`，在包根目录依次执行
    `VarifyServer/node.exe migrations/migrate.js plan`、`apply`、`verify`（每次保留相同命令前缀）。
    必须通过执行器维护版本、摘要和恢复状态，不能手工逐个导入 SQL 替代迁移。
 3. 将各应用的 config.ini.template / config.json.template 复制为 config.ini / config.json，
-   填写本机地址、端口、数据库和日志设置。C++ 服务凭据填入对应 INI；Varify 凭据通过环境变量
+   填写本机地址、端口、数据库和日志设置。三个 C++ 服务共用 `[Database]` 后端配置，
+   通过环境变量 `CHAT_DB_PASSWORD` 读取数据库密码。Varify 凭据通过环境变量
    `CHAT_VARIFY_EMAIL_USER`、`CHAT_VARIFY_EMAIL_PASS`（SMTP 登录模式）、
    `CHAT_VARIFY_REDIS_PASSWORD` 提供，不写入 JSON。模板不包含开发者连接信息。
 4. 配置 GateServer 中的 ChatServer 列表，实例名称保持一致；TLS 部署时公布外部 TCP 入口，

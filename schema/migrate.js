@@ -23,6 +23,11 @@ function configuration(env) {
 async function main(env = process.env, action = process.argv[2]) {
     const actions = { inspect: 'inspect', plan: 'plan', apply: 'apply', verify: 'verify' };
     if (!Object.hasOwn(actions, action)) throw new Error('ExpectedInspectPlanApplyOrVerify');
+    if (!env.CHAT_DB_DRIVER && env.CHAT_MYSQL_DATABASE && env.CHAT_PG_DATABASE)
+        throw new Error('ConflictingDatabaseTargets');
+    const backend = env.CHAT_DB_DRIVER ?? (env.CHAT_MYSQL_DATABASE ? 'mysql' : 'postgresql');
+    if (backend === 'postgresql') return require('./postgresql/migrate').migrate(env, action);
+    if (backend !== 'mysql') throw new Error('InvalidDatabaseDriver');
     const config = configuration(env);
     const session = new MysqlSession(env.CHAT_MYSQL_CLIENT || 'mysql', ['--no-defaults', '--protocol=TCP',
         `--host=${config.host}`, `--port=${config.port}`, `--user=${config.user}`, ...mysqlArgs],

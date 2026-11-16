@@ -2,6 +2,7 @@
 
 #include "GateRequestInternal.h"
 #include "MysqlMgr.h"
+#include "PostgresAccounts.h"
 #include "RedisMgr.h"
 #include "ConfigMgr.h"
 #include <boost/algorithm/string/trim.hpp>
@@ -52,16 +53,18 @@ public:
 };
 
 /** @brief 将账号端口适配到共享 MysqlMgr，不缓存请求或凭据。 */
-class MysqlUserStoreAdapter final : public gate::internal::UserStore {
+template <class Accounts> class UserStoreAdapter final : public gate::internal::UserStore {
 public:
+    // 固定服务启动时选择的数据库，所有请求共用一个池。
+    explicit UserStoreAdapter(std::shared_ptr<Accounts> accounts) : accounts_(std::move(accounts)) {}
     /** @brief 转交账号创建并保留管理器的 UID 或失败哨兵返回值。 */
     int CreateUser(const std::string& username, const std::string& email, const std::string& password) override {
-        return MysqlMgr::GetInstance()->RegUser(username, email, password);
+        return accounts_->RegUser(username, email, password);
     }
 
     /** @brief 查询用户名与邮箱是否匹配，保留管理器的失败结果。 */
     bool IdentityMatches(const std::string& username, const std::string& email) override {
-        return MysqlMgr::GetInstance()->CheckEmail(username, email);
+        return accounts_->CheckEmail(username, email);
     }
 
     /** @brief 同步更新指定用户密码，直接返回管理器结果。 */
@@ -70,7 +73,7 @@ public:
          * 在账号锁内先提升认证代次并撤销旧 Token；
          * 依赖失败阻止改密。
          */
-        return MysqlMgr::GetInstance()->UpdatePassword(username, password, email, [](int uid) {
+        return accounts_->UpdatePassword(username, password, email, [](int uid) {
             return RedisMgr::GetInstance()->EvalNumber(
                        "redis.call('INCR','auth_version_'..KEYS[1]); redis.call('DEL',KEYS[1]); return 1",
                        std::to_string(uid),
@@ -82,7 +85,7 @@ public:
     std::optional<gate::internal::UserRecord> CheckCredentials(const std::string& email, const std::string& password)
         override {
         UserInfo user;
-        if (!MysqlMgr::GetInstance()->CheckPassword(email, password, user)) {
+        if (!accounts_->CheckPassword(email, password, user)) {
             return std::nullopt;
         }
         const auto version = RedisMgr::GetInstance()->EvalNumber(
@@ -91,6 +94,9 @@ public:
             "");
         return gate::internal::UserRecord{user.uid, version, std::move(user.credential_lease)};
     }
+
+private:
+    std::shared_ptr<Accounts> accounts_;
 };
 
 /** @brief 读取 Chat 租约与计数，通过代次检查发布凭据。 */
@@ -162,10 +168,19 @@ private:
 namespace gate {
 
 std::unique_ptr<GateRequest> CreateProductionGateRequest() {
+    auto section = ConfigMgr::GetInstance()["Database"];
+    std::shared_ptr<internal::UserStore> accounts;
+    if (section["Driver"] == "postgresql") {
+        chat_pg::Settings
+            config{section["Host"], section["Port"], section["Schema"], section["User"], section["Password"]};
+        accounts = std::make_shared<UserStoreAdapter<PostgresAccounts>>(std::make_shared<PostgresAccounts>(config));
+    } else {
+        accounts = std::make_shared<UserStoreAdapter<MysqlMgr>>(MysqlMgr::GetInstance());
+    }
     return internal::CreateGateRequest(
         std::make_shared<GrpcVerificationAdapter>(),
         std::make_shared<RedisCodeStoreAdapter>(),
-        std::make_shared<MysqlUserStoreAdapter>(),
+        std::move(accounts),
         std::make_shared<RedisAssignmentAdapter>());
 }
 

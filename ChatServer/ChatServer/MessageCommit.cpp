@@ -29,7 +29,8 @@ Result Commit(
     int chat,
     const Batch& batch,
     Deadline deadline,
-    bool group) {
+    bool group,
+    Preconditions access) {
     if (principal.uid <= 0 || principal.uid != claimed_sender) {
         return {Error::UNAUTHORIZED_SENDER, {}};
     }
@@ -48,7 +49,7 @@ Result Commit(
     if (std::chrono::steady_clock::now() >= deadline) {
         return {Error::DEADLINE_EXCEEDED, {}};
     }
-    return store.Commit(principal.uid, recipient, chat, batch, deadline);
+    return store.Commit(principal.uid, recipient, chat, batch, deadline, access);
 }
 
 }

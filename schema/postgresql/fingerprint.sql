@@ -1,0 +1,23 @@
+-- Stable names and definitions, excluding data, object OIDs and sequence counters.
+WITH objects(value) AS (
+    SELECT json_build_array('column',c.relname,a.attnum,a.attname,format_type(a.atttypid,a.atttypmod),
+        a.attnotnull,a.attidentity,coll.collname,pg_get_expr(d.adbin,d.adrelid))::text
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    JOIN pg_attribute a ON a.attrelid=c.oid
+    LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum
+    LEFT JOIN pg_collation coll ON coll.oid=a.attcollation
+    WHERE n.nspname='chat' AND c.relkind='r' AND a.attnum>0 AND NOT a.attisdropped
+    UNION ALL SELECT json_build_array('index',c.relname,pg_get_indexdef(i.indexrelid),i.indisvalid)::text
+    FROM pg_index i JOIN pg_class c ON c.oid=i.indrelid
+    WHERE c.relnamespace='chat'::regnamespace
+    UNION ALL SELECT json_build_array('constraint',conrelid::regclass::text,conname,pg_get_constraintdef(oid),convalidated)::text
+    FROM pg_constraint WHERE connamespace='chat'::regnamespace
+    UNION ALL SELECT json_build_array('routine',p.proname,pg_get_functiondef(p.oid))::text
+    FROM pg_proc p WHERE p.pronamespace='chat'::regnamespace
+    UNION ALL SELECT json_build_array('trigger',t.tgname,pg_get_triggerdef(t.oid),t.tgenabled)::text
+    FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+    WHERE c.relnamespace='chat'::regnamespace AND NOT t.tgisinternal
+    UNION ALL SELECT json_build_array('weight',lo,hi,step,encode(weight,'hex'))::text FROM chat.account_weight
+)
+SELECT encode(sha256(convert_to(string_agg(value,E'\n' ORDER BY value COLLATE "C"),'UTF8')),'hex') AS fingerprint
+FROM objects

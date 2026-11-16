@@ -1,3 +1,4 @@
+#include "../../../common/database/Configuration.h"
 #include "ResourceHttpServer.h"
 #include "../../../common/asio/IOServicePool.h"
 #include "../../../common/auth/RedisToken.h"
@@ -38,11 +39,17 @@ int main(int argc, char** argv) {
             config.get<std::uint64_t>("ResourceServer.MaxFileBytes", 8ull * 1024 * 1024 * 1024),
             config.get<std::uint64_t>("ResourceServer.MaxTotalBytes", 64ull * 1024 * 1024 * 1024),
             config.get<std::uint64_t>("ResourceServer.MaxOwnerBytes", 16ull * 1024 * 1024 * 1024));
+        const auto settings = database::Configuration(config);
+        const auto& driver = settings.at("Driver");
+        const auto& host = settings.at("Host");
+        const auto& db_port = settings.at("Port");
         resource::ResourceCatalog catalog(
-            config.get<std::string>("Mysql.Host") + ":" + config.get<std::string>("Mysql.Port"),
-            config.get<std::string>("Mysql.User"),
-            config.get<std::string>("Mysql.Password", ""),
-            config.get<std::string>("Mysql.Schema"));
+            driver == "mysql" ? host + ":" + db_port : host,
+            settings.at("User"),
+            settings.at("Password"),
+            settings.at("Schema"),
+            driver,
+            db_port);
         chat_redis::RedisPool redis(
             config.get<std::string>("Redis.Host"),
             config.get<int>("Redis.Port"),

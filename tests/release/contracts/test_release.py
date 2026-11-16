@@ -47,6 +47,9 @@ class ReleaseContracts(unittest.TestCase):
         for name in ('migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'):
             self.assertEqual((destination / 'migrations' / name).read_bytes(),
                              (ROOT / 'schema' / name).read_bytes())
+        for name in package.PG_MIGRATION_FILES:
+            self.assertEqual((destination / 'migrations/postgresql' / name).read_bytes(),
+                             (ROOT / 'schema/postgresql' / name).read_bytes())
         self.assertFalse((destination / 'GateServer/config.ini').exists())
         self.assertNotIn('fixture-value', (destination / 'GateServer/config.ini.template').read_text())
         self.assertNotIn('private-example', (destination / 'VarifyServer/config.json.template').read_text())

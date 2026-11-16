@@ -53,14 +53,14 @@ inline void ValidateReceiptRequest(const Json::Value& request, bool report) {
 }
 
 /** @brief 将当前数据库行序列化为协议回执；要求调用方已定位有效行，数据库读取异常向上传播。 */
-inline Json::Value ReadReceipt(sql::ResultSet& row) {
+inline Json::Value ReadReceipt(database::ResultSet& row) {
     Json::Value item;
-    item["message_id"] = row.getInt("message_id");
-    item["recipient_uid"] = row.getInt("recipient_uid");
-    item["level"] = row.getInt("level") == 2 ? "read" : "delivered";
-    item["revision"] = std::to_string(row.getInt64("revision"));
-    item["delivered_at"] = Json::Int64(row.getInt64("delivered_at"));
-    item["read_at"] = row.isNull("read_at") ? Json::Value() : Json::Value(Json::Int64(row.getInt64("read_at")));
+    item["message_id"] = row.GetInt("message_id");
+    item["recipient_uid"] = row.GetInt("recipient_uid");
+    item["level"] = row.GetInt("level") == 2 ? "read" : "delivered";
+    item["revision"] = std::to_string(row.GetInt64("revision"));
+    item["delivered_at"] = Json::Int64(row.GetInt64("delivered_at"));
+    item["read_at"] = row.IsNull("read_at") ? Json::Value() : Json::Value(Json::Int64(row.GetInt64("read_at")));
     return item;
 }
 
@@ -72,7 +72,7 @@ inline Json::Value ReadReceipt(sql::ResultSet& row) {
  * 五秒期限在事务阶段间检查，不能取消已开始的同步数据库调用。
  */
 inline void ReceiptRequest(
-    sql::Connection& connection,
+    database::Session connection,
     int uid,
     const Json::Value& request,
     bool report,
@@ -87,13 +87,13 @@ inline void ReceiptRequest(
     };
     const int chat = request["chat_id"].asInt();
     Transaction transaction(connection);
-    std::unique_ptr<sql::PreparedStatement> membership(
-        connection.prepareStatement("SELECT user1_id,user2_id FROM private_chat WHERE chat_id=? FOR UPDATE"));
-    membership->setInt(1, chat);
-    std::unique_ptr<sql::ResultSet> members(membership->executeQuery());
-    if (!members->next() || (members->getInt(1) != uid && members->getInt(2) != uid))
+    std::unique_ptr<database::PreparedStatement> membership(
+        connection.PrepareStatement("SELECT user1_id,user2_id FROM private_chat WHERE chat_id=? FOR UPDATE"));
+    membership->SetInt(1, chat);
+    std::unique_ptr<database::ResultSet> members(membership->ExecuteQuery());
+    if (!members->Next() || (members->GetInt(1) != uid && members->GetInt(2) != uid))
         throw ReceiptError("Unauthorized");
-    peer = members->getInt(1) == uid ? members->getInt(2) : members->getInt(1);
+    peer = members->GetInt(1) == uid ? members->GetInt(2) : members->GetInt(1);
     members.reset();
     response["items"] = Json::Value(Json::arrayValue);
     if (report) {
@@ -103,71 +103,76 @@ inline void ReceiptRequest(
         std::sort(items.begin(), items.end());
         for (const auto& item : items) {
             check_deadline();
-            std::unique_ptr<sql::PreparedStatement> check(
-                connection.prepareStatement("SELECT recv_id FROM chat_message WHERE chat_id=? AND message_id=?"));
-            check->setInt(1, chat);
-            check->setInt(2, item.first);
-            std::unique_ptr<sql::ResultSet> row(check->executeQuery());
-            if (!row->next() || row->getInt(1) != uid)
+            std::unique_ptr<database::PreparedStatement> check(
+                connection.PrepareStatement("SELECT recv_id FROM chat_message WHERE chat_id=? AND message_id=?"));
+            check->SetInt(1, chat);
+            check->SetInt(2, item.first);
+            std::unique_ptr<database::ResultSet> row(check->ExecuteQuery());
+            if (!row->Next() || row->GetInt(1) != uid)
                 throw ReceiptError("InvalidMessage");
         }
-        std::unique_ptr<sql::PreparedStatement> create_clock(connection.prepareStatement(
-            "INSERT IGNORE INTO private_chat_receipt_clock(chat_id,last_revision) VALUES(?,0)"));
-        create_clock->setInt(1, chat);
-        create_clock->executeUpdate();
-        std::unique_ptr<sql::PreparedStatement> clock(
-            connection.prepareStatement("SELECT last_revision FROM private_chat_receipt_clock WHERE chat_id=?"));
-        clock->setInt(1, chat);
-        std::unique_ptr<sql::ResultSet> version(clock->executeQuery());
-        if (!version->next())
+        std::unique_ptr<database::PreparedStatement> create_clock(connection.PrepareStatement(database::QueryText{
+            "INSERT IGNORE INTO private_chat_receipt_clock(chat_id,last_revision) VALUES(?,0)",
+            "INSERT INTO private_chat_receipt_clock(chat_id,last_revision) VALUES(?,0) ON CONFLICT DO NOTHING"}));
+        create_clock->SetInt(1, chat);
+        create_clock->ExecuteUpdate();
+        std::unique_ptr<database::PreparedStatement> clock(
+            connection.PrepareStatement("SELECT last_revision FROM private_chat_receipt_clock WHERE chat_id=?"));
+        clock->SetInt(1, chat);
+        std::unique_ptr<database::ResultSet> version(clock->ExecuteQuery());
+        if (!version->Next())
             throw ReceiptError("StorageUnavailable");
-        auto revision = version->getInt64(1);
+        auto revision = version->GetInt64(1);
         version.reset();
         const auto now =
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
                 .count();
         for (const auto& item : items) {
             check_deadline();
-            std::unique_ptr<sql::PreparedStatement> select(connection.prepareStatement(
+            std::unique_ptr<database::PreparedStatement> select(connection.PrepareStatement(
                 "SELECT * FROM chat_message_receipt WHERE chat_id=? AND message_id=? AND recipient_uid=?"));
-            select->setInt(1, chat);
-            select->setInt(2, item.first);
-            select->setInt(3, uid);
-            std::unique_ptr<sql::ResultSet> prior(select->executeQuery());
+            select->SetInt(1, chat);
+            select->SetInt(2, item.first);
+            select->SetInt(3, uid);
+            std::unique_ptr<database::ResultSet> prior(select->ExecuteQuery());
             Json::Value saved;
-            const bool exists = prior->next();
+            const bool exists = prior->Next();
             if (exists)
                 saved = ReadReceipt(*prior);
-            const int level = exists ? prior->getInt("level") : 0;
+            const int level = exists ? prior->GetInt("level") : 0;
             prior.reset();
             if (item.second > level) {
                 if (revision == INT64_MAX)
                     throw ReceiptError("StorageUnavailable");
                 ++revision;
-                std::unique_ptr<sql::PreparedStatement> write(connection.prepareStatement(
+                std::unique_ptr<database::PreparedStatement> write(connection.PrepareStatement(database::QueryText{
                     "INSERT INTO chat_message_receipt(chat_id,message_id,recipient_uid,level,delivered_at,read_at,revision) "
                     "VALUES(?,?,?,?,?,NULLIF(?,0),?) ON DUPLICATE KEY UPDATE "
-                    "level=VALUES(level),read_at=VALUES(read_at),revision=VALUES(revision)"));
-                write->setInt(1, chat);
-                write->setInt(2, item.first);
-                write->setInt(3, uid);
-                write->setInt(4, item.second);
-                write->setInt64(5, now);
-                write->setInt64(6, item.second == 2 ? now : 0);
-                write->setInt64(7, revision);
-                write->executeUpdate();
-                std::unique_ptr<sql::ResultSet> updated(select->executeQuery());
-                if (!updated->next())
+                    "level=VALUES(level),read_at=VALUES(read_at),revision=VALUES(revision)",
+                    "INSERT INTO "
+                    "chat_message_receipt(chat_id,message_id,recipient_uid,level,delivered_at,read_at,revision) "
+                    "VALUES(?,?,?,?,?,NULLIF(?::bigint,0),?) ON CONFLICT (chat_id,message_id,recipient_uid) DO "
+                    "UPDATE SET level=EXCLUDED.level,read_at=EXCLUDED.read_at,revision=EXCLUDED.revision"}));
+                write->SetInt(1, chat);
+                write->SetInt(2, item.first);
+                write->SetInt(3, uid);
+                write->SetInt(4, item.second);
+                write->SetInt64(5, now);
+                write->SetInt64(6, item.second == 2 ? now : 0);
+                write->SetInt64(7, revision);
+                write->ExecuteUpdate();
+                std::unique_ptr<database::ResultSet> updated(select->ExecuteQuery());
+                if (!updated->Next())
                     throw ReceiptError("StorageUnavailable");
                 saved = ReadReceipt(*updated);
             }
             response["items"].append(saved);
         }
-        std::unique_ptr<sql::PreparedStatement> advance(
-            connection.prepareStatement("UPDATE private_chat_receipt_clock SET last_revision=? WHERE chat_id=?"));
-        advance->setInt64(1, revision);
-        advance->setInt(2, chat);
-        advance->executeUpdate();
+        std::unique_ptr<database::PreparedStatement> advance(
+            connection.PrepareStatement("UPDATE private_chat_receipt_clock SET last_revision=? WHERE chat_id=?"));
+        advance->SetInt64(1, revision);
+        advance->SetInt(2, chat);
+        advance->ExecuteUpdate();
         response["latest_revision"] = std::to_string(revision);
         if (CompactJson(response).size() > 2048)
             throw ReceiptError("InvalidRequest");
@@ -176,12 +181,12 @@ inline void ReceiptRequest(
         response["after_revision"] = std::to_string(after);
         response["next_revision"] = std::to_string(after);
         response["load_more"] = false;
-        std::unique_ptr<sql::PreparedStatement> select(connection.prepareStatement(
+        std::unique_ptr<database::PreparedStatement> select(connection.PrepareStatement(
             "SELECT * FROM chat_message_receipt WHERE chat_id=? AND revision>? ORDER BY revision LIMIT 17"));
-        select->setInt(1, chat);
-        select->setInt64(2, after);
-        std::unique_ptr<sql::ResultSet> rows(select->executeQuery());
-        while (rows->next()) {
+        select->SetInt(1, chat);
+        select->SetInt64(2, after);
+        std::unique_ptr<database::ResultSet> rows(select->ExecuteQuery());
+        while (rows->Next()) {
             Json::Value candidate = response;
             auto item = ReadReceipt(*rows);
             candidate["items"].append(item);

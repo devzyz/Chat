@@ -17,6 +17,12 @@ struct AuthenticatedPrincipal {
     int uid = 0;
 };
 
+// 同一次发送观察到的私聊关系版本或群成员代次，由请求传入事务。
+struct Preconditions {
+    std::int64_t relationship_revision = 0;
+    std::int64_t group_epoch = 0;
+};
+
 enum class Error {
     NONE,
     UNAUTHORIZED_SENDER,
@@ -51,7 +57,13 @@ public:
     /** @brief 允许经存储接口销毁适配器。 */
     virtual ~Store() = default;
     /** @brief 按输入顺序提交已校验批次；deadline 使用 steady_clock，失败返回错误及空条目。 */
-    virtual Result Commit(int sender, int recipient, int chat, const Batch& batch, Deadline deadline) = 0;
+    virtual Result Commit(
+        int sender,
+        int recipient,
+        int chat,
+        const Batch& batch,
+        Deadline deadline,
+        Preconditions access = {}) = 0;
 };
 
 /** @brief 判断是否为小写十六进制的非全零 8-4-4-4-12 UUID，不校验 UUID 版本。 */
@@ -69,6 +81,7 @@ Result Commit(
     int chat,
     const Batch& batch,
     Deadline deadline,
-    bool group = false);
+    bool group = false,
+    Preconditions access = {});
 
 }

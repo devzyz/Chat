@@ -1,4 +1,5 @@
 #include "ConfigMgr.h"
+#include "MysqlMgr.h"
 #include "AsioIOServicePool.h"
 #include "CServer.h"
 #include "RedisMgr.h"
@@ -95,6 +96,8 @@ int main(int argc, char* argv[]) {
         if (!LogMgr::GetInstance()->InitLogMgr())
             throw std::runtime_error("logging initialization failed");
         auto& config = ConfigMgr::GetInstance();
+        // 在监听或发布实例租约之前验证所选数据库。
+        (void)MysqlMgr::GetInstance();
         server_id = config["SelfServer"]["Name"];
         const auto port_text = config["SelfServer"]["Port"];
         std::size_t parsed = 0;

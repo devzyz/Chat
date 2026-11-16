@@ -140,4 +140,4 @@ const faultCases = [
     });
 } }));
 
-module.exports = { faultCases };
+module.exports = { faultCases, withPeer };

@@ -13,7 +13,7 @@ ChatServer 的 TCP Session 由 `CServer` 持有，`CSession` 在独立 strand �
 停机等待 accept、Session 的在途 I/O 与绑定完成，再排空生命周期任务，最后停 I/O 和依赖。
 
 
-Chat 是由 Qt 桌面客户端和多个独立服务组成的分布式聊天项目。当前 Windows 发布基线包含 GateServer、ChatServer、ResourceServer、VarifyServer 和 Qt 客户端；Server 之间通过 HTTP/TCP、gRPC、Redis 和 MySQL 协作。
+Chat 是由 Qt 桌面客户端和多个独立服务组成的分布式聊天项目。当前 Windows 发布基线包含 GateServer、ChatServer、ResourceServer、VarifyServer 和 Qt 客户端；Server 之间通过 HTTP/TCP、gRPC、Redis 和关系数据库协作（默认 PostgreSQL，亦支持 MySQL）。
 
 ```text
 Qt Client
@@ -31,10 +31,10 @@ ChatServer instance A <---gRPC---> ChatServer instance B ... N
 
 Qt Client ------HTTP------> ResourceServer
                               | Redis：校验当前凭据
-                              | MySQL metadata / filesystem bytes
+                              | SQL metadata / filesystem bytes
 ```
 
-图示生产通信主路径；Gate/Chat 的数据访问也使用 MySQL/Redis。Gate 根据 Redis 中的实例租约和连接数选服并签发凭据。
+图示生产通信主路径；Gate/Chat 的数据访问也使用关系数据库和 Redis。Gate 根据 Redis 中的实例租约和连接数选服并签发凭据。
 Linux 根构建默认包含 Gate/Chat，`CHAT_BUILD_ACCEPTANCE_RESOURCES=ON` 增加生产 ResourceServer
 及资源验收目标。统一可分发包仍以 Windows 为基线。
 
@@ -59,8 +59,8 @@ Linux 根构建默认包含 Gate/Chat，`CHAT_BUILD_ACCEPTANCE_RESOURCES=ON` 增
 
 ### ChatServer
 
-ChatServer 每进程共享 Redis、MySQL、出站 gRPC 三个有界依赖池。两个业务 worker 按不可变 SessionId 的哈希固定分配 TCP 连接，每个分片维护连接内请求及回调的顺序；
-会话绑定和清理、实例租约以及入站 RPC 的接收者鉴权也使用同一 Redis 池。写库前先取得 MySQL 执行名额，
+ChatServer 每进程共享 Redis、关系数据库、出站 gRPC 三个有界依赖池。两个业务 worker 按不可变 SessionId 的哈希固定分配 TCP 连接，每个分片维护连接内请求及回调的顺序；
+会话绑定和清理、实例租约以及入站 RPC 的接收者鉴权也使用同一 Redis 池。写库前先取得数据库执行名额，
 在 Redis 池完成凭据复核后直接启动 SQL。消息提交后先回 ACK，通知按序在 Redis 查位置，必要时再投出站 gRPC。
 容量、过载及停服见 [Concurrency](Concurrency.md)。
 
@@ -116,13 +116,13 @@ ChatServer 每进程共享 Redis、MySQL、出站 gRPC 三个有界依赖池。�
 ## 头像与资源传输
 
 ResourceServer 现提供头像、图片、视频和附件的 HTTP 上传、续传与下载，
-直接从 Redis 校验当前登录凭据，资源引用存 MySQL，字节存文件系统；
+直接从 Redis 校验当前登录凭据，资源引用存关系数据库，字节存文件系统；
 ChatServer 负责资源消息的参与者权限、事务提交及现有 TCP/gRPC 通知。
 客户端统一存储路径、头像会话与传输管理器的边界见 [Resources](Resources.md)。
 
 ## Local message persistence
 
-`UserMgr` owns `MessageService`; its worker owns the SQLite connection. UI models consume stored value objects; TCP requests and callbacks enter through the service. Server sync uses the existing MySQL pool and locks the same conversation row as text/resource writers. See [MessageStorage](MessageStorage.md) and [message states and receipts](MessageStates.md).
+`UserMgr` owns `MessageService`; its worker owns the SQLite connection. UI models consume stored value objects; TCP requests and callbacks enter through the service. Server sync uses the selected database pool and locks the same conversation row as text/resource writers. See [MessageStorage](MessageStorage.md) and [message states and receipts](MessageStates.md).
 
 ### 局域网 TLS 与客户端会话
 

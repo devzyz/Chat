@@ -1,3 +1,4 @@
+#include "../../common/database/Configuration.h"
 #include "ConfigMgr.h"
 #include <spdlog/spdlog.h>
 #include <boost/algorithm/string/trim.hpp>
@@ -129,9 +130,7 @@ ConfigMgr::ConfigMgr() {
     ValidatePort(gate["Port"], "[GateServer].Port");
     ValidateEndpoint((*this)["VarifyServer"], "VarifyServer");
     ValidateEndpoint((*this)["Redis"], "Redis");
-    ValidateEndpoint((*this)["Mysql"], "Mysql");
-    RequireValue((*this)["Mysql"], "Mysql", "User");
-    RequireValue((*this)["Mysql"], "Mysql", "Schema");
+    _config_map["Database"]._section_datas = database::Configuration(pt);
     auto server_list = (*this)["ChatServers"]["Name"];
     if (server_list.empty()) {
         throw std::invalid_argument("[ChatServers].Name must not be empty");

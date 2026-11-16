@@ -12,6 +12,13 @@
     "gtest",
     "hiredis",
     "jsoncpp",
+    {
+      "name": "libpq",
+      "default-features": false,
+      "features": [
+        "openssl"
+      ]
+    },
     "openssl",
     {
       "name": "mysql-connector-cpp",

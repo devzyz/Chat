@@ -18,7 +18,7 @@ Gate 的 MySQL Connector 连接、读取和写入超时均为 2 秒，关闭池�
 ## 配置校验
 
 Gate 的 [ChatServers] 列出候选实例配置节。Gate 选服与签发凭据、Chat 和 Resource 校验凭据都使用 Redis。
-Gate、Chat 与 Resource 的 MySQL 配置要求不变。Gate 的滚动日志使用
+Gate、Chat 与 Resource 使用同一后端和数据库；新配置的驱动、密码来源及旧配置兼容规则见[数据库接入](Data.md)。Gate 的滚动日志使用
 `common/logging/RotatingLog.h`，各服务 `LogMgr` 只读取本服务配置；关闭仍仅刷新，保留注册表供静态析构记录日志。
 
 Gate 的 `GET /get_test` 保留为发布冒烟和服务回归的 HTTP 就绪探针。
@@ -191,7 +191,7 @@ Chat 每实例最多接收 1024 个 TCP 会话，业务队列满时关闭连接�
 失去归属或 Redis 不可用时关闭会话。客户端保持十秒心跳；暂时断线自动有限重连，凭据失效则回到登录。
 租约是请求入口保护，不能把已经开始的数据库事务解释为全局即时撤销。
 
-Resource `/health` 仅报告进程 HTTP 存活；`/ready` 在有界工作执行器核验 MySQL schema 和
+Resource `/health` 仅报告进程 HTTP 存活；`/ready` 在有界工作执行器核验所选数据库的 schema 和
 Redis 连接，可用返回 200，否则 503。二者不要求用户凭据；不能把 `/health` 当业务就绪。
 
 ### TLS 入口配置

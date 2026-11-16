@@ -1,3 +1,4 @@
+#include "../../common/database/Configuration.h"
 #include "ConfigMgr.h"
 #include "LogMgr.h"
 #include "../../common/grpc/GrpcClientRuntime.h"
@@ -118,9 +119,7 @@ ConfigMgr::ConfigMgr() {
     }
 
     ValidateEndpoint((*this)["Redis"], "Redis");
-    ValidateEndpoint((*this)["Mysql"], "Mysql");
-    RequireValue((*this)["Mysql"], "Mysql", "User");
-    RequireValue((*this)["Mysql"], "Mysql", "Schema");
+    _config_data["Database"]._sectionInfo_data = database::Configuration(pt);
 
     auto grpc = (*this)["Grpc"];
     (void)rpc::ParseDurationMs(

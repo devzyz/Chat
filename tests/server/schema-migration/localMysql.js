@@ -38,7 +38,8 @@ async function startLocalMysql(binDirectory) {
     if (!path.isAbsolute(binDirectory)) throw new Error('absolute MySQL bin directory required');
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'chat-schema-'));
     const mysqld = path.join(binDirectory, process.platform === 'win32' ? 'mysqld.exe' : 'mysqld');
-    const mysql = path.join(binDirectory, process.platform === 'win32' ? 'mysql.exe' : 'mysql');
+    const mysql = process.env.CHAT_MYSQL_FIXTURE_CLIENT || path.join(binDirectory,
+        process.platform === 'win32' ? 'mysql.exe' : 'mysql');
     const datadir = path.join(root, 'data');
     const basedir = path.dirname(binDirectory);
     let server;
@@ -79,6 +80,7 @@ async function startLocalMysql(binDirectory) {
         });
         server = spawn(mysqld, ['--no-defaults', ...noMonitor, `--basedir=${basedir}`, `--datadir=${datadir}`,
             '--bind-address=127.0.0.1', `--port=${port}`, '--mysqlx=0', '--skip-log-bin',
+            ...(process.platform === 'win32' ? [] : [`--socket=${path.join(root, 'mysql.sock')}`]),
             `--pid-file=${path.join(root, 'mysqld.pid')}`, `--log-error=${path.join(root, 'server.log')}`],
         { windowsHide: true, stdio: 'ignore' });
         // 把所属 MySQL 进程的退出或启动失败转换为可等待结果。

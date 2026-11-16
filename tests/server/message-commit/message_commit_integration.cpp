@@ -70,7 +70,7 @@ Result Send(Store& store, const Batch& batch, int sender = 1, int recipient = 2,
 struct RejectStore final : Store {
     int calls = 0;
     /** 记录一次存储调用并返回默认失败结果。 */
-    Result Commit(int, int, int, const Batch&, Deadline) override {
+    Result Commit(int, int, int, const Batch&, Deadline, Preconditions) override {
         ++calls;
         return {};
     }

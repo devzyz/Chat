@@ -25,6 +25,10 @@ REQUIRED = [*(f'{app}/{app}.exe' for app in SERVERS),
               ('migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'))]
 
 
+PG_MIGRATION_FILES = ('migrate.js', 'contract.js', 'manifest.json', '001_baseline.sql',
+                      'account_weights.sql', 'account.sql', 'timestamps.sql', 'private_text.sql', 'fingerprint.sql')
+
+
 def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -69,6 +73,16 @@ def check_layout(root):
     for name in REQUIRED:
         if not (root / name).is_file():
             raise ValueError('Missing runtime file: ' + name)
+    for name in PG_MIGRATION_FILES:
+        if not (root / 'migrations/postgresql' / name).is_file():
+            raise ValueError('Missing PostgreSQL migration file: ' + name)
+    pg_dir = root / 'migrations/postgresql'
+    pg_checksums = json.loads((pg_dir / 'manifest.json').read_text(encoding='utf-8'))
+    if set(pg_checksums) != {name for name in PG_MIGRATION_FILES if name.endswith('.sql')}:
+        raise ValueError('Invalid PostgreSQL migration manifest')
+    for name, checksum in pg_checksums.items():
+        if sha256((pg_dir / name).read_bytes().replace(b'\r\n', b'\n')) != checksum:
+            raise ValueError('PostgreSQL migration checksum mismatch')
     for app in APPS:
         name = 'config.json.template' if app == 'VarifyServer' else 'config.ini.template'
         if not (root / app / name).is_file():
@@ -100,7 +114,7 @@ def assemble(source, artifacts, output, source_sha):
             target.parent.mkdir(exist_ok=True)
             target.write_bytes(file.read_bytes())
         manifest = json.loads((source / 'schema/manifest.json').read_text(encoding='utf-8'))
-        for name in ['manifest.json', 'migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'] + [item['file'] for item in manifest['migrations']]:
+        for name in ['manifest.json', 'migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'] + [item['file'] for item in manifest['migrations']] + ['postgresql/' + item for item in PG_MIGRATION_FILES]:
             target = stage / 'migrations' / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((source / 'schema' / name).read_bytes())

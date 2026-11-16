@@ -9,6 +9,8 @@ T08-STATUS 的选服与签发用例已迁入 Gate 的 gate_routing 单元和组�
 > 业务 Test ID 和覆盖说明保留；旧 R-00 审批/版本占用、跨 workflow admission、N-1 bootstrap 发布阻断已退出当前 CI。
 > 发布测试通过 unittest 自动发现，不再维护独立的 release-reports.json 数量账本。
 
+新增双库合同通过[数据库测试入口](server/schema-migration/README.md#postgresql-与双库合同)运行：隔离实例负责 schema、账号排序与幂等行为，共用原生用例负责好友、回执、群和事务结果。配置服务二进制时另外验证 Gate、两个 Chat 实例和 Resource 的真实协议路径。仅运行 SQL 用例不计原生或跨服务通过。
+
 2026-09 连接与输入修复补充：MySQL 连接池的超时、关闭、失效重建及事务清理由
 [data](server/data/README.md) 的六项 Unit 覆盖；Redis 回复类型和二进制内容由该模块 Component 覆盖。
 `T08-LOGIC-08` 验证处理器异常后分发线程继续运行且不记录请求载荷；Gate HTTP Integration

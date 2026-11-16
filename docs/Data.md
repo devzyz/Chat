@@ -1,4 +1,39 @@
-# MySQL schema and migration contract
+# 服务端数据库、结构版本与迁移
+
+GateServer、每个 ChatServer 实例和 ResourceServer 需要指向同一个数据库。开发配置默认 PostgreSQL。
+已有单独的 `[Mysql]` 配置仍按 MySQL 读取。新配置用 `[Database]`，`Driver` 可选
+`postgresql` 或 `mysql`，省略时默认 PostgreSQL。`Schema` 表示数据库名，PG 对象放在固定的
+`chat` schema。新配置通过进程环境 `CHAT_DB_PASSWORD` 传递凭据，配置同时出现两个数据库节时启动失败。
+
+## 接入现有 PostgreSQL
+
+1. 在现有实例上准备 UTF8 空库（示例名 `chat_dev`）和账号。开发时可用该库的所有者初始化。
+   在三个服务及各 Chat 实例配置中设置相同的 `Host`、`Port`、`Schema`、`User`。
+2. 给迁移进程设置 `CHAT_DB_DRIVER=postgresql`、`CHAT_PG_HOST`、`CHAT_PG_PORT`、
+   `CHAT_PG_DATABASE`、`CHAT_PG_USER` 和 `CHAT_PG_PASSWORD`。可选 `CHAT_PG_CLIENT` 指向
+   已安装的 psql。依次执行以下命令，错误通过非零退出码返回。服务进程验证结构后才监听。
+
+   ```text
+   node schema/migrate.js plan
+   node schema/migrate.js apply
+   node schema/migrate.js verify
+   ```
+
+3. 为新开发库分配独立的 Redis、ResourceServer 存储目录和客户端环境（例如使用不同的 Gate 端口）。
+   空库会重新分配 UID 和消息 ID，旧登录状态、文件授权和客户端同步游标属于旧环境。
+   本流程只初始化空库，对现有 MySQL 数据和旧库不执行导入、删除或覆盖。
+
+PG 初始化使用同一会话内的事务咨询锁、事务 DDL 和文件摘要。重复 apply 核对版本、结构指纹和 UID
+计数器。未知非空库或结构漂移会使 apply 失败。运行账号需能读取业务表、账号权重与结构元数据，
+执行相应业务函数及 CRUD，并使用 identity 序列。应用本身不执行 DDL。
+
+账号保留原始字节；唯一索引和按名/邮箱查找使用从 MySQL `utf8mb4_german2_ci` 获取的主权重。
+例如 `ß` 与 `ss` 相等，两个不同的补充平面字符也可能相等。Gate 核验改密身份时先按用户名键定位，
+再逐字节核对原邮箱。消息正文使用 bytea，支持零字节，重试逐字节比较。
+认证锁与连接共用生命周期，PG 需要直连或使用支持会话级锁的连接方式。
+参见[双库合同与测试命令](../tests/server/schema-migration/README.md#postgresql-与双库合同)。
+
+## MySQL 既有迁移
 
 The schema source is the user-supplied schema-only export of the historical Chat
 development database (nine tables and `reg_user`). The raw export, its host metadata,
@@ -121,7 +156,7 @@ The account-scoped SQLite schema, transaction/cursor rules and deployment workfl
 
 ## MySQL connection recovery
 
-Gate, Chat and ResourceCatalog use `common/mysql/ConnectionPool.h` for bounded
+Gate, Chat and ResourceCatalog use `common/database/ConnectionPool.h` for bounded
 borrowing, checkout validation and one replacement attempt before business SQL.
 Connection setup and health checks run outside the pool mutex. Close wakes waiters;
 checked-out work must finish before destroying the pool. Gate no longer needs a

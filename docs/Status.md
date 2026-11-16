@@ -1,5 +1,7 @@
 # 项目当前状态
 
+**开发分支数据库接入（未合并）**：基于 develop 的 e3ab44e。已在本机隔离 MySQL 和 PostgreSQL 上运行共享原生存储合同，MySQL 消息提交 T10-MSG-01…20、12 项迁移及 10 项消息同步回归通过。使用独立 PG 测试实例检查了 103 条业务 SQL 的解析和参数类型。正式 Windows 构建在受管依赖缺少 libpq 头文件处停止。双实例协议矩阵、发布包启动和性能基线仍待使用正式产物验证。操作说明见[数据库接入](Data.md)。
+
 截至 2026-11-12，已合并的开发基线为 [develop 的 1a235b6](https://github.com/devzyz/Chat/commit/1a235b618dcbdcfb0e3428639bc4cba630d8991e)，包含 PR #45。发行版本号由 [VERSION](../VERSION) 定义。
 
 ## 已合并的能力
