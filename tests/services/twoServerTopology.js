@@ -39,9 +39,13 @@ function nativeConfig(topology, role, dependencies, logDirectory) {
         (name, values) => `[${name}]\n` + Object.entries(values).map(
         // 把已校验的单个键值编码为配置行。
         ([key, value]) => `${key}=${value}\n`).join('');
-    let result = section('Redis', { Host: topology.host, Port: dependencies.redis, Password: dependencies.password }) +
+    const storage = dependencies.driver ?
+        section('Database', { Driver: dependencies.driver, Host: topology.host, Port: dependencies.mysql,
+            User: dependencies.user, Schema: topology.database }) :
         section('Mysql', { Host: topology.host, Port: dependencies.mysql, User: 'root',
-            Password: dependencies.password, Schema: topology.database }) +
+            Password: dependencies.password, Schema: topology.database });
+    let result = section('Redis', { Host: topology.host, Port: dependencies.redis, Password: dependencies.password }) +
+        storage +
         section('Log', { Name: role, LogDir: logDirectory, MaxSizeMB: 1, MaxTotalFiles: 2, Level: 'warn', FlushLevel: 'warn' });
     if (role === 'ChatA' || role === 'ChatB') {
         const index = role === 'ChatA' ? 0 : 1;

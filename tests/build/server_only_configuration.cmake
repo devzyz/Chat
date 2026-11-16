@@ -16,7 +16,7 @@ function(find_package name)
     endif()
     foreach(target IN ITEMS Boost::filesystem gRPC::grpc++ protobuf::libprotobuf
             hiredis::hiredis JsonCpp::JsonCpp unofficial::mysql-connector-cpp::connector-jdbc
-            spdlog::spdlog Threads::Threads OpenSSL::Crypto ZLIB::ZLIB)
+            spdlog::spdlog Threads::Threads OpenSSL::Crypto ZLIB::ZLIB PostgreSQL::PostgreSQL)
         if(NOT TARGET ${target})
             add_library(${target} INTERFACE IMPORTED GLOBAL)
         endif()

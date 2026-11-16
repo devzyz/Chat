@@ -125,6 +125,7 @@ TEST(ConfigMgrTests, ExplicitPathOverridesChatConfigEnvironmentVariable) {
 
 /** 验证随仓双实例配置的运行身份与监听端口不同。 */
 TEST(ConfigMgrTests, ShippedDualInstanceConfigurationsHaveDistinctIdentities) {
+    ScopedEnvironmentVariable database_password("CHAT_DB_PASSWORD", "fixture-only");
     const auto fixture_root = std::filesystem::current_path() / "fixtures";
     const auto first_path = fixture_root / "chat-01.ini";
     const auto second_path = fixture_root / "chat-02.ini";
@@ -134,6 +135,8 @@ TEST(ConfigMgrTests, ShippedDualInstanceConfigurationsHaveDistinctIdentities) {
     ConfigMgr::SetConfigPath(second_path.string());
     ConfigMgr second;
 
+    EXPECT_EQ(first["Database"]["Driver"], "postgresql");
+    EXPECT_EQ(second["Database"]["Driver"], "postgresql");
     EXPECT_NE(first["SelfServer"]["Name"], second["SelfServer"]["Name"]);
     EXPECT_NE(first["SelfServer"]["Port"], second["SelfServer"]["Port"]);
     EXPECT_NE(first["SelfServer"]["RPCPort"], second["SelfServer"]["RPCPort"]);

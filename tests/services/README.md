@@ -1,5 +1,9 @@
 # Disposable dependency coordinator and adapters (3C-02/04/06)
 
+The Docker coordinator on this page exercises the MySQL compatibility environment.
+The [database contracts](../server/schema-migration/README.md#postgresql-与双库合同) cover the default PostgreSQL backend
+and run the same registration, cross-instance send, retry and sync scenario against both databases in full CI.
+
 The driver regression distinguishes a cleanly supervised nonzero application exit
 from failed teardown. Its wire rejection mode requires a successful login and full
 request write, then EOF/reset before any response bytes. Login failure, timeout,

@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "FixtureDatabase.h"
 
 #include <boost/asio.hpp>
 
@@ -265,13 +266,7 @@ void WriteValidStartupConfig(
            << "Host = 127.0.0.1\n"
            << "Port = 1\n"
            << "Password = test-placeholder\n"
-           << "[Mysql]\n"
-           << "Host = 127.0.0.1\n"
-           << "Port = 1\n"
-           << "Password = test-placeholder\n"
-           << "User = test-user\n"
-           << "Schema = test-schema\n"
-           << "[PeerServer]\n"
+           << startup_fixture::DatabaseSection() << "[PeerServer]\n"
            << "Servers =\n"
            << "[Log]\n"
            << "Name = StartupTest\n"

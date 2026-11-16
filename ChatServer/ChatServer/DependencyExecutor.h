@@ -9,11 +9,11 @@
 #include <type_traits>
 #include <utility>
 
-enum class ExternalTask { Redis, MySQL, OutboundGrpc };
+enum class ExternalTask { Redis, Database, OutboundGrpc };
 enum class LogicSubmitResult { Accepted, Full, Closed };
 enum class RedisAdmission { Critical, Routing };
 
-// 进程级依赖执行器；各依赖有独立等待队列，MySQL 的执行名额可在 Redis 复核期间预留。
+// 进程级依赖执行器；各依赖有独立等待队列，数据库 的执行名额可在 Redis 复核期间预留。
 class DependencyExecutor final {
 public:
     using Task = std::function<void()>;
@@ -23,7 +23,7 @@ public:
         Task denied;
     };
     // 容量不含执行中的任务；默认保留八个 Redis 等待位置给关键请求。
-    explicit DependencyExecutor(std::size_t mysql_workers = 2, std::size_t capacity = 64);
+    explicit DependencyExecutor(std::size_t database_workers = 2, std::size_t capacity = 64);
     // 排空任务并回收所有线程，所有者须先停止生产者。
     ~DependencyExecutor();
     // 标识当前调用的实际依赖工作线程，适配器可在执行 I/O 前检查所属池。

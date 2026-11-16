@@ -17,14 +17,15 @@
 #include <condition_variable>
 #include <thread>
 #include "MessageCommit.h"
-#include "../../common/mysql/ConnectionPool.h"
+#include "../../common/database/Session.h"
+#include "../../common/database/ConnectionPool.h"
 
 /** @brief 以 unique_ptr 独占一个 JDBC 连接，供连接池转移借用所有权。 */
 class SQLConnection {
 public:
     /** @brief 初始化SQLConnection，以 unique_ptr 独占一个 JDBC 连接，供连接池转移借用所有权。 */
-    explicit SQLConnection(std::unique_ptr<sql::Connection> connection = {}) : _connection(std::move(connection)) {}
-    std::unique_ptr<sql::Connection> _connection;
+    explicit SQLConnection(std::unique_ptr<database::Owned> connection = {}) : _connection(std::move(connection)) {}
+    std::unique_ptr<database::Owned> _connection;
 };
 
 /** @brief 包装共享 MySQL 连接池，为聊天事务提供有截止时间的独占借用。 */
@@ -36,7 +37,9 @@ public:
         const std::string& user,
         const std::string& password,
         const std::string& schema,
-        int pool_size);
+        int pool_size,
+        const std::string& driver = "mysql",
+        const std::string& port = "");
     /** @brief 在池的等待策略内借出独占连接；关闭、耗尽或健康检查失败返回空值，使用后须归还。 */
     std::unique_ptr<SQLConnection> GetConnection(
         message_commit::Deadline deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2));
@@ -46,7 +49,7 @@ public:
     void Close();
 
 private:
-    std::unique_ptr<chat_mysql::ConnectionPool<>> _connections;
+    std::unique_ptr<database::ConnectionPool<database::Owned>> _connections;
 };
 
 /** @brief 使用连接池执行聊天数据查询、消息提交和回执事务。 */

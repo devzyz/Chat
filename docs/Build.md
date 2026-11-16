@@ -29,6 +29,11 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 
 ## 依赖变更
 
+服务端 PostgreSQL 驱动使用 PostgreSQL 许可证的 libpq，通过根 manifest 的固定基线恢复；
+仅启用 OpenSSL 功能。它提供现有 MySQL JDBC 驱动无法提供的 PG 协议、参数绑定、非阻塞 I/O
+和 SQLSTATE。CMake 使用 PostgreSQL::PostgreSQL，Windows 按仓库的动态链接和 app-local 规则
+发布 libpq 及运行时依赖。manifest 变动会生成新的依赖缓存键；本机缺少该包时按 DG-25 单独授权恢复。
+
 新增或升级依赖前 MUST：
 
 1. 证明标准库或现有依赖不能合理满足需求。

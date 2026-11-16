@@ -92,6 +92,7 @@ function write(root, report) {
         });
     const markdown = `# 性能测试报告\n\n状态：${report.status}；档位：${report.profile}。\n\n` +
         `提交：\`${report.sha}\`。运行：[GitHub Actions](${report.url})。\n\n` +
+        `数据库镜像：\`${report.environment?.databaseImage || '未记录'}\`。\n\n` +
         `环境：GitHub Ubuntu 24.04，同机正式服务与临时依赖；${report.environment?.cpus || '?'} vCPU，` +
         `${number((report.environment?.memoryBytes || 0) / 1073741824)} GiB RAM，Node ${report.environment?.node || '?' }。\n\n` +
         (report.dataset ? `预装消息 ${report.dataset.totalRows} 条。各私聊实际行数 ${report.dataset.rowsPerChat.join('、')}。\n\n` : '') +

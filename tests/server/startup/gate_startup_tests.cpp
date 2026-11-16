@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "FixtureDatabase.h"
 
 #include <boost/asio.hpp>
 
@@ -322,12 +323,7 @@ void WriteServiceConfig(
     bool include_critical_endpoint = true,
     const std::string& grpc_settings = {}) {
     std::ostringstream config;
-    config << "[Mysql]\n"
-           << "Host = 127.0.0.1\n"
-           << "Port = 1\n"
-           << "Password = fixture-placeholder\n"
-           << "User = fixture-user\n"
-           << "Schema = fixture-schema\n";
+    config << startup_fixture::DatabaseSection();
     config << "[GateServer]\n"
            << "Port = " << service_port << "\n"
            << "[VarifyServer]\n"

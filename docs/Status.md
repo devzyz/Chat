@@ -1,5 +1,7 @@
 # 项目当前状态
 
+**开发分支数据库接入（未合并）**：本机已在 `7ead057` 构建 Debug、Release 三个服务，并用正式 Release 程序通过 PG 与 MySQL 双实例注册、登录、发送、原 UUID 重试和接收端同步验收。80 项服务单元测试通过。两库各以每秒 20 条发送 200 条 256 字节私聊消息，接收端逐条核对成功；本机 PG 提交 ACK 的 P95 为 2.44 ms。解包后的 Windows 程序使用包内 PG 迁移器通过全部 6 项冒烟检查。完整 CI、百万条历史和高并发压测未在这次运行中执行。开发与兼容验证入口见[数据库接入](Data.md)和[双库测试说明](../tests/server/schema-migration/README.md)。
+
 截至 2026-11-12，已合并的开发基线为 [develop 的 1a235b6](https://github.com/devzyz/Chat/commit/1a235b618dcbdcfb0e3428639bc4cba630d8991e)，包含 PR #45。发行版本号由 [VERSION](../VERSION) 定义。
 
 ## 已合并的能力

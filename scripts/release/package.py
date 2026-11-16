@@ -11,7 +11,7 @@ SERVERS = ('GateServer', 'ChatServer', 'ResourceServer')
 APPS = (*SERVERS, 'chat-client', 'VarifyServer')
 REQUIRED = [*(f'{app}/{app}.exe' for app in SERVERS),
             *(f'{app}/{dll}' for app in SERVERS
-              for dll in ('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')),
+              for dll in ('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'libpq.dll')),
             'chat-client/chat.exe', 'chat-client/Qt6Core.dll', 'chat-client/Qt6Widgets.dll',
             'chat-client/platforms/qwindows.dll', 'VarifyServer/node.exe', 'VarifyServer/server.js',
             'VarifyServer/tlsGateway.js', 'VarifyServer/tls.config.example.json',
@@ -23,6 +23,10 @@ REQUIRED = [*(f'{app}/{app}.exe' for app in SERVERS),
             'proto/varify.proto', 'migrations/manifest.json', 'README.md',
             *(f'migrations/{name}' for name in
               ('migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'))]
+
+
+PG_MIGRATION_FILES = ('migrate.js', 'contract.js', 'manifest.json', '001_baseline.sql',
+                      'account_weights.sql', 'account.sql', 'timestamps.sql', 'private_text.sql', 'fingerprint.sql')
 
 
 def sha256(data):
@@ -56,12 +60,15 @@ def blank_config(file):
             return {key: blank(child) for key, child in value.items()} if isinstance(value, dict) else None
         return json.dumps(blank(json.loads(file.read_text(encoding='utf-8'))), indent=2) + '\n'
     lines = ['; Fill values for your installation before starting.']
+    section = ''
     for line in file.read_text(encoding='utf-8-sig').splitlines():
         line = line.strip()
         if line.startswith('[') and line.endswith(']'):
+            section = line[1:-1]
             lines.append(line)
         elif '=' in line and not line.startswith((';', '#')):
-            lines.append(line.split('=', 1)[0].strip() + '=')
+            key = line.split('=', 1)[0].strip()
+            lines.append(key + ('=postgresql' if section == 'Database' and key == 'Driver' else '='))
     return '\n'.join(lines) + '\n'
 
 
@@ -69,6 +76,16 @@ def check_layout(root):
     for name in REQUIRED:
         if not (root / name).is_file():
             raise ValueError('Missing runtime file: ' + name)
+    for name in PG_MIGRATION_FILES:
+        if not (root / 'migrations/postgresql' / name).is_file():
+            raise ValueError('Missing PostgreSQL migration file: ' + name)
+    pg_dir = root / 'migrations/postgresql'
+    pg_checksums = json.loads((pg_dir / 'manifest.json').read_text(encoding='utf-8'))
+    if set(pg_checksums) != {name for name in PG_MIGRATION_FILES if name.endswith('.sql')}:
+        raise ValueError('Invalid PostgreSQL migration manifest')
+    for name, checksum in pg_checksums.items():
+        if sha256((pg_dir / name).read_bytes().replace(b'\r\n', b'\n')) != checksum:
+            raise ValueError('PostgreSQL migration checksum mismatch')
     for app in APPS:
         name = 'config.json.template' if app == 'VarifyServer' else 'config.ini.template'
         if not (root / app / name).is_file():
@@ -100,7 +117,7 @@ def assemble(source, artifacts, output, source_sha):
             target.parent.mkdir(exist_ok=True)
             target.write_bytes(file.read_bytes())
         manifest = json.loads((source / 'schema/manifest.json').read_text(encoding='utf-8'))
-        for name in ['manifest.json', 'migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'] + [item['file'] for item in manifest['migrations']]:
+        for name in ['manifest.json', 'migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'] + [item['file'] for item in manifest['migrations']] + ['postgresql/' + item for item in PG_MIGRATION_FILES]:
             target = stage / 'migrations' / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((source / 'schema' / name).read_bytes())

@@ -22,6 +22,16 @@
           SkipUnchangedFiles="true" />
   </Target>
 
+  <!-- IncrementalClean can remove unchanged DLLs after vcpkg has already checked them.
+       Use the dependency list for this executable so an incremental build also repairs its runtime. -->
+  <Target Name="EnsureAppLocalRuntime" AfterTargets="Build"
+          Condition="'$(ConfigurationType)' == 'Application' and '$(VcpkgApplocalDeps)' == 'true' and Exists('$(IntDir)vcpkg.applocal.log')">
+    <ReadLinesFromFile File="$(IntDir)vcpkg.applocal.log">
+      <Output TaskParameter="Lines" ItemName="_ChatRuntimeFiles" />
+    </ReadLinesFromFile>
+    <Copy SourceFiles="@(_ChatRuntimeFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
+
   <Target Name="CopyChatServerInstanceConfigs" AfterTargets="Build"
           Condition="'$(Platform)' == 'x64' and '$(MSBuildProjectName)' == 'ChatServer' and Exists('$(MSBuildProjectDirectory)\configs')">
     <ItemGroup>

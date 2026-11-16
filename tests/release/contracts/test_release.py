@@ -47,11 +47,21 @@ class ReleaseContracts(unittest.TestCase):
         for name in ('migrate.js', 'SchemaMigration.js', 'MysqlSession.js', 'SchemaContract.h'):
             self.assertEqual((destination / 'migrations' / name).read_bytes(),
                              (ROOT / 'schema' / name).read_bytes())
+        for name in package.PG_MIGRATION_FILES:
+            self.assertEqual((destination / 'migrations/postgresql' / name).read_bytes(),
+                             (ROOT / 'schema/postgresql' / name).read_bytes())
         self.assertFalse((destination / 'GateServer/config.ini').exists())
         self.assertNotIn('fixture-value', (destination / 'GateServer/config.ini.template').read_text())
         self.assertNotIn('private-example', (destination / 'VarifyServer/config.json.template').read_text())
         self.assertEqual((self.output / 'SHA256SUMS').read_text(),
                          package.sha256(archive.read_bytes()) + '  ' + archive.name + '\n')
+
+    def test_database_template_preserves_pg_default_and_removes_machine_settings(self):
+        source = self.root / 'config.ini'
+        source.write_text('[Database]\nDriver=postgresql\nHost=old-host\nUser=old-user\nPassword=fixture-only\n',
+                          encoding='utf-8')
+        template = package.blank_config(source)
+        self.assertIn('[Database]\nDriver=postgresql\nHost=\nUser=\nPassword=\n', template)
 
     def test_missing_package_or_runtime_fails(self):
         (self.artifacts / 'GateServer.zip').unlink()
@@ -74,6 +84,19 @@ class ReleaseContracts(unittest.TestCase):
         (self.artifacts / 'ResourceServer.zip').unlink()
         with self.assertRaisesRegex(ValueError, 'Expected one CI ZIP for ResourceServer'):
             package.assemble(ROOT, self.artifacts, self.root / 'missing-resource', self.sha)
+
+    def test_every_server_requires_its_own_postgres_runtime(self):
+        """每个发布单元都必须能从自身目录加载 PG 驱动。"""
+        root = self.root / 'missing-libpq'
+        package.verify(self.build(), root, self.sha)
+        for server in package.SERVERS:
+            with self.subTest(server=server):
+                dll = root / server / 'libpq.dll'
+                content = dll.read_bytes()
+                dll.unlink()
+                with self.assertRaisesRegex(ValueError, f'Missing runtime file: {server}/libpq'):
+                    package.check_layout(root)
+                dll.write_bytes(content)
 
     def test_resource_runtime_files_cannot_be_omitted(self):
         """资源服务缺少可执行文件或运行库时必须拒绝发布包。"""

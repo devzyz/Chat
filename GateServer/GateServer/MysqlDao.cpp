@@ -117,11 +117,11 @@ void MysqlConnectionPool::Close() {
 
 MysqlDao::MysqlDao() {
     auto& configmgr = ConfigMgr::GetInstance();
-    const auto& host = configmgr["Mysql"]["Host"];
-    const auto& port = configmgr["Mysql"]["Port"];
-    const auto& user = configmgr["Mysql"]["User"];
-    const auto& password = configmgr["Mysql"]["Password"];
-    const auto& schema = configmgr["Mysql"]["Schema"];
+    const auto& host = configmgr["Database"]["Host"];
+    const auto& port = configmgr["Database"]["Port"];
+    const auto& user = configmgr["Database"]["User"];
+    const auto& password = configmgr["Database"]["Password"];
+    const auto& schema = configmgr["Database"]["Schema"];
     _pool.reset(new MysqlConnectionPool(host + ":" + port, user, password, schema, 8));
 }
 

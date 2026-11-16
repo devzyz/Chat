@@ -21,9 +21,13 @@ Domain 为 Architecture，Level 为 Integration。`startup_config_tests.cpp` 包
 
 ## 运行与 CI
 
+设置 `CHAT_PG_BIN` 指向包含 initdb 和 pg_ctl 的绝对路径，psql 单独安装时设置 `CHAT_PG_CLIENT`。
+标准 `RunServerTests` 和下面的单组命令会创建隔离的回环 PG、应用真实 schema，并在测试结束后关闭夹具。
+这样，检查 HTTP 就绪、gRPC 端口冲突和正常退出的用例可以通过正式服务的数据库启动预检。
+
 ```powershell
 .\scripts\windows-local.ps1 -Task RunServerTests -Configuration Release
-.\build\windows-tests\Release\server_integration_tests.exe --gtest_filter=StartupConfigTests.*:GateStartupTests.*
+node tests/server/startup/withPostgres.js .\build\windows-tests\Release\server_integration_tests.exe --gtest_filter=StartupConfigTests.*:GateStartupTests.*
 ```
 
 统一 runner 构建并 app-local deploy Gate、Chat 和 Integration test EXE，将本模块用例计入 `server_integration.xml`；整组精确数量以 `scripts/windows-local.ps1` 的报告注册为准。CI 复用服务构建 job 的同一依赖恢复，并由现有 report artifact 路径保留失败诊断。

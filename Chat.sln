@@ -34,6 +34,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MessageCommit", "ChatServer
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MessageCommitTests", "tests\server\MessageCommitTests.vcxproj", "{AC1F5D07-BDA4-4A95-A095-3C0500000002}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PostgresContractTests", "tests\server\PostgresContractTests.vcxproj", "{AF953AC8-3599-49DE-8673-167447106A14}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -49,11 +51,17 @@ Global
 		{AC1F5D07-BDA4-4A95-A095-3C0500000001}.Release|x64.Build.0 = Release|x64
 		{AC1F5D07-BDA4-4A95-A095-3C0500000001}.Release|x86.ActiveCfg = Release|Win32
 		{AC1F5D07-BDA4-4A95-A095-3C0500000002}.Debug|x64.ActiveCfg = Debug|x64
+		{AF953AC8-3599-49DE-8673-167447106A14}.Debug|x64.ActiveCfg = Debug|x64
 		{AC1F5D07-BDA4-4A95-A095-3C0500000002}.Debug|x64.Build.0 = Debug|x64
+		{AF953AC8-3599-49DE-8673-167447106A14}.Debug|x64.Build.0 = Debug|x64
 		{AC1F5D07-BDA4-4A95-A095-3C0500000002}.Debug|x86.ActiveCfg = Debug|x64
+		{AF953AC8-3599-49DE-8673-167447106A14}.Debug|x86.ActiveCfg = Debug|x64
 		{AC1F5D07-BDA4-4A95-A095-3C0500000002}.Release|x64.ActiveCfg = Release|x64
+		{AF953AC8-3599-49DE-8673-167447106A14}.Release|x64.ActiveCfg = Release|x64
 		{AC1F5D07-BDA4-4A95-A095-3C0500000002}.Release|x64.Build.0 = Release|x64
+		{AF953AC8-3599-49DE-8673-167447106A14}.Release|x64.Build.0 = Release|x64
 		{AC1F5D07-BDA4-4A95-A095-3C0500000002}.Release|x86.ActiveCfg = Release|x64
+		{AF953AC8-3599-49DE-8673-167447106A14}.Release|x86.ActiveCfg = Release|x64
 		{4B7AD04F-6F24-45BC-BF1B-3B0400000001}.Debug|x64.ActiveCfg = Debug|x64
 		{4B7AD04F-6F24-45BC-BF1B-3B0400000001}.Debug|x64.Build.0 = Debug|x64
 		{4B7AD04F-6F24-45BC-BF1B-3B0400000001}.Debug|x86.ActiveCfg = Debug|Win32

@@ -363,7 +363,7 @@ function Run-ServerTests {
     $arguments = @(
         $solution
         '/m'
-        '/t:GateServer;ChatServer;ResourceServer;ServerUnitTests;ServerComponentTests;ServerIntegrationTests;ChatGrpcClientTests'
+        '/t:GateServer;ChatServer;ResourceServer;ServerUnitTests;ServerComponentTests;ServerIntegrationTests;ChatGrpcClientTests;PostgresContractTests'
         "/p:Configuration=$Configuration"
         '/p:Platform=x64'
         "/p:VcpkgRoot=$($vcpkg.Root)"
@@ -474,6 +474,9 @@ function Run-ServerTests {
                     Get-Content -LiteralPath $stdoutPath -Tail 12
                     Get-Content -LiteralPath $stderrPath -Tail 12
                 }
+            } elseif ($execution.Binary -eq $integrationBinary) {
+                & node (Join-Path $repoRoot 'tests/server/startup/withPostgres.js') $execution.Binary "--gtest_output=xml:$($execution.Report)"
+                $exitCode = $LASTEXITCODE
             } else {
                 & $execution.Binary "--gtest_output=xml:$($execution.Report)"
                 $exitCode = $LASTEXITCODE

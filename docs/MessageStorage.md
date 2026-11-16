@@ -12,7 +12,7 @@
 客户端复用账号目录：`data/environments/<环境SHA256>/users/<uid>/messages.sqlite`。
 附件待发时保存上传资源描述符，同步后保存服务端规范正文。按 UUID 对账时仅忽略上传临时字段
 `offset`、`owner`、`ready`、`upload_id`；资源 ID、名称、类型、摘要、大小和其他字段仍必须一致。
-下载文件仍由现有资源模块管理。SQLite 不是服务端 MySQL 的替代品。
+下载文件仍由现有资源模块管理。服务端 PostgreSQL 或 MySQL 保存权威消息记录。
 
 ## 工作流程
 
@@ -52,7 +52,7 @@ flowchart LR
   此提醒表示尚未打开查看的消息，不生成或替代对方已读回执。
 - SQLite 1～4 升级前保留快照，schema 5 增加查看边界表，保留历史、目录、游标、outbox 和回执。
   旧版本没有可靠的本地查看记录，因此升级时已有历史不重新弹出提醒；升级后新增接收消息正常计数。
-  schema 5 的查看边界变化不涉及服务端 MySQL 或通信协议；当前 schema 6 的关系版本合同见文末。
+  schema 5 的查看边界变化不涉及服务端数据库或通信协议；当前 schema 6 的关系版本合同见文末。
 
 - 服务端复用 migration 002 的 `UNIQUE(send_id, client_msg_uuid)`，文本和附件共享身份约束。
 - 文本提交、资源提交和同步查询都先锁定同一 `private_chat` 会话行。由此避免较小 ID 尚未提交时，同步游标越过它。此保证要求所有 ChatServer 写入方都已更新。

@@ -51,7 +51,7 @@ function describeCoverage(policy, eventName, ref) {
         return 'Selected: **09 Performance** (' + policy.performance_profile +
             ') with dedicated 01 framework checks, 02/03 Linux runtime build and 10 evidence validation.';
     }
-    const common = 'Windows: 01 static checks, 02 infrastructure, 03 build, 04 component regression, ' +
+    const common = 'Windows: 01 static checks, 02 infrastructure, 03 build, 04 component regression and default PostgreSQL storage, ' +
         '05 instance scripts, 08 packaging contracts and 10 report validation.';
     if (policy.mode === 'quick') {
         return common + ' Automatic develop documentation scope is resolved in the static job. ' +

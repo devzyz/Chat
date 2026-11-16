@@ -1,5 +1,8 @@
 # Automated test structure
 
+PostgreSQL is the default development backend. The [database test entry](server/schema-migration/README.md#postgresql-与双库合同)
+covers PG-only schema and native tests, optional two-instance service tests, and explicit MySQL parity runs.
+
 Tests are organized on two independent axes:
 
 1. **Domain** identifies the responsibility being protected: `Foundation`,

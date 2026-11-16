@@ -96,7 +96,13 @@ std::unique_ptr<sql::Connection> ConnectBounded(
     return connection;
 }
 
-Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, const Batch& batch, Deadline deadline) {
+Result MySqlMessageCommitAdapter::Commit(
+    int sender,
+    int recipient,
+    int chat,
+    const Batch& batch,
+    Deadline deadline,
+    Preconditions access) {
     Result result;
     bool has_transaction = false;
     bool was_autocommit = true;
@@ -113,9 +119,9 @@ Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, co
         if (!IsMember(_connection, sender, recipient, chat)) {
             throw Error::INVALID_MEMBERSHIP;
         }
-        if (recipient == 0 && _group_epoch > 0) {
+        if (recipient == 0 && access.group_epoch > 0) {
             try {
-                messaging::LockGroup(_connection, chat, sender, _group_epoch);
+                messaging::LockGroup(_connection, chat, sender, access.group_epoch);
             } catch (const messaging::MembershipDenied&) {
                 throw Error::INVALID_MEMBERSHIP;
             }
@@ -138,7 +144,7 @@ Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, co
                     continue;
                 }
                 try {
-                    messaging::CheckPrivateSend(_connection, chat, _relationship);
+                    messaging::CheckPrivateSend(_connection, chat, access.relationship_revision);
                 } catch (const messaging::PrivateSendDenied&) {
                     throw Error::INVALID_MEMBERSHIP;
                 }

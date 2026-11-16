@@ -333,11 +333,10 @@ TEST(MessageSync, DynamicGroupLifecycleAndResources) {
         {},
         false);
     message_commit::MySqlMessageCommitAdapter adapter(*db);
-    adapter.SetGroupEpoch(1);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
     // 按当前群成员代次提交不可变 UUID 的文字。
     auto send = [&](const std::string& name) {
-        return message_commit::Commit(adapter, {7}, 7, 0, 302, {{Uuid(name), name}}, deadline, true);
+        return message_commit::Commit(adapter, {7}, 7, 0, 302, {{Uuid(name), name}}, deadline, true, {0, 1});
     };
     const auto old = send("before-join");
     ASSERT_TRUE(old.IsSuccess());
@@ -417,9 +416,8 @@ TEST(MessageSync, DynamicGroupLifecycleAndResources) {
     messaging::SyncPage(*db, 9, 302, 0, history, 65535);
     EXPECT_TRUE(history["msgs"].empty());
     message_commit::MySqlMessageCommitAdapter stale(*db);
-    stale.SetGroupEpoch(1);
-    EXPECT_FALSE(
-        message_commit::Commit(stale, {9}, 9, 0, 302, {{Uuid("stale-epoch"), "stale"}}, deadline, true).IsSuccess());
+    EXPECT_FALSE(message_commit::Commit(stale, {9}, 9, 0, 302, {{Uuid("stale-epoch"), "stale"}}, deadline, true, {0, 1})
+                     .IsSuccess());
 
     resource::ResourceCatalog catalog(std::getenv("MESSAGE_SYNC_TEST_MYSQL"), "root", "", "message_sync_test");
     catalog.Publish("dynamic-resource", 7, "file.txt", "application/octet-stream", 3, std::string(64, 'a'));
@@ -571,7 +569,6 @@ TEST(MessageSync, MembershipChangesWaitForCommittedMessages) {
         } else {
             EXPECT_THROW(messaging::SyncPage(*db, 9, 304, 0, page, 2048), std::exception);
             message_commit::MySqlMessageCommitAdapter sender(*db);
-            sender.SetGroupEpoch(1);
             EXPECT_FALSE(message_commit::Commit(
                              sender,
                              {9},
@@ -580,7 +577,8 @@ TEST(MessageSync, MembershipChangesWaitForCommittedMessages) {
                              304,
                              {{Uuid("after-remove"), "denied"}},
                              std::chrono::steady_clock::now() + std::chrono::seconds(5),
-                             true)
+                             true,
+                             {0, 1})
                              .IsSuccess());
         }
     }
@@ -632,6 +630,6 @@ TEST(MessageSync, TransferAndLeaveCannotRemoveTheOwner) {
         "SELECT COUNT(*) FROM group_chat g JOIN group_chat_member m ON m.chat_id=g.chat_id "
         "WHERE g.chat_id=305 AND m.state='active' AND m.role=1 AND m.user_id=g.owner_uid",
         {});
-    ASSERT_TRUE(owners.rows->next());
-    EXPECT_EQ(owners.rows->getInt(1), 1);
+    ASSERT_TRUE(owners.rows->Next());
+    EXPECT_EQ(owners.rows->GetInt(1), 1);
 }

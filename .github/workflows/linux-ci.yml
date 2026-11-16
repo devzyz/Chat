@@ -181,7 +181,7 @@ jobs:
         # Leave time for blocked evidence and artifact upload before the job cap.
         timeout-minutes: 57
         run: |
-          node --test tests/server/schema-migration/migration.test.js
+          node --test tests/server/schema-migration/migration.test.js tests/services/performance/*.test.js
           mkdir -p "$CHAT_EVIDENCE_ROOT"
           set -o pipefail
           timeout --signal=TERM --kill-after=30s 55m \
@@ -199,6 +199,21 @@ jobs:
 
       - name: Verify shared production targets and ProcessHarness
         run: bash scripts/linux-ci.sh --phase 3C --configuration Release --selector 3C-01
+
+      - name: Verify both database backends through native storage and two Chat instances
+        timeout-minutes: 20
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql postgresql-client mysql-server redis-server
+          cmake --preset linux-x64-release -DCHAT_BUILD_ACCEPTANCE_RESOURCES=ON -DVCPKG_MANIFEST_INSTALL=OFF
+          cmake --build out/build/linux-x64-release --target postgres_contract GateServer ChatServer ResourceServer --parallel 2
+          export CHAT_TEST_DATABASES=both
+          export CHAT_DB_SERVICE_BIN="$PWD/out/build/linux-x64-release/bin"
+          export CHAT_PG_CONTRACT_BINARY="$CHAT_DB_SERVICE_BIN/postgres_contract"
+          export CHAT_PG_BIN="$(pg_config --bindir)"
+          export CHAT_MYSQL_BIN="$(dirname "$(command -v mysqld)")"
+          export CHAT_MYSQL_FIXTURE_CLIENT="$(command -v mysql)"
+          node --test tests/server/schema-migration/postgres.test.js
 
       - name: Build opt-in production resources and widget acceptance · 07 Real acceptance
         if: inputs.real_acceptance
