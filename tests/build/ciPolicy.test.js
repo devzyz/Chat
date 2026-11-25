@@ -5,7 +5,7 @@ const path = require('node:path');
 const os = require('node:os');
 const test = require('node:test');
 const { spawnSync } = require('node:child_process');
-const { selectPolicy } = require('../../scripts/ci/ciPolicy');
+const { selectPolicy, selectAutodl } = require('../../scripts/ci/ciPolicy');
 
 /** 构造独立事件数据，不访问 GitHub 或业务依赖。 */
 function event(inputs = {}, base = 'develop') {
@@ -90,7 +90,7 @@ test('policy CLI writes effective mode and promotion reason without external too
             assert.ifError(result.error);
             assert.equal(result.status === 0, ok, result.stderr);
             if (ok) {
-                assert.match(fs.readFileSync(output, 'utf8'), /^mode=full\nrefresh_tools=false\ncold_linux=true\nreal_acceptance=false\npromoted=true\n$/);
+                assert.match(fs.readFileSync(output, 'utf8'), /^mode=full\nrefresh_tools=false\ncold_linux=true\nreal_acceptance=false\npromoted=true\nautodl=skip\n$/);
                 assert.match(fs.readFileSync(summary, 'utf8'), /quick mode was promoted to full/);
             } else {
                 assert.equal(fs.readFileSync(output, 'utf8'), '');
@@ -98,4 +98,21 @@ test('policy CLI writes effective mode and promotion reason without external too
             }
         }
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+// 验证默认跳过、自动开关、手动选择以及受信分支边界。
+test('AutoDL records the requested delivery once per CI run', () => {
+    const develop = 'refs/heads/develop', master = 'refs/heads/master';
+    assert.equal(selectAutodl('push', develop, 'quick'), 'skip');
+    assert.equal(selectAutodl('push', develop, 'quick', 'skip', 'false'), 'skip');
+    assert.equal(selectAutodl('push', develop, 'quick', 'skip', 'true'), 'deploy');
+    assert.equal(selectAutodl('push', master, 'full', 'skip', 'true'), 'skip');
+    for (const event of ['pull_request', 'schedule']) {
+        assert.equal(selectAutodl(event, develop, 'full', 'deploy', 'true'), 'skip');
+    }
+    assert.equal(selectAutodl('workflow_dispatch', develop, 'quick', 'deploy'), 'deploy');
+    assert.equal(selectAutodl('workflow_dispatch', master, 'quick', 'package'), 'package');
+    assert.equal(selectAutodl('workflow_dispatch', develop, 'full', 'skip', 'true'), 'skip');
+    assert.equal(selectAutodl('workflow_dispatch', develop, 'performance', 'deploy'), 'skip');
+    assert.throws(() => selectAutodl('workflow_dispatch', master, 'full', 'deploy'));
 });

@@ -4,7 +4,7 @@
 `package` 在 Ubuntu 22.04 x64 / GCC 11 上构建 Gate、Chat、Resource 与 Node 验证码服务，上传
 `jammy-server-release`。`deploy` 只在 `develop` 生效，测试包就绪且本次 quick 或 full
 回归门禁成功后才连接目标机。普通推送默认跳过。需要持续部署时，把**仓库变量**
-`AUTODL_AUTO_DEPLOY` 设为 `true`。恢复为 `false` 即关闭后续自动部署。PR、周检、
+`AUTODL_AUTO_DEPLOY` 设为 `true`。CI 在选择本次运行范围时记录该开关；恢复为 `false` 即关闭后续自动部署。PR、周检、
 master 和性能模式不激活目标机。Windows Release 仍走原有 master 发布流程。
 
 ## 首次准备目标机

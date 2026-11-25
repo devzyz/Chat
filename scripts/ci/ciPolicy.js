@@ -45,6 +45,17 @@ function selectPolicy(eventName, ref, event) {
     return { mode, refresh_tools: refreshTools, cold_linux: coldLinux, real_acceptance: realAcceptance, promoted };
 }
 
+/** 在运行开始时固定部署选择，后续开关变化只影响下一次运行。 */
+function selectAutodl(eventName, ref, mode, requested = 'skip', automatic = '') {
+    if (mode === 'performance') return 'skip';
+    const develop = ref === 'refs/heads/develop';
+    if (eventName === 'push') return develop && automatic === 'true' ? 'deploy' : 'skip';
+    if (eventName !== 'workflow_dispatch') return 'skip';
+    if (requested === 'package' || requested === 'skip') return requested;
+    if (requested === 'deploy' && develop) return 'deploy';
+    throw new Error('AutoDL deployment requires a develop dispatch with a supported operation');
+}
+
 /** 说明所选模式的验证边界；develop 文档范围由后续静态作业根据完整差异确定。 */
 function describeCoverage(policy, eventName, ref) {
     if (policy.mode === 'performance') {
@@ -67,11 +78,13 @@ if (require.main === module) {
     try {
         const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
         const policy = selectPolicy(process.env.GITHUB_EVENT_NAME, process.env.GITHUB_REF, event);
+        policy.autodl = selectAutodl(process.env.GITHUB_EVENT_NAME, process.env.GITHUB_REF, policy.mode,
+            event.inputs?.autodl, process.env.AUTODL_AUTO_DEPLOY);
         // 序列化固定策略字段为 GitHub 输出。
         const output = Object.entries(policy).map(
             ([key, value]) => `${key}=${value}\n`).join('');
         fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
-        const summary = `CI mode: **${policy.mode}**.\n` +
+        const summary = `CI mode: **${policy.mode}**. AutoDL: **${policy.autodl}**.\n` +
             (policy.promoted ? 'Requested quick mode was promoted to full by an optional acceptance or maintenance flag.\n' : '') +
             `Windows tool refresh: ${policy.refresh_tools}; Linux cold restore: ${policy.cold_linux}; ` +
             `real acceptance: ${policy.real_acceptance}.\n\n` +
@@ -81,4 +94,4 @@ if (require.main === module) {
     } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
 
-module.exports = { selectPolicy };
+module.exports = { selectPolicy, selectAutodl };

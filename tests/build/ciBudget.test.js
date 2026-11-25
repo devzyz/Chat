@@ -302,7 +302,8 @@ test('AutoDL deployment is opt-in and consumes the gated develop package', () =>
     assert.match(ci, /autodl:[\s\S]*?default: skip/);
     const build = job(ci, 'jammy-package'), deploy = job(ci, 'autodl-deploy');
     assert.ok(build && deploy);
-    assert.match(build, /AUTODL_AUTO_DEPLOY == 'true'/);
+    assert.match(build, /needs\.plan\.outputs\.autodl == 'package'/);
+    assert.match(deploy, /needs\.plan\.outputs\.autodl == 'deploy'/);
     assert.match(deploy, /needs: \[plan, regression, full, jammy-package\]/);
     assert.match(deploy, /needs\.regression\.result == 'success'/);
     assert.match(deploy, /needs\.full\.result == 'success'/);
