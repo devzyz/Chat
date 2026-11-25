@@ -14,6 +14,8 @@
 
 每个 Chat 实例运行同一二进制。实例内的两个业务分片按连接分工，同一连接上的请求及回调保序；Redis、数据库和出站 gRPC 各有独立工作池。详见[服务架构](docs/Architecture.md)与[并发合同](docs/Concurrency.md)。
 
+要追踪一次登录、断线重发或附件提交，先查谁持有状态、哪一步完成、由哪项测试覆盖。[核心流程与状态机](docs/StateMachines.md)
+
 ## 在 Windows 构建与运行
 
 1. 按 [Windows 构建指南](WINDOWS_BUILD.md#environment) 配置 Visual Studio、Qt/MinGW、Node.js 和已有的 vcpkg 安装。日常构建使用只读依赖树。
