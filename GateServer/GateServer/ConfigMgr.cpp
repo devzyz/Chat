@@ -71,16 +71,14 @@ SectionInfo::SectionInfo(const SectionInfo& src) {
 }
 
 SectionInfo& SectionInfo::operator=(const SectionInfo& src) {
-    if (&src == this)
-        return *this;
+    if (&src == this) return *this;
     this->_section_datas = src._section_datas;
     return *this;
 }
 
 // 为了通过对SectionInfo[key]直接取到key对应的value,而不是先取到SectionInfo._section_datas[key]取到value
 std::string SectionInfo::operator[](const std::string& key) {
-    if (_section_datas.find(key) == _section_datas.end())
-        return "";
+    if (_section_datas.find(key) == _section_datas.end()) return "";
     return _section_datas[key];
 }
 
@@ -152,9 +150,7 @@ ConfigMgr::ConfigMgr() {
     }
 
     auto grpc = (*this)["Grpc"];
-    (void)rpc::ParseDurationMs(
-        grpc["PoolAcquireTimeoutMs"],
-        "[Grpc].PoolAcquireTimeoutMs",
+    (void)rpc::ParseDurationMs(grpc["PoolAcquireTimeoutMs"], "[Grpc].PoolAcquireTimeoutMs",
         std::chrono::milliseconds(1000));
     (void)rpc::ParseDurationMs(grpc["VarifyDeadlineMs"], "[Grpc].VarifyDeadlineMs", std::chrono::milliseconds(15000));
 
@@ -169,9 +165,9 @@ ConfigMgr::ConfigMgr(const ConfigMgr& src) {
     _config_map = src._config_map;
     _config_path = src._config_path;
 }
+
 ConfigMgr& ConfigMgr::operator=(const ConfigMgr& src) {
-    if (&src == this)
-        return *this;
+    if (&src == this) return *this;
     _config_map = src._config_map;
     _config_path = src._config_path;
     return *this;

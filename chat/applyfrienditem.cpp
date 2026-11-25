@@ -11,10 +11,7 @@ ApplyFriendItem::ApplyFriendItem(QWidget* parent) : ListItemBase(parent), ui(new
     ui->apply_friend_add_friend_btn->hide();
 
     // 当点击添加后，发送认证成功信号
-    connect(
-        ui->apply_friend_add_friend_btn,
-        &ClickedBtn::clicked,
-        this,
+    connect(ui->apply_friend_add_friend_btn, &ClickedBtn::clicked, this,
         /** @brief 将审批按钮点击转换为当前申请的审批通知。 */
         [this]() {
             emit this->friendApprovalRequested(_apply_info);

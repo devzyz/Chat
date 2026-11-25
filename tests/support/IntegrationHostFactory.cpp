@@ -71,9 +71,7 @@ bool HasRequiredModules(HostFamily family, const ProductionModules& modules) {
 }
 
 /** 在启动失败后有界停机并发布清理结果，停机异常转换为失败证据。 */
-CleanupResult StopForFailedStart(
-    TransportHost& transport,
-    Deadline deadline,
+CleanupResult StopForFailedStart(TransportHost& transport, Deadline deadline,
     const std::shared_ptr<CleanupObserver>& cleanup) noexcept {
     CleanupResult result;
     try {
@@ -112,10 +110,7 @@ ProductionModules::~ProductionModules() = default;
 ProductionModules::ProductionModules(ProductionModules&&) noexcept = default;
 ProductionModules& ProductionModules::operator=(ProductionModules&&) noexcept = default;
 
-HostHandle::HostHandle(
-    ProductionModules modules,
-    std::unique_ptr<TransportHost> transport,
-    Deadline deadline,
+HostHandle::HostHandle(ProductionModules modules, std::unique_ptr<TransportHost> transport, Deadline deadline,
     std::shared_ptr<CleanupObserver> cleanup)
     : modules_(std::move(modules)), transport_(std::move(transport)), deadline_(deadline),
       cleanup_(std::move(cleanup)) {}

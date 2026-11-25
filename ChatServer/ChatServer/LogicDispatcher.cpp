@@ -16,18 +16,21 @@
 // 短锁保护入口总额度和各片队列；业务处理器和外部完成回调始终在锁外运行。
 struct LogicDispatcher::Impl {
     using Session = std::shared_ptr<CSession>;
+
     // 入站 FIFO 与请求所等待的异步步骤；正在运行的回调仍占用连接。
     struct Mailbox {
         std::queue<LogicMessage> pending;
         bool running = false;
         std::uint64_t waiting_for = 0;
     };
+
     // 非零 ticket 标记特定连接请求的特定步骤，零表示独立于连接的工作。
     struct Result {
         Session session;
         std::uint64_t ticket;
         Completion next;
     };
+
     // 每个分片只有一个消费者；ready 中每条有就绪请求的连接只出现一次。
     struct Shard {
         std::condition_variable wake;
@@ -42,8 +45,7 @@ struct LogicDispatcher::Impl {
     // 全部分片构造后才启动消费者；启动失败也回收已启动的线程。
     Impl(Handler callback, std::shared_ptr<DependencyExecutor> executor, std::size_t count, SessionHash synthetic)
         : handler(std::move(callback)), dependencies(std::move(executor)), synthetic_hash(std::move(synthetic)) {
-        if (!count || !dependencies || !handler)
-            throw std::invalid_argument("invalid logic dispatcher");
+        if (!count || !dependencies || !handler) throw std::invalid_argument("invalid logic dispatcher");
         for (std::size_t i = 0; i < count; ++i)
             shards.push_back(std::make_unique<Shard>());
         try {
@@ -57,8 +59,7 @@ struct LogicDispatcher::Impl {
 
     // 拒绝非所属 worker 上的请求编排；外部线程只允许调用已经取得的 resume。
     Shard& CallingShard() {
-        if (current_dispatcher != this)
-            throw std::logic_error("not on owning logic worker");
+        if (current_dispatcher != this) throw std::logic_error("not on owning logic worker");
         return *current_shard;
     }
 
@@ -74,11 +75,11 @@ struct LogicDispatcher::Impl {
             }
         };
         if (ordered) {
-            if (session.owner_before(shard.executing) || shard.executing.owner_before(session))
+            if (session.owner_before(shard.executing) || shard.executing.owner_before(session)) {
                 throw std::logic_error("session does not own current request");
+            }
             auto& box = shard.connections.at(session);
-            if (!box.running || box.waiting_for)
-                throw std::logic_error("request already suspended");
+            if (!box.running || box.waiting_for) throw std::logic_error("request already suspended");
             box.waiting_for = ticket;
         } else {
             ++active;
@@ -88,10 +89,11 @@ struct LogicDispatcher::Impl {
 
     // 外部池拒绝时，由当前 handler 处理错误，仍待其返回后才结束整笔请求。
     void CancelSuspension(Shard& shard, const Session& session, bool ordered) {
-        if (ordered)
+        if (ordered) {
             shard.connections.at(session).waiting_for = 0;
-        else
+        } else {
             --active;
+        }
     }
 
     // 入口与在途计数同时归零才允许任何 worker 退出；其他片仍可产生通知。
@@ -106,17 +108,16 @@ struct LogicDispatcher::Impl {
         if (ordered) {
             auto it = shard.connections.find(session);
             auto& box = it->second;
-            if (box.waiting_for)
-                return;
+            if (box.waiting_for) return;
             box.running = false;
-            if (box.pending.empty())
+            if (box.pending.empty()) {
                 shard.connections.erase(it);
-            else
+            } else {
                 shard.ready.push(session);
+            }
         }
         --active;
-        if (Drained())
-            WakeAll();
+        if (Drained()) WakeAll();
     }
 
     // 每次只取一条就绪连接或一个完成事件；等待依赖的连接不参与扫描。
@@ -140,8 +141,7 @@ struct LogicDispatcher::Impl {
                     session = result.session;
                     if (result.ticket) {
                         auto it = shard.connections.find(session);
-                        if (it == shard.connections.end() || it->second.waiting_for != result.ticket)
-                            continue;
+                        if (it == shard.connections.end() || it->second.waiting_for != result.ticket) continue;
                         it->second.waiting_for = 0;
                     }
                 } else if (!shard.ready.empty()) {
@@ -154,16 +154,17 @@ struct LogicDispatcher::Impl {
                     --pending;
                     ++active;
                     initial = true;
-                } else
+                } else {
                     return;
+                }
                 shard.executing = session;
             }
             try {
                 if (initial) {
-                    if (!handler(message))
-                        SPDLOG_WARN("logic message handler not found, msg_id={}", message.id);
-                } else if (result.next)
+                    if (!handler(message)) SPDLOG_WARN("logic message handler not found, msg_id={}", message.id);
+                } else if (result.next) {
                     result.next();
+                }
             } catch (...) {
                 SPDLOG_ERROR("logic handler or completion failed, msg_id={}", message.id);
             }
@@ -185,8 +186,7 @@ struct LogicDispatcher::Impl {
         }
         WakeAll();
         for (auto& shard : shards)
-            if (shard->worker.joinable())
-                shard->worker.join();
+            if (shard->worker.joinable()) shard->worker.join();
     }
 
     inline static thread_local Impl* current_dispatcher = nullptr;
@@ -205,21 +205,13 @@ struct LogicDispatcher::Impl {
     std::once_flag stop_once;
 };
 
-LogicDispatcher::LogicDispatcher(
-    Handler handler,
-    std::shared_ptr<DependencyExecutor> dependencies,
+LogicDispatcher::LogicDispatcher(Handler handler, std::shared_ptr<DependencyExecutor> dependencies,
     std::size_t business_workers)
     : LogicDispatcher(std::move(handler), std::move(dependencies), business_workers, {}) {}
 
-LogicDispatcher::LogicDispatcher(
-    Handler handler,
-    std::shared_ptr<DependencyExecutor> dependencies,
-    std::size_t business_workers,
-    SessionHash synthetic_hash)
-    : _impl(std::make_unique<Impl>(
-          std::move(handler),
-          std::move(dependencies),
-          business_workers,
+LogicDispatcher::LogicDispatcher(Handler handler, std::shared_ptr<DependencyExecutor> dependencies,
+    std::size_t business_workers, SessionHash synthetic_hash)
+    : _impl(std::make_unique<Impl>(std::move(handler), std::move(dependencies), business_workers,
           std::move(synthetic_hash))) {}
 
 LogicDispatcher::Resume LogicDispatcher::AwaitCompletion(std::shared_ptr<CSession> session) {
@@ -227,12 +219,8 @@ LogicDispatcher::Resume LogicDispatcher::AwaitCompletion(std::shared_ptr<CSessio
     return _impl->Suspend(_impl->CallingShard(), std::move(session), true);
 }
 
-LogicSubmitResult LogicDispatcher::SubmitExternal(
-    ExternalTask kind,
-    std::shared_ptr<CSession> session,
-    ExternalWork work,
-    Completion failed,
-    std::function<bool()> sql_check) {
+LogicSubmitResult LogicDispatcher::SubmitExternal(ExternalTask kind, std::shared_ptr<CSession> session,
+    ExternalWork work, Completion failed, std::function<bool()> sql_check) {
     const bool ordered = session.use_count() != 0;
     auto& shard = _impl->CallingShard();
     Resume resume;
@@ -263,8 +251,7 @@ LogicSubmitResult LogicDispatcher::SubmitExternal(
                 }
                 resume(std::move(next));
             },
-            RedisAdmission::Critical,
-            std::move(guard));
+            RedisAdmission::Critical, std::move(guard));
     } catch (...) {
         std::lock_guard<std::mutex> lock(_impl->mutex);
         _impl->CancelSuspension(shard, session, ordered);
@@ -286,8 +273,7 @@ void LogicDispatcher::QueueNotification(ExternalWork route) {
             } else {
                 const auto count = ++_impl->skipped;
                 lock.unlock();
-                if ((count & (count - 1)) == 0)
-                    SPDLOG_WARN("notification backlog full, skipped={}", count);
+                if ((count & (count - 1)) == 0) SPDLOG_WARN("notification backlog full, skipped={}", count);
             }
             return;
         }
@@ -331,8 +317,9 @@ void LogicDispatcher::StartNotification(ExternalWork route) {
                     resume(next);
                 };
                 if (_impl->dependencies->SubmitExternal(ExternalTask::OutboundGrpc, std::move(send)) ==
-                    LogicSubmitResult::Accepted)
+                    LogicSubmitResult::Accepted) {
                     return;
+                }
             }
         } catch (...) {
             SPDLOG_WARN("notification routing failed");
@@ -340,8 +327,9 @@ void LogicDispatcher::StartNotification(ExternalWork route) {
         resume(next);
     };
     if (_impl->dependencies->SubmitExternal(ExternalTask::Redis, std::move(resolve), RedisAdmission::Routing) !=
-        LogicSubmitResult::Accepted)
+        LogicSubmitResult::Accepted) {
         resume(next);
+    }
 }
 
 LogicDispatcher::~LogicDispatcher() {
@@ -350,25 +338,22 @@ LogicDispatcher::~LogicDispatcher() {
 
 LogicSubmitResult LogicDispatcher::Submit(LogicMessage message) {
     std::size_t hash = 0;
-    if (message.session)
+    if (message.session) {
         hash = message.session->DispatchHash();
-    else if (_impl->synthetic_hash)
+    } else if (_impl->synthetic_hash) {
         hash = _impl->synthetic_hash(message.session);
+    }
     auto& shard = *_impl->shards[hash % _impl->shards.size()];
     {
         std::lock_guard<std::mutex> lock(_impl->mutex);
-        if (_impl->stopping)
-            return LogicSubmitResult::Closed;
-        if (_impl->pending >= MAX_DEALQUE)
-            return LogicSubmitResult::Full;
+        if (_impl->stopping) return LogicSubmitResult::Closed;
+        if (_impl->pending >= MAX_DEALQUE) return LogicSubmitResult::Full;
         auto [it, inserted] = shard.connections.try_emplace(message.session);
         try {
             it->second.pending.push(std::move(message));
-            if (inserted)
-                shard.ready.push(it->first);
+            if (inserted) shard.ready.push(it->first);
         } catch (...) {
-            if (inserted)
-                shard.connections.erase(it);
+            if (inserted) shard.connections.erase(it);
             throw;
         }
         ++_impl->pending;

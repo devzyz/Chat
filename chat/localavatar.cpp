@@ -44,10 +44,7 @@ void LocalAvatar::setAccount(const QString& environment, int uid) {
     const auto generation = _generation;
     const auto imageRevision = _imageRevision;
     auto* watcher = new QFutureWatcher<AvatarResult>(this);
-    connect(
-        watcher,
-        &QFutureWatcher<AvatarResult>::finished,
-        this,
+    connect(watcher, &QFutureWatcher<AvatarResult>::finished, this,
         /** @brief 仅将当前账号且未被新图片覆盖的加载结果应用到界面。 */
         [this, watcher, generation, imageRevision]() {
             const auto result = watcher->result();
@@ -55,16 +52,14 @@ void LocalAvatar::setAccount(const QString& environment, int uid) {
             if (generation != _generation) {
                 return;
             }
-            if (_imageRevision == imageRevision)
-                _image = result.image;
+            if (_imageRevision == imageRevision) _image = result.image;
             setBusy(false);
             emit imageChanged(_image);
             if (!result.error.isEmpty()) {
                 emit errorOccurred(result.error);
             }
         });
-    watcher->setFuture(QtConcurrent::run(
-        &_worker,
+    watcher->setFuture(QtConcurrent::run(&_worker,
         /** @brief 在工作线程读取指定环境和账号的头像。 */
         [store = _store, environment, uid]() {
             return store.load(environment, uid);
@@ -81,10 +76,7 @@ void LocalAvatar::selectFile(const QString& fileName) {
     const auto generation = _generation;
     const auto revision = _selectionRevision;
     auto* watcher = new QFutureWatcher<AvatarResult>(this);
-    connect(
-        watcher,
-        &QFutureWatcher<AvatarResult>::finished,
-        this,
+    connect(watcher, &QFutureWatcher<AvatarResult>::finished, this,
         /** @brief 仅应用当前账号与选图版本的候选图片。 */
         [this, watcher, generation, revision]() {
             const auto result = watcher->result();
@@ -100,8 +92,7 @@ void LocalAvatar::selectFile(const QString& fileName) {
                 emit errorOccurred(result.error);
             }
         });
-    watcher->setFuture(QtConcurrent::run(
-        &_worker,
+    watcher->setFuture(QtConcurrent::run(&_worker,
         /** @brief 在工作线程解码用户选择的图片文件。 */
         [fileName]() {
             return LocalAvatarStore::readImage(fileName);
@@ -132,10 +123,7 @@ void LocalAvatar::saveSelection(const QRectF& sourceRect) {
     _saving = true;
     setBusy(true);
     auto* watcher = new QFutureWatcher<AvatarResult>(this);
-    connect(
-        watcher,
-        &QFutureWatcher<AvatarResult>::finished,
-        this,
+    connect(watcher, &QFutureWatcher<AvatarResult>::finished, this,
         /** @brief 仅为当前账号处理保存结果并决定是否请求上传。 */
         [this, watcher, generation, upload, staged]() {
             const AvatarResult result = watcher->result();
@@ -160,17 +148,18 @@ void LocalAvatar::saveSelection(const QRectF& sourceRect) {
             emit imageChanged(_image);
             emit saved();
         });
-    watcher->setFuture(QtConcurrent::run(
-        &_worker,
+    watcher->setFuture(QtConcurrent::run(&_worker,
         /** @brief 在工作线程裁剪图片并原子保存本地或待上传文件。 */
         [store = _store, environment = _environment, uid = _uid, source, sourceRect, upload, staged]() -> AvatarResult {
             const QImage cropped = AvatarCrop::render(source, sourceRect);
             if (upload) {
-                if (cropped.isNull() || !QDir().mkpath(QFileInfo(staged).absolutePath()))
+                if (cropped.isNull() || !QDir().mkpath(QFileInfo(staged).absolutePath())) {
                     return {{}, tr("无法在安装目录中准备头像，请检查目录写入权限")};
+                }
                 QSaveFile file(staged);
-                if (!file.open(QIODevice::WriteOnly) || !cropped.save(&file, "PNG") || !file.commit())
+                if (!file.open(QIODevice::WriteOnly) || !cropped.save(&file, "PNG") || !file.commit()) {
                     return {{}, tr("无法保存待上传头像")};
+                }
                 return {cropped, {}};
             }
             return {cropped, store.save(environment, uid, cropped)};
@@ -178,8 +167,7 @@ void LocalAvatar::saveSelection(const QRectF& sourceRect) {
 }
 
 void LocalAvatar::finishUpload(const QString& error) {
-    if (!_saving || _pendingImage.isNull())
-        return;
+    if (!_saving || _pendingImage.isNull()) return;
     _saving = false;
     setBusy(false);
     if (!error.isEmpty()) {
@@ -193,8 +181,7 @@ void LocalAvatar::finishUpload(const QString& error) {
 }
 
 void LocalAvatar::setRemoteImage(const QImage& image) {
-    if (_saving || image.isNull())
-        return;
+    if (_saving || image.isNull()) return;
     ++_imageRevision;
     _image = image;
     emit imageChanged(_image);

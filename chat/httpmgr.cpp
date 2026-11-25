@@ -4,10 +4,7 @@
 HttpMgr::HttpMgr() {
     // 连接信号与槽
     connect(this, &HttpMgr::httpFinished, this, &HttpMgr::httpFinish);
-    connect(
-        &_transport,
-        &GateHttpTransport::finished,
-        this,
+    connect(&_transport, &GateHttpTransport::finished, this,
         /** @brief 将 HTTP 传输终态转换为旧模块使用的错误码和完成信号。 */
         [this](const GateHttpResult& result) {
             ErrorCodes error = ErrorCodes::ERR_NETWORK;
@@ -16,12 +13,8 @@ HttpMgr::HttpMgr() {
             } else if (result.terminal == GateHttpTerminal::MalformedResponse) {
                 error = ErrorCodes::ERR_JSON;
             }
-            emit httpFinished(
-                static_cast<AuthFlowId>(result.flowId),
-                static_cast<ReqId>(result.requestId),
-                static_cast<Modules>(result.module),
-                QString::fromUtf8(result.body),
-                error);
+            emit httpFinished(static_cast<AuthFlowId>(result.flowId), static_cast<ReqId>(result.requestId),
+                static_cast<Modules>(result.module), QString::fromUtf8(result.body), error);
         });
 }
 

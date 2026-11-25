@@ -27,9 +27,7 @@ unsigned short FindUnavailableLoopbackPort() {
 class ControlledVarifyService final : public message::VarifyService::Service {
 public:
     /** 按故障开关延时后回显邮箱并返回成功。 */
-    grpc::Status GetVarifyCode(
-        grpc::ServerContext*,
-        const message::GetVarifyReq* request,
+    grpc::Status GetVarifyCode(grpc::ServerContext*, const message::GetVarifyReq* request,
         message::GetVarifyRsp* response) override {
         if (delay.load()) {
             std::this_thread::sleep_for(400ms);
@@ -73,6 +71,7 @@ public:
     std::string Port() const {
         return std::to_string(_port);
     }
+
     /** 借用验证码服务以控制测试延迟。 */
     ControlledVarifyService& Varify() {
         return _varify;

@@ -11,11 +11,11 @@
 namespace {
 /** @brief 检查持久化预算及最大 attempt 字段加入后的线协议预算。 */
 bool fitsRequest(QJsonObject request) {
-    if (QJsonDocument(request).toJson(QJsonDocument::Compact).size() > 1950)
-        return false;
+    if (QJsonDocument(request).toJson(QJsonDocument::Compact).size() > 1950) return false;
     request["attempt_id"] = QStringLiteral("9223372036854775807");
     return QJsonDocument(request).toJson(QJsonDocument::Compact).size() <= ChatTcpTransport::maxBodyBytes();
 }
+
 /** @brief 构造单消息请求，保留调用者固定的会话身份。 */
 QJsonObject messageRequest(QJsonObject context, const QString& uuid, const QString& content) {
     context["text_array"] = QJsonArray{QJsonObject{{"msg_uuid", uuid}, {"msg_content", content}}};
@@ -23,24 +23,15 @@ QJsonObject messageRequest(QJsonObject context, const QString& uuid, const QStri
 }
 }
 
-MessageSubmissionController::MessageSubmissionController(
-    MessageService* messages,
-    ResourceTransferManager* uploads,
-    int uid,
-    QObject* parent)
+MessageSubmissionController::MessageSubmissionController(MessageService* messages, ResourceTransferManager* uploads,
+    int uid, QObject* parent)
     : QObject(parent), _messages(messages), _uploads(uploads), _uid(uid) {
-    connect(
-        uploads,
-        &ResourceTransferManager::uploaded,
-        this,
+    connect(uploads, &ResourceTransferManager::uploaded, this,
         // 上传完成后保留描述，存储失败无需重复上传。
         [this](const QJsonObject& descriptor) {
-            if (!_uploading || !hasPending())
-                return;
+            if (!_uploading || !hasPending()) return;
             _uploading = false;
-            auto request = messageRequest(
-                _context,
-                _uploadUuid,
+            auto request = messageRequest(_context, _uploadUuid,
                 "@resource:v1:" + QString::fromUtf8(QJsonDocument(descriptor).toJson(QJsonDocument::Compact)));
             request["resource_id"] = descriptor["resource_id"];
             if (!fitsRequest(request)) {
@@ -50,39 +41,26 @@ MessageSubmissionController::MessageSubmissionController(
             _requests = {request};
             persist();
         });
-    connect(
-        uploads,
-        &ResourceTransferManager::failed,
-        this,
+    connect(uploads, &ResourceTransferManager::failed, this,
         // 专用上传器失败只影响当前草稿。
         [this](const QString& reason) {
-            if (!_uploading)
-                return;
+            if (!_uploading) return;
             _uploading = false;
             fail(reason);
         });
-    connect(
-        uploads,
-        &ResourceTransferManager::progress,
-        this,
+    connect(uploads, &ResourceTransferManager::progress, this,
         // 发布当前固定目标的上传进度。
         [this](qint64 done, qint64 total) {
-            if (!_uploading)
-                return;
+            if (!_uploading) return;
             _status = tr("会话 %1：上传 %2 / %3 字节").arg(_context["chat_id"].toInt()).arg(done).arg(total);
             emit stateChanged();
         });
-    connect(
-        messages,
-        &MessageService::outgoingPersisted,
-        this,
+    connect(messages, &MessageService::outgoingPersisted, this,
         /** @brief 只消费当前 UUID 的落盘结果，成功部分永久移交 outbox。 */
         [this](int chat, const QVector<QString>& ids, bool success) {
-            if (!_saving || _requests.isEmpty() || chat != _context["chat_id"].toInt())
-                return;
+            if (!_saving || _requests.isEmpty() || chat != _context["chat_id"].toInt()) return;
             const auto uuid = _requests.first()["text_array"].toArray().first().toObject()["msg_uuid"].toString();
-            if (!ids.contains(uuid))
-                return;
+            if (!ids.contains(uuid)) return;
             _saving = false;
             if (_cancelAfterSave) {
                 finish();
@@ -99,10 +77,7 @@ MessageSubmissionController::MessageSubmissionController(
             }
             QTimer::singleShot(0, this, &MessageSubmissionController::advance);
         });
-    connect(
-        messages,
-        &MessageService::stopped,
-        this,
+    connect(messages, &MessageService::stopped, this,
         // 存储停止时默认释放任务，暂时断线已冻结的提交则保留。
         [this] {
             if (!_suspended) {
@@ -121,19 +96,16 @@ QVector<QJsonObject> MessageSubmissionController::textRequests(const QString& te
             text.at(i).isHighSurrogate() && i + 1 < text.size() && text.at(i + 1).isLowSurrogate() ? 2 : 1;
         const QString character = text.mid(i, width);
         if (!fitsRequest(messageRequest(context, uuid, chunk + character))) {
-            if (chunk.isEmpty())
-                return {};
+            if (chunk.isEmpty()) return {};
             result.push_back(messageRequest(context, uuid, chunk));
             chunk.clear();
             uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
-            if (!fitsRequest(messageRequest(context, uuid, character)))
-                return {};
+            if (!fitsRequest(messageRequest(context, uuid, character))) return {};
         }
         chunk += character;
         i += width;
     }
-    if (!chunk.isEmpty())
-        result.push_back(messageRequest(context, uuid, chunk));
+    if (!chunk.isEmpty()) result.push_back(messageRequest(context, uuid, chunk));
     return result;
 }
 
@@ -166,8 +138,7 @@ bool MessageSubmissionController::submit(const MessageDraft& draft, int chatId, 
             emit rejected(tr("好友关系尚未确认或已解除，草稿已保留"));
             return false;
         }
-        if (state.contains("relationship_revision"))
-            context["relationship_revision"] = state["relationship_revision"];
+        if (state.contains("relationship_revision")) context["relationship_revision"] = state["relationship_revision"];
     }
     for (const auto& entry : draft.entries) {
         if (entry.kind == DraftEntry::Kind::Attachment) {
@@ -191,8 +162,7 @@ bool MessageSubmissionController::submit(const MessageDraft& draft, int chatId, 
 }
 
 void MessageSubmissionController::advance() {
-    if (_suspended || _saving || _uploading || _failed)
-        return;
+    if (_suspended || _saving || _uploading || _failed) return;
     if (_entries.isEmpty()) {
         finish();
         return;
@@ -211,8 +181,7 @@ void MessageSubmissionController::advance() {
         }
         persist();
     } else {
-        if (_uploadUuid.isEmpty())
-            _uploadUuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        if (_uploadUuid.isEmpty()) _uploadUuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
         _uploading = true;
         _uploads->upload(entry.content);
     }
@@ -222,19 +191,21 @@ void MessageSubmissionController::persist() {
     _saving = true;
     _messages->send(_requests.first(), MessageService::DraftRetention::Caller);
 }
+
 void MessageSubmissionController::fail(const QString& reason) {
     _failed = true;
     _status = tr("会话 %1：%2").arg(_context["chat_id"].toInt()).arg(reason);
     emit stateChanged();
 }
+
 void MessageSubmissionController::retry() {
-    if (_suspended || !_failed)
-        return;
+    if (_suspended || !_failed) return;
     _failed = false;
     _status = tr("正在重试");
     emit stateChanged();
     advance();
 }
+
 void MessageSubmissionController::cancel() {
     if (_saving) {
         _cancelAfterSave = true;
@@ -243,6 +214,7 @@ void MessageSubmissionController::cancel() {
     _uploads->cancel();
     finish();
 }
+
 void MessageSubmissionController::suspend() {
     _suspended = true;
     _uploads->cancel();
@@ -252,16 +224,15 @@ void MessageSubmissionController::suspend() {
         finish();
         return;
     }
-    if (hasPending())
-        fail(tr("连接中断，内容已保留，恢复后可重试或取消"));
+    if (hasPending()) fail(tr("连接中断，内容已保留，恢复后可重试或取消"));
 }
+
 void MessageSubmissionController::resume() {
-    if (!_suspended)
-        return;
+    if (!_suspended) return;
     _suspended = false;
-    if (hasPending())
-        fail(tr("连接已恢复，可重试或取消未完成内容"));
+    if (hasPending()) fail(tr("连接已恢复，可重试或取消未完成内容"));
 }
+
 void MessageSubmissionController::finish() {
     _entries.clear();
     _requests.clear();

@@ -14,12 +14,9 @@ class QListView;
 class MessageReadExposure final {
 public:
     /** @brief 以单调毫秒时间采样气泡与视口，返回连续可见至少 500ms 的消息 ID；会话或活跃状态变化清除旧计时。 */
-    QVector<qint64> sample(
-        int chatId,
-        bool active,
-        const QHash<qint64, QRect>& bubbles,
-        const QRect& viewport,
+    QVector<qint64> sample(int chatId, bool active, const QHash<qint64, QRect>& bubbles, const QRect& viewport,
         qint64 now);
+
     /** @brief 清除连续可见计时和当前会话标识。 */
     void clear() {
         _since.clear();
@@ -37,10 +34,12 @@ class MessageReadTracker final : public QObject {
 public:
     /** @brief 初始化对象，用于通过视图事件和定时采样生成已读意图。 */
     explicit MessageReadTracker(QListView* view);
+
     /** @brief 清除当前可见累计，后续采样重新满足连续可见期限。 */
     void resetExposure() {
         _exposure.clear();
     }
+
 signals:
     /** @brief 通知当前前台会话中持续可见满足期限的消息 ID，供持久化层生成已读意图。 */
     void observed(int chatId, QVector<qint64> ids);

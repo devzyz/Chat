@@ -4,7 +4,11 @@
 #include <string>
 
 using SessionId = std::string;
-enum class SessionState { Created, Active, Closing };
+enum class SessionState {
+    Created,
+    Active,
+    Closing
+};
 enum class SessionCloseReason {
     ServerShutdown,
     PeerClosed,
@@ -16,12 +20,23 @@ enum class SessionCloseReason {
     Replaced,
     LocalRequest
 };
-enum class SessionSendResult { Accepted, Full, NotActive };
-enum class SessionBindResult { Bound, NotActive, AlreadyBound, Unavailable };
+enum class SessionSendResult {
+    Accepted,
+    Full,
+    NotActive
+};
+enum class SessionBindResult {
+    Bound,
+    NotActive,
+    AlreadyBound,
+    Unavailable
+};
+
 /** @brief 持有消息 ID 与消息体的待发送帧，提交后不借用调用方缓冲。 */
 struct SessionFrame {
     std::uint16_t message_id = 0;
     std::string body;
 };
+
 using SendCompletion = std::function<void(SessionSendResult)>;
 using BindCompletion = std::function<void(SessionBindResult)>;

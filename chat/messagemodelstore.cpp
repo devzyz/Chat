@@ -1,9 +1,6 @@
 #include "messagemodelstore.h"
 
-bool MessageModelStore::applyHistory(
-    int chatId,
-    const QVector<MessageRecord>& records,
-    bool canLoadMore,
+bool MessageModelStore::applyHistory(int chatId, const QVector<MessageRecord>& records, bool canLoadMore,
     qint64 nextCursor) {
     auto* model = getOrCreate(chatId);
     qint64 previousId = 0;

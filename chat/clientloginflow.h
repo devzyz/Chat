@@ -17,10 +17,12 @@ public:
     AuthFlowId login(const QUrl& gate, const QString& email, const QString& password);
     /** @brief 取消当前认证流程及其 HTTP 请求和超时任务，迟到结果不再推进该流程。 */
     void cancel();
+
     /** @brief 返回本次选服获得的服务器主机名。 */
     QString serverHost() const {
         return _server.Host;
     }
+
     /** @brief 返回本次选服获得的服务器端口。 */
     quint16 serverPort() const {
         return _server.Port.toUShort();

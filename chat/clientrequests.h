@@ -6,51 +6,26 @@
 #include "userdata.h"
 
 /** @brief 将好友申请资料序列化为现有协议字段，不发送请求。 */
-inline QByteArray clientFriendRequest(
-    const UserInfo& self,
-    int toUid,
-    const QString& description,
+inline QByteArray clientFriendRequest(const UserInfo& self, int toUid, const QString& description,
     const QString& backname) {
-    return QJsonDocument(QJsonObject{
-                             {"fromuid", self._uid},
-                             {"applyname", self._name},
-                             {"applydescription", self._description},
-                             {"applyicon", self._icon},
-                             {"applysex", self._sex},
-                             {"touid", toUid},
-                             {"description", description},
-                             {"backname", backname}})
+    return QJsonDocument(
+        QJsonObject{{"fromuid", self._uid}, {"applyname", self._name}, {"applydescription", self._description},
+            {"applyicon", self._icon}, {"applysex", self._sex}, {"touid", toUid}, {"description", description},
+            {"backname", backname}})
         .toJson(QJsonDocument::Compact);
 }
 
 /** @brief 序列化申请人和审批人资料，保留现有好友确认协议字段。 */
-inline QByteArray clientAcceptFriendRequest(
-    const UserInfo& self,
-    const ApplyInfo& apply,
-    const QString& description,
+inline QByteArray clientAcceptFriendRequest(const UserInfo& self, const ApplyInfo& apply, const QString& description,
     const QString& backname) {
-    const QJsonObject applicant{
-        {"applyuid", apply._apply_uid},
-        {"applyname", apply._apply_name},
-        {"applydescription", apply._apply_description},
-        {"applyicon", apply._apply_icon},
-        {"applysex", apply._apply_sex},
-        {"touid", apply._to_uid},
-        {"description", apply._description},
+    const QJsonObject applicant{{"applyuid", apply._apply_uid}, {"applyname", apply._apply_name},
+        {"applydescription", apply._apply_description}, {"applyicon", apply._apply_icon},
+        {"applysex", apply._apply_sex}, {"touid", apply._to_uid}, {"description", apply._description},
         {"backname", apply._backname}};
-    const QJsonObject acceptor{
-        {"authuid", self._uid},
-        {"authname", self._name},
-        {"authdescription", self._description},
-        {"authicon", self._icon},
-        {"authsex", self._sex},
-        {"touid", apply._apply_uid},
-        {"description", description},
+    const QJsonObject acceptor{{"authuid", self._uid}, {"authname", self._name}, {"authdescription", self._description},
+        {"authicon", self._icon}, {"authsex", self._sex}, {"touid", apply._apply_uid}, {"description", description},
         {"backname", backname}};
-    return QJsonDocument(QJsonObject{
-                             {"authuid", self._uid},
-                             {"applyuid", apply._apply_uid},
-                             {"applyinfo", applicant},
+    return QJsonDocument(QJsonObject{{"authuid", self._uid}, {"applyuid", apply._apply_uid}, {"applyinfo", applicant},
                              {"authinfo", acceptor}})
         .toJson(QJsonDocument::Compact);
 }

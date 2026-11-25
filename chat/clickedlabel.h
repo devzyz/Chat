@@ -25,13 +25,8 @@ public:
     virtual void leaveEvent(QEvent* event) override;
     // 初始化图标的状态
     /** @brief 初始化图标的状态。 */
-    void setState(
-        QString normal_leave = "",
-        QString normal_hover = "",
-        QString normal_press = "",
-        QString select_leave = "",
-        QString select_hover = "",
-        QString select_press = "");
+    void setState(QString normal_leave = "", QString normal_hover = "", QString normal_press = "",
+        QString select_leave = "", QString select_hover = "", QString select_press = "");
     // 获取图标现在的状态
     /** @brief 获取图标现在的状态。 */
     ClickLabelState getCurState();

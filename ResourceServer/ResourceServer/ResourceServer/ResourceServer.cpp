@@ -15,27 +15,23 @@
 int main(int argc, char** argv) {
     try {
         std::string path = std::getenv("CHAT_CONFIG") ? std::getenv("CHAT_CONFIG") : "config.ini";
-        if (argc == 3 && std::string(argv[1]) == "--config")
+        if (argc == 3 && std::string(argv[1]) == "--config") {
             path = argv[2];
-        else if (argc != 1)
+        } else if (argc != 1) {
             throw std::invalid_argument("usage: ResourceServer [--config path]");
+        }
         boost::property_tree::ptree config;
         boost::property_tree::read_ini(path, config);
         const auto port = config.get<unsigned int>("ResourceServer.Port");
-        if (!port || port > 65535)
-            throw std::invalid_argument("invalid ResourceServer.Port");
+        if (!port || port > 65535) throw std::invalid_argument("invalid ResourceServer.Port");
         std::filesystem::create_directories(config.get<std::string>("Log.LogDir", "logs"));
-        auto logger = spdlog::rotating_logger_mt(
-            "ResourceServer",
+        auto logger = spdlog::rotating_logger_mt("ResourceServer",
             (std::filesystem::path(config.get<std::string>("Log.LogDir", "logs")) / "ResourceServer.log").string(),
-            5 * 1024 * 1024,
-            2);
+            5 * 1024 * 1024, 2);
         spdlog::set_default_logger(logger);
         auto storage_root = std::filesystem::path(config.get<std::string>("ResourceServer.StorageRoot"));
-        if (storage_root.is_relative())
-            storage_root = std::filesystem::absolute(path).parent_path() / storage_root;
-        resource::ResourceStore store(
-            storage_root,
+        if (storage_root.is_relative()) storage_root = std::filesystem::absolute(path).parent_path() / storage_root;
+        resource::ResourceStore store(storage_root,
             config.get<std::uint64_t>("ResourceServer.MaxFileBytes", 8ull * 1024 * 1024 * 1024),
             config.get<std::uint64_t>("ResourceServer.MaxTotalBytes", 64ull * 1024 * 1024 * 1024),
             config.get<std::uint64_t>("ResourceServer.MaxOwnerBytes", 16ull * 1024 * 1024 * 1024));
@@ -43,30 +39,18 @@ int main(int argc, char** argv) {
         const auto& driver = settings.at("Driver");
         const auto& host = settings.at("Host");
         const auto& db_port = settings.at("Port");
-        resource::ResourceCatalog catalog(
-            driver == "mysql" ? host + ":" + db_port : host,
-            settings.at("User"),
-            settings.at("Password"),
-            settings.at("Schema"),
-            driver,
-            db_port);
-        chat_redis::RedisPool redis(
-            config.get<std::string>("Redis.Host"),
-            config.get<int>("Redis.Port"),
-            config.get<std::string>("Redis.Password", ""),
-            2);
+        resource::ResourceCatalog catalog(driver == "mysql" ? host + ":" + db_port : host, settings.at("User"),
+            settings.at("Password"), settings.at("Schema"), driver, db_port);
+        chat_redis::RedisPool redis(config.get<std::string>("Redis.Host"), config.get<int>("Redis.Port"),
+            config.get<std::string>("Redis.Password", ""), 2);
         common::IOServicePool pool(1);
         auto& context = pool.GetIOService();
         resource::ResourceHttpServer server(
-            context,
-            config.get<std::string>("ResourceServer.Host"),
-            static_cast<unsigned short>(port),
-            store,
+            context, config.get<std::string>("ResourceServer.Host"), static_cast<unsigned short>(port), store,
             // 读取当前 Redis 凭据，不延长登录有效期。
             [&redis](int uid, const std::string& token) {
                 const auto result = chat_auth::ValidateToken(redis, uid, token);
-                if (result == chat_auth::TokenResult::Unavailable)
-                    SPDLOG_WARN("credential store unavailable");
+                if (result == chat_auth::TokenResult::Unavailable) SPDLOG_WARN("credential store unavailable");
                 return result == chat_auth::TokenResult::Valid;
                 // 通过共享目录检查用户读取资源的权限。
             },
@@ -75,12 +59,7 @@ int main(int argc, char** argv) {
             },
             // 把上传完成的元数据发布到共享目录。
             [&catalog](const resource::Metadata& metadata) {
-                catalog.Publish(
-                    metadata.id,
-                    metadata.owner,
-                    metadata.name,
-                    metadata.media_type,
-                    metadata.size,
+                catalog.Publish(metadata.id, metadata.owner, metadata.name, metadata.media_type, metadata.size,
                     metadata.sha256);
                 // 查询用户已发布头像的资源 ID。
             },
@@ -93,11 +72,9 @@ int main(int argc, char** argv) {
             },
             // 借用时连接池验证认证及 PING，同时检查目录 schema。
             [&catalog, &redis] {
-                if (!catalog.IsReady())
-                    return false;
+                if (!catalog.IsReady()) return false;
                 auto* connection = redis.Borrow(std::chrono::milliseconds(1000));
-                if (!connection)
-                    return false;
+                if (!connection) return false;
                 redis.Return(connection);
                 return true;
             });

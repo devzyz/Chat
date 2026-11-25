@@ -29,8 +29,7 @@ QJsonObject directoryResponse(ReqId id, const QJsonObject& response, int self) {
             conversations.append(row);
             continue;
         }
-        if (row["type"].toString() != "private")
-            continue;
+        if (row["type"].toString() != "private") continue;
         const int peer = row["user1_id"].toInt() == self ? row["user2_id"].toInt() : row["user1_id"].toInt();
         conversations.append(QJsonObject{{"id", row["chat_id"]}, {"uid", peer}, {"type", "private"}});
     }
@@ -46,9 +45,7 @@ QJsonObject directoryResponse(ReqId id, const QJsonObject& response, int self) {
         conversations.append(row);
     }
     if (id == ID_FRIEND_REMARK_RSP) {
-        contacts.append(QJsonObject{
-            {"id", response["target_uid"]},
-            {"uid", response["target_uid"]},
+        contacts.append(QJsonObject{{"id", response["target_uid"]}, {"uid", response["target_uid"]},
             {"backname", response["name"]}});
     }
     int approved = 0;
@@ -64,41 +61,24 @@ QJsonObject directoryResponse(ReqId id, const QJsonObject& response, int self) {
         const QString prefix = approving ? "apply" : "auth";
         const int peer = info[prefix + "uid"].toInt();
         const QJsonValue backname = response[approving ? "authinfo" : "applyinfo"].toObject().value("backname");
-        contacts.append(QJsonObject{
-            {"id", peer},
-            {"uid", peer},
-            {"name", info[prefix + "name"]},
-            {"description", info[prefix + "description"]},
-            {"icon", info[prefix + "icon"]},
-            {"sex", info[prefix + "sex"]},
-            {"backname", backname}});
+        contacts.append(QJsonObject{{"id", peer}, {"uid", peer}, {"name", info[prefix + "name"]},
+            {"description", info[prefix + "description"]}, {"icon", info[prefix + "icon"]},
+            {"sex", info[prefix + "sex"]}, {"backname", backname}});
         conversations.append(QJsonObject{{"id", response["chatid"]}, {"uid", peer}, {"type", "private"}});
-        if (approving)
-            approved = peer;
+        if (approving) approved = peer;
     } else if (id == ID_CREATE_PRIVATE_CHAT_RSP) {
         const auto info = response["other_info"].toObject();
-        conversations.append(QJsonObject{
-            {"id", response["chat_id"]},
-            {"uid", response["other_id"]},
-            {"type", "private"},
-            {"name", info["other_name"]},
-            {"icon", info["other_icon"]}});
+        conversations.append(QJsonObject{{"id", response["chat_id"]}, {"uid", response["other_id"]},
+            {"type", "private"}, {"name", info["other_name"]}, {"icon", info["other_icon"]}});
     }
-    return {
-        {"contacts", contacts},
-        {"conversations", conversations},
-        {"applications", applications},
+    return {{"contacts", contacts}, {"conversations", conversations}, {"applications", applications},
         {"approved_uid", approved}};
 }
 }
 
 TcpMgr::TcpMgr() : _host("") {
-
     // 绑定连接完成信号到lambda槽函数上
-    connect(
-        &_transport,
-        &ChatTcpTransport::connected,
-        this,
+    connect(&_transport, &ChatTcpTransport::connected, this,
         /** @brief 连接成功后开启发送入口并通知认证流程。 */
         [this](quint64, quint64) {
             _acceptingSends = true;
@@ -107,20 +87,14 @@ TcpMgr::TcpMgr() : _host("") {
         });
 
     // 分发传输层已解码的完整消息帧。
-    connect(
-        &_transport,
-        &ChatTcpTransport::frameReceived,
-        this,
+    connect(&_transport, &ChatTcpTransport::frameReceived, this,
         /** @brief 将当前连接完整帧交给消息处理器。 */
         [this](const ChatTcpFrame& frame) {
             handleMessage(ReqId(frame.messageId), frame.body.size(), frame.body);
         });
 
     // 处理错误信号
-    connect(
-        &_transport,
-        &ChatTcpTransport::finished,
-        this,
+    connect(&_transport, &ChatTcpTransport::finished, this,
         /** @brief 按终止原因清理发送状态并通知预期或异常关闭。 */
         [this](const ChatTcpOutcome& outcome) {
             const bool expectedClose = _expectedClose || outcome.terminal == ChatTcpTerminal::LocalClosed ||
@@ -133,10 +107,8 @@ TcpMgr::TcpMgr() : _host("") {
             _socialRefreshing = false;
             _socialPending.clear();
             _legacyHistoryRequests.clear();
-            if (expectedClose && !_retainingPending)
-                UserMgr::instance()->messages()->pauseOutgoing();
-            if (!expectedClose || _retainingPending)
-                UserMgr::instance()->suspendSubmissions();
+            if (expectedClose && !_retainingPending) UserMgr::instance()->messages()->pauseOutgoing();
+            if (!expectedClose || _retainingPending) UserMgr::instance()->suspendSubmissions();
             UserMgr::instance()->messages()->stop();
             if (outcome.terminal == ChatTcpTerminal::Refused ||
                 outcome.terminal == ChatTcpTerminal::ConnectDeadlineExceeded) {
@@ -150,10 +122,7 @@ TcpMgr::TcpMgr() : _host("") {
     connect(this, &TcpMgr::sendRequested, this, &TcpMgr::sendData);
     auto* messages = UserMgr::instance()->messages();
     // 将已落盘的发送确认同步到兼容缓存并通知界面。
-    connect(
-        messages,
-        &MessageService::sendResponseApplied,
-        this,
+    connect(messages, &MessageService::sendResponseApplied, this,
         /** @brief 将已落盘 ACK 应用到会话展示并继续失败处理。 */
         [this](const QJsonObject& response) {
             const int chatId = response["chat_id"].toInt();
@@ -181,46 +150,32 @@ TcpMgr::TcpMgr() : _host("") {
             emit requestCompleted(ID_TEXT_CHAT_MSG_RSP, error);
         });
     // 发送消息正文增量同步请求。
-    connect(
-        messages,
-        &MessageService::syncRequested,
-        this,
+    connect(messages, &MessageService::syncRequested, this,
         /** @brief 将消息增量请求编码后发送。 */
         [this](const QJsonObject& request) {
             emit sendRequested(ID_LOAD_CHAT_MESSAGE_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
         });
     // 发送消息服务已调度的持久化批次。
-    connect(
-        messages,
-        &MessageService::sendRequested,
-        this,
+    connect(messages, &MessageService::sendRequested, this,
         /** @brief 将持久化发送批次编码后发送。 */
         [this](const QJsonObject& request) {
             emit sendRequested(ID_TEXT_CHAT_MSG_REQ, QJsonDocument(request).toJson(QJsonDocument::Compact));
         });
 
     // 转发回执上报或同步请求。
-    connect(
-        messages,
-        &MessageService::receiptRequested,
-        this,
+    connect(messages, &MessageService::receiptRequested, this,
         /** @brief 将回执请求按指定协议 ID 编码后发送。 */
         [this](quint16 id, const QJsonObject& request) {
             emit sendRequested(static_cast<ReqId>(id), QJsonDocument(request).toJson(QJsonDocument::Compact));
         });
 
     _directoryTimer.setInterval(10000);
-    connect(
-        &_directoryTimer,
-        &QTimer::timeout,
-        this,
+    connect(&_directoryTimer, &QTimer::timeout, this,
         /** @brief 上轮目录完整加载后重新扫描，发现其他成员建立的群。 */
         [this] {
-            if (!_authenticated)
-                return;
+            if (!_authenticated) return;
             refreshSocialDirectory();
-            emit sendRequested(
-                ID_LOAD_CHAT_LIST_REQ,
+            emit sendRequested(ID_LOAD_CHAT_LIST_REQ,
                 QJsonDocument(QJsonObject{{"uid", UserMgr::instance()->uid()}, {"current_chat_id", 0}})
                     .toJson(QJsonDocument::Compact));
         });
@@ -236,15 +191,13 @@ void TcpMgr::initHandlers() {
             emit groupResponse(id, QJsonDocument::fromJson(bytes).object());
         });
     }
-    _handlers.insert(
-        ID_CREATE_GROUP_RSP,
+    _handlers.insert(ID_CREATE_GROUP_RSP,
         /** @brief 群目录落盘后发布建群结果，失败也携带请求身份。 */
         [this](ReqId, int, QByteArray data) {
             emit groupCreated(QJsonDocument::fromJson(data).object());
         });
     // 登录请求的回包处理逻辑
-    _handlers.insert(
-        ReqId::ID_CHAT_LOGIN_RSP,
+    _handlers.insert(ReqId::ID_CHAT_LOGIN_RSP,
         /** @brief 解析聊天登录回复并完成身份和初始数据接入。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
@@ -270,9 +223,7 @@ void TcpMgr::initHandlers() {
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "chat login response is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
+                SPDLOG_WARN("chat login response is missing error field, msg_id={}, error={}", static_cast<int>(id),
                     static_cast<int>(ErrorCodes::ERR_JSON));
                 emit loginFailed(ErrorCodes::ERR_JSON);
                 return;
@@ -304,8 +255,7 @@ void TcpMgr::initHandlers() {
             refreshSocialDirectory();
 
             emit loginSucceeded();
-            UserMgr::instance()->messages()->saveDirectory(
-                directoryResponse(id, jsonObj, uid),
+            UserMgr::instance()->messages()->saveDirectory(directoryResponse(id, jsonObj, uid),
                 /** @brief 首批目录落盘后继续服务端分页，界面分页独立读取本地。 */
                 [this, jsonObj, uid] {
                     const int cursor = jsonObj["current_chat_id"].toInt();
@@ -314,8 +264,7 @@ void TcpMgr::initHandlers() {
                     UserMgr::instance()->setChatListFullyLoaded(!more);
                     emit chatListLoaded(jsonObj["chat_list"].toArray());
                     if (more && cursor >= 0) {
-                        emit sendRequested(
-                            ID_LOAD_CHAT_LIST_REQ,
+                        emit sendRequested(ID_LOAD_CHAT_LIST_REQ,
                             QJsonDocument(QJsonObject{{"uid", uid}, {"current_chat_id", cursor}})
                                 .toJson(QJsonDocument::Compact));
                     }
@@ -323,14 +272,11 @@ void TcpMgr::initHandlers() {
         });
 
     // 搜索用户请求的回包处理逻辑
-    _handlers.insert(
-        ReqId::ID_SEARCH_USER_RSP,
+    _handlers.insert(ReqId::ID_SEARCH_USER_RSP,
         /** @brief 解析用户搜索回复并通知搜索页面。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
-            SPDLOG_DEBUG(
-                "received search user response, msg_id={}, payload_size={}",
-                static_cast<int>(id),
+            SPDLOG_DEBUG("received search user response, msg_id={}, payload_size={}", static_cast<int>(id),
                 data.size());
 
             // 将字节流转换为json
@@ -354,9 +300,7 @@ void TcpMgr::initHandlers() {
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "search user response is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
+                SPDLOG_WARN("search user response is missing error field, msg_id={}, error={}", static_cast<int>(id),
                     static_cast<int>(ErrorCodes::ERR_JSON));
                 emit userSearchFinished(nullptr);
                 return;
@@ -382,8 +326,7 @@ void TcpMgr::initHandlers() {
         });
 
     // 申请添加好友的回包处理逻辑
-    _handlers.insert(
-        ReqId::ID_ADD_FRIEND_RSP,
+    _handlers.insert(ReqId::ID_ADD_FRIEND_RSP,
         /** @brief 解析好友申请发送结果。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
@@ -407,9 +350,7 @@ void TcpMgr::initHandlers() {
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "add friend response is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
+                SPDLOG_WARN("add friend response is missing error field, msg_id={}, error={}", static_cast<int>(id),
                     static_cast<int>(ErrorCodes::ERR_JSON));
                 return;
             }
@@ -423,14 +364,11 @@ void TcpMgr::initHandlers() {
         });
 
     // 服务器通知我申请添加好友逻辑
-    _handlers.insert(
-        ReqId::ID_NOTIFY_ADD_FRIEND_REQ,
+    _handlers.insert(ReqId::ID_NOTIFY_ADD_FRIEND_REQ,
         /** @brief 解析对方发来的好友申请通知。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
-            SPDLOG_DEBUG(
-                "received add friend notification, msg_id={}, payload_size={}",
-                static_cast<int>(id),
+            SPDLOG_DEBUG("received add friend notification, msg_id={}, payload_size={}", static_cast<int>(id),
                 data.size());
 
             // 将字节流转换为json
@@ -451,9 +389,7 @@ void TcpMgr::initHandlers() {
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "add friend notification is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
+                SPDLOG_WARN("add friend notification is missing error field, msg_id={}, error={}", static_cast<int>(id),
                     static_cast<int>(ErrorCodes::ERR_JSON));
                 return;
             }
@@ -475,21 +411,18 @@ void TcpMgr::initHandlers() {
             QString description = jsonObj["description"].toString();
             QString backname = jsonObj["backname"].toString();
 
-            auto apply_info = std::make_shared<
-                ApplyInfo>(from_uid, from_name, from_description, from_icon, from_sex, 0, touid, description, backname);
+            auto apply_info = std::make_shared<ApplyInfo>(from_uid, from_name, from_description, from_icon, from_sex, 0,
+                touid, description, backname);
 
             emit friendApplicationReceived(apply_info);
         });
 
     // 服务器认证添加好友逻辑
-    _handlers.insert(
-        ReqId::ID_AUTH_FRIEND_RSP,
+    _handlers.insert(ReqId::ID_AUTH_FRIEND_RSP,
         /** @brief 解析好友审批回复并更新联系人。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
-            SPDLOG_DEBUG(
-                "received authorize friend response, msg_id={}, payload_size={}",
-                static_cast<int>(id),
+            SPDLOG_DEBUG("received authorize friend response, msg_id={}, payload_size={}", static_cast<int>(id),
                 data.size());
 
             // 将字节流转换为json
@@ -510,10 +443,8 @@ void TcpMgr::initHandlers() {
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "authorize friend response is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
-                    static_cast<int>(ErrorCodes::ERR_JSON));
+                SPDLOG_WARN("authorize friend response is missing error field, msg_id={}, error={}",
+                    static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
                 return;
             }
 
@@ -548,14 +479,8 @@ void TcpMgr::initHandlers() {
                 auto recv_id = msg_info["recv_id"].toInt();
                 auto content = msg_info["content"].toString();
                 auto status = msg_info["status"].toInt();
-                auto text_msg = std::make_shared<TextChatData>(
-                    message_id,
-                    chat_id,
-                    ChatType::PRIVATE,
-                    ChatMessageType::TEXT_TYPE,
-                    content,
-                    send_id,
-                    QTime::currentTime());
+                auto text_msg = std::make_shared<TextChatData>(message_id, chat_id, ChatType::PRIVATE,
+                    ChatMessageType::TEXT_TYPE, content, send_id, QTime::currentTime());
                 text_msg->setClientMessageId(msg_info["msg_uuid"].toString());
                 chat_info->addChatData(text_msg);
             }
@@ -569,14 +494,11 @@ void TcpMgr::initHandlers() {
         });
 
     // 服务器通知我认证添加好友
-    _handlers.insert(
-        ReqId::ID_NOTIFY_AUTH_FRIEND_REQ,
+    _handlers.insert(ReqId::ID_NOTIFY_AUTH_FRIEND_REQ,
         /** @brief 解析对方完成好友审批的通知。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
-            SPDLOG_DEBUG(
-                "received authorize friend notification, msg_id={}, payload_size={}",
-                static_cast<int>(id),
+            SPDLOG_DEBUG("received authorize friend notification, msg_id={}, payload_size={}", static_cast<int>(id),
                 data.size());
 
             // 将字节流转换为json
@@ -591,18 +513,15 @@ void TcpMgr::initHandlers() {
             // 取到json键值对数据
             QJsonObject jsonObj = jsonDoc.object();
             if (jsonObj.isEmpty()) {
-                SPDLOG_WARN(
-                    "authorize friend notification contains an empty JSON object, msg_id={}",
+                SPDLOG_WARN("authorize friend notification contains an empty JSON object, msg_id={}",
                     static_cast<int>(id));
                 return;
             }
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "authorize friend notification is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
-                    static_cast<int>(ErrorCodes::ERR_JSON));
+                SPDLOG_WARN("authorize friend notification is missing error field, msg_id={}, error={}",
+                    static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
                 return;
             }
 
@@ -637,14 +556,8 @@ void TcpMgr::initHandlers() {
                 auto recv_id = msg_info["recv_id"].toInt();
                 auto content = msg_info["content"].toString();
                 auto status = msg_info["status"].toInt();
-                auto text_msg = std::make_shared<TextChatData>(
-                    message_id,
-                    chat_id,
-                    ChatType::PRIVATE,
-                    ChatMessageType::TEXT_TYPE,
-                    content,
-                    send_id,
-                    QTime::currentTime());
+                auto text_msg = std::make_shared<TextChatData>(message_id, chat_id, ChatType::PRIVATE,
+                    ChatMessageType::TEXT_TYPE, content, send_id, QTime::currentTime());
                 text_msg->setClientMessageId(msg_info["msg_uuid"].toString());
                 chat_info->addChatData(text_msg);
             }
@@ -658,24 +571,21 @@ void TcpMgr::initHandlers() {
         });
 
     // 将发送回包交给消息服务校验并落盘。
-    _handlers.insert(
-        ID_TEXT_CHAT_MSG_RSP,
+    _handlers.insert(ID_TEXT_CHAT_MSG_RSP,
         /** @brief 将文本 ACK 交给持久化消息服务。 */
         [](ReqId, int, QByteArray data) {
             UserMgr::instance()->messages()->acceptSendResponse(QJsonDocument::fromJson(data).object());
         });
     for (const auto id : {ID_MESSAGE_RECEIPT_REPORT_RSP, ID_MESSAGE_RECEIPT_SYNC_RSP}) {
         // 将回执结果交给消息服务合并。
-        _handlers.insert(
-            id,
+        _handlers.insert(id,
             /** @brief 将回执回复交给持久化消息服务。 */
             [](ReqId, int, QByteArray data) {
                 UserMgr::instance()->messages()->acceptReceiptResponse(QJsonDocument::fromJson(data).object());
             });
     }
     // 收到回执变化提示后主动补拉权威状态。
-    _handlers.insert(
-        ID_MESSAGE_RECEIPT_CHANGED_NOTIFY,
+    _handlers.insert(ID_MESSAGE_RECEIPT_CHANGED_NOTIFY,
         /** @brief 收到回执变化提示后登记会话并补拉消息及回执。 */
         [](ReqId, int, QByteArray data) {
             auto* messages = UserMgr::instance()->messages();
@@ -685,14 +595,11 @@ void TcpMgr::initHandlers() {
         });
 
     // 服务器通知接收文本聊天数据
-    _handlers.insert(
-        ReqId::ID_NOTIFY_CHAT_MSG_REQ,
+    _handlers.insert(ReqId::ID_NOTIFY_CHAT_MSG_REQ,
         /** @brief 解析新消息通知并更新会话及同步状态。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
-            SPDLOG_DEBUG(
-                "received chat message notification, msg_id={}, payload_size={}",
-                static_cast<int>(id),
+            SPDLOG_DEBUG("received chat message notification, msg_id={}, payload_size={}", static_cast<int>(id),
                 data.size());
 
             // 将字节流转换为json
@@ -713,10 +620,8 @@ void TcpMgr::initHandlers() {
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "chat message notification is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
-                    static_cast<int>(ErrorCodes::ERR_JSON));
+                SPDLOG_WARN("chat message notification is missing error field, msg_id={}, error={}",
+                    static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
                 return;
             }
 
@@ -738,14 +643,8 @@ void TcpMgr::initHandlers() {
                 const auto info = msg.toObject();
                 auto msgid = info["message_id"].toInt();
                 auto msgcontent = info["msg_content"].toString();
-                auto text_msg = std::make_shared<TextChatData>(
-                    msgid,
-                    chat_id,
-                    ChatType::PRIVATE,
-                    ChatMessageType::TEXT_TYPE,
-                    msgcontent,
-                    from_uid,
-                    QTime::currentTime());
+                auto text_msg = std::make_shared<TextChatData>(msgid, chat_id, ChatType::PRIVATE,
+                    ChatMessageType::TEXT_TYPE, msgcontent, from_uid, QTime::currentTime());
                 text_msg->setClientMessageId(info["msg_uuid"].toString());
                 if (chat_info) {
                     chat_info->addChatData(text_msg);
@@ -759,14 +658,11 @@ void TcpMgr::initHandlers() {
         });
 
     // 服务器通知客户端下线
-    _handlers.insert(
-        ReqId::ID_NOTIFY_OFF_LINE_REQ,
+    _handlers.insert(ReqId::ID_NOTIFY_OFF_LINE_REQ,
         /** @brief 解析强制下线通知并结束当前账号会话。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
-            SPDLOG_DEBUG(
-                "received offline notification, msg_id={}, payload_size={}",
-                static_cast<int>(id),
+            SPDLOG_DEBUG("received offline notification, msg_id={}, payload_size={}", static_cast<int>(id),
                 data.size());
 
             // 将字节流转换为json
@@ -787,9 +683,7 @@ void TcpMgr::initHandlers() {
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "offline notification is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
+                SPDLOG_WARN("offline notification is missing error field, msg_id={}, error={}", static_cast<int>(id),
                     static_cast<int>(ErrorCodes::ERR_JSON));
                 return;
             }
@@ -805,8 +699,7 @@ void TcpMgr::initHandlers() {
         });
 
     // 心跳检测回包
-    _handlers.insert(
-        ReqId::ID_HEART_BEAT_RSP,
+    _handlers.insert(ReqId::ID_HEART_BEAT_RSP,
         /** @brief 解析心跳回复并处理在线状态。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
@@ -830,9 +723,7 @@ void TcpMgr::initHandlers() {
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "heartbeat response is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
+                SPDLOG_WARN("heartbeat response is missing error field, msg_id={}, error={}", static_cast<int>(id),
                     static_cast<int>(ErrorCodes::ERR_JSON));
                 return;
             }
@@ -847,14 +738,11 @@ void TcpMgr::initHandlers() {
         });
 
     // 从服务器加载一部分聊天列表
-    _handlers.insert(
-        ReqId::ID_LOAD_CHAT_LIST_RSP,
+    _handlers.insert(ReqId::ID_LOAD_CHAT_LIST_RSP,
         /** @brief 解析会话列表页并更新列表模型。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
-            SPDLOG_DEBUG(
-                "received load chat list response, msg_id={}, payload_size={}",
-                static_cast<int>(id),
+            SPDLOG_DEBUG("received load chat list response, msg_id={}, payload_size={}", static_cast<int>(id),
                 data.size());
 
             // 将字节流转换为json
@@ -875,9 +763,7 @@ void TcpMgr::initHandlers() {
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "load chat list response is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
+                SPDLOG_WARN("load chat list response is missing error field, msg_id={}, error={}", static_cast<int>(id),
                     static_cast<int>(ErrorCodes::ERR_JSON));
                 return;
             }
@@ -908,14 +794,11 @@ void TcpMgr::initHandlers() {
         });
 
     // 创建私有聊天请求回包
-    _handlers.insert(
-        ReqId::ID_CREATE_PRIVATE_CHAT_RSP,
+    _handlers.insert(ReqId::ID_CREATE_PRIVATE_CHAT_RSP,
         /** @brief 解析创建私聊回复并通知进入会话。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
-            SPDLOG_DEBUG(
-                "received create private chat response, msg_id={}, payload_size={}",
-                static_cast<int>(id),
+            SPDLOG_DEBUG("received create private chat response, msg_id={}, payload_size={}", static_cast<int>(id),
                 data.size());
 
             // 将字节流转换为json
@@ -930,18 +813,15 @@ void TcpMgr::initHandlers() {
             // 取到json键值对数据
             QJsonObject jsonObj = jsonDoc.object();
             if (jsonObj.isEmpty()) {
-                SPDLOG_WARN(
-                    "create private chat response contains an empty JSON object, msg_id={}",
+                SPDLOG_WARN("create private chat response contains an empty JSON object, msg_id={}",
                     static_cast<int>(id));
                 return;
             }
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "create private chat response is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
-                    static_cast<int>(ErrorCodes::ERR_JSON));
+                SPDLOG_WARN("create private chat response is missing error field, msg_id={}, error={}",
+                    static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
                 return;
             }
 
@@ -964,14 +844,11 @@ void TcpMgr::initHandlers() {
         });
 
     // 增量拉取聊天记录回包
-    _handlers.insert(
-        ReqId::ID_LOAD_CHAT_MESSAGE_RSP,
+    _handlers.insert(ReqId::ID_LOAD_CHAT_MESSAGE_RSP,
         /** @brief 区分消息同步与旧历史回复并交给对应处理器。 */
         [this](ReqId id, int len, QByteArray data) {
             Q_UNUSED(len);
-            SPDLOG_DEBUG(
-                "received load chat message response, msg_id={}, payload_size={}",
-                static_cast<int>(id),
+            SPDLOG_DEBUG("received load chat message response, msg_id={}, payload_size={}", static_cast<int>(id),
                 data.size());
 
             // 将字节流转换为json
@@ -997,18 +874,15 @@ void TcpMgr::initHandlers() {
             }
 
             if (jsonObj.isEmpty()) {
-                SPDLOG_WARN(
-                    "load chat message response contains an empty JSON object, msg_id={}",
+                SPDLOG_WARN("load chat message response contains an empty JSON object, msg_id={}",
                     static_cast<int>(id));
                 return;
             }
 
             // 如果结果内不包含error键，则说明json不正确
             if (!jsonObj.contains("error")) {
-                SPDLOG_WARN(
-                    "load chat message response is missing error field, msg_id={}, error={}",
-                    static_cast<int>(id),
-                    static_cast<int>(ErrorCodes::ERR_JSON));
+                SPDLOG_WARN("load chat message response is missing error field, msg_id={}, error={}",
+                    static_cast<int>(id), static_cast<int>(ErrorCodes::ERR_JSON));
                 return;
             }
 
@@ -1037,14 +911,8 @@ void TcpMgr::initHandlers() {
                 auto created_at = msg_obj["created_at"].toInteger();
                 QDateTime dt = QDateTime::fromSecsSinceEpoch(created_at);
 
-                auto msg_info = std::make_shared<TextChatData>(
-                    message_id,
-                    chat_id,
-                    ChatType::PRIVATE,
-                    ChatMessageType::TEXT_TYPE,
-                    content,
-                    send_id,
-                    dt);
+                auto msg_info = std::make_shared<TextChatData>(message_id, chat_id, ChatType::PRIVATE,
+                    ChatMessageType::TEXT_TYPE, content, send_id, dt);
                 msg_info->setClientMessageId(msg_obj["msg_uuid"].toString());
                 if (status >= ChatStatus::STATUS_EMPTY && status <= ChatStatus::STATUS_READ_ALREADY) {
                     msg_info->setStatus(static_cast<ChatStatus>(status));
@@ -1062,14 +930,11 @@ void TcpMgr::handleMessage(ReqId id, int len, QByteArray data) {
         const auto response = QJsonDocument::fromJson(data).object();
         const auto key = response["request_id"].toString();
         auto it = _socialPending.find(key);
-        if (it == _socialPending.end() || it->response != id)
-            return;
+        if (it == _socialPending.end() || it->response != id) return;
         const auto pending = *it;
         _socialPending.erase(it);
-        if (pending.context)
-            pending.callback(response);
-        if (id != ID_SOCIAL_DIRECTORY_RSP)
-            refreshSocialDirectory();
+        if (pending.context) pending.callback(response);
+        if (id != ID_SOCIAL_DIRECTORY_RSP) refreshSocialDirectory();
         return;
     }
     if (_social && (id == ID_NOTIFY_ADD_FRIEND_REQ || id == ID_NOTIFY_AUTH_FRIEND_REQ || id == ID_AUTH_FRIEND_RSP)) {
@@ -1095,13 +960,11 @@ void TcpMgr::handleMessage(ReqId id, int len, QByteArray data) {
             /** @brief 落盘后保留既有业务完成通知，不重新进入网络分发。 */
             [this, id, len, data] {
                 _handlers[id](id, len, data);
-                if (id == ID_AUTH_FRIEND_RSP || id == ID_CREATE_PRIVATE_CHAT_RSP)
-                    emit requestCompleted(id, 0);
+                if (id == ID_AUTH_FRIEND_RSP || id == ID_CREATE_PRIVATE_CHAT_RSP) emit requestCompleted(id, 0);
             },
             /** @brief 已知服务端成功而本地保存失败时向管理界面发布明确的恢复提示。 */
             [this, id, response] {
-                if (id != ID_GROUP_MANAGE_RSP && id != ID_GROUP_INFO_RSP && id != ID_FRIEND_REMARK_RSP)
-                    return;
+                if (id != ID_GROUP_MANAGE_RSP && id != ID_GROUP_INFO_RSP && id != ID_FRIEND_REMARK_RSP) return;
                 auto result = response;
                 result["local_save_failed"] = true;
                 emit groupResponse(id, result);
@@ -1112,8 +975,7 @@ void TcpMgr::handleMessage(ReqId id, int len, QByteArray data) {
     if (id == ID_CREATE_PRIVATE_CHAT_RSP || id == ID_LOAD_CHAT_MESSAGE_RSP || id == ID_ADD_FRIEND_RSP ||
         id == ID_AUTH_FRIEND_RSP) {
         const auto object = QJsonDocument::fromJson(data).object();
-        if (id == ID_LOAD_CHAT_MESSAGE_RSP && object.contains("request_id"))
-            return;
+        if (id == ID_LOAD_CHAT_MESSAGE_RSP && object.contains("request_id")) return;
         emit requestCompleted(id, object.value("error").toInt(-1));
     }
 }
@@ -1131,8 +993,9 @@ void TcpMgr::resetConnection(bool expectedClose) {
     _legacyHistoryRequests.clear();
     if (expectedClose) {
         UserMgr::instance()->messages()->pauseOutgoing();
-    } else
+    } else {
         UserMgr::instance()->suspendSubmissions();
+    }
     UserMgr::instance()->messages()->stop();
     _host.clear();
     _port = 0;
@@ -1148,8 +1011,7 @@ void TcpMgr::sendData(ReqId reqId, QByteArray dataBytes) {
     const auto rejected =
         /** @brief 发送被拒绝时保留文本 UUID 并标记结果不确定。 */
         [&] {
-            if (reqId != ID_TEXT_CHAT_MSG_REQ)
-                return;
+            if (reqId != ID_TEXT_CHAT_MSG_REQ) return;
             const auto request = QJsonDocument::fromJson(dataBytes).object();
             QVector<QString> uuids;
             for (const auto& item : request["text_array"].toArray())
@@ -1157,8 +1019,8 @@ void TcpMgr::sendData(ReqId reqId, QByteArray dataBytes) {
             UserMgr::instance()->messages()->markUncertain(request["chat_id"].toInt(), uuids);
         };
     if (!_acceptingSends || ((reqId == ID_TEXT_CHAT_MSG_REQ || reqId == ID_MESSAGE_RECEIPT_REPORT_REQ ||
-                              reqId == ID_MESSAGE_RECEIPT_SYNC_REQ) &&
-                             !_authenticated)) {
+                                 reqId == ID_MESSAGE_RECEIPT_SYNC_REQ) &&
+                                !_authenticated)) {
         rejected();
         return;
     }
@@ -1225,19 +1087,16 @@ void TcpMgr::socialRequest(ReqId id, QJsonObject request, QObject* context, std:
     // 超时只结束当前请求，不自动重放写命令。
     QTimer::singleShot(10000, this, [this, key] {
         auto it = _socialPending.find(key);
-        if (it == _socialPending.end())
-            return;
+        if (it == _socialPending.end()) return;
         auto pending = *it;
         _socialPending.erase(it);
-        if (pending.context)
-            pending.callback({{"error", 1}, {"social_error", "Timeout"}});
+        if (pending.context) pending.callback({{"error", 1}, {"social_error", "Timeout"}});
     });
     emit sendRequested(id, bytes);
 }
 
 void TcpMgr::refreshSocialDirectory() {
-    if (!_social || !_authenticated)
-        return;
+    if (!_social || !_authenticated) return;
     if (_socialRefreshing) {
         _socialRefreshAgain = true;
         return;
@@ -1248,10 +1107,7 @@ void TcpMgr::refreshSocialDirectory() {
 }
 
 void TcpMgr::loadSocialPage(QString kind, QString after) {
-    socialRequest(
-        ID_SOCIAL_DIRECTORY_REQ,
-        {{"kind", kind}, {"after", after}},
-        this,
+    socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind", kind}, {"after", after}}, this,
         /** @brief 将版本目录转换为既有存储格式，成功落盘后继续分页。 */
         [this, kind, after](QJsonObject response) {
             if (response["error"].toInt(-1) != 0) {
@@ -1294,15 +1150,14 @@ void TcpMgr::loadSocialPage(QString kind, QString after) {
                             return;
                         }
                         loadSocialPage(kind, next);
-                    } else if (kind == "profile")
+                    } else if (kind == "profile") {
                         loadSocialPage("contacts");
-                    else if (kind == "contacts") {
+                    } else if (kind == "contacts") {
                         UserMgr::instance()->messages()->setSocialReady();
                         loadSocialPage("applications");
                     } else {
                         _socialRefreshing = false;
-                        if (_socialRefreshAgain)
-                            refreshSocialDirectory();
+                        if (_socialRefreshAgain) refreshSocialDirectory();
                     }
                     // 写盘失败保留旧目录，下次周期重试读取。
                 },

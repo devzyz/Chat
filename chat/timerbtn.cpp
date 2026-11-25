@@ -13,10 +13,7 @@ TimerBtn::TimerBtn(QWidget* parent) : QPushButton(parent), _counter(10) {
     });
 
     // 连接定时器的触发信号，与一个lambda槽函数
-    connect(
-        _timer,
-        &QTimer::timeout,
-        this,
+    connect(_timer, &QTimer::timeout, this,
         /** @brief 更新验证码倒计时，到时恢复可点击状态。 */
         [this]() {
             _counter--;

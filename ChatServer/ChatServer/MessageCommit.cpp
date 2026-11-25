@@ -21,16 +21,8 @@ bool IsCanonicalUuid(const std::string& value) {
     return value != "00000000-0000-0000-0000-000000000000";
 }
 
-Result Commit(
-    Store& store,
-    AuthenticatedPrincipal principal,
-    int claimed_sender,
-    int recipient,
-    int chat,
-    const Batch& batch,
-    Deadline deadline,
-    bool group,
-    Preconditions access) {
+Result Commit(Store& store, AuthenticatedPrincipal principal, int claimed_sender, int recipient, int chat,
+    const Batch& batch, Deadline deadline, bool group, Preconditions access) {
     if (principal.uid <= 0 || principal.uid != claimed_sender) {
         return {Error::UNAUTHORIZED_SENDER, {}};
     }

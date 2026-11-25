@@ -7,7 +7,12 @@
 #include "gatehttptransport.h"
 #include "userdata.h"
 
-enum class SessionResetReason { Logout, SwitchAccount, Kicked, UnexpectedDisconnect };
+enum class SessionResetReason {
+    Logout,
+    SwitchAccount,
+    Kicked,
+    UnexpectedDisconnect
+};
 
 Q_DECLARE_METATYPE(SessionResetReason)
 
@@ -27,10 +32,12 @@ public:
     bool isActive() const;
     /** @brief 异步撤销当前凭据；失败保留会话供重试，完成由 logoutFinished 通知。 */
     bool requestLogout(SessionResetReason reason);
+
     /** @brief 查询是否正在恢复同账号连接，期间保留会话界面及草稿。 */
     bool isReconnecting() const {
         return _reconnecting;
     }
+
     /** @brief 查询是否正在等待撤销确认，期间断线不得抢先清理界面。 */
     bool isLoggingOut() const {
         return _loggingOut;

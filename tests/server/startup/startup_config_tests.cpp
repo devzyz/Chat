@@ -96,9 +96,7 @@ std::wstring Quote(const std::wstring& value) {
 }
 
 /** 启动真实测试子进程并将输出定向到所属目录，有限等待后收集结果。 */
-ProcessResult RunProcess(
-    const std::filesystem::path& executable,
-    const std::vector<std::wstring>& arguments,
+ProcessResult RunProcess(const std::filesystem::path& executable, const std::vector<std::wstring>& arguments,
     const std::filesystem::path& working_directory) {
     const auto stdout_path = working_directory / "child.stdout.txt";
     const auto stderr_path = working_directory / "child.stderr.txt";
@@ -107,22 +105,10 @@ ProcessResult RunProcess(
     security_attributes.nLength = sizeof(security_attributes);
     security_attributes.bInheritHandle = TRUE;
 
-    HANDLE stdout_handle = CreateFileW(
-        stdout_path.c_str(),
-        GENERIC_WRITE,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        &security_attributes,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        nullptr);
-    HANDLE stderr_handle = CreateFileW(
-        stderr_path.c_str(),
-        GENERIC_WRITE,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        &security_attributes,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        nullptr);
+    HANDLE stdout_handle = CreateFileW(stdout_path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        &security_attributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    HANDLE stderr_handle = CreateFileW(stderr_path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        &security_attributes, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (stdout_handle == INVALID_HANDLE_VALUE || stderr_handle == INVALID_HANDLE_VALUE) {
         if (stdout_handle != INVALID_HANDLE_VALUE) {
             CloseHandle(stdout_handle);
@@ -148,17 +134,8 @@ ProcessResult RunProcess(
     startup_info.hStdError = stderr_handle;
 
     PROCESS_INFORMATION process_info{};
-    const BOOL created = CreateProcessW(
-        executable.c_str(),
-        mutable_command.data(),
-        nullptr,
-        nullptr,
-        TRUE,
-        CREATE_NO_WINDOW,
-        nullptr,
-        working_directory.c_str(),
-        &startup_info,
-        &process_info);
+    const BOOL created = CreateProcessW(executable.c_str(), mutable_command.data(), nullptr, nullptr, TRUE,
+        CREATE_NO_WINDOW, nullptr, working_directory.c_str(), &startup_info, &process_info);
     CloseHandle(stdout_handle);
     CloseHandle(stderr_handle);
     if (!created) {
@@ -211,11 +188,7 @@ void WriteText(const std::filesystem::path& path, const std::string& content) {
 unsigned short ReservePort(boost::asio::ip::tcp::acceptor& acceptor) {
     acceptor.open(boost::asio::ip::tcp::v4());
     const BOOL exclusive = TRUE;
-    if (setsockopt(
-            acceptor.native_handle(),
-            SOL_SOCKET,
-            SO_EXCLUSIVEADDRUSE,
-            reinterpret_cast<const char*>(&exclusive),
+    if (setsockopt(acceptor.native_handle(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusive),
             sizeof(exclusive)) == SOCKET_ERROR) {
         throw std::runtime_error("unable to reserve an exclusive loopback port");
     }
@@ -228,11 +201,7 @@ unsigned short ReservePort(boost::asio::ip::tcp::acceptor& acceptor) {
 unsigned short ReserveWildcardPort(boost::asio::ip::tcp::acceptor& acceptor) {
     acceptor.open(boost::asio::ip::tcp::v4());
     const BOOL exclusive = TRUE;
-    if (setsockopt(
-            acceptor.native_handle(),
-            SOL_SOCKET,
-            SO_EXCLUSIVEADDRUSE,
-            reinterpret_cast<const char*>(&exclusive),
+    if (setsockopt(acceptor.native_handle(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusive),
             sizeof(exclusive)) == SOCKET_ERROR) {
         throw std::runtime_error("unable to reserve an exclusive wildcard port");
     }
@@ -251,10 +220,7 @@ unsigned short FindAvailablePort() {
 }
 
 /** 生成指定 TCP、RPC 端口及可选 gRPC 设置的启动配置。 */
-void WriteValidStartupConfig(
-    const std::filesystem::path& path,
-    unsigned short tcp_port,
-    unsigned short grpc_port,
+void WriteValidStartupConfig(const std::filesystem::path& path, unsigned short tcp_port, unsigned short grpc_port,
     const std::string& grpc_settings = {}) {
     std::ostringstream config;
     config << "[SelfServer]\n"

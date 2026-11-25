@@ -182,10 +182,8 @@ ProcessIdentity Win32ProcessAdapter::Start(const ProcessSpec& spec) {
         !CreatePipe(&impl_->stderr_read, &stderr_write, &security, 0) ||
         !SetHandleInformation(impl_->stdout_read, HANDLE_FLAG_INHERIT, 0) ||
         !SetHandleInformation(impl_->stderr_read, HANDLE_FLAG_INHERIT, 0)) {
-        if (stdout_write != nullptr)
-            CloseHandle(stdout_write);
-        if (stderr_write != nullptr)
-            CloseHandle(stderr_write);
+        if (stdout_write != nullptr) CloseHandle(stdout_write);
+        if (stderr_write != nullptr) CloseHandle(stderr_write);
         throw std::runtime_error("unable to create bounded child output pipes");
     }
 
@@ -203,17 +201,9 @@ ProcessIdentity Win32ProcessAdapter::Start(const ProcessSpec& spec) {
     startup.hStdError = stderr_write;
     PROCESS_INFORMATION process{};
     const auto executable = std::filesystem::absolute(spec.executable).wstring();
-    const BOOL created = CreateProcessW(
-        executable.c_str(),
-        mutable_command.data(),
-        nullptr,
-        nullptr,
-        TRUE,
-        CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED,
-        nullptr,
-        std::filesystem::absolute(spec.working_directory).c_str(),
-        &startup,
-        &process);
+    const BOOL created = CreateProcessW(executable.c_str(), mutable_command.data(), nullptr, nullptr, TRUE,
+        CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED, nullptr, std::filesystem::absolute(spec.working_directory).c_str(),
+        &startup, &process);
     CloseHandle(stdout_write);
     CloseHandle(stderr_write);
     if (!created) {

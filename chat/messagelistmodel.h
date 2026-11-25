@@ -62,11 +62,8 @@ public:
     void updateSenderAvatar(int senderId, const QPixmap& avatar);
 
     /** @brief 按客户端 UUID 及可选发送者匹配 ACK，写入服务器 ID 并单调推进状态；未找到返回 false。 */
-    bool acknowledgeMessage(
-        const QString& clientMessageId,
-        qint64 messageId,
-        DeliveryStatus status = DeliveryStatus::Sent,
-        int senderId = -1);
+    bool acknowledgeMessage(const QString& clientMessageId, qint64 messageId,
+        DeliveryStatus status = DeliveryStatus::Sent, int senderId = -1);
     /** @brief 按 UUID 和可选发送者更新状态；不倒退已确认的送达或已读事实。 */
     bool updateStatusByClientId(const QString& clientMessageId, DeliveryStatus status, int senderId = -1);
     /** @brief 按服务器 ID 更新消息状态，未命中返回 false。 */

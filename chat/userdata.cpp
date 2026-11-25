@@ -1,36 +1,18 @@
 #include "userdata.h"
 
-ChatDataBase::ChatDataBase(
-    int msg_id,
-    int chat_id,
-    ChatType chat_type,
-    ChatMessageType chat_msg_type,
-    QString content,
-    int send_uid,
-    QTime send_time)
+ChatDataBase::ChatDataBase(int msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type, QString content,
+    int send_uid, QTime send_time)
     : _msg_id(msg_id), _chat_id(chat_id), _chat_type(chat_type), _chat_msg_type(chat_msg_type), _content(content),
       _send_uid(send_uid), _sent_at(QDateTime(QDate::currentDate(), send_time)), _status(ChatStatus::STATUS_NO_READ) {}
 
-ChatDataBase::ChatDataBase(
-    QString client_msg_id,
-    int chat_id,
-    ChatType chat_type,
-    ChatMessageType chat_msg_type,
-    QString content,
-    int send_uid,
-    QTime send_time)
+ChatDataBase::ChatDataBase(QString client_msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type,
+    QString content, int send_uid, QTime send_time)
     : _client_msg_id(client_msg_id), _msg_id(0), _chat_id(chat_id), _chat_type(chat_type),
       _chat_msg_type(chat_msg_type), _content(content), _send_uid(send_uid),
       _sent_at(QDateTime(QDate::currentDate(), send_time)), _status(ChatStatus::STATUS_NO_READ) {}
 
-ChatDataBase::ChatDataBase(
-    int msg_id,
-    int chat_id,
-    ChatType chat_type,
-    ChatMessageType chat_msg_type,
-    QString content,
-    int send_uid,
-    QDateTime sent_at)
+ChatDataBase::ChatDataBase(int msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type, QString content,
+    int send_uid, QDateTime sent_at)
     : _msg_id(msg_id), _chat_id(chat_id), _chat_type(chat_type), _chat_msg_type(chat_msg_type), _content(content),
       _send_uid(send_uid), _sent_at(std::move(sent_at)), _status(ChatStatus::STATUS_NO_READ) {}
 
@@ -86,34 +68,16 @@ QString ChatDataBase::getCacheMsgId() {
     return _client_msg_id;
 }
 
-TextChatData::TextChatData(
-    int msg_id,
-    int chat_id,
-    ChatType chat_type,
-    ChatMessageType chat_msg_type,
-    QString content,
-    int send_uid,
-    QTime send_time)
+TextChatData::TextChatData(int msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type, QString content,
+    int send_uid, QTime send_time)
     : ChatDataBase(msg_id, chat_id, chat_type, chat_msg_type, content, send_uid, send_time) {}
 
-TextChatData::TextChatData(
-    QString client_msg_id,
-    int chat_id,
-    ChatType chat_type,
-    ChatMessageType chat_msg_type,
-    QString content,
-    int send_uid,
-    QTime send_time)
+TextChatData::TextChatData(QString client_msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type,
+    QString content, int send_uid, QTime send_time)
     : ChatDataBase(client_msg_id, chat_id, chat_type, chat_msg_type, content, send_uid, send_time) {}
 
-TextChatData::TextChatData(
-    int msg_id,
-    int chat_id,
-    ChatType chat_type,
-    ChatMessageType chat_msg_type,
-    QString content,
-    int send_uid,
-    QDateTime sent_at)
+TextChatData::TextChatData(int msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type, QString content,
+    int send_uid, QDateTime sent_at)
     : ChatDataBase(msg_id, chat_id, chat_type, chat_msg_type, content, send_uid, std::move(sent_at)) {}
 
 UserInfo::UserInfo(int uid, QString name, QString description, QString icon, int sex)

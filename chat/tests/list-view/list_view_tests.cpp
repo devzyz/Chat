@@ -12,6 +12,7 @@
 class ListViewTests : public QObject {
     Q_OBJECT
 private slots:
+
     /** @brief 悬停行为同时适用于模型视图和条目列表，且不修改模型或选择策略。 */
     void sharesHoverWithoutChangingModels() {
         QListView view;
@@ -45,25 +46,15 @@ private slots:
         QCoreApplication::processEvents();
         for (int delta : {-120, -30, -30, -30, -30, 120}) {
             for (auto* view : {&native, &shared}) {
-                QWheelEvent wheel(
-                    QPointF(30, 30),
-                    QPointF(30, 30),
-                    {},
-                    QPoint(0, delta),
-                    Qt::NoButton,
-                    Qt::NoModifier,
-                    Qt::NoScrollPhase,
-                    false);
+                QWheelEvent wheel(QPointF(30, 30), QPointF(30, 30), {}, QPoint(0, delta), Qt::NoButton, Qt::NoModifier,
+                    Qt::NoScrollPhase, false);
                 QCoreApplication::sendEvent(view->viewport(), &wheel);
             }
             QCOMPARE(shared.verticalScrollBar()->value(), native.verticalScrollBar()->value());
         }
         QVERIFY(shared.verticalScrollBar()->value() > 0);
         shared.scrollToTop();
-        QTest::mouseClick(
-            shared.viewport(),
-            Qt::LeftButton,
-            Qt::NoModifier,
+        QTest::mouseClick(shared.viewport(), Qt::LeftButton, Qt::NoModifier,
             shared.visualItemRect(shared.item(0)).center());
         QCOMPARE(shared.currentRow(), 0);
     }
@@ -88,26 +79,12 @@ private slots:
         view.addItem("only row");
         QCoreApplication::processEvents();
         reached.clear();
-        QWheelEvent down(
-            QPointF(30, 30),
-            QPointF(30, 30),
-            {},
-            QPoint(0, -120),
-            Qt::NoButton,
-            Qt::NoModifier,
-            Qt::NoScrollPhase,
-            false);
+        QWheelEvent down(QPointF(30, 30), QPointF(30, 30), {}, QPoint(0, -120), Qt::NoButton, Qt::NoModifier,
+            Qt::NoScrollPhase, false);
         QCoreApplication::sendEvent(view.viewport(), &down);
         QTRY_COMPARE(reached.count(), 1);
-        QWheelEvent up(
-            QPointF(30, 30),
-            QPointF(30, 30),
-            {},
-            QPoint(0, 120),
-            Qt::NoButton,
-            Qt::NoModifier,
-            Qt::NoScrollPhase,
-            false);
+        QWheelEvent up(QPointF(30, 30), QPointF(30, 30), {}, QPoint(0, 120), Qt::NoButton, Qt::NoModifier,
+            Qt::NoScrollPhase, false);
         QCoreApplication::sendEvent(view.viewport(), &up);
         QCoreApplication::processEvents();
         QCOMPARE(reached.count(), 1);
@@ -121,15 +98,8 @@ private slots:
         auto* behavior = new ListViewBehavior(view);
         QSignalSpy reached(behavior, &ListViewBehavior::bottomReached);
         view->show();
-        QWheelEvent down(
-            QPointF(30, 30),
-            QPointF(30, 30),
-            {},
-            QPoint(0, -120),
-            Qt::NoButton,
-            Qt::NoModifier,
-            Qt::NoScrollPhase,
-            false);
+        QWheelEvent down(QPointF(30, 30), QPointF(30, 30), {}, QPoint(0, -120), Qt::NoButton, Qt::NoModifier,
+            Qt::NoScrollPhase, false);
         QCoreApplication::sendEvent(view->viewport(), &down);
         delete view;
         QCoreApplication::processEvents();

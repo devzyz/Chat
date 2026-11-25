@@ -146,9 +146,7 @@ class NonLoginResponseTest : public testing::TestWithParam<gate::Endpoint> {};
 
 /** 验证非登录成功响应仅含错误码且不反射输入。 */
 TEST_P(NonLoginResponseTest, SuccessContainsOnlyError) {
-    const auto body = gate::HandleJsonRequest(
-        GetParam(),
-        RequestWithForbiddenFields(),
+    const auto body = gate::HandleJsonRequest(GetParam(), RequestWithForbiddenFields(),
         // 提供默认成功业务结果。
         [](const Json::Value&) {
             return gate::Result{};
@@ -162,9 +160,7 @@ TEST_P(NonLoginResponseTest, SuccessContainsOnlyError) {
 
 /** 验证非登录失败响应仅含错误码。 */
 TEST_P(NonLoginResponseTest, BusinessFailureContainsOnlyError) {
-    const auto body = gate::HandleJsonRequest(
-        GetParam(),
-        RequestWithForbiddenFields(),
+    const auto body = gate::HandleJsonRequest(GetParam(), RequestWithForbiddenFields(),
         // 提供固定业务失败结果。
         [](const Json::Value&) {
             return gate::Result{kBusinessFailure};
@@ -176,10 +172,7 @@ TEST_P(NonLoginResponseTest, BusinessFailureContainsOnlyError) {
     ExpectNoInputMarkers(body);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Endpoints,
-    NonLoginResponseTest,
-    testing::ValuesIn(kNonLoginEndpoints),
+INSTANTIATE_TEST_SUITE_P(Endpoints, NonLoginResponseTest, testing::ValuesIn(kNonLoginEndpoints),
     // 使用端点名生成参数化用例名称。
     [](const testing::TestParamInfo<gate::Endpoint>& info) {
         return EndpointName(info.param);
@@ -187,9 +180,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 /** 验证登录成功响应严格遵循身份、Token 及端点白名单。 */
 TEST(GateLoginResponseTest, SuccessUsesTheExactReviewedAllowlist) {
-    const auto body = gate::HandleJsonRequest(
-        gate::Endpoint::UserLogin,
-        RequestWithForbiddenFields(),
+    const auto body = gate::HandleJsonRequest(gate::Endpoint::UserLogin, RequestWithForbiddenFields(),
         // 提供完整登录成功结果。
         [](const Json::Value&) {
             return gate::Result{0, 42, "opaque-session-value", "127.0.0.1", "8090"};
@@ -207,9 +198,7 @@ TEST(GateLoginResponseTest, SuccessUsesTheExactReviewedAllowlist) {
 
 /** 验证登录业务失败仅公开错误码。 */
 TEST(GateLoginResponseTest, FailureContainsOnlyError) {
-    const auto body = gate::HandleJsonRequest(
-        gate::Endpoint::UserLogin,
-        RequestWithForbiddenFields(),
+    const auto body = gate::HandleJsonRequest(gate::Endpoint::UserLogin, RequestWithForbiddenFields(),
         // 提供固定业务失败结果。
         [](const Json::Value&) {
             return gate::Result{kBusinessFailure};
@@ -227,9 +216,7 @@ class AllEndpointResponseTest : public testing::TestWithParam<gate::Endpoint> {}
 /** 验证损坏 JSON 返回稳定错误且不调用业务处理器。 */
 TEST_P(AllEndpointResponseTest, MalformedJsonReturnsTheStableJsonError) {
     bool called = false;
-    const auto body = gate::HandleJsonRequest(
-        GetParam(),
-        "{not-json",
+    const auto body = gate::HandleJsonRequest(GetParam(), "{not-json",
         // 记录业务处理器是否被错误地调用。
         [&called](const Json::Value&) {
             called = true;
@@ -244,9 +231,7 @@ TEST_P(AllEndpointResponseTest, MalformedJsonReturnsTheStableJsonError) {
 
 /** 验证请求中的禁止字段及值不会被反射到响应。 */
 TEST_P(AllEndpointResponseTest, ForbiddenRequestFieldsAndValuesAreNeverReflected) {
-    const auto body = gate::HandleJsonRequest(
-        GetParam(),
-        RequestWithForbiddenFields(),
+    const auto body = gate::HandleJsonRequest(GetParam(), RequestWithForbiddenFields(),
         // 提供固定业务失败结果。
         [](const Json::Value&) {
             return gate::Result{kBusinessFailure};
@@ -265,9 +250,7 @@ TEST_P(AllEndpointResponseTest, InternalExceptionReturnsStableErrorWithoutLoggin
     ScopedLogCapture logs;
     const auto exception_text = std::string(kPasswordMarker) + " " + kConfirmMarker + " " + kCodeMarker + " " +
                                 kInboundTokenMarker + " " + kEmailMarker + " password confirm varifycode email token";
-    const auto body = gate::HandleJsonRequest(
-        GetParam(),
-        RequestWithForbiddenFields(),
+    const auto body = gate::HandleJsonRequest(GetParam(), RequestWithForbiddenFields(),
         // 抛出包含敏感夹具标记的异常以验证脱敏边界。
         [&exception_text](const Json::Value&) -> gate::Result {
             throw std::runtime_error(exception_text);
@@ -285,10 +268,7 @@ TEST_P(AllEndpointResponseTest, InternalExceptionReturnsStableErrorWithoutLoggin
     EXPECT_EQ(logs.Text().find("token"), std::string::npos);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Endpoints,
-    AllEndpointResponseTest,
-    testing::ValuesIn(kAllEndpoints),
+INSTANTIATE_TEST_SUITE_P(Endpoints, AllEndpointResponseTest, testing::ValuesIn(kAllEndpoints),
     // 使用端点名生成参数化用例名称。
     [](const testing::TestParamInfo<gate::Endpoint>& info) {
         return EndpointName(info.param);
@@ -296,9 +276,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 /** 验证登录 RPC 失败保持稳定的错误响应结构。 */
 TEST(GateLoginResponseTest, RpcFailureUsesTheStableErrorEnvelope) {
-    const auto body = gate::HandleJsonRequest(
-        gate::Endpoint::UserLogin,
-        RequestWithForbiddenFields(),
+    const auto body = gate::HandleJsonRequest(gate::Endpoint::UserLogin, RequestWithForbiddenFields(),
         // 提供固定 RPC 失败业务结果。
         [](const Json::Value&) {
             return gate::Result{kRpcFailed};

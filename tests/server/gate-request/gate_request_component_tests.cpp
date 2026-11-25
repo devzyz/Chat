@@ -59,6 +59,7 @@ public:
         consumed_purpose = purpose;
         return consume_result;
     }
+
     std::string read_purpose, consumed_purpose;
     bool consume_result = true;
 
@@ -152,13 +153,14 @@ public:
     gate::internal::ChatAssignment assignment;
     long long assigned_version = -1;
     bool revoked = true;
+
     /** @brief 记录撤销调用并允许模拟依赖错误。 */
     bool Revoke(int, const std::string&) override {
         calls_->push_back("sessions.revoke");
-        if (throw_on_call)
-            throw std::runtime_error("synthetic revoke failure");
+        if (throw_on_call) throw std::runtime_error("synthetic revoke failure");
         return revoked;
     }
+
     bool throw_on_call = false;
 
 private:

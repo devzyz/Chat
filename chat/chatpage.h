@@ -36,10 +36,7 @@ public:
     /** @brief 将旧消息数据转换并追加到当前消息模型。 */
     void appendChatMsg(const std::shared_ptr<ChatDataBase>& message);
     /** @brief 将对应会话的历史页合并到模型，保留当前阅读锚点。 */
-    void applyHistoryPage(
-        int chatId,
-        const std::vector<std::shared_ptr<ChatDataBase>>& messages,
-        bool canLoadMore,
+    void applyHistoryPage(int chatId, const std::vector<std::shared_ptr<ChatDataBase>>& messages, bool canLoadMore,
         qint64 nextCursor);
     /** @brief 结束历史页加载标志并恢复后续请求能力。 */
     void historyLoadFailed(int chatId);

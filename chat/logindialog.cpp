@@ -14,45 +14,29 @@ LoginDialog::LoginDialog(AuthFlowCoordinator& authFlow, QWidget* parent)
     connect(ui->forget_label, &ClickedLabel::clicked, this, &LoginDialog::passwordResetRequested);
 
     // 忘记密码高亮显示逻辑
-    ui->forget_label->setState(
-        "invisible_leave",
-        "invisible_hover",
-        "invisible_press",
-        "visible_leave",
-        "visible_hover",
-        "visible_press");
+    ui->forget_label->setState("invisible_leave", "invisible_hover", "invisible_press", "visible_leave",
+        "visible_hover", "visible_press");
 
     // 错误提示信息颜色
     ui->err_tip->setProperty("state", "normal");
     repolish(ui->err_tip);
     // 绑定email和password实时检验信号
-    connect(
-        ui->email_edit,
-        &QLineEdit::editingFinished,
+    connect(ui->email_edit, &QLineEdit::editingFinished,
         /** @brief 邮箱编辑结束时更新校验提示。 */
         [this]() {
             checkEmailValid();
         });
-    connect(
-        ui->password_edit,
-        &QLineEdit::editingFinished,
+    connect(ui->password_edit, &QLineEdit::editingFinished,
         /** @brief 密码编辑结束时更新校验提示。 */
         [this]() {
             checkPasswordValid();
         });
 
     // 密码隐藏逻辑
-    ui->password_visible->setState(
-        "invisible_leave",
-        "invisible_hover",
-        "invisible_press",
-        "visible_leave",
-        "visible_hover",
-        "visible_presss");
+    ui->password_visible->setState("invisible_leave", "invisible_hover", "invisible_press", "visible_leave",
+        "visible_hover", "visible_presss");
     ui->password_edit->setEchoMode(QLineEdit::Password);
-    connect(
-        ui->password_visible,
-        &ClickedLabel::clicked,
+    connect(ui->password_visible, &ClickedLabel::clicked,
         /** @brief 根据可见性标签状态切换密码显示模式。 */
         [this]() {
             auto curState = ui->password_visible->getCurState();
@@ -66,18 +50,12 @@ LoginDialog::LoginDialog(AuthFlowCoordinator& authFlow, QWidget* parent)
 
     // 头像处理逻辑
     initHead();
-    connect(
-        &_loginFlow,
-        &ClientLoginFlow::failed,
-        this,
+    connect(&_loginFlow, &ClientLoginFlow::failed, this,
         /** @brief 展示当前认证流程失败的错误。 */
         [this](AuthFlowId, AuthError error) {
             showAuthError(error);
         });
-    connect(
-        &_loginFlow,
-        &ClientLoginFlow::connected,
-        this,
+    connect(&_loginFlow, &ClientLoginFlow::connected, this,
         /** @brief 展示聊天连接成功但尚待登录确认的状态。 */
         [this] {
             showTip(tr("聊天服务器连接成功，正在登录..."), true);
@@ -171,12 +149,8 @@ void LoginDialog::initHead() {
     // 加载图片
     QPixmap originalPixmap(":/res/head_1.jpg");
     // 设置图片自动缩放
-    SPDLOG_DEBUG(
-        "login avatar scaled, source={}x{}, target={}x{}",
-        originalPixmap.width(),
-        originalPixmap.height(),
-        ui->head_label->width(),
-        ui->head_label->height());
+    SPDLOG_DEBUG("login avatar scaled, source={}x{}, target={}x{}", originalPixmap.width(), originalPixmap.height(),
+        ui->head_label->width(), ui->head_label->height());
 
     // 缩放到head_label的尺寸。保持原来的宽高比。采用平滑缩放算法，避免锯齿
     originalPixmap = originalPixmap.scaled(ui->head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);

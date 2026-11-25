@@ -38,18 +38,19 @@ public:
     QHash<QString, std::shared_ptr<DraftAttachment>> attachments;
     QString accountRoot;
 };
+
 MessageTextEdit::MessageTextEdit(QWidget* parent) : QTextEdit(parent) {
     setMaximumHeight(100);
     setAcceptRichText(false);
     setConversation(0);
     // 每次编辑产生新提交身份。
     connect(this, &QTextEdit::textChanged, this, [this] {
-        if (_switching)
-            return;
+        if (_switching) return;
         _active->id = QUuid::createUuid().toString(QUuid::WithoutBraces);
         reconcileAttachments();
     });
 }
+
 QMimeData* MessageTextEdit::createMimeDataFromSelection() const {
     auto* mime = new DraftMimeData;
     std::unique_ptr<QMimeData> standard(QTextEdit::createMimeDataFromSelection());
@@ -62,12 +63,12 @@ QMimeData* MessageTextEdit::createMimeDataFromSelection() const {
     for (auto block = selected.begin(); block.isValid(); block = block.next()) {
         for (auto it = block.begin(); !it.atEnd(); ++it) {
             const auto id = it.fragment().charFormat().toImageFormat().name();
-            if (_active->attachments.contains(id))
-                mime->attachments.insert(id, _active->attachments.value(id));
+            if (_active->attachments.contains(id)) mime->attachments.insert(id, _active->attachments.value(id));
         }
     }
     return mime;
 }
+
 void MessageTextEdit::reconcileAttachments() {
     const int step = document()->availableUndoSteps();
     if (!document()->isRedoAvailable()) {
@@ -79,8 +80,7 @@ void MessageTextEdit::reconcileAttachments() {
     for (auto block = document()->begin(); block.isValid(); block = block.next()) {
         for (auto it = block.begin(); !it.atEnd(); ++it) {
             const auto format = it.fragment().charFormat();
-            if (format.isImageFormat())
-                current.insert(format.toImageFormat().name());
+            if (format.isImageFormat()) current.insert(format.toImageFormat().name());
         }
     }
     _active->history[step] = current;
@@ -88,63 +88,66 @@ void MessageTextEdit::reconcileAttachments() {
     for (const auto& ids : _active->history)
         reachable.unite(ids);
     for (auto it = _active->attachments.begin(); it != _active->attachments.end();) {
-        if (!reachable.contains(it.key()))
+        if (!reachable.contains(it.key())) {
             it = _active->attachments.erase(it);
-        else
+        } else {
             ++it;
+        }
     }
 }
+
 MessageDraft MessageTextEdit::draft() const {
     MessageDraft result{_active->id, {}};
     QString text;
     // 将相邻文本合为一项并保留换行。
     const auto flush = [&] {
-        if (!text.isEmpty())
-            result.entries.push_back({DraftEntry::Kind::Text, {}, text, {}});
+        if (!text.isEmpty()) result.entries.push_back({DraftEntry::Kind::Text, {}, text, {}});
         text.clear();
     };
     for (auto block = document()->begin(); block.isValid(); block = block.next()) {
-        if (block != document()->begin())
-            text += '\n';
+        if (block != document()->begin()) text += '\n';
         for (auto it = block.begin(); !it.atEnd(); ++it) {
             const auto fragment = it.fragment();
-            if (!fragment.isValid())
-                continue;
+            if (!fragment.isValid()) continue;
             const auto format = fragment.charFormat();
             if (format.isImageFormat()) {
                 flush();
                 const auto id = format.toImageFormat().name();
                 const auto attachment = _active->attachments.value(id);
-                if (!attachment)
+                if (!attachment) {
                     result.error = tr("附件身份无法恢复，请删除后重新添加");
-                else if (!attachment->future.isFinished())
+                } else if (!attachment->future.isFinished()) {
                     result.error = tr("附件正在准备，请稍后发送");
-                else {
+                } else {
                     const auto prepared = attachment->future.result();
-                    if (!prepared.error.isEmpty())
+                    if (!prepared.error.isEmpty()) {
                         result.error = prepared.error;
-                    else
+                    } else {
                         for (qsizetype i = 0; i < fragment.length(); ++i)
                             result.entries.push_back(prepared.entry);
+                    }
                 }
-            } else
+            } else {
                 text += fragment.text();
+            }
         }
     }
     flush();
     return result;
 }
+
 void MessageTextEdit::clearAccepted(const QString& id) {
-    if (id != _active->id)
-        return;
+    if (id != _active->id) return;
     clear();
     document()->clearUndoRedoStacks();
     _active->attachments.clear();
     _active->history.clear();
 }
+
 void MessageTextEdit::setAccountRoot(const QString& root) {
     _accountRoot = root;
 }
+
 bool MessageTextEdit::addAttachment(const QString& path) {
     if (path.isEmpty()) {
         emit inputRejected(tr("附件路径为空"));
@@ -153,39 +156,35 @@ bool MessageTextEdit::addAttachment(const QString& path) {
     insertAttachment(prepareDraftAttachment(path, {}, _accountRoot));
     return true;
 }
+
 bool MessageTextEdit::hasPendingAttachments() const {
     for (auto block = document()->begin(); block.isValid(); block = block.next()) {
         for (auto it = block.begin(); !it.atEnd(); ++it) {
             const auto attachment = _active->attachments.value(it.fragment().charFormat().toImageFormat().name());
-            if (attachment && !attachment->future.isFinished())
-                return true;
+            if (attachment && !attachment->future.isFinished()) return true;
         }
     }
     return false;
 }
+
 void MessageTextEdit::observeAttachment(const std::shared_ptr<DraftAttachment>& attachment) {
     auto* watcher = new QFutureWatcher<DraftAttachmentResult>(this);
     const std::weak_ptr<DraftState> state = _active;
-    connect(
-        watcher,
-        &QFutureWatcher<DraftAttachmentResult>::finished,
-        this,
+    connect(watcher, &QFutureWatcher<DraftAttachmentResult>::finished, this,
         /** @brief 后台结果只写入原草稿，已清除或已释放的附件不再刷新。 */
         [this, watcher, state, id = attachment->id] {
             const auto result = watcher->result();
             watcher->deleteLater();
             const auto target = state.lock();
-            if (!target || !target->attachments.contains(id))
-                return;
+            if (!target || !target->attachments.contains(id)) return;
             if (!result.error.isEmpty()) {
-                if (target == _active)
-                    emit inputRejected(result.error);
+                if (target == _active) emit inputRejected(result.error);
             } else {
                 const auto name = target->attachments.value(id)->displayName;
                 QImage preview = result.preview;
-                if (preview.isNull())
+                if (preview.isNull()) {
                     preview = attachmentCard(name, tr("文件 · %1 字节").arg(result.byteSize));
-                else {
+                } else {
                     QImage canvas(240, 80, QImage::Format_ARGB32_Premultiplied);
                     canvas.fill(Qt::transparent);
                     QPainter painter(&canvas);
@@ -195,13 +194,13 @@ void MessageTextEdit::observeAttachment(const std::shared_ptr<DraftAttachment>& 
                 }
                 target->document->addResource(QTextDocument::ImageResource, QUrl(id), preview);
                 target->document->markContentsDirty(0, target->document->characterCount());
-                if (target == _active)
-                    viewport()->update();
+                if (target == _active) viewport()->update();
             }
             target->id = QUuid::createUuid().toString(QUuid::WithoutBraces);
         });
     watcher->setFuture(attachment->future);
 }
+
 void MessageTextEdit::insertAttachment(const std::shared_ptr<DraftAttachment>& attachment) {
     const auto preview = attachmentCard(attachment->displayName, tr("正在准备…"));
     document()->addResource(QTextDocument::ImageResource, QUrl(attachment->id), preview);
@@ -216,9 +215,11 @@ void MessageTextEdit::insertAttachment(const std::shared_ptr<DraftAttachment>& a
     setTextCursor(cursor);
     observeAttachment(attachment);
 }
+
 bool MessageTextEdit::canInsertFromMimeData(const QMimeData* source) const {
     return source->hasImage() || source->hasUrls() || QTextEdit::canInsertFromMimeData(source);
 }
+
 void MessageTextEdit::insertFromMimeData(const QMimeData* source) {
     if (const auto* internal = dynamic_cast<const DraftMimeData*>(source)) {
         if (!internal->attachments.isEmpty() && internal->accountRoot != _accountRoot) {
@@ -236,10 +237,11 @@ void MessageTextEdit::insertFromMimeData(const QMimeData* source) {
     }
     if (source->hasUrls()) {
         for (const auto& url : source->urls()) {
-            if (url.isLocalFile())
+            if (url.isLocalFile()) {
                 addAttachment(url.toLocalFile());
-            else
+            } else {
                 emit inputRejected(tr("仅支持拖入本地文件"));
+            }
         }
         return;
     }
@@ -252,11 +254,13 @@ void MessageTextEdit::insertFromMimeData(const QMimeData* source) {
         insertAttachment(prepareDraftAttachment({}, image, _accountRoot));
         return;
     }
-    if (source->hasText())
+    if (source->hasText()) {
         QTextEdit::insertFromMimeData(source);
-    else
+    } else {
         emit inputRejected(tr("不支持此剪贴板内容"));
+    }
 }
+
 void MessageTextEdit::keyPressEvent(QKeyEvent* event) {
     if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) &&
         !(event->modifiers() & Qt::ShiftModifier)) {
@@ -265,12 +269,15 @@ void MessageTextEdit::keyPressEvent(QKeyEvent* event) {
     }
     QTextEdit::keyPressEvent(event);
 }
+
 void MessageTextEdit::dragEnterEvent(QDragEnterEvent* event) {
-    if (canInsertFromMimeData(event->mimeData()))
+    if (canInsertFromMimeData(event->mimeData())) {
         event->acceptProposedAction();
-    else
+    } else {
         event->ignore();
+    }
 }
+
 void MessageTextEdit::dropEvent(QDropEvent* event) {
     if (event->source() == this) {
         QTextEdit::dropEvent(event);
@@ -282,10 +289,8 @@ void MessageTextEdit::dropEvent(QDropEvent* event) {
 }
 
 void MessageTextEdit::setConversation(int chatId) {
-    if (chatId < 0)
-        return;
-    if (_active)
-        _active->cursor = textCursor();
+    if (chatId < 0) return;
+    if (_active) _active->cursor = textCursor();
     if (!_drafts.contains(chatId)) {
         auto state = std::make_shared<DraftState>();
         state->document = new QTextDocument(this);
@@ -301,9 +306,9 @@ void MessageTextEdit::setConversation(int chatId) {
     setTextCursor(_active->cursor);
     _switching = false;
 }
+
 bool MessageTextEdit::hasDrafts() const {
     for (const auto& state : _drafts)
-        if (!state->document->isEmpty())
-            return true;
+        if (!state->document->isEmpty()) return true;
     return false;
 }

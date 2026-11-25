@@ -21,10 +21,7 @@ public:
     /** @brief 在 IPv4 通配地址绑定端口并建立监听，借用事件循环并持有业务分发器；绑定失败抛异常。 */
     CServer(boost::asio::io_context& ioc, unsigned short port, std::shared_ptr<LogicSystem> logic);
     /** @brief 在显式数字地址绑定端口并建立监听；端口可为零以动态分配，绑定失败抛异常。 */
-    CServer(
-        boost::asio::io_context& ioc,
-        const std::string& address,
-        unsigned short port,
+    CServer(boost::asio::io_context& ioc, const std::string& address, unsigned short port,
         std::shared_ptr<LogicSystem> logic);
     /** @brief 幂等地在已绑定监听器上安排首次异步接收，已停止时不重启。 */
     void Start();

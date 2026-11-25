@@ -17,10 +17,12 @@ public:
     AvatarCache(QUrl endpoint, int uid, QString token, QString accountRoot, QObject* parent = nullptr);
     /** @brief 订阅指定用户头像并启动缓存或远端解析。 */
     void watch(int owner);
+
     /** @brief 返回当前缓存图片值，尚未加载时可能为空。 */
     QImage image(int owner) const {
         return _images.value(owner);
     }
+
     /** @brief 保存待发布的头像路径并委托资源上传器上传，完成后继续发布头像。 */
     void upload(const QString& path);
     /** @brief 重新查询已订阅用户的远端头像版本。 */

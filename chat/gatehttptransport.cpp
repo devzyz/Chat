@@ -17,10 +17,7 @@ struct GateHttpTransport::Impl {
     explicit Impl(GateHttpTransport* owner) : owner(owner) {
         manager.setProxy(QNetworkProxy::NoProxy);
         deadline.setSingleShot(true);
-        QObject::connect(
-            &deadline,
-            &QTimer::timeout,
-            owner,
+        QObject::connect(&deadline, &QTimer::timeout, owner,
             /** @brief 将当前请求超时转为唯一终态并取消网络操作。 */
             [this] {
                 finish(generation, GateHttpTerminal::DeadlineExceeded, true);
@@ -59,10 +56,7 @@ struct GateHttpTransport::Impl {
         reply = current;
         const quint64 currentGeneration = generation;
 
-        QObject::connect(
-            current,
-            &QIODevice::readyRead,
-            owner,
+        QObject::connect(current, &QIODevice::readyRead, owner,
             /** @brief 累计当前请求的响应字节并限制最大长度。 */
             [this, current, currentGeneration] {
                 if (!isCurrent(current, currentGeneration)) {
@@ -73,10 +67,7 @@ struct GateHttpTransport::Impl {
                     finish(currentGeneration, GateHttpTerminal::ResponseTooLarge, true);
                 }
             });
-        QObject::connect(
-            current,
-            &QNetworkReply::finished,
-            owner,
+        QObject::connect(current, &QNetworkReply::finished, owner,
             /** @brief 完成当前响应读取、校验及终态发布。 */
             [this, current, currentGeneration] {
                 if (!isCurrent(current, currentGeneration)) {
@@ -100,10 +91,7 @@ struct GateHttpTransport::Impl {
                 }
                 finish(currentGeneration, GateHttpTerminal::Success, false);
             });
-        QObject::connect(
-            current,
-            &QNetworkReply::errorOccurred,
-            owner,
+        QObject::connect(current, &QNetworkReply::errorOccurred, owner,
             /** @brief 仅处理当前请求的网络错误。 */
             [this, current, currentGeneration](QNetworkReply::NetworkError) {
                 if (isCurrent(current, currentGeneration)) {

@@ -18,7 +18,12 @@ namespace {
 /** 提供真实回环 HTTP 对端，按路径注入延时、挂起、拒绝和截断响应。 */
 class LoopbackHttpPeer final : public QObject {
 public:
-    enum class Behavior { Respond, Hold, ResetOnAccept, CloseMidResponse };
+    enum class Behavior {
+        Respond,
+        Hold,
+        ResetOnAccept,
+        CloseMidResponse
+    };
 
     /** 描述单路径响应正文、故障模式和延迟。 */
     struct Plan {
@@ -182,10 +187,7 @@ void HttpTransportTests::successPreservesRequestAndFlowIdentity() {
     QVERIFY(peer.listen());
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(
-        &transport,
-        &GateHttpTransport::finished,
-        this,
+    connect(&transport, &GateHttpTransport::finished, this,
         // 收集 HTTP 终态结果，供身份、次数和错误断言。
         [&results](const GateHttpResult& result) {
             results.append(result);
@@ -207,10 +209,7 @@ void HttpTransportTests::refusedConnectionHasOneBoundedOutcome() {
 
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(
-        &transport,
-        &GateHttpTransport::finished,
-        this,
+    connect(&transport, &GateHttpTransport::finished, this,
         // 收集 HTTP 终态结果，供身份、次数和错误断言。
         [&results](const GateHttpResult& result) {
             results.append(result);
@@ -230,10 +229,7 @@ void HttpTransportTests::finiteDeadlineAbortsAnUnresponsivePeer() {
     peer.setPlan(QStringLiteral("/hold"), {{}, LoopbackHttpPeer::Behavior::Hold, 0});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(
-        &transport,
-        &GateHttpTransport::finished,
-        this,
+    connect(&transport, &GateHttpTransport::finished, this,
         // 收集 HTTP 终态结果，供身份、次数和错误断言。
         [&results](const GateHttpResult& result) {
             results.append(result);
@@ -251,10 +247,7 @@ void HttpTransportTests::malformedJsonIsRejectedWithoutLeakingItsBody() {
     peer.setPlan(QStringLiteral("/malformed"), {QByteArrayLiteral("not-json")});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(
-        &transport,
-        &GateHttpTransport::finished,
-        this,
+    connect(&transport, &GateHttpTransport::finished, this,
         // 收集 HTTP 终态结果，供身份、次数和错误断言。
         [&results](const GateHttpResult& result) {
             results.append(result);
@@ -273,10 +266,7 @@ void HttpTransportTests::maximumResponseIsAccepted() {
     peer.setPlan(QStringLiteral("/maximum"), {jsonBody(GateHttpTransport::maxResponseBytes())});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(
-        &transport,
-        &GateHttpTransport::finished,
-        this,
+    connect(&transport, &GateHttpTransport::finished, this,
         // 收集 HTTP 终态结果，供身份、次数和错误断言。
         [&results](const GateHttpResult& result) {
             results.append(result);
@@ -295,10 +285,7 @@ void HttpTransportTests::oneByteOverMaximumIsRejected() {
     peer.setPlan(QStringLiteral("/oversized"), {jsonBody(GateHttpTransport::maxResponseBytes() + 1)});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(
-        &transport,
-        &GateHttpTransport::finished,
-        this,
+    connect(&transport, &GateHttpTransport::finished, this,
         // 收集 HTTP 终态结果，供身份、次数和错误断言。
         [&results](const GateHttpResult& result) {
             results.append(result);
@@ -317,10 +304,7 @@ void HttpTransportTests::peerClosingMidResponseHasOneNetworkOutcome() {
     peer.setPlan(QStringLiteral("/partial"), {{}, LoopbackHttpPeer::Behavior::CloseMidResponse, 0});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(
-        &transport,
-        &GateHttpTransport::finished,
-        this,
+    connect(&transport, &GateHttpTransport::finished, this,
         // 收集 HTTP 终态结果，供身份、次数和错误断言。
         [&results](const GateHttpResult& result) {
             results.append(result);
@@ -340,10 +324,7 @@ void HttpTransportTests::explicitCancelHasExactlyOneTerminalOutcome() {
     peer.setPlan(QStringLiteral("/cancel"), {{}, LoopbackHttpPeer::Behavior::Hold, 0});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(
-        &transport,
-        &GateHttpTransport::finished,
-        this,
+    connect(&transport, &GateHttpTransport::finished, this,
         // 收集 HTTP 终态结果，供身份、次数和错误断言。
         [&results](const GateHttpResult& result) {
             results.append(result);
@@ -361,16 +342,12 @@ void HttpTransportTests::lateReplyFromAnOldFlowCannotCompleteTheNewFlow() {
     // Q04-HTTP-09
     LoopbackHttpPeer peer;
     QVERIFY(peer.listen());
-    peer.setPlan(
-        QStringLiteral("/old"),
+    peer.setPlan(QStringLiteral("/old"),
         {QByteArrayLiteral("{\"old\":true}"), LoopbackHttpPeer::Behavior::Respond, 250});
     peer.setPlan(QStringLiteral("/current"), {QByteArrayLiteral("{\"current\":true}")});
     GateHttpTransport transport;
     QList<GateHttpResult> results;
-    connect(
-        &transport,
-        &GateHttpTransport::finished,
-        this,
+    connect(&transport, &GateHttpTransport::finished, this,
         // 收集 HTTP 终态结果，供身份、次数和错误断言。
         [&results](const GateHttpResult& result) {
             results.append(result);

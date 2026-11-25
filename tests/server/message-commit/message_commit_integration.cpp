@@ -25,24 +25,25 @@ void Require(bool condition) {
         throw std::runtime_error("contract_failed");
     }
 }
+
 /** 读取指定环境变量，未配置时返回空字符串。 */
 std::string Env(const char* name) {
     const char* value = std::getenv(name);
     return value ? value : "";
 }
+
 /** 按隔离测试环境连接 MySQL，使用有界连接设置。 */
 std::unique_ptr<sql::Connection> Connect() {
-    return ConnectBounded(
-        "tcp://" + Env("CHAT_MYSQL_HOST") + ":" + Env("CHAT_MYSQL_PORT"),
-        Env("CHAT_MYSQL_USER"),
-        Env("CHAT_MYSQL_PASSWORD"),
-        Env("CHAT_MYSQL_DATABASE"));
+    return ConnectBounded("tcp://" + Env("CHAT_MYSQL_HOST") + ":" + Env("CHAT_MYSQL_PORT"), Env("CHAT_MYSQL_USER"),
+        Env("CHAT_MYSQL_PASSWORD"), Env("CHAT_MYSQL_DATABASE"));
 }
+
 /** 执行一条测试 SQL，由调用方负责数据库和事务归属。 */
 void Execute(sql::Connection& connection, const std::string& text) {
     std::unique_ptr<sql::Statement> statement(connection.createStatement());
     statement->execute(text);
 }
+
 /** 查询首行首列整数，缺少结果时判定合同失败。 */
 std::int64_t Scalar(sql::Connection& connection, const std::string& text) {
     std::unique_ptr<sql::Statement> statement(connection.createStatement());
@@ -50,31 +51,30 @@ std::int64_t Scalar(sql::Connection& connection, const std::string& text) {
     Require(rows->next());
     return rows->getInt64(1);
 }
+
 /** 以编号生成格式合法且可重复的测试 UUID。 */
 std::string Uuid(int suffix) {
     const auto value = std::to_string(suffix);
     return "12345678-1234-4234-8234-" + std::string(12 - value.size(), '0') + value;
 }
+
 /** 以固定截止时间提交测试消息批次，可指定发送方、接收方和会话。 */
 Result Send(Store& store, const Batch& batch, int sender = 1, int recipient = 2, int chat = 100) {
-    return message_commit::Commit(
-        store,
-        {sender},
-        sender,
-        recipient,
-        chat,
-        batch,
+    return message_commit::Commit(store, {sender}, sender, recipient, chat, batch,
         std::chrono::steady_clock::now() + std::chrono::seconds(8));
 }
+
 /** 记录存储层调用次数，用于证明参数拒绝发生在持久化之前。 */
 struct RejectStore final : Store {
     int calls = 0;
+
     /** 记录一次存储调用并返回默认失败结果。 */
     Result Commit(int, int, int, const Batch&, Deadline, Preconditions) override {
         ++calls;
         return {};
     }
 };
+
 /** 验证 UUID、重复项和身份参数在触及存储之前被拒绝。 */
 void Validate() {
     Require(IsCanonicalUuid(Uuid(1)));
@@ -87,12 +87,15 @@ void Validate() {
     Require(Send(store, {{Uuid(1), "a"}}, 0).error == Error::UNAUTHORIZED_SENDER);
     Require(store.calls == 0);
 }
+
 /** 借用控制连接在事务提交边界杀死目标连接，注入提交失败。 */
 struct KillAtCommit final : TransactionCommit {
     /** 保存控制连接引用，调用者须使其活过故障注入器。 */
     explicit KillAtCommit(sql::Connection& controller) : control(controller) {}
+
     sql::Connection& control;
     bool reached = false;
+
     /** 标记提交边界已到达，断开目标连接后尝试提交。 */
     void Commit(sql::Connection& connection) override {
         reached = true;
@@ -106,17 +109,14 @@ struct KillAtCommit final : TransactionCommit {
 void Integration() {
     // Only the owned fixture may invoke this destructive seed operation.
     const auto database = Env("CHAT_MYSQL_DATABASE");
-    Require(
-        database.rfind("chat_", 0) == 0 && database.size() > 8 &&
-        database.compare(database.size() - 8, 8, "_message") == 0);
+    Require(database.rfind("chat_", 0) == 0 && database.size() > 8 &&
+            database.compare(database.size() - 8, 8, "_message") == 0);
     auto connection = Connect();
     chat_schema::Verify(*connection);
-    Execute(
-        *connection,
-        "INSERT INTO user(uid,name,email,password,description,icon,sex) VALUES "
-        "(1,'message-one','one@example.invalid','synthetic','','',0),"
-        "(2,'message-two','two@example.invalid','synthetic','','',0),"
-        "(3,'message-three','three@example.invalid','synthetic','','',0)");
+    Execute(*connection, "INSERT INTO user(uid,name,email,password,description,icon,sex) VALUES "
+                         "(1,'message-one','one@example.invalid','synthetic','','',0),"
+                         "(2,'message-two','two@example.invalid','synthetic','','',0),"
+                         "(3,'message-three','three@example.invalid','synthetic','','',0)");
     Execute(*connection, "INSERT INTO chat(chat_id,type) VALUES(100,'private'),(101,'private')");
     Execute(*connection, "INSERT INTO private_chat(chat_id,user1_id,user2_id) VALUES(100,1,2),(101,1,3)");
     MySqlMessageCommitAdapter store(*connection);
@@ -166,13 +166,7 @@ void Integration() {
     });
     // 验证认证身份与声明发送方不一致时拒绝提交。
     test(9, [&] {
-        auto result = message_commit::Commit(
-            store,
-            {1},
-            2,
-            2,
-            100,
-            {{Uuid(9), "a"}},
+        auto result = message_commit::Commit(store, {1}, 2, 2, 100, {{Uuid(9), "a"}},
             std::chrono::steady_clock::now() + std::chrono::seconds(5));
         Require(result.error == Error::UNAUTHORIZED_SENDER);
     });
@@ -260,10 +254,8 @@ void Integration() {
     });
     // 验证旧数据允许多条空 UUID 消息并存。
     test(17, [&] {
-        Execute(
-            *connection,
-            "INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES "
-            "(100,1,2,'legacy-one',0),(100,1,2,'legacy-two',0)");
+        Execute(*connection, "INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES "
+                             "(100,1,2,'legacy-one',0),(100,1,2,'legacy-two',0)");
         Require(Scalar(*connection, "SELECT COUNT(*) FROM chat_message WHERE client_msg_uuid IS NULL") == 2);
     });
     // 验证下一批消息返回按提交顺序递增的持久化标识。

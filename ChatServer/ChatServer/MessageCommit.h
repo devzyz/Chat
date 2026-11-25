@@ -32,7 +32,10 @@ enum class Error {
     STORAGE_UNAVAILABLE,
     DEADLINE_EXCEEDED
 };
-enum class Disposition { CREATED, EXISTING };
+enum class Disposition {
+    CREATED,
+    EXISTING
+};
 
 /** @brief 保存单条消息的持久化标识、幂等处理结果及秒级创建时间。 */
 struct Item {
@@ -41,10 +44,12 @@ struct Item {
     Disposition disposition = Disposition::CREATED;
     std::int64_t created_at = 0;
 };
+
 /** @brief 返回整个批次的提交结果；错误时不提供部分成功条目。 */
 struct Result {
     Error error = Error::NONE;
     std::vector<Item> items;
+
     /** @brief 判断批次是否获得成功提交结果，不代表接收者已收到或已读。 */
     bool IsSuccess() const {
         return error == Error::NONE;
@@ -57,12 +62,7 @@ public:
     /** @brief 允许经存储接口销毁适配器。 */
     virtual ~Store() = default;
     /** @brief 按输入顺序提交已校验批次；deadline 使用 steady_clock，失败返回错误及空条目。 */
-    virtual Result Commit(
-        int sender,
-        int recipient,
-        int chat,
-        const Batch& batch,
-        Deadline deadline,
+    virtual Result Commit(int sender, int recipient, int chat, const Batch& batch, Deadline deadline,
         Preconditions access = {}) = 0;
 };
 
@@ -73,15 +73,7 @@ bool IsCanonicalUuid(const std::string& value);
  * @note 验证失败不调用 store；空批次或过大批次同样返回 INVALID_UUID。存储异常不在此层捕获。
  * group 为 true 时仅允许零收件人；存储仍须核对真实群成员，不能仅信任该标志。
  */
-Result Commit(
-    Store& store,
-    AuthenticatedPrincipal principal,
-    int claimed_sender,
-    int recipient,
-    int chat,
-    const Batch& batch,
-    Deadline deadline,
-    bool group = false,
-    Preconditions access = {});
+Result Commit(Store& store, AuthenticatedPrincipal principal, int claimed_sender, int recipient, int chat,
+    const Batch& batch, Deadline deadline, bool group = false, Preconditions access = {});
 
 }

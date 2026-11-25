@@ -102,12 +102,8 @@ bool LogMgr::InitLogMgr() {
 
         config_mgr.DumpLoadedConfig();
 
-        SPDLOG_INFO(
-            "logger initialized, file={}, max_size_mb={}, max_total_files={}, rotated_files={}",
-            log_file,
-            log_max_size_mb,
-            log_max_total_files,
-            rotated_files);
+        SPDLOG_INFO("logger initialized, file={}, max_size_mb={}, max_total_files={}, rotated_files={}", log_file,
+            log_max_size_mb, log_max_total_files, rotated_files);
 
         return true;
     } catch (std::exception& e) {

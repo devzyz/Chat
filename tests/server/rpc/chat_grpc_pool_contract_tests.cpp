@@ -64,10 +64,12 @@ auto ChatPeerPoolFactory() {
 TEST(ChatPeerPoolContractTests, BorrowReturn) {
     VerifyBorrowReturn(ChatPeerPoolFactory());
 }
+
 /** 验证Chat 对端池耗尽有界合同。 */
 TEST(ChatPeerPoolContractTests, ExhaustionIsBounded) {
     VerifyExhaustion(ChatPeerPoolFactory());
 }
+
 /** 验证Chat 对端池关闭唤醒与幂等合同。 */
 TEST(ChatPeerPoolContractTests, CloseIsIdempotentAndWakesBorrowers) {
     VerifyCloseLifecycle(ChatPeerPoolFactory());

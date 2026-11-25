@@ -9,10 +9,10 @@ struct JdbcPolicy {
     template <class T> static bool Healthy(T& db) {
         return db.isValid();
     }
+
     // 归还前恢复自动提交；返回 false 或抛异常均会丢弃连接。
     template <class T> static bool Reset(T& db) {
-        if (db.isClosed())
-            return false;
+        if (db.isClosed()) return false;
         if (!db.getAutoCommit()) {
             db.rollback();
             db.setAutoCommit(true);

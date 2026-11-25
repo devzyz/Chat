@@ -10,10 +10,7 @@
 CServer::CServer(boost::asio::io_context& ioc, unsigned short port, std::shared_ptr<LogicSystem> logic)
     : CServer(ioc, "0.0.0.0", port, std::move(logic)) {}
 
-CServer::CServer(
-    boost::asio::io_context& ioc,
-    const std::string& address,
-    unsigned short port,
+CServer::CServer(boost::asio::io_context& ioc, const std::string& address, unsigned short port,
     std::shared_ptr<LogicSystem> logic)
     : _acceptor(ioc), _ioc(ioc), _logic(std::move(logic)) {
     if (!_logic) {
@@ -47,13 +44,10 @@ void CServer::AcceptNext() {
     {
         std::lock_guard<std::mutex> lock(connections_mutex_);
         // 筛选已失效的 HTTP 会话弱引用。
-        connections_.erase(
-            std::remove_if(
-                connections_.begin(),
-                connections_.end(),
-                [](const auto& connection) {
-                    return connection.expired();
-                }),
+        connections_.erase(std::remove_if(connections_.begin(), connections_.end(),
+                               [](const auto& connection) {
+                                   return connection.expired();
+                               }),
             connections_.end());
         connections_.push_back(new_con);
     }

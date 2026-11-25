@@ -72,6 +72,7 @@ public:
     bool Revoke(int, const std::string&) override {
         return true;
     }
+
     /** 返回默认分配结果，不发起外部 RPC。 */
     gate::internal::ChatAssignment Assign(int, long long) override {
         return {};
@@ -86,15 +87,10 @@ integration::ProductionModules CreateProductionModules() {
         [](const LogicMessage&) {
             return true;
         });
-    modules.chat_sessions = std::make_unique<SessionLifecycleCoordinator>(
-        std::make_shared<UserSessionDirectory>(),
-        std::make_shared<session_test::MemoryPresence>(),
-        "host-contract",
-        std::make_shared<DependencyExecutor>());
-    modules.gate_request = gate::internal::CreateGateRequest(
-        std::make_shared<InMemoryVerification>(),
-        std::make_shared<InMemoryCodeStore>(),
-        std::make_shared<InMemoryUserStore>(),
+    modules.chat_sessions = std::make_unique<SessionLifecycleCoordinator>(std::make_shared<UserSessionDirectory>(),
+        std::make_shared<session_test::MemoryPresence>(), "host-contract", std::make_shared<DependencyExecutor>());
+    modules.gate_request = gate::internal::CreateGateRequest(std::make_shared<InMemoryVerification>(),
+        std::make_shared<InMemoryCodeStore>(), std::make_shared<InMemoryUserStore>(),
         std::make_shared<InMemorySessionAssignmentPort>());
     return modules;
 }
@@ -137,8 +133,7 @@ private:
 };
 
 /** 建立隔离宿主规格，注入生产模块、传输替身与清理观察者。 */
-integration::HostSpec MakeSpec(
-    std::shared_ptr<TransportState> state,
+integration::HostSpec MakeSpec(std::shared_ptr<TransportState> state,
     std::shared_ptr<integration::CleanupObserver> cleanup = std::make_shared<integration::CleanupObserver>()) {
     integration::HostSpec spec;
     spec.family = integration::HostFamily::GateHttp;
@@ -146,10 +141,10 @@ integration::HostSpec MakeSpec(
     spec.deadline = std::chrono::steady_clock::now() + 5s;
     spec.create_modules = CreateProductionModules;
     // 创建固定 loopback 端点的传输替身并共享调用记录。
-    spec.create_transport =
-        [state = std::move(state)](const integration::LoopbackEndpoint&, const integration::ProductionModules&) {
-            return std::make_unique<ContractTransport>(integration::LoopbackEndpoint{"127.0.0.1", 43123}, state);
-        };
+    spec.create_transport = [state = std::move(state)](const integration::LoopbackEndpoint&,
+                                const integration::ProductionModules&) {
+        return std::make_unique<ContractTransport>(integration::LoopbackEndpoint{"127.0.0.1", 43123}, state);
+    };
     spec.cleanup = std::move(cleanup);
     return spec;
 }

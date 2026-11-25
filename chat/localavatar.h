@@ -22,26 +22,32 @@ public:
     void discardSelection();
     /** @brief 按 sourceRect 裁剪并异步原子保存，按配置继续请求远端上传。 */
     void saveSelection(const QRectF& sourceRect);
+
     /** @brief 返回当前缓存图片值，尚未加载时可能为空。 */
     QImage image() const {
         return _image;
     }
+
     /** @brief 返回当前待裁剪的候选图片值。 */
     QImage selection() const {
         return _selection;
     }
+
     /** @brief 查询头像是否正在读写或等待异步操作完成。 */
     bool isBusy() const {
         return _busy;
     }
+
     /** @brief 查询头像是否正在保存或等待上传结果。 */
     bool isSaving() const {
         return _saving;
     }
+
     /** @brief 设置本地头像保存后是否还需等待远端上传发布。 */
     void setUploadEnabled(bool enabled) {
         _uploadEnabled = enabled;
     }
+
     /** @brief 应用头像上传结果；error 为空表示成功，否则保留失败提示。 */
     void finishUpload(const QString& error = {});
     /** @brief 更新已发布头像图片，同时防止覆盖较新的本地编辑结果。 */

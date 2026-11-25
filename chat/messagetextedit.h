@@ -7,6 +7,7 @@
 #include "draftattachment.h"
 #include <QTextDocument>
 #include <QTextCursor>
+
 /** @brief 编辑文本及稳定身份附件；文档快照无副作用，临时文件覆盖撤销生命周期。 */
 class MessageTextEdit : public QTextEdit {
     Q_OBJECT
@@ -56,6 +57,7 @@ private:
         QMap<int, QSet<QString>> history;
         QString id;
     };
+
     /** @brief 只保留当前文档和可达撤销分支引用的附件。 */
     void reconcileAttachments();
     /** @brief 用稳定资源 ID 在当前位置插入附件占位图。 */

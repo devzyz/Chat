@@ -129,7 +129,10 @@ enum ListItemType {
 };
 
 // 聊天item类型，分为自己和别人
-enum class ChatRole { Self, Other };
+enum class ChatRole {
+    Self,
+    Other
+};
 
 // 发送信息
 /** @brief 保存编辑器拆分的文本或图片消息内容。 */

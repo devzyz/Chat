@@ -84,8 +84,7 @@ void MessageItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
     }
 
     if (!message.avatar.isNull()) {
-        painter->drawPixmap(
-            metrics.avatarRect,
+        painter->drawPixmap(metrics.avatarRect,
             message.avatar.scaled(metrics.avatarRect.size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
     } else {
         painter->setPen(Qt::NoPen);
@@ -98,9 +97,7 @@ void MessageItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
 
     painter->setFont(nameFont());
     painter->setPen(QColor(0, 0, 0));
-    painter->drawText(
-        metrics.nameRect,
-        (message.isSelf ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter,
+    painter->drawText(metrics.nameRect, (message.isSelf ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter,
         message.senderName);
 
     const QColor bubbleColor = message.isSelf ? QColor(158, 234, 106) : QColor(Qt::white);
@@ -131,9 +128,7 @@ void MessageItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
 
     painter->setFont(timeFont());
     painter->setPen(QColor(140, 140, 140));
-    painter->drawText(
-        metrics.timeRect,
-        (message.isSelf ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter,
+    painter->drawText(metrics.timeRect, (message.isSelf ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter,
         message.sentAt.isValid() ? message.sentAt.toString(QStringLiteral("HH:mm")) : QString());
 
     if (message.isSelf && message.deliveryStatus != DeliveryStatus::None) {
@@ -234,27 +229,20 @@ MessageItemDelegate::Metrics MessageItemDelegate::calculateMetrics(const Message
         bodyX = overallRight - bubbleWidth;
         metrics.bubbleBodyRect = QRect(bodyX, kBubbleTop, bubbleWidth - kTriangleWidth, bubbleHeight);
         const int right = metrics.bubbleBodyRect.right() + 1;
-        metrics.triangle = QPolygon(
-            {QPoint(right, kBubbleTop + 12),
-             QPoint(right, kBubbleTop + 20),
-             QPoint(right + kTriangleWidth, kBubbleTop + 16)});
+        metrics.triangle = QPolygon({QPoint(right, kBubbleTop + 12), QPoint(right, kBubbleTop + 20),
+            QPoint(right + kTriangleWidth, kBubbleTop + 16)});
         metrics.textRect =
             metrics.bubbleBodyRect.adjusted(kBubblePadding, kBubblePadding, -kBubblePadding, -kBubblePadding);
         metrics.nameRect = QRect(metrics.bubbleBodyRect.left(), 4, metrics.bubbleBodyRect.width(), kNameHeight);
-        metrics.statusRect = QRect(
-            metrics.bubbleBodyRect.left() - kStatusSize - 6,
-            metrics.bubbleBodyRect.bottom() - kStatusSize + 1,
-            kStatusSize,
-            kStatusSize);
+        metrics.statusRect = QRect(metrics.bubbleBodyRect.left() - kStatusSize - 6,
+            metrics.bubbleBodyRect.bottom() - kStatusSize + 1, kStatusSize, kStatusSize);
     } else {
         const int overallLeft = metrics.avatarRect.right() + 1 + kAvatarGap;
         bodyX = overallLeft + kTriangleWidth;
         metrics.bubbleBodyRect = QRect(bodyX, kBubbleTop, bubbleWidth - kTriangleWidth, bubbleHeight);
         const int left = metrics.bubbleBodyRect.left();
-        metrics.triangle = QPolygon(
-            {QPoint(left, kBubbleTop + 12),
-             QPoint(left, kBubbleTop + 20),
-             QPoint(left - kTriangleWidth, kBubbleTop + 16)});
+        metrics.triangle = QPolygon({QPoint(left, kBubbleTop + 12), QPoint(left, kBubbleTop + 20),
+            QPoint(left - kTriangleWidth, kBubbleTop + 16)});
         metrics.textRect =
             metrics.bubbleBodyRect.adjusted(kBubblePadding, kBubblePadding, -kBubblePadding, -kBubblePadding);
         metrics.nameRect = QRect(metrics.bubbleBodyRect.left(), 4, metrics.bubbleBodyRect.width(), kNameHeight);

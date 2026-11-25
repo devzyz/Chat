@@ -42,6 +42,7 @@ class Defer {
 public:
     /** @brief 接收并保存退出作用域时需要执行的清理动作。 */
     Defer(std::function<void()> func) : _func(func) {}
+
     /** @brief 执行保存的作用域退出动作，清理回调不得抛异常。 */
     ~Defer() {
         _func();

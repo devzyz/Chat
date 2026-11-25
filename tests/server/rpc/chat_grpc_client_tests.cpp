@@ -28,20 +28,16 @@ unsigned short FindUnavailableLoopbackPort() {
 class ControlledChatService final : public message::ChatService::Service {
 public:
     /** 核对踢出请求的用户与旧会话标识后返回对应业务结果。 */
-    grpc::Status NotifyOtherKickUser(
-        grpc::ServerContext*,
-        const message::KickUserReq* request,
+    grpc::Status NotifyOtherKickUser(grpc::ServerContext*, const message::KickUserReq* request,
         message::KickUserRsp* response) override {
-        response->set_error(
-            request->uid() == 42 && request->session_id() == "old-session" ? ErrorCodes::Success
-                                                                           : ErrorCodes::UidInvalid);
+        response->set_error(request->uid() == 42 && request->session_id() == "old-session" ? ErrorCodes::Success
+                                                                                           : ErrorCodes::UidInvalid);
         response->set_uid(request->uid());
         return grpc::Status::OK;
     }
+
     /** 按故障开关延时后回显申请者并返回成功。 */
-    grpc::Status NotifyOtherAddFriend(
-        grpc::ServerContext*,
-        const message::AddFriendReq* request,
+    grpc::Status NotifyOtherAddFriend(grpc::ServerContext*, const message::AddFriendReq* request,
         message::AddFriendRsp* response) override {
         if (delay.load()) {
             std::this_thread::sleep_for(400ms);
@@ -85,6 +81,7 @@ public:
     std::string Port() const {
         return std::to_string(_port);
     }
+
     /** 借用可控 Chat 服务，对象存活期间可设置故障开关。 */
     ControlledChatService& Chat() {
         return _chat;

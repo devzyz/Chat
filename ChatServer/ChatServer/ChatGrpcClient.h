@@ -27,14 +27,9 @@ using message::TextChatMsgRsp;
 class ChatConnectionPool : public rpc::BoundedPool<ChatService::Stub> {
 public:
     /** @brief 初始化ChatConnectionPool，按单个对端维护有界 gRPC stub 池，借用期限和调用期限分别约束。 */
-    ChatConnectionPool(
-        const std::string& host,
-        const std::string& port,
-        std::size_t pool_size,
+    ChatConnectionPool(const std::string& host, const std::string& port, std::size_t pool_size,
         std::chrono::milliseconds acquire_timeout)
-        : rpc::BoundedPool<ChatService::Stub>(
-              pool_size,
-              acquire_timeout,
+        : rpc::BoundedPool<ChatService::Stub>(pool_size, acquire_timeout,
               // 为固定对端创建 ChatService stub，通道由 stub 共享持有。
               [endpoint = host + ":" + port] {
                   return ChatService::NewStub(grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials()));
@@ -62,8 +57,7 @@ public:
     /** @brief 请求对端实例使指定旧登录会话下线。 */
     KickUserRsp NotifyOtherKickUser(const std::string& server_name, const KickUserReq& request);
     /** @brief 向对端实例通知回执发生变化；接收方仍需按 revision 同步持久化事实。 */
-    message::ReceiptChangedRsp NotifyMessageReceiptChanged(
-        const std::string& server_name,
+    message::ReceiptChangedRsp NotifyMessageReceiptChanged(const std::string& server_name,
         const message::ReceiptChangedReq& request);
 
 private:

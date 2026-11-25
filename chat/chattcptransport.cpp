@@ -17,18 +17,12 @@ struct ChatTcpTransport::Impl {
     explicit Impl(ChatTcpTransport* owner) : owner(owner) {
         connectDeadline.setSingleShot(true);
         writeDeadline.setSingleShot(true);
-        QObject::connect(
-            &connectDeadline,
-            &QTimer::timeout,
-            owner,
+        QObject::connect(&connectDeadline, &QTimer::timeout, owner,
             /** @brief 将当前连接的建连超时转为唯一终态。 */
             [this] {
                 finish(generation, ChatTcpTerminal::ConnectDeadlineExceeded, true);
             });
-        QObject::connect(
-            &writeDeadline,
-            &QTimer::timeout,
-            owner,
+        QObject::connect(&writeDeadline, &QTimer::timeout, owner,
             /** @brief 将当前写入超时转为唯一终态。 */
             [this] {
                 finish(generation, ChatTcpTerminal::WriteDeadlineExceeded, true);
@@ -84,10 +78,7 @@ struct ChatTcpTransport::Impl {
         } else {
             QObject::connect(nextSocket, &QTcpSocket::connected, owner, connectionReady);
         }
-        QObject::connect(
-            nextSocket,
-            &QTcpSocket::readyRead,
-            owner,
+        QObject::connect(nextSocket, &QTcpSocket::readyRead, owner,
             /** @brief 仅解析当前连接收到的字节，协议错误结束连接。 */
             [this, nextSocket, currentGeneration] {
                 if (!isCurrent(nextSocket, currentGeneration)) {
@@ -107,10 +98,7 @@ struct ChatTcpTransport::Impl {
                     emit owner->frameReceived(frame);
                 }
             });
-        QObject::connect(
-            nextSocket,
-            &QTcpSocket::bytesWritten,
-            owner,
+        QObject::connect(nextSocket, &QTcpSocket::bytesWritten, owner,
             /** @brief 累计当前帧写入字节，完成后继续下一帧。 */
             [this, nextSocket, currentGeneration](qint64 count) {
                 if (!isCurrent(nextSocket, currentGeneration) || currentWriteBytes <= 0) {
@@ -125,10 +113,7 @@ struct ChatTcpTransport::Impl {
                 currentWriteBytes = 0;
                 startNextWrite();
             });
-        QObject::connect(
-            nextSocket,
-            &QTcpSocket::errorOccurred,
-            owner,
+        QObject::connect(nextSocket, &QTcpSocket::errorOccurred, owner,
             /** @brief 仅将当前 socket 错误转换为对应终止原因。 */
             [this, nextSocket, currentGeneration](QAbstractSocket::SocketError error) {
                 if (!isCurrent(nextSocket, currentGeneration)) {
@@ -140,10 +125,7 @@ struct ChatTcpTransport::Impl {
                         : (connected ? ChatTcpTerminal::PeerClosed : ChatTcpTerminal::Refused);
                 finish(currentGeneration, terminal, false);
             });
-        QObject::connect(
-            nextSocket,
-            &QTcpSocket::disconnected,
-            owner,
+        QObject::connect(nextSocket, &QTcpSocket::disconnected, owner,
             /** @brief 仅为当前连接处理对端断开。 */
             [this, nextSocket, currentGeneration] {
                 if (isCurrent(nextSocket, currentGeneration)) {
@@ -152,10 +134,11 @@ struct ChatTcpTransport::Impl {
             });
 
         connectDeadline.start(endpoint.connectDeadlineMs);
-        if (endpoint.tls)
+        if (endpoint.tls) {
             static_cast<QSslSocket*>(nextSocket)->connectToHostEncrypted(endpoint.host, endpoint.port);
-        else
+        } else {
             nextSocket->connectToHost(endpoint.host, endpoint.port);
+        }
         return generation;
     }
 

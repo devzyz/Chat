@@ -16,9 +16,7 @@ int main(int argc, char* argv[]) {
 
     auto logger = LogMgr::instance();
     if (!logger->initLogMgr()) {
-        QMessageBox::critical(
-            nullptr,
-            QObject::tr("日志初始化失败"),
+        QMessageBox::critical(nullptr, QObject::tr("日志初始化失败"),
             QObject::tr("无法创建或打开日志文件，客户端将退出。"));
         return EXIT_FAILURE;
     }
@@ -50,9 +48,7 @@ int main(int argc, char* argv[]) {
     if (!portOk || gatePort < 1 || gatePort > 65535 || gate_host.isEmpty() || !resources.isValid() ||
         resources.host().isEmpty() || (scheme != "http" && scheme != "https") || (scheme == "http" && !loopback) ||
         (scheme == "https" && (resources.scheme() != "https" || !QSslSocket::supportsSsl()))) {
-        QMessageBox::critical(
-            nullptr,
-            QObject::tr("连接配置错误"),
+        QMessageBox::critical(nullptr, QObject::tr("连接配置错误"),
             QObject::tr("局域网连接必须为 Gate 和 Resource 配置 HTTPS，并安装可用的 TLS 运行库。"));
         return EXIT_FAILURE;
     }

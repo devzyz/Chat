@@ -15,15 +15,14 @@ public:
 
 /** @brief 解析回执 revision，拒绝非规范或越界数值。 */
 inline std::int64_t ReceiptRevision(const Json::Value& value) {
-    if (!value.isString())
-        throw ReceiptError("InvalidRequest");
+    if (!value.isString()) throw ReceiptError("InvalidRequest");
     const auto text = value.asString();
-    if (text.empty() || text.size() > 19 || (text.size() > 1 && text[0] == '0'))
-        throw ReceiptError("InvalidRequest");
+    if (text.empty() || text.size() > 19 || (text.size() > 1 && text[0] == '0')) throw ReceiptError("InvalidRequest");
     std::int64_t result = 0;
     for (char digit : text) {
-        if (digit < '0' || digit > '9' || result > (INT64_MAX - (digit - '0')) / 10)
+        if (digit < '0' || digit > '9' || result > (INT64_MAX - (digit - '0')) / 10) {
             throw ReceiptError("InvalidRequest");
+        }
         result = result * 10 + digit - '0';
     }
     return result;
@@ -34,21 +33,22 @@ inline void ValidateReceiptRequest(const Json::Value& request, bool report) {
     if (!request.isObject() || !request["version"].isInt() || request["version"].asInt() != 1 ||
         !request["chat_id"].isInt() || request["chat_id"].asInt() <= 0 || !request["request_id"].isString() ||
         request["request_id"].asString().empty() || request["request_id"].asString().size() > 64 ||
-        CompactJson(request).size() > 2048)
+        CompactJson(request).size() > 2048) {
         throw ReceiptError("InvalidRequest");
+    }
     if (!report) {
         ReceiptRevision(request["after_revision"]);
         return;
     }
     const auto& items = request["items"];
-    if (!items.isArray() || items.empty() || items.size() > 8)
-        throw ReceiptError("InvalidRequest");
+    if (!items.isArray() || items.empty() || items.size() > 8) throw ReceiptError("InvalidRequest");
     std::set<int> ids;
     for (const auto& item : items) {
         if (!item.isObject() || !item["message_id"].isInt() || item["message_id"].asInt() <= 0 ||
             !ids.insert(item["message_id"].asInt()).second || !item["level"].isString() ||
-            (item["level"].asString() != "delivered" && item["level"].asString() != "read"))
+            (item["level"].asString() != "delivered" && item["level"].asString() != "read")) {
             throw ReceiptError("InvalidRequest");
+        }
     }
 }
 
@@ -71,19 +71,13 @@ inline Json::Value ReadReceipt(database::ResultSet& row) {
  * 非法输入、权限或期限失败抛 ReceiptError，数据库异常向上传播，未提交事务由守卫回滚。
  * 五秒期限在事务阶段间检查，不能取消已开始的同步数据库调用。
  */
-inline void ReceiptRequest(
-    database::Session connection,
-    int uid,
-    const Json::Value& request,
-    bool report,
-    Json::Value& response,
-    int& peer) {
+inline void ReceiptRequest(database::Session connection, int uid, const Json::Value& request, bool report,
+    Json::Value& response, int& peer) {
     ValidateReceiptRequest(request, report);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     // 在事务关键阶段检查截止时间，超时抛回执期限错误。
     const auto check_deadline = [&] {
-        if (std::chrono::steady_clock::now() >= deadline)
-            throw ReceiptError("DeadlineExceeded");
+        if (std::chrono::steady_clock::now() >= deadline) throw ReceiptError("DeadlineExceeded");
     };
     const int chat = request["chat_id"].asInt();
     Transaction transaction(connection);
@@ -91,8 +85,9 @@ inline void ReceiptRequest(
         connection.PrepareStatement("SELECT user1_id,user2_id FROM private_chat WHERE chat_id=? FOR UPDATE"));
     membership->SetInt(1, chat);
     std::unique_ptr<database::ResultSet> members(membership->ExecuteQuery());
-    if (!members->Next() || (members->GetInt(1) != uid && members->GetInt(2) != uid))
+    if (!members->Next() || (members->GetInt(1) != uid && members->GetInt(2) != uid)) {
         throw ReceiptError("Unauthorized");
+    }
     peer = members->GetInt(1) == uid ? members->GetInt(2) : members->GetInt(1);
     members.reset();
     response["items"] = Json::Value(Json::arrayValue);
@@ -108,20 +103,18 @@ inline void ReceiptRequest(
             check->SetInt(1, chat);
             check->SetInt(2, item.first);
             std::unique_ptr<database::ResultSet> row(check->ExecuteQuery());
-            if (!row->Next() || row->GetInt(1) != uid)
-                throw ReceiptError("InvalidMessage");
+            if (!row->Next() || row->GetInt(1) != uid) throw ReceiptError("InvalidMessage");
         }
-        std::unique_ptr<database::PreparedStatement> create_clock(connection.PrepareStatement(database::QueryText{
-            "INSERT IGNORE INTO private_chat_receipt_clock(chat_id,last_revision) VALUES(?,0)",
-            "INSERT INTO private_chat_receipt_clock(chat_id,last_revision) VALUES(?,0) ON CONFLICT DO NOTHING"}));
+        std::unique_ptr<database::PreparedStatement> create_clock(connection.PrepareStatement(
+            database::QueryText{"INSERT IGNORE INTO private_chat_receipt_clock(chat_id,last_revision) VALUES(?,0)",
+                "INSERT INTO private_chat_receipt_clock(chat_id,last_revision) VALUES(?,0) ON CONFLICT DO NOTHING"}));
         create_clock->SetInt(1, chat);
         create_clock->ExecuteUpdate();
         std::unique_ptr<database::PreparedStatement> clock(
             connection.PrepareStatement("SELECT last_revision FROM private_chat_receipt_clock WHERE chat_id=?"));
         clock->SetInt(1, chat);
         std::unique_ptr<database::ResultSet> version(clock->ExecuteQuery());
-        if (!version->Next())
-            throw ReceiptError("StorageUnavailable");
+        if (!version->Next()) throw ReceiptError("StorageUnavailable");
         auto revision = version->GetInt64(1);
         version.reset();
         const auto now =
@@ -137,13 +130,11 @@ inline void ReceiptRequest(
             std::unique_ptr<database::ResultSet> prior(select->ExecuteQuery());
             Json::Value saved;
             const bool exists = prior->Next();
-            if (exists)
-                saved = ReadReceipt(*prior);
+            if (exists) saved = ReadReceipt(*prior);
             const int level = exists ? prior->GetInt("level") : 0;
             prior.reset();
             if (item.second > level) {
-                if (revision == INT64_MAX)
-                    throw ReceiptError("StorageUnavailable");
+                if (revision == INT64_MAX) throw ReceiptError("StorageUnavailable");
                 ++revision;
                 std::unique_ptr<database::PreparedStatement> write(connection.PrepareStatement(database::QueryText{
                     "INSERT INTO chat_message_receipt(chat_id,message_id,recipient_uid,level,delivered_at,read_at,revision) "
@@ -162,8 +153,7 @@ inline void ReceiptRequest(
                 write->SetInt64(7, revision);
                 write->ExecuteUpdate();
                 std::unique_ptr<database::ResultSet> updated(select->ExecuteQuery());
-                if (!updated->Next())
-                    throw ReceiptError("StorageUnavailable");
+                if (!updated->Next()) throw ReceiptError("StorageUnavailable");
                 saved = ReadReceipt(*updated);
             }
             response["items"].append(saved);
@@ -174,8 +164,7 @@ inline void ReceiptRequest(
         advance->SetInt(2, chat);
         advance->ExecuteUpdate();
         response["latest_revision"] = std::to_string(revision);
-        if (CompactJson(response).size() > 2048)
-            throw ReceiptError("InvalidRequest");
+        if (CompactJson(response).size() > 2048) throw ReceiptError("InvalidRequest");
     } else {
         const auto after = ReceiptRevision(request["after_revision"]);
         response["after_revision"] = std::to_string(after);
@@ -192,8 +181,7 @@ inline void ReceiptRequest(
             candidate["items"].append(item);
             candidate["next_revision"] = item["revision"];
             if (candidate["items"].size() > 16 || CompactJson(candidate).size() > 2048) {
-                if (response["items"].empty())
-                    throw ReceiptError("InvalidRequest");
+                if (response["items"].empty()) throw ReceiptError("InvalidRequest");
                 response["load_more"] = true;
                 break;
             }

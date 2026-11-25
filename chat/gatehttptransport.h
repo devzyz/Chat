@@ -18,7 +18,14 @@ struct GateHttpRequest {
     int deadlineMs = 0;
 };
 
-enum class GateHttpTerminal { Success, NetworkError, DeadlineExceeded, Cancelled, MalformedResponse, ResponseTooLarge };
+enum class GateHttpTerminal {
+    Success,
+    NetworkError,
+    DeadlineExceeded,
+    Cancelled,
+    MalformedResponse,
+    ResponseTooLarge
+};
 
 /** @brief 保存一次 HTTP 操作的终态和响应体，并保留流程及模块关联信息。 */
 struct GateHttpResult {

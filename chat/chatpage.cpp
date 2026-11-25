@@ -33,16 +33,11 @@ ChatPage::ChatPage(QWidget* parent) : QWidget(parent), ui(new Ui::ChatPage) {
     reapply->hide();
     // 复用好友申请表单，重新读取申请版本。
     connect(reapply, &QPushButton::clicked, this, [this] {
-        if (!_chatInfo || _chatInfo->getChatType() != ChatType::PRIVATE)
-            return;
+        if (!_chatInfo || _chatInfo->getChatType() != ChatType::PRIVATE) return;
         auto* dialog = new ApplyFriendDialog(this);
         const auto profile = UserMgr::instance()->socialProfile(_chatInfo->getUid());
-        dialog->setSearchInfo(std::make_shared<SearchInfo>(
-            _chatInfo->getUid(),
-            profile["name"].toString(),
-            profile["description"].toString(),
-            profile["icon"].toString(),
-            profile["sex"].toInt()));
+        dialog->setSearchInfo(std::make_shared<SearchInfo>(_chatInfo->getUid(), profile["name"].toString(),
+            profile["description"].toString(), profile["icon"].toString(), profile["sex"].toInt()));
         dialog->show();
     });
     auto* details = new QPushButton(tr("资料 / 备注"), this);
@@ -52,12 +47,10 @@ ChatPage::ChatPage(QWidget* parent) : QWidget(parent), ui(new Ui::ChatPage) {
     connect(search, &QPushButton::clicked, this, &ChatPage::openHistorySearch);
     // 群打开成员资料，私聊修改当前好友个人备注。
     connect(details, &QPushButton::clicked, this, [this] {
-        if (!_chatInfo)
-            return;
+        if (!_chatInfo) return;
         if (_chatInfo->getChatType() == ChatType::GROUP) {
             auto* panel = findChild<QDialog*>(QString("group-details-%1").arg(_currentChatId));
-            if (!panel)
-                panel = new GroupPanel(_currentChatId, this);
+            if (!panel) panel = new GroupPanel(_currentChatId, this);
             panel->show();
             panel->raise();
             return;
@@ -65,8 +58,7 @@ ChatPage::ChatPage(QWidget* parent) : QWidget(parent), ui(new Ui::ChatPage) {
         bool ok = false;
         const auto name =
             QInputDialog::getText(this, tr("好友备注"), tr("仅自己可见，可留空"), QLineEdit::Normal, QString(), &ok);
-        if (!ok || name.toUtf8().size() > 60)
-            return;
+        if (!ok || name.toUtf8().size() > 60) return;
         _remarkRequest = QUuid::createUuid().toString(QUuid::WithoutBraces);
         const QJsonObject request{{"target_uid", _chatInfo->getUid()}, {"name", name}, {"request_id", _remarkRequest}};
         emit TcpMgr::instance()
@@ -74,44 +66,31 @@ ChatPage::ChatPage(QWidget* parent) : QWidget(parent), ui(new Ui::ChatPage) {
         const auto identity = _remarkRequest;
         // 无回包时不宣称保存失败，允许重新设置相同备注。
         QTimer::singleShot(10000, this, [this, identity] {
-            if (_remarkRequest != identity)
-                return;
+            if (_remarkRequest != identity) return;
             _remarkRequest.clear();
             QMessageBox::information(this, tr("好友备注"), tr("结果尚未确认，请刷新联系人或重新设置备注。"));
         });
     });
     // 备注写入完成后显示结果，拒绝时显示错误。
     connect(TcpMgr::instance().get(), &TcpMgr::groupResponse, this, [this](ReqId id, const QJsonObject& response) {
-        if (id != ID_FRIEND_REMARK_RSP || _remarkRequest.isEmpty() || response["request_id"] != _remarkRequest)
-            return;
+        if (id != ID_FRIEND_REMARK_RSP || _remarkRequest.isEmpty() || response["request_id"] != _remarkRequest) return;
         _remarkRequest.clear();
-        QMessageBox::information(
-            this,
-            tr("好友备注"),
+        QMessageBox::information(this, tr("好友备注"),
             response["local_save_failed"].toBool() ? tr("操作已完成，本地保存失败。请刷新联系人恢复。")
             : response["error"].toInt(-1) == 0     ? tr("备注已保存")
                                                    : tr("备注未保存，请稍后重试"));
     });
-    connect(
-        UserMgr::instance()->messages(),
-        &MessageService::directoryChanged,
-        this,
+    connect(UserMgr::instance()->messages(), &MessageService::directoryChanged, this,
         // 已落盘的群权限变化即时关闭输入。
         [this](const QJsonObject&) {
             refreshGroupState();
         });
-    connect(
-        UserMgr::instance().get(),
-        &UserMgr::avatarChanged,
-        this,
+    connect(UserMgr::instance().get(), &UserMgr::avatarChanged, this,
         /** @brief 更新对应发送者的消息头像。 */
         [this](int uid) {
             _messageStore.updateSenderAvatar(uid, UserMgr::instance()->avatarFor(uid));
         });
-    connect(
-        UserMgr::instance()->localAvatar(),
-        &LocalAvatar::imageChanged,
-        this,
+    connect(UserMgr::instance()->localAvatar(), &LocalAvatar::imageChanged, this,
         /** @brief 本人头像变化时更新所有关联消息行。 */
         [this]() {
             const auto user = UserMgr::instance();
@@ -130,10 +109,7 @@ ChatPage::ChatPage(QWidget* parent) : QWidget(parent), ui(new Ui::ChatPage) {
     initResourceTransfers();
     ui->chat_edit->setAccountRoot(UserMgr::instance()->storageRoot());
     connect(ui->chat_edit, &MessageTextEdit::send, this, &ChatPage::on_send_btn_clicked);
-    connect(
-        ui->chat_edit,
-        &MessageTextEdit::inputRejected,
-        this,
+    connect(ui->chat_edit, &MessageTextEdit::inputRejected, this,
         // 保留草稿并显示输入失败原因。
         [this](const QString& reason) {
             QMessageBox::information(this, tr("输入未接收"), reason);
@@ -156,19 +132,13 @@ ChatPage::ChatPage(QWidget* parent) : QWidget(parent), ui(new Ui::ChatPage) {
     connect(submission, &MessageSubmissionController::stateChanged, this, refresh);
     connect(retry, &QPushButton::clicked, submission, &MessageSubmissionController::retry);
     connect(cancel, &QPushButton::clicked, submission, &MessageSubmissionController::cancel);
-    connect(
-        submission,
-        &MessageSubmissionController::rejected,
-        this,
+    connect(submission, &MessageSubmissionController::rejected, this,
         // 提交拒绝保持编辑器原内容并说明原因。
         [this](const QString& reason) {
             QMessageBox::information(this, tr("未提交"), reason);
         });
     refresh();
-    connect(
-        ui->chat_detail_data_list,
-        &ChatDetailList::viewportResized,
-        this,
+    connect(ui->chat_detail_data_list, &ChatDetailList::viewportResized, this,
         /** @brief 视口变化时清空尺寸缓存并重新布局。 */
         [this]() {
             _messageDelegate->clearSizeCache();
@@ -224,9 +194,7 @@ void ChatPage::setChatInfo(std::shared_ptr<ChatInfo> chatInfo) {
         queueScrollToBottom(_currentChatId);
     }
     const int selectedChatId = _currentChatId;
-    QTimer::singleShot(
-        0,
-        this,
+    QTimer::singleShot(0, this,
         /** @brief 仅为仍被选中的会话恢复历史加载。 */
         [this, selectedChatId]() {
             if (_currentChatId == selectedChatId) {
@@ -251,8 +219,7 @@ bool ChatPage::hasDrafts() const {
 
 void ChatPage::applyStoredHistory(int chatId, qint64 before, const QVector<StoredMessage>& messages, bool hasMore) {
     auto* model = _messageStore.find(chatId);
-    if (!model)
-        return;
+    if (!model) return;
     const bool current = _currentChatId == chatId;
     const auto anchor = current ? captureScrollAnchor() : ScrollAnchor{};
     const bool initial = !model->hasLoadedInitialPage();
@@ -266,8 +233,7 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before, const QVector<Store
         record.senderId = stored.senderId;
         record.isSelf = stored.senderId == UserMgr::instance()->uid();
         // Client UUIDs are sender-scoped; remote rows use their server ID in the GUI index.
-        if (record.isSelf)
-            record.clientMessageId = stored.clientMessageId;
+        if (record.isSelf) record.clientMessageId = stored.clientMessageId;
         record.sentAt = QDateTime::fromMSecsSinceEpoch(stored.sentAt);
         record.text = stored.content;
         const auto sender =
@@ -275,8 +241,9 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before, const QVector<Store
         if (sender) {
             record.senderName = sender->_name;
             record.avatarKey = sender->_icon;
-        } else
+        } else {
             record.senderName = tr("用户 %1").arg(stored.senderId);
+        }
         record.avatar = UserMgr::instance()->avatarFor(stored.senderId, record.avatarKey);
         record.deliveryStatus = !record.isSelf                              ? DeliveryStatus::None
                                 : stored.receipt == ReceiptLevel::Read      ? DeliveryStatus::Read
@@ -290,10 +257,11 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before, const QVector<Store
         records.push_back(record);
     }
     model->mergeMessages(records);
-    if (before > 0 || initial || model->oldestMessageId() == 0)
+    if (before > 0 || initial || model->oldestMessageId() == 0) {
         model->setCanLoadMore(hasMore);
-    else if (hasMore)
+    } else if (hasMore) {
         model->setCanLoadMore(true);
+    }
     model->setHistoryCursor(model->oldestMessageId());
     model->setInitialPageLoaded(true);
     model->setLoadingHistory(false);
@@ -305,8 +273,7 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before, const QVector<Store
             _searchJumpId = 0;
             // 模型完成布局后定位搜索命中的消息。
             QTimer::singleShot(0, this, [this, chatId, target] {
-                if (_currentChatId != chatId)
-                    return;
+                if (_currentChatId != chatId) return;
                 auto* model = ui->chat_detail_data_list->model();
                 for (int row = 0; row < model->rowCount(); ++row) {
                     const auto index = model->index(row, 0);
@@ -317,10 +284,11 @@ void ChatPage::applyStoredHistory(int chatId, qint64 before, const QVector<Store
                     }
                 }
             });
-        } else if (initial || anchor.wasAtBottom)
+        } else if (initial || anchor.wasAtBottom) {
             queueScrollToBottom(chatId);
-        else
+        } else {
             restoreScrollAnchor(chatId, anchor);
+        }
     }
 }
 
@@ -340,11 +308,8 @@ void ChatPage::appendChatMsg(const std::shared_ptr<ChatDataBase>& message) {
     }
 }
 
-void ChatPage::applyHistoryPage(
-    int chatId,
-    const std::vector<std::shared_ptr<ChatDataBase>>& messages,
-    bool canLoadMore,
-    qint64 nextCursor) {
+void ChatPage::applyHistoryPage(int chatId, const std::vector<std::shared_ptr<ChatDataBase>>& messages,
+    bool canLoadMore, qint64 nextCursor) {
     Q_ASSERT(QThread::currentThread() == thread());
     auto* model = _messageStore.getOrCreate(chatId);
     const bool initialPage = !model->hasLoadedInitialPage();
@@ -364,13 +329,10 @@ void ChatPage::applyHistoryPage(
 
     if (!_messageStore.applyHistory(chatId, records, canLoadMore, nextCursor)) {
         if (affectsCurrentView) {
-            QTimer::singleShot(
-                0,
-                this,
+            QTimer::singleShot(0, this,
                 /** @brief 本地历史完成后解除当前会话的请求抑制。 */
                 [this, chatId] {
-                    if (_currentChatId == chatId)
-                        _suppressHistoryRequests = false;
+                    if (_currentChatId == chatId) _suppressHistoryRequests = false;
                 });
         }
         return;
@@ -384,9 +346,7 @@ void ChatPage::applyHistoryPage(
     } else if (anchor.valid) {
         restoreScrollAnchor(chatId, anchor);
     }
-    QTimer::singleShot(
-        0,
-        this,
+    QTimer::singleShot(0, this,
         /** @brief 仅解除仍匹配当前会话的历史请求抑制。 */
         [this, chatId]() {
             if (_currentChatId == chatId) {
@@ -421,13 +381,12 @@ void ChatPage::paintEvent(QPaintEvent* event) {
 }
 
 void ChatPage::on_send_btn_clicked() {
-    if (!_chatInfo)
-        return;
+    if (!_chatInfo) return;
     const auto draft = ui->chat_edit->draft();
-    if (UserMgr::instance()
-            ->submissions()
-            ->submit(draft, _currentChatId, _chatInfo->getUid(), _chatInfo->getChatType() == ChatType::GROUP))
+    if (UserMgr::instance()->submissions()->submit(draft, _currentChatId, _chatInfo->getUid(),
+            _chatInfo->getChatType() == ChatType::GROUP)) {
         ui->chat_edit->clearAccepted(draft.id);
+    }
 }
 
 void ChatPage::requestOlderHistory() {
@@ -502,9 +461,7 @@ void ChatPage::saveCurrentScrollAnchor() {
 }
 
 void ChatPage::restoreScrollAnchor(int chatId, const ScrollAnchor& anchor) {
-    QTimer::singleShot(
-        0,
-        this,
+    QTimer::singleShot(0, this,
         /** @brief 布局完成后仅对原会话及模型恢复滚动锚点。 */
         [this, chatId, anchor]() {
             auto* model = _messageStore.find(chatId);
@@ -526,9 +483,7 @@ void ChatPage::restoreScrollAnchor(int chatId, const ScrollAnchor& anchor) {
 }
 
 void ChatPage::queueScrollToBottom(int chatId) {
-    QTimer::singleShot(
-        0,
-        this,
+    QTimer::singleShot(0, this,
         /** @brief 排队布局结束后仅滚动仍处于当前页的模型。 */
         [this, chatId]() {
             auto* model = _messageStore.find(chatId);
@@ -539,8 +494,7 @@ void ChatPage::queueScrollToBottom(int chatId) {
 }
 
 void ChatPage::refreshGroupState() {
-    if (!_chatInfo)
-        return;
+    if (!_chatInfo) return;
     const auto state = UserMgr::instance()->messages()->groupState(_currentChatId);
     const bool group = _chatInfo->getChatType() == ChatType::GROUP;
     const auto relation = UserMgr::instance()->messages()->privateState(_currentChatId);
@@ -551,19 +505,18 @@ void ChatPage::refreshGroupState() {
     ui->send_btn->setEnabled(active);
     ui->file_label->setEnabled(active);
     ui->chat_edit->setEnabled(active);
-    if (group)
+    if (group) {
         ui->title_label->setText(
             state["name"].toString(_chatInfo->name()) + (active ? QString() : tr("（已离群或解散，只读）")));
-    else if (const auto contact = UserMgr::instance()->friendById(_chatInfo->getUid()))
+    } else if (const auto contact = UserMgr::instance()->friendById(_chatInfo->getUid())) {
         ui->title_label->setText(contact->_backname.isEmpty() ? contact->_name : contact->_backname);
-    if (!group && !active)
-        ui->title_label->setText(_chatInfo->name() + tr("（已解除好友，只读）"));
+    }
+    if (!group && !active) ui->title_label->setText(_chatInfo->name() + tr("（已解除好友，只读）"));
     ui->file_label->setToolTip(active ? tr("发送图片、视频或文件") : tr("当前会话只读"));
 }
 
 void ChatPage::openHistorySearch() {
-    if (!_chatInfo)
-        return;
+    if (!_chatInfo) return;
     const int chat = _currentChatId;
     auto* dialog = new QDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
@@ -585,8 +538,7 @@ void ChatPage::openHistorySearch() {
     // 新查询重新开始本地分页。
     connect(input, &QLineEdit::returnPressed, dialog, [chat, input, rows, more, cursor, term, pending] {
         *term = input->text().trimmed();
-        if (term->isEmpty())
-            return;
+        if (term->isEmpty()) return;
         rows->clear();
         *cursor = 0;
         *pending = true;
@@ -595,24 +547,16 @@ void ChatPage::openHistorySearch() {
     });
     // 从上一页末尾继续搜索。
     connect(more, &QPushButton::clicked, dialog, [chat, cursor, term, pending, more] {
-        if (*pending)
-            return;
+        if (*pending) return;
         *pending = true;
         more->setEnabled(false);
         UserMgr::instance()->messages()->search(chat, *term, *cursor);
     });
-    connect(
-        UserMgr::instance()->messages(),
-        &MessageService::searchLoaded,
-        dialog,
+    connect(UserMgr::instance()->messages(), &MessageService::searchLoaded, dialog,
         /** @brief 只接受当前查询的结果，保留完整分页定位标识。 */
-        [chat, rows, more, cursor, term, pending](
-            int resultChat,
-            const QString& text,
-            qint64 before,
+        [chat, rows, more, cursor, term, pending](int resultChat, const QString& text, qint64 before,
             const QVector<StoredMessage>& results) {
-            if (resultChat != chat || text != *term || before != *cursor)
-                return;
+            if (resultChat != chat || text != *term || before != *cursor) return;
             *pending = false;
             for (const auto& result : results) {
                 const auto visible =
@@ -627,11 +571,9 @@ void ChatPage::openHistorySearch() {
         });
     // 将结果所在历史范围加载到消息视图并请求定位。
     connect(rows, &QListWidget::itemDoubleClicked, dialog, [this, chat, dialog](QListWidgetItem* item) {
-        if (_currentChatId != chat)
-            return;
+        if (_currentChatId != chat) return;
         _searchJumpId = item->data(Qt::UserRole).toLongLong();
-        if (_searchJumpId > 0)
-            UserMgr::instance()->messages()->loadHistory(chat, _searchJumpId + 1);
+        if (_searchJumpId > 0) UserMgr::instance()->messages()->loadHistory(chat, _searchJumpId + 1);
         dialog->close();
     });
     dialog->show();

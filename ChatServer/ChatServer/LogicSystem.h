@@ -8,15 +8,14 @@
 
 class CSession;
 typedef std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> MessageHandler;
+
 /** @brief 分发聊天业务请求，协调会话身份、用户查询和消息存储。 */
 class LogicSystem : public LogicDispatcher {
 public:
     /** @brief 停止业务分发线程并等待已接受任务结束。 */
     ~LogicSystem();
     /** @brief 接入会话目录与在线状态存储，并注册业务处理器。 */
-    LogicSystem(
-        std::shared_ptr<UserSessionDirectory> directory,
-        std::shared_ptr<UserPresenceStore> presence,
+    LogicSystem(std::shared_ptr<UserSessionDirectory> directory, std::shared_ptr<UserPresenceStore> presence,
         std::shared_ptr<DependencyExecutor> dependencies);
 
 private:
@@ -25,20 +24,14 @@ private:
     // 在工作线程复核排队请求的绑定凭据后执行数据库操作；满载或异常时关闭发起连接。
     void QueueDatabase(const std::shared_ptr<CSession>& session, ExternalWork work);
     // 受理与连接有序关联的外部步骤，过载或异常时关闭原连接。
-    void QueueRequest(
-        ExternalTask kind,
-        const std::shared_ptr<CSession>& session,
-        ExternalWork work,
+    void QueueRequest(ExternalTask kind, const std::shared_ptr<CSession>& session, ExternalWork work,
         std::function<bool()> sql_check = {});
     // Redis 复核完成后重新确认连接归属，再调用原业务处理器。
     void DispatchAuthenticated(const LogicMessage& message, int uid);
     // 登录初验通过后按客户端能力加载资料，并在绑定成功后回复。
     void QueueLoginData(std::shared_ptr<CSession> session, int uid, std::string credential, Json::Value capabilities);
     // 返回事务提交的后续操作；先回包，再独立投递通知，队满不改变已提交结果。
-    Completion ReplyAndNotify(
-        std::shared_ptr<CSession> session,
-        short id,
-        const Json::Value& response,
+    Completion ReplyAndNotify(std::shared_ptr<CSession> session, short id, const Json::Value& response,
         ExternalWork route);
     // 构造唯一一份处理器表，发布后所有分片只读访问。
     std::map<short, MessageHandler> CreateHandlers();

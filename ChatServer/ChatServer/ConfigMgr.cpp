@@ -122,9 +122,7 @@ ConfigMgr::ConfigMgr() {
     _config_data["Database"]._sectionInfo_data = database::Configuration(pt);
 
     auto grpc = (*this)["Grpc"];
-    (void)rpc::ParseDurationMs(
-        grpc["PoolAcquireTimeoutMs"],
-        "[Grpc].PoolAcquireTimeoutMs",
+    (void)rpc::ParseDurationMs(grpc["PoolAcquireTimeoutMs"], "[Grpc].PoolAcquireTimeoutMs",
         std::chrono::milliseconds(1000));
     (void)rpc::ParseDurationMs(grpc["ChatDeadlineMs"], "[Grpc].ChatDeadlineMs", std::chrono::milliseconds(3000));
 

@@ -20,18 +20,15 @@ FriendInfoPage::FriendInfoPage(QWidget* parent) : QWidget(parent), ui(new Ui::Fr
     remove->setEnabled(TcpMgr::instance()->supportsSocial());
     // 明确确认双向解除关系后提交带版本命令。
     connect(remove, &QPushButton::clicked, this, [this, remove, status] {
-        if (!_friend_info)
-            return;
+        if (!_friend_info) return;
         const int peer = _friend_info->_uid;
         const auto relation = UserMgr::instance()->socialProfile(peer);
-        if (QMessageBox::question(
-                this,
-                tr("删除好友"),
-                tr("解除双方好友关系并停止新消息；聊天记录仍然保留。是否继续？")) != QMessageBox::Yes)
+        if (QMessageBox::question(this, tr("删除好友"),
+                tr("解除双方好友关系并停止新消息；聊天记录仍然保留。是否继续？")) != QMessageBox::Yes) {
             return;
+        }
         remove->setEnabled(false);
-        TcpMgr::instance()->socialRequest(
-            ID_FRIEND_MANAGE_REQ,
+        TcpMgr::instance()->socialRequest(ID_FRIEND_MANAGE_REQ,
             {{"operation", "delete"}, {"target_uid", peer}, {"expected_revision", relation["relationship_revision"]}},
             this,
             // 结果只更新当前查看的好友页面。
@@ -44,19 +41,16 @@ FriendInfoPage::FriendInfoPage(QWidget* parent) : QWidget(parent), ui(new Ui::Fr
                 status->setText(socialResultText(response));
             });
     });
-    connect(
-        UserMgr::instance()->messages(),
-        &MessageService::directoryChanged,
-        this,
+    connect(UserMgr::instance()->messages(), &MessageService::directoryChanged, this,
         // 当前详情同步到已落盘的新资料或解除状态。
         [this](const QJsonObject&) {
-            if (!_friend_info)
-                return;
+            if (!_friend_info) return;
             const auto current = UserMgr::instance()->friendById(_friend_info->_uid);
-            if (current)
+            if (current) {
                 setInfo(current);
-            else
+            } else {
                 findChild<QPushButton*>("deleteFriendButton")->setEnabled(false);
+            }
         });
     ui->info_voice_label->hide();
     ui->info_video_label->hide();

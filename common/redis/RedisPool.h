@@ -36,11 +36,7 @@ public:
     using Clock = std::chrono::steady_clock;
 
     /** @brief 保存容量和认证配置，验证字面量端点与有限期限；连接在借用时惰性建立。 */
-    RedisPool(
-        std::string host,
-        int port,
-        std::string password,
-        std::size_t capacity,
+    RedisPool(std::string host, int port, std::string password, std::size_t capacity,
         Milliseconds io_timeout = Milliseconds(2000))
         : _host(host == "localhost" ? "127.0.0.1" : std::move(host)), _port(port), _password(std::move(password)),
           _capacity(capacity), _io_timeout(io_timeout) {
@@ -57,6 +53,7 @@ public:
     ~RedisPool() {
         Close();
     }
+
     /** @brief 禁止复制或赋值，避免重复拥有连接、线程或租约资源。 */
     RedisPool(const RedisPool&) = delete;
     /** @brief 禁止复制或赋值，避免重复拥有连接、线程或租约资源。 */
@@ -72,9 +69,7 @@ public:
         {
             std::unique_lock<std::mutex> lock(_mutex);
             // 在关闭、有空闲连接或尚有容量时结束借用等待。
-            if (!_available.wait_until(
-                    lock,
-                    deadline,
+            if (!_available.wait_until(lock, deadline,
                     [this]() {
                         return _is_closed || !_idle.empty() || _size < _capacity;
                     }) ||

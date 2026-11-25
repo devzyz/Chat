@@ -14,22 +14,15 @@ ApplyFriendPage::ApplyFriendPage(QWidget* parent) : QWidget(parent), ui(new Ui::
     loadApplyList();
 
     auto* messages = UserMgr::instance()->messages();
-    connect(
-        messages,
-        &MessageService::directoryRestored,
-        this,
+    connect(messages, &MessageService::directoryRestored, this,
         /** @brief 初始本地目录恢复后展示申请。 */
         [this](const QJsonObject&) {
             loadApplyList();
         });
-    connect(
-        messages,
-        &MessageService::directoryChanged,
-        this,
+    connect(messages, &MessageService::directoryChanged, this,
         /** @brief 仅在本地申请记录提交后刷新申请页。 */
         [this](const QJsonObject& directory) {
-            if (!directory["applications"].toArray().isEmpty())
-                loadApplyList();
+            if (!directory["applications"].toArray().isEmpty()) loadApplyList();
         });
 }
 
@@ -58,10 +51,7 @@ void ApplyFriendPage::addNewApply(std::shared_ptr<ApplyInfo> applyInfo) {
     _apply_items_map.insert(applyInfo->_apply_uid, apply_item);
 
     // 收到审核好友信号
-    connect(
-        apply_item,
-        &ApplyFriendItem::friendApprovalRequested,
-        this,
+    connect(apply_item, &ApplyFriendItem::friendApprovalRequested, this,
         /** @brief 为选中申请创建有父对象的审批对话框。 */
         [this](std::shared_ptr<ApplyInfo> apply_info) {
             auto* authFriendDialog = new AuthFriendDialog(this);

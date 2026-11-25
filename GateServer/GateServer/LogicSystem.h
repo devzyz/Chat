@@ -4,6 +4,7 @@
 
 class HttpConnection;
 typedef std::function<void(std::shared_ptr<HttpConnection>)> HttpHandler;
+
 /** @brief 按 HTTP 路径分发请求，将注册、登录及验证码业务委托给 GateRequest。 */
 class LogicSystem {
 public:

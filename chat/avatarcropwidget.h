@@ -14,14 +14,17 @@ public:
     void setImage(const QImage& image);
     /** @brief 设置百分比缩放并将裁剪中心限制在有效范围。 */
     void setZoom(int percent);
+
     /** @brief 返回当前裁剪缩放百分比。 */
     int zoom() const {
         return _crop.zoom();
     }
+
     /** @brief 返回当前裁剪区域在源图中的矩形。 */
     QRectF sourceRect() const {
         return _crop.sourceRect();
     }
+
     /** @brief 返回控件中的裁剪框区域。 */
     QRectF frameRect() const;
 

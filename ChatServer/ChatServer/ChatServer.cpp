@@ -39,20 +39,18 @@ int main(int argc, char* argv[]) {
     bool tcp_stopped = false;
     // 幂等取消维护计时并启动 TCP 停服。
     auto shutdown = [&] {
-        if (stopping)
-            return;
+        if (stopping) return;
         stopping = true;
-        if (service)
-            service->StopAdmission();
+        if (service) service->StopAdmission();
         boost::system::error_code ignored;
         count_timer.cancel();
         // 在会话关闭及 I/O 取消完成后退出主事件循环。
-        if (tcp)
+        if (tcp) {
             tcp->Stop([&] {
                 tcp_stopped = true;
                 io.stop();
             });
-        else {
+        } else {
             tcp_stopped = true;
             io.stop();
         }
@@ -69,10 +67,8 @@ int main(int argc, char* argv[]) {
             rpc->Shutdown(std::chrono::system_clock::now() + std::chrono::seconds(5));
             rpc->Wait();
         }
-        if (logic)
-            logic->Stop();
-        if (lifecycle)
-            lifecycle->Drain();
+        if (logic) logic->Stop();
+        if (lifecycle) lifecycle->Drain();
 
         if (registered) {
             // 所有生产者排空后通过 Redis 池注销，返回失败时仍由租约 TTL 兜底。
@@ -83,18 +79,13 @@ int main(int argc, char* argv[]) {
             }
             registered = false;
         }
-        if (dependencies)
-            dependencies->Stop();
-        if (pool)
-            pool->Stop();
-        if (redis)
-            redis->Close();
+        if (dependencies) dependencies->Stop();
+        if (pool) pool->Stop();
+        if (redis) redis->Close();
     };
     try {
-        if (argc == 3)
-            ConfigMgr::SetConfigPath(argv[2]);
-        if (!LogMgr::GetInstance()->InitLogMgr())
-            throw std::runtime_error("logging initialization failed");
+        if (argc == 3) ConfigMgr::SetConfigPath(argv[2]);
+        if (!LogMgr::GetInstance()->InitLogMgr()) throw std::runtime_error("logging initialization failed");
         auto& config = ConfigMgr::GetInstance();
         // 在监听或发布实例租约之前验证所选数据库。
         (void)MysqlMgr::GetInstance();
@@ -102,39 +93,30 @@ int main(int argc, char* argv[]) {
         const auto port_text = config["SelfServer"]["Port"];
         std::size_t parsed = 0;
         const int port = std::stoi(port_text, &parsed);
-        if (parsed != port_text.size() || port < 1 || port > 65535)
-            throw std::runtime_error("invalid TCP port");
+        if (parsed != port_text.size() || port < 1 || port > 65535) throw std::runtime_error("invalid TCP port");
         dependencies = std::make_shared<DependencyExecutor>();
         auto directory = std::make_shared<UserSessionDirectory>();
         // The adapter resolves Redis lazily: bind both ports before connecting to dependencies.
         auto presence = std::make_shared<RedisUserPresenceStore>();
-        lifecycle = std::make_shared<SessionLifecycleCoordinator>(
-            directory,
-            presence,
-            server_id,
-            dependencies,
+        lifecycle = std::make_shared<SessionLifecycleCoordinator>(directory, presence, server_id, dependencies,
             // 向旧用户所在实例发送带会话标识的踢出请求。
             [](int uid, const chat_session::UserPresence& old) {
                 message::KickUserReq request;
                 request.set_uid(uid);
                 request.set_session_id(old.session_id);
                 const auto response = ChatGrpcClient::GetInstance()->NotifyOtherKickUser(old.server_id, request);
-                if (response.error() != ErrorCodes::Success)
-                    SPDLOG_WARN("remote replacement failed, uid={}", uid);
+                if (response.error() != ErrorCodes::Success) SPDLOG_WARN("remote replacement failed, uid={}", uid);
             });
         logic = std::make_unique<LogicSystem>(directory, presence, dependencies);
         const auto configured_bind = config["SelfServer"]["BindHost"];
         const auto bind_host = configured_bind.empty() ? config["SelfServer"]["Host"] : configured_bind;
         const auto configured_rpc = config["SelfServer"]["RpcHost"];
         const auto rpc_host = configured_rpc.empty() ? std::string("127.0.0.1") : configured_rpc;
-        if (!boost::asio::ip::make_address(rpc_host).is_loopback())
+        if (!boost::asio::ip::make_address(rpc_host).is_loopback()) {
             throw std::invalid_argument("unauthenticated Chat RPC must bind loopback");
+        }
         tcp = std::make_shared<chat_transport::CServer>(
-            io,
-            bind_host,
-            static_cast<unsigned short>(port),
-            lifecycle,
-            directory,
+            io, bind_host, static_cast<unsigned short>(port), lifecycle, directory,
             // 把入站消息交给有界业务分发器。
             [&](LogicMessage message) {
                 return logic->Submit(std::move(message));
@@ -149,8 +131,7 @@ int main(int argc, char* argv[]) {
         builder.AddListeningPort(rpc_host + ":" + config["SelfServer"]["RPCPort"], grpc::InsecureServerCredentials());
         builder.RegisterService(service.get());
         rpc = builder.BuildAndStart();
-        if (!rpc)
-            throw std::runtime_error("failed to listen on gRPC address");
+        if (!rpc) throw std::runtime_error("failed to listen on gRPC address");
         // 已独占绑定同机 TCP 端点，可接管该端点旧进程遗留的租约；其他端点仍拒绝同名注册。
         const auto lease_endpoint =
             "[" + bind_host + "]:" + port_text + "/[" + rpc_host + "]:" + config["SelfServer"]["RPCPort"] + "|";
@@ -165,12 +146,9 @@ int main(int argc, char* argv[]) {
             [redis](const auto& script, const auto& keys, const auto& args) {
                 return redis->Eval(script, keys, args);
             },
-            server_id,
-            lease_endpoint,
-            boost::uuids::to_string(boost::uuids::random_generator()()));
+            server_id, lease_endpoint, boost::uuids::to_string(boost::uuids::random_generator()()));
         registered = lease->Register();
-        if (!registered)
-            throw std::runtime_error("instance registration failed or name already leased");
+        if (!registered) throw std::runtime_error("instance registration failed or name already leased");
         tcp->Start();
         std::function<void()> update_count;
         // 安排下一轮连接计数发布。
@@ -178,8 +156,7 @@ int main(int argc, char* argv[]) {
             count_timer.expires_after(std::chrono::seconds(60));
             // 计时成功且未停服时把计数更新交给维护执行器。
             count_timer.async_wait([&](boost::system::error_code error) {
-                if (error || stopping)
-                    return;
+                if (error || stopping) return;
                 lease->Renew(tcp->ConnectionCount());
                 update_count();
             });
@@ -188,8 +165,7 @@ int main(int argc, char* argv[]) {
         boost::asio::signal_set signals(io, SIGINT, SIGTERM);
         // 接收退出信号并启动统一停服流程。
         signals.async_wait([&](boost::system::error_code error, int) {
-            if (!error)
-                shutdown();
+            if (!error) shutdown();
         });
         io.run();
         shutdown();

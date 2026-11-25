@@ -59,8 +59,7 @@ bool ProbeReady(const integration::LoopbackPort& endpoint) {
 /** 验证启动后立即退出仍保留有界输出、进程身份和真实退出码。 */
 TEST(T09_PROC_ProcessHarness, StartupExitRetainsBoundedOutputIdentityAndExitCode) {
     auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
-    auto harness = integration::ProcessHarness::Start(
-        *context,
+    auto harness = integration::ProcessHarness::Start(*context,
         HelperSpec(*context, {L"--mode=exit", L"--exit-code=23", L"--emit-startup"}));
 
     // 保持探针失败，让提前退出决定启动结果。
@@ -88,8 +87,8 @@ TEST(T09_PROC_ProcessHarness, StartupExitRetainsBoundedOutputIdentityAndExitCode
         [&] {
             if (first_probe) {
                 first_probe = false;
-                while (!racing->CollectEvidence().exit_code.has_value() &&
-                       std::chrono::steady_clock::now() < deadline) {
+                while (
+                    !racing->CollectEvidence().exit_code.has_value() && std::chrono::steady_clock::now() < deadline) {
                     std::this_thread::yield();
                 }
                 return false;
@@ -108,8 +107,7 @@ TEST(T09_PROC_ProcessHarness, ReadinessRequiresSuccessfulProtocolProbe) {
     auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
     const auto endpoint = context->ReserveLoopbackPort("ready");
     ASSERT_TRUE(context->ReleaseLoopbackPort("ready"));
-    auto harness = integration::ProcessHarness::Start(
-        *context,
+    auto harness = integration::ProcessHarness::Start(*context,
         HelperSpec(*context, {L"--mode=server", L"--port=" + std::to_wstring(endpoint.port)}));
 
     // 拒绝就绪以验证协议探针失败路径。
@@ -133,8 +131,7 @@ TEST(T09_PROC_ProcessHarness, StopUsesGracefulSignalAndClosesPipesByDeadline) {
     auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
     const auto endpoint = context->ReserveLoopbackPort("graceful");
     ASSERT_TRUE(context->ReleaseLoopbackPort("graceful"));
-    auto harness = integration::ProcessHarness::Start(
-        *context,
+    auto harness = integration::ProcessHarness::Start(*context,
         HelperSpec(*context, {L"--mode=server", L"--port=" + std::to_wstring(endpoint.port)}));
     // 等待辅助进程通过协议就绪检查。
     ASSERT_TRUE(harness->WaitReady(
@@ -160,8 +157,7 @@ TEST(T09_PROC_ProcessHarness, StopEscalatesOnlyAfterGracefulDeadline) {
     auto context = integration::RunContext::Create(std::chrono::steady_clock::now() + 5s);
     const auto endpoint = context->ReserveLoopbackPort("escalate");
     ASSERT_TRUE(context->ReleaseLoopbackPort("escalate"));
-    auto harness = integration::ProcessHarness::Start(
-        *context,
+    auto harness = integration::ProcessHarness::Start(*context,
         HelperSpec(*context, {L"--mode=server", L"--ignore-graceful", L"--port=" + std::to_wstring(endpoint.port)}));
     // 确认忽略温和信号的辅助进程已就绪。
     ASSERT_TRUE(harness->WaitReady(
@@ -190,12 +186,10 @@ TEST(T09_PROC_ProcessHarness, Win32AdapterRefusesMismatchedCreationIdentity) {
         adapter.Start(HelperSpec(*context, {L"--mode=server", L"--port=" + std::to_wstring(endpoint.port)}));
     const integration::ProcessIdentity stale{identity.pid, identity.creation_time + 1};
 
-    EXPECT_EQ(
-        adapter.Terminate(stale, std::chrono::steady_clock::now() + 500ms),
+    EXPECT_EQ(adapter.Terminate(stale, std::chrono::steady_clock::now() + 500ms),
         integration::internal::TerminationResult::IdentityMismatch);
     EXPECT_TRUE(adapter.IsRunning(identity));
-    EXPECT_EQ(
-        adapter.Terminate(identity, std::chrono::steady_clock::now() + 2s),
+    EXPECT_EQ(adapter.Terminate(identity, std::chrono::steady_clock::now() + 2s),
         integration::internal::TerminationResult::Terminated);
     EXPECT_TRUE(adapter.ClosePipes(std::chrono::steady_clock::now() + 2s));
 }

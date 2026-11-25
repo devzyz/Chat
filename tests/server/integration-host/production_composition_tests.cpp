@@ -21,7 +21,10 @@
 namespace {
 using namespace std::chrono_literals;
 
-enum class FormalService { Gate, Chat };
+enum class FormalService {
+    Gate,
+    Chat
+};
 
 /** 将正式服务枚举映射为产物名称，未知值返回诊断名称。 */
 const char* ServiceName(FormalService service) {
@@ -108,10 +111,7 @@ void WriteGateConfig(const std::filesystem::path& path, std::uint16_t port, cons
 }
 
 /** 生成 Chat 隔离配置，使用本次监听端口和不可用的本地依赖端点。 */
-void WriteChatConfig(
-    const std::filesystem::path& path,
-    std::uint16_t tcp_port,
-    std::uint16_t grpc_port,
+void WriteChatConfig(const std::filesystem::path& path, std::uint16_t tcp_port, std::uint16_t grpc_port,
     const std::string& run_identity) {
     std::ostringstream config;
     config << "[SelfServer]\nName = CompositionChat\nHost = 127.0.0.1"
@@ -125,11 +125,8 @@ void WriteChatConfig(
 }
 
 /** 从正式产物启动服务，显式选择配置并由运行上下文管理进程。 */
-std::unique_ptr<integration::ProcessHarness> StartFormal(
-    integration::RunContext& context,
-    FormalService service,
-    const std::filesystem::path& config,
-    const std::filesystem::path& working_directory) {
+std::unique_ptr<integration::ProcessHarness> StartFormal(integration::RunContext& context, FormalService service,
+    const std::filesystem::path& config, const std::filesystem::path& working_directory) {
     const auto executable = FindExecutable(service);
     if (!std::filesystem::is_regular_file(executable)) {
         throw std::runtime_error("missing formal executable " + executable.string());
@@ -147,12 +144,10 @@ bool ProbeGate(std::uint16_t port) {
     boost::asio::ip::tcp::socket socket(context);
     boost::system::error_code error;
     socket.connect({boost::asio::ip::address_v4::loopback(), port}, error);
-    if (error)
-        return false;
+    if (error) return false;
     const std::string request = "GET /get_test HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
     boost::asio::write(socket, boost::asio::buffer(request), error);
-    if (error)
-        return false;
+    if (error) return false;
     socket.non_blocking(true, error);
     std::array<char, 1024> buffer{};
     std::string response;
@@ -183,16 +178,10 @@ void ExpectPortReleased(std::uint16_t port, bool wildcard) {
     acceptor.open(boost::asio::ip::tcp::v4(), error);
     ASSERT_FALSE(error) << error.message();
     const BOOL exclusive = TRUE;
-    ASSERT_NE(
-        setsockopt(
-            acceptor.native_handle(),
-            SOL_SOCKET,
-            SO_EXCLUSIVEADDRUSE,
-            reinterpret_cast<const char*>(&exclusive),
-            sizeof(exclusive)),
+    ASSERT_NE(setsockopt(acceptor.native_handle(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+                  reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)),
         SOCKET_ERROR);
-    acceptor.bind(
-        {wildcard ? boost::asio::ip::address_v4::any() : boost::asio::ip::address_v4::loopback(), port},
+    acceptor.bind({wildcard ? boost::asio::ip::address_v4::any() : boost::asio::ip::address_v4::loopback(), port},
         error);
     EXPECT_FALSE(error) << "formal process retained port " << port << ": " << error.message();
 }
@@ -270,10 +259,8 @@ struct RefusalEvidence {
 };
 
 /** 观察正式 Chat 在真实依赖缺失时的有界启动与关闭，收集独立证据。 */
-RefusalEvidence ObserveChatRealDependencyBoundary(
-    integration::RunContext& context,
-    const std::filesystem::path& working,
-    const std::filesystem::path& config) {
+RefusalEvidence ObserveChatRealDependencyBoundary(integration::RunContext& context,
+    const std::filesystem::path& working, const std::filesystem::path& config) {
     auto process = StartFormal(context, FormalService::Chat, config, working);
     // 不把依赖拒绝中的进程存活视为服务就绪。
     EXPECT_FALSE(process->WaitReady(
@@ -284,14 +271,8 @@ RefusalEvidence ObserveChatRealDependencyBoundary(
     const auto stop = process->Stop(std::chrono::steady_clock::now() + 2s);
     const auto evidence = process->CollectEvidence();
     EXPECT_TRUE(stop.Complete()) << stop.Detail();
-    RefusalEvidence result{
-        evidence.exit_code,
-        evidence.graceful_stop_attempted,
-        evidence.escalated,
-        evidence.ready_probe_succeeded,
-        evidence.pipe_readers_closed,
-        evidence.stdout_text,
-        evidence.stderr_text};
+    RefusalEvidence result{evidence.exit_code, evidence.graceful_stop_attempted, evidence.escalated,
+        evidence.ready_probe_succeeded, evidence.pipe_readers_closed, evidence.stdout_text, evidence.stderr_text};
     process.reset();
     return result;
 }

@@ -34,21 +34,21 @@ public:
     std::optional<std::string> ReadCode(const std::string& email, const std::string& purpose) override {
         if (RedisMgr::GetInstance()->EvalNumber(
                 "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],600) end; return n",
-                (purpose == "reset_password" ? "code_attempt_reset_" : "code_attempt_") + email,
-                "") > 8)
+                (purpose == "reset_password" ? "code_attempt_reset_" : "code_attempt_") + email, "") > 8) {
             return std::nullopt;
+        }
         std::string code;
         if (!RedisMgr::GetInstance()->Get((purpose == "reset_password" ? "code_reset_" : CODEPREFIX) + email, code)) {
             return std::nullopt;
         }
         return code;
     }
+
     /** @brief 比较并消费匹配验证码；过期、替换或已被消费时返回 false。 */
     bool ConsumeCode(const std::string& email, const std::string& code, const std::string& purpose) override {
         return RedisMgr::GetInstance()->EvalNumber(
                    "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) end; return 0",
-                   (purpose == "reset_password" ? "code_reset_" : CODEPREFIX) + email,
-                   code) == 1;
+                   (purpose == "reset_password" ? "code_reset_" : CODEPREFIX) + email, code) == 1;
     }
 };
 
@@ -57,6 +57,7 @@ template <class Accounts> class UserStoreAdapter final : public gate::internal::
 public:
     // 固定服务启动时选择的数据库，所有请求共用一个池。
     explicit UserStoreAdapter(std::shared_ptr<Accounts> accounts) : accounts_(std::move(accounts)) {}
+
     /** @brief 转交账号创建并保留管理器的 UID 或失败哨兵返回值。 */
     int CreateUser(const std::string& username, const std::string& email, const std::string& password) override {
         return accounts_->RegUser(username, email, password);
@@ -76,22 +77,19 @@ public:
         return accounts_->UpdatePassword(username, password, email, [](int uid) {
             return RedisMgr::GetInstance()->EvalNumber(
                        "redis.call('INCR','auth_version_'..KEYS[1]); redis.call('DEL',KEYS[1]); return 1",
-                       std::to_string(uid),
-                       "") == 1;
+                       std::to_string(uid), "") == 1;
         });
     }
 
     /** @brief 校验邮箱及密码，仅返回认证 UID；校验失败返回 nullopt。 */
-    std::optional<gate::internal::UserRecord> CheckCredentials(const std::string& email, const std::string& password)
-        override {
+    std::optional<gate::internal::UserRecord> CheckCredentials(const std::string& email,
+        const std::string& password) override {
         UserInfo user;
         if (!accounts_->CheckPassword(email, password, user)) {
             return std::nullopt;
         }
-        const auto version = RedisMgr::GetInstance()->EvalNumber(
-            "return tonumber(redis.call('GET',KEYS[1]) or '0')",
-            "auth_version_" + std::to_string(user.uid),
-            "");
+        const auto version = RedisMgr::GetInstance()->EvalNumber("return tonumber(redis.call('GET',KEYS[1]) or '0')",
+            "auth_version_" + std::to_string(user.uid), "");
         return gate::internal::UserRecord{user.uid, version, std::move(user.credential_lease)};
     }
 
@@ -106,10 +104,10 @@ public:
     std::optional<std::string> ReadCount(const std::string& name) override {
         auto redis = RedisMgr::GetInstance();
         std::string value;
-        if (!redis->Get("chatlease_" + name, value) || !redis->HGet("logincount", name, value))
-            return {};
+        if (!redis->Get("chatlease_" + name, value) || !redis->HGet("logincount", name, value)) return {};
         return value;
     }
+
     /** @brief 仅当前代次可覆盖凭据。 */
     bool PutToken(int uid, const std::string& token, long long version) override {
         return RedisMgr::GetInstance()->PutExpiringToken(uid, token, version);
@@ -139,9 +137,7 @@ public:
             auto section = config[name];
             servers.push_back({section["Name"], section["Host"], section["Port"]});
         }
-        routing_ = gate_routing::CreateGateRouting(
-            std::move(servers),
-            std::make_shared<AssignmentStore>(),
+        routing_ = gate_routing::CreateGateRouting(std::move(servers), std::make_shared<AssignmentStore>(),
             std::make_shared<UuidTokenSource>());
     }
 
@@ -151,9 +147,9 @@ public:
                    "local current=redis.call('HGET',KEYS[1],'utoken_'..KEYS[1]); "
                    "if not current then return 1 end; if current~=ARGV[1] then return 0 end; "
                    "redis.call('INCR','auth_version_'..KEYS[1]); redis.call('DEL',KEYS[1]); return 1",
-                   std::to_string(uid),
-                   token) == 1;
+                   std::to_string(uid), token) == 1;
     }
+
     /** @brief 仅在找到有效实例并成功发布当前代次的凭据后返回地址。 */
     gate::internal::ChatAssignment Assign(int uid, long long auth_version) override {
         return routing_->Assign(uid, auth_version);
@@ -171,17 +167,14 @@ std::unique_ptr<GateRequest> CreateProductionGateRequest() {
     auto section = ConfigMgr::GetInstance()["Database"];
     std::shared_ptr<internal::UserStore> accounts;
     if (section["Driver"] == "postgresql") {
-        chat_pg::Settings
-            config{section["Host"], section["Port"], section["Schema"], section["User"], section["Password"]};
+        chat_pg::Settings config{section["Host"], section["Port"], section["Schema"], section["User"],
+            section["Password"]};
         accounts = std::make_shared<UserStoreAdapter<PostgresAccounts>>(std::make_shared<PostgresAccounts>(config));
     } else {
         accounts = std::make_shared<UserStoreAdapter<MysqlMgr>>(MysqlMgr::GetInstance());
     }
-    return internal::CreateGateRequest(
-        std::make_shared<GrpcVerificationAdapter>(),
-        std::make_shared<RedisCodeStoreAdapter>(),
-        std::move(accounts),
-        std::make_shared<RedisAssignmentAdapter>());
+    return internal::CreateGateRequest(std::make_shared<GrpcVerificationAdapter>(),
+        std::make_shared<RedisCodeStoreAdapter>(), std::move(accounts), std::make_shared<RedisAssignmentAdapter>());
 }
 
 } // namespace gate

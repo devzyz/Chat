@@ -35,6 +35,7 @@ public:
         static ConfigMgr configMgr;
         return configMgr;
     }
+
     /** @brief 保存显式配置路径，必须在配置单例首次加载前调用。 */
     static void SetConfigPath(const std::string& path);
 

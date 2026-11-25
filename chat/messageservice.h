@@ -20,15 +20,16 @@ public:
     /** @brief 在原存储线程查询排序后的会话摘要。 */
     void loadConversationSummaries();
     /** @brief 写盘失败时由服务兼容旧入口保留请求，或由提交控制器独占保留。 */
-    enum class DraftRetention { Service, Caller };
+    enum class DraftRetention {
+        Service,
+        Caller
+    };
     /** @brief 在存储线程查询全部或指定会话提醒，旧账号结果自动丢弃。 */
     void loadConversationAttention(int chatId = 0);
     /** @brief 持久化当前已展示快照的本地查看边界，成功后刷新提醒。 */
     void markConversationSeen(int chatId, qint64 throughLocalId);
     /** @brief 排队合并目录，提交后发布本地结果并调用完成通知；失败不更新界面。 */
-    void saveDirectory(
-        const QJsonObject& directory,
-        std::function<void()> completion = {},
+    void saveDirectory(const QJsonObject& directory, std::function<void()> completion = {},
         std::function<void()> failure = {});
     /** @brief 在当前目录版本中持久化管理请求，避免并发刷新丢掉待确认身份。 */
     void saveGroupOperation(int chatId, const QJsonObject& request, std::function<void()> completion = {});
@@ -44,10 +45,12 @@ public:
     void start(const QString& accountRoot, int uid, bool receipts = false, bool social = false);
     /** @brief 停止定时任务并递增账号代号，丢弃旧账号完成回调；关闭存储按工作队列顺序执行。 */
     void stop();
+
     /** @brief 查询当前是否关联有效账号，不等同于数据库异步打开成功。 */
     bool isActive() const {
         return _uid > 0;
     }
+
     /** @brief 登记需要同步的会话，首次登记启动消息和回执同步。 */
     void registerChat(int chatId, bool group = false);
     /** @brief 读取已提交游标后请求消息增量；同一会话已有请求时不重复启动。 */
@@ -74,23 +77,28 @@ public:
     void retry(int chatId, const QString& uuid);
     /** @brief 暂停自动发送，保留本地消息及批次供以后恢复。 */
     void pauseOutgoing();
+
     /** @brief 返回当前已落盘群状态快照。 */
     QJsonObject groupState(int chatId) const {
         return _groupStates.value(chatId);
     }
+
     /** @brief 返回已落盘的私聊关系版本。 */
     QJsonObject privateState(int chatId) const {
         return _privateStates.value(chatId);
     }
+
     /** @brief 首轮目录完整落盘后允许持久化批次调度。 */
     void setSocialReady() {
         _socialReady = true;
         dispatchOutgoing();
     }
+
     /** @brief 返回本轮关系目录是否已验证，供提交入口阻止过早发送。 */
     bool socialReady() const {
         return _socialReady;
     }
+
     /** @brief 在存储线程搜索当前会话，结果通过 searchLoaded 返回。 */
     void search(int chatId, const QString& text, qint64 before = 0);
 signals:
@@ -145,10 +153,7 @@ private:
     /** @brief 安排指定会话回执失败后的有界重试。 */
     void receiptRetry(int chatId);
     /** @brief 将 operation 排入 SQLite 工作线程；完成或失败回到所属线程，仅当前账号代接收回调，回调不可抛异常。 */
-    void execute(
-        int chatId,
-        std::function<void(LocalMessageStore&)> operation,
-        std::function<void()> completion = {},
+    void execute(int chatId, std::function<void(LocalMessageStore&)> operation, std::function<void()> completion = {},
         std::function<void()> failure = {});
     int _uid = 0;
     QString _accountRoot;

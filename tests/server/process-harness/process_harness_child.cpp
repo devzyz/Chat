@@ -150,8 +150,6 @@ int wmain(int argc, wchar_t** argv) {
     if (port.empty()) {
         return 32;
     }
-    return RunServer(
-        static_cast<std::uint16_t>(std::stoul(port)),
-        HasArgument(argc, argv, L"--late-output"),
+    return RunServer(static_cast<std::uint16_t>(std::stoul(port)), HasArgument(argc, argv, L"--late-output"),
         HasArgument(argc, argv, L"--emit-secret"));
 }

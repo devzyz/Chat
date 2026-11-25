@@ -96,16 +96,10 @@ bool LogMgr::initLogMgr() {
         _closed.store(false);
         _initialized.store(true);
 
-        SPDLOG_INFO(
-            "logger initialized, file={}, max_size_mb={}, "
-            "max_total_files={}, level={}, flush_level={}, "
-            "flush_interval_seconds={}",
-            logFilePath,
-            maxSizeMb,
-            maxTotalFiles,
-            toUtf8(configuredLevel),
-            toUtf8(flushLevel),
-            flushIntervalSeconds);
+        SPDLOG_INFO("logger initialized, file={}, max_size_mb={}, "
+                    "max_total_files={}, level={}, flush_level={}, "
+                    "flush_interval_seconds={}",
+            logFilePath, maxSizeMb, maxTotalFiles, toUtf8(configuredLevel), toUtf8(flushLevel), flushIntervalSeconds);
         return true;
     } catch (const std::exception&) {
         if (_logger) {
@@ -141,21 +135,15 @@ std::string LogMgr::toUtf8(const QString& value) {
 
 spdlog::level::level_enum LogMgr::getLevel(const QString& level, spdlog::level::level_enum defaultLevel) const {
     const QString normalized = level.trimmed().toLower();
-    if (normalized == "trace")
-        return spdlog::level::trace;
-    if (normalized == "debug")
-        return spdlog::level::debug;
-    if (normalized == "info")
-        return spdlog::level::info;
+    if (normalized == "trace") return spdlog::level::trace;
+    if (normalized == "debug") return spdlog::level::debug;
+    if (normalized == "info") return spdlog::level::info;
     if (normalized == "warn" || normalized == "warning") {
         return spdlog::level::warn;
     }
-    if (normalized == "error")
-        return spdlog::level::err;
-    if (normalized == "critical")
-        return spdlog::level::critical;
-    if (normalized == "off")
-        return spdlog::level::off;
+    if (normalized == "error") return spdlog::level::err;
+    if (normalized == "critical") return spdlog::level::critical;
+    if (normalized == "off") return spdlog::level::off;
     if (normalized == "auto") {
 #ifdef NDEBUG
         return spdlog::level::info;
@@ -174,9 +162,7 @@ void LogMgr::handleQtMessage(QtMsgType type, const QMessageLogContext& context, 
     }
 
     const std::string formattedMessage = toUtf8(message);
-    const spdlog::source_loc sourceLocation(
-        context.file ? context.file : "",
-        context.line,
+    const spdlog::source_loc sourceLocation(context.file ? context.file : "", context.line,
         context.function ? context.function : "");
     logger->log(sourceLocation, toSpdlogLevel(type), "{}", formattedMessage);
     if (type == QtFatalMsg) {

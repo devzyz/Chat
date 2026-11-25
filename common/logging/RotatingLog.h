@@ -19,13 +19,8 @@ public:
     /** @brief 幂等刷新已有日志器，不注销或关闭 spdlog 注册表。 */
     void Close();
     /** @brief 按配置建立滚动文件日志器及全局默认入口；转换或创建失败返回 false。 */
-    bool Init(
-        const std::string& name,
-        const std::string& directory,
-        const std::string& max_size_mb,
-        const std::string& max_total_files,
-        const std::string& level,
-        const std::string& flush_level);
+    bool Init(const std::string& name, const std::string& directory, const std::string& max_size_mb,
+        const std::string& max_total_files, const std::string& level, const std::string& flush_level);
 
 private:
     /** @brief 将配置字符串映射为日志级别，未知值使用默认级别。 */
@@ -55,33 +50,21 @@ inline void RotatingLog::Close() {
 }
 
 /** @brief 将配置字符串映射为日志级别，未知值使用默认级别。 */
-inline spdlog::level::level_enum RotatingLog::GetLevel(
-    const std::string& level,
+inline spdlog::level::level_enum RotatingLog::GetLevel(const std::string& level,
     spdlog::level::level_enum default_level) {
-    if (level == "trace")
-        return spdlog::level::trace;
-    if (level == "debug")
-        return spdlog::level::debug;
-    if (level == "info")
-        return spdlog::level::info;
-    if (level == "warn")
-        return spdlog::level::warn;
-    if (level == "error")
-        return spdlog::level::err;
-    if (level == "critical")
-        return spdlog::level::critical;
+    if (level == "trace") return spdlog::level::trace;
+    if (level == "debug") return spdlog::level::debug;
+    if (level == "info") return spdlog::level::info;
+    if (level == "warn") return spdlog::level::warn;
+    if (level == "error") return spdlog::level::err;
+    if (level == "critical") return spdlog::level::critical;
     return default_level;
 }
 
 /** @brief 按配置创建滚动日志器及默认入口，转换或创建失败返回 false。 */
-inline bool RotatingLog::Init(
-    const std::string& log_name,
-    const std::string& log_dir,
-    const std::string& log_max_size_mb,
-    const std::string& log_max_total_files,
-    const std::string& log_level,
+inline bool RotatingLog::Init(const std::string& log_name, const std::string& log_dir,
+    const std::string& log_max_size_mb, const std::string& log_max_total_files, const std::string& log_level,
     const std::string& log_flush_level) {
-
     try {
         const auto max_file_size = static_cast<std::size_t>(std::stoull(log_max_size_mb)) * 1024 * 1024;
         const auto max_total_files = std::stoull(log_max_total_files);
@@ -100,12 +83,8 @@ inline bool RotatingLog::Init(
         spdlog::set_default_logger(_logger);
         spdlog::flush_every(std::chrono::seconds(3));
 
-        SPDLOG_INFO(
-            "logger initialized, file={}, max_size_mb={}, max_total_files={}, rotated_files={}",
-            log_file,
-            log_max_size_mb,
-            log_max_total_files,
-            rotated_files);
+        SPDLOG_INFO("logger initialized, file={}, max_size_mb={}, max_total_files={}, rotated_files={}", log_file,
+            log_max_size_mb, log_max_total_files, rotated_files);
         return true;
     } catch (const std::exception& e) {
         SPDLOG_ERROR("LogMgr init failed, error={}", e.what());

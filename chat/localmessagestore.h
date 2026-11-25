@@ -14,7 +14,14 @@
 // Persistence values contain no widgets, pixmaps or presentation text.
 /** @brief 保存可持久化消息事实，不包含 QWidget、QPixmap 或展示文案。 */
 struct StoredMessage {
-    enum State { Pending, Confirmed, Uncertain, Failed, Queued };
+    enum State {
+        Pending,
+        Confirmed,
+        Uncertain,
+        Failed,
+        Queued
+    };
+
     qint64 localId = 0;
     qint64 messageId = 0;
     QString clientMessageId;
@@ -78,18 +85,16 @@ public:
     void open(const QString& accountRoot, int uid = 0);
     /** @brief 在工作线程关闭数据库并释放连接及账号锁，可重复调用。 */
     void close();
+
     /** @brief 查询当前工作线程持有的 SQLite 连接是否打开。 */
     bool isOpen() const {
         return _db.isOpen();
     }
+
     /** @brief 读取指定会话已经事务提交的消息同步游标。 */
     qint64 cursor(int chatId);
     /** @brief 在同一事务中合并服务器消息并推进匹配 previous 的游标；失败不推进游标。 */
-    void applySyncPage(
-        int chatId,
-        qint64 previous,
-        qint64 next,
-        const QVector<StoredMessage>& messages,
+    void applySyncPage(int chatId, qint64 previous, qint64 next, const QVector<StoredMessage>& messages,
         const QString& epoch = {});
     /** @brief 将待发消息落入本地存储，保留客户端 UUID 以支持重试。 */
     void saveOutgoing(const QVector<StoredMessage>& messages);

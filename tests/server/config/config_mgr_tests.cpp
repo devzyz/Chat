@@ -43,7 +43,7 @@ public:
     explicit ConfigFile(const std::string& contents) {
         static unsigned long sequence = 0;
         path_ = std::filesystem::temp_directory_path() / ("chat-config-test-" + std::to_string(GetCurrentProcessId()) +
-                                                          "-" + std::to_string(++sequence) + ".ini");
+                                                             "-" + std::to_string(++sequence) + ".ini");
         std::ofstream output(path_, std::ios::binary);
         output << contents;
         output.close();
@@ -148,7 +148,9 @@ TEST(ConfigMgrTests, EmptyPeerListAllowsSingleInstanceConfiguration) {
     ConfigFile file(ValidConfig());
     ConfigMgr::SetConfigPath(file.Path().string());
 
-    EXPECT_NO_THROW({ ConfigMgr config; });
+    EXPECT_NO_THROW({
+        ConfigMgr config;
+    });
 }
 
 /** 验证配置文件缺失会抛读取异常。 */
@@ -158,7 +160,11 @@ TEST(ConfigMgrTests, MissingConfigFileIsRejected) {
     std::filesystem::remove(missing, error);
     ConfigMgr::SetConfigPath(missing.string());
 
-    EXPECT_THROW({ ConfigMgr config; }, boost::property_tree::ini_parser_error);
+    EXPECT_THROW(
+        {
+            ConfigMgr config;
+        },
+        boost::property_tree::ini_parser_error);
 }
 
 /** 验证缺失必需配置节被拒绝。 */
@@ -182,9 +188,7 @@ TEST_P(InvalidPortTest, SelfServerTcpPortIsRejectedOutsideCanonicalRange) {
     ExpectInvalidConfig(invalid, "[SelfServer].Port must be a number between 1 and 65535");
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    InvalidPorts,
-    InvalidPortTest,
+INSTANTIATE_TEST_SUITE_P(InvalidPorts, InvalidPortTest,
     testing::Values("", "not-a-number", "-1", "0", "65536", "8090suffix"));
 
 /** 验证 TCP 与 RPC 端口相同被拒绝。 */

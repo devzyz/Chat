@@ -29,29 +29,32 @@ public:
             throw;
         }
     }
+
     /** @brief 执行服务关闭流程并释放本对象拥有的运行资源。 */
     ~IOServicePool() {
         Stop();
     }
+
     /** @brief 禁止复制或赋值，避免重复拥有连接、线程或租约资源。 */
     IOServicePool(const IOServicePool&) = delete;
     /** @brief 禁止复制或赋值，避免重复拥有连接、线程或租约资源。 */
     IOServicePool& operator=(const IOServicePool&) = delete;
+
     /** @brief 轮转返回池内 io_context 的借用引用，池必须保持存活。 */
     boost::asio::io_context& GetIOService() {
         return _contexts[_next.fetch_add(1) % _contexts.size()];
     }
+
     /** @brief 停止接收新工作并关闭当前服务的监听或执行器；后续销毁由所属生命周期流程负责。 */
     void Stop() {
-        if (_stopped.exchange(true))
-            return;
+        if (_stopped.exchange(true)) return;
         for (auto& context : _contexts)
             context.stop();
         for (auto& thread : _threads)
-            if (thread.joinable())
-                thread.join();
+            if (thread.joinable()) thread.join();
         _work.clear();
     }
+
     /** @brief 根据硬件并发能力计算至少一个工作线程的默认池大小。 */
     static std::size_t DefaultSize() {
         const auto count = std::thread::hardware_concurrency();

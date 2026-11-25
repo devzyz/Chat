@@ -11,8 +11,10 @@ namespace resource {
 struct Error : std::runtime_error {
     /** @brief 保存状态码及错误说明，供 HTTP 层转换响应。 */
     Error(int status, const std::string& message) : std::runtime_error(message), status(status) {}
+
     int status;
 };
+
 /** @brief 保存资源元数据快照；size 为声明长度，offset 为已落盘长度，ready 表示已完成发布文件。 */
 struct Metadata {
     std::string id;
@@ -24,6 +26,7 @@ struct Metadata {
     bool ready = false;
     std::string sha256;
 };
+
 /**
  * @brief 持有资源根目录配置并同步读写上传文件；调用方必须在单一存储执行器串行调用。
  * @note 本类不加锁，不验证下载权限；业务失败抛 Error，文件系统和 JSON 异常可直接传播。
@@ -31,17 +34,10 @@ struct Metadata {
 class ResourceStore {
 public:
     /** @brief 固定绝对根路径并创建目录；max_size 单位为字节且必须大于零，失败抛异常。 */
-    ResourceStore(
-        std::filesystem::path root,
-        std::uint64_t max_size,
-        std::uint64_t total_limit = 64ull * 1024 * 1024 * 1024,
-        std::uint64_t owner_limit = 16ull * 1024 * 1024 * 1024);
+    ResourceStore(std::filesystem::path root, std::uint64_t max_size,
+        std::uint64_t total_limit = 64ull * 1024 * 1024 * 1024, std::uint64_t owner_limit = 16ull * 1024 * 1024 * 1024);
     /** @brief 校验元数据、创建分块文件后原子发布描述；中断创建由下次 Create 回收。 */
-    Metadata Create(
-        int owner,
-        const std::string& name,
-        const std::string& type,
-        std::uint64_t size,
+    Metadata Create(int owner, const std::string& name, const std::string& type, std::uint64_t size,
         const std::string& sha256);
     /** @brief 读取元数据及实际文件长度，不检查调用者权限；不存在抛 404，非法 id 抛 400。 */
     Metadata Inspect(const std::string& id) const;

@@ -7,9 +7,23 @@
 #include <QString>
 #include <QVector>
 
-enum class MessageType { Text, Image, Video, File };
+enum class MessageType {
+    Text,
+    Image,
+    Video,
+    File
+};
 
-enum class DeliveryStatus { None, Sending, Sent, Failed, Read, Uncertain, Queued, Delivered };
+enum class DeliveryStatus {
+    None,
+    Sending,
+    Sent,
+    Failed,
+    Read,
+    Uncertain,
+    Queued,
+    Delivered
+};
 
 /** @brief 合并发送和回执状态，保留已经确认的更高回执级别。 */
 inline DeliveryStatus mergeDeliveryStatus(DeliveryStatus prior, DeliveryStatus incoming) {
