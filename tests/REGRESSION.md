@@ -1,10 +1,9 @@
 # Regression test strategy
 
-Branch and release enforcement is defined in
-[`CI-GOVERNANCE.md`](CI-GOVERNANCE.md). The authoritative inventory of current
-Test IDs, reports, lanes, and gaps is
-[`TEST-CONTRACT-MATRIX.md`](TEST-CONTRACT-MATRIX.md); exact executable registration
-and aggregate counts are owned by `scripts/windows-local.ps1`.
+CI selects jobs and enforces release gates according to [CI governance](CI-GOVERNANCE.md).
+The [contract matrix](TEST-CONTRACT-MATRIX.md) maps behavior to Test IDs, reports and gaps.
+The [Windows runner](../scripts/windows-local.ps1) owns its registered report counts.
+Workflow-owned checks, including PostgreSQL native storage, produce separate reports.
 Current progress and next work are maintained only in [Status](../docs/Status.md).
 Phase plans retain historical evidence. DG-25 remains in force: a missing or inconsistent
 dependency fails closed and never authorizes an automatic restore.
@@ -65,13 +64,9 @@ that historical baseline. They must not be described as absent from today's repo
 
 ## Required lanes
 
-| Lane | Runs | Purpose |
-| --- | --- | --- |
-| Fast regression | develop PR/push under the CI governance scope rules | existing Windows unit, component and deterministic loopback/process contracts |
-| Full regression | master PR/push, weekly develop and manual runs | additional Linux real-dependency Integration and registered business E2E |
-| Package startup smoke | master push after full checks | assembled Windows package startup and cleanup before publication |
-| Focused local integration | owning module entry when relevant | resource and message-sync/receipt opt-in contracts outside the routine aggregate |
-| Stress/soak | explicit work when a scenario exists | long-running concurrency, media, reconnect and resource measurements; no completed baseline is implied |
+Choose the smallest boundary that can observe the outcome. Use the owning C++ or Qt tests for in-process decisions and signals. Use the existing protocol driver when a claim depends on multiple processes. For example, a retry after a lost ACK needs both the original message identity at the client and one committed row in the database. When replacing a test, demonstrate that its replacement detects the same failure and retains the required observation and cleanup. [Quality requirements](../docs/Quality.md) · [Database contracts](server/schema-migration/README.md)
+
+The [CI trigger matrix](CI-GOVERNANCE.md#十类检查的触发与证据) lists automatic and optional lanes. Focused resource and message-sync suites also have local entry points in their module READMEs. A run summary records which suites actually executed.
 
 The original Phase 3A floor remains protected. Phase 3B added transport/process
 contracts and `client_integration.xml`; later changes added storage, resources and

@@ -20,12 +20,10 @@ they are Component tests, while ChatServer process startup tests stay in
 Git and incremental naming/comment checks use `CheckConventions`; their dedicated
 `RunConventionTests` and inventory-only `AuditConventions` entries are documented in
 [build/conventions/README.md](build/conventions/README.md). These infrastructure checks run
-in Windows static-check and do not change the business report counts below.
+in Windows static-check.
 
-[CI-GOVERNANCE.md](CI-GOVERNANCE.md) defines quick/full regression and automatic master release.
-Develop PR/push runs existing Windows unit, component and deterministic loopback/process tests.
-Master PR/push, weekly develop and manual runs add Linux real-dependency and full business E2E.
-Only master push can publish, after full checks and Windows package smoke succeed.
+For a particular PR or run, look up its [event and mode](CI-GOVERNANCE.md#1-分支与运行时机), then the [checks and evidence for that mode](CI-GOVERNANCE.md#十类检查的触发与证据).
+To choose a test for a changed behavior, use the [regression strategy](REGRESSION.md).
 
 Local module commands remain below; release packaging tests are documented in
 [release/contracts/README.md](release/contracts/README.md).
@@ -55,8 +53,10 @@ network.
 | ResourceStore restart/resume, ownership, integrity and path validation on temporary files | Integration | `server_resource_integration.xml` |
 | ChatServer service-free Redis pool, session registry/send state, Gate response/request orchestration, and Gate token publication failures | Component | `server_component.xml` |
 | Chat/Gate CLI, config, bind, ready, shutdown plus C++→Node Varify, run-owned process harness, and production gRPC-client loopback | Integration | `server_integration.xml`, `server_chat_grpc_integration.xml` |
+| PostgreSQL schema and native storage in an isolated instance | Integration | `postgresql_native.xml` from the Windows workflow's [database test entry](server/schema-migration/README.md#postgresql-与双库合同) |
 | Qt frame decoder, message-model rules Q01-MODEL-01..06, auth outcomes Q03-AUTH-01..11 | Unit | `client_unit.xml` |
 | Qt message store/delegate Q01-MODEL-07..08, authenticated-session reset Q02-SESSION-01..06, auth abnormal-reset wiring Q03-AUTH-12 | Component | `client_component.xml` |
+| Qt HTTP/TCP transports, authenticated retry and session driver | Integration | `client_integration.xml` |
 | Varify protocol, injected handler, fake startup transition | Unit | `varify_unit.xml` |
 | Varify config subprocess, loopback gRPC, direct-process bind failure | Integration | `varify_integration.xml` |
 | ChatServer instance validation | Component | `script_component.xml` |
@@ -85,9 +85,7 @@ compatibility/drift check after restoring/building its pinned protobuf tools.
 
 ## Module documentation
 
-发布包回归、实际冒烟和自动发布边界见 [发布包验证](release/contracts/README.md)。
-发布测试单独报告，不加入 Server/Qt/Varify 计数；master 使用同一次 CI 的 Windows 包，
-下载冒烟和上传回验成功后自动发布。旧 R-00 审批/版本占用机制不再使用。
+Package tests produce their own reports. Run them through the [release contract entry](release/contracts/README.md). Publication gates are defined in [CI governance](CI-GOVERNANCE.md#3-发布).
 
 Every module directory must contain a `README.md` that records:
 
@@ -103,6 +101,5 @@ accepted. Run `scripts/windows-local.ps1 -Task CheckTestStructure` to verify
 source registration, exact Qt Level/report mapping, npm and runner file-list
 parity, per-Test-ID PowerShell registration, and Module README presence.
 
-The permanent regression policy, current coverage gaps, and admission rules
-for cache, group chat, file/media, audio/video, and LAN modules are defined in
-[`REGRESSION.md`](REGRESSION.md).
+Module admission follows the [regression strategy](REGRESSION.md#new-module-admission-contract).
+Look up covered behavior and outstanding gaps in the [contract matrix](TEST-CONTRACT-MATRIX.md).

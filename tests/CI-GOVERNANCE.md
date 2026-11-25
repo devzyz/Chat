@@ -14,9 +14,11 @@
 | 每周一北京时间 03:17 | 默认分支 develop 的 Windows 回归和 Linux 全量集成/E2E | 否 |
 | master PR | 同上全量检查，成功才允许合并 | 否 |
 | master push | 实际合并 SHA 的全量检查、Windows 包启动冒烟 | 成功后自动发布 |
-| workflow_dispatch | 所选分支可选 quick / full，默认 full | 否 |
+| workflow_dispatch | 所选分支默认 full，可选 quick 或独立的[性能模式](#手动性能模式) | 否 |
 
-入口的轻量 `plan` 作业通过 `scripts/ci/ciPolicy.js` 统一选择模式，不查询历史运行或工具链工件。
+PR 按目标分支分流；打开、更新提交、重新打开、编辑和转为可评审都会重新判定。功能分支的独立 push 不触发此工作流。[工作流入口](../.github/workflows/ci.yml) · [模式选择](../scripts/ci/ciPolicy.js) · [文档路径判定](../scripts/ci/ciScope.js)
+
+入口的轻量 `plan` 作业统一选择模式，不查询历史运行或工具链工件。
 `quick` 保留完整 Windows 静态、构建和既有测试，不运行 Linux、不生成应用 ZIP；`full` 增加
 Linux 集成/E2E 和应用打包。master PR/push 与周检固定 full；手动 quick 即使选择 master 也不发布。
 手动 `real_acceptance`、`cold_linux`、`refresh_tools` 任一启用都将模式提升为 full，并在摘要说明。
@@ -117,7 +119,7 @@ JS 匿名类没有命名要求，具名类仍检查。这些例外都不免除�
 ## 2. 回归测试
 
 保留已有业务行为测试。快速流程的“快速”指不启用 Docker 真实依赖和完整 E2E，不省略单元测试；首次冷依赖构建仍可能较慢。
-Windows 快速流程使用临时 PostgreSQL 运行迁移和原生存储合同。全量流程额外在 Linux 运行 PostgreSQL / MySQL 双实例协议对照，并保留既有 MySQL、Redis、SMTP、Qt 等完整业务回归。
+普通 Windows quick 使用临时 PostgreSQL 运行迁移和原生存储合同。全量流程额外在 Linux 运行 PostgreSQL / MySQL 双实例协议对照，并保留既有 MySQL、Redis、SMTP、Qt 等完整业务回归。
 
 Windows 静态 job 统一执行一次 `CheckTestStructure`；其成功后，各测试入口使用
 `-SkipTestStructureCheck` 复用同一提交的检查结果。该参数仅允许 GitHub CI 的四个测试入口使用，
@@ -134,13 +136,32 @@ quick 保留所有 Windows 测试及报告上传，不生成或上传应用 ZIP�
 
 ### 2.1 比例化执行合同
 
-十类验证的触发与证据边界见 [CI 分类规范](../docs/CI-Category-Spec.md)。各通道在原始工件上传后读取本作业的 JUnit，
+各通道在原始工件上传后读取本作业的 JUnit，
 在 Actions Summary 展示模块、失败或跳过的用例及日志/工件入口。有源码位置时链接到本次提交。
 构建或准备阶段失败时查看 Failure diagnostics 中该次 attempt 的失败步骤；没有 JUnit 时不推断测试通过。
 
 文档修改检查事实、链接和 diff；行为修改运行所属模块回归；网络或数据修改补相关集成。
 跨流程修改验证触发、失败传播和受影响入口；全量运行用于 master、周检、手动 full 和明确的全量验收。
 不要求普通修改另写计划、威胁模型、多份总结或重复 mutation。已有业务测试不因流程精简而删除。
+
+### 十类检查的触发与证据
+
+先按[分支与运行时机](#1-分支与运行时机)确定本次模式，再查下表。类别按受检查的行为划分，一项作业可以产出多类证据。测试的 Domain、Level 和执行命令见[测试入口](README.md)，业务 Test ID 及覆盖缺口见[合同矩阵](TEST-CONTRACT-MATRIX.md)。
+
+| ID 与类别 | develop 纯文档 | 普通 quick | full（含 master push） | 手动 performance | 首要证据 |
+| --- | --- | --- | --- | --- | --- |
+| 01 静态与 CI 自检 | Windows 静态检查 | 同左 | 同左，master 事件另查版本冲突 | 性能框架与策略合同 | 规范、工作流、清单或注册检查器的诊断 |
+| 02 构建基础设施与复用 | 缓存和工具脚本自检 | Windows 工具链与依赖恢复 | 双平台恢复，周检刷新 Windows 工具链 | Linux 专项恢复 | 工具链、ABI、实际复用包数和运行包来源 SHA |
+| 03 平台构建 | CMake 配置合同 | Windows Release | Windows 与 Linux 原生目标，另查无 Qt 的服务端构建 | 专项运行包 | 对应平台、目标和配置的编译、链接、就绪记录 |
+| 04 组件与协议回归 | — | Windows Server、Qt、Varify；Server 作业另跑临时 PG | 含普通 quick 的模块回归 | — | 模块 JUnit；PG 迁移和原生存储另产出 `postgresql_native.xml`，在 04 Server 摘要展示 |
+| 05 运维脚本与进程管理 | Windows 实例脚本 | 同左 | 另加 Linux POSIX 进程检查 | — | 实例验证、启动、PID 归属、退出与清理 |
+| 06 真实依赖与服务集成 | — | 真实 PG 合同见 04 | Linux 双库原生合同及 3C 临时服务集成 | 依赖用于 09 的负载 | 数据库记录、Redis 状态、Mailpit 收件和进程清理 |
+| 07 真实业务端到端 | — | — | Linux 双库跨实例协议及 3D 双服业务；手动勾选后增加四账号专项 | — | 场景 ID、收发双方观察、持久化结果和资源清理；自动控件证据单列 |
+| 08 打包与成品冒烟 | 临时 ZIP 打包合同 | 同左 | 另生成五个应用 ZIP；master push 在全量成功后组装、下载和冒烟发行包 | — | 文件布局、源码 SHA、包摘要、独立 Windows runner 启动记录与上传回验 |
+| 09 性能 | — | — | — | 所选档位的真实负载 | 按档位核验样本、内容、去重和超时，吞吐及延迟见当次报告 |
+| 10 报告与失败定位 | 静态作业报告 | Windows 门禁 | 双平台门禁，按需验收门禁；master push 成品冒烟另报 | 专项报告及采样校验 | Actions Summary、原始报告、该次 attempt 的失败步骤与日志 |
+
+Windows 静态检查通过后，Server、Qt、Varify 作业可分别执行；Gate、Chat、Resource 和共享协议复用同次服务端构建。Linux 的 3C 与 3D 在构建预检及 POSIX 检查成功后使用独立环境、校验同一提交的运行包。替身的结果只证明调用方对相应返回值的处理。一次运行的通过、跳过、上游失败及清理结果均见该次记录。[Windows 作业](../.github/workflows/windows-ci.yml) · [Linux 作业](../.github/workflows/linux-ci.yml) · [性能作业](../.github/workflows/performance.yml)
 
 ## 3. 发布
 
