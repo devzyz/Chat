@@ -114,5 +114,6 @@ test('AutoDL records the requested delivery once per CI run', () => {
     assert.equal(selectAutodl('workflow_dispatch', master, 'quick', 'package'), 'package');
     assert.equal(selectAutodl('workflow_dispatch', develop, 'full', 'skip', 'true'), 'skip');
     assert.equal(selectAutodl('workflow_dispatch', develop, 'performance', 'deploy'), 'skip');
+    // 拒绝从 master 手动激活 AutoDL 部署。
     assert.throws(() => selectAutodl('workflow_dispatch', master, 'full', 'deploy'));
 });
