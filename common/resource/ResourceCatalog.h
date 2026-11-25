@@ -16,16 +16,10 @@ namespace resource {
 class ResourceCatalog {
 public:
     /** @brief 建立目录数据库连接池，配置有限连接/读写期限并禁止自动重连。 */
-    ResourceCatalog(
-        const std::string& host,
-        const std::string& user,
-        const std::string& password,
-        const std::string& schema,
-        const std::string& driver = "mysql",
-        const std::string& port = "")
+    ResourceCatalog(const std::string& host, const std::string& user, const std::string& password,
+        const std::string& schema, const std::string& driver = "mysql", const std::string& port = "")
         // 以固定连接和 I/O 期限建立目录数据库连接，并禁止自动重连。
-        : _pool(
-              2,
+        : _pool(2,
               // 为每次借用建立可独立复位的物理连接。
               [=] {
                   if (driver == "postgresql") {
@@ -50,19 +44,16 @@ public:
               }) {
         auto lease = Acquire();
     }
+
     /** @brief 检查当前连接的完整 schema；仅用于管理就绪探测，异常向调用方传播。 */
     bool IsReady() {
         auto lease = Acquire();
         lease->Verify();
         return true;
     }
+
     /** @brief 把已就绪资源元数据登记到共享目录，重复资源 ID 不覆盖既有元数据。 */
-    void Publish(
-        const std::string& id,
-        int owner,
-        const std::string& name,
-        const std::string& type,
-        std::uint64_t size,
+    void Publish(const std::string& id, int owner, const std::string& name, const std::string& type, std::uint64_t size,
         const std::string& digest) {
         auto lease = Acquire();
         std::unique_ptr<database::PreparedStatement> statement(lease->PrepareStatement(database::QueryText{
@@ -78,6 +69,7 @@ public:
         statement->SetString(6, digest);
         statement->ExecuteUpdate();
     }
+
     /** @brief 检查认证用户能否读取公开头像或其参与私聊引用的资源。 */
     bool CanRead(int uid, const std::string& id) {
         auto lease = Acquire();
@@ -85,8 +77,7 @@ public:
             lease->PrepareStatement("SELECT 1 FROM user_avatar WHERE resource_id=? LIMIT 1"));
         avatar->SetString(1, id);
         std::unique_ptr<database::ResultSet> profile(avatar->ExecuteQuery());
-        if (uid > 0 && profile->Next())
-            return true;
+        if (uid > 0 && profile->Next()) return true;
         profile.reset();
         std::unique_ptr<database::PreparedStatement> statement(
             lease->PrepareStatement("SELECT 1 FROM resource_message r JOIN chat_message m ON m.message_id=r.message_id "
@@ -96,8 +87,7 @@ public:
         for (int index = 2; index <= 5; ++index)
             statement->SetInt(index, uid);
         std::unique_ptr<database::ResultSet> rows(statement->ExecuteQuery());
-        if (rows->Next())
-            return true;
+        if (rows->Next()) return true;
         rows.reset();
         std::unique_ptr<database::PreparedStatement> group(lease->PrepareStatement(database::QueryText{
             "SELECT 1 FROM resource_message r JOIN chat_message m ON m.message_id=r.message_id "
@@ -112,12 +102,14 @@ public:
         rows.reset(group->ExecuteQuery());
         return rows->Next();
     }
+
     /** @brief 保存已提交资源消息的服务器 ID 与序列化内容。 */
     struct Message {
         int id;
         std::string content;
         bool existing = false;
     };
+
     /** @brief 查询用户当前已发布头像的资源 ID，不存在时返回空字符串。 */
     std::string GetAvatar(int uid) {
         auto lease = Acquire();
@@ -127,6 +119,7 @@ public:
         std::unique_ptr<database::ResultSet> row(statement->ExecuteQuery());
         return row->Next() ? std::string(row->GetString(1)) : std::string();
     }
+
     /** @brief 在 SQL 中核验资源归属及头像限制后更新用户头像；验证不通过抛异常。 */
     void SetAvatar(int uid, const std::string& id) {
         auto lease = Acquire();
@@ -145,29 +138,24 @@ public:
             lease->PrepareStatement("SELECT resource_id FROM user_avatar WHERE uid=?"));
         verify->SetInt(1, uid);
         std::unique_ptr<database::ResultSet> row(verify->ExecuteQuery());
-        if (!row->Next() || row->GetString(1) != id)
+        if (!row->Next() || row->GetString(1) != id) {
             throw std::runtime_error("avatar resource unavailable or not owned");
+        }
     }
+
     /** @brief 在会话行锁事务中校验资源归属并提交消息引用；同 UUID 幂等复用，身份冲突抛异常。 */
-    Message CommitMessage(
-        int sender,
-        int recipient,
-        int chat,
-        const std::string& uuid,
-        const std::string& id,
-        std::int64_t epoch = 0,
-        std::int64_t relationship = 0) {
-        if (uuid.empty() || uuid.size() > 64)
-            throw std::invalid_argument("invalid message UUID");
+    Message CommitMessage(int sender, int recipient, int chat, const std::string& uuid, const std::string& id,
+        std::int64_t epoch = 0, std::int64_t relationship = 0) {
+        if (uuid.empty() || uuid.size() > 64) throw std::invalid_argument("invalid message UUID");
         auto lease = Acquire();
         messaging::Transaction transaction(*lease);
         {
             if (recipient == 0) {
-                if (epoch <= 0)
-                    throw std::runtime_error("missing membership epoch");
+                if (epoch <= 0) throw std::runtime_error("missing membership epoch");
                 messaging::LockGroup(*lease, chat, sender, epoch);
-            } else
+            } else {
                 messaging::LockConversation(*lease, chat, sender, recipient);
+            }
             std::unique_ptr<database::PreparedStatement> existing(lease->PrepareStatement(
                 "SELECT m.message_id,m.content,r.resource_id,m.chat_id,m.recv_id FROM resource_message r "
                 "JOIN chat_message m ON m.message_id=r.message_id WHERE r.sender_uid=? AND r.client_uuid=?"));
@@ -175,22 +163,21 @@ public:
             existing->SetString(2, uuid);
             std::unique_ptr<database::ResultSet> prior(existing->ExecuteQuery());
             if (prior->Next()) {
-                if (prior->GetString(3) != id || prior->GetInt(4) != chat || prior->GetInt(5) != recipient)
+                if (prior->GetString(3) != id || prior->GetInt(4) != chat || prior->GetInt(5) != recipient) {
                     throw std::runtime_error("message UUID conflict");
+                }
                 Message message{prior->GetInt(1), prior->GetString(2), true};
                 transaction.Commit();
                 return message;
             }
             prior.reset();
-            if (recipient > 0)
-                messaging::CheckPrivateSend(*lease, chat, relationship);
+            if (recipient > 0) messaging::CheckPrivateSend(*lease, chat, relationship);
             std::unique_ptr<database::PreparedStatement> resource(lease->PrepareStatement(
                 "SELECT name,media_type,size_bytes,sha256 FROM resource_file WHERE resource_id=? AND owner_uid=?"));
             resource->SetString(1, id);
             resource->SetInt(2, sender);
             std::unique_ptr<database::ResultSet> row(resource->ExecuteQuery());
-            if (!row->Next())
-                throw std::runtime_error("resource unavailable or not owned");
+            if (!row->Next()) throw std::runtime_error("resource unavailable or not owned");
             Json::Value descriptor;
             descriptor["resource_id"] = id;
             descriptor["name"] = std::string(row->GetString(1));
@@ -211,11 +198,10 @@ public:
             insert->SetString(5, uuid);
             insert->ExecuteUpdate();
             std::unique_ptr<database::Statement> query(lease->CreateStatement());
-            std::unique_ptr<database::ResultSet> generated(query->ExecuteQuery(database::QueryText{
-                "SELECT LAST_INSERT_ID()",
-                "SELECT currval(pg_get_serial_sequence('chat.chat_message','message_id'))"}));
-            if (!generated->Next())
-                throw std::runtime_error("missing message id");
+            std::unique_ptr<database::ResultSet> generated(
+                query->ExecuteQuery(database::QueryText{"SELECT LAST_INSERT_ID()",
+                    "SELECT currval(pg_get_serial_sequence('chat.chat_message','message_id'))"}));
+            if (!generated->Next()) throw std::runtime_error("missing message id");
             const auto message_id = generated->GetInt(1);
             std::unique_ptr<database::PreparedStatement> reference(lease->PrepareStatement(
                 "INSERT INTO resource_message(message_id,resource_id,sender_uid,client_uuid) VALUES(?,?,?,?)"));
@@ -234,6 +220,7 @@ private:
     database::ConnectionPool<database::Owned>::Lease Acquire() {
         return _pool.Acquire();
     }
+
     database::ConnectionPool<database::Owned> _pool;
 };
 }

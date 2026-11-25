@@ -37,7 +37,7 @@ TEST(T09_PROC_RunContext, AllocatesDistinctOwnedLoopbackPortsAndRejectsDuplicate
     EXPECT_NE(gate.port, 0);
     EXPECT_NE(status.port, 0);
     EXPECT_NE(gate.port, status.port);
-    EXPECT_THROW(context->ReserveLoopbackPort("gate"), std::invalid_argument);
+    EXPECT_THROW(context -> ReserveLoopbackPort("gate"), std::invalid_argument);
 }
 
 // T09-PROC-03
@@ -49,8 +49,8 @@ TEST(T09_PROC_RunContext, CreatesOwnedTempRootAndRefusesOutsideOrPreexistingPath
 
     const auto owned = context->CreateOwnedDirectory("evidence");
     ASSERT_TRUE(std::filesystem::is_directory(owned));
-    EXPECT_THROW(context->CreateOwnedDirectory("evidence"), std::invalid_argument);
-    EXPECT_THROW(context->CreateOwnedDirectory("..\\outside"), std::invalid_argument);
+    EXPECT_THROW(context -> CreateOwnedDirectory("evidence"), std::invalid_argument);
+    EXPECT_THROW(context -> CreateOwnedDirectory("..\\outside"), std::invalid_argument);
     EXPECT_FALSE(context->CleanupOwnedPath(std::filesystem::temp_directory_path()));
 }
 

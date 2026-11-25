@@ -152,6 +152,7 @@ void StateWidget::keyPressEvent(QKeyEvent* event) {
     }
     QWidget::keyPressEvent(event);
 }
+
 void StateWidget::keyReleaseEvent(QKeyEvent* event) {
     if (_activation.keyRelease(event)) {
         setSelected(true);
@@ -161,6 +162,7 @@ void StateWidget::keyReleaseEvent(QKeyEvent* event) {
     }
     QWidget::keyReleaseEvent(event);
 }
+
 void StateWidget::focusOutEvent(QFocusEvent* event) {
     _activation.cancel();
     QWidget::focusOutEvent(event);

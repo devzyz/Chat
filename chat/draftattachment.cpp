@@ -17,6 +17,7 @@ constexpr qint64 maxPendingImageBytes = 256 * 1024 * 1024;
 /** @brief 一次后台准备占用的队列与图片内存额度，任务退出时归还。 */
 struct PreparationReservation {
     qint64 bytes = 0;
+
     /** @brief 释放任务数量及其捕获图片的内存额度。 */
     ~PreparationReservation() {
         pendingImageBytes.fetch_sub(bytes);
@@ -25,9 +26,7 @@ struct PreparationReservation {
 };
 }
 
-std::shared_ptr<DraftAttachment> prepareDraftAttachment(
-    const QString& path,
-    const QImage& image,
+std::shared_ptr<DraftAttachment> prepareDraftAttachment(const QString& path, const QImage& image,
     const QString& accountRoot) {
     auto attachment = std::make_shared<DraftAttachment>();
     attachment->id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -50,16 +49,10 @@ std::shared_ptr<DraftAttachment> prepareDraftAttachment(
     auto* ownerThread = QCoreApplication::instance()->thread();
     attachment->future = QtConcurrent::run(
         /** @brief 仅处理值参数；文件关闭后交给主线程中的共享草稿引用。 */
-        [path,
-         image,
-         accountRoot,
-         id = attachment->id,
-         ownerThread,
-         reservation,
-         reference = std::weak_ptr<DraftAttachment>(attachment)] {
+        [path, image, accountRoot, id = attachment->id, ownerThread, reservation,
+            reference = std::weak_ptr<DraftAttachment>(attachment)] {
             DraftAttachmentResult result;
-            if (reference.expired())
-                return result;
+            if (reference.expired()) return result;
             result.entry = {DraftEntry::Kind::Attachment, id, path, {}};
             if (!image.isNull()) {
                 const auto directory = accountRoot + "/transfers/drafts";
@@ -77,8 +70,7 @@ std::shared_ptr<DraftAttachment> prepareDraftAttachment(
                 result.entry.content = file->fileName();
                 result.entry.temporary = file;
             }
-            if (reference.expired())
-                return DraftAttachmentResult{};
+            if (reference.expired()) return DraftAttachmentResult{};
             const QFileInfo file(result.entry.content);
             if (!file.isFile() || !file.isReadable() || file.size() == 0) {
                 result.error = QObject::tr("附件不存在、为空或不可读，请删除或重新添加");
@@ -87,10 +79,8 @@ std::shared_ptr<DraftAttachment> prepareDraftAttachment(
             result.entry.content = file.absoluteFilePath();
             result.byteSize = file.size();
             QImageReader reader(result.entry.content);
-            if (reference.expired())
-                return DraftAttachmentResult{};
-            if (reader.size().isValid())
-                reader.setScaledSize(reader.size().scaled(120, 80, Qt::KeepAspectRatio));
+            if (reference.expired()) return DraftAttachmentResult{};
+            if (reader.size().isValid()) reader.setScaledSize(reader.size().scaled(120, 80, Qt::KeepAspectRatio));
             result.preview = reader.read();
             return result;
         });

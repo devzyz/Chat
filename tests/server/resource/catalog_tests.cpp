@@ -5,8 +5,7 @@
 /** 验证真实数据库空闲连接被杀死后，目录操作在下一次借用前替换连接。 */
 TEST(ResourceCatalogIntegration, KilledIdleConnectionsAreReplacedBeforeTheNextOperation) {
     const auto* endpoint = std::getenv("RESOURCE_TEST_MYSQL");
-    if (!endpoint)
-        GTEST_SKIP() << "Requires disposable MySQL";
+    if (!endpoint) GTEST_SKIP() << "Requires disposable MySQL";
     std::unique_ptr<sql::Connection> control(sql::mysql::get_mysql_driver_instance()->connect(endpoint, "root", ""));
     control->setSchema("resource_test");
     resource::ResourceCatalog catalog(endpoint, "root", "", "resource_test");
@@ -27,8 +26,7 @@ TEST(ResourceCatalogIntegration, KilledIdleConnectionsAreReplacedBeforeTheNextOp
 /** 验证资源提交重试幂等、成员资格及下载授权。 */
 TEST(ResourceCatalogIntegration, CommitRetryMembershipAndDownloadAuthorization) {
     const auto* endpoint = std::getenv("RESOURCE_TEST_MYSQL");
-    if (!endpoint)
-        GTEST_SKIP() << "RESOURCE_TEST_MYSQL must identify the disposable test MySQL";
+    if (!endpoint) GTEST_SKIP() << "RESOURCE_TEST_MYSQL must identify the disposable test MySQL";
     std::unique_ptr<sql::Connection> connection(sql::mysql::get_mysql_driver_instance()->connect(endpoint, "root", ""));
     connection->setSchema("resource_test");
     std::unique_ptr<sql::Statement> statement(connection->createStatement());
@@ -62,8 +60,7 @@ TEST(ResourceCatalogIntegration, CommitRetryMembershipAndDownloadAuthorization) 
 /** 验证头像发布遵循拥有者权限、持久化且独立于聊天消息。 */
 TEST(ResourceCatalogIntegration, AvatarPublicationIsOwnedPersistentAndSeparateFromMessages) {
     const auto* endpoint = std::getenv("RESOURCE_TEST_MYSQL");
-    if (!endpoint)
-        GTEST_SKIP() << "Requires disposable MySQL";
+    if (!endpoint) GTEST_SKIP() << "Requires disposable MySQL";
     resource::ResourceCatalog catalog(endpoint, "root", "", "resource_test");
     const std::string first = "00000000-0000-0000-0000-000000000011";
     const std::string second = "00000000-0000-0000-0000-000000000012";

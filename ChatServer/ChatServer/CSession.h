@@ -10,6 +10,7 @@
 
 class SessionLifecycleCoordinator;
 class UserSessionDirectory;
+
 /**
  * @brief 在独立 strand 上管理 TCP 会话、收发队列、心跳与关闭；异步调用要求 shared_ptr 所有权。
  * @note io 和生命周期协调器必须存活到回调排空；原子查询是快照，Active 不代表已认证。
@@ -18,54 +19,62 @@ class CSession : public std::enable_shared_from_this<CSession> {
 public:
     using Submit = std::function<LogicSubmitResult(LogicMessage)>;
     /** @brief 创建未启动会话；依赖必须有效，submit 在会话 strand 同步调用，不应阻塞。 */
-    CSession(
-        boost::asio::io_context& io,
-        std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
-        std::shared_ptr<UserSessionDirectory> directory,
-        Submit submit);
+    CSession(boost::asio::io_context& io, std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
+        std::shared_ptr<UserSessionDirectory> directory, Submit submit);
     /** @brief 默认释放成员资源；正常关闭及所有权移除由 Close 的异步流程完成。 */
     ~CSession() = default;
     /** @brief 借出 socket 供 acceptor 在 Start 前接入；引用只在会话存活期间有效。 */
     boost::asio::ip::tcp::socket& Socket(); // Acceptor only, before Start.
+
     /** @brief 返回不可变会话标识的借用引用，有效期与会话相同。 */
     const SessionId& Id() const noexcept {
         return _id;
     }
+
     // 返回建连时由 SessionId 计算的固定分片键，所有入站请求共用。
     std::size_t DispatchHash() const noexcept {
         return _dispatch_hash;
     }
+
     // 在请求关闭时立即失效，供排队任务检查。
     bool Closing() const noexcept {
         return _closing.load();
     }
+
     /** @brief 返回已绑定 UID 的原子快照；未绑定或进入关闭时为 0。 */
     int AuthenticatedUid() const noexcept {
         return _authenticated_uid.load();
     }
+
     /** @brief 返回此连接是否协商资料与好友管理协议。 */
     bool SupportsSocial() const noexcept {
         return _social.load();
     }
+
     /** @brief 登录协商是否支持版本化资料和好友关系。 */
     void EnableSocial(bool enabled) noexcept {
         _social.store(enabled);
     }
+
     /** @brief 查询已协商的群能力。 */
     bool SupportsGroups() const noexcept {
         return _groups.load();
     }
+
     /** @brief 保存登录协商结果。 */
     void EnableGroups(bool enabled) noexcept {
         _groups.store(enabled);
     }
+
     bool SupportsReceipts() const noexcept {
         return _receipts.load();
     }
+
     /** @brief 原子更新协商后的回执能力，不改变认证状态。 */
     void EnableReceipts(bool enabled) noexcept {
         _receipts.store(enabled);
     }
+
     /** @brief 投递首次启动至 strand，开始收帧和心跳；重复启动或关闭后启动无效。 */
     void Start();
     /**
@@ -90,12 +99,8 @@ public:
 private:
     friend class SessionLifecycleCoordinator;
     /** @brief 将发布结果送回 strand；取消或关闭时拒绝绑定，先通知 committed 再调用业务 completion。 */
-    void FinishBinding(
-        int uid,
-        SessionBindResult result,
-        BindCompletion completion,
-        std::shared_ptr<std::atomic<bool>> cancelled,
-        std::function<void(bool)> committed);
+    void FinishBinding(int uid, SessionBindResult result, BindCompletion completion,
+        std::shared_ptr<std::atomic<bool>> cancelled, std::function<void(bool)> committed);
     /** @brief 仅在 strand 首次进入 Closing，注销本地身份并取消 socket、心跳及待发队列。 */
     void BeginClosing(SessionCloseReason reason);
     /** @brief 在 strand 确认关闭且 I/O、绑定全部结束后，仅一次请求 Server 释放所有权。 */
@@ -110,14 +115,17 @@ private:
     void StartWrite();
     /** @brief 在 strand 启动心跳检查；按最近收到完整帧的时刻判断超时并关闭。 */
     void ArmHeartbeat();
+
     boost::asio::strand<boost::asio::io_context::executor_type> _strand;
     boost::asio::ip::tcp::socket _socket;
     boost::asio::steady_timer _heartbeat;
+
     std::shared_ptr<SessionLifecycleCoordinator> _lifecycle;
     std::shared_ptr<UserSessionDirectory> _directory;
     Submit _submit;
     const SessionId _id;
     const std::size_t _dispatch_hash;
+
     SessionState _state = SessionState::Created;
     std::optional<SessionCloseReason> _close_reason;
     std::atomic<bool> _closing{false};
@@ -130,6 +138,7 @@ private:
     bool _binding = false;
     bool _released = false;
     std::size_t _io_pending = 0;
+
     bool _write_active = false;
     ChatFrameCodec::HeaderBytes _header{};
     std::string _body;

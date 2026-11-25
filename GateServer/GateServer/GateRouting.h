@@ -46,9 +46,7 @@ public:
 };
 
 /** @brief 拥有候选实例副本并共享持有有效的存储及 Token 源，不修改调用方实例列表。 */
-std::unique_ptr<GateRouting> CreateGateRouting(
-    std::vector<RoutingServer> servers,
-    std::shared_ptr<AssignmentStore> store,
-    std::shared_ptr<TokenSource> token_source);
+std::unique_ptr<GateRouting> CreateGateRouting(std::vector<RoutingServer> servers,
+    std::shared_ptr<AssignmentStore> store, std::shared_ptr<TokenSource> token_source);
 
 } // namespace gate_routing

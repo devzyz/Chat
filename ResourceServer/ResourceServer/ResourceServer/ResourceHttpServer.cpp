@@ -17,16 +17,19 @@ using tcp = net::ip::tcp;
 static std::uint64_t Number(const std::string& text) {
     std::uint64_t value = 0;
     auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
-    if (text.empty() || parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size())
+    if (text.empty() || parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
         throw Error(400, "invalid unsigned integer");
+    }
     return value;
 }
+
 /** @brief 把 JSON 响应值编码为无多余缩进的字节文本。 */
 static std::string Json(const Json::Value& value) {
     Json::StreamWriterBuilder writer;
     writer["indentation"] = "";
     return Json::writeString(writer, value);
 }
+
 /** @brief 把资源元数据转换为 HTTP JSON 描述，大小和偏移按协议编码。 */
 static Json::Value Describe(const Metadata& metadata) {
     Json::Value value;
@@ -57,26 +60,21 @@ struct ResourceHttpServer::Impl : std::enable_shared_from_this<Impl> {
     std::set<std::shared_ptr<Session>> sessions;
     bool stopping = false;
     std::function<bool()> ready;
+
     /** @brief 初始化Impl，拥有外层服务的运行状态和异步操作所需资源，生命周期由外层实现约束。 */
-    Impl(
-        net::io_context& context,
-        const std::string& host,
-        unsigned short port,
-        ResourceStore& value,
-        Authenticate auth,
-        CanRead reader,
-        Publish publisher,
-        GetAvatar avatar_reader,
-        SetAvatar avatar_writer,
+    Impl(net::io_context& context, const std::string& host, unsigned short port, ResourceStore& value,
+        Authenticate auth, CanRead reader, Publish publisher, GetAvatar avatar_reader, SetAvatar avatar_writer,
         std::function<bool()> readiness)
         : acceptor(context, tcp::endpoint(net::ip::make_address(host), port)), store(value),
           authenticate(std::move(auth)), can_read(std::move(reader)), publish(std::move(publisher)),
           get_avatar(std::move(avatar_reader)), set_avatar(std::move(avatar_writer)), ready(std::move(readiness)) {}
+
     /** @brief 安排下一次资源 HTTP 连接接收，并在运行状态与会话数限制内启动会话。 */
     void Accept();
     /** @brief 停止接收新工作并关闭当前服务的监听或执行器；后续销毁由所属生命周期流程负责。 */
     void Stop();
 };
+
 /** @brief 拥有一次资源 HTTP 连接及流式读写状态，异步回调以共享引用保持自身存活。 */
 struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session> {
     beast::tcp_stream stream;
@@ -91,19 +89,21 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
     std::optional<http::response<http::empty_body>> download_header;
     std::optional<http::response_serializer<http::empty_body>> download_serializer;
     std::vector<char> outgoing;
+
     /** @brief 初始化Session，拥有一次资源 HTTP 连接及流式读写状态，异步回调以共享引用保持自身存活。 */
     explicit Session(tcp::socket socket, std::shared_ptr<Impl> owner)
         : stream(std::move(socket)), server(std::move(owner)) {}
+
     /** @brief 幂等标记连接关闭，取消 socket 操作并从服务的会话集合移除自身。 */
     void Close() {
-        if (closed)
-            return;
+        if (closed) return;
         closed = true;
         beast::error_code error;
         stream.socket().cancel(error);
         stream.socket().close(error);
         server->sessions.erase(shared_from_this());
     }
+
     /** @brief 执行队列中的工作并把结果交回所属执行器，遵守停止状态与错误映射。 */
     template <class Work, class Done> void Run(Work work, Done done) {
         auto self = shared_from_this();
@@ -122,20 +122,20 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
             }
             // 把工作结果交回连接执行器，关闭会话不再发送响应。
             net::post(self->stream.get_executor(), [self, done = std::move(done), result, status]() mutable {
-                if (self->closed)
-                    return;
+                if (self->closed) return;
                 if (status != 200) {
                     self->keep_alive = false;
                     self->Reply(status, result);
-                } else
+                } else {
                     done(result);
+                }
             });
         });
     }
+
     /** @brief 重置单次请求状态，在既有连接上有界读取 HTTP 头；首次及 keep-alive 后续请求共用此入口。 */
     void Start() {
-        if (closed)
-            return;
+        if (closed) return;
         parser.emplace();
         parser->header_limit(8192);
         parser->body_limit(1024 * 1024);
@@ -145,10 +145,7 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
         keep_alive = false;
         stream.expires_after(std::chrono::seconds(30));
         // 完成 HTTP 头读取后检查大小限制及连接错误。
-        http::async_read_header(
-            stream,
-            buffer,
-            *parser,
+        http::async_read_header(stream, buffer, *parser,
             [self = shared_from_this()](beast::error_code error, std::size_t) {
                 if (error == http::error::body_limit || error == http::error::header_limit) {
                     Json::Value result;
@@ -163,6 +160,7 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
                 self->Headers();
             });
     }
+
     /** @brief 核对 HTTP 方法、路由、认证和请求长度，在处理正文前完成资源前置校验。 */
     void Headers() {
         const auto& request = parser->get();
@@ -181,10 +179,8 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
                     bool ready = false;
                     try {
                         ready = owner->ready && owner->ready();
-                    } catch (...) {
-                    }
-                    if (!ready)
-                        throw Error(503, "dependencies unavailable");
+                    } catch (...) {}
+                    if (!ready) throw Error(503, "dependencies unavailable");
                     Json::Value value;
                     value["status"] = "ready";
                     return value;
@@ -197,42 +193,38 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
         }
         try {
             const auto parsed_uid = Number(std::string(request["X-User-Id"]));
-            if (!parsed_uid || parsed_uid > 2147483647)
-                throw Error(401, "invalid user");
+            if (!parsed_uid || parsed_uid > 2147483647) throw Error(401, "invalid user");
             uid = static_cast<int>(parsed_uid);
             const std::string authorization(request[http::field::authorization]);
-            if (authorization.rfind("Bearer ", 0) != 0)
-                throw Error(401, "token required");
-            if (request.chunked())
-                throw Error(400, "Content-Length required");
+            if (authorization.rfind("Bearer ", 0) != 0) throw Error(401, "token required");
+            if (request.chunked()) throw Error(400, "Content-Length required");
             const auto length = parser->content_length();
-            if (!length && !parser->is_done())
-                throw Error(411, "Content-Length required");
+            if (!length && !parser->is_done()) throw Error(411, "Content-Length required");
             if (route.rfind("/uploads/", 0) == 0) {
                 id = route.substr(9);
-                if (id.size() > 9 && id.substr(id.size() - 9) == "/complete")
-                    id.resize(id.size() - 9);
-            } else if (route.rfind("/resources/", 0) == 0)
+                if (id.size() > 9 && id.substr(id.size() - 9) == "/complete") id.resize(id.size() - 9);
+            } else if (route.rfind("/resources/", 0) == 0) {
                 id = route.substr(11);
+            }
             patch = request.method() == http::verb::patch;
-            if (patch)
-                offset = Number(std::string(request["Upload-Offset"]));
+            if (patch) offset = Number(std::string(request["Upload-Offset"]));
             const auto token = authorization.substr(7);
             // 在工作执行器核对认证身份、上传偏移和请求长度。
             Run(
                 [self = shared_from_this(), token, length] {
-                    if (!self->server->authenticate(self->uid, token))
-                        throw Error(401, "authentication failed");
+                    if (!self->server->authenticate(self->uid, token)) throw Error(401, "authentication failed");
                     if (self->patch) {
-                        if (self->route != "/uploads/" + self->id)
-                            throw Error(404, "route not found");
+                        if (self->route != "/uploads/" + self->id) throw Error(404, "route not found");
                         auto metadata = self->server->store.Owned(self->id, self->uid);
-                        if (metadata.ready || metadata.offset != self->offset)
+                        if (metadata.ready || metadata.offset != self->offset) {
                             throw Error(409, "upload offset mismatch");
-                        if (!length || *length > metadata.size - metadata.offset)
+                        }
+                        if (!length || *length > metadata.size - metadata.offset) {
                             throw Error(413, "invalid upload length");
-                    } else if (length && *length > 8192)
+                        }
+                    } else if (length && *length > 8192) {
                         throw Error(413, "metadata too large");
+                    }
                     return Json::Value();
                     // 前置认证及上传校验成功后开始读取正文。
                 },
@@ -246,6 +238,7 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
             Reply(error.status, result);
         }
     }
+
     /** @brief 分块读取请求正文，上传块落盘完成后才继续读取后续块。 */
     void ReadBody() {
         if (parser->is_done()) {
@@ -256,16 +249,11 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
         parser->get().body().size = block.size();
         stream.expires_after(std::chrono::seconds(30));
         // 读取上传块后先检查关闭与错误状态，再安排文件追加。
-        http::async_read_some(
-            stream,
-            buffer,
-            *parser,
+        http::async_read_some(stream, buffer, *parser,
             [self = shared_from_this()](beast::error_code error, std::size_t) {
-                if (self->closed)
-                    return;
+                if (self->closed) return;
                 const auto count = self->block.size() - self->parser->get().body().size;
-                if (error == http::error::need_buffer)
-                    error = {};
+                if (error == http::error::need_buffer) error = {};
                 if (count && self->patch) {
                     // Persist any received prefix even when the peer disconnects mid-request.
                     const auto at = self->offset;
@@ -278,10 +266,11 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
                         },
                         [self, error, count](const Json::Value&) {
                             self->offset += count;
-                            if (error)
+                            if (error) {
                                 self->Close();
-                            else
+                            } else {
                                 self->ReadBody();
+                            }
                         });
                 } else {
                     if (error) {
@@ -300,6 +289,7 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
                 }
             });
     }
+
     /** @brief 按资源路由执行业务动作，将结果或资源错误转换为 HTTP 响应。 */
     void Dispatch() {
         const auto method = parser->get().method();
@@ -313,35 +303,33 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
                 auto& store = self->server->store;
                 if (self->route.rfind("/avatars/", 0) == 0) {
                     const auto owner = Number(self->route.substr(9));
-                    if (owner == 0 || owner > 2147483647)
-                        throw Error(400, "invalid avatar owner");
-                    if (!self->server->get_avatar || !self->server->set_avatar)
+                    if (owner == 0 || owner > 2147483647) throw Error(400, "invalid avatar owner");
+                    if (!self->server->get_avatar || !self->server->set_avatar) {
                         throw Error(503, "avatar service unavailable");
+                    }
                     if (method == http::verb::get) {
                         const auto id = self->server->get_avatar(static_cast<int>(owner));
                         return id.empty() ? Json::Value(Json::objectValue) : Describe(store.Inspect(id));
                     }
-                    if (method != http::verb::put)
-                        throw Error(405, "method not allowed");
-                    if (owner != self->uid)
-                        throw Error(403, "cannot change another user's avatar");
+                    if (method != http::verb::put) throw Error(405, "method not allowed");
+                    if (owner != self->uid) throw Error(403, "cannot change another user's avatar");
                     Json::Value value;
                     Json::CharReaderBuilder builder;
                     std::string errors;
                     std::istringstream input(self->control);
                     if (!Json::parseFromStream(builder, input, &value, &errors) || !value.isObject() ||
-                        !value["resource_id"].isString())
+                        !value["resource_id"].isString()) {
                         throw Error(400, "resource_id required");
+                    }
                     const auto metadata = store.Owned(value["resource_id"].asString(), self->uid);
-                    if (!metadata.ready)
-                        throw Error(409, "avatar upload incomplete");
-                    if (metadata.media_type != "image/png" || metadata.size > 1024 * 1024)
+                    if (!metadata.ready) throw Error(409, "avatar upload incomplete");
+                    if (metadata.media_type != "image/png" || metadata.size > 1024 * 1024) {
                         throw Error(415, "avatar must be PNG under 1 MiB");
+                    }
                     std::vector<char> bytes;
                     for (std::uint64_t offset = 0; offset < metadata.size;) {
                         auto part = store.Read(metadata.id, offset, ResourceStore::BUFFER_SIZE);
-                        if (part.empty())
-                            throw Error(422, "avatar file truncated");
+                        if (part.empty()) throw Error(422, "avatar file truncated");
                         offset += part.size();
                         bytes.insert(bytes.end(), part.begin(), part.end());
                     }
@@ -349,28 +337,22 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
                     self->server->set_avatar(self->uid, metadata.id);
                     return Describe(metadata);
                 }
-                if (self->patch)
-                    return Describe(store.Owned(self->id, self->uid));
+                if (self->patch) return Describe(store.Owned(self->id, self->uid));
                 if (method == http::verb::post && self->route == "/uploads") {
                     Json::Value value;
                     Json::CharReaderBuilder builder;
                     std::string errors;
                     std::istringstream input(self->control);
-                    if (!Json::parseFromStream(builder, input, &value, &errors))
-                        throw Error(400, "invalid JSON");
-                    return Describe(store.Create(
-                        self->uid,
-                        value["name"].asString(),
-                        value["media_type"].asString(),
-                        Number(value["size"].asString()),
-                        value["sha256"].asString()));
+                    if (!Json::parseFromStream(builder, input, &value, &errors)) throw Error(400, "invalid JSON");
+                    return Describe(store.Create(self->uid, value["name"].asString(), value["media_type"].asString(),
+                        Number(value["size"].asString()), value["sha256"].asString()));
                 }
-                if (method == http::verb::get && self->route == "/uploads/" + self->id)
+                if (method == http::verb::get && self->route == "/uploads/" + self->id) {
                     return Describe(store.Owned(self->id, self->uid));
+                }
                 if (method == http::verb::post && self->route == "/uploads/" + self->id + "/complete") {
                     const auto metadata = store.Complete(self->id, self->uid);
-                    if (self->server->publish)
-                        self->server->publish(metadata);
+                    if (self->server->publish) self->server->publish(metadata);
                     return Describe(metadata);
                 }
                 throw Error(404, "route not found");
@@ -380,6 +362,7 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
                 self->Reply(200, value);
             });
     }
+
     /** @brief 异步写出 JSON 状态响应，完成后按连接策略继续请求或关闭 socket。 */
     void Reply(int code, const Json::Value& value) {
         auto response = std::make_shared<http::response<http::string_body>>(static_cast<http::status>(code), 11);
@@ -389,16 +372,16 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
         response->prepare_payload();
         stream.expires_after(std::chrono::seconds(30));
         // JSON 响应写完后按 keep-alive 与停服状态复用或关闭连接。
-        http::async_write(
-            stream,
-            *response,
+        http::async_write(stream, *response,
             [self = shared_from_this(), response](beast::error_code error, std::size_t) {
-                if (error || !self->keep_alive || self->server->stopping)
+                if (error || !self->keep_alive || self->server->stopping) {
                     self->Close();
-                else
+                } else {
                     self->Start();
+                }
             });
     }
+
     /** @brief 校验资源就绪、读取权限与 Range 后发送下载响应头及文件块。 */
     void Download() {
         const std::string range(parser->get()[http::field::range]);
@@ -406,18 +389,18 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
         Run(
             [self = shared_from_this(), range] {
                 auto metadata = self->server->store.Inspect(self->id);
-                if (!metadata.ready)
-                    throw Error(409, "upload not complete");
+                if (!metadata.ready) throw Error(409, "upload not complete");
                 if (metadata.owner != self->uid &&
-                    (!self->server->can_read || !self->server->can_read(self->uid, metadata)))
+                    (!self->server->can_read || !self->server->can_read(self->uid, metadata))) {
                     throw Error(403, "download forbidden");
+                }
                 std::uint64_t at = 0;
                 if (!range.empty()) {
-                    if (range.rfind("bytes=", 0) != 0 || range.back() != '-')
+                    if (range.rfind("bytes=", 0) != 0 || range.back() != '-') {
                         throw Error(416, "only open ended ranges supported");
+                    }
                     at = Number(range.substr(6, range.size() - 7));
-                    if (at >= metadata.size)
-                        throw Error(416, "range outside resource");
+                    if (at >= metadata.size) throw Error(416, "range outside resource");
                 }
                 auto result = Describe(metadata);
                 result["start"] = std::to_string(at);
@@ -433,36 +416,36 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
                 header.set(http::field::content_type, value["media_type"].asString());
                 header.set(http::field::accept_ranges, "bytes");
                 header.set(http::field::etag, "\"" + value["sha256"].asString() + "\"");
-                if (!range.empty())
-                    header.set(
-                        http::field::content_range,
-                        "bytes " + std::to_string(self->offset) + "-" + std::to_string(size - 1) + "/" +
-                            std::to_string(size));
+                if (!range.empty()) {
+                    header.set(http::field::content_range, "bytes " + std::to_string(self->offset) + "-" +
+                                                               std::to_string(size - 1) + "/" + std::to_string(size));
+                }
                 header.content_length(self->remaining);
                 header.keep_alive(self->keep_alive);
                 self->download_serializer.emplace(header);
                 self->stream.expires_after(std::chrono::seconds(30));
                 // 响应头写完后开始发送文件块，失败关闭连接。
-                http::async_write_header(
-                    self->stream,
-                    *self->download_serializer,
+                http::async_write_header(self->stream, *self->download_serializer,
                     [self](beast::error_code error, std::size_t) {
-                        if (error)
+                        if (error) {
                             self->Close();
-                        else
+                        } else {
                             self->WriteFile();
+                        }
                     });
             });
     }
+
     /** @brief 在工作执行器读取下一块文件，写入 socket 成功后推进偏移，失败关闭连接。 */
     void WriteFile() {
         if (!remaining) {
             download_serializer.reset();
             download_header.reset();
-            if (keep_alive && !server->stopping)
+            if (keep_alive && !server->stopping) {
                 Start();
-            else
+            } else {
                 Close();
+            }
             return;
         }
         auto self = shared_from_this();
@@ -477,8 +460,7 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
             }
             // 在连接执行器接收文件块，已关闭或读失败时停止发送。
             net::post(self->stream.get_executor(), [self, bytes = std::move(bytes), failed]() mutable {
-                if (self->closed)
-                    return;
+                if (self->closed) return;
                 if (failed || bytes.empty()) {
                     self->Close();
                     return;
@@ -486,9 +468,7 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
                 self->outgoing = std::move(bytes);
                 self->stream.expires_after(std::chrono::seconds(30));
                 // 成功写出文件块后推进偏移及剩余字节数。
-                net::async_write(
-                    self->stream,
-                    net::buffer(self->outgoing),
+                net::async_write(self->stream, net::buffer(self->outgoing),
                     [self](beast::error_code error, std::size_t count) {
                         if (error) {
                             self->Close();
@@ -502,10 +482,10 @@ struct ResourceHttpServer::Impl::Session : std::enable_shared_from_this<Session>
         });
     }
 };
+
 /** @brief 安排下一次资源 HTTP 连接接收，并在运行状态与会话数限制内启动会话。 */
 void ResourceHttpServer::Impl::Accept() {
-    if (stopping)
-        return;
+    if (stopping) return;
     // 接受资源 HTTP 连接并落实并发会话上限，随后继续监听。
     acceptor.async_accept([self = shared_from_this()](beast::error_code error, tcp::socket socket) {
         if (!error && !self->stopping && self->sessions.size() < 32) {
@@ -513,14 +493,13 @@ void ResourceHttpServer::Impl::Accept() {
             self->sessions.insert(session);
             session->Start();
         }
-        if (!self->stopping)
-            self->Accept();
+        if (!self->stopping) self->Accept();
     });
 }
+
 /** @brief 停止接收新工作并关闭当前服务的监听或执行器；后续销毁由所属生命周期流程负责。 */
 void ResourceHttpServer::Impl::Stop() {
-    if (stopping)
-        return;
+    if (stopping) return;
     stopping = true;
     beast::error_code error;
     acceptor.close(error);
@@ -528,37 +507,25 @@ void ResourceHttpServer::Impl::Stop() {
     for (auto& session : pending)
         session->Close();
 }
-ResourceHttpServer::ResourceHttpServer(
-    net::io_context& context,
-    const std::string& host,
-    unsigned short port,
-    ResourceStore& store,
-    Authenticate authenticate,
-    CanRead can_read,
-    Publish publish,
-    GetAvatar get_avatar,
-    SetAvatar set_avatar,
-    std::function<bool()> ready)
-    : _impl(std::make_shared<Impl>(
-          context,
-          host,
-          port,
-          store,
-          std::move(authenticate),
-          std::move(can_read),
-          std::move(publish),
-          std::move(get_avatar),
-          std::move(set_avatar),
-          std::move(ready))) {}
+
+ResourceHttpServer::ResourceHttpServer(net::io_context& context, const std::string& host, unsigned short port,
+    ResourceStore& store, Authenticate authenticate, CanRead can_read, Publish publish, GetAvatar get_avatar,
+    SetAvatar set_avatar, std::function<bool()> ready)
+    : _impl(std::make_shared<Impl>(context, host, port, store, std::move(authenticate), std::move(can_read),
+          std::move(publish), std::move(get_avatar), std::move(set_avatar), std::move(ready))) {}
+
 ResourceHttpServer::~ResourceHttpServer() {
     _impl->storage.join();
 }
+
 void ResourceHttpServer::Start() {
     _impl->Accept();
 }
+
 void ResourceHttpServer::Stop() {
     _impl->Stop();
 }
+
 unsigned short ResourceHttpServer::Port() const {
     return _impl->acceptor.local_endpoint().port();
 }

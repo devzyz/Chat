@@ -16,18 +16,22 @@ public:
     /** @brief 初始化RedisConnectionPool，将模块 Redis 配置转为有界传输池；归还原始指针后调用方不得继续使用。 */
     RedisConnectionPool(const std::string& host, const std::string& port, const std::string& password, int pool_size)
         : _transport(host, ParsePort(port), password, pool_size > 0 ? static_cast<std::size_t>(pool_size) : 0) {}
+
     /** @brief 在池的等待策略内借出独占连接；关闭、耗尽或健康检查失败返回空值，使用后须归还。 */
     redisContext* GetConnection(std::chrono::milliseconds timeout = std::chrono::milliseconds(2000)) {
         return _transport.Borrow(timeout);
     }
+
     /** @brief 接回借出的连接所有权，关闭或不可用连接由底层池丢弃；归还后不得继续访问。 */
     void ReturnConnection(redisContext* connection) {
         _transport.Return(connection);
     }
+
     /** @brief 使用本池读取 UID 当前凭据，不刷新 TTL。 */
     chat_auth::TokenResult ValidateToken(int uid, const std::string& token) {
         return chat_auth::ValidateToken(_transport, uid, token);
     }
+
     /** @brief 停止接受新的借用并释放空闲连接，唤醒等待者；借出资源仍须按原协议归还。 */
     void Close() {
         _transport.Close();
@@ -55,25 +59,28 @@ public:
     /** @brief 执行服务关闭流程并释放本对象拥有的运行资源。 */
     ~RedisMgr();
     /** @brief 执行给定 Lua 脚本并读取字符串数组，连接或响应失败返回空 optional。 */
-    std::optional<std::vector<std::string>> Eval(
-        const std::string& script,
-        const std::vector<std::string>& keys,
+    std::optional<std::vector<std::string>> Eval(const std::string& script, const std::vector<std::string>& keys,
         const std::vector<std::string>& arguments);
+
     /** @brief 校验 TCP 登录凭据，区分用户缺失、凭据错误及依赖失败。 */
     chat_auth::TokenResult ValidateToken(int uid, const std::string& token) {
         return CheckedConnectionPool().ValidateToken(uid, token);
     }
+
     /** @brief 停止接受新的借用并释放空闲连接，唤醒等待者；借出资源仍须按原协议归还。 */
     void Close();
 
 private:
     /** @brief 初始化RedisMgr，执行模块 Redis 命令并检查响应类型；命令失败不自动重放写入。 */
     RedisMgr();
+
     // 所有生产命令均在 Redis 工作线程借连接，防止新调用点绕过准入。
     RedisConnectionPool& CheckedConnectionPool() {
-        if (!DependencyExecutor::RunningOn(ExternalTask::Redis))
+        if (!DependencyExecutor::RunningOn(ExternalTask::Redis)) {
             throw std::logic_error("Redis command outside Redis pool");
+        }
         return *_pool;
     }
+
     std::unique_ptr<RedisConnectionPool> _pool;
 };

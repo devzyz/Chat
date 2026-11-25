@@ -82,8 +82,7 @@ inline void ResourceTransferTests::conversationAttentionWidgets() {
         window.show();
         auto* list = window.findChild<ChatUserList*>();
         QTRY_VERIFY(list->count() > 0);
-        QVERIFY2(
-            warnings.str().find("invalid chat uid=0") == std::string::npos,
+        QVERIFY2(warnings.str().find("invalid chat uid=0") == std::string::npos,
             "normal initial conversation selection must not warn");
         auto* first = qobject_cast<ChatUserItem*>(list->itemWidget(list->item(0)));
         QVERIFY(first);
@@ -92,8 +91,7 @@ inline void ResourceTransferTests::conversationAttentionWidgets() {
         QTRY_VERIFY_WITH_TIMEOUT((window.loadChatUserList(), list->count() == 30), 5000);
         ChatUserItem* target = nullptr;
         for (auto* item : window.findChildren<ChatUserItem*>())
-            if (item->getChatInfo()->getChatId() == 30)
-                target = item;
+            if (item->getChatInfo()->getChatId() == 30) target = item;
         QVERIFY(target);
         auto* badge = target->findChild<QLabel*>("new_msg_count_label");
         QVERIFY(badge);
@@ -104,8 +102,7 @@ inline void ResourceTransferTests::conversationAttentionWidgets() {
             QTRY_VERIFY(window.isActiveWindow());
             QListWidgetItem* row = nullptr;
             for (int index = 0; index < list->count(); ++index)
-                if (list->itemWidget(list->item(index)) == target)
-                    row = list->item(index);
+                if (list->itemWidget(list->item(index)) == target) row = list->item(index);
             QVERIFY(row);
             list->scrollToItem(row);
             QTest::mouseClick(list->viewport(), Qt::LeftButton, Qt::NoModifier, list->visualItemRect(row).center());
@@ -125,8 +122,7 @@ inline void ResourceTransferTests::conversationAttentionWidgets() {
         QTRY_VERIFY_WITH_TIMEOUT((window.loadChatUserList(), list->count() == 30), 5000);
         ChatUserItem* target = nullptr;
         for (auto* item : window.findChildren<ChatUserItem*>())
-            if (item->getChatInfo()->getChatId() == 30)
-                target = item;
+            if (item->getChatInfo()->getChatId() == 30) target = item;
         QVERIFY(target);
         auto* badge = target->findChild<QLabel*>("new_msg_count_label");
         window.findChild<ChatPage*>()->setChatInfo(target->getChatInfo());
@@ -135,9 +131,9 @@ inline void ResourceTransferTests::conversationAttentionWidgets() {
         for (int mode = 0; mode < 3; ++mode) {
             QDialog modal(&window);
             modal.setModal(true);
-            if (mode == 0)
+            if (mode == 0) {
                 window.hide();
-            else if (mode == 1) {
+            } else if (mode == 1) {
                 window.showMinimized();
                 QTRY_VERIFY(window.isMinimized());
             } else {
@@ -147,24 +143,20 @@ inline void ResourceTransferTests::conversationAttentionWidgets() {
             service->synchronize(30);
             QJsonObject request;
             // 查找当前会话和已提交游标对应的真实同步请求。
-            QTRY_VERIFY_WITH_TIMEOUT(
-                ([&] {
-                    for (const auto& entry : syncRequests)
-                        if (entry[0].toJsonObject()["chat_id"].toInt() == 30 &&
-                            entry[0].toJsonObject()["after_id"].toInteger() == mode + 3)
-                            request = entry[0].toJsonObject();
-                    return !request.isEmpty();
-                }()),
+            QTRY_VERIFY_WITH_TIMEOUT(([&] {
+                for (const auto& entry : syncRequests)
+                    if (entry[0].toJsonObject()["chat_id"].toInt() == 30 &&
+                        entry[0].toJsonObject()["after_id"].toInteger() == mode + 3) {
+                        request = entry[0].toJsonObject();
+                    }
+                return !request.isEmpty();
+            }()),
                 3000);
             request["error"] = 0;
             request["load_more"] = false;
             request["next_cursor"] = mode + 4;
-            request["msgs"] = QJsonArray{QJsonObject{
-                {"message_id", mode + 4},
-                {"send_id", 130},
-                {"recv_id", 7},
-                {"content", "background arrival"},
-                {"created_at", 1700000000},
+            request["msgs"] = QJsonArray{QJsonObject{{"message_id", mode + 4}, {"send_id", 130}, {"recv_id", 7},
+                {"content", "background arrival"}, {"created_at", 1700000000},
                 {"msg_uuid", QString("background-%1").arg(mode)}}};
             QSignalSpy loaded(service, &MessageService::historyLoaded);
             service->acceptSyncPage(request);
@@ -186,16 +178,14 @@ inline void ResourceTransferTests::conversationAttentionWidgets() {
 /** @brief 按用户可见文字取得按钮，避免依赖控件创建顺序。 */
 inline QPushButton* acceptanceButton(QWidget* parent, const QString& text) {
     for (auto* button : parent->findChildren<QPushButton*>())
-        if (button->text() == text)
-            return button;
+        if (button->text() == text) return button;
     return nullptr;
 }
 
 /** @brief 查询实际列表文本，确认目录提交更新到所有已展示位置。 */
 inline bool acceptanceHasLabel(QWidget* parent, const QString& name, const QString& text) {
     for (auto* label : parent->findChildren<QLabel*>(name))
-        if (label->text() == text)
-            return true;
+        if (label->text() == text) return true;
     return false;
 }
 
@@ -276,14 +266,8 @@ inline void ResourceTransferTests::localDirectorySearchWidgets() {
         for (int id = 101; id <= 170; ++id) {
             contacts.append(QJsonObject{{"id", id}, {"uid", id}, {"name", QString("friend-%1").arg(id)}});
             chats.append(QJsonObject{{"id", id + 400}, {"uid", id}, {"type", "private"}});
-            chats.append(QJsonObject{
-                {"id", id + 900},
-                {"name", QString("group-%1").arg(id)},
-                {"type", "group"},
-                {"group_revision", "1"},
-                {"group_state", "active"},
-                {"membership_epoch", "1"},
-                {"joined_after_id", "0"},
+            chats.append(QJsonObject{{"id", id + 900}, {"name", QString("group-%1").arg(id)}, {"type", "group"},
+                {"group_revision", "1"}, {"group_state", "active"}, {"membership_epoch", "1"}, {"joined_after_id", "0"},
                 {"owner_uid", 7}});
         }
         store.mergeDirectory({{"contacts", contacts}, {"conversations", chats}});
@@ -304,8 +288,7 @@ inline void ResourceTransferTests::localDirectorySearchWidgets() {
         QTest::mouseClick(acceptanceButton(&window, QStringLiteral("本地查找")), Qt::LeftButton);
         QPointer<QDialog> search;
         for (auto* candidate : window.findChildren<QDialog*>())
-            if (candidate->windowTitle() == QStringLiteral("联系人与群"))
-                search = candidate;
+            if (candidate->windowTitle() == QStringLiteral("联系人与群")) search = candidate;
         QVERIFY(search);
         search->findChild<QComboBox*>()->setCurrentIndex(group ? 1 : 0);
         auto* input = search->findChild<QLineEdit*>();
@@ -322,8 +305,7 @@ inline void ResourceTransferTests::localDirectorySearchWidgets() {
         QTest::mouseClick(rows->viewport(), Qt::LeftButton, Qt::NoModifier, rect.center());
         QTest::mouseDClick(rows->viewport(), Qt::LeftButton, Qt::NoModifier, rect.center());
         auto* page = window.findChild<ChatPage*>();
-        QTRY_COMPARE(
-            page->findChild<QLabel*>("title_label")->text(),
+        QTRY_COMPARE(page->findChild<QLabel*>("title_label")->text(),
             group ? QString("group-170") : QString("friend-170"));
         QVERIFY(!search || !search->isVisible());
     }
@@ -343,7 +325,7 @@ inline void ResourceTransferTests::friendRemarkOutcomeWidgets() {
     QSignalSpy changed(service, &MessageService::directoryChanged);
     service->saveDirectory(
         {{"contacts", QJsonArray{QJsonObject{{"id", 8}, {"uid", 8}, {"name", "peer"}, {"backname", "old"}}}},
-         {"conversations", QJsonArray{QJsonObject{{"id", 880}, {"uid", 8}, {"type", "private"}}}}});
+            {"conversations", QJsonArray{QJsonObject{{"id", 880}, {"uid", 8}, {"type", "private"}}}}});
     QTRY_COMPARE(changed.size(), 1);
     ChatDialog window;
     window.resize(1000, 650);
@@ -383,22 +365,15 @@ inline void ResourceTransferTests::friendRemarkOutcomeWidgets() {
                 service->saveDirectory({{"contacts", QJsonArray{QJsonObject{{"id", 8}, {"backname", "new"}}}}});
                 QTRY_COMPARE(changed.size(), 2);
             }
-            emit TcpMgr::instance() -> groupResponse(
-                ID_FRIEND_REMARK_RSP,
-                QJsonObject{
-                    {"request_id", request["request_id"]},
-                    {"error", outcome == 0 ? 1 : 0},
+            emit TcpMgr::instance() -> groupResponse(ID_FRIEND_REMARK_RSP,
+                QJsonObject{{"request_id", request["request_id"]}, {"error", outcome == 0 ? 1 : 0},
                     {"local_save_failed", outcome == 1}});
         }
         QTRY_VERIFY_WITH_TIMEOUT(!displayed.isEmpty(), 12000);
-        if (outcome == 0)
-            QVERIFY(displayed.contains(QStringLiteral("未保存")));
-        if (outcome == 1)
-            QVERIFY(displayed.contains(QStringLiteral("本地保存失败")));
-        if (outcome == 2)
-            QVERIFY(displayed.contains(QStringLiteral("备注已保存")));
-        if (outcome == 3)
-            QVERIFY(displayed.contains(QStringLiteral("尚未确认")));
+        if (outcome == 0) QVERIFY(displayed.contains(QStringLiteral("未保存")));
+        if (outcome == 1) QVERIFY(displayed.contains(QStringLiteral("本地保存失败")));
+        if (outcome == 2) QVERIFY(displayed.contains(QStringLiteral("备注已保存")));
+        if (outcome == 3) QVERIFY(displayed.contains(QStringLiteral("尚未确认")));
         const auto expected = outcome >= 2 ? QString("new") : QString("old");
         QCOMPARE(title->text(), expected);
         QVERIFY(acceptanceHasLabel(&window, "contact_user_name_label", expected));
@@ -442,14 +417,8 @@ inline void ResourceTransferTests::groupResourceCardWidgets() {
     QTRY_COMPARE_WITH_TIMEOUT(restored.size(), 1, 15000);
     QSignalSpy changed(service, &MessageService::directoryChanged);
     service->saveDirectory(
-        {{"conversations",
-          QJsonArray{QJsonObject{
-              {"id", 890},
-              {"type", "group"},
-              {"name", "resources"},
-              {"group_state", "active"},
-              {"group_revision", "1"},
-              {"membership_epoch", "1"}}}}});
+        {{"conversations", QJsonArray{QJsonObject{{"id", 890}, {"type", "group"}, {"name", "resources"},
+                               {"group_state", "active"}, {"group_revision", "1"}, {"membership_epoch", "1"}}}}});
     QTRY_COMPARE(changed.size(), 1);
     ChatPage page;
     page.resize(750, 650);
@@ -460,20 +429,12 @@ inline void ResourceTransferTests::groupResourceCardWidgets() {
     const QStringList names{"group.png", "group.avi", "group.txt"};
     const QVector<MessageType> types{MessageType::Image, MessageType::Video, MessageType::File};
     for (int index = 0; index < media.size(); ++index) {
-        const QJsonObject descriptor{
-            {"resource_id", QString("card-%1").arg(index)},
-            {"media_type", media[index]},
+        const QJsonObject descriptor{{"resource_id", QString("card-%1").arg(index)}, {"media_type", media[index]},
             {"name", names[index]}};
         const auto content =
             "@resource:v1:" + QString::fromUtf8(QJsonDocument(descriptor).toJson(QJsonDocument::Compact));
-        page.appendChatMsg(std::make_shared<TextChatData>(
-            QString("resource-%1").arg(index),
-            890,
-            ChatType::GROUP,
-            ChatMessageType::TEXT_TYPE,
-            content,
-            8,
-            QTime::currentTime()));
+        page.appendChatMsg(std::make_shared<TextChatData>(QString("resource-%1").arg(index), 890, ChatType::GROUP,
+            ChatMessageType::TEXT_TYPE, content, 8, QTime::currentTime()));
         const auto row = view->model()->index(index, 0);
         QCOMPARE(row.data(MessageListModel::MessageTypeRole).toInt(), int(types[index]));
         QVERIFY(row.data(MessageListModel::TextRole).toString().contains(names[index]));

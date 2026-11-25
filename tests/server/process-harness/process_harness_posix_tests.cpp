@@ -54,8 +54,7 @@ int main() {
         }
         auto stale = harness->Identity();
         ++stale.creation_time;
-        if (context->CleanupProcess(stale))
-            throw std::runtime_error("context accepted stale identity");
+        if (context->CleanupProcess(stale)) throw std::runtime_error("context accepted stale identity");
         if (!harness->Stop(std::chrono::steady_clock::now() + 50ms).Complete()) {
             throw std::runtime_error("harness escalation failed");
         }

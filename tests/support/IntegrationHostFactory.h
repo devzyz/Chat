@@ -119,10 +119,7 @@ public:
 private:
     friend class IntegrationHostFactory;
     /** 接管已就绪模块与传输，保存期限和清理观察者。 */
-    HostHandle(
-        ProductionModules modules,
-        std::unique_ptr<TransportHost> transport,
-        Deadline deadline,
+    HostHandle(ProductionModules modules, std::unique_ptr<TransportHost> transport, Deadline deadline,
         std::shared_ptr<CleanupObserver> cleanup);
 
     ProductionModules modules_;

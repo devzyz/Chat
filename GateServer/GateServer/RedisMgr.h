@@ -10,14 +10,17 @@ public:
     /** @brief 初始化RedisConfigPool，按 Gate 配置拥有 Redis 传输池，不构造业务 key。 */
     RedisConfigPool(std::size_t pool_size, const char* host, int port, const char* password)
         : _transport(host, port, password, pool_size) {}
+
     /** @brief 在池的等待策略内借出独占连接；关闭、耗尽或健康检查失败返回空值，使用后须归还。 */
     redisContext* GetConnection(std::chrono::milliseconds timeout = std::chrono::milliseconds(2000)) {
         return _transport.Borrow(timeout);
     }
+
     /** @brief 接回借出的连接所有权，关闭或不可用连接由底层池丢弃；归还后不得继续访问。 */
     void ReturnConnection(redisContext* connection) {
         _transport.Return(connection);
     }
+
     /** @brief 停止接受新的借用并释放空闲连接，唤醒等待者；借出资源仍须按原协议归还。 */
     void Close() {
         _transport.Close();

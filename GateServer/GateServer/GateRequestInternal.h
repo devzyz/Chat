@@ -70,10 +70,8 @@ public:
 };
 
 /** @brief 创建共享持有四个有效依赖的编排器；并发调用要求各依赖支持并发，不在此处额外加锁。 */
-std::unique_ptr<GateRequest> CreateGateRequest(
-    std::shared_ptr<VerificationPort> verification,
-    std::shared_ptr<CodeStore> code_store,
-    std::shared_ptr<UserStore> user_store,
+std::unique_ptr<GateRequest> CreateGateRequest(std::shared_ptr<VerificationPort> verification,
+    std::shared_ptr<CodeStore> code_store, std::shared_ptr<UserStore> user_store,
     std::shared_ptr<SessionAssignmentPort> session_service);
 
 } // namespace gate::internal

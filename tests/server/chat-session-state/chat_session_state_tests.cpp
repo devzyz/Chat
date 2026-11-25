@@ -1,5 +1,6 @@
 #include "session_test_support.h"
 using namespace session_test;
+
 // T08-SESSION-01
 /** 验证新建会话拥有非空且互异的稳定身份并处于 Created 状态。 */
 TEST(SessionComponentTests, CreatedSessionsHaveUniqueImmutableIds) {
@@ -10,6 +11,7 @@ TEST(SessionComponentTests, CreatedSessionsHaveUniqueImmutableIds) {
     EXPECT_NE(a->Id(), b->Id());
     EXPECT_EQ(h.Snapshot(a).first, SessionState::Created);
 }
+
 // T08-SESSION-02
 /** 验证目录登记并查询用户当前会话。 */
 TEST(SessionComponentTests, DirectoryRegistersCurrentSession) {
@@ -19,6 +21,7 @@ TEST(SessionComponentTests, DirectoryRegistersCurrentSession) {
     EXPECT_EQ(h.directory->FindCurrent(42), session);
     EXPECT_TRUE(h.directory->IsCurrent(42, session->Id()));
 }
+
 // T08-SESSION-03
 /** 验证替换登记返回旧会话并保留新所有者。 */
 TEST(SessionComponentTests, DirectoryReturnsReplacedSession) {
@@ -29,6 +32,7 @@ TEST(SessionComponentTests, DirectoryReturnsReplacedSession) {
     EXPECT_EQ(h.directory->Register(42, b->Id(), b), a);
     EXPECT_EQ(h.directory->FindCurrent(42), b);
 }
+
 // T08-SESSION-04
 /** 验证旧会话注销不能擦除替代者。 */
 TEST(SessionComponentTests, OldUnregisterCannotEraseReplacement) {
@@ -42,6 +46,7 @@ TEST(SessionComponentTests, OldUnregisterCannotEraseReplacement) {
     h.directory->UnregisterIfCurrent(42, b->Id());
     EXPECT_FALSE(h.directory->FindCurrent(42));
 }
+
 // T08-SESSION-05
 /** 验证重复关闭保持首次关闭原因。 */
 TEST(SessionComponentTests, RepeatedClosePreservesFirstReason) {
@@ -53,6 +58,7 @@ TEST(SessionComponentTests, RepeatedClosePreservesFirstReason) {
     EXPECT_EQ(state.first, SessionState::Closing);
     EXPECT_EQ(state.second, SessionCloseReason::ProtocolError);
 }
+
 // T08-SESSION-06
 /** 验证并发关闭幂等且未认证会话不删除在线状态。 */
 TEST(SessionComponentTests, ConcurrentCloseIsIdempotent) {
@@ -69,6 +75,7 @@ TEST(SessionComponentTests, ConcurrentCloseIsIdempotent) {
     EXPECT_EQ(h.Snapshot(session).first, SessionState::Closing);
     EXPECT_EQ(h.presence->removals, 0);
 }
+
 // T08-SESSION-07 (FIFO moved to real transport contract below.)
 /** 验证目录只弱持有会话，外部所有权释放后查询失效。 */
 TEST(SessionComponentTests, DirectoryHasWeakOwnership) {
@@ -81,6 +88,7 @@ TEST(SessionComponentTests, DirectoryHasWeakOwnership) {
     EXPECT_FALSE(h.directory->FindCurrent(42));
     EXPECT_FALSE(h.directory->IsCurrent(42, id));
 }
+
 // T08-SESSION-08 (Capacity moved to real transport contract below.)
 /** 验证 Created 和 Closing 状态拒绝发送。 */
 TEST(SessionComponentTests, CreatedAndClosingRejectSend) {
@@ -90,6 +98,7 @@ TEST(SessionComponentTests, CreatedAndClosingRejectSend) {
     session->Close();
     EXPECT_EQ(h.Send(session), SessionSendResult::NotActive);
 }
+
 // T08-SESSION-09
 /** 验证关闭状态拒绝认证且不发布用户身份。 */
 TEST(SessionComponentTests, ClosingRejectsAuthentication) {
@@ -100,6 +109,7 @@ TEST(SessionComponentTests, ClosingRejectsAuthentication) {
     EXPECT_EQ(session->AuthenticatedUid(), 0);
     EXPECT_EQ(h.presence->publications, 0);
 }
+
 // T08-SESSION-10 (Write failure moved to real transport contract below.)
 /** 验证先关闭再重复启动不能重新激活会话。 */
 TEST(SessionComponentTests, CloseBeforeStartCannotReactivate) {

@@ -49,8 +49,7 @@ void AuthFriendDialog::setApplyInfo(std::shared_ptr<ApplyInfo> applyinfo) {
     const bool enabled = TcpMgr::instance()->supportsSocial() && !_revision.isEmpty();
     ui->sure_btn->setEnabled(enabled);
     findChild<QPushButton*>("rejectApplicationButton")->setEnabled(enabled);
-    if (!enabled)
-        findChild<QLabel*>("socialStatus")->setText(tr("请等待最新申请目录；旧服务器需要更新"));
+    if (!enabled) findChild<QLabel*>("socialStatus")->setText(tr("请等待最新申请目录；旧服务器需要更新"));
 }
 
 void AuthFriendDialog::authApplyCancel() {
@@ -67,20 +66,16 @@ void AuthFriendDialog::authApplySure() {
 }
 
 void AuthFriendDialog::manageApplication(const QString& operation) {
-    if (_busy || !_apply_info || _revision.isEmpty())
-        return;
+    if (_busy || !_apply_info || _revision.isEmpty()) return;
     _busy = true;
     ui->sure_btn->setEnabled(false);
     for (auto* edit : {ui->send_auth_user_description_edit, ui->send_auth_user_back_edit})
         edit->setEnabled(false);
     findChild<QPushButton*>("rejectApplicationButton")->setEnabled(false);
-    TcpMgr::instance()->socialRequest(
-        ID_FRIEND_MANAGE_REQ,
-        {{"operation", operation},
-         {"target_uid", _apply_info->_apply_uid},
-         {"expected_revision", _revision},
-         {"description", ui->send_auth_user_description_edit->text()},
-         {"backname", ui->send_auth_user_back_edit->text()}},
+    TcpMgr::instance()->socialRequest(ID_FRIEND_MANAGE_REQ,
+        {{"operation", operation}, {"target_uid", _apply_info->_apply_uid}, {"expected_revision", _revision},
+            {"description", ui->send_auth_user_description_edit->text()},
+            {"backname", ui->send_auth_user_back_edit->text()}},
         this,
         /** @brief 失败保留审批内容，成功由后续目录刷新更新列表。 */
         [this](QJsonObject response) {

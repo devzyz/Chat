@@ -10,17 +10,16 @@
 namespace {
 constexpr qint64 blockSize = 64 * 1024;
 }
-ResourceTransferManager::ResourceTransferManager(
-    QUrl endpoint,
-    int uid,
-    QString token,
-    QString cacheRoot,
+
+ResourceTransferManager::ResourceTransferManager(QUrl endpoint, int uid, QString token, QString cacheRoot,
     QObject* parent)
     : QObject(parent), _endpoint(std::move(endpoint)), _uid(uid), _token(std::move(token)),
       _cache(std::move(cacheRoot)), _network(this) {}
+
 ResourceTransferManager::~ResourceTransferManager() {
     cancel();
 }
+
 QNetworkRequest ResourceTransferManager::request(const QString& route) const {
     QNetworkRequest value(_endpoint.resolved(QUrl(route)));
     value.setRawHeader("X-User-Id", QByteArray::number(_uid));
@@ -29,6 +28,7 @@ QNetworkRequest ResourceTransferManager::request(const QString& route) const {
     value.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     return value;
 }
+
 void ResourceTransferManager::cancel() {
     ++_generation;
     const auto replies = _replies;
@@ -42,36 +42,28 @@ void ResourceTransferManager::cancel() {
     _source.close();
     _busy = false;
 }
+
 void ResourceTransferManager::fail(const QString& reason) {
     _source.close();
     _busy = false;
     emit failed(reason);
 }
-void ResourceTransferManager::jsonRequest(
-    const QByteArray& method,
-    const QString& route,
-    const QByteArray& body,
-    std::function<void(QJsonObject)> done,
-    qint64 offset) {
+
+void ResourceTransferManager::jsonRequest(const QByteArray& method, const QString& route, const QByteArray& body,
+    std::function<void(QJsonObject)> done, qint64 offset) {
     auto headers = request(route);
-    headers.setHeader(
-        QNetworkRequest::ContentTypeHeader,
+    headers.setHeader(QNetworkRequest::ContentTypeHeader,
         offset >= 0 ? "application/octet-stream" : "application/json");
-    if (offset >= 0)
-        headers.setRawHeader("Upload-Offset", QByteArray::number(offset));
+    if (offset >= 0) headers.setRawHeader("Upload-Offset", QByteArray::number(offset));
     auto* reply = _network.sendCustomRequest(headers, method, body);
     _replies.insert(reply);
     const auto generation = _generation;
-    connect(
-        reply,
-        &QNetworkReply::finished,
-        this,
+    connect(reply, &QNetworkReply::finished, this,
         /** @brief 释放响应对象，仅向当前任务代交付成功结果或报告失败。 */
         [this, reply, generation, method, route, done = std::move(done)] {
             _replies.remove(reply);
             reply->deleteLater();
-            if (generation != _generation)
-                return;
+            if (generation != _generation) return;
             const auto response = QJsonDocument::fromJson(reply->readAll()).object();
             if (reply->error() != QNetworkReply::NoError) {
                 const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -86,14 +78,14 @@ void ResourceTransferManager::jsonRequest(
                     beginUpload();
                     return;
                 }
-                if (status == 404 || status == 422)
-                    QFile::remove(_checkpoint);
+                if (status == 404 || status == 422) QFile::remove(_checkpoint);
                 fail(response.value("error").toString(reply->errorString()));
                 return;
             }
             done(response);
         });
 }
+
 void ResourceTransferManager::upload(const QString& path) {
     if (_busy) {
         emit failed(tr("已有上传任务正在进行"));
@@ -117,9 +109,9 @@ void ResourceTransferManager::upload(const QString& path) {
     _metadata = {{"name", QFileInfo(path).fileName()}, {"media_type", type}, {"size", QString::number(_source.size())}};
     hashNext();
 }
+
 void ResourceTransferManager::hashNext() {
-    if (!_busy)
-        return;
+    if (!_busy) return;
     const auto bytes = _source.read(blockSize);
     if (bytes.isEmpty() && !_source.atEnd()) {
         fail(tr("读取文件失败"));
@@ -128,13 +120,10 @@ void ResourceTransferManager::hashNext() {
     _hash.addData(bytes);
     if (!_source.atEnd()) {
         const auto generation = _generation;
-        QTimer::singleShot(
-            0,
-            this,
+        QTimer::singleShot(0, this,
             /** @brief 只为仍有效的上传代继续计算摘要。 */
             [this, generation] {
-                if (generation == _generation)
-                    hashNext();
+                if (generation == _generation) hashNext();
             });
         return;
     }
@@ -142,12 +131,12 @@ void ResourceTransferManager::hashNext() {
     _source.seek(0);
     beginUpload();
 }
+
 void ResourceTransferManager::beginUpload() {
-    const auto key = QCryptographicHash::hash(
-                         (_endpoint.toString() + "\n" + _metadata["media_type"].toString() + "\n" +
-                          _metadata["sha256"].toString() + "\n" + _metadata["name"].toString())
-                             .toUtf8(),
-                         QCryptographicHash::Sha256)
+    const auto key = QCryptographicHash::hash((_endpoint.toString() + "\n" + _metadata["media_type"].toString() + "\n" +
+                                                  _metadata["sha256"].toString() + "\n" + _metadata["name"].toString())
+                                                  .toUtf8(),
+        QCryptographicHash::Sha256)
                          .toHex();
     const auto tasks = QDir(_cache).filePath("transfers/uploads");
     if (_cache.isEmpty() || !QDir().mkpath(tasks)) {
@@ -156,12 +145,11 @@ void ResourceTransferManager::beginUpload() {
     }
     _checkpoint = QDir(tasks).filePath(QString::fromLatin1(key) + ".upload.json");
     // 升级旧版断点时保留原文件；服务端完整身份匹配后才续传，改名则创建独立任务。
-    const auto legacyKey =
-        QCryptographicHash::hash(
-            (_endpoint.toString() + "\n" + _metadata["media_type"].toString() + "\n" + _metadata["sha256"].toString())
-                .toUtf8(),
-            QCryptographicHash::Sha256)
-            .toHex();
+    const auto legacyKey = QCryptographicHash::hash(
+        (_endpoint.toString() + "\n" + _metadata["media_type"].toString() + "\n" + _metadata["sha256"].toString())
+            .toUtf8(),
+        QCryptographicHash::Sha256)
+                               .toHex();
     const auto legacy = QDir(tasks).filePath(QString::fromLatin1(legacyKey) + ".upload.json");
     const bool migrate = !_legacyChecked && !QFile::exists(_checkpoint) && QFile::exists(legacy);
     _legacyChecked = true;
@@ -174,10 +162,7 @@ void ResourceTransferManager::beginUpload() {
         _uploadId = QJsonDocument::fromJson(checkpoint.readAll()).object()["upload_id"].toString();
     }
     if (!_uploadId.isEmpty()) {
-        jsonRequest(
-            "GET",
-            "/uploads/" + _uploadId,
-            {},
+        jsonRequest("GET", "/uploads/" + _uploadId, {},
             /** @brief 校验完整上传身份和服务端续传偏移后继续上传。 */
             [this](QJsonObject value) {
                 for (const auto& field : {"name", "media_type", "size", "sha256"}) {
@@ -201,10 +186,7 @@ void ResourceTransferManager::beginUpload() {
             });
         return;
     }
-    jsonRequest(
-        "POST",
-        "/uploads",
-        QJsonDocument(_metadata).toJson(QJsonDocument::Compact),
+    jsonRequest("POST", "/uploads", QJsonDocument(_metadata).toJson(QJsonDocument::Compact),
         /** @brief 保存服务端新上传 ID 和断点文件后发送首块。 */
         [this](QJsonObject value) {
             _uploadId = value["upload_id"].toString();
@@ -221,16 +203,13 @@ void ResourceTransferManager::beginUpload() {
             sendNext(0);
         });
 }
+
 void ResourceTransferManager::sendNext(qint64 offset) {
     const auto generation = _generation;
     emit progress(offset, _source.size());
-    if (!_busy || generation != _generation)
-        return;
+    if (!_busy || generation != _generation) return;
     if (offset == _source.size()) {
-        jsonRequest(
-            "POST",
-            "/uploads/" + _uploadId + "/complete",
-            {},
+        jsonRequest("POST", "/uploads/" + _uploadId + "/complete", {},
             /** @brief 完成资源校验后释放源文件并通知上传成功。 */
             [this](QJsonObject value) {
                 _source.close();
@@ -249,9 +228,7 @@ void ResourceTransferManager::sendNext(qint64 offset) {
         return;
     }
     jsonRequest(
-        "PATCH",
-        "/uploads/" + _uploadId,
-        bytes,
+        "PATCH", "/uploads/" + _uploadId, bytes,
         /** @brief 核对块确认偏移，正确时发送下一块。 */
         [this, offset, count = bytes.size()](QJsonObject value) {
             bool valid = false;
@@ -264,11 +241,11 @@ void ResourceTransferManager::sendNext(qint64 offset) {
         },
         offset);
 }
+
 void ResourceTransferManager::download(const QJsonObject& descriptor, bool avatar) {
     const auto id = descriptor["resource_id"].toString();
     static const QRegularExpression safeId("^[0-9a-f-]{36}$");
-    if (!safeId.match(id).hasMatch() || _downloads.contains(id))
-        return;
+    if (!safeId.match(id).hasMatch() || _downloads.contains(id)) return;
     bool valid = false;
     const auto size = descriptor["size"].toString().toLongLong(&valid);
     if (!valid || size <= 0) {
@@ -285,10 +262,9 @@ void ResourceTransferManager::download(const QJsonObject& descriptor, bool avata
                            : safeExtension.match(extension).hasMatch() ? "." + extension
                                                                        : ".bin";
     const auto directory = avatar ? UserStoragePaths::avatarDirectory(_cache, descriptor["owner"].toInt())
-                                  : QDir(_cache).filePath(
-                                        type.startsWith("image/")   ? "files/images"
-                                        : type.startsWith("video/") ? "files/videos"
-                                                                    : "files/documents");
+                                  : QDir(_cache).filePath(type.startsWith("image/")   ? "files/images"
+                                                          : type.startsWith("video/") ? "files/videos"
+                                                                                      : "files/documents");
     if (_cache.isEmpty() || directory.isEmpty() || !QDir().mkpath(directory)) {
         emit failed(tr("无法创建安装目录中的资源目录"));
         return;
@@ -305,14 +281,8 @@ void ResourceTransferManager::download(const QJsonObject& descriptor, bool avata
             return;
         }
         _downloads.insert(id);
-        verifyDownload(
-            cached,
-            std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256),
-            descriptor["sha256"].toString(),
-            path,
-            id,
-            _generation,
-            true);
+        verifyDownload(cached, std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256),
+            descriptor["sha256"].toString(), path, id, _generation, true);
         return;
     }
     auto file = std::make_shared<QFile>(path + ".part");
@@ -320,13 +290,11 @@ void ResourceTransferManager::download(const QJsonObject& descriptor, bool avata
         emit failed(tr("无法创建下载文件"));
         return;
     }
-    if (file->size() > size)
-        file->resize(0);
+    if (file->size() > size) file->resize(0);
     const auto offset = file->size();
     file->seek(offset);
     auto headers = request("/resources/" + id);
-    if (offset > 0 && offset < size)
-        headers.setRawHeader("Range", "bytes=" + QByteArray::number(offset) + "-");
+    if (offset > 0 && offset < size) headers.setRawHeader("Range", "bytes=" + QByteArray::number(offset) + "-");
     if (offset == size) {
         file->resize(0);
         file->seek(0);
@@ -341,8 +309,7 @@ void ResourceTransferManager::download(const QJsonObject& descriptor, bool avata
         /** @brief 检查响应范围并有界写入下载文件，保留写失败标志。 */
         [reply, file, failedWrite, start, size] {
             const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            if (status != (start > 0 ? 206 : 200))
-                return;
+            if (status != (start > 0 ? 206 : 200)) return;
             if (start > 0 &&
                 !reply->rawHeader("Content-Range").startsWith("bytes " + QByteArray::number(start) + "-")) {
                 *failedWrite = true;
@@ -359,10 +326,7 @@ void ResourceTransferManager::download(const QJsonObject& descriptor, bool avata
             }
         };
     connect(reply, &QNetworkReply::readyRead, this, drain);
-    connect(
-        reply,
-        &QNetworkReply::finished,
-        this,
+    connect(reply, &QNetworkReply::finished, this,
         /** @brief 下载结束后校验文件长度和网络结果，再进入摘要验证。 */
         [this, reply, file, failedWrite, drain, descriptor, path, id, size] {
             drain();
@@ -374,53 +338,33 @@ void ResourceTransferManager::download(const QJsonObject& descriptor, bool avata
                 return;
             }
             file->seek(0);
-            verifyDownload(
-                file,
-                std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256),
-                descriptor["sha256"].toString(),
-                path,
-                id,
-                _generation);
+            verifyDownload(file, std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256),
+                descriptor["sha256"].toString(), path, id, _generation);
         });
 }
 
 void ResourceTransferManager::fetchAvatar(int owner) {
-    if (owner <= 0)
-        return;
+    if (owner <= 0) return;
     const auto revision = ++_avatarRequests[owner];
-    jsonRequest(
-        "GET",
-        "/avatars/" + QString::number(owner),
-        {},
+    jsonRequest("GET", "/avatars/" + QString::number(owner), {},
         /** @brief 仅发布该用户最新一次头像查询结果。 */
         [this, owner, revision](QJsonObject value) {
-            if (_avatarRequests.value(owner) == revision)
-                emit avatarResolved(owner, value);
+            if (_avatarRequests.value(owner) == revision) emit avatarResolved(owner, value);
         });
 }
 
 void ResourceTransferManager::commitAvatar(const QString& resourceId) {
     const QJsonObject value{{"resource_id", resourceId}};
-    jsonRequest(
-        "PUT",
-        "/avatars/" + QString::number(_uid),
-        QJsonDocument(value).toJson(QJsonDocument::Compact),
+    jsonRequest("PUT", "/avatars/" + QString::number(_uid), QJsonDocument(value).toJson(QJsonDocument::Compact),
         /** @brief 发布头像提交成功的资源描述。 */
         [this](QJsonObject result) {
             emit avatarCommitted(result);
         });
 }
 
-void ResourceTransferManager::verifyDownload(
-    std::shared_ptr<QFile> file,
-    std::shared_ptr<QCryptographicHash> digest,
-    QString expected,
-    QString path,
-    QString id,
-    quint64 generation,
-    bool finalFile) {
-    if (generation != _generation)
-        return;
+void ResourceTransferManager::verifyDownload(std::shared_ptr<QFile> file, std::shared_ptr<QCryptographicHash> digest,
+    QString expected, QString path, QString id, quint64 generation, bool finalFile) {
+    if (generation != _generation) return;
     const auto bytes = file->read(blockSize);
     if (bytes.isEmpty() && !file->atEnd()) {
         _downloads.remove(id);
@@ -429,9 +373,7 @@ void ResourceTransferManager::verifyDownload(
     }
     digest->addData(bytes);
     if (!file->atEnd()) {
-        QTimer::singleShot(
-            0,
-            this,
+        QTimer::singleShot(0, this,
             /** @brief 只在匹配任务代时继续分块摘要校验。 */
             [this, file, digest, expected, path, id, generation, finalFile] {
                 verifyDownload(file, digest, expected, path, id, generation, finalFile);

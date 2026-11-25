@@ -8,8 +8,7 @@ bool RedisMgr::PutExpiringToken(int uid, const std::string& value, long long aut
     const auto key = std::to_string(uid);
     const auto field = "utoken_" + key;
     auto* connection = _redis_pool->GetConnection();
-    if (!connection)
-        return false;
+    if (!connection) return false;
     // 归还独占 Redis 连接。
     Defer release([this, connection] {
         _redis_pool->ReturnConnection(connection);
@@ -18,53 +17,30 @@ bool RedisMgr::PutExpiringToken(int uid, const std::string& value, long long aut
                                "redis.call('HSET',KEYS[1],ARGV[1],ARGV[2]); return redis.call('EXPIRE',KEYS[1],86400)";
     const auto version_key = "auth_version_" + key;
     const auto version = std::to_string(auth_version);
-    auto* reply = static_cast<redisReply*>(redisCommand(
-        connection,
-        "EVAL %b 2 %b %b %b %b %b",
-        script.data(),
-        script.size(),
-        key.data(),
-        key.size(),
-        version_key.data(),
-        version_key.size(),
-        field.data(),
-        field.size(),
-        value.data(),
-        value.size(),
-        version.data(),
-        version.size()));
+    auto* reply = static_cast<redisReply*>(redisCommand(connection, "EVAL %b 2 %b %b %b %b %b", script.data(),
+        script.size(), key.data(), key.size(), version_key.data(), version_key.size(), field.data(), field.size(),
+        value.data(), value.size(), version.data(), version.size()));
     // 释放命令回复。
     Defer free_reply([reply] {
-        if (reply)
-            freeReplyObject(reply);
+        if (reply) freeReplyObject(reply);
     });
     return reply && reply->type == REDIS_REPLY_INTEGER && reply->integer == 1;
 }
 
 long long RedisMgr::EvalNumber(const std::string& script, const std::string& key, const std::string& value) {
     auto* connection = _redis_pool->GetConnection();
-    if (!connection)
-        throw std::runtime_error("redis unavailable");
+    if (!connection) throw std::runtime_error("redis unavailable");
     // 所有路径归还当前连接。
     Defer release([this, connection] {
         _redis_pool->ReturnConnection(connection);
     });
-    auto* reply = static_cast<redisReply*>(redisCommand(
-        connection,
-        "EVAL %b 1 %b %b",
-        script.data(),
-        script.size(),
-        key.data(),
-        key.size(),
-        value.data(),
-        value.size()));
+    auto* reply = static_cast<redisReply*>(redisCommand(connection, "EVAL %b 1 %b %b", script.data(), script.size(),
+        key.data(), key.size(), value.data(), value.size()));
     // 释放可能为空的 Redis 回复。
     Defer free_reply([reply] {
-        if (reply)
-            freeReplyObject(reply);
+        if (reply) freeReplyObject(reply);
     });
-    if (!reply || reply->type != REDIS_REPLY_INTEGER)
-        throw std::runtime_error("redis command unavailable");
+    if (!reply || reply->type != REDIS_REPLY_INTEGER) throw std::runtime_error("redis command unavailable");
     return reply->integer;
 }
 

@@ -16,11 +16,11 @@ UserInfoPage::UserInfoPage(QWidget* parent) : QWidget(parent), ui(new Ui::UserIn
     // 仅在表单未编辑时接收服务端资料，保留用户未提交输入。
     const auto refresh = [this] {
         if (_profileBusy || ui->user_info_page_name_edit->isModified() ||
-            ui->user_info_page_description_edit->isModified())
+            ui->user_info_page_description_edit->isModified()) {
             return;
+        }
         const auto profile = UserMgr::instance()->userInfo();
-        if (!profile)
-            return;
+        if (!profile) return;
         ui->user_info_page_name_edit->setText(profile->_name);
         ui->user_info_page_description_edit->setText(profile->_description);
         _profileRevision = UserMgr::instance()->socialProfile(profile->_uid)["profile_revision"].toString();
@@ -31,13 +31,9 @@ UserInfoPage::UserInfoPage(QWidget* parent) : QWidget(parent), ui(new Ui::UserIn
     ui->verticalLayout->addWidget(reload);
     // 用户显式重新载入最新资料，用于处理冲突或不确定结果。
     connect(reload, &QPushButton::clicked, this, [this, status] {
-        if (_profileBusy)
-            return;
+        if (_profileBusy) return;
         setProfileBusy(true);
-        TcpMgr::instance()->socialRequest(
-            ID_SOCIAL_DIRECTORY_REQ,
-            {{"kind", "profile"}},
-            this,
+        TcpMgr::instance()->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind", "profile"}}, this,
             // 读取成功才替换表单内容和编辑版本。
             [this, status](QJsonObject response) {
                 setProfileBusy(false);
@@ -55,18 +51,14 @@ UserInfoPage::UserInfoPage(QWidget* parent) : QWidget(parent), ui(new Ui::UserIn
     });
     refresh();
     connect(UserMgr::instance().get(), &UserMgr::profileChanged, this, refresh);
-    if (!TcpMgr::instance()->supportsSocial())
-        status->setText(tr("服务器需要更新后才能编辑资料"));
+    if (!TcpMgr::instance()->supportsSocial()) status->setText(tr("服务器需要更新后才能编辑资料"));
     // 提交本人资料时固定原版本并保留失败内容。
     connect(ui->user_info_page_submit_btn, &QPushButton::clicked, this, [this, status] {
-        if (_profileBusy)
-            return;
+        if (_profileBusy) return;
         setProfileBusy(true);
-        TcpMgr::instance()->socialRequest(
-            ID_PROFILE_UPDATE_REQ,
+        TcpMgr::instance()->socialRequest(ID_PROFILE_UPDATE_REQ,
             {{"name", ui->user_info_page_name_edit->text()},
-             {"description", ui->user_info_page_description_edit->text()},
-             {"expected_revision", _profileRevision}},
+                {"description", ui->user_info_page_description_edit->text()}, {"expected_revision", _profileRevision}},
             this,
             // 成功后解除编辑标记，失败保持输入供用户处理。
             [this, status](QJsonObject response) {
@@ -99,9 +91,7 @@ UserInfoPage::UserInfoPage(QWidget* parent) : QWidget(parent), ui(new Ui::UserIn
         /** @brief 头像变化后刷新本人资料页的头像显示。 */
         [this]() {
             ui->user_info_page_head_label->setPixmap(UserMgr::instance()->selfAvatar().scaled(
-                ui->user_info_page_head_label->size(),
-                Qt::KeepAspectRatio,
-                Qt::SmoothTransformation));
+                ui->user_info_page_head_label->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
         };
     updateAvatar();
     connect(UserMgr::instance()->localAvatar(), &LocalAvatar::imageChanged, this, updateAvatar);

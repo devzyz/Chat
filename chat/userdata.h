@@ -18,6 +18,7 @@ struct SearchInfo {
     /** @brief 创建保存用户搜索结果的身份及展示资料。 */
     SearchInfo(int uid, QString name, QString description, QString icon, int sex)
         : _uid(uid), _name(name), _description(description), _sex(sex), _icon(icon) {}
+
     int _uid;
     QString _name;
     QString _description;
@@ -28,16 +29,8 @@ struct SearchInfo {
 /** @brief 保存新朋友申请列表展示所需的申请人资料和申请内容。 */
 struct ApplyInfo {
     /** @brief 使用好友申请回包构造列表项，backname 为申请人给接收方的备注名。 */
-    ApplyInfo(
-        int apply_uid,
-        QString apply_name,
-        QString apply_description,
-        QString apply_icon,
-        int apply_sex,
-        int status,
-        int to_uid,
-        QString description,
-        QString backname)
+    ApplyInfo(int apply_uid, QString apply_name, QString apply_description, QString apply_icon, int apply_sex,
+        int status, int to_uid, QString description, QString backname)
         : _apply_uid(apply_uid), _apply_name(apply_name), _apply_description(apply_description),
           _apply_icon(apply_icon), _apply_sex(apply_sex), _status(status), _to_uid(to_uid), _description(description),
           _backname(backname) {}
@@ -56,12 +49,7 @@ struct ApplyInfo {
 /** @brief 保存好友审批后展示的对方资料和本账号设置的备注名。 */
 struct AuthInfo {
     /** @brief 使用好友确认回包构造联系人资料。 */
-    AuthInfo(
-        int auth_uid,
-        QString auth_name,
-        QString auth_description,
-        QString auth_icon,
-        int auth_sex,
+    AuthInfo(int auth_uid, QString auth_name, QString auth_description, QString auth_icon, int auth_sex,
         QString backname)
         : _auth_uid(auth_uid), _auth_name(auth_name), _auth_description(auth_description), _auth_icon(auth_icon),
           _auth_sex(auth_sex), _backname(backname) {}
@@ -85,34 +73,16 @@ struct AuthInfo {
 class ChatDataBase {
 public:
     /** @brief 以服务器消息 ID 和日内时间构造消息，日期按当前日期补齐。 */
-    ChatDataBase(
-        int msg_id,
-        int chat_id,
-        ChatType chat_type,
-        ChatMessageType chat_msg_type,
-        QString content,
-        int send_uid,
-        QTime send_time);
+    ChatDataBase(int msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type, QString content,
+        int send_uid, QTime send_time);
 
     /** @brief 以客户端 UUID 构造待确认消息，日内时间按当前日期补齐。 */
-    ChatDataBase(
-        QString client_msg_id,
-        int chat_id,
-        ChatType chat_type,
-        ChatMessageType chat_msg_type,
-        QString content,
-        int send_uid,
-        QTime send_time);
+    ChatDataBase(QString client_msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type, QString content,
+        int send_uid, QTime send_time);
 
     /** @brief 以服务器消息 ID 和完整日期时间构造已确认消息。 */
-    ChatDataBase(
-        int msg_id,
-        int chat_id,
-        ChatType chat_type,
-        ChatMessageType chat_msg_type,
-        QString content,
-        int send_uid,
-        QDateTime sent_at);
+    ChatDataBase(int msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type, QString content,
+        int send_uid, QDateTime sent_at);
 
     /** @brief 返回服务器分配的消息 ID，本地待发消息可能尚无有效 ID。 */
     int getMsgId();
@@ -167,34 +137,16 @@ private:
 class TextChatData : public ChatDataBase {
 public:
     /** @brief 以服务器消息 ID 和日内时间构造消息，日期按当前日期补齐。 */
-    TextChatData(
-        int msg_id,
-        int chat_id,
-        ChatType chat_type,
-        ChatMessageType chat_msg_type,
-        QString content,
-        int send_uid,
-        QTime send_time);
+    TextChatData(int msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type, QString content,
+        int send_uid, QTime send_time);
 
     /** @brief 以客户端 UUID 构造待确认消息，日内时间按当前日期补齐。 */
-    TextChatData(
-        QString client_msg_id,
-        int chat_id,
-        ChatType chat_type,
-        ChatMessageType chat_msg_type,
-        QString content,
-        int send_uid,
-        QTime send_time);
+    TextChatData(QString client_msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type, QString content,
+        int send_uid, QTime send_time);
 
     /** @brief 以服务器消息 ID 和完整日期时间构造已确认消息。 */
-    TextChatData(
-        int msg_id,
-        int chat_id,
-        ChatType chat_type,
-        ChatMessageType chat_msg_type,
-        QString content,
-        int send_uid,
-        QDateTime sent_at);
+    TextChatData(int msg_id, int chat_id, ChatType chat_type, ChatMessageType chat_msg_type, QString content,
+        int send_uid, QDateTime sent_at);
 };
 
 /**
@@ -236,14 +188,17 @@ public:
     void setLastMsgId(int current_msg_id);
     /** @brief 返回私聊或群聊会话类型。 */
     ChatType getChatType();
+
     /** @brief 返回会话展示名称，群聊使用建群时的群名。 */
     QString name() const {
         return _name;
     }
+
     /** @brief 更新已持久化会话的展示名称，保留消息缓存。 */
     void setName(const QString& name) {
         _name = name;
     }
+
     // 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息
     /** @brief 根据msg_id从_chat_msgs中获取编号为msg_id所发送的详细信息。 */
     std::shared_ptr<ChatDataBase> getChatDataByMsgId(int msg_id);

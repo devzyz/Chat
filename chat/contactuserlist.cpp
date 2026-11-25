@@ -21,46 +21,34 @@ ContactUserList::ContactUserList(QWidget* parent) : QListWidget(parent), _loadin
     connect(this, &QListWidget::itemClicked, this, &ContactUserList::itemClicked);
 
     auto* messages = UserMgr::instance()->messages();
-    connect(
-        messages,
-        &MessageService::directoryPageLoaded,
-        this,
+    connect(messages, &MessageService::directoryPageLoaded, this,
         /** @brief 按本地页推进联系人游标，重复记录只更新已有行。 */
         [this](const QString& kind, int after, const QJsonArray& rows, bool more) {
-            if (kind != "contacts" || after != _cursor)
-                return;
+            if (kind != "contacts" || after != _cursor) return;
             for (const auto& value : rows)
                 applyContact(value.toObject());
-            if (!rows.isEmpty())
-                _cursor = rows.last().toObject()["id"].toInt();
+            if (!rows.isEmpty()) _cursor = rows.last().toObject()["id"].toInt();
             _hasMore = more;
             _loading_contact = false;
         });
-    connect(
-        messages,
-        &MessageService::directoryChanged,
-        this,
+    connect(messages, &MessageService::directoryChanged, this,
         /** @brief 已落盘的资料更新已显示行，新记录由本地分页读取。 */
         [this](const QJsonObject& directory) {
             const bool wasComplete = !_hasMore;
             for (const auto& value : directory["contacts"].toArray()) {
                 const auto row = value.toObject();
-                if (row["id"].toInt() <= _cursor)
+                if (row["id"].toInt() <= _cursor) {
                     applyContact(row);
-                else
+                } else {
                     _hasMore = true;
+                }
             }
-            if (_items.isEmpty() || wasComplete)
-                loadNextPage();
+            if (_items.isEmpty() || wasComplete) loadNextPage();
         });
-    connect(
-        messages,
-        &MessageService::directoryFailed,
-        this,
+    connect(messages, &MessageService::directoryFailed, this,
         /** @brief 存储失败时结束当前列表等待，允许用户重试。 */
         [this](const QString& kind) {
-            if (kind.isEmpty() || kind == "contacts")
-                _loading_contact = false;
+            if (kind.isEmpty() || kind == "contacts") _loading_contact = false;
         });
     loadNextPage();
 }
@@ -163,8 +151,7 @@ void ContactUserList::itemClicked(QListWidgetItem* item) {
 }
 
 void ContactUserList::loadNextPage() {
-    if (_loading_contact || !_hasMore)
-        return;
+    if (_loading_contact || !_hasMore) return;
     _loading_contact = true;
     UserMgr::instance()->messages()->loadDirectoryPage("contacts", _cursor, LOADING_STEP_LENGTH);
 }
@@ -180,8 +167,7 @@ void ContactUserList::applyContact(const QJsonObject& row) {
         }
         return;
     }
-    if (!info)
-        return;
+    if (!info) return;
     if (!item) {
         auto* widget = new ContactUserItem();
         item = new QListWidgetItem();

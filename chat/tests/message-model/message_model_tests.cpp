@@ -156,8 +156,7 @@ void MessageModelTests::unknownStableIdsDoNotMutateTheModel() {
     QCOMPARE(removals, 0);
     QCOMPARE(model.rowCount(), 1);
     QCOMPARE(model.rowForMessageId(101), 0);
-    QCOMPARE(
-        model.data(model.index(0), MessageListModel::DeliveryStatusRole).toInt(),
+    QCOMPARE(model.data(model.index(0), MessageListModel::DeliveryStatusRole).toInt(),
         static_cast<int>(DeliveryStatus::Read));
 }
 
@@ -165,11 +164,8 @@ void MessageModelTests::historyDeduplicatesAndRemainsChronological() {
     MessageListModel model(7);
     model.appendMessage(message(30, {}));
     QPersistentModelIndex anchor(model.index(0));
-    const QVector<MessageRecord> history = {
-        message(20, {}, QStringLiteral("中文")),
-        message(10, {}, QStringLiteral("English 😄\nmanual wrap")),
-        message(20, {}),
-        message(30, {})};
+    const QVector<MessageRecord> history = {message(20, {}, QStringLiteral("中文")),
+        message(10, {}, QStringLiteral("English 😄\nmanual wrap")), message(20, {}), message(30, {})};
 
     QCOMPARE(model.prependHistory(history), 2);
     QCOMPARE(model.rowCount(), 3);
@@ -178,23 +174,17 @@ void MessageModelTests::historyDeduplicatesAndRemainsChronological() {
     QCOMPARE(model.data(model.index(2), MessageListModel::MessageIdRole).toLongLong(), 30);
     QCOMPARE(anchor.row(), 2);
     QCOMPARE(anchor.data(MessageListModel::MessageIdRole).toLongLong(), 30);
-    QCOMPARE(
-        model.data(model.index(0), MessageListModel::TextRole).toString(),
+    QCOMPARE(model.data(model.index(0), MessageListModel::TextRole).toString(),
         QStringLiteral("English 😄\nmanual wrap"));
 }
 
 void MessageModelTests::multipleHistoryPagesRemainChronological() {
     MessageListModel model(7);
     model.appendMessage(message(50, QStringLiteral("server-50")));
-    QCOMPARE(
-        model.prependHistory({message(40, QStringLiteral("server-40")), message(30, QStringLiteral("server-30"))}),
+    QCOMPARE(model.prependHistory({message(40, QStringLiteral("server-40")), message(30, QStringLiteral("server-30"))}),
         2);
-    QCOMPARE(
-        model.prependHistory(
-            {message(20, QStringLiteral("server-20")),
-             message(10, QStringLiteral("server-10")),
-             message(30, QStringLiteral("duplicate-message-id")),
-             message(15, QStringLiteral("server-20"))}),
+    QCOMPARE(model.prependHistory({message(20, QStringLiteral("server-20")), message(10, QStringLiteral("server-10")),
+                 message(30, QStringLiteral("duplicate-message-id")), message(15, QStringLiteral("server-20"))}),
         2);
 
     const QVector<qint64> expectedIds = {10, 20, 30, 40, 50};
@@ -213,10 +203,8 @@ void MessageModelTests::multipleHistoryPagesRemainChronological() {
 
 void MessageModelTests::removalAndAcknowledgementRebuildShiftedIndexes() {
     MessageListModel model(7);
-    model.appendMessages(
-        {message(100, QStringLiteral("client-100")),
-         message(200, QStringLiteral("client-200")),
-         message(300, QStringLiteral("client-300"))});
+    model.appendMessages({message(100, QStringLiteral("client-100")), message(200, QStringLiteral("client-200")),
+        message(300, QStringLiteral("client-300"))});
 
     QVERIFY(model.removeByMessageId(100));
     QCOMPARE(model.rowForMessageId(100), -1);
@@ -253,9 +241,8 @@ void MessageModelTests::textAndChatIdentityRoundTripWithoutNormalization() {
 
     MessageListModel model(7);
     const QString unicodeText = QStringLiteral("你好，组合字符 e\u0301，😄\nsecond line");
-    QCOMPARE(
-        model.appendMessages(
-            {message(1, QStringLiteral("unicode"), unicodeText), message(2, QStringLiteral("empty"), QString())}),
+    QCOMPARE(model.appendMessages(
+                 {message(1, QStringLiteral("unicode"), unicodeText), message(2, QStringLiteral("empty"), QString())}),
         2);
     QCOMPARE(model.data(model.index(0), MessageListModel::TextRole).toString(), unicodeText);
     QCOMPARE(model.data(model.index(0), Qt::DisplayRole).toString(), unicodeText);
@@ -316,9 +303,7 @@ void MessageModelTests::storeRetainsOneModelAndPaginationStatePerChat() {
 
 void MessageModelTests::delegateReflowsLongTextForANarrowViewport() {
     MessageListModel model(7);
-    model.appendMessage(message(
-        1,
-        {},
+    model.appendMessage(message(1, {},
         QStringLiteral("中文 English 😄 emoji\n手工换行，以及一段用于验证窗口缩放后自动换行高度的长文本。")));
     QListView view;
     MessageItemDelegate delegate(&view);

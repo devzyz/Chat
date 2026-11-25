@@ -12,8 +12,9 @@ inline std::string DatabaseSection() {
     const std::string port = raw ? raw : "";
     unsigned int parsed = 0;
     const auto result = std::from_chars(port.data(), port.data() + port.size(), parsed);
-    if (result.ec != std::errc() || result.ptr != port.data() + port.size() || parsed == 0 || parsed > 65535)
+    if (result.ec != std::errc() || result.ptr != port.data() + port.size() || parsed == 0 || parsed > 65535) {
         throw std::runtime_error("OwnedStartupPostgresRequired");
+    }
     return "[Database]\nDriver=postgresql\nHost=127.0.0.1\nPort=" + port + "\nUser=chat_fixture\nSchema=postgres\n";
 }
 } // namespace startup_fixture

@@ -10,12 +10,18 @@ struct UserPresence {
     std::string authentication_token;
 };
 }
-enum class PresenceStatus { Found, NotFound, Unavailable };
+enum class PresenceStatus {
+    Found,
+    NotFound,
+    Unavailable
+};
+
 /** @brief 区分查得位置、不存在与存储不可用；Publish 的位置表示被替换的旧值。 */
 struct PresenceResult {
     PresenceStatus status = PresenceStatus::Unavailable;
     std::optional<chat_session::UserPresence> presence;
 };
+
 /** @brief 提供同步在线位置存取及条件删除；调用可能阻塞，生产调用由进程共享 Redis 池执行。 */
 class UserPresenceStore {
 public:
@@ -25,12 +31,14 @@ public:
     virtual PresenceResult Publish(int uid, const chat_session::UserPresence& presence) = 0;
     /** @brief 同步读取位置；缺失为 NotFound，失败为 Unavailable，适配器异常由调用方处理。 */
     virtual PresenceResult Find(int uid) = 0;
+
     /** @brief 校验全局当前会话；生产适配器同时原子续租，替身默认只检查会话身份。 */
     virtual bool RefreshIfCurrent(int uid, const SessionId& session_id) {
         const auto current = Find(uid);
         return current.status == PresenceStatus::Found && current.presence &&
                current.presence->session_id == session_id;
     }
+
     /** @brief 仅在实例和会话都匹配时删除；不匹配也返回 true，false 表示存储失败。 */
     virtual bool RemoveIfCurrent(int uid, const chat_session::UserPresence& presence) = 0;
 };

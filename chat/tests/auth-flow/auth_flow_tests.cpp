@@ -129,8 +129,7 @@ void AuthFlowTests::unknownModuleOrRequestDoesNotChangeTheActiveFlow() {
     valid.kind = AuthOutcomeKind::HttpNetworkError;
     valid.module = static_cast<int>(Modules::LOGINMOD);
     valid.requestId = static_cast<int>(ReqId::ID_LOGIN_UESR);
-    QCOMPARE(
-        coordinator.reduce(active.flowId, valid).kind,
+    QCOMPARE(coordinator.reduce(active.flowId, valid).kind,
         std::optional<AuthActionKind>(AuthActionKind::StayAndShowError));
 
     AuthOutcome unknownBegin;
@@ -194,8 +193,7 @@ void AuthFlowTests::loginHttpSuccessConnectsOnlyOnce() {
 void AuthFlowTests::tcpFailureDoesNotCreateChat() {
     AuthFlowCoordinator coordinator;
     const AuthAction active = begin(coordinator, Modules::LOGINMOD, ReqId::ID_LOGIN_UESR);
-    QCOMPARE(
-        loginHttpSuccess(coordinator, active.flowId).kind,
+    QCOMPARE(loginHttpSuccess(coordinator, active.flowId).kind,
         std::optional<AuthActionKind>(AuthActionKind::ConnectChat));
 
     AuthOutcome failure;

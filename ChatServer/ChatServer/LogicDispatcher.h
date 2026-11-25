@@ -23,8 +23,7 @@ public:
     using Handler = std::function<bool(const LogicMessage&)>;
 
     // 默认两个业务分片，handler 可被不同分片并发调用。生产使用进程共享依赖池。
-    explicit LogicDispatcher(
-        Handler handler,
+    explicit LogicDispatcher(Handler handler,
         std::shared_ptr<DependencyExecutor> dependencies = std::make_shared<DependencyExecutor>(),
         std::size_t business_workers = 2);
     /** @brief 停止接收并等待已接受消息排空；不能在 handler 所在线程析构。 */
@@ -45,22 +44,15 @@ public:
     using Resume = std::function<void(Completion)>;
 
     // 从分发线程投递依赖步骤；关联连接时保序，完成和异常回到分发线程。已提交的通知走 QueueNotification。
-    LogicSubmitResult SubmitExternal(
-        ExternalTask kind,
-        std::shared_ptr<CSession> session,
-        ExternalWork work,
-        Completion failed,
-        std::function<bool()> sql_check = {});
+    LogicSubmitResult SubmitExternal(ExternalTask kind, std::shared_ptr<CSession> session, ExternalWork work,
+        Completion failed, std::function<bool()> sql_check = {});
     // 暂停当前请求，在原分片恢复绑定结果。调用方必须恰好一次交回完成通知。
     Resume AwaitCompletion(std::shared_ptr<CSession> session);
 
 protected:
     using SessionHash = std::function<std::size_t(const std::shared_ptr<CSession>&)>;
     // 无 socket 的调度夹具可以在构造时为合成连接提供固定哈希。真实连接始终使用自身的不可变键。
-    LogicDispatcher(
-        Handler handler,
-        std::shared_ptr<DependencyExecutor> dependencies,
-        std::size_t business_workers,
+    LogicDispatcher(Handler handler, std::shared_ptr<DependencyExecutor> dependencies, std::size_t business_workers,
         SessionHash synthetic_hash);
     // 从分发线程投递已提交的通知，路由在 Redis 上执行，返回可选的出站 RPC 工作。
     void QueueNotification(ExternalWork route);

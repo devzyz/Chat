@@ -26,20 +26,22 @@ public:
     ~FileDescriptor() {
         Reset();
     }
+
     /** 初始化为无效描述符。 */
     FileDescriptor() = default;
     /** 禁止复制文件描述符所有权。 */
     FileDescriptor(const FileDescriptor&) = delete;
     /** 禁止复制赋值文件描述符所有权。 */
     FileDescriptor& operator=(const FileDescriptor&) = delete;
+
     /** 借用原始描述符，未持有时返回负值。 */
     int Get() const {
         return _value;
     }
+
     /** 关闭旧描述符并接管新值。 */
     void Reset(int value = -1) {
-        if (_value >= 0)
-            close(_value);
+        if (_value >= 0) close(_value);
         _value = value;
     }
 
@@ -50,8 +52,7 @@ private:
 /** 创建执行时关闭的管道并把读端设为非阻塞，失败抛异常。 */
 void MakePipe(FileDescriptor& reader, FileDescriptor& writer) {
     int descriptors[2] = {-1, -1};
-    if (pipe2(descriptors, O_CLOEXEC) != 0)
-        throw std::runtime_error("unable to create child pipe");
+    if (pipe2(descriptors, O_CLOEXEC) != 0) throw std::runtime_error("unable to create child pipe");
     reader.Reset(descriptors[0]);
     writer.Reset(descriptors[1]);
     if (fcntl(reader.Get(), F_SETFL, O_NONBLOCK) < 0) {
@@ -63,16 +64,13 @@ void MakePipe(FileDescriptor& reader, FileDescriptor& writer) {
 std::uint64_t StartTicks(pid_t pid) {
     std::ifstream input("/proc/" + std::to_string(pid) + "/stat");
     std::string line;
-    if (!std::getline(input, line))
-        return 0;
+    if (!std::getline(input, line)) return 0;
     const auto closing = line.rfind(')');
-    if (closing == std::string::npos)
-        return 0;
+    if (closing == std::string::npos) return 0;
     std::istringstream fields(line.substr(closing + 2));
     std::string field;
     for (int number = 3; number <= 21; ++number) {
-        if (!(fields >> field))
-            return 0;
+        if (!(fields >> field)) return 0;
     }
     std::uint64_t ticks = 0;
     fields >> ticks;
@@ -88,17 +86,17 @@ public:
     ~Impl() {
         // No PID adoption: even exceptional startup/cleanup owns only this child.
         if (pid > 0 && !reaped) {
-            if (Matches(identity))
+            if (Matches(identity)) {
                 kill(-pid, SIGKILL);
-            else
+            } else {
                 kill(pid, SIGKILL); // unreaped direct child cannot be recycled
+            }
             const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
             while (!ObserveExit() && std::chrono::steady_clock::now() < deadline)
                 Pump(deadline);
             if (exited) {
                 int status = 0;
-                while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
-                }
+                while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
             }
         }
     }
@@ -112,10 +110,8 @@ public:
 
     /** 非阻塞观察所属子进程退出而暂不回收，记录退出码或信号状态。 */
     bool ObserveExit() {
-        if (exited)
-            return true;
-        if (pid <= 0)
-            return false;
+        if (exited) return true;
+        if (pid <= 0) return false;
         siginfo_t info{};
         int result = 0;
         do {
@@ -139,8 +135,7 @@ public:
             } else if (count == 0) {
                 descriptor.Reset();
             } else if (errno != EINTR) {
-                if (errno != EAGAIN && errno != EWOULDBLOCK)
-                    read_failed = true;
+                if (errno != EAGAIN && errno != EWOULDBLOCK) read_failed = true;
                 break;
             }
         }
@@ -172,12 +167,12 @@ public:
 
 /** 创建空的 POSIX 进程实现。 */
 PosixProcessAdapter::PosixProcessAdapter() : _impl(std::make_unique<Impl>()) {}
+
 PosixProcessAdapter::~PosixProcessAdapter() = default;
 
 ProcessIdentity PosixProcessAdapter::Start(const ProcessSpec& spec) {
     std::lock_guard<std::mutex> lock(_impl->mutex);
-    if (_impl->pid > 0)
-        throw std::logic_error("process adapter can start only one child");
+    if (_impl->pid > 0) throw std::logic_error("process adapter can start only one child");
     if (!std::filesystem::is_regular_file(spec.executable) || !std::filesystem::is_directory(spec.working_directory) ||
         spec.evidence_limit == 0) {
         throw std::invalid_argument("child executable, directory and evidence bound are required");
@@ -187,8 +182,7 @@ ProcessIdentity PosixProcessAdapter::Start(const ProcessSpec& spec) {
     std::vector<std::string> arguments{executable};
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     for (const auto& argument : spec.arguments) {
-        if (argument.find(L'\0') != std::wstring::npos)
-            throw std::invalid_argument("NUL in child argument");
+        if (argument.find(L'\0') != std::wstring::npos) throw std::invalid_argument("NUL in child argument");
         arguments.push_back(converter.to_bytes(argument));
     }
     std::vector<char*> argv;
@@ -201,13 +195,13 @@ ProcessIdentity PosixProcessAdapter::Start(const ProcessSpec& spec) {
     MakePipe(_impl->stderr_read, stderr_write);
     _impl->limit = spec.evidence_limit;
     const pid_t pid = fork();
-    if (pid < 0)
-        throw std::runtime_error("unable to fork owned child");
+    if (pid < 0) throw std::runtime_error("unable to fork owned child");
     if (pid == 0) {
         // Only async-signal-safe calls between fork and exec; arguments are prepared above.
         if (setpgid(0, 0) != 0 || chdir(directory.c_str()) != 0 || dup2(stdout_write.Get(), STDOUT_FILENO) < 0 ||
-            dup2(stderr_write.Get(), STDERR_FILENO) < 0)
+            dup2(stderr_write.Get(), STDERR_FILENO) < 0) {
             _exit(126);
+        }
         execv(executable.c_str(), argv.data());
         _exit(127);
     }
@@ -215,11 +209,9 @@ ProcessIdentity PosixProcessAdapter::Start(const ProcessSpec& spec) {
     stdout_write.Reset();
     stderr_write.Reset();
     // Both sides establish the group; EACCES means the child already exec'd.
-    if (setpgid(pid, pid) != 0 && errno != EACCES)
-        throw std::runtime_error("unable to own child process group");
+    if (setpgid(pid, pid) != 0 && errno != EACCES) throw std::runtime_error("unable to own child process group");
     _impl->identity = {static_cast<std::uint32_t>(pid), StartTicks(pid)};
-    if (!_impl->Matches(_impl->identity))
-        throw std::runtime_error("unable to capture child creation identity");
+    if (!_impl->Matches(_impl->identity)) throw std::runtime_error("unable to capture child creation identity");
     return _impl->identity;
 }
 
@@ -233,10 +225,8 @@ bool PosixProcessAdapter::WaitForExitUntil(RunDeadline deadline) const {
     do {
         _impl->Drain(_impl->stdout_read, _impl->stdout_text);
         _impl->Drain(_impl->stderr_read, _impl->stderr_text);
-        if (_impl->ObserveExit())
-            return true;
-        if (std::chrono::steady_clock::now() >= deadline)
-            return false;
+        if (_impl->ObserveExit()) return true;
+        if (std::chrono::steady_clock::now() >= deadline) return false;
         _impl->Pump(deadline);
     } while (true);
 }
@@ -249,43 +239,34 @@ bool PosixProcessAdapter::SendGraceful(ProcessIdentity expected) {
 TerminationResult PosixProcessAdapter::Terminate(ProcessIdentity expected, RunDeadline deadline) {
     {
         std::lock_guard<std::mutex> lock(_impl->mutex);
-        if (!_impl->Matches(expected))
-            return TerminationResult::IdentityMismatch;
-        if (_impl->ObserveExit())
-            return TerminationResult::AlreadyExited;
-        if (kill(-_impl->pid, SIGKILL) != 0)
-            return TerminationResult::Failed;
+        if (!_impl->Matches(expected)) return TerminationResult::IdentityMismatch;
+        if (_impl->ObserveExit()) return TerminationResult::AlreadyExited;
+        if (kill(-_impl->pid, SIGKILL) != 0) return TerminationResult::Failed;
     }
     return WaitForExitUntil(deadline) ? TerminationResult::Terminated : TerminationResult::TimedOut;
 }
 
 bool PosixProcessAdapter::ClosePipes(RunDeadline deadline) {
     std::lock_guard<std::mutex> lock(_impl->mutex);
-    if (!_impl->ObserveExit())
-        return false;
+    if (!_impl->ObserveExit()) return false;
     if (!_impl->reaped) {
         // Keep the leader waitable until all group signalling is done: a stale
         // process group ID must never reach an unrelated child after PID reuse.
-        if (!_impl->Matches(_impl->identity))
-            return false;
-        if (kill(-_impl->pid, SIGKILL) != 0 && errno != ESRCH)
-            return false;
+        if (!_impl->Matches(_impl->identity)) return false;
+        if (kill(-_impl->pid, SIGKILL) != 0 && errno != ESRCH) return false;
         int status = 0;
         pid_t result = 0;
         do {
             result = waitpid(_impl->pid, &status, WNOHANG);
         } while (result < 0 && errno == EINTR);
-        if (result != _impl->pid)
-            return false;
+        if (result != _impl->pid) return false;
         _impl->reaped = true;
     }
     while (_impl->stdout_read.Get() >= 0 || _impl->stderr_read.Get() >= 0) {
         _impl->Drain(_impl->stdout_read, _impl->stdout_text);
         _impl->Drain(_impl->stderr_read, _impl->stderr_text);
-        if (_impl->stdout_read.Get() < 0 && _impl->stderr_read.Get() < 0)
-            break;
-        if (std::chrono::steady_clock::now() >= deadline)
-            return false;
+        if (_impl->stdout_read.Get() < 0 && _impl->stderr_read.Get() < 0) break;
+        if (std::chrono::steady_clock::now() >= deadline) return false;
         _impl->Pump(deadline);
     }
     return !_impl->read_failed;
@@ -296,11 +277,7 @@ AdapterEvidence PosixProcessAdapter::CollectEvidence() const {
     _impl->Drain(_impl->stdout_read, _impl->stdout_text);
     _impl->Drain(_impl->stderr_read, _impl->stderr_text);
     _impl->ObserveExit();
-    return {
-        _impl->identity,
-        _impl->exit_code,
-        _impl->stdout_text,
-        _impl->stderr_text,
+    return {_impl->identity, _impl->exit_code, _impl->stdout_text, _impl->stderr_text,
         _impl->reaped && _impl->stdout_read.Get() < 0 && _impl->stderr_read.Get() < 0};
 }
 

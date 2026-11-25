@@ -61,17 +61,14 @@ class ShardFixtureDispatcher final : public LogicDispatcher {
 public:
     // 指定归属第二片的测试连接，其他合成连接落在第一片。
     ShardFixtureDispatcher(std::vector<std::shared_ptr<CSession>> second, Handler handler)
-        : LogicDispatcher(
-              std::move(handler),
-              std::make_shared<DependencyExecutor>(),
-              2,
+        : LogicDispatcher(std::move(handler), std::make_shared<DependencyExecutor>(), 2,
               // 比较合成句柄的所有权；这些句柄不指向 socket 对象。
               [second = std::move(second)](const auto& key) -> std::size_t {
                   for (const auto& item : second)
-                      if (!item.owner_before(key) && !key.owner_before(item))
-                          return 1;
+                      if (!item.owner_before(key) && !key.owner_before(item)) return 1;
                   return 0;
               }) {}
+
     using LogicDispatcher::QueueNotification;
 };
 
@@ -332,8 +329,7 @@ TEST(LogicDispatcherTests, ThrowingHandlerDoesNotTerminateWorkerOrExposePayload)
     auto ready = handled.get_future();
     // 对指定编号抛含敏感标记的异常，其余消息正常完成。
     LogicDispatcher dispatcher([&](const LogicMessage& message) {
-        if (message.id == 90)
-            throw std::runtime_error("PRIVATE_EXCEPTION_PAYLOAD");
+        if (message.id == 90) throw std::runtime_error("PRIVATE_EXCEPTION_PAYLOAD");
         handled.set_value();
         return true;
     });
@@ -362,22 +358,18 @@ TEST(LogicDispatcherTests, SlowWritesAllowOtherSessionsAndPreserveReadAfterWrite
             const auto id = message.id;
             const auto thread = std::this_thread::get_id();
             // 工作线程暂停到测试释放门闩；回调必须回到业务线程。
-            EXPECT_EQ(
-                executor->SubmitExternal(
-                    ExternalTask::Database,
-                    message.session,
-                    [&, id, thread]() -> LogicDispatcher::Completion {
-                        EXPECT_NE(thread, std::this_thread::get_id());
-                        (id == 1 ? first : second).set_value();
-                        EXPECT_EQ(gate.wait_for(2s), std::future_status::ready);
-                        // 检查写入完成回到分发线程。
-                        return [&, id, thread] {
-                            EXPECT_EQ(thread, std::this_thread::get_id());
-                            if (id == 1)
-                                committed = true;
-                        };
-                    },
-                    {}),
+            EXPECT_EQ(executor->SubmitExternal(ExternalTask::Database, message.session,
+                          [&, id, thread]() -> LogicDispatcher::Completion {
+                              EXPECT_NE(thread, std::this_thread::get_id());
+                              (id == 1 ? first : second).set_value();
+                              EXPECT_EQ(gate.wait_for(2s), std::future_status::ready);
+                              // 检查写入完成回到分发线程。
+                              return [&, id, thread] {
+                                  EXPECT_EQ(thread, std::this_thread::get_id());
+                                  if (id == 1) committed = true;
+                              };
+                          },
+                          {}),
                 LogicSubmitResult::Accepted);
         }
         return true;
@@ -408,8 +400,7 @@ TEST(LogicDispatcherTests, DatabaseCapacityRejectsWithoutWritingAndDrainsFailure
             const auto id = message.id;
             // 第一笔故意抛错，第二笔应正常执行，第三笔不应进入数据库。
             auto result = executor->SubmitExternal(
-                ExternalTask::Database,
-                message.session,
+                ExternalTask::Database, message.session,
                 [&, id]() -> LogicDispatcher::Completion {
                     if (id == 1) {
                         started.set_value();
@@ -423,12 +414,10 @@ TEST(LogicDispatcherTests, DatabaseCapacityRejectsWithoutWritingAndDrainsFailure
                     ++failures;
                 });
             EXPECT_EQ(result, id == 3 ? LogicSubmitResult::Full : LogicSubmitResult::Accepted);
-            if (id == 3)
-                full.set_value();
+            if (id == 3) full.set_value();
             return true;
         },
-        std::make_shared<DependencyExecutor>(1, 1),
-        1);
+        std::make_shared<DependencyExecutor>(1, 1), 1);
     executor = &dispatcher;
     dispatcher.Submit({SessionKey(), 1, {}});
     ASSERT_EQ(started.get_future().wait_for(2s), std::future_status::ready);
@@ -452,9 +441,7 @@ TEST(LogicDispatcherTests, SlowRedisAndGrpcAllowIndependentSqlAndDrain) {
         [&](const LogicMessage& msg) {
             if (msg.id == 1) {
                 // 暂停一笔认证，验证另一条连接能使用第二个 Redis worker。
-                executor->SubmitExternal(
-                    ExternalTask::Redis,
-                    msg.session,
+                executor->SubmitExternal(ExternalTask::Redis, msg.session,
                     [&]() -> LogicDispatcher::Completion {
                         auth_started.set_value();
                         EXPECT_EQ(gate.wait_for(2s), std::future_status::ready);
@@ -463,9 +450,7 @@ TEST(LogicDispatcherTests, SlowRedisAndGrpcAllowIndependentSqlAndDrain) {
                     {});
             } else if (msg.id == 2) {
                 // 模拟对端 RPC 未返回。
-                executor->SubmitExternal(
-                    ExternalTask::OutboundGrpc,
-                    {},
+                executor->SubmitExternal(ExternalTask::OutboundGrpc, {},
                     [&]() -> LogicDispatcher::Completion {
                         notification_started.set_value();
                         EXPECT_EQ(gate.wait_for(2s), std::future_status::ready);
@@ -476,9 +461,7 @@ TEST(LogicDispatcherTests, SlowRedisAndGrpcAllowIndependentSqlAndDrain) {
             } else {
                 for (int index : {2, 3}) {
                     // 满队列拒绝的第三笔不能执行。
-                    auto status = executor->SubmitExternal(
-                        ExternalTask::OutboundGrpc,
-                        {},
+                    auto status = executor->SubmitExternal(ExternalTask::OutboundGrpc, {},
                         [&, index]() -> LogicDispatcher::Completion {
                             delivered.push_back(index);
                             return {};
@@ -487,16 +470,12 @@ TEST(LogicDispatcherTests, SlowRedisAndGrpcAllowIndependentSqlAndDrain) {
                     EXPECT_EQ(status, index == 2 ? LogicSubmitResult::Accepted : LogicSubmitResult::Full);
                 }
                 // 从认证完成事件继续查询；不占用被阻塞的出站 gRPC worker。
-                executor->SubmitExternal(
-                    ExternalTask::Redis,
-                    msg.session,
+                executor->SubmitExternal(ExternalTask::Redis, msg.session,
                     [&, session = msg.session]() -> LogicDispatcher::Completion {
                         // 回到分发线程后再提交同一连接的数据库操作。
                         return [&, session] {
                             // 查询开始即证明通知和慢认证没有耗尽数据库容量。
-                            executor->SubmitExternal(
-                                ExternalTask::Database,
-                                session,
+                            executor->SubmitExternal(ExternalTask::Database, session,
                                 [&]() -> LogicDispatcher::Completion {
                                     second_auth.set_value();
                                     return {};
@@ -509,8 +488,7 @@ TEST(LogicDispatcherTests, SlowRedisAndGrpcAllowIndependentSqlAndDrain) {
             }
             return true;
         },
-        std::make_shared<DependencyExecutor>(1, 1),
-        1);
+        std::make_shared<DependencyExecutor>(1, 1), 1);
     executor = &dispatcher;
     dispatcher.Submit({SessionKey(), 1, {}});
     dispatcher.Submit({SessionKey(), 2, {}});
@@ -545,11 +523,9 @@ TEST(LogicDispatcherTests, RedisReservesCriticalCapacityAndRejectsGuardedWritesW
     ASSERT_EQ(first.get_future().wait_for(2s), std::future_status::ready);
     ASSERT_EQ(second.get_future().wait_for(2s), std::future_status::ready);
     // 普通路由与关键任务共用队列，仅准入配额不同。
-    auto noop = [] {
-    };
+    auto noop = [] {};
     for (int n = 0; n < 56; ++n)
-        EXPECT_EQ(
-            executor.SubmitExternal(ExternalTask::Redis, noop, RedisAdmission::Routing),
+        EXPECT_EQ(executor.SubmitExternal(ExternalTask::Redis, noop, RedisAdmission::Routing),
             LogicSubmitResult::Accepted);
     EXPECT_EQ(executor.SubmitExternal(ExternalTask::Redis, noop, RedisAdmission::Routing), LogicSubmitResult::Full);
     for (int n = 0; n < 8; ++n)
@@ -568,8 +544,7 @@ TEST(LogicDispatcherTests, RedisReservesCriticalCapacityAndRejectsGuardedWritesW
     auto sql = [] {
         ADD_FAILURE() << "unexpected SQL";
     };
-    EXPECT_EQ(
-        executor.SubmitExternal(ExternalTask::Database, sql, RedisAdmission::Critical, guard),
+    EXPECT_EQ(executor.SubmitExternal(ExternalTask::Database, sql, RedisAdmission::Critical, guard),
         LogicSubmitResult::Accepted);
     EXPECT_EQ(denied.get_future().wait_for(2s), std::future_status::ready);
     release.set_value();
@@ -611,14 +586,12 @@ TEST(LogicDispatcherTests, ReservedSqlResumesAheadOfLaterWorkDuringDrain) {
         executor.Stop();
     });
     // 等到外部入口可观察地关闭，再释放预留名额，避免 Stop 尚未运行就通过测试。
-    auto probe = [] {
-    };
+    auto probe = [] {};
     const auto deadline = std::chrono::steady_clock::now() + 2s;
     auto admission = LogicSubmitResult::Accepted;
     while (std::chrono::steady_clock::now() < deadline) {
         admission = executor.SubmitExternal(ExternalTask::OutboundGrpc, probe);
-        if (admission == LogicSubmitResult::Closed)
-            break;
+        if (admission == LogicSubmitResult::Closed) break;
         stopped.wait_for(1ms);
     }
     EXPECT_EQ(admission, LogicSubmitResult::Closed);
@@ -660,9 +633,7 @@ TEST(LogicDispatcherTests, InstanceLeaseUsesRedisAndUnregistersAfterRenewal) {
             actions.push_back("removed");
             return InstanceLease::Values{};
         },
-        "test",
-        "endpoint|",
-        "nonce");
+        "test", "endpoint|", "nonce");
     ASSERT_TRUE(lease.Register());
     lease.Renew(2);
     EXPECT_EQ(entered.get_future().wait_for(2s), std::future_status::ready);
@@ -677,8 +648,9 @@ TEST(LogicDispatcherTests, InstanceLeaseUsesRedisAndUnregistersAfterRenewal) {
 bool WaitForClosedIngress(LogicDispatcher& dispatcher, std::future<void>& stopped) {
     const auto deadline = std::chrono::steady_clock::now() + 2s;
     while (std::chrono::steady_clock::now() < deadline) {
-        if (dispatcher.Submit({nullptr, 0, {}}) == LogicSubmitResult::Closed)
+        if (dispatcher.Submit({nullptr, 0, {}}) == LogicSubmitResult::Closed) {
             return stopped.wait_for(0ms) != std::future_status::ready;
+        }
         stopped.wait_for(1ms);
     }
     return false;
@@ -695,36 +667,31 @@ TEST(LogicDispatcherTests, ReadWaitsForFinalContinuationOnItsOwningShard) {
     LogicDispatcher* executor = nullptr;
     // 测试提前返回时，两个外部步骤均能自行超时结束并归还请求位置。
     ShardFixtureDispatcher dispatcher({writer, neighbor}, [&](const LogicMessage& message) {
-        if (message.id == 0)
-            return true;
+        if (message.id == 0) return true;
         if (message.id == 1) {
             owner = std::this_thread::get_id();
             // 认证期间让出当前 worker，等待同片心跳完成。
             auto authenticate = [&]() -> LogicDispatcher::Completion {
                 auth_started.set_value();
-                if (auth_gate.wait_for(3s) != std::future_status::ready)
-                    return {};
+                if (auth_gate.wait_for(3s) != std::future_status::ready) return {};
                 // 原分片继续当前请求，投递第二个异步步骤。
                 return [&] {
                     EXPECT_EQ(std::this_thread::get_id(), owner);
                     // 在入口关闭后放行写入，观察最终回调的线程和顺序。
                     auto write = [&]() -> LogicDispatcher::Completion {
                         sql_started.set_value();
-                        if (sql_gate.wait_for(3s) != std::future_status::ready)
-                            return {};
+                        if (sql_gate.wait_for(3s) != std::future_status::ready) return {};
                         // 完成业务确认后才允许下一条读取。
                         return [&] {
                             EXPECT_EQ(std::this_thread::get_id(), owner);
                             committed = true;
                         };
                     };
-                    EXPECT_EQ(
-                        executor->SubmitExternal(ExternalTask::Database, writer, write, {}),
+                    EXPECT_EQ(executor->SubmitExternal(ExternalTask::Database, writer, write, {}),
                         LogicSubmitResult::Accepted);
                 };
             };
-            EXPECT_EQ(
-                executor->SubmitExternal(ExternalTask::Redis, writer, authenticate, {}),
+            EXPECT_EQ(executor->SubmitExternal(ExternalTask::Redis, writer, authenticate, {}),
                 LogicSubmitResult::Accepted);
         } else if (message.id == 2) {
             EXPECT_EQ(std::this_thread::get_id(), owner);
@@ -764,8 +731,7 @@ TEST(LogicDispatcherTests, NotificationsFromBothShardsDrainOneFifo) {
     ShardFixtureDispatcher* executor = nullptr;
     // 首次通知阻塞在出站池，第二个分片仍能受理后续通知。
     ShardFixtureDispatcher dispatcher({source}, [&](const LogicMessage& message) {
-        if (message.id == 0)
-            return true;
+        if (message.id == 0) return true;
         const int id = message.id;
         // 路由完成后返回出站任务。
         executor->QueueNotification([&, id]() -> LogicDispatcher::Completion {
@@ -779,8 +745,7 @@ TEST(LogicDispatcherTests, NotificationsFromBothShardsDrainOneFifo) {
                 deliveries.push_back(id);
             };
         });
-        if (id == 2)
-            queued.set_value();
+        if (id == 2) queued.set_value();
         return true;
     });
     executor = &dispatcher;

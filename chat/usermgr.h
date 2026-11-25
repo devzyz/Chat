@@ -32,10 +32,12 @@ public:
     void startResourceSession();
     /** @brief 停止消息服务并清空账号缓存，保留应用级配置。 */
     void resetSession();
+
     /** @brief 返回本对象持有的本地头像服务，调用方不负责释放。 */
     LocalAvatar* localAvatar() const {
         return _localAvatar;
     }
+
     /** @brief 返回当前用户头像，缺失时使用默认头像。 */
     QPixmap selfAvatar() const;
     /** @brief 查询并关注指定用户头像，尚未取得时返回内置回退图。 */
@@ -44,24 +46,29 @@ public:
     void bindAvatar(QLabel* label, int uid, const QString& fallback = {});
     /** @brief 返回按 Gate 地址和当前账号隔离的本地数据目录。 */
     QString storageRoot() const;
+
     /** @brief 返回本对象持有的消息服务，调用方不负责释放。 */
     MessageService* messages() const {
         return _messages;
     }
+
     /** @brief 返回账号提交控制器，首次访问创建；账号结束前有效。 */
     MessageSubmissionController* submissions();
     /** @brief 连接暂时中断时冻结已有提交，不创建新的上传或控制器。 */
     void suspendSubmissions();
     /** @brief 查询是否存在未落盘发送内容，不创建控制器。 */
     bool hasPendingSubmissions() const;
+
     /** @brief 返回本人或联系人的版本资料。 */
     QJsonObject socialProfile(int uid) const {
         return _socialProfiles.value(uid);
     }
+
     /** @brief 返回当前申请版本，供显式审批命令使用。 */
     QString applicationRevision(int uid) const {
         return _applicationRevisions.value(uid);
     }
+
 signals:
     /** @brief 已落盘的本人资料变化后刷新展示。 */
     void profileChanged();
@@ -86,10 +93,12 @@ public:
     bool isFriend(int uid);
     /** @brief 查询缓存中的好友资料，未找到时返回 nullptr。 */
     std::shared_ptr<UserInfo> friendById(int uid);
+
     /** @brief 返回当前已恢复的联系人值，用于选择建群成员，不推进列表游标。 */
     std::vector<std::shared_ptr<UserInfo>> friends() const {
         return _friend_list;
     }
+
     /** @brief 返回当前游标对应的一页联系人，不推进游标。 */
     std::vector<std::shared_ptr<UserInfo>> nextContactPage();
     /** @brief 按一页大小推进联系人游标，不越过列表末尾。 */

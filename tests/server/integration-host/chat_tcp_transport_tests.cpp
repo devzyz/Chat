@@ -89,22 +89,14 @@ protected:
     /** 组装会话目录、生命周期与分发器，启动 loopback Chat 监听。 */
     void SetUp() override {
         directory_ = std::make_shared<UserSessionDirectory>();
-        lifecycle_ = std::make_shared<SessionLifecycleCoordinator>(
-            directory_,
-            std::make_shared<session_test::MemoryPresence>(),
-            "transport-test",
-            std::make_shared<DependencyExecutor>());
+        lifecycle_ = std::make_shared<SessionLifecycleCoordinator>(directory_,
+            std::make_shared<session_test::MemoryPresence>(), "transport-test", std::make_shared<DependencyExecutor>());
         dispatcher_ = std::make_shared<LogicDispatcher>(
             // 记录分发后的逻辑消息并执行测试响应器。
             [this](const LogicMessage& message) {
                 return recorder_.Record(message);
             });
-        server_ = std::make_shared<chat_transport::CServer>(
-            ioc_,
-            "127.0.0.1",
-            0,
-            lifecycle_,
-            directory_,
+        server_ = std::make_shared<chat_transport::CServer>(ioc_, "127.0.0.1", 0, lifecycle_, directory_,
             // 把传输层收到的消息移交真实分发队列。
             [this](LogicMessage message) {
                 return dispatcher_->Submit(std::move(message));
@@ -135,8 +127,7 @@ protected:
 
     /** 通过完成通知等待服务停止，已停止时直接返回。 */
     void StopServer() {
-        if (server_->Stopped())
-            return;
+        if (server_->Stopped()) return;
         auto done = std::make_shared<std::promise<void>>();
         auto ready = done->get_future();
         // 通知等待线程服务停止回调已完成。
@@ -244,8 +235,7 @@ TEST_F(T09_CTCP_Stream, MaximumLegalBodyDispatchesWithoutTruncation) {
 TEST_F(T09_CTCP_Stream, OneByteOverMaximumClosesBeforeDispatch) {
     auto socket = Connect();
     const auto header = ChatFrameCodec::EncodeHeader(1207, MAX_LENGTH + 1);
-    Write(
-        socket,
+    Write(socket,
         std::string(reinterpret_cast<const char*>(header.data()), header.size()) + std::string(MAX_LENGTH + 1, 'x'));
     EXPECT_FALSE(recorder_.WaitFor(1, std::chrono::steady_clock::now() + 150ms));
     auto healthy = Connect();
@@ -305,8 +295,7 @@ TEST_F(T09_CTCP_Stream, RefusedConnectionCompletesBeforeOwnedDeadline) {
     boost::asio::steady_timer deadline(connect_ioc, 250ms);
     boost::system::error_code outcome;
     bool completed = false;
-    socket.async_connect(
-        {boost::asio::ip::make_address("127.0.0.1"), port},
+    socket.async_connect({boost::asio::ip::make_address("127.0.0.1"), port},
         // 保存首次连接结果并取消截止计时器。
         [&](const boost::system::error_code& error) {
             if (!completed) {
@@ -337,9 +326,7 @@ TEST_F(T09_CTCP_Stream, SilentReadIsCancelledAtTheOwnedDeadline) {
     boost::asio::steady_timer deadline(client_ioc_, 75ms);
     bool timed_out = false;
     bool read_completed = false;
-    boost::asio::async_read(
-        socket,
-        boost::asio::buffer(byte),
+    boost::asio::async_read(socket, boost::asio::buffer(byte),
         // 标记异步读取已完成并取消超时等待。
         [&](const boost::system::error_code&, std::size_t) {
             read_completed = true;
@@ -368,13 +355,10 @@ TEST_F(T09_CTCP_Stream, QueuedWritesSurvivePartialCompletionsExactlyOnce) {
     // 收到触发消息后排队发送固定数量的大帧回复。
     recorder_.SetResponder([&](const LogicMessage& message) {
         for (std::size_t index = 0; index < reply_count; ++index) {
-            message.session->Send(
-                body,
-                static_cast<std::uint16_t>(2200 + (index % 100)),
+            message.session->Send(body, static_cast<std::uint16_t>(2200 + (index % 100)),
                 // 只统计服务确认已入队的回复。
                 [&](SessionSendResult result) {
-                    if (result == SessionSendResult::Accepted)
-                        ++accepted;
+                    if (result == SessionSendResult::Accepted) ++accepted;
                 });
         }
     });
@@ -393,9 +377,7 @@ TEST_F(T09_CTCP_Stream, QueuedWritesSurvivePartialCompletionsExactlyOnce) {
     boost::asio::steady_timer deadline(client_ioc_, 3s);
     std::size_t bytes_read = 0;
     bool timed_out = false;
-    boost::asio::async_read(
-        socket,
-        boost::asio::buffer(received),
+    boost::asio::async_read(socket, boost::asio::buffer(received),
         // 记录实际读取字节数并取消截止计时器。
         [&](const boost::system::error_code&, std::size_t count) {
             bytes_read = count;
@@ -425,11 +407,7 @@ TEST_F(T09_CTCP_Stream, OccupiedPortIsRejectedWithoutReplacingTheOwner) {
     EXPECT_THROW(
         {
             const auto duplicate = std::make_shared<chat_transport::CServer>(
-                ioc_,
-                "127.0.0.1",
-                server_->BoundPort(),
-                lifecycle_,
-                directory_,
+                ioc_, "127.0.0.1", server_->BoundPort(), lifecycle_, directory_,
                 // 将重复服务接收的消息移交其独立分发器。
                 [second_dispatcher](LogicMessage message) {
                     return second_dispatcher->Submit(std::move(message));
@@ -456,8 +434,7 @@ TEST_F(T09_CTCP_Stream, StopCancelsPendingAcceptAndReleasesThePort) {
     bool closed = false;
     // 等待对端关闭超时后主动关闭测试套接字。
     deadline.async_wait([&](auto error) {
-        if (!error)
-            socket.close();
+        if (!error) socket.close();
     });
     char byte = 0;
     // 识别服务端 EOF 或 Windows 重置，并结束截止等待。

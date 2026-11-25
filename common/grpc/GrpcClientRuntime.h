@@ -43,9 +43,7 @@ inline Failure ClassifyStatus(const grpc::Status& status) {
 }
 
 /** @brief 解析 100～60000 毫秒配置，空值用默认值，非整数或越界抛异常。 */
-inline std::chrono::milliseconds ParseDurationMs(
-    const std::string& configured,
-    const std::string& key,
+inline std::chrono::milliseconds ParseDurationMs(const std::string& configured, const std::string& key,
     std::chrono::milliseconds default_value) {
     if (configured.empty()) {
         return default_value;
@@ -108,10 +106,12 @@ public:
         Resource* operator->() const {
             return _resource.get();
         }
+
         /** @brief 返回租约内资源的借用访问，调用前须保证租约有效且尚未归还。 */
         Resource& operator*() const {
             return *_resource;
         }
+
         /** @brief 查询租约是否仍持有资源。 */
         explicit operator bool() const {
             return _resource != nullptr;
@@ -127,6 +127,7 @@ public:
 
     private:
         friend class BoundedPool<Resource>;
+
         /** @brief 接管池借出的独占资源并记录归还目标；池须活过租约。 */
         Lease(BoundedPool* owner, std::unique_ptr<Resource> resource) : _owner(owner), _resource(std::move(resource)) {}
 
@@ -238,10 +239,7 @@ template <typename Response> struct CallResult {
 
 /** @brief 先有界借用 stub，再设置 RPC 截止时间执行一次调用；返回响应及失败分类，不重放请求。 */
 template <typename Pool, typename Request, typename Response, typename Invoker>
-CallResult<Response> InvokeUnary(
-    Pool& pool,
-    const Request& request,
-    std::chrono::milliseconds deadline,
+CallResult<Response> InvokeUnary(Pool& pool, const Request& request, std::chrono::milliseconds deadline,
     Invoker invoke) {
     auto acquired = pool.Acquire();
     if (!acquired) {

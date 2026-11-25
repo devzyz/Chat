@@ -5,6 +5,7 @@ ClickedLabel::ClickedLabel(QWidget* parent) : QLabel(parent), _curState(ClickLab
     this->setCursor(Qt::PointingHandCursor);
     setFocusPolicy(Qt::StrongFocus);
 }
+
 /**
  * @brief ClickedLabel::mousePressEvent
  * @param event
@@ -71,13 +72,8 @@ void ClickedLabel::leaveEvent(QEvent* event) {
 }
 
 // 用于保存每种状态
-void ClickedLabel::setState(
-    QString normal_leave,
-    QString normal_hover,
-    QString normal_press,
-    QString select_leave,
-    QString select_hover,
-    QString select_press) {
+void ClickedLabel::setState(QString normal_leave, QString normal_hover, QString normal_press, QString select_leave,
+    QString select_hover, QString select_press) {
     _normal_leave = normal_leave;
     _normal_hover = normal_hover;
     _normal_press = normal_press;
@@ -121,6 +117,7 @@ void ClickedLabel::keyPressEvent(QKeyEvent* event) {
     }
     QLabel::keyPressEvent(event);
 }
+
 void ClickedLabel::keyReleaseEvent(QKeyEvent* event) {
     if (_activation.keyRelease(event)) {
         setCurState(_curState == Normal ? Selected : Normal);
@@ -130,6 +127,7 @@ void ClickedLabel::keyReleaseEvent(QKeyEvent* event) {
     }
     QLabel::keyReleaseEvent(event);
 }
+
 void ClickedLabel::focusOutEvent(QFocusEvent* event) {
     _activation.cancel();
     QLabel::focusOutEvent(event);

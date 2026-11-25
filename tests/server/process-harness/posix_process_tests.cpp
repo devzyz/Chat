@@ -14,8 +14,7 @@ using namespace std::chrono_literals;
 
 /** 条件不满足时抛出诊断，交由测试入口报告失败。 */
 void Require(bool condition, const char* message) {
-    if (!condition)
-        throw std::runtime_error(message);
+    if (!condition) throw std::runtime_error(message);
 }
 
 /** 建立运行 shell 命令的子进程规格，限定工作目录和证据大小。 */
@@ -48,14 +47,13 @@ int main(int argc, char** argv) {
             Require(adapter.WaitForExitUntil(deadline), "exit timed out");
             Require(adapter.ClosePipes(deadline), "pipes not closed");
             const auto evidence = adapter.CollectEvidence();
-            Require(
-                evidence.exit_code == 23 && evidence.stdout_text == "hello" && evidence.stderr_text == "failure",
+            Require(evidence.exit_code == 23 && evidence.stdout_text == "hello" && evidence.stderr_text == "failure",
                 "exit/output not retained");
             Reaped(id.pid);
         } else if (name == "graceful" || name == "stale-identity" || name == "timeout") {
-            const auto id = adapter.Start(Spec(
-                name == "timeout" ? L"trap '' TERM; printf ready; while :; do :; done"
-                                  : L"trap 'exit 0' TERM; printf ready; while :; do :; done"));
+            const auto id =
+                adapter.Start(Spec(name == "timeout" ? L"trap '' TERM; printf ready; while :; do :; done"
+                                                     : L"trap 'exit 0' TERM; printf ready; while :; do :; done"));
             while (adapter.CollectEvidence().stdout_text != "ready") {
                 Require(std::chrono::steady_clock::now() < deadline, "child did not initialize signal handler");
                 Require(!adapter.WaitForExitUntil(std::chrono::steady_clock::now() + 10ms), "child exited early");
@@ -64,16 +62,15 @@ int main(int argc, char** argv) {
                 auto stale = id;
                 ++stale.creation_time;
                 Require(!adapter.SendGraceful(stale), "stale graceful identity accepted");
-                Require(
-                    adapter.Terminate(stale, deadline) == integration::internal::TerminationResult::IdentityMismatch,
+                Require(adapter.Terminate(stale, deadline) ==
+                            integration::internal::TerminationResult::IdentityMismatch,
                     "stale termination identity accepted");
                 Require(adapter.IsRunning(id), "stale identity killed owned child");
             }
             Require(adapter.SendGraceful(id), "SIGTERM failed");
             if (name == "timeout") {
                 Require(!adapter.WaitForExitUntil(std::chrono::steady_clock::now() + 50ms), "ignored TERM exited");
-                Require(
-                    adapter.Terminate(id, deadline) == integration::internal::TerminationResult::Terminated,
+                Require(adapter.Terminate(id, deadline) == integration::internal::TerminationResult::Terminated,
                     "SIGKILL escalation failed");
             } else {
                 Require(adapter.WaitForExitUntil(deadline), "graceful exit timed out");
@@ -87,8 +84,7 @@ int main(int argc, char** argv) {
             Require(adapter.WaitForExitUntil(deadline), "full pipe deadlocked child");
             Require(adapter.ClosePipes(deadline), "output cleanup failed");
             const auto evidence = adapter.CollectEvidence();
-            Require(
-                evidence.stdout_text.size() == 128 && evidence.stderr_text.size() == 128,
+            Require(evidence.stdout_text.size() == 128 && evidence.stderr_text.size() == 128,
                 "evidence bounds not enforced");
             Reaped(id.pid);
         } else if (name == "descendant") {

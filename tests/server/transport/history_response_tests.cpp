@@ -5,8 +5,7 @@
 
 /** 条件不满足时抛出带定位信息的测试异常。 */
 static void Require(bool condition, const char* message) {
-    if (!condition)
-        throw std::runtime_error(message);
+    if (!condition) throw std::runtime_error(message);
 }
 
 // E03-RECOVER-CONTRACT-01
@@ -72,13 +71,11 @@ int main() {
         const auto overhead = SerializeHistoryResponse(boundary, 10).size();
         boundary["msgs"][0]["content"] = std::string(MAX_LENGTH - overhead, 'x');
         const auto exact = SerializeHistoryResponse(boundary, 10);
-        Require(
-            exact.size() == MAX_LENGTH && reader.parse(exact, decoded) && decoded["msgs"].size() == 1,
+        Require(exact.size() == MAX_LENGTH && reader.parse(exact, decoded) && decoded["msgs"].size() == 1,
             "exact frame boundary rejected");
         boundary["msgs"][0]["content"] = std::string(MAX_LENGTH - overhead + 1, 'x');
-        Require(
-            reader.parse(SerializeHistoryResponse(boundary, 10), decoded) &&
-                decoded["error"].asInt() == ErrorCodes::Error_Json,
+        Require(reader.parse(SerializeHistoryResponse(boundary, 10), decoded) &&
+                    decoded["error"].asInt() == ErrorCodes::Error_Json,
             "one byte overflow accepted");
         Json::Value giant;
         giant["message_id"] = 11;
@@ -86,14 +83,12 @@ int main() {
         page["msgs"].append(giant);
         page["current_msg_id"] = 11;
         Require(reader.parse(SerializeHistoryResponse(page, 10), decoded), "oversized row parse");
-        Require(
-            decoded["error"].asInt() == ErrorCodes::Error_Json && !decoded.isMember("msgs"),
+        Require(decoded["error"].asInt() == ErrorCodes::Error_Json && !decoded.isMember("msgs"),
             "unrepresentable row must fail without a looping cursor");
         page["error"] = ErrorCodes::UidInvalid;
         page.removeMember("msgs");
-        Require(
-            reader.parse(SerializeHistoryResponse(page, 10), decoded) &&
-                decoded["error"].asInt() == ErrorCodes::UidInvalid,
+        Require(reader.parse(SerializeHistoryResponse(page, 10), decoded) &&
+                    decoded["error"].asInt() == ErrorCodes::UidInvalid,
             "membership error changed");
         std::cout << "history response contract passed\n";
         return 0;

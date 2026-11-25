@@ -1,7 +1,6 @@
 #include "ChatGrpcClient.h"
 
-message::ReceiptChangedRsp ChatGrpcClient::NotifyMessageReceiptChanged(
-    const std::string& server_name,
+message::ReceiptChangedRsp ChatGrpcClient::NotifyMessageReceiptChanged(const std::string& server_name,
     const message::ReceiptChangedReq& request) {
     auto found = _pool.find(server_name);
     if (found == _pool.end()) {
@@ -10,18 +9,13 @@ message::ReceiptChangedRsp ChatGrpcClient::NotifyMessageReceiptChanged(
         return response;
     }
     auto result = rpc::InvokeUnary<ChatConnectionPool, message::ReceiptChangedReq, message::ReceiptChangedRsp>(
-        *found->second,
-        request,
-        _policy.rpc_deadline,
+        *found->second, request, _policy.rpc_deadline,
         // 在既定截止时间内转发回执变化 RPC。
-        [](ChatService::Stub& stub,
-           ClientContext& context,
-           const message::ReceiptChangedReq& req,
-           message::ReceiptChangedRsp& rsp) {
+        [](ChatService::Stub& stub, ClientContext& context, const message::ReceiptChangedReq& req,
+            message::ReceiptChangedRsp& rsp) {
             return stub.NotifyMessageReceiptChanged(&context, req, &rsp);
         });
-    if (!result)
-        result.response.set_error(ErrorCodes::RPCFailed);
+    if (!result) result.response.set_error(ErrorCodes::RPCFailed);
     return result.response;
 }
 
@@ -31,24 +25,17 @@ message::ReceiptChangedRsp ChatGrpcClient::NotifyMessageReceiptChanged(
 ChatGrpcClient::ChatGrpcClient() {
     auto& config = ConfigMgr::GetInstance();
     auto grpc_config = config["Grpc"];
-    _policy = {
-        rpc::ParseDurationMs(
-            grpc_config["PoolAcquireTimeoutMs"],
-            "[Grpc].PoolAcquireTimeoutMs",
-            std::chrono::milliseconds(1000)),
+    _policy = {rpc::ParseDurationMs(grpc_config["PoolAcquireTimeoutMs"], "[Grpc].PoolAcquireTimeoutMs",
+                   std::chrono::milliseconds(1000)),
         rpc::ParseDurationMs(grpc_config["ChatDeadlineMs"], "[Grpc].ChatDeadlineMs", std::chrono::milliseconds(3000))};
 
-    const auto endpoints = ResolvePeerServerEndpoints(
-        config["PeerServer"]["Servers"],
+    const auto endpoints = ResolvePeerServerEndpoints(config["PeerServer"]["Servers"],
         // 按节及键读取对端路由配置。
         [&config](const std::string& section, const std::string& key) {
             return config[section][key];
         });
     for (const auto& endpoint : endpoints) {
-        _pool[endpoint.first] = std::make_unique<ChatConnectionPool>(
-            endpoint.second.host,
-            endpoint.second.port,
-            5,
+        _pool[endpoint.first] = std::make_unique<ChatConnectionPool>(endpoint.second.host, endpoint.second.port, 5,
             _policy.acquire_timeout);
     }
 }
@@ -56,11 +43,8 @@ ChatGrpcClient::ChatGrpcClient() {
 ChatGrpcClient::ChatGrpcClient(EndpointMap endpoints, rpc::ClientPolicy policy, std::size_t pool_size)
     : _policy(policy) {
     for (const auto& endpoint : endpoints) {
-        _pool[endpoint.first] = std::make_unique<ChatConnectionPool>(
-            endpoint.second.first,
-            endpoint.second.second,
-            pool_size,
-            _policy.acquire_timeout);
+        _pool[endpoint.first] = std::make_unique<ChatConnectionPool>(endpoint.second.first, endpoint.second.second,
+            pool_size, _policy.acquire_timeout);
     }
 }
 
@@ -71,14 +55,12 @@ AddFriendRsp ChatGrpcClient::NotifyOtherAddFriend(const std::string& server_name
         response.set_error(ErrorCodes::RPCFailed);
         return response;
     }
-    auto result = rpc::InvokeUnary<ChatConnectionPool, AddFriendReq, AddFriendRsp>(
-        *found->second,
-        request,
-        _policy.rpc_deadline,
-        // 执行好友申请通知 RPC。
-        [](ChatService::Stub& stub, ClientContext& context, const AddFriendReq& req, AddFriendRsp& rsp) {
-            return stub.NotifyOtherAddFriend(&context, req, &rsp);
-        });
+    auto result =
+        rpc::InvokeUnary<ChatConnectionPool, AddFriendReq, AddFriendRsp>(*found->second, request, _policy.rpc_deadline,
+            // 执行好友申请通知 RPC。
+            [](ChatService::Stub& stub, ClientContext& context, const AddFriendReq& req, AddFriendRsp& rsp) {
+                return stub.NotifyOtherAddFriend(&context, req, &rsp);
+            });
     if (!result) {
         result.response.set_error(ErrorCodes::RPCFailed);
     }
@@ -92,9 +74,7 @@ AuthFriendRsp ChatGrpcClient::NotifyOtherAuthFriend(const std::string& server_na
         response.set_error(ErrorCodes::RPCFailed);
         return response;
     }
-    auto result = rpc::InvokeUnary<ChatConnectionPool, AuthFriendReq, AuthFriendRsp>(
-        *found->second,
-        request,
+    auto result = rpc::InvokeUnary<ChatConnectionPool, AuthFriendReq, AuthFriendRsp>(*found->second, request,
         _policy.rpc_deadline,
         // 执行好友认证通知 RPC。
         [](ChatService::Stub& stub, ClientContext& context, const AuthFriendReq& req, AuthFriendRsp& rsp) {
@@ -106,8 +86,7 @@ AuthFriendRsp ChatGrpcClient::NotifyOtherAuthFriend(const std::string& server_na
     return result.response;
 }
 
-TextChatMsgRsp ChatGrpcClient::NotifyOtherReceiveTextChatMsg(
-    const std::string& server_name,
+TextChatMsgRsp ChatGrpcClient::NotifyOtherReceiveTextChatMsg(const std::string& server_name,
     const TextChatMsgReq& request) {
     auto found = _pool.find(server_name);
     if (found == _pool.end()) {
@@ -115,9 +94,7 @@ TextChatMsgRsp ChatGrpcClient::NotifyOtherReceiveTextChatMsg(
         response.set_error(ErrorCodes::RPCFailed);
         return response;
     }
-    auto result = rpc::InvokeUnary<ChatConnectionPool, TextChatMsgReq, TextChatMsgRsp>(
-        *found->second,
-        request,
+    auto result = rpc::InvokeUnary<ChatConnectionPool, TextChatMsgReq, TextChatMsgRsp>(*found->second, request,
         _policy.rpc_deadline,
         // 执行文本消息通知 RPC。
         [](ChatService::Stub& stub, ClientContext& context, const TextChatMsgReq& req, TextChatMsgRsp& rsp) {
@@ -136,14 +113,12 @@ KickUserRsp ChatGrpcClient::NotifyOtherKickUser(const std::string& server_name, 
         response.set_error(ErrorCodes::RPCFailed);
         return response;
     }
-    auto result = rpc::InvokeUnary<ChatConnectionPool, KickUserReq, KickUserRsp>(
-        *found->second,
-        request,
-        _policy.rpc_deadline,
-        // 执行旧登录踢出通知 RPC。
-        [](ChatService::Stub& stub, ClientContext& context, const KickUserReq& req, KickUserRsp& rsp) {
-            return stub.NotifyOtherKickUser(&context, req, &rsp);
-        });
+    auto result =
+        rpc::InvokeUnary<ChatConnectionPool, KickUserReq, KickUserRsp>(*found->second, request, _policy.rpc_deadline,
+            // 执行旧登录踢出通知 RPC。
+            [](ChatService::Stub& stub, ClientContext& context, const KickUserReq& req, KickUserRsp& rsp) {
+                return stub.NotifyOtherKickUser(&context, req, &rsp);
+            });
     if (!result) {
         result.response.set_error(ErrorCodes::RPCFailed);
     }

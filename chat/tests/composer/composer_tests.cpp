@@ -31,6 +31,7 @@
 class ComposerTests : public QObject {
     Q_OBJECT
 private slots:
+
     /** @brief 切换会话保留各自原生文档和附件撤销记录，后台完成不污染当前输入。 */
     void conversationDrafts() {
         QTemporaryDir root;
@@ -65,11 +66,13 @@ private slots:
         QCOMPARE(editor.toPlainText(), QString("second"));
         QApplication::clipboard()->clear();
     }
+
     /** @brief 自动控件回归不使用系统原生对话框，避免依赖桌面主题。 */
     void initTestCase() {
         QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
         QApplication::setStyle("Fusion");
     }
+
     /** @brief 后台准备期间 UI 事件继续执行，提交拒绝保留原文；完成后附件位置不变。 */
     void preparationIsAsynchronous() {
         QTemporaryDir root;
@@ -109,6 +112,7 @@ private slots:
         QCOMPARE(editor.draft().entries.size(), 2);
         QCOMPARE(editor.draft().entries[1].content, QString("after"));
     }
+
     /** @brief 后台队列满载明确拒绝；无草稿引用的排队图片不再写入临时文件。 */
     void preparationCapacity() {
         QTemporaryDir root;
@@ -138,6 +142,7 @@ private slots:
         QVERIFY(rejected);
         QVERIFY(QDir(root.filePath("transfers/drafts")).entryList(QDir::Files).isEmpty());
     }
+
     /** @brief 撤销后建立新分支时，已不可恢复的图片释放临时文件。 */
     void discardedAttachment() {
         QTemporaryDir root;
@@ -154,6 +159,7 @@ private slots:
         QVERIFY(!editor.document()->isRedoAvailable());
         QVERIFY(!QFileInfo::exists(path));
     }
+
     /** @brief 附件剪切粘贴后仍按附件提交，剪贴板持有临时文件直到被替换。 */
     void attachmentClipboard() {
         QTemporaryDir root;
@@ -174,14 +180,11 @@ private slots:
         QCOMPARE(copied.entries.first().content, original.entries.first().content);
         QApplication::clipboard()->clear();
     }
+
     /** @brief 草稿读取无副作用，长 Unicode 文本按真实 JSON 预算无损重组。 */
     void byteBudget() {
         const QString text = QString::fromUtf8("汉字😄\n\"\\").repeated(1500);
-        const QJsonObject context{
-            {"from_uid", 7},
-            {"to_uid", 0},
-            {"chat_id", 12},
-            {"chat_type", "group"},
+        const QJsonObject context{{"from_uid", 7}, {"to_uid", 0}, {"chat_id", 12}, {"chat_type", "group"},
             {"membership_epoch", "9223372036854775807"}};
         const auto requests = MessageSubmissionController::textRequests(text, context);
         QVERIFY(requests.size() > 1);
@@ -201,6 +204,7 @@ private slots:
         }
         QCOMPARE(combined, text);
     }
+
     /** @brief 附件按文档身份读取，删除及撤销重做不改变文件路径。 */
     void attachmentDraft() {
         QTemporaryDir root;
@@ -237,6 +241,7 @@ private slots:
         editor.clearAccepted(editor.draft().id);
         QVERIFY(editor.draft().entries.isEmpty());
     }
+
     /** @brief 普通文件草稿显示带文件名的卡片，跨会话和撤销后仍可识别。 */
     void fileAttachmentPreview() {
         QTemporaryDir root;
@@ -269,6 +274,7 @@ private slots:
         QVERIFY(
             editor.document()->begin().begin().fragment().charFormat().toolTip().contains(QFileInfo(path).fileName()));
     }
+
     /** @brief 剪贴板图片暂存文件由草稿及任务共享持有。 */
     void clipboardLifetime() {
         QTemporaryDir root;
@@ -293,6 +299,7 @@ private slots:
         snapshot = {};
         QVERIFY(!QFileInfo::exists(path));
     }
+
     /** @brief 文本拒绝不清空，接受后每段只落盘一次且固定会话。 */
     void submissionPersistence() {
         QTemporaryDir root;
@@ -331,6 +338,7 @@ private slots:
             combined += row.content;
         QCOMPARE(combined, text);
     }
+
     /** @brief 本地开库失败保留 UUID，修复可写路径后仅重试未落盘部分。 */
     void storageFailureRetry() {
         QTemporaryDir root;
@@ -368,6 +376,7 @@ private slots:
         QCOMPARE(persisted.last()[1], ids);
         QVERIFY(persisted.last()[2].toBool());
     }
+
     /** @brief 取消写盘失败的提交后，旧消息服务重试入口不能找回已取消内容。 */
     void storageFailureCancel() {
         QTemporaryDir root;
@@ -397,6 +406,7 @@ private slots:
         QCOMPARE(rows.size(), 1);
         QCOMPARE(rows.first().content, QString("next"));
     }
+
     /** @brief 上传失败暂停后续文本，取消和账号停止隔离迟到上传结果。 */
     void uploadFailureCancel() {
         QTemporaryDir root;
@@ -411,13 +421,9 @@ private slots:
         MessageSubmissionController controller(&service, &uploads, 7);
         QSignalSpy saved(&service, &MessageService::outgoingPersisted);
         QVERIFY(controller.submit(
-            {"draft",
-             {{DraftEntry::Kind::Text, {}, "first", {}},
-              {DraftEntry::Kind::Attachment, {}, path, {}},
-              {DraftEntry::Kind::Text, {}, "last", {}}}},
-            12,
-            8,
-            false));
+            {"draft", {{DraftEntry::Kind::Text, {}, "first", {}}, {DraftEntry::Kind::Attachment, {}, path, {}},
+                          {DraftEntry::Kind::Text, {}, "last", {}}}},
+            12, 8, false));
         QTRY_VERIFY(controller.isFailed());
         QCOMPARE(saved.size(), 1);
         controller.retry();
@@ -429,9 +435,8 @@ private slots:
         QCOMPARE(saved.size(), 1);
         QVERIFY(controller.submit({"second", {{DraftEntry::Kind::Text, {}, "old account", {}}}}, 12, 8, false));
         // 确实排入旧账号 SQLite 操作，但不处理其 GUI 完成回调即切换账号。
-        const auto queuedOld = MessageSubmissionController::textRequests(
-                                   "old queued write",
-                                   {{"from_uid", 7}, {"to_uid", 8}, {"chat_id", 12}})
+        const auto queuedOld = MessageSubmissionController::textRequests("old queued write",
+            {{"from_uid", 7}, {"to_uid", 8}, {"chat_id", 12}})
                                    .first();
         service.send(queuedOld);
         service.stop();
@@ -459,6 +464,7 @@ private slots:
         service.stop();
         QTRY_VERIFY(!QFileInfo::exists(nextRoot.path() + "/messages.lock"));
     }
+
     /** @brief 搜索超时、旧响应、重复及无编号响应均有独立终态。 */
     void searchLifecycle() {
         UserSearchController search(nullptr, 20);
@@ -491,34 +497,26 @@ private slots:
         QCOMPARE(errors.size(), 4);
         search.search("sixth");
         search.cancel();
-        search.accept(
-            {{"request_id", requests.last()[0].toJsonObject().value("request_id")},
-             {"error", 0},
-             {"uid", 8},
-             {"name", "late"}});
+        search.accept({{"request_id", requests.last()[0].toJsonObject().value("request_id")}, {"error", 0}, {"uid", 8},
+            {"name", "late"}});
         QCOMPARE(found.size(), 1);
         auto* temporary = new UserSearchController(nullptr, 20);
         temporary->search("dispose");
         delete temporary;
     }
+
     /** @brief 生产 TCP 解帧把 loopback 回包的搜索身份交给控制器。 */
     void searchLoopback() {
         QTcpServer peer;
         QVERIFY(peer.listen(QHostAddress::LocalHost, 0));
         ChatTcpTransport transport;
         UserSearchController search;
-        connect(
-            &search,
-            &UserSearchController::requestReady,
-            &transport,
+        connect(&search, &UserSearchController::requestReady, &transport,
             // 测试使用真实协议帧传输查询 JSON。
             [&transport](const QJsonObject& request) {
                 transport.send(1007, QJsonDocument(request).toJson(QJsonDocument::Compact));
             });
-        connect(
-            &transport,
-            &ChatTcpTransport::frameReceived,
-            &search,
+        connect(&transport, &ChatTcpTransport::frameReceived, &search,
             // 回包通过生产解帧后核对查询身份。
             [&search](const ChatTcpFrame& frame) {
                 search.accept(QJsonDocument::fromJson(frame.body).object());
@@ -539,10 +537,9 @@ private slots:
         const auto size = (quint8(bytes[2]) << 8) | quint8(bytes[3]);
         QTRY_VERIFY(received(4 + size));
         const auto request = QJsonDocument::fromJson(bytes.mid(4, size)).object();
-        const auto body =
-            QJsonDocument(
-                QJsonObject{{"request_id", request["request_id"]}, {"error", 0}, {"uid", 8}, {"name", "user"}})
-                .toJson(QJsonDocument::Compact);
+        const auto body = QJsonDocument(
+            QJsonObject{{"request_id", request["request_id"]}, {"error", 0}, {"uid", 8}, {"name", "user"}})
+                              .toJson(QJsonDocument::Compact);
         QByteArray wire;
         QDataStream stream(&wire, QIODevice::WriteOnly);
         stream.setByteOrder(QDataStream::BigEndian);
@@ -553,6 +550,7 @@ private slots:
         QTRY_COMPARE(found.size(), 1);
         transport.reset();
     }
+
     /** @brief 点击包装器支持键盘，右键及拖出取消不启动倒计时。 */
     void keyboardControls() {
         ClickedLabel toggle;
@@ -590,6 +588,7 @@ private slots:
         editor.paste();
         QCOMPARE(editor.toPlainText(), text);
     }
+
     /** @brief 输入长度沿用 QLineEdit 的字符单位。 */
     void unicodeLength() {
         CustomizeEdit editor;
@@ -597,6 +596,7 @@ private slots:
         editor.setText(QString::fromUtf8("一二三四五六"));
         QCOMPARE(editor.text(), QString::fromUtf8("一二三四五六"));
     }
+
     /** @brief 按住移出后释放不得发出点击或切换选中。 */
     void releaseOutside() {
         ClickedLabel label;

@@ -4,15 +4,13 @@
 #include <QJsonObject>
 class MessageService;
 class ResourceTransferManager;
+
 /** @brief 固定一次提交的账号、会话和群代次；串行上传并将消息所有权移交 outbox。 */
 class MessageSubmissionController final : public QObject {
     Q_OBJECT
 public:
     /** @brief 借用同账号服务及专用上传器，其生命周期必须覆盖本对象。 */
-    MessageSubmissionController(
-        MessageService* messages,
-        ResourceTransferManager* uploads,
-        int uid,
+    MessageSubmissionController(MessageService* messages, ResourceTransferManager* uploads, int uid,
         QObject* parent = nullptr);
     /** @brief 接受草稿快照；忙碌、重复、空输入或无权限返回 false，原编辑器应保留内容。 */
     bool submit(const MessageDraft& draft, int chatId, int recipient, bool group);
@@ -24,18 +22,22 @@ public:
     void suspend();
     /** @brief 同账号存储恢复后开放人工重试，不自动重发失败内容。 */
     void resume();
+
     /** @brief 是否仍拥有未移交消息服务的内容。 */
     bool hasPending() const {
         return !_entries.isEmpty();
     }
+
     /** @brief 是否处于可重试失败状态。 */
     bool isFailed() const {
         return _failed;
     }
+
     /** @brief 返回当前进度或失败提示，供页面重建恢复展示。 */
     QString status() const {
         return _status;
     }
+
     /** @brief 返回未落盘内容摘要，供界面在清空编辑器后仍可查看任务。 */
     QString pendingSummary() const;
     /** @brief 将文本按 JSON 字节预算拆分为稳定 UUID 请求，不切断代理对。 */

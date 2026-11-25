@@ -56,9 +56,7 @@ public:
 // T08-STATUS-01
 /** 验证无候选服务时失败且不返回端点或 Token。 */
 TEST(GateRoutingUnitTests, EmptyServerListFailsClosed) {
-    auto routing = gate_routing::CreateGateRouting(
-        {},
-        std::make_shared<InMemoryAssignmentStore>(),
+    auto routing = gate_routing::CreateGateRouting({}, std::make_shared<InMemoryAssignmentStore>(),
         std::make_shared<FixedTokenSource>());
 
     const auto result = routing->Assign(41);
@@ -69,13 +67,10 @@ TEST(GateRoutingUnitTests, EmptyServerListFailsClosed) {
 }
 
 /** 以指定候选及计数构建真实路由并为固定用户选服。 */
-gate::internal::ChatAssignment AssignWithCounts(
-    std::vector<RoutingServer> servers,
+gate::internal::ChatAssignment AssignWithCounts(std::vector<RoutingServer> servers,
     std::unordered_map<std::string, std::optional<std::string>> counts) {
-    auto routing = gate_routing::CreateGateRouting(
-        std::move(servers),
-        std::make_shared<InMemoryAssignmentStore>(std::move(counts)),
-        std::make_shared<FixedTokenSource>());
+    auto routing = gate_routing::CreateGateRouting(std::move(servers),
+        std::make_shared<InMemoryAssignmentStore>(std::move(counts)), std::make_shared<FixedTokenSource>());
     return routing->Assign(42);
 }
 
@@ -91,8 +86,7 @@ TEST(GateRoutingUnitTests, SingleServerIsSelected) {
 // T08-STATUS-03
 /** 验证有效连接数最低的候选获选。 */
 TEST(GateRoutingUnitTests, LowestValidConnectionCountWins) {
-    const auto result = AssignWithCounts(
-        {{"chat-b", "10.0.0.2", "9002"}, {"chat-a", "10.0.0.1", "9001"}},
+    const auto result = AssignWithCounts({{"chat-b", "10.0.0.2", "9002"}, {"chat-a", "10.0.0.1", "9001"}},
         {{"chat-a", "8"}, {"chat-b", "2"}});
     EXPECT_EQ(result.host, "10.0.0.2");
     EXPECT_EQ(result.port, "9002");
@@ -101,8 +95,7 @@ TEST(GateRoutingUnitTests, LowestValidConnectionCountWins) {
 // T08-STATUS-04
 /** 验证连接数相同时按运行实例名称排序。 */
 TEST(GateRoutingUnitTests, EqualValidCountsUseRuntimeNameOrder) {
-    const auto result = AssignWithCounts(
-        {{"chat-z", "10.0.0.9", "9009"}, {"chat-a", "10.0.0.1", "9001"}},
+    const auto result = AssignWithCounts({{"chat-z", "10.0.0.9", "9009"}, {"chat-a", "10.0.0.1", "9001"}},
         {{"chat-z", "3"}, {"chat-a", "3"}});
     EXPECT_EQ(result.host, "10.0.0.1");
 }
@@ -118,8 +111,7 @@ TEST(GateRoutingUnitTests, ValidCountRanksBeforeUnknownCount) {
 // T08-STATUS-06
 /** 验证所有计数未知时不为用户分配失效实例。 */
 TEST(GateRoutingUnitTests, AllUnknownCountsFailClosed) {
-    const auto result = AssignWithCounts(
-        {{"chat-z", "10.0.0.9", "9009"}, {"chat-a", "10.0.0.1", "9001"}},
+    const auto result = AssignWithCounts({{"chat-z", "10.0.0.9", "9009"}, {"chat-a", "10.0.0.1", "9001"}},
         {{"chat-z", std::nullopt}, {"chat-a", ""}});
     EXPECT_EQ(result.error, kRpcFailed);
     EXPECT_TRUE(result.host.empty());
@@ -138,8 +130,7 @@ TEST(GateRoutingUnitTests, NegativeAndMalformedCountsAreUnknown) {
 /** 验证同时选服在相同输入下给出确定结果。 */
 TEST(GateRoutingUnitTests, ConcurrentSelectionIsDeterministic) {
     constexpr int thread_count = 16;
-    auto routing = gate_routing::CreateGateRouting(
-        {{"chat-z", "10.0.0.9", "9009"}, {"chat-a", "10.0.0.1", "9001"}},
+    auto routing = gate_routing::CreateGateRouting({{"chat-z", "10.0.0.9", "9009"}, {"chat-a", "10.0.0.1", "9001"}},
         std::make_shared<InMemoryAssignmentStore>(
             std::unordered_map<std::string, std::optional<std::string>>{{"chat-z", "4"}, {"chat-a", "4"}}),
         std::make_shared<FixedTokenSource>());

@@ -13,6 +13,5 @@ struct PeerServerEndpoint {
 };
 
 /** @brief 解析配置中的对端名称与 RPC 地址，拒绝缺失或冲突的端点配置。 */
-std::unordered_map<std::string, PeerServerEndpoint> ResolvePeerServerEndpoints(
-    const std::string& configured_servers,
+std::unordered_map<std::string, PeerServerEndpoint> ResolvePeerServerEndpoints(const std::string& configured_servers,
     const PeerConfigLookup& lookup);

@@ -14,6 +14,7 @@ class SqlConnection {
 public:
     /** @brief 初始化SqlConnection，持有一个 JDBC 连接及该模块所需连接状态，借用期间由调用方独占。 */
     explicit SqlConnection(std::unique_ptr<sql::Connection> connection = {}) : _con(std::move(connection)) {}
+
     std::unique_ptr<sql::Connection> _con;
 };
 
@@ -21,12 +22,8 @@ public:
 class MysqlConnectionPool {
 public:
     /** @brief 初始化MysqlConnectionPool，维护 MySQL 可用连接及关闭状态；所有借出连接须在池析构之前归还。 */
-    MysqlConnectionPool(
-        const std::string& url,
-        const std::string& user,
-        const std::string& pass,
-        const std::string& schema,
-        int poolsize);
+    MysqlConnectionPool(const std::string& url, const std::string& user, const std::string& pass,
+        const std::string& schema, int poolsize);
     /** @brief 停止接受新的借用并释放空闲连接，唤醒等待者；借出资源仍须按原协议归还。 */
     void Close();
     /** @brief 在池的等待策略内借出独占连接；关闭、耗尽或健康检查失败返回空值，使用后须归还。 */
@@ -59,10 +56,7 @@ public:
     /** @brief 核对用户名与邮箱是否属于同一用户，返回校验结果。 */
     bool CheckEmail(const std::string& username, const std::string& email);
     /** @brief 在账号锁内先撤销旧凭据再更新密码；撤销失败保持旧密码，SQL 失败保留已撤销状态。 */
-    bool UpdatePassword(
-        const std::string& username,
-        const std::string& password,
-        const std::string& email,
+    bool UpdatePassword(const std::string& username, const std::string& password, const std::string& email,
         const std::function<bool(int)>& revoke);
     /** @brief 账号锁内核验密码；成功返回资料及共享锁租约，发布 Token 前不得释放该租约。 */
     bool CheckPassword(const std::string& email, const std::string& password, UserInfo& userinfo);

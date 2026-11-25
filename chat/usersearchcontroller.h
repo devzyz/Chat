@@ -3,6 +3,7 @@
 #include <QTimer>
 #include <QJsonObject>
 #include "userdata.h"
+
 /** @brief 管理一次用户搜索身份及有限等待；网络适配由组装方提供。 */
 class UserSearchController final : public QObject {
     Q_OBJECT

@@ -22,7 +22,12 @@ enum class AuthOutcomeKind {
     AbnormalDisconnect
 };
 
-enum class AuthActionKind { StayAndShowError, ConnectChat, ShowLogin, ShowChat };
+enum class AuthActionKind {
+    StayAndShowError,
+    ConnectChat,
+    ShowLogin,
+    ShowChat
+};
 
 enum class AuthError {
     None,
@@ -65,8 +70,20 @@ public:
     AuthAction reduce(AuthFlowId flowId, const AuthOutcome& outcome);
 
 private:
-    enum class FlowKind { None, Register, Reset, Login };
-    enum class Stage { None, AwaitingHttp, AwaitingTcp, AwaitingChatLogin, Chat, Complete };
+    enum class FlowKind {
+        None,
+        Register,
+        Reset,
+        Login
+    };
+    enum class Stage {
+        None,
+        AwaitingHttp,
+        AwaitingTcp,
+        AwaitingChatLogin,
+        Chat,
+        Complete
+    };
 
     /** @brief 根据模块和请求类型确定认证流程，不支持的组合返回 None。 */
     static FlowKind flowFor(int module, int requestId);

@@ -20,20 +20,14 @@ MessageService::MessageService(QObject* parent) : QObject(parent), _worker(new M
     _outgoingTimer.setInterval(1000);
     connect(&_outgoingTimer, &QTimer::timeout, this, &MessageService::dispatchOutgoing);
     _groupTimer.setInterval(2000);
-    connect(
-        &_groupTimer,
-        &QTimer::timeout,
-        this,
+    connect(&_groupTimer, &QTimer::timeout, this,
         /** @brief 短周期增量拉取固定成员群，无需新增跨服广播线程。 */
         [this] {
             for (int chat : _groups)
                 synchronize(chat);
         });
     _syncTimer.setInterval(30000);
-    connect(
-        &_syncTimer,
-        &QTimer::timeout,
-        this,
+    connect(&_syncTimer, &QTimer::timeout, this,
         /** @brief 定时为已登记会话同步消息并上报及拉取回执。 */
         [this] {
             for (int chat : _chats) {
@@ -57,11 +51,8 @@ MessageService::~MessageService() {
     _thread.wait();
 }
 
-void MessageService::execute(
-    int chatId,
-    std::function<void(LocalMessageStore&)> operation,
-    std::function<void()> completion,
-    std::function<void()> failure) {
+void MessageService::execute(int chatId, std::function<void(LocalMessageStore&)> operation,
+    std::function<void()> completion, std::function<void()> failure) {
     const auto generation = _generation;
     const auto requestAtStart = _requests.value(chatId);
     // Bound accepted disk work, including completions waiting for the GUI loop.
@@ -71,21 +62,15 @@ void MessageService::execute(
         _requests.remove(chatId);
         _committing.remove(chatId);
         emit failed(chatId, tr("本地消息处理繁忙，请稍后重试"));
-        if (failure)
-            failure();
+        if (failure) failure();
         return;
     }
     ++_pendingOperations;
     QMetaObject::invokeMethod(
         _worker,
         /** @brief 在 SQLite 线程执行存储操作并收集错误，再排队返回对象线程。 */
-        [this,
-         generation,
-         chatId,
-         requestAtStart,
-         operation = std::move(operation),
-         completion = std::move(completion),
-         failure = std::move(failure)] {
+        [this, generation, chatId, requestAtStart, operation = std::move(operation), completion = std::move(completion),
+            failure = std::move(failure)] {
             QString error;
             try {
                 operation(_worker->store);
@@ -97,18 +82,17 @@ void MessageService::execute(
                 /** @brief 减少在途计数，仅对当前账号代调用成功或失败回调。 */
                 [this, generation, chatId, requestAtStart, error, completion, failure] {
                     --_pendingOperations;
-                    if (generation != _generation || !isActive())
-                        return;
+                    if (generation != _generation || !isActive()) return;
                     if (!error.isEmpty()) {
                         if (_requests.value(chatId) == requestAtStart) {
                             _requests.remove(chatId);
                             _committing.remove(chatId);
                         }
                         emit failed(chatId, error);
-                        if (failure)
-                            failure();
-                    } else if (completion)
+                        if (failure) failure();
+                    } else if (completion) {
                         completion();
+                    }
                 },
                 Qt::QueuedConnection);
         },
@@ -117,8 +101,7 @@ void MessageService::execute(
 
 void MessageService::start(const QString& accountRoot, int uid, bool receipts, bool social) {
     stop();
-    if (uid <= 0 || accountRoot.isEmpty())
-        return;
+    if (uid <= 0 || accountRoot.isEmpty()) return;
     _uid = uid;
     _accountRoot = accountRoot;
     _receipts = receipts;
@@ -142,13 +125,10 @@ void MessageService::start(const QString& accountRoot, int uid, bool receipts, b
             for (int chat : *recovering)
                 registerChat(chat);
             const auto generation = _generation;
-            QTimer::singleShot(
-                15000,
-                this,
+            QTimer::singleShot(15000, this,
                 /** @brief 恢复期限到达后仅对当前账号释放发送等待。 */
                 [this, generation] {
-                    if (generation != _generation)
-                        return;
+                    if (generation != _generation) return;
                     _recoveringChats.clear();
                     dispatchOutgoing();
                 });
@@ -196,11 +176,9 @@ void MessageService::stop() {
 }
 
 void MessageService::registerChat(int chatId, bool group) {
-    if (!isActive() || chatId <= 0)
-        return;
+    if (!isActive() || chatId <= 0) return;
     if (group || _groupStates.contains(chatId)) {
-        if (_groupStates.value(chatId)["group_state"] != "active")
-            return;
+        if (_groupStates.value(chatId)["group_state"] != "active") return;
         _groups.insert(chatId);
     }
     if (!_chats.contains(chatId)) {
@@ -212,8 +190,7 @@ void MessageService::registerChat(int chatId, bool group) {
 }
 
 void MessageService::synchronize(int chatId) {
-    if (!isActive() || !_chats.contains(chatId) || _requests.contains(chatId))
-        return;
+    if (!isActive() || !_chats.contains(chatId) || _requests.contains(chatId)) return;
     const QString requestId = QUuid::createUuid().toString(QUuid::WithoutBraces);
     _requests.insert(chatId, requestId);
     auto cursor = std::make_shared<qint64>(0);
@@ -225,26 +202,19 @@ void MessageService::synchronize(int chatId) {
         },
         /** @brief 游标读取完成后发送仍匹配当前请求的增量查询。 */
         [this, chatId, requestId, cursor] {
-            if (_requests.value(chatId) != requestId)
-                return;
-            QJsonObject request{
-                {"mode", "sync_v1"},
-                {"uid", _uid},
-                {"chat_id", chatId},
-                {"after_id", *cursor},
+            if (_requests.value(chatId) != requestId) return;
+            QJsonObject request{{"mode", "sync_v1"}, {"uid", _uid}, {"chat_id", chatId}, {"after_id", *cursor},
                 {"request_id", requestId}};
-            if (_groups.contains(chatId))
-                request["membership_epoch"] = _groupStates.value(chatId)["membership_epoch"];
+            if (_groups.contains(chatId)) request["membership_epoch"] = _groupStates.value(chatId)["membership_epoch"];
             emit syncRequested(request);
             const auto generation = _generation;
-            QTimer::singleShot(
-                15000,
-                this,
+            QTimer::singleShot(15000, this,
                 /** @brief 仅为仍未完成且未提交的请求报告同步超时。 */
                 [this, generation, chatId, requestId] {
                     if (generation != _generation || _requests.value(chatId) != requestId ||
-                        _committing.contains(chatId))
+                        _committing.contains(chatId)) {
                         return;
+                    }
                     _requests.remove(chatId);
                     emit failed(chatId, tr("消息同步超时，将稍后重试"));
                 });
@@ -254,8 +224,9 @@ void MessageService::synchronize(int chatId) {
 void MessageService::acceptSyncPage(const QJsonObject& response) {
     const int chatId = response["chat_id"].toInt();
     const QString requestId = response["request_id"].toString();
-    if (!isActive() || requestId.isEmpty() || _requests.value(chatId) != requestId || _committing.contains(chatId))
+    if (!isActive() || requestId.isEmpty() || _requests.value(chatId) != requestId || _committing.contains(chatId)) {
         return;
+    }
     if (response["mode"].toString() != "sync_v1" || !response.contains("error") || response["error"].toInt(-1) != 0 ||
         !response["msgs"].isArray() || !response["after_id"].isDouble() || !response["next_cursor"].isDouble() ||
         !response["load_more"].isBool()) {
@@ -294,16 +265,14 @@ void MessageService::acceptSyncPage(const QJsonObject& response) {
         },
         /** @brief 提交后清除请求标记，通知消息变化并安排下一页或发送恢复。 */
         [this, chatId, requestId, more, next, changed = !messages.isEmpty()] {
-            if (_requests.value(chatId) != requestId)
-                return;
+            if (_requests.value(chatId) != requestId) return;
             _committing.remove(chatId);
             _requests.remove(chatId);
             sendReceipts(chatId);
-            if (changed)
-                emit messagesChanged(chatId);
-            if (more)
+            if (changed) emit messagesChanged(chatId);
+            if (more) {
                 synchronize(chatId);
-            else {
+            } else {
                 _recoveringChats.remove(chatId);
                 dispatchOutgoing();
                 emit synchronized(chatId, next);
@@ -311,17 +280,16 @@ void MessageService::acceptSyncPage(const QJsonObject& response) {
             // 写入失败后释放同步标记，后续周期可以重试且游标未推进。
         },
         [this, chatId, requestId] {
-            if (_requests.value(chatId) != requestId)
-                return;
+            if (_requests.value(chatId) != requestId) return;
             _committing.remove(chatId);
-            if (_requests.value(chatId) == requestId)
-                _requests.remove(chatId);
+            if (_requests.value(chatId) == requestId) _requests.remove(chatId);
         });
 }
 
 void MessageService::send(QJsonObject request, DraftRetention retention) {
-    if (request.value("chat_type") == "group" && !request.contains("membership_epoch"))
+    if (request.value("chat_type") == "group" && !request.contains("membership_epoch")) {
         request["membership_epoch"] = _groupStates.value(request["chat_id"].toInt())["membership_epoch"];
+    }
     const int chatId = request["chat_id"].toInt();
     if (!isActive() || request["from_uid"].toInt() != _uid || chatId <= 0) {
         QVector<QString> ids;
@@ -343,8 +311,7 @@ void MessageService::send(QJsonObject request, DraftRetention retention) {
         message.sentAt = QDateTime::currentMSecsSinceEpoch();
         messages.push_back(message);
     }
-    if (messages.isEmpty())
-        return;
+    if (messages.isEmpty()) return;
     QVector<QString> uuids;
     for (const auto& message : messages)
         uuids.push_back(message.clientMessageId);
@@ -352,8 +319,7 @@ void MessageService::send(QJsonObject request, DraftRetention retention) {
         chatId,
         /** @brief 确保当前账号库已打开后原子保存发送请求。 */
         [request, root = _accountRoot, uid = _uid](LocalMessageStore& store) {
-            if (!store.isOpen())
-                store.open(root, uid);
+            if (!store.isOpen()) store.open(root, uid);
             store.saveOutgoingRequest(request);
         },
         /** @brief 持久化成功后删除草稿错误并启动发送调度。 */
@@ -377,8 +343,7 @@ void MessageService::send(QJsonObject request, DraftRetention retention) {
 }
 
 void MessageService::acknowledge(int chatId, const QString& uuid, qint64 messageId) {
-    if (!isActive())
-        return;
+    if (!isActive()) return;
     execute(
         chatId,
         /** @brief 在存储线程合并指定 UUID 的服务器确认 ID。 */
@@ -393,8 +358,7 @@ void MessageService::acknowledge(int chatId, const QString& uuid, qint64 message
 }
 
 void MessageService::markUncertain(int chatId, const QVector<QString>& uuids) {
-    if (!isActive())
-        return;
+    if (!isActive()) return;
     execute(
         chatId,
         /** @brief 在存储线程标记指定消息发送结果不确定。 */
@@ -445,8 +409,7 @@ void MessageService::loadConversationSummaries() {
 }
 
 void MessageService::loadConversationAttention(int chatId) {
-    if (!isActive() || chatId < 0)
-        return;
+    if (!isActive() || chatId < 0) return;
     auto rows = std::make_shared<QVector<ConversationAttention>>();
     execute(
         chatId,
@@ -462,8 +425,7 @@ void MessageService::loadConversationAttention(int chatId) {
 }
 
 void MessageService::markConversationSeen(int chatId, qint64 throughLocalId) {
-    if (!isActive() || chatId <= 0 || throughLocalId <= 0)
-        return;
+    if (!isActive() || chatId <= 0 || throughLocalId <= 0) return;
     execute(
         chatId,
         /** @brief 保存已展示边界，期间新增的消息不会被清除。 */
@@ -483,8 +445,7 @@ void MessageService::dispatchOutgoing() {
         _receiptQueued.remove(qint64(work.first) * 2 + work.second);
         requestReceipts(work.first, work.second);
     }
-    if (!isActive() || _dispatching || !_socialReady)
-        return;
+    if (!isActive() || _dispatching || !_socialReady) return;
     _dispatching = true;
     auto requests = std::make_shared<QVector<QJsonObject>>();
     auto changed = std::make_shared<QSet<int>>();
@@ -502,8 +463,9 @@ void MessageService::dispatchOutgoing() {
             for (const auto& request : *requests) {
                 if (request["chat_type"] == "group") {
                     const auto state = _groupStates.value(request["chat_id"].toInt());
-                    if (state["group_state"] != "active" || state["membership_epoch"] != request["membership_epoch"])
+                    if (state["group_state"] != "active" || state["membership_epoch"] != request["membership_epoch"]) {
                         continue;
+                    }
                 }
                 emit sendRequested(request);
             }
@@ -516,18 +478,17 @@ void MessageService::dispatchOutgoing() {
 
 void MessageService::pauseOutgoing() {
     _outgoingTimer.stop();
-    if (isActive())
-        execute(
-            0,
+    if (isActive()) {
+        execute(0,
             /** @brief 在存储线程暂停未完成发送批次。 */
             [](LocalMessageStore& store) {
                 store.pauseOutgoing();
             });
+    }
 }
 
 void MessageService::retry(int chatId, const QString& uuid) {
-    if (!isActive())
-        return;
+    if (!isActive()) return;
     if (_failedDrafts.contains(uuid) && _failedDrafts.value(uuid)["chat_id"].toInt() == chatId) {
         send(_failedDrafts.value(uuid));
         return;
@@ -545,13 +506,11 @@ void MessageService::retry(int chatId, const QString& uuid) {
 }
 
 void MessageService::acceptSendResponse(const QJsonObject& response) {
-    if (!isActive())
-        return;
+    if (!isActive()) return;
     const int chatId = response["chat_id"].toInt();
     if (_groupStates.contains(chatId)) {
         const auto state = _groupStates.value(chatId);
-        if (state["group_state"] != "active" || state["membership_epoch"] != response["membership_epoch"])
-            return;
+        if (state["group_state"] != "active" || state["membership_epoch"] != response["membership_epoch"]) return;
     }
     execute(
         chatId,
@@ -569,8 +528,7 @@ void MessageService::acceptSendResponse(const QJsonObject& response) {
 }
 
 void MessageService::observeRead(int chatId, const QVector<qint64>& ids) {
-    if (!isActive() || !_receipts || _groups.contains(chatId) || !_chats.contains(chatId) || ids.isEmpty())
-        return;
+    if (!isActive() || !_receipts || _groups.contains(chatId) || !_chats.contains(chatId) || ids.isEmpty()) return;
     execute(
         chatId,
         /** @brief 在存储线程记录已满足可见性的已读意图。 */
@@ -586,6 +544,7 @@ void MessageService::observeRead(int chatId, const QVector<qint64>& ids) {
 void MessageService::synchronizeReceipts(int chatId) {
     requestReceipts(chatId, false);
 }
+
 void MessageService::sendReceipts(int chatId) {
     requestReceipts(chatId, true);
 }
@@ -593,26 +552,20 @@ void MessageService::sendReceipts(int chatId) {
 void MessageService::receiptRetry(int chatId) {
     const int retry = _receiptRetries.value(chatId);
     _receiptRetries[chatId] = retry + 1;
-    if (retry >= 3)
-        return; // The periodic synchronization resumes persistent work.
+    if (retry >= 3) return; // The periodic synchronization resumes persistent work.
     const int delays[] = {1000, 3000, 10000};
     const auto generation = _generation;
-    QTimer::singleShot(
-        delays[retry],
-        this,
+    QTimer::singleShot(delays[retry], this,
         /** @brief 重试定时器到期时仅继续当前账号回执。 */
         [this, chatId, generation] {
-            if (generation == _generation)
-                sendReceipts(chatId);
+            if (generation == _generation) sendReceipts(chatId);
         });
 }
 
 void MessageService::requestReceipts(int chatId, bool report) {
-    if (!isActive() || !_receipts || _groups.contains(chatId) || !_chats.contains(chatId))
-        return;
+    if (!isActive() || !_receipts || _groups.contains(chatId) || !_chats.contains(chatId)) return;
     auto& busy = report ? _receiptReport : _receiptSync;
-    if (busy.contains(chatId))
-        return;
+    if (busy.contains(chatId)) return;
     if (busy.size() >= 8) {
         const qint64 key = qint64(chatId) * 2 + report;
         if (!_receiptQueued.contains(key)) {
@@ -622,9 +575,7 @@ void MessageService::requestReceipts(int chatId, bool report) {
         return;
     }
     busy.insert(chatId);
-    auto request = std::make_shared<QJsonObject>(QJsonObject{
-        {"version", 1},
-        {"chat_id", chatId},
+    auto request = std::make_shared<QJsonObject>(QJsonObject{{"version", 1}, {"chat_id", chatId},
         {"request_id", QUuid::createUuid().toString(QUuid::WithoutBraces)}});
     execute(
         chatId,
@@ -632,11 +583,11 @@ void MessageService::requestReceipts(int chatId, bool report) {
         [chatId, report, request, single = _receiptSingles.contains(chatId)](LocalMessageStore& store) {
             if (report) {
                 auto items = store.pendingReceipts(chatId);
-                if (single && !items.isEmpty())
-                    items = QJsonArray{items.first()};
+                if (single && !items.isEmpty()) items = QJsonArray{items.first()};
                 (*request)["items"] = items;
-            } else
+            } else {
                 (*request)["after_revision"] = QString::number(store.receiptCursor(chatId));
+            }
         },
         /** @brief 登记回执请求并发送，空上报批次直接释放占用。 */
         [this, chatId, report, request] {
@@ -648,18 +599,16 @@ void MessageService::requestReceipts(int chatId, bool report) {
             _receiptRequests.insert(requestId, *request);
             emit receiptRequested(report ? 1029 : 1032, *request);
             const auto generation = _generation;
-            QTimer::singleShot(
-                15000,
-                this,
+            QTimer::singleShot(15000, this,
                 /** @brief 回执超时仅处理当前账号的未提交请求并安排重试。 */
                 [this, requestId, generation, chatId, report] {
                     if (generation != _generation || !_receiptRequests.contains(requestId) ||
-                        _receiptCommitting.contains(requestId))
+                        _receiptCommitting.contains(requestId)) {
                         return;
+                    }
                     _receiptRequests.remove(requestId);
                     (report ? _receiptReport : _receiptSync).remove(chatId);
-                    if (report)
-                        receiptRetry(chatId);
+                    if (report) receiptRetry(chatId);
                 });
         },
         /** @brief 存储读取失败后释放对应回执通道。 */
@@ -670,13 +619,13 @@ void MessageService::requestReceipts(int chatId, bool report) {
 
 void MessageService::acceptReceiptResponse(const QJsonObject& response) {
     const auto requestId = response["request_id"].toString();
-    if (!isActive() || !_receipts || !_receiptRequests.contains(requestId) || _receiptCommitting.contains(requestId))
+    if (!isActive() || !_receipts || !_receiptRequests.contains(requestId) || _receiptCommitting.contains(requestId)) {
         return;
+    }
     const auto request = _receiptRequests.value(requestId);
     const int chatId = request["chat_id"].toInt();
     const bool report = request.contains("items");
-    if (response["chat_id"].toInt() != chatId || response["version"].toInt() != 1)
-        return;
+    if (response["chat_id"].toInt() != chatId || response["version"].toInt() != 1) return;
     if (response["error"].toInt(-1) != 0) {
         _receiptRequests.remove(requestId);
         (report ? _receiptReport : _receiptSync).remove(chatId);
@@ -685,8 +634,7 @@ void MessageService::acceptReceiptResponse(const QJsonObject& response) {
             _receiptSingles.insert(chatId);
             const auto items = request["items"].toArray();
             if (items.size() == 1) {
-                execute(
-                    chatId,
+                execute(chatId,
                     /** @brief 删除已被服务器拒绝且无需继续重试的单条回执。 */
                     [chatId, id = items.first().toObject()["message_id"].toInteger()](LocalMessageStore& store) {
                         store.discardReceipt(chatId, id);
@@ -694,26 +642,24 @@ void MessageService::acceptReceiptResponse(const QJsonObject& response) {
                 emit failed(chatId, tr("服务器拒绝了消息回执"));
             }
         }
-        if (report)
-            receiptRetry(chatId);
+        if (report) receiptRetry(chatId);
         return;
     }
-    if (!response["items"].isArray())
-        return;
+    if (!response["items"].isArray()) return;
     const auto items = response["items"].toArray();
     qint64 previous = -1, next = -1;
     if (report) {
         QMap<qint64, QString> expected;
         for (const auto& item : request["items"].toArray())
             expected.insert(item.toObject()["message_id"].toInteger(), item.toObject()["level"].toString());
-        if (expected.size() != items.size())
-            return;
+        if (expected.size() != items.size()) return;
         for (const auto& value : items) {
             const auto item = value.toObject();
             const auto id = item["message_id"].toInteger();
             if (!expected.contains(id) || item["recipient_uid"].toInt() != _uid ||
-                (expected.value(id) == "read" && item["level"].toString() != "read"))
+                (expected.value(id) == "read" && item["level"].toString() != "read")) {
                 return;
+            }
             expected.remove(id);
         }
     } else {
@@ -722,8 +668,9 @@ void MessageService::acceptReceiptResponse(const QJsonObject& response) {
         next = response["next_revision"].toString().toLongLong(&valid);
         if (!valid || next < previous || QString::number(next) != response["next_revision"].toString() ||
             response["after_revision"] != request["after_revision"] || !response["load_more"].isBool() ||
-            (response["load_more"].toBool() && next == previous))
+            (response["load_more"].toBool() && next == previous)) {
             return;
+        }
     }
     _receiptCommitting.insert(requestId);
     execute(
@@ -739,27 +686,24 @@ void MessageService::acceptReceiptResponse(const QJsonObject& response) {
             (report ? _receiptReport : _receiptSync).remove(chatId);
             _receiptRetries.remove(chatId);
             emit messagesChanged(chatId);
-            if (report)
+            if (report) {
                 sendReceipts(chatId);
-            else if (more)
+            } else if (more) {
                 synchronizeReceipts(chatId);
+            }
         },
         /** @brief 回执提交失败后清理占用并按上报策略重试。 */
         [this, requestId, chatId, report] {
             _receiptCommitting.remove(requestId);
             _receiptRequests.remove(requestId);
             (report ? _receiptReport : _receiptSync).remove(chatId);
-            if (report)
-                receiptRetry(chatId);
+            if (report) receiptRetry(chatId);
         });
 }
 
-void MessageService::saveDirectory(
-    const QJsonObject& directory,
-    std::function<void()> completion,
+void MessageService::saveDirectory(const QJsonObject& directory, std::function<void()> completion,
     std::function<void()> failure) {
-    if (!isActive())
-        return;
+    if (!isActive()) return;
     auto saved = std::make_shared<QJsonObject>();
     execute(
         -1,
@@ -771,20 +715,17 @@ void MessageService::saveDirectory(
         [this, saved, completion] {
             applyGroups(*saved);
             emit directoryChanged(*saved);
-            if (completion)
-                completion();
+            if (completion) completion();
         },
         /** @brief 通知目录写入失败，保留当前界面数据。 */
         [this, failure] {
             emit directoryFailed({});
-            if (failure)
-                failure();
+            if (failure) failure();
         });
 }
 
 void MessageService::saveGroupOperation(int chatId, const QJsonObject& request, std::function<void()> completion) {
-    if (!isActive())
-        return;
+    if (!isActive()) return;
     auto saved = std::make_shared<QJsonObject>();
     execute(
         -1,
@@ -798,8 +739,7 @@ void MessageService::saveGroupOperation(int chatId, const QJsonObject& request, 
         [this, saved, completion] {
             applyGroups(*saved);
             emit directoryChanged(*saved);
-            if (completion)
-                completion();
+            if (completion) completion();
         },
         /** @brief 保存失败保持原群资料并通知调用者。 */
         [this] {
@@ -808,22 +748,19 @@ void MessageService::saveGroupOperation(int chatId, const QJsonObject& request, 
 }
 
 void MessageService::loadDirectoryPage(const QString& kind, int after, int limit) {
-    if (!isActive())
-        return;
+    if (!isActive()) return;
     auto rows = std::make_shared<QJsonArray>();
     execute(
         -1,
         /** @brief 本地查询多取一条，以确定下一页是否存在。 */
         [kind, after, limit, rows](LocalMessageStore& store) {
-            if (limit <= 0 || limit > 1000)
-                throw std::runtime_error("Invalid directory page size");
+            if (limit <= 0 || limit > 1000) throw std::runtime_error("Invalid directory page size");
             *rows = store.directoryPage(kind, after, limit + 1);
         },
         /** @brief 返回原游标和本地分页结果。 */
         [this, kind, after, limit, rows] {
             const bool more = rows->size() > limit;
-            if (more)
-                rows->removeLast();
+            if (more) rows->removeLast();
             emit directoryPageLoaded(kind, after, *rows, more);
         },
         /** @brief 查询失败后允许该列表重新加载。 */
@@ -835,13 +772,11 @@ void MessageService::loadDirectoryPage(const QString& kind, int after, int limit
 void MessageService::applyGroups(const QJsonObject& directory) {
     for (const auto& value : directory["conversations"].toArray()) {
         const auto row = value.toObject();
-        if (row["type"] == "private" && row.contains("relationship_revision"))
-            _privateStates[row["id"].toInt()] = row;
+        if (row["type"] == "private" && row.contains("relationship_revision")) _privateStates[row["id"].toInt()] = row;
     }
     for (const auto& value : directory["conversations"].toArray()) {
         const auto row = value.toObject();
-        if (row["type"] != "group")
-            continue;
+        if (row["type"] != "group") continue;
         const int chat = row["id"].toInt();
         const auto old = _groupStates.value(chat);
         if (old["membership_epoch"] != row["membership_epoch"] || row["group_state"] != "active") {
@@ -852,16 +787,16 @@ void MessageService::applyGroups(const QJsonObject& directory) {
         }
         _groupStates[chat] = row;
         _groups.insert(chat);
-        if (row["group_state"] == "active")
+        if (row["group_state"] == "active") {
             registerChat(chat, true);
-        else
+        } else {
             _groups.remove(chat);
+        }
     }
 }
 
 void MessageService::search(int chatId, const QString& text, qint64 before) {
-    if (!isActive())
-        return;
+    if (!isActive()) return;
     auto rows = std::make_shared<QVector<StoredMessage>>();
     // 使用已有 SQLite worker 执行有界历史搜索。
     execute(
@@ -876,8 +811,7 @@ void MessageService::search(int chatId, const QString& text, qint64 before) {
 }
 
 void MessageService::findDirectory(const QString& kind, const QString& text, int after) {
-    if (!isActive())
-        return;
+    if (!isActive()) return;
     auto rows = std::make_shared<QJsonArray>();
     // 在 worker 中搜索完整目录，避免只筛选已显示列表。
     execute(

@@ -26,9 +26,7 @@ std::string ShapeResponse(Endpoint endpoint, const Result& result) {
 
 } // namespace
 
-std::string HandleJsonRequest(
-    Endpoint endpoint,
-    std::string_view request_body,
+std::string HandleJsonRequest(Endpoint endpoint, std::string_view request_body,
     const EndpointHandler& handler) noexcept {
     try {
         Json::Value request;

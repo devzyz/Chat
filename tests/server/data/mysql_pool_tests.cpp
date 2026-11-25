@@ -4,6 +4,7 @@
 
 namespace {
 using namespace std::chrono_literals;
+
 /** 模拟 Connector/C++ 连接健康与事务状态，允许注入校验阻塞和回滚失败。 */
 struct Connection {
     bool valid = true;
@@ -11,31 +12,35 @@ struct Connection {
     bool fail_rollback = false;
     int rollbacks = 0;
     std::function<void()> validation;
+
     /** 执行可选健康探针后返回有效状态；接口拼写由连接池模板约束。 @see sql::Connection::isValid。 */
     bool isValid() {
-        if (validation)
-            validation();
+        if (validation) validation();
         return valid;
     }
+
     /** 模拟连接未关闭。 @see sql::Connection::isClosed。 */
     bool isClosed() {
         return false;
     }
+
     /** 返回模拟自动提交状态。 @see sql::Connection::getAutoCommit。 */
     bool getAutoCommit() {
         return autocommit;
     }
+
     /** 更新模拟自动提交状态。 @see sql::Connection::setAutoCommit。 */
     void setAutoCommit(bool value) {
         autocommit = value;
     }
+
     /** 按故障开关抛出回滚错误，否则累计回滚次数。 @see sql::Connection::rollback。 */
     void rollback() {
-        if (fail_rollback)
-            throw std::runtime_error("rollback failed");
+        if (fail_rollback) throw std::runtime_error("rollback failed");
         ++rollbacks;
     }
 };
+
 using Pool = chat_mysql::ConnectionPool<Connection>;
 
 /** 验证池耗尽等待有期限，归还后可再次借用。 */
@@ -97,8 +102,7 @@ TEST(MysqlConnectionPoolTests, FailedReplacementReleasesCapacityForRecovery) {
     bool unavailable = false;
     // 根据故障开关拒绝创建或返回健康连接。
     Pool pool(1, [&] {
-        if (unavailable)
-            throw std::runtime_error("unavailable");
+        if (unavailable) throw std::runtime_error("unavailable");
         return std::make_unique<Connection>();
     });
     auto held = pool.Borrow();

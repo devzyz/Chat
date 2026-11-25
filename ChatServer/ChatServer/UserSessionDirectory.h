@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 class CSession;
+
 /** @brief 加锁维护用户的当前会话弱引用，不延长会话生命周期。 */
 class UserSessionDirectory {
 public:
@@ -23,6 +24,7 @@ private:
         SessionId id;
         std::weak_ptr<CSession> session;
     };
+
     mutable std::mutex _mutex;
     std::unordered_map<int, Entry> _entries;
 };

@@ -13,8 +13,7 @@ TEST(SessionRuntimeIntegrationTests, SplitHeaderBodyAndCoalescedFrames) {
     Connected c(h, [done, bodies](LogicMessage message) {
         EXPECT_EQ(message.session->DispatchHash(), std::hash<SessionId>{}(message.session->Id()));
         bodies->push_back(message.body);
-        if (bodies->size() == 3)
-            done->set_value(*bodies);
+        if (bodies->size() == 3) done->set_value(*bodies);
         return LogicSubmitResult::Accepted;
     });
     const auto first = Frame(100, "hello");
@@ -24,6 +23,7 @@ TEST(SessionRuntimeIntegrationTests, SplitHeaderBodyAndCoalescedFrames) {
     boost::asio::write(c.peer, boost::asio::buffer(rest));
     EXPECT_EQ(Await(std::move(future)), (std::vector<std::string>{"hello", "", std::string(MAX_LENGTH, 'x')}));
 }
+
 // T09-SESSION-02
 /** 验证超长帧头关闭连接且不委派业务消息。 */
 TEST(SessionRuntimeIntegrationTests, OversizedHeaderClosesWithoutDispatch) {
@@ -47,6 +47,7 @@ TEST(SessionRuntimeIntegrationTests, OversizedHeaderClosesWithoutDispatch) {
     EXPECT_EQ(h.Snapshot(c.session).second, SessionCloseReason::ProtocolError);
     EXPECT_EQ(dispatches, 0);
 }
+
 // T09-SESSION-03
 /** 验证重复启动仅保留一条读取链。 */
 TEST(SessionRuntimeIntegrationTests, RepeatedStartKeepsOneReadChain) {
@@ -64,6 +65,7 @@ TEST(SessionRuntimeIntegrationTests, RepeatedStartKeepsOneReadChain) {
     boost::asio::write(c.peer, boost::asio::buffer(Frame(100, "one")));
     EXPECT_EQ(Await(std::move(future)), "one");
 }
+
 // T09-SESSION-04
 /** 验证发送按 FIFO 写出且完成回调仅表示入队。 */
 TEST(SessionRuntimeIntegrationTests, SendsUseFifoAndAdmissionOnly) {
@@ -74,6 +76,7 @@ TEST(SessionRuntimeIntegrationTests, SendsUseFifoAndAdmissionOnly) {
     const auto expected = Frame(100, "first") + Frame(101, "second");
     EXPECT_EQ(c.Read(expected.size()), expected);
 }
+
 // T09-SESSION-05
 /** 验证精确队列容量边界以及写入期间关闭行为。 */
 TEST(SessionRuntimeIntegrationTests, ExactQueueCapacityAndCloseDuringWrite) {
@@ -108,15 +111,14 @@ TEST(SessionRuntimeIntegrationTests, ExactQueueCapacityAndCloseDuringWrite) {
     auto received = std::make_shared<std::promise<std::size_t>>();
     auto remaining = received->get_future();
     auto bytes = std::make_shared<std::array<char, MAX_LENGTH * 2 + 8>>();
-    boost::asio::async_read(
-        c.peer,
-        boost::asio::buffer(*bytes),
+    boost::asio::async_read(c.peer, boost::asio::buffer(*bytes),
         // 记录对端实际读取字节数。
         [received, bytes](boost::system::error_code, std::size_t count) {
             received->set_value(count);
         });
     EXPECT_LE(Await(std::move(remaining)), static_cast<std::size_t>(MAX_LENGTH + HEAD_TOTAL_LEN));
 }
+
 // T09-SESSION-06
 /** 验证认证替换后的旧会话清理不能删除新在线归属。 */
 TEST(SessionRuntimeIntegrationTests, AuthenticationReplacementCannotDeleteNewPresence) {
@@ -142,6 +144,7 @@ TEST(SessionRuntimeIntegrationTests, AuthenticationReplacementCannotDeleteNewPre
     EXPECT_EQ(h.Snapshot(c.session).second, SessionCloseReason::Replaced);
     h.presence->unavailable = false;
 }
+
 // T09-SESSION-07
 /** 验证发布在线状态期间关闭会话会回滚，不能完成认证。 */
 TEST(SessionRuntimeIntegrationTests, CloseDuringPublicationRollsBackAndNeverAuthenticates) {
@@ -172,6 +175,7 @@ TEST(SessionRuntimeIntegrationTests, CloseDuringPublicationRollsBackAndNeverAuth
     EXPECT_FALSE(h.directory->FindCurrent(42));
     EXPECT_EQ(h.presence->Find(42).status, PresenceStatus::NotFound);
 }
+
 // T09-SESSION-08
 /** 验证存储不可用时不登记本地认证身份。 */
 TEST(SessionRuntimeIntegrationTests, StorageFailureDoesNotPublishLocalIdentity) {
@@ -182,6 +186,7 @@ TEST(SessionRuntimeIntegrationTests, StorageFailureDoesNotPublishLocalIdentity) 
     EXPECT_FALSE(h.directory->FindCurrent(42));
     EXPECT_EQ(c.session->AuthenticatedUid(), 0);
 }
+
 // T09-SESSION-09
 /** 验证缓慢在线清理不会阻塞 socket 关闭及目录注销。 */
 TEST(SessionRuntimeIntegrationTests, SlowCleanupDoesNotBlockSocketClose) {
@@ -205,6 +210,7 @@ TEST(SessionRuntimeIntegrationTests, SlowCleanupDoesNotBlockSocketClose) {
     EXPECT_EQ(h.Send(c.session), SessionSendResult::NotActive);
     release->set_value();
 }
+
 // T09-SESSION-10
 /** 验证远端替换通知携带被替换的旧会话身份。 */
 TEST(SessionRuntimeIntegrationTests, RemoteReplacementCarriesOldSessionIdentity) {
@@ -221,6 +227,7 @@ TEST(SessionRuntimeIntegrationTests, RemoteReplacementCarriesOldSessionIdentity)
     ASSERT_EQ(h.Bind(c.session), SessionBindResult::Bound);
     EXPECT_EQ(Await(std::move(future)).session_id, "old-session");
 }
+
 // T09-SESSION-11
 /** 验证中断读取及对端断连释放会话且半帧不再提交。 */
 TEST(SessionRuntimeIntegrationTests, InterruptedReadAndPeerDisconnectReleaseSession) {
@@ -238,18 +245,14 @@ TEST(SessionRuntimeIntegrationTests, InterruptedReadAndPeerDisconnectReleaseSess
     EXPECT_EQ(h.Snapshot(c.session).second, SessionCloseReason::ReadError);
     EXPECT_EQ(dispatched->load(), 0);
 }
+
 // T09-SESSION-12
 /** 验证服务停止排空 accept 与会话所有权，重复停止仍完成。 */
 TEST(SessionRuntimeIntegrationTests, ServerStopDrainsAcceptAndSessionOwnership) {
     Harness h;
     auto received = std::make_shared<std::promise<std::shared_ptr<CSession>>>();
     auto incoming = received->get_future();
-    auto server = std::make_shared<chat_transport::CServer>(
-        h.io,
-        "127.0.0.1",
-        0,
-        h.lifecycle,
-        h.directory,
+    auto server = std::make_shared<chat_transport::CServer>(h.io, "127.0.0.1", 0, h.lifecycle, h.directory,
         // 保存实际接收入站消息的会话。
         [received](LogicMessage message) {
             received->set_value(message.session);

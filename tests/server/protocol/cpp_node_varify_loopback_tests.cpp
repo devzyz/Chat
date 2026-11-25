@@ -48,17 +48,8 @@ public:
         std::wstring command = L"node.exe \"" + script.wstring() + L"\"";
         std::vector<wchar_t> mutable_command(command.begin(), command.end());
         mutable_command.push_back(L'\0');
-        const BOOL created = CreateProcessW(
-            nullptr,
-            mutable_command.data(),
-            nullptr,
-            nullptr,
-            TRUE,
-            CREATE_NO_WINDOW,
-            nullptr,
-            script.parent_path().wstring().c_str(),
-            &startup,
-            &process_info);
+        const BOOL created = CreateProcessW(nullptr, mutable_command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
+            nullptr, script.parent_path().wstring().c_str(), &startup, &process_info);
         CloseHandleIfValid(stdout_write);
         CloseHandleIfValid(stdin_read);
         if (!created) {

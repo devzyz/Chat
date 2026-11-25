@@ -63,6 +63,7 @@ SendNode::SendNode(const char* msg, std::uint16_t msgId, std::size_t msgLen)
     // 数据
     memcpy(_data + HEAD_TOTAL_LEN, msg, msgLen);
 }
+
 /**
  *
  * @param msg 要发送的数据

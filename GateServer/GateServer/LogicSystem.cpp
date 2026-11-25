@@ -16,9 +16,8 @@ void LogicSystem::RegisterPostHandler(std::string url, HttpHandler handler) {
 LogicSystem::LogicSystem(gate::GateRequest& gate_request) : _gate_request(gate_request) {
     // 将请求体交给端点处理器，并写入统一 JSON 响应。
     // 解析正文并通过 Gate 端点合同生成统一 JSON 响应。
-    const auto write_gate_response = [](const std::shared_ptr<HttpConnection>& connection,
-                                        gate::Endpoint endpoint,
-                                        const gate::EndpointHandler& handler) {
+    const auto write_gate_response = [](const std::shared_ptr<HttpConnection>& connection, gate::Endpoint endpoint,
+                                         const gate::EndpointHandler& handler) {
         const auto body = boost::beast::buffers_to_string(connection->_request.body().data());
         connection->_response.set(http::field::content_type, "application/json");
         beast::ostream(connection->_response.body()) << gate::HandleJsonRequest(endpoint, body, handler);

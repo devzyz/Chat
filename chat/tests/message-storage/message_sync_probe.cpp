@@ -13,8 +13,7 @@
 int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
     const auto arguments = app.arguments();
-    if (arguments.size() != 5 && arguments.size() != 6)
-        return 2;
+    if (arguments.size() != 5 && arguments.size() != 6) return 2;
     const bool receipts = arguments.size() == 6 && arguments[5] == "receipts";
     const qint64 expectedCursor = arguments[3].toLongLong();
     const int expectedCount = arguments[4].toInt();
@@ -33,12 +32,8 @@ int main(int argc, char** argv) {
     };
     // 连接成功后发送带可选回执能力的固定测试身份登录。
     QObject::connect(&socket, &QTcpSocket::connected, &app, [&] {
-        send(
-            1005,
-            QJsonObject{
-                {"uid", 8},
-                {"token", "fixture-token"},
-                {"capabilities", receipts ? QJsonArray{"message_receipts_v1"} : QJsonArray{}}});
+        send(1005, QJsonObject{{"uid", 8}, {"token", "fixture-token"},
+                       {"capabilities", receipts ? QJsonArray{"message_receipts_v1"} : QJsonArray{}}});
     });
     // 解码入站帧，登录成功后启动存储并分发消息及回执同步结果。
     QObject::connect(&socket, &QTcpSocket::readyRead, &app, [&] {
@@ -55,10 +50,11 @@ int main(int argc, char** argv) {
                 }
                 service.start(arguments[2], 8, receipts);
                 service.registerChat(201);
-            } else if (frame.messageId == 1028)
+            } else if (frame.messageId == 1028) {
                 service.acceptSyncPage(response);
-            else if (frame.messageId == 1030 || frame.messageId == 1033)
+            } else if (frame.messageId == 1030 || frame.messageId == 1033) {
                 service.acceptReceiptResponse(response);
+            }
         }
     });
     // 核对首次请求使用恢复游标后发送增量同步帧。
@@ -77,21 +73,16 @@ int main(int argc, char** argv) {
     QObject::connect(&service, &MessageService::receiptRequested, &app, send);
     // 启用回执场景时在回执变化后重读历史。
     QObject::connect(&service, &MessageService::messagesChanged, &app, [&](int chatId) {
-        if (receipts)
-            service.loadHistory(chatId);
+        if (receipts) service.loadHistory(chatId);
     });
-    QObject::connect(
-        &service,
-        &MessageService::historyLoaded,
-        &app,
+    QObject::connect(&service, &MessageService::historyLoaded, &app,
         /**
          * 核对历史数量及确认状态，必要时上报已读；
          * 全部满足后成功退出。
          */
         [&](int, qint64, const QVector<StoredMessage>& rows, bool) {
             if (rows.size() != expectedCount) {
-                if (!receipts)
-                    app.exit(5);
+                if (!receipts) app.exit(5);
                 return;
             }
             QVector<qint64> unread;
@@ -100,8 +91,7 @@ int main(int argc, char** argv) {
                     app.exit(6);
                     return;
                 }
-                if (row.receipt != ReceiptLevel::Read)
-                    unread.push_back(row.messageId);
+                if (row.receipt != ReceiptLevel::Read) unread.push_back(row.messageId);
             }
             if (receipts && !unread.isEmpty()) {
                 service.observeRead(201, unread);

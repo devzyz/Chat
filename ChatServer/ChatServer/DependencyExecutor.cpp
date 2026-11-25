@@ -15,6 +15,7 @@ struct DependencyExecutor::Impl {
         SqlGuard guard;
         bool routing = false;
     };
+
     // active 包括正在 Redis 复核的 SQL 名额；approved 不再参与普通排队。
     struct Pool {
         std::condition_variable ready;
@@ -25,16 +26,18 @@ struct DependencyExecutor::Impl {
         std::size_t rejected = 0;
         std::size_t routing_waiting = 0;
         std::size_t limit;
+
         // 固定执行名额，启动期间也不读取正在增长的线程数组。
         Pool(ExternalTask kind, std::size_t count) : limit(count), kind(kind) {}
+
         const ExternalTask kind;
     };
+
     // 初始化容量后启动三组消费者；构造失败时回收已启动部分。
     Impl(std::size_t count, std::size_t capacity)
         : sql_pool(ExternalTask::Database, count), capacity(capacity),
           routing_capacity(capacity - std::min<std::size_t>(8, capacity / 2)) {
-        if (!capacity || !count)
-            throw std::invalid_argument("invalid dependency capacity");
+        if (!capacity || !count) throw std::invalid_argument("invalid dependency capacity");
         try {
             for (auto pool : {&redis, &sql_pool, &grpc})
                 for (std::size_t i = 0; i < pool->limit; ++i)
@@ -44,6 +47,7 @@ struct DependencyExecutor::Impl {
             throw;
         }
     }
+
     // 在锁内选择固定池。
     Pool& Select(ExternalTask kind) {
         switch (kind) {
@@ -56,29 +60,30 @@ struct DependencyExecutor::Impl {
         }
         throw std::invalid_argument("unknown dependency");
     }
+
     // 内部的写前复核属于已受理的 SQL，关闭入口后仍允许完成。
     LogicSubmitResult Enqueue(ExternalTask kind, Job job, RedisAdmission admission, bool internal = false) {
         auto& pool = Select(kind);
         std::unique_lock<std::mutex> lock(mutex);
-        if (closed && !internal)
-            return LogicSubmitResult::Closed;
+        if (closed && !internal) return LogicSubmitResult::Closed;
         job.routing = kind == ExternalTask::Redis && admission == RedisAdmission::Routing;
         if (pool.waiting.size() >= capacity || (job.routing && pool.routing_waiting >= routing_capacity)) {
             const auto rejected = ++pool.rejected;
             lock.unlock();
-            if ((rejected & (rejected - 1)) == 0)
+            if ((rejected & (rejected - 1)) == 0) {
                 SPDLOG_WARN("dependency queue full, kind={}, rejected={}", static_cast<int>(kind), rejected);
+            }
             return LogicSubmitResult::Full;
         }
         const bool routing = job.routing;
         pool.waiting.push(std::move(job));
-        if (routing)
-            ++pool.routing_waiting;
+        if (routing) ++pool.routing_waiting;
         ++outstanding;
         lock.unlock();
         pool.ready.notify_one();
         return LogicSubmitResult::Accepted;
     }
+
     // 回填已占用的 数据库 名额；成功直接运行 SQL，失败只完成请求。
     void Approve(Task task) {
         {
@@ -87,6 +92,7 @@ struct DependencyExecutor::Impl {
         }
         sql_pool.ready.notify_one();
     }
+
     // 把凭据检查交给 Redis；SQL 线程立刻回到取任务循环。
     void CheckSql(Job job) {
         auto denied = job.guard.denied;
@@ -101,9 +107,11 @@ struct DependencyExecutor::Impl {
             Approve(valid ? std::move(job.work) : std::move(job.guard.denied));
         };
         if (Enqueue(ExternalTask::Redis, {std::move(check), {}}, RedisAdmission::Critical, true) !=
-            LogicSubmitResult::Accepted)
+            LogicSubmitResult::Accepted) {
             Approve(std::move(denied));
+        }
     }
+
     // 预留任务优先，普通任务只在空闲名额存在时出队。
     void Run(Pool& pool) {
         _current = pool.kind;
@@ -122,11 +130,11 @@ struct DependencyExecutor::Impl {
                 } else if (!pool.waiting.empty()) {
                     job = std::move(pool.waiting.front());
                     pool.waiting.pop();
-                    if (job.routing)
-                        --pool.routing_waiting;
+                    if (job.routing) --pool.routing_waiting;
                     ++pool.active;
-                } else
+                } else {
                     return;
+                }
             }
             if (job.guard.check) {
                 CheckSql(std::move(job));
@@ -142,18 +150,19 @@ struct DependencyExecutor::Impl {
                 --pool.active;
                 if (--outstanding == 0) {
                     idle.notify_all();
-                    if (closed)
-                        WakeAll();
+                    if (closed) WakeAll();
                 }
             }
             pool.ready.notify_one();
         }
     }
+
     // 所有消费者重新检查退出条件。
     void WakeAll() {
         for (auto pool : {&redis, &sql_pool, &grpc})
             pool->ready.notify_all();
     }
+
     // 对外关闭入口后排空，包括内部 Redis 复核。
     void Stop() {
         {
@@ -165,6 +174,7 @@ struct DependencyExecutor::Impl {
             for (auto& thread : pool->workers)
                 thread.join();
     }
+
     Pool redis{ExternalTask::Redis, 2}, sql_pool, grpc{ExternalTask::OutboundGrpc, 1};
     const std::size_t capacity, routing_capacity;
     std::mutex mutex;
@@ -176,24 +186,26 @@ struct DependencyExecutor::Impl {
 
 DependencyExecutor::DependencyExecutor(std::size_t database_workers, std::size_t capacity)
     : _impl(std::make_unique<Impl>(database_workers, capacity)) {}
+
 DependencyExecutor::~DependencyExecutor() {
     Stop();
 }
+
 void DependencyExecutor::Stop() {
     // 所有停止调用等待同一次线程回收。
     std::call_once(_impl->stop_once, [this] {
         _impl->Stop();
     });
 }
-LogicSubmitResult DependencyExecutor::SubmitExternal(
-    ExternalTask kind,
-    Task task,
-    RedisAdmission admission,
+
+LogicSubmitResult DependencyExecutor::SubmitExternal(ExternalTask kind, Task task, RedisAdmission admission,
     SqlGuard guard) {
-    if (!task || (guard.check && (kind != ExternalTask::Database || !guard.denied)))
+    if (!task || (guard.check && (kind != ExternalTask::Database || !guard.denied))) {
         throw std::invalid_argument("invalid dependency task");
+    }
     return _impl->Enqueue(kind, {std::move(task), std::move(guard)}, admission);
 }
+
 void DependencyExecutor::Drain() {
     std::unique_lock<std::mutex> lock(_impl->mutex);
     // 统计同时涵盖普通工作和预留 SQL。

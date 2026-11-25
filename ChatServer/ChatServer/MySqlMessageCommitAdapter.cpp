@@ -42,13 +42,8 @@ bool IsMember(sql::Connection& connection, int sender, int recipient, int chat) 
 }
 
 /** @brief 锁定发送者 UUID 对应记录并核对会话、接收者及正文；不一致抛 CONFLICT。 */
-Item ReadIdentity(
-    sql::Connection& connection,
-    int sender,
-    int recipient,
-    int chat,
-    const std::pair<std::string, std::string>& message,
-    Disposition disposition) {
+Item ReadIdentity(sql::Connection& connection, int sender, int recipient, int chat,
+    const std::pair<std::string, std::string>& message, Disposition disposition) {
     std::unique_ptr<sql::PreparedStatement> query(connection.prepareStatement(
         "SELECT message_id,chat_id,recv_id,content,UNIX_TIMESTAMP(created_at) AS created_epoch "
         "FROM chat_message WHERE send_id=? AND client_msg_uuid=? FOR UPDATE"));
@@ -71,11 +66,8 @@ Item ReadIdentity(
 
 }
 
-std::unique_ptr<sql::Connection> ConnectBounded(
-    const std::string& url,
-    const std::string& user,
-    const std::string& password,
-    const std::string& schema) {
+std::unique_ptr<sql::Connection> ConnectBounded(const std::string& url, const std::string& user,
+    const std::string& password, const std::string& schema) {
     // The synchronous classic connector cannot cancel system DNS resolution.
     static const std::regex endpoint("^(tcp://)?(localhost|[0-9.]+|\\[[0-9a-fA-F:]+\\]):[0-9]+$");
     if (!std::regex_match(url, endpoint)) {
@@ -96,12 +88,7 @@ std::unique_ptr<sql::Connection> ConnectBounded(
     return connection;
 }
 
-Result MySqlMessageCommitAdapter::Commit(
-    int sender,
-    int recipient,
-    int chat,
-    const Batch& batch,
-    Deadline deadline,
+Result MySqlMessageCommitAdapter::Commit(int sender, int recipient, int chat, const Batch& batch, Deadline deadline,
     Preconditions access) {
     Result result;
     bool has_transaction = false;

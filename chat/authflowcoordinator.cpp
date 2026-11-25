@@ -2,11 +2,11 @@
 
 AuthFlowCoordinator::FlowKind AuthFlowCoordinator::flowFor(int module, int requestId) {
     if (module == static_cast<int>(Modules::REGISTERMOD) && (requestId == static_cast<int>(ReqId::ID_GET_VERIFY_CODE) ||
-                                                             requestId == static_cast<int>(ReqId::ID_REG_USER))) {
+                                                                requestId == static_cast<int>(ReqId::ID_REG_USER))) {
         return FlowKind::Register;
     }
     if (module == static_cast<int>(Modules::RESETMOD) && (requestId == static_cast<int>(ReqId::ID_GET_VERIFY_CODE) ||
-                                                          requestId == static_cast<int>(ReqId::ID_RESET_PWD))) {
+                                                             requestId == static_cast<int>(ReqId::ID_RESET_PWD))) {
         return FlowKind::Reset;
     }
     if (module == static_cast<int>(Modules::LOGINMOD) && requestId == static_cast<int>(ReqId::ID_LOGIN_UESR)) {

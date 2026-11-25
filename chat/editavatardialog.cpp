@@ -59,26 +59,17 @@ EditAvatarDialog::EditAvatarDialog(LocalAvatar* avatar, const QPixmap& current, 
     zoomIn->setEnabled(false);
     connect(zoom, &QSlider::valueChanged, ui->avatar_crop_widget, &AvatarCropWidget::setZoom);
     connect(ui->avatar_crop_widget, &AvatarCropWidget::zoomChanged, zoom, &QSlider::setValue);
-    connect(
-        zoom,
-        &QSlider::valueChanged,
-        this,
+    connect(zoom, &QSlider::valueChanged, this,
         /** @brief 刷新缩放百分比显示。 */
         [percentage](int value) {
             percentage->setText(QStringLiteral("%1%").arg(value));
         });
-    connect(
-        zoomOut,
-        &QPushButton::clicked,
-        this,
+    connect(zoomOut, &QPushButton::clicked, this,
         /** @brief 按一步缩小裁剪图。 */
         [zoom]() {
             zoom->setValue(zoom->value() - 10);
         });
-    connect(
-        zoomIn,
-        &QPushButton::clicked,
-        this,
+    connect(zoomIn, &QPushButton::clicked, this,
         /** @brief 按一步放大裁剪图。 */
         [zoom]() {
             zoom->setValue(zoom->value() + 10);
@@ -96,10 +87,7 @@ EditAvatarDialog::EditAvatarDialog(LocalAvatar* avatar, const QPixmap& current, 
         };
     ui->edit_avatar_confirm_btn->setEnabled(false);
     _chooseButton->setEnabled(!_avatar->isBusy());
-    connect(
-        _chooseButton,
-        &QPushButton::clicked,
-        this,
+    connect(_chooseButton, &QPushButton::clicked, this,
         /** @brief 打开仅选择本地图片的文件对话框。 */
         [this]() {
             auto* picker = new QFileDialog(this, tr("选择头像（最大 5 MB，宽高不超过 4096 像素）"));
@@ -109,48 +97,33 @@ EditAvatarDialog::EditAvatarDialog(LocalAvatar* avatar, const QPixmap& current, 
             connect(picker, &QFileDialog::fileSelected, _avatar, &LocalAvatar::selectFile);
             picker->open();
         });
-    connect(
-        _avatar,
-        &LocalAvatar::selectionChanged,
-        this,
+    connect(_avatar, &LocalAvatar::selectionChanged, this,
         /** @brief 选图变化后刷新裁剪预览并更新控件状态。 */
         [this, current, updateControls](const QImage& image) {
             const QImage local = image.isNull() ? _avatar->image() : image;
             ui->avatar_crop_widget->setImage(local.isNull() ? current.toImage() : local);
             updateControls();
         });
-    connect(
-        _avatar,
-        &LocalAvatar::imageChanged,
-        this,
+    connect(_avatar, &LocalAvatar::imageChanged, this,
         /** @brief 没有候选图时显示新加载的账号头像。 */
         [this](const QImage& image) {
             if (_avatar->selection().isNull() && !image.isNull()) {
                 ui->avatar_crop_widget->setImage(image);
             }
         });
-    connect(
-        _avatar,
-        &LocalAvatar::busyChanged,
-        this,
+    connect(_avatar, &LocalAvatar::busyChanged, this,
         /** @brief 根据异步忙碌和保存状态更新按钮可用性。 */
         [this, updateControls](bool busy) {
             _chooseButton->setEnabled(!busy);
             updateControls();
             ui->edit_avatar_cancel_btn->setEnabled(!_avatar->isSaving());
         });
-    connect(
-        _avatar,
-        &LocalAvatar::errorOccurred,
-        this,
+    connect(_avatar, &LocalAvatar::errorOccurred, this,
         /** @brief 弹出头像流程错误提示。 */
         [this](const QString& error) {
             QMessageBox::warning(this, tr("头像上传"), error);
         });
-    connect(
-        ui->edit_avatar_confirm_btn,
-        &QPushButton::clicked,
-        this,
+    connect(ui->edit_avatar_confirm_btn, &QPushButton::clicked, this,
         /** @brief 保存当前裁剪框对应的头像区域。 */
         [this]() {
             _avatar->saveSelection(ui->avatar_crop_widget->sourceRect());

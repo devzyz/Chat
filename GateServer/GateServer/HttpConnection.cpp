@@ -4,13 +4,12 @@
 #include "LogicSystem.h"
 #include <stdexcept>
 
-HttpConnection::HttpConnection(
-    boost::asio::io_context& ioc,
-    std::shared_ptr<LogicSystem> logic,
+HttpConnection::HttpConnection(boost::asio::io_context& ioc, std::shared_ptr<LogicSystem> logic,
     std::chrono::steady_clock::duration request_timeout)
     : _socket(ioc), _logic(std::move(logic)), _request_timeout(request_timeout) {
-    if (request_timeout <= std::chrono::steady_clock::duration::zero())
+    if (request_timeout <= std::chrono::steady_clock::duration::zero()) {
         throw std::invalid_argument("positive request timeout required");
+    }
     _parser.body_limit(CServer::MaxRequestBodyBytes());
 }
 
@@ -73,12 +72,9 @@ unsigned char ToHex(unsigned char x) {
 // 16进制转数字
 /** @brief 将一个十六进制字符转换为数值，无效字符返回约定失败值。 */
 unsigned char FromHex(unsigned char value) {
-    if (value >= 'A' && value <= 'F')
-        return value - 'A' + 10;
-    if (value >= 'a' && value <= 'f')
-        return value - 'a' + 10;
-    if (value >= '0' && value <= '9')
-        return value - '0';
+    if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+    if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+    if (value >= '0' && value <= '9') return value - '0';
     throw std::invalid_argument("invalid percent encoding");
 }
 
@@ -113,17 +109,18 @@ std::string UrlDecode(const std::string& str) {
 
     for (size_t i = 0; i < length; i++) {
         // 还原+为空格
-        if (str[i] == '+')
+        if (str[i] == '+') {
             strTemp += " ";
+        }
         // 遇到%则将后面的
         else if (str[i] == '%') {
-            if (length - i < 3)
-                throw std::invalid_argument("incomplete percent encoding");
+            if (length - i < 3) throw std::invalid_argument("incomplete percent encoding");
             unsigned char high = FromHex((unsigned char)str[++i]);
             unsigned char low = FromHex((unsigned char)str[++i]);
             strTemp += high * 16 + low;
-        } else
+        } else {
             strTemp += str[i];
+        }
     }
 
     return strTemp;
@@ -238,6 +235,7 @@ void HttpConnection::WriteResponse() {
         self->deadline_.cancel();
     });
 }
+
 // 开启定时器
 void HttpConnection::CheckDeadline() {
     auto self = shared_from_this();

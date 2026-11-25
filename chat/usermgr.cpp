@@ -10,60 +10,46 @@
 #include <QLabel>
 
 UserMgr::UserMgr()
-    : _messages(new MessageService(this)), _localAvatar(new LocalAvatar(
-                                               UserStoragePaths::dataRoot(),
-                                               this,
+    : _messages(new MessageService(this)), _localAvatar(new LocalAvatar(UserStoragePaths::dataRoot(), this,
                                                QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation))),
       _contact_load_count(0), _current_load_chat_id(0), _last_chat_id(0), _is_load_chat_finish(false) {
     connect(_messages, &MessageService::directoryRestored, this, &UserMgr::applyDirectory);
     connect(_messages, &MessageService::directoryChanged, this, &UserMgr::applyDirectory);
-    connect(
-        _messages,
-        &MessageService::directoryRestored,
-        this,
+    connect(_messages, &MessageService::directoryRestored, this,
         // 账号库恢复后才允许重试断线期间保留的提交。
         [this] {
-            if (_submissions)
-                _submissions->resume();
+            if (_submissions) _submissions->resume();
         });
     // 在 Qt 事件投递停止前排空存储，避免工作线程无法收到退出任务。
     qAddPostRoutine(
         /** @brief 应用退出时释放消息服务，兼容单例已释放的关闭顺序。 */
         [] {
             const auto user = UserMgr::instance();
-            if (!user)
-                return; // Normal application exit may already release the singleton.
+            if (!user) return; // Normal application exit may already release the singleton.
             delete user->_messages;
             user->_messages = nullptr;
         });
     _localAvatar->setUploadEnabled(true);
     // 将本地头像上传请求转交当前资源会话。
-    connect(
-        _localAvatar,
-        &LocalAvatar::uploadRequested,
-        this,
+    connect(_localAvatar, &LocalAvatar::uploadRequested, this,
         /** @brief 有远端头像服务时上传，否则结束本地等待并报告错误。 */
         [this](const QString& path) {
-            if (_remoteAvatars)
+            if (_remoteAvatars) {
                 _remoteAvatars->upload(path);
-            else
+            } else {
                 _localAvatar->finishUpload(tr("尚未建立资源服务会话"));
+            }
         });
     // 将当前账号的本地头像变化通知界面。
-    connect(
-        _localAvatar,
-        &LocalAvatar::imageChanged,
-        this,
+    connect(_localAvatar, &LocalAvatar::imageChanged, this,
         /** @brief 本人头像变化时通知引用该 UID 的界面。 */
         [this] {
-            if (_user_info)
-                emit avatarChanged(_user_info->_uid);
+            if (_user_info) emit avatarChanged(_user_info->_uid);
         });
 }
 
 void UserMgr::suspendSubmissions() {
-    if (_submissions)
-        _submissions->suspend();
+    if (_submissions) _submissions->suspend();
 }
 
 void UserMgr::setToken(QString token) {
@@ -91,57 +77,43 @@ void UserMgr::setUserInfo(std::shared_ptr<UserInfo> user_info) {
 
 void UserMgr::startResourceSession() {
     const auto user_info = _user_info;
-    if (!user_info || _remoteAvatars)
-        return;
+    if (!user_info || _remoteAvatars) return;
     if (!_token.isEmpty() && !gate_url_prefix.isEmpty()) {
         QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
-        _remoteAvatars = new AvatarCache(
-            QUrl(settings.value("ResourceServer/Url", "http://127.0.0.1:8090").toString()),
-            user_info->_uid,
-            _token,
-            storageRoot(),
-            this);
+        _remoteAvatars = new AvatarCache(QUrl(settings.value("ResourceServer/Url", "http://127.0.0.1:8090").toString()),
+            user_info->_uid, _token, storageRoot(), this);
         // 远端发布完成后结束本地上传状态。
-        connect(
-            _remoteAvatars,
-            &AvatarCache::published,
-            this,
+        connect(_remoteAvatars, &AvatarCache::published, this,
             /** @brief 远端发布成功后完成本地头像保存流程。 */
             [this] {
                 _localAvatar->finishUpload();
             });
         connect(_remoteAvatars, &AvatarCache::uploadFailed, _localAvatar, &LocalAvatar::finishUpload);
         // 更新本人头像或通知其他用户头像变化。
-        connect(
-            _remoteAvatars,
-            &AvatarCache::changed,
-            this,
+        connect(_remoteAvatars, &AvatarCache::changed, this,
             /** @brief 将本人远端头像写回本地模型，其他用户仅通知刷新。 */
             [this](int uid, const QImage& image) {
-                if (_user_info && uid == _user_info->_uid)
+                if (_user_info && uid == _user_info->_uid) {
                     _localAvatar->setRemoteImage(image);
-                else
+                } else {
                     emit avatarChanged(uid);
+                }
             });
         _remoteAvatars->watch(user_info->_uid);
     }
 }
 
 QString UserMgr::storageRoot() const {
-    return UserStoragePaths::accountRoot(
-        UserStoragePaths::dataRoot(),
-        gate_url_prefix,
+    return UserStoragePaths::accountRoot(UserStoragePaths::dataRoot(), gate_url_prefix,
         _user_info ? _user_info->_uid : 0);
 }
 
 QPixmap UserMgr::avatarFor(int uid, const QString& fallback) const {
-    if (_user_info && uid == _user_info->_uid)
-        return selfAvatar();
+    if (_user_info && uid == _user_info->_uid) return selfAvatar();
     if (_remoteAvatars && uid > 0) {
         _remoteAvatars->watch(uid);
         const auto image = _remoteAvatars->image(uid);
-        if (!image.isNull())
-            return QPixmap::fromImage(AvatarCrop::circularPreview(image));
+        if (!image.isNull()) return QPixmap::fromImage(AvatarCrop::circularPreview(image));
     }
     // Only bundled resources are accepted as legacy server paths.
     QPixmap result(fallback.startsWith(":/") ? fallback : ":/res/head_1.jpg");
@@ -162,14 +134,10 @@ void UserMgr::bindAvatar(QLabel* label, int uid, const QString& fallback) {
     if (!label->property("avatarBound").toBool()) {
         label->setProperty("avatarBound", true);
         // 仅刷新与变更 UID 匹配的标签。
-        connect(
-            this,
-            &UserMgr::avatarChanged,
-            label,
+        connect(this, &UserMgr::avatarChanged, label,
             /** @brief 只更新引用发生变化 UID 的头像标签。 */
             [label, update](int changed) {
-                if (label->property("avatarUid").toInt() == changed)
-                    update();
+                if (label->property("avatarUid").toInt() == changed) update();
             });
     }
     update();
@@ -234,8 +202,8 @@ void UserMgr::addFriendApplications(QJsonArray list) {
         auto description = value["description"].toString();
         auto backname = value["backname"].toString();
         auto touid = value["touid"].toInt();
-        auto apply_info = std::make_shared<
-            ApplyInfo>(fromuid, applyname, applydescription, applyicon, applysex, status, touid, description, backname);
+        auto apply_info = std::make_shared<ApplyInfo>(fromuid, applyname, applydescription, applyicon, applysex, status,
+            touid, description, backname);
         _apply_map.insert(fromuid, apply_info);
     }
 }
@@ -256,14 +224,11 @@ void UserMgr::addFriends(QJsonArray list) {
         }
         if (value.toObject().contains("relationship_active") && !value["relationship_active"].toBool()) {
             _friend_map.remove(uid);
-            _friend_list.erase(
-                std::remove_if(
-                    _friend_list.begin(),
-                    _friend_list.end(),
-                    /** @brief 解除好友只移除联系人，不触碰历史会话。 */
-                    [uid](const std::shared_ptr<UserInfo>& row) {
-                        return row->_uid == uid;
-                    }),
+            _friend_list.erase(std::remove_if(_friend_list.begin(), _friend_list.end(),
+                                   /** @brief 解除好友只移除联系人，不触碰历史会话。 */
+                                   [uid](const std::shared_ptr<UserInfo>& row) {
+                                       return row->_uid == uid;
+                                   }),
                 _friend_list.end());
             continue;
         }
@@ -273,12 +238,12 @@ void UserMgr::addFriends(QJsonArray list) {
         auto sex = value["sex"].toInt();
         auto backname = value["backname"].toString();
         auto friend_info = std::make_shared<UserInfo>(uid, name, description, icon, sex, backname);
-        if (!_friend_map.contains(uid))
+        if (!_friend_map.contains(uid)) {
             _friend_list.push_back(friend_info);
-        else
+        } else {
             for (auto& existing : _friend_list)
-                if (existing->_uid == uid)
-                    existing = friend_info;
+                if (existing->_uid == uid) existing = friend_info;
+        }
         _friend_map.insert(uid, friend_info);
     }
 }
@@ -411,26 +376,20 @@ void UserMgr::applyDirectory(const QJsonObject& directory) {
         const auto row = value.toObject();
         const int chat = row["id"].toInt();
         if (row["type"].toString() == "group") {
-            if (auto existing = chatInfo(chat))
-                existing->setName(row["name"].toString());
-            addChatInfo(
-                chat,
+            if (auto existing = chatInfo(chat)) existing->setName(row["name"].toString());
+            addChatInfo(chat,
                 std::make_shared<ChatInfo>(0, row["name"].toString(), QString(), QString(), chat, ChatType::GROUP));
             continue;
         }
         const int peer = row["uid"].toInt();
         const auto contact = friendById(peer);
-        if (auto existing = chatInfo(chat))
+        if (auto existing = chatInfo(chat)) {
             existing->setName(contact ? contact->_name : row["name"].toString(existing->name()));
+        }
         addPrivateChatMapping(peer, chat);
-        addChatInfo(
-            chat,
-            std::make_shared<ChatInfo>(
-                peer,
-                contact ? contact->_name : row["name"].toString(QString::number(peer)),
-                contact ? contact->_icon : row["icon"].toString(),
-                contact ? contact->_backname : QString(),
-                chat,
+        addChatInfo(chat,
+            std::make_shared<ChatInfo>(peer, contact ? contact->_name : row["name"].toString(QString::number(peer)),
+                contact ? contact->_icon : row["icon"].toString(), contact ? contact->_backname : QString(), chat,
                 ChatType::PRIVATE));
     }
 }
@@ -438,16 +397,14 @@ void UserMgr::applyDirectory(const QJsonObject& directory) {
 MessageSubmissionController* UserMgr::submissions() {
     if (!_submissions) {
         QSettings settings(QCoreApplication::applicationDirPath() + "/config.ini", QSettings::IniFormat);
-        _uploads = new ResourceTransferManager(
-            QUrl(settings.value("ResourceServer/Url", "http://127.0.0.1:8090").toString()),
-            uid(),
-            token(),
-            storageRoot(),
-            this);
+        _uploads =
+            new ResourceTransferManager(QUrl(settings.value("ResourceServer/Url", "http://127.0.0.1:8090").toString()),
+                uid(), token(), storageRoot(), this);
         _submissions = new MessageSubmissionController(_messages, _uploads, uid(), this);
     }
     return _submissions;
 }
+
 bool UserMgr::hasPendingSubmissions() const {
     return _submissions && _submissions->hasPending();
 }

@@ -57,8 +57,7 @@ bool FaultProbeReady(const integration::LoopbackPort& endpoint) {
 /** 发起非阻塞拒连探测后关闭套接字，始终报告未就绪。 */
 bool ProbeRefusedWithoutBlocking(const integration::LoopbackPort& endpoint) {
     SOCKET probe = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (probe == INVALID_SOCKET)
-        return false;
+    if (probe == INVALID_SOCKET) return false;
     u_long nonblocking = 1;
     ioctlsocket(probe, FIONBIO, &nonblocking);
     sockaddr_in address{};
@@ -76,14 +75,9 @@ bool CanBind(std::uint16_t port) {
     boost::asio::ip::tcp::acceptor acceptor(io);
     boost::system::error_code error;
     acceptor.open(boost::asio::ip::tcp::v4(), error);
-    if (error)
-        return false;
+    if (error) return false;
     const BOOL exclusive = TRUE;
-    setsockopt(
-        acceptor.native_handle(),
-        SOL_SOCKET,
-        SO_EXCLUSIVEADDRUSE,
-        reinterpret_cast<const char*>(&exclusive),
+    setsockopt(acceptor.native_handle(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusive),
         sizeof(exclusive));
     acceptor.bind({boost::asio::ip::address_v4::loopback(), port}, error);
     return !error;
@@ -97,8 +91,7 @@ TEST(T09_PROC_Faults, RefusalDeadlineAndPortConflictAreBoundedAndReleaseOwnershi
     ASSERT_TRUE(context->ReleaseLoopbackPort("fault-child"));
     const auto refused_endpoint = context->ReserveLoopbackPort("fault-refused");
     ASSERT_TRUE(context->ReleaseLoopbackPort("fault-refused"));
-    auto running = integration::ProcessHarness::Start(
-        *context,
+    auto running = integration::ProcessHarness::Start(*context,
         FaultHelperSpec(*context, {L"--mode=server", L"--port=" + std::to_wstring(child_endpoint.port)}));
     ASSERT_TRUE(running->WaitReady(
         // 用子进程端点的协议响应判断就绪。
@@ -124,8 +117,7 @@ TEST(T09_PROC_Faults, RefusalDeadlineAndPortConflictAreBoundedAndReleaseOwnershi
     EXPECT_TRUE(running->Stop(std::chrono::steady_clock::now() + 2s).Complete());
 
     const auto conflict_endpoint = context->ReserveLoopbackPort("fault-conflict");
-    auto conflicting = integration::ProcessHarness::Start(
-        *context,
+    auto conflicting = integration::ProcessHarness::Start(*context,
         FaultHelperSpec(*context, {L"--mode=server", L"--port=" + std::to_wstring(conflict_endpoint.port)}));
     // 保持探针失败以验证就绪等待的硬超时。
     EXPECT_FALSE(conflicting->WaitReady(
@@ -153,10 +145,8 @@ TEST(T09_PROC_Faults, LateOutputAndCleanupFailureRemainSeparateSanitizedAndResid
         const auto endpoint = context->ReserveLoopbackPort("late-output");
         port = endpoint.port;
         ASSERT_TRUE(context->ReleaseLoopbackPort("late-output"));
-        auto harness = integration::ProcessHarness::Start(
-            *context,
-            FaultHelperSpec(
-                *context,
+        auto harness = integration::ProcessHarness::Start(*context,
+            FaultHelperSpec(*context,
                 {L"--mode=server", L"--late-output", L"--emit-secret", L"--port=" + std::to_wstring(endpoint.port)}));
         ASSERT_TRUE(harness->WaitReady(
             // 确认故障子进程可接收协议请求。

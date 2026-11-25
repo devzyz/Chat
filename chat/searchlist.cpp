@@ -37,8 +37,7 @@ void SearchList::closeFindDialog() {
  * 因为发送网络请求可能要时间，通过这个创建一个等待
  */
 void SearchList::waitPending(bool pending) {
-    if (_send_pending == pending)
-        return;
+    if (_send_pending == pending) return;
     _send_pending = pending;
     if (pending) {
         _loadingDialog = new LoadingDialog(this);
@@ -50,6 +49,7 @@ void SearchList::waitPending(bool pending) {
         _loadingDialog.clear();
     }
 }
+
 void SearchList::cancelSearch() {
     emit searchCancelled();
 }

@@ -65,10 +65,12 @@ auto VarifyPoolFactory() {
 TEST(GateVarifyPoolContractTests, BorrowReturn) {
     VerifyBorrowReturn(VarifyPoolFactory());
 }
+
 /** 验证Gate 的验证码池耗尽有界合同。 */
 TEST(GateVarifyPoolContractTests, ExhaustionIsBounded) {
     VerifyExhaustion(VarifyPoolFactory());
 }
+
 /** 验证Gate 的验证码池关闭唤醒与幂等合同。 */
 TEST(GateVarifyPoolContractTests, CloseIsIdempotentAndWakesBorrowers) {
     VerifyCloseLifecycle(VarifyPoolFactory());

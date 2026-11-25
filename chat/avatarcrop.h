@@ -14,10 +14,12 @@ public:
     void setZoom(int percent);
     /** @brief 按源图坐标偏移裁剪中心，并限制裁剪框不越界。 */
     void moveBy(QPointF sourceDelta);
+
     /** @brief 返回当前裁剪缩放百分比。 */
     int zoom() const {
         return _zoom;
     }
+
     /** @brief 返回当前裁剪区域在源图中的矩形。 */
     QRectF sourceRect() const;
     /** @brief 按源图区域生成标准头像图片值。 */

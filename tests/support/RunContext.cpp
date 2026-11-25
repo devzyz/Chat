@@ -33,7 +33,7 @@ bool IsSafeName(const std::string& value) {
     }
     for (const auto character : value) {
         if (!((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
-              (character >= '0' && character <= '9') || character == '-' || character == '_')) {
+                (character >= '0' && character <= '9') || character == '-' || character == '_')) {
             return false;
         }
     }
@@ -120,12 +120,11 @@ public:
             }
             owned_paths.insert(temp_root.lexically_normal().wstring());
             // 清理当前运行创建的临时根。
-            ledger.push_back(
-                {"temp-root",
-                 [this] {
-                     return RemovePath(temp_root);
-                 },
-                 false});
+            ledger.push_back({"temp-root",
+                [this] {
+                    return RemovePath(temp_root);
+                },
+                false});
         } catch (...) {
             ReleaseRunId(run_id);
             throw;
@@ -244,12 +243,8 @@ LoopbackPort RunContext::ReserveLoopbackPort(const std::string& name) {
     }
 #ifdef _WIN32
     const BOOL exclusive = TRUE;
-    if (setsockopt(
-            acceptor->native_handle(),
-            SOL_SOCKET,
-            SO_EXCLUSIVEADDRUSE,
-            reinterpret_cast<const char*>(&exclusive),
-            sizeof(exclusive)) == SOCKET_ERROR) {
+    if (setsockopt(acceptor->native_handle(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+            reinterpret_cast<const char*>(&exclusive), sizeof(exclusive)) == SOCKET_ERROR) {
         throw std::runtime_error("unable to make loopback reservation exclusive");
     }
 #endif
@@ -264,12 +259,11 @@ LoopbackPort RunContext::ReserveLoopbackPort(const std::string& name) {
     const auto endpoint = acceptor->local_endpoint();
     impl_->ports.emplace(name, std::move(acceptor));
     // 按账本登记的名称关闭所属预约端口。
-    impl_->ledger.push_back(
-        {"port:" + name,
-         [impl = impl_.get(), name] {
-             return impl->ClosePort(name);
-         },
-         false});
+    impl_->ledger.push_back({"port:" + name,
+        [impl = impl_.get(), name] {
+            return impl->ClosePort(name);
+        },
+        false});
     return {endpoint.address().to_string(), endpoint.port()};
 }
 
@@ -303,12 +297,11 @@ std::filesystem::path RunContext::CreateOwnedDirectory(const std::filesystem::pa
     }
     impl_->owned_paths.insert(path.wstring());
     // 移除账本登记的所属目录。
-    impl_->ledger.push_back(
-        {"path:" + path.string(),
-         [impl = impl_.get(), path] {
-             return impl->RemovePath(path);
-         },
-         false});
+    impl_->ledger.push_back({"path:" + path.string(),
+        [impl = impl_.get(), path] {
+            return impl->RemovePath(path);
+        },
+        false});
     return path;
 }
 

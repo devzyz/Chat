@@ -17,7 +17,11 @@ constexpr int kRpcFailed = 1002;
 /** 模拟可成功、返回失败或抛异常的 Token 存储，数据访问受互斥锁保护。 */
 class InMemoryAssignmentStore final : public gate_routing::AssignmentStore {
 public:
-    enum class PutBehavior { Succeed, ReturnFalse, Throw };
+    enum class PutBehavior {
+        Succeed,
+        ReturnFalse,
+        Throw
+    };
 
     /** 保存本用例指定的 Token 写入故障模式。 */
     explicit InMemoryAssignmentStore(PutBehavior put_behavior = PutBehavior::Succeed) : put_behavior_(put_behavior) {}
@@ -58,8 +62,7 @@ public:
 // T08-STATUS-09
 /** 验证 Token 写入返回失败时清空选服结果。 */
 TEST(GateRoutingComponentTests, StoreFalseFailsClosedAndClearsAssignment) {
-    auto routing = gate_routing::CreateGateRouting(
-        {{"chat-a", "127.0.0.1", "9001"}},
+    auto routing = gate_routing::CreateGateRouting({{"chat-a", "127.0.0.1", "9001"}},
         std::make_shared<InMemoryAssignmentStore>(InMemoryAssignmentStore::PutBehavior::ReturnFalse),
         std::make_shared<SyntheticTokenSource>());
 
@@ -73,10 +76,8 @@ TEST(GateRoutingComponentTests, StoreFalseFailsClosedAndClearsAssignment) {
 // T08-STATUS-08
 /** 验证写入成功时返回完整端点与 Token。 */
 TEST(GateRoutingComponentTests, SuccessfulStoreProducesCompleteAssignment) {
-    auto routing = gate_routing::CreateGateRouting(
-        {{"chat-a", "127.0.0.1", "9001"}},
-        std::make_shared<InMemoryAssignmentStore>(),
-        std::make_shared<SyntheticTokenSource>());
+    auto routing = gate_routing::CreateGateRouting({{"chat-a", "127.0.0.1", "9001"}},
+        std::make_shared<InMemoryAssignmentStore>(), std::make_shared<SyntheticTokenSource>());
     const auto result = routing->Assign(52);
     EXPECT_EQ(result.error, kSuccess);
     EXPECT_FALSE(result.host.empty());
@@ -87,8 +88,7 @@ TEST(GateRoutingComponentTests, SuccessfulStoreProducesCompleteAssignment) {
 // T08-STATUS-10
 /** 验证存储异常被转换为稳定的失败响应。 */
 TEST(GateRoutingComponentTests, StoreExceptionUsesStableFailClosedEnvelope) {
-    auto routing = gate_routing::CreateGateRouting(
-        {{"chat-a", "127.0.0.1", "9001"}},
+    auto routing = gate_routing::CreateGateRouting({{"chat-a", "127.0.0.1", "9001"}},
         std::make_shared<InMemoryAssignmentStore>(InMemoryAssignmentStore::PutBehavior::Throw),
         std::make_shared<SyntheticTokenSource>());
     const auto result = routing->Assign(53);

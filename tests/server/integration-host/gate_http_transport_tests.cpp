@@ -122,8 +122,7 @@ TEST_F(T09_GHTTP_Core, PublishesReadyLoopbackEndpointAndStopsIdempotently) {
     boost::asio::steady_timer deadline(io, 2s);
     // 超时停止本用例事件循环，避免读响应悬挂。
     deadline.async_wait([&](auto error) {
-        if (!error)
-            io.stop();
+        if (!error) io.stop();
     });
     // 记录真实 HTTP 响应结果并取消测试总期限。
     http::async_read(peer, buffer, response, [&](auto error, auto) {
@@ -179,8 +178,7 @@ TEST_F(T09_GHTTP_Core, FragmentedMaximumBodyIsAcceptedExactlyOnce) {
         "POST /user_login HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: " +
         std::to_string(body.size()) + "\r\nConnection: close\r\n\r\n" + body;
     for (std::size_t offset = 0; offset < raw.size(); offset += 17) {
-        boost::asio::write(
-            stream.socket(),
+        boost::asio::write(stream.socket(),
             boost::asio::buffer(raw.data() + offset, (std::min)(std::size_t{17}, raw.size() - offset)));
     }
     beast::flat_buffer buffer;
@@ -216,16 +214,14 @@ TEST_F(T09_GHTTP_Core, OverLimitMalformedAndInterruptedRequestsNeverDispatch) {
     beast::tcp_stream malformed(client_ioc);
     malformed.expires_after(2s);
     malformed.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
-    boost::asio::write(
-        malformed.socket(),
+    boost::asio::write(malformed.socket(),
         boost::asio::buffer("POST /user_login HTTP/1.1\r\nContent-Length: nope\r\n\r\n"));
     malformed.socket().shutdown(tcp::socket::shutdown_send, error);
 
     beast::tcp_stream interrupted(client_ioc);
     interrupted.expires_after(2s);
     interrupted.connect({boost::asio::ip::make_address(server_->BoundAddress()), server_->BoundPort()});
-    boost::asio::write(
-        interrupted.socket(),
+    boost::asio::write(interrupted.socket(),
         boost::asio::buffer("POST /user_login HTTP/1.1\r\nContent-Length: 20\r\n\r\n{"));
     interrupted.socket().close(error);
     std::this_thread::sleep_for(100ms);

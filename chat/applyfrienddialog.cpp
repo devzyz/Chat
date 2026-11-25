@@ -39,10 +39,7 @@ void ApplyFriendDialog::setSearchInfo(std::shared_ptr<SearchInfo> si) {
     _si = si;
     _revision.clear();
     ui->sure_btn->setEnabled(false);
-    TcpMgr::instance()->socialRequest(
-        ID_SOCIAL_DIRECTORY_REQ,
-        {{"kind", "profile"}, {"target_uid", si->_uid}},
-        this,
+    TcpMgr::instance()->socialRequest(ID_SOCIAL_DIRECTORY_REQ, {{"kind", "profile"}, {"target_uid", si->_uid}}, this,
         /** @brief 保存打开表单时的申请版本，禁止迟到操作覆盖新申请。 */
         [this](QJsonObject response) {
             if (response["error"].toInt(-1) != 0) {
@@ -53,8 +50,7 @@ void ApplyFriendDialog::setSearchInfo(std::shared_ptr<SearchInfo> si) {
             _revision = profile["outgoing_revision"].toString();
             const bool pending = profile["outgoing_status"].toInt() == 0;
             ui->sure_btn->setEnabled(!pending && !profile["relationship_active"].toBool());
-            if (pending)
-                findChild<QLabel*>("socialStatus")->setText(tr("申请已发送，等待对方处理"));
+            if (pending) findChild<QLabel*>("socialStatus")->setText(tr("申请已发送，等待对方处理"));
         });
 }
 
@@ -64,22 +60,15 @@ void ApplyFriendDialog::setSearchInfo(std::shared_ptr<SearchInfo> si) {
  * 发送tcp添加好友请求
  */
 void ApplyFriendDialog::sendApplySure() {
-    if (_busy || !_si || _revision.isEmpty())
-        return;
+    if (_busy || !_si || _revision.isEmpty()) return;
     _busy = true;
     ui->sure_btn->setEnabled(false);
     for (auto* edit : {ui->send_apply_user_description_edit, ui->send_apply_user_back_edit})
         edit->setEnabled(false);
-    const QJsonObject request{
-        {"operation", "apply"},
-        {"target_uid", _si->_uid},
-        {"expected_revision", _revision},
+    const QJsonObject request{{"operation", "apply"}, {"target_uid", _si->_uid}, {"expected_revision", _revision},
         {"description", ui->send_apply_user_description_edit->text()},
         {"backname", ui->send_apply_user_back_edit->text()}};
-    TcpMgr::instance()->socialRequest(
-        ID_FRIEND_MANAGE_REQ,
-        request,
-        this,
+    TcpMgr::instance()->socialRequest(ID_FRIEND_MANAGE_REQ, request, this,
         /** @brief 成功后关闭表单，失败保留输入并明确显示结果。 */
         [this](QJsonObject response) {
             _busy = false;

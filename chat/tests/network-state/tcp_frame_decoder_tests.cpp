@@ -75,28 +75,23 @@ int main(int argc, char* argv[]) {
         TcpFrameDecoder expanded;
         const QByteArray body(8192, 'x');
         const auto frames = expanded.append(frame(id, body));
-        passed &= expect(
-            frames.size() == 1 && frames[0].body == body,
+        passed &= expect(frames.size() == 1 && frames[0].body == body,
             "login or acknowledgement response rejected at its boundary");
     }
     TcpFrameDecoder history;
     const QByteArray historyBody(65535, 'x');
     const auto historyFrames = history.append(frame(1028, historyBody));
-    passed &= expect(
-        historyFrames.size() == 1 && historyFrames[0].body == historyBody,
+    passed &= expect(historyFrames.size() == 1 && historyFrames[0].body == historyBody,
         "history response did not preserve the full uint16 body");
     TcpFrameDecoder bounded;
     TcpFrameDecoder social;
     const QByteArray socialBody(8192, 's');
     const auto socialFrames = social.append(frame(1047, socialBody));
-    passed &= expect(
-        socialFrames.size() == 1 && socialFrames[0].body == socialBody,
+    passed &= expect(socialFrames.size() == 1 && socialFrames[0].body == socialBody,
         "social directory response did not preserve its bounded body");
-    passed &= expect(
-        social.append(frame(1047, QByteArray(8193, 's'))).isEmpty() && social.hasError(),
+    passed &= expect(social.append(frame(1047, QByteArray(8193, 's'))).isEmpty() && social.hasError(),
         "social directory accepted an oversized body");
-    passed &= expect(
-        bounded.append(frame(1018, QByteArray(2049, 'x'))).isEmpty() && bounded.hasError(),
+    passed &= expect(bounded.append(frame(1018, QByteArray(2049, 'x'))).isEmpty() && bounded.hasError(),
         "non-history response exceeded its existing bound");
     return passed ? 0 : 1;
 }

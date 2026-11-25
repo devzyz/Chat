@@ -29,6 +29,7 @@ int main() {
             }
         }
         {
+            // 这个池只靠析构关闭，离开作用域后再检查关闭耗时。
             MysqlConnectionPool pool("", "", "", "", 0);
         }
         if (std::chrono::steady_clock::now() - started > 2s) {

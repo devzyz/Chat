@@ -72,8 +72,7 @@ inline void Verify(sql::Connection& connection) {
         const std::unique_ptr<sql::ResultSet> counter(
             statement->executeQuery("SELECT COUNT(*)=1 AND MIN(id)>=COALESCE((SELECT MAX(uid) FROM user),0) "
                                     "AND MAX(id)<=2147483647 FROM user_id"));
-        if (!counter->next() || !counter->getBoolean(1))
-            throw std::runtime_error("invalid_uid_counter");
+        if (!counter->next() || !counter->getBoolean(1)) throw std::runtime_error("invalid_uid_counter");
     } catch (const std::exception&) {
         // Driver diagnostics may contain endpoints or data. Startup has one safe error boundary.
         throw std::runtime_error("schema_verification_failed");

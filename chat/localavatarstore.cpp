@@ -58,8 +58,7 @@ AvatarResult LocalAvatarStore::load(const QString& environment, int uid) const {
                     .filePath(QStringLiteral("avatars/v1/%1/%2.png").arg(QString::fromLatin1(key)).arg(uid));
             if (QFileInfo::exists(legacy)) {
                 auto result = readImage(legacy);
-                if (result.error.isEmpty())
-                    result.error = save(environment, uid, result.image);
+                if (result.error.isEmpty()) result.error = save(environment, uid, result.image);
                 return result; // Preserve the legacy file even after a successful migration.
             }
         }
@@ -73,8 +72,7 @@ QString LocalAvatarStore::save(const QString& environment, int uid, const QImage
         return QObject::tr("请先选择有效图片");
     }
     const QString fileName = path(environment, uid);
-    if (fileName.isEmpty())
-        return QObject::tr("无效的用户数据目录");
+    if (fileName.isEmpty()) return QObject::tr("无效的用户数据目录");
     if (!QDir().mkpath(QFileInfo(fileName).absolutePath())) {
         return QObject::tr("无法创建头像保存目录");
     }

@@ -19,12 +19,19 @@
  ***************************************************/
 
 QT_BEGIN_NAMESPACE
+
 namespace Ui {
 class MainWindow;
 }
+
 QT_END_NAMESPACE
 
-enum UIStatus { LOGIN_UI, REGISTER_UI, RESET_UI, CHAT_UI };
+enum UIStatus {
+    LOGIN_UI,
+    REGISTER_UI,
+    RESET_UI,
+    CHAT_UI
+};
 
 /** @brief 管理认证页面切换和账号会话根对象的生命周期。 */
 class MainWindow : public QMainWindow {

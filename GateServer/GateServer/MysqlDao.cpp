@@ -11,17 +11,16 @@ public:
     /** @brief 接管池连接；无效连接拒绝认证。 */
     CredentialLease(MysqlConnectionPool& pool, std::unique_ptr<SqlConnection> connection)
         : pool_(pool), connection_(std::move(connection)) {
-        if (!connection_)
-            throw std::runtime_error("credential storage unavailable");
+        if (!connection_) throw std::runtime_error("credential storage unavailable");
     }
+
     /** @brief 查询账号 UID 后取得跨 Gate 实例共享的锁；邮箱大小写由数据库规则解析。 */
     int Lock(const std::string& email) {
         std::unique_ptr<sql::PreparedStatement> lookup(Db().prepareStatement("SELECT uid FROM user WHERE email"
                                                                              "=?"));
         lookup->setString(1, email);
         std::unique_ptr<sql::ResultSet> user(lookup->executeQuery());
-        if (!user->next())
-            return 0;
+        if (!user->next()) return 0;
         const int uid = user->getInt(1);
         user.reset();
         lookup.reset();
@@ -29,15 +28,16 @@ public:
         std::unique_ptr<sql::PreparedStatement> acquire(Db().prepareStatement("SELECT GET_LOCK(?,1)"));
         acquire->setString(1, lock_);
         std::unique_ptr<sql::ResultSet> result(acquire->executeQuery());
-        if (!result->next() || result->getInt(1) != 1)
-            throw std::runtime_error("credential lock unavailable");
+        if (!result->next() || result->getInt(1) != 1) throw std::runtime_error("credential lock unavailable");
         locked_ = true;
         return uid;
     }
+
     /** @brief 仅在租约存活期间借出独占 SQL 连接。 */
     sql::Connection& Db() {
         return *connection_->_con;
     }
+
     /** @brief 释放账号锁后归还连接；不确定锁状态时销毁连接，不向池泄漏会话锁。 */
     ~CredentialLease() {
         try {
@@ -45,8 +45,7 @@ public:
                 std::unique_ptr<sql::PreparedStatement> release(Db().prepareStatement("SELECT RELEASE_LOCK(?)"));
                 release->setString(1, lock_);
                 std::unique_ptr<sql::ResultSet> result(release->executeQuery());
-                if (!result->next() || (locked_ && result->getInt(1) != 1))
-                    connection_->_con.reset();
+                if (!result->next() || (locked_ && result->getInt(1) != 1)) connection_->_con.reset();
             }
         } catch (...) {
             connection_->_con.reset();
@@ -62,11 +61,8 @@ private:
 };
 
 /** @brief 使用有限连接和读写期限建立 JDBC 连接，禁止自动重连重放写操作。 */
-std::unique_ptr<sql::Connection> ConnectGateMysql(
-    const std::string& url,
-    const std::string& user,
-    const std::string& password,
-    const std::string& schema) {
+std::unique_ptr<sql::Connection> ConnectGateMysql(const std::string& url, const std::string& user,
+    const std::string& password, const std::string& schema) {
     sql::ConnectOptionsMap options;
     options["hostName"] = sql::SQLString(url);
     options["userName"] = sql::SQLString(user);
@@ -81,12 +77,8 @@ std::unique_ptr<sql::Connection> ConnectGateMysql(
 }
 }
 
-MysqlConnectionPool::MysqlConnectionPool(
-    const std::string& url,
-    const std::string& user,
-    const std::string& pass,
-    const std::string& schema,
-    int poolsize)
+MysqlConnectionPool::MysqlConnectionPool(const std::string& url, const std::string& user, const std::string& pass,
+    const std::string& schema, int poolsize)
     // 用有限连接及读写期限创建 Gate 数据库连接。
     try
     : _connections(std::make_unique<chat_mysql::ConnectionPool<>>(poolsize, [=] {
@@ -107,8 +99,7 @@ std::unique_ptr<SqlConnection> MysqlConnectionPool::GetConnection() {
 }
 
 void MysqlConnectionPool::ReturnConnection(std::unique_ptr<SqlConnection> connection) noexcept {
-    if (connection)
-        _connections->Return(std::move(connection->_con));
+    if (connection) _connections->Return(std::move(connection->_con));
 }
 
 void MysqlConnectionPool::Close() {
@@ -164,11 +155,7 @@ int MysqlDao::RegUser(const std::string& name, const std::string& email, const s
         }
         return -1;
     } catch (sql::SQLException& e) {
-        SPDLOG_ERROR(
-            "mysql RegUser failed, name={}, error={}, code={}, state={}",
-            name,
-            e.what(),
-            e.getErrorCode(),
+        SPDLOG_ERROR("mysql RegUser failed, name={}, error={}, code={}, state={}", name, e.what(), e.getErrorCode(),
             e.getSQLState().c_str());
         return -1;
     }
@@ -213,20 +200,15 @@ bool MysqlDao::CheckEmail(const std::string& username, const std::string& email)
     }
 }
 
-bool MysqlDao::UpdatePassword(
-    const std::string& username,
-    const std::string& password,
-    const std::string& email,
+bool MysqlDao::UpdatePassword(const std::string& username, const std::string& password, const std::string& email,
     const std::function<bool(int)>& revoke) {
     try {
         CredentialLease lease(*_pool, _pool->GetConnection());
         const int uid = lease.Lock(email);
-        if (uid <= 0)
-            return false;
+        if (uid <= 0) return false;
 
         // 锁覆盖 Token 撤销和密码写入；撤销先失败则密码保持原值，SQL 失败则保守地保持已撤销。
-        if (!revoke(uid))
-            return false;
+        if (!revoke(uid)) return false;
         // 准备查询语句
         std::unique_ptr<sql::PreparedStatement> pstmt(
             lease.Db().prepareStatement("UPDATE user SET password = ? WHERE name = ? AND email = ? "));
@@ -250,8 +232,7 @@ bool MysqlDao::UpdatePassword(
 bool MysqlDao::CheckPassword(const std::string& email, const std::string& password, UserInfo& userinfo) {
     try {
         auto lease = std::make_shared<CredentialLease>(*_pool, _pool->GetConnection());
-        if (lease->Lock(email) <= 0)
-            return false;
+        if (lease->Lock(email) <= 0) return false;
         std::unique_ptr<sql::PreparedStatement> pstmt(
             lease->Db().prepareStatement("SELECT * FROM user WHERE email = ?"));
 
@@ -284,8 +265,7 @@ bool MysqlDao::CheckPassword(const std::string& email, const std::string& passwo
             upgrade->setString(1, authentication::HashPassword(password));
             upgrade->setInt(2, userinfo.uid);
             upgrade->setString(3, origin_password);
-            if (upgrade->executeUpdate() != 1)
-                return false;
+            if (upgrade->executeUpdate() != 1) return false;
         }
         userinfo.credential_lease = std::move(lease);
         return true;

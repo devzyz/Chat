@@ -24,48 +24,38 @@ namespace {
 /** 连接显式指定的隔离测试库并限制锁等待时间，未指定端点则拒绝。 */
 std::unique_ptr<sql::Connection> Connect() {
     const auto* endpoint = std::getenv("MESSAGE_SYNC_TEST_MYSQL");
-    if (!endpoint)
-        throw std::runtime_error("requires isolated MESSAGE_SYNC_TEST_MYSQL");
+    if (!endpoint) throw std::runtime_error("requires isolated MESSAGE_SYNC_TEST_MYSQL");
     std::unique_ptr<sql::Connection> connection(sql::mysql::get_mysql_driver_instance()->connect(endpoint, "root", ""));
     connection->setSchema("message_sync_test");
     std::unique_ptr<sql::Statement> statement(connection->createStatement());
     statement->execute("SET SESSION innodb_lock_wait_timeout=5");
     return connection;
 }
+
 /** 为样本名称分配进程内稳定的合法 UUID。 */
 std::string Uuid(const std::string& name) {
     static std::map<std::string, int> identifiers;
-    if (!identifiers.count(name))
-        identifiers[name] = static_cast<int>(identifiers.size()) + 1;
+    if (!identifiers.count(name)) identifiers[name] = static_cast<int>(identifiers.size()) + 1;
     std::ostringstream value;
     value << "00000000-0000-4000-8000-" << std::setfill('0') << std::setw(12) << identifiers[name];
     return value.str();
 }
+
 /** 经生产提交器保存文本批次并返回消息编号，提交失败抛异常。 */
-std::vector<int> SaveText(
-    sql::Connection& connection,
-    int sender,
-    int recipient,
-    int chat,
+std::vector<int> SaveText(sql::Connection& connection, int sender, int recipient, int chat,
     message_commit::Batch messages) {
     for (auto& message : messages)
         message.first = Uuid(message.first);
     message_commit::MySqlMessageCommitAdapter adapter(connection);
-    const auto result = message_commit::Commit(
-        adapter,
-        {sender},
-        sender,
-        recipient,
-        chat,
-        messages,
+    const auto result = message_commit::Commit(adapter, {sender}, sender, recipient, chat, messages,
         std::chrono::steady_clock::now() + std::chrono::seconds(5));
-    if (!result.IsSuccess())
-        throw std::runtime_error("text commit failed");
+    if (!result.IsSuccess()) throw std::runtime_error("text commit failed");
     std::vector<int> ids;
     for (const auto& item : result.items)
         ids.push_back(item.message_id);
     return ids;
 }
+
 /** 为固定参与者读取受字节上限约束的增量页。 */
 Json::Value Page(sql::Connection& connection, int chat, std::int64_t after, std::size_t limit = 2048) {
     Json::Value result;
@@ -132,13 +122,11 @@ TEST(MessageSync, IncrementalByteBoundedPagesAndResourceIdentity) {
     std::unique_ptr<sql::Statement> state(connection->createStatement());
     state->execute("UPDATE private_chat SET relationship_active=FALSE,relationship_revision=2 WHERE chat_id=103");
     EXPECT_TRUE(catalog.CanRead(10, resourceId));
-    EXPECT_EQ(
-        catalog.CommitMessage(7, 10, 103, Uuid("resource"), resourceId).id,
+    EXPECT_EQ(catalog.CommitMessage(7, 10, 103, Uuid("resource"), resourceId).id,
         resource["msgs"][0]["message_id"].asInt());
     EXPECT_THROW(catalog.CommitMessage(7, 10, 103, Uuid("resource-deleted"), resourceId), messaging::PrivateSendDenied);
     state->execute("UPDATE private_chat SET relationship_active=TRUE,relationship_revision=3 WHERE chat_id=103");
-    EXPECT_THROW(
-        catalog.CommitMessage(7, 10, 103, Uuid("resource-deleted"), resourceId, 0, 1),
+    EXPECT_THROW(catalog.CommitMessage(7, 10, 103, Uuid("resource-deleted"), resourceId, 0, 1),
         messaging::PrivateSendDenied);
     EXPECT_GT(catalog.CommitMessage(7, 10, 103, Uuid("resource-current"), resourceId, 0, 3).id, 0);
     EXPECT_TRUE(catalog.CanRead(10, resourceId));
@@ -179,13 +167,8 @@ TEST(MessageSync, CursorCannotPassAnUncommittedWriter) {
 
 namespace {
 /** 构造并执行回执上报或 revision 同步请求，返回协议响应。 */
-Json::Value Receipt(
-    sql::Connection& connection,
-    int uid,
-    int chat,
-    const std::vector<int>& ids,
-    const std::string& level,
-    std::int64_t after = 0) {
+Json::Value Receipt(sql::Connection& connection, int uid, int chat, const std::vector<int>& ids,
+    const std::string& level, std::int64_t after = 0) {
     Json::Value request;
     request["version"] = 1;
     request["chat_id"] = chat;
@@ -198,8 +181,9 @@ Json::Value Receipt(
             item["level"] = level;
             request["items"].append(item);
         }
-    } else
+    } else {
         request["after_revision"] = std::to_string(after);
+    }
     Json::Value response;
     response["version"] = 1;
     response["chat_id"] = chat;
@@ -253,8 +237,7 @@ TEST(MessageSync, ReceiptPageCannotSkipAnUpgrade) {
     for (int i = 0; i < 10 && page["load_more"].asBool(); ++i) {
         page = Receipt(*connection, 7, 102, {}, "", messaging::ReceiptRevision(page["next_revision"]));
         for (const auto& row : page["items"])
-            if (row["message_id"].asInt() == ids[0] && row["level"].asString() == "read")
-                saw_upgrade = true;
+            if (row["message_id"].asInt() == ids[0] && row["level"].asString() == "read") saw_upgrade = true;
         EXPECT_LE(messaging::CompactJson(page).size(), 2048);
     }
     EXPECT_TRUE(saw_upgrade);
@@ -287,8 +270,7 @@ TEST(MessageSync, GroupMembershipAndCommitOrdering) {
     messaging::LockConversation(*first, 301, 8);
     statement->execute(
         "INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES(301,8,0,'held group',0)");
-    auto reading = std::async(
-        std::launch::async,
+    auto reading = std::async(std::launch::async,
         /** 在另一连接补拉群历史，必须等待当前写事务提交。 */
         [] {
             auto second = Connect();
@@ -317,21 +299,13 @@ TEST(MessageSync, GroupMembershipAndCommitOrdering) {
 TEST(MessageSync, DynamicGroupLifecycleAndResources) {
     auto db = Connect();
     messaging::GroupQuery setup(*db, "INSERT INTO chat(chat_id,type) VALUES(302,'group')", {}, false);
-    messaging::GroupQuery group(
-        *db,
+    messaging::GroupQuery group(*db,
         "INSERT INTO group_chat(chat_id,name,owner_uid,creator_uid,original_name) VALUES(302,'dynamic',7,7,'dynamic')",
-        {},
-        false);
-    messaging::GroupQuery members(
-        *db,
-        "INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(302,7,1),(302,8,0)",
-        {},
-        false);
-    messaging::GroupQuery friends(
-        *db,
-        "INSERT IGNORE INTO friend(self_id,other_id,backname) VALUES(7,9,''),(7,10,'')",
-        {},
-        false);
+        {}, false);
+    messaging::GroupQuery members(*db, "INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(302,7,1),(302,8,0)",
+        {}, false);
+    messaging::GroupQuery friends(*db, "INSERT IGNORE INTO friend(self_id,other_id,backname) VALUES(7,9,''),(7,10,'')",
+        {}, false);
     message_commit::MySqlMessageCommitAdapter adapter(*db);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
     // 按当前群成员代次提交不可变 UUID 的文字。
@@ -417,7 +391,7 @@ TEST(MessageSync, DynamicGroupLifecycleAndResources) {
     EXPECT_TRUE(history["msgs"].empty());
     message_commit::MySqlMessageCommitAdapter stale(*db);
     EXPECT_FALSE(message_commit::Commit(stale, {9}, 9, 0, 302, {{Uuid("stale-epoch"), "stale"}}, deadline, true, {0, 1})
-                     .IsSuccess());
+            .IsSuccess());
 
     resource::ResourceCatalog catalog(std::getenv("MESSAGE_SYNC_TEST_MYSQL"), "root", "", "message_sync_test");
     catalog.Publish("dynamic-resource", 7, "file.txt", "application/octet-stream", 3, std::string(64, 'a'));
@@ -467,10 +441,8 @@ TEST(MessageSync, DynamicGroupLifecycleAndResources) {
 TEST(MessageSync, ConcurrentGroupVersionsSerialize) {
     auto db = Connect();
     messaging::GroupQuery chat(*db, "INSERT INTO chat(chat_id,type) VALUES(303,'group')", {}, false);
-    messaging::GroupQuery group(
-        *db,
-        "INSERT INTO group_chat(chat_id,name,owner_uid,creator_uid,original_name) VALUES(303,'race',7,7,'race')",
-        {},
+    messaging::GroupQuery group(*db,
+        "INSERT INTO group_chat(chat_id,name,owner_uid,creator_uid,original_name) VALUES(303,'race',7,7,'race')", {},
         false);
     messaging::GroupQuery member(*db, "INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(303,7,1)", {}, false);
     Json::Value first;
@@ -510,29 +482,17 @@ TEST(MessageSync, ConcurrentGroupVersionsSerialize) {
 TEST(MessageSync, MembershipChangesWaitForCommittedMessages) {
     auto db = Connect();
     messaging::GroupQuery chat(*db, "INSERT INTO chat(chat_id,type) VALUES(304,'group')", {}, false);
-    messaging::GroupQuery group(
-        *db,
-        "INSERT INTO group_chat(chat_id,name,owner_uid) VALUES(304,'ordering',7)",
-        {},
+    messaging::GroupQuery group(*db, "INSERT INTO group_chat(chat_id,name,owner_uid) VALUES(304,'ordering',7)", {},
         false);
-    messaging::GroupQuery member(
-        *db,
-        "INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(304,7,1),(304,8,0)",
-        {},
-        false);
-    messaging::GroupQuery friendship(
-        *db,
-        "INSERT IGNORE INTO friend(self_id,other_id,backname) VALUES(7,9,'')",
-        {},
+    messaging::GroupQuery member(*db, "INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(304,7,1),(304,8,0)",
+        {}, false);
+    messaging::GroupQuery friendship(*db, "INSERT IGNORE INTO friend(self_id,other_id,backname) VALUES(7,9,'')", {},
         false);
     for (const auto* operation : {"add", "remove"}) {
         db->setAutoCommit(false);
         messaging::LockGroup(*db, 304, 7);
-        messaging::GroupQuery pending(
-            *db,
-            "INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES(304,7,0,'held',0)",
-            {},
-            false);
+        messaging::GroupQuery pending(*db,
+            "INSERT INTO chat_message(chat_id,send_id,recv_id,content,status) VALUES(304,7,0,'held',0)", {}, false);
         Json::Value request;
         request["chat_id"] = 304;
         request["request_id"] = Uuid(std::string("order-") + operation);
@@ -569,17 +529,9 @@ TEST(MessageSync, MembershipChangesWaitForCommittedMessages) {
         } else {
             EXPECT_THROW(messaging::SyncPage(*db, 9, 304, 0, page, 2048), std::exception);
             message_commit::MySqlMessageCommitAdapter sender(*db);
-            EXPECT_FALSE(message_commit::Commit(
-                             sender,
-                             {9},
-                             9,
-                             0,
-                             304,
-                             {{Uuid("after-remove"), "denied"}},
-                             std::chrono::steady_clock::now() + std::chrono::seconds(5),
-                             true,
-                             {0, 1})
-                             .IsSuccess());
+            EXPECT_FALSE(message_commit::Commit(sender, {9}, 9, 0, 304, {{Uuid("after-remove"), "denied"}},
+                std::chrono::steady_clock::now() + std::chrono::seconds(5), true, {0, 1})
+                    .IsSuccess());
         }
     }
     messaging::GroupQuery cleanup(*db, "DELETE FROM friend WHERE self_id=7 AND other_id=9", {}, false);
@@ -589,16 +541,10 @@ TEST(MessageSync, MembershipChangesWaitForCommittedMessages) {
 TEST(MessageSync, TransferAndLeaveCannotRemoveTheOwner) {
     auto db = Connect();
     messaging::GroupQuery chat(*db, "INSERT INTO chat(chat_id,type) VALUES(305,'group')", {}, false);
-    messaging::GroupQuery group(
-        *db,
-        "INSERT INTO group_chat(chat_id,name,owner_uid) VALUES(305,'owner race',7)",
-        {},
+    messaging::GroupQuery group(*db, "INSERT INTO group_chat(chat_id,name,owner_uid) VALUES(305,'owner race',7)", {},
         false);
-    messaging::GroupQuery member(
-        *db,
-        "INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(305,7,1),(305,8,0)",
-        {},
-        false);
+    messaging::GroupQuery member(*db, "INSERT INTO group_chat_member(chat_id,user_id,role) VALUES(305,7,1),(305,8,0)",
+        {}, false);
     Json::Value transfer;
     transfer["chat_id"] = 305;
     transfer["request_id"] = Uuid("owner-transfer-race");
@@ -625,8 +571,7 @@ TEST(MessageSync, TransferAndLeaveCannotRemoveTheOwner) {
     auto one = std::async(std::launch::async, run, 7, transfer), two = std::async(std::launch::async, run, 8, leave);
     start.set_value();
     EXPECT_NE(one.get(), two.get());
-    messaging::GroupQuery owners(
-        *db,
+    messaging::GroupQuery owners(*db,
         "SELECT COUNT(*) FROM group_chat g JOIN group_chat_member m ON m.chat_id=g.chat_id "
         "WHERE g.chat_id=305 AND m.state='active' AND m.role=1 AND m.user_id=g.owner_uid",
         {});

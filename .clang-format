@@ -6,17 +6,28 @@ UseTab: Never
 ColumnLimit: 120
 LineEnding: LF
 PointerAlignment: Left
-AlignAfterOpenBracket: AlwaysBreak
-BinPackParameters: false
-BinPackArguments: false
+AlignAfterOpenBracket: DontAlign
+BinPackParameters: true
+BinPackArguments: true
 AllowAllParametersOfDeclarationOnNextLine: false
 AllowAllArgumentsOnNextLine: false
 PenaltyReturnTypeOnItsOwnLine: 10000
+BreakBeforeBraces: Attach
 AllowShortFunctionsOnASingleLine: Empty
-AllowShortLambdasOnASingleLine: None
+AllowShortLambdasOnASingleLine: Empty
+AllowShortBlocksOnASingleLine: Empty
+AllowShortEnumsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: WithoutElse
+KeepEmptyLines:
+  AtStartOfBlock: false
 SortIncludes: Never
 SortUsingDeclarations: Never
 FixNamespaceComments: false
 ReflowComments: false
 BreakStringLiterals: false
+# clang-format models the statement passed to these GoogleTest assertions as a
+# callable body so that a braced statement is formatted as code.
+Macros:
+  - 'EXPECT_NO_THROW(body)=invoke([] body)'
+  - 'EXPECT_THROW(body, error)=invoke([] body, error)'
 StatementMacros: [Q_UNUSED, QT_REQUIRE_VERSION, Q_OBJECT, Q_GADGET, Q_DISABLE_COPY, Q_DECLARE_METATYPE, Q_PROPERTY]

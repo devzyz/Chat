@@ -29,9 +29,7 @@ TEST(AsioPoolContractTests, PostedTaskCompletesBeforeScopedDestruction) {
         });
 
         std::unique_lock<std::mutex> lock(state->mutex);
-        ASSERT_TRUE(state->condition.wait_for(
-            lock,
-            std::chrono::seconds(2),
+        ASSERT_TRUE(state->condition.wait_for(lock, std::chrono::seconds(2),
             // 检测测试任务是否恰好完成一次。
             [state]() {
                 return state->completed.load() == 1;

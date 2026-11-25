@@ -125,8 +125,7 @@ void LocalAvatarTests::persistsAndIsolatesAccounts() {
     QVERIFY(reopened.path("server-a", 1).endsWith("/users/1/static/head/1/current.png"));
     QVERIFY(UserStoragePaths::dataRoot().startsWith(QCoreApplication::applicationDirPath() + "/"));
     QVERIFY(UserStoragePaths::accountRoot(dir.path(), "server", 0).isEmpty());
-    QCOMPARE(
-        UserStoragePaths::environmentKey("http://localhost:8080/"),
+    QCOMPARE(UserStoragePaths::environmentKey("http://localhost:8080/"),
         UserStoragePaths::environmentKey("http://localhost:8080"));
     const auto hash = QCryptographicHash::hash(QByteArray("legacy-server"), QCryptographicHash::Sha256).toHex();
     const auto legacy = dir.filePath("legacy/avatars/v1/" + QString::fromLatin1(hash) + "/1.png");
@@ -296,13 +295,8 @@ void LocalAvatarTests::dialogConfirmsAndCancels() {
     const QPoint center = preview->rect().center();
     QTest::mousePress(preview, Qt::LeftButton, Qt::NoModifier, center);
     const QPointF destination = center - QPoint(2000, 0);
-    QMouseEvent move(
-        QEvent::MouseMove,
-        destination,
-        preview->mapToGlobal(destination.toPoint()),
-        Qt::NoButton,
-        Qt::LeftButton,
-        Qt::NoModifier);
+    QMouseEvent move(QEvent::MouseMove, destination, preview->mapToGlobal(destination.toPoint()), Qt::NoButton,
+        Qt::LeftButton, Qt::NoModifier);
     QCoreApplication::sendEvent(preview, &move);
     QTest::mouseRelease(preview, Qt::LeftButton, Qt::NoModifier, center);
     QCOMPARE(preview->sourceRect(), QRectF(500, 50, 100, 100));
@@ -374,25 +368,13 @@ void LocalAvatarTests::cropWidgetDragsAndZooms() {
     const QPoint center = widget.rect().center();
     QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, center);
     const QPointF destination = QPointF(center) + QPointF(widget.frameRect().width() / 2, 0);
-    QMouseEvent move(
-        QEvent::MouseMove,
-        destination,
-        widget.mapToGlobal(destination.toPoint()),
-        Qt::NoButton,
-        Qt::LeftButton,
-        Qt::NoModifier);
+    QMouseEvent move(QEvent::MouseMove, destination, widget.mapToGlobal(destination.toPoint()), Qt::NoButton,
+        Qt::LeftButton, Qt::NoModifier);
     QCoreApplication::sendEvent(&widget, &move);
     QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, center);
     QCOMPARE(widget.sourceRect(), QRectF(200, 50, 100, 100));
-    QWheelEvent wheel(
-        center,
-        widget.mapToGlobal(center),
-        {},
-        QPoint(0, 120),
-        Qt::NoButton,
-        Qt::NoModifier,
-        Qt::NoScrollPhase,
-        false);
+    QWheelEvent wheel(center, widget.mapToGlobal(center), {}, QPoint(0, 120), Qt::NoButton, Qt::NoModifier,
+        Qt::NoScrollPhase, false);
     QCoreApplication::sendEvent(&widget, &wheel);
     QCOMPARE(widget.zoom(), 210);
     widget.setZoom(100);

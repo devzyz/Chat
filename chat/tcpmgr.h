@@ -20,6 +20,7 @@ public:
     bool supportsSocial() const {
         return _social;
     }
+
     /** @brief 发送有编号和十秒期限的社交请求，接收者销毁或换账号后丢弃回调。 */
     void socialRequest(ReqId id, QJsonObject request, QObject* context, std::function<void(QJsonObject)> callback);
     /** @brief 串行分页刷新资料、关系和申请；已有刷新时合并请求。 */
@@ -34,10 +35,12 @@ public:
     void beginSession();
     /** @brief 停止消息服务并重置连接；expectedClose 为 true 时暂停待发送消息。 */
     void resetConnection(bool expectedClose);
+
     /** @brief 返回当前认证标志，用于退出失败后判断是否需要恢复连接。 */
     bool isAuthenticated() const {
         return _authenticated;
     }
+
     /** @brief 复制当前账号的恢复端点与 Token，仅存于当前进程内存。 */
     ServerInfo connectionInfo() const;
 
@@ -102,12 +105,14 @@ private:
     void initHandlers();
 
     QMap<ReqId, std::function<void(ReqId id, int len, QByteArray)>> _handlers;
+
     /** @brief 保存一次有界社交请求的接收对象与回复类型。 */
     struct SocialPending {
         ReqId response;
         QPointer<QObject> context;
         std::function<void(QJsonObject)> callback;
     };
+
     /** @brief 在同一刷新轮次继续下一页，落盘后才推进游标。 */
     void loadSocialPage(QString kind, QString after = "0");
     QHash<QString, SocialPending> _socialPending;

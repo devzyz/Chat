@@ -8,10 +8,8 @@
 #include "CSession.h"
 #include "LogMgr.h"
 
-ChatServiceImpl::ChatServiceImpl(
-    std::shared_ptr<UserSessionDirectory> directory,
-    std::shared_ptr<SessionLifecycleCoordinator> lifecycle,
-    std::shared_ptr<UserPresenceStore> presence,
+ChatServiceImpl::ChatServiceImpl(std::shared_ptr<UserSessionDirectory> directory,
+    std::shared_ptr<SessionLifecycleCoordinator> lifecycle, std::shared_ptr<UserPresenceStore> presence,
     std::shared_ptr<DependencyExecutor> dependencies)
     : _dependencies(std::move(dependencies)), _directory(std::move(directory)), _lifecycle(std::move(lifecycle)),
       _presence(std::move(presence)) {}
@@ -24,48 +22,44 @@ Status ChatServiceImpl::AuthorizeRecipient(ServerContext* context, int uid, std:
     using namespace std::chrono;
     const auto deadline =
         context->deadline() == system_clock::time_point::max() ? system_clock::now() + seconds(5) : context->deadline();
-    if (!CanDeliver(context))
-        return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
+    if (!CanDeliver(context)) return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
     try {
         // worker 只返回候选会话，不捕获 ServerContext、请求或响应，也不向 socket 写入。
         auto result = _dependencies->SubmitFuture(
             ExternalTask::Redis,
             [directory = _directory, presence = _presence, uid, deadline] {
-                if (system_clock::now() >= deadline)
-                    return std::shared_ptr<CSession>{};
+                if (system_clock::now() >= deadline) return std::shared_ptr<CSession>{};
                 return FindAuthorizedRecipient(*directory, *presence, uid);
             },
             RedisAdmission::Routing);
         while (result.wait_until(std::min(deadline, system_clock::now() + milliseconds(25))) !=
                std::future_status::ready) {
-            if (system_clock::now() >= deadline)
+            if (system_clock::now() >= deadline) {
                 return Status(grpc::StatusCode::DEADLINE_EXCEEDED, "authorization timed out");
-            if (!CanDeliver(context))
-                return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
+            }
+            if (!CanDeliver(context)) return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
         }
-        if (system_clock::now() >= deadline)
+        if (system_clock::now() >= deadline) {
             return Status(grpc::StatusCode::DEADLINE_EXCEEDED, "authorization timed out");
-        if (!CanDeliver(context))
-            return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
+        }
+        if (!CanDeliver(context)) return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
         auto candidate = result.get();
-        if (candidate && !candidate->Closing() && _directory->IsCurrent(uid, candidate->Id()))
+        if (candidate && !candidate->Closing() && _directory->IsCurrent(uid, candidate->Id())) {
             session = std::move(candidate);
+        }
         return Status::OK;
     } catch (...) {
         return Status(grpc::StatusCode::UNAVAILABLE, "authorization unavailable");
     }
 }
 
-Status ChatServiceImpl::NotifyOtherAddFriend(
-    ServerContext* context,
-    const AddFriendReq* request,
+Status ChatServiceImpl::NotifyOtherAddFriend(ServerContext* context, const AddFriendReq* request,
     AddFriendRsp* response) {
     // 查看是否在本服务器，因为有可能已经离线了
     auto touid = request->touid();
     std::shared_ptr<CSession> session;
     auto status = AuthorizeRecipient(context, touid, session);
-    if (!status.ok())
-        return status;
+    if (!status.ok()) return status;
 
     // 设置返回值
     response->set_error(ErrorCodes::Success);
@@ -96,23 +90,17 @@ Status ChatServiceImpl::NotifyOtherAddFriend(
     return_value["description"] = request->description();
     return_value["backname"] = request->backname();
 
-    if (!CanDeliver(context))
-        return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
+    if (!CanDeliver(context)) return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
     session->Send({MSG_NOTIFY_ADD_FRIEND_REQ, return_value.toStyledString()});
 
     return Status::OK;
 }
 
 // 别的服务器通知本服务其进行认证信息
-Status ChatServiceImpl::NotifyOtherAuthFriend(
-    ServerContext* context,
-    const AuthFriendReq* request,
+Status ChatServiceImpl::NotifyOtherAuthFriend(ServerContext* context, const AuthFriendReq* request,
     AuthFriendRsp* response) {
-    SPDLOG_DEBUG(
-        "notify auth friend request, applyuid={}, authuid={}, chatid={}",
-        request->applyuid(),
-        request->authuid(),
-        request->chatid());
+    SPDLOG_DEBUG("notify auth friend request, applyuid={}, authuid={}, chatid={}", request->applyuid(),
+        request->authuid(), request->chatid());
     // 查看是否在本服务器，因为有可能已经离线了
     auto applyuid = request->applyuid();
     auto authuid = request->authuid();
@@ -120,8 +108,7 @@ Status ChatServiceImpl::NotifyOtherAuthFriend(
     // 由认证人发送到申请人
     std::shared_ptr<CSession> session;
     auto status = AuthorizeRecipient(context, applyuid, session);
-    if (!status.ok())
-        return status;
+    if (!status.ok()) return status;
 
     // 设置返回值
     response->set_error(ErrorCodes::Success);
@@ -187,30 +174,22 @@ Status ChatServiceImpl::NotifyOtherAuthFriend(
     SPDLOG_DEBUG("auth friend notify prepared, applyuid={}, authuid={}, chatid={}", applyuid, authuid, chatid);
 
     std::string notify_str = messaging::BoundedNotification(notify);
-    if (!CanDeliver(context))
-        return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
+    if (!CanDeliver(context)) return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
     session->Send({MSG_NOTIFY_AUTH_FRIEND_REQ, notify_str});
     return Status::OK;
 }
 
 // 别的服务器通知接收数据
-Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(
-    ServerContext* context,
-    const TextChatMsgReq* request,
+Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(ServerContext* context, const TextChatMsgReq* request,
     TextChatMsgRsp* response) {
-    SPDLOG_DEBUG(
-        "notify text chat message request, from_uid={}, to_uid={}, chat_id={}, msg_count={}",
-        request->fromuid(),
-        request->touid(),
-        request->chatid(),
-        request->textmsgs_size());
+    SPDLOG_DEBUG("notify text chat message request, from_uid={}, to_uid={}, chat_id={}, msg_count={}",
+        request->fromuid(), request->touid(), request->chatid(), request->textmsgs_size());
 
     // 查看是否在本服务器，因为有可能已经离线了
     auto touid = request->touid();
     std::shared_ptr<CSession> session;
     auto status = AuthorizeRecipient(context, touid, session);
-    if (!status.ok())
-        return status;
+    if (!status.ok()) return status;
 
     // 设置返回值
     response->set_error(ErrorCodes::Success);
@@ -242,16 +221,14 @@ Status ChatServiceImpl::NotifyOtherReceiveTextChatMsg(
 
     // 通知对方服务器
     std::string notify_str = messaging::BoundedNotification(notify);
-    if (!CanDeliver(context))
-        return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
+    if (!CanDeliver(context)) return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
     session->Send({MSG_NOTIFY_CHAT_MSG_REQ, notify_str});
     return Status::OK;
 }
 
 /** @brief 请求对端实例使指定旧登录会话下线。 */
 Status ChatServiceImpl::NotifyOtherKickUser(ServerContext* context, const KickUserReq* request, KickUserRsp* response) {
-    if (!CanDeliver(context))
-        return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
+    if (!CanDeliver(context)) return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
     if (request->session_id().empty()) {
         response->set_error(ErrorCodes::UidInvalid);
         return Status::OK;
@@ -263,9 +240,7 @@ Status ChatServiceImpl::NotifyOtherKickUser(ServerContext* context, const KickUs
 }
 
 /** @brief 接收跨实例回执变化并提示本地目标会话补拉；提示不代替持久化回执事实。 */
-Status ChatServiceImpl::NotifyMessageReceiptChanged(
-    ServerContext* context,
-    const message::ReceiptChangedReq* request,
+Status ChatServiceImpl::NotifyMessageReceiptChanged(ServerContext* context, const message::ReceiptChangedReq* request,
     message::ReceiptChangedRsp* response) {
     if (request->uid() <= 0 || request->chat_id() <= 0 || request->revision() <= 0) {
         response->set_error(ErrorCodes::UidInvalid);
@@ -273,14 +248,12 @@ Status ChatServiceImpl::NotifyMessageReceiptChanged(
     }
     std::shared_ptr<CSession> session;
     auto status = AuthorizeRecipient(context, request->uid(), session);
-    if (!status.ok())
-        return status;
+    if (!status.ok()) return status;
     if (session && session->SupportsReceipts()) {
         Json::Value hint;
         hint["chat_id"] = request->chat_id();
         hint["latest_revision"] = std::to_string(request->revision());
-        if (!CanDeliver(context))
-            return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
+        if (!CanDeliver(context)) return Status(grpc::StatusCode::CANCELLED, "delivery cancelled");
         session->Send(hint.toStyledString(), MSG_MESSAGE_RECEIPT_CHANGED_NOTIFY);
     }
     return Status::OK;

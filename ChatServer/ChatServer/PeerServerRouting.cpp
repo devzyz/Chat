@@ -2,8 +2,7 @@
 
 #include <sstream>
 
-std::unordered_map<std::string, PeerServerEndpoint> ResolvePeerServerEndpoints(
-    const std::string& configured_servers,
+std::unordered_map<std::string, PeerServerEndpoint> ResolvePeerServerEndpoints(const std::string& configured_servers,
     const PeerConfigLookup& lookup) {
     std::unordered_map<std::string, PeerServerEndpoint> endpoints;
     std::stringstream stream(configured_servers);

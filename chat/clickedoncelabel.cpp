@@ -25,6 +25,7 @@ void ClickedOnceLabel::keyPressEvent(QKeyEvent* event) {
     }
     QLabel::keyPressEvent(event);
 }
+
 void ClickedOnceLabel::keyReleaseEvent(QKeyEvent* event) {
     if (_activation.keyRelease(event)) {
         emit clicked(text());
@@ -33,6 +34,7 @@ void ClickedOnceLabel::keyReleaseEvent(QKeyEvent* event) {
     }
     QLabel::keyReleaseEvent(event);
 }
+
 void ClickedOnceLabel::focusOutEvent(QFocusEvent* event) {
     _activation.cancel();
     QLabel::focusOutEvent(event);
