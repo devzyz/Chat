@@ -4,8 +4,8 @@ import re
 import subprocess
 import sys
 
-# GCC 11 uses GLIBCXX_3.4.29; Jammy provides glibc 2.35.
-LIMITS = {'GLIBC': (2, 35), 'GLIBCXX': (3, 4, 29), 'CXXABI': (1, 3, 13)}
+# Jammy's libstdc++6 comes from GCC 12 even when compiling with GCC 11.
+LIMITS = {'GLIBC': (2, 35), 'GLIBCXX': (3, 4, 30), 'CXXABI': (1, 3, 13)}
 
 
 def verify(root):

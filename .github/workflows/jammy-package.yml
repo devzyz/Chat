@@ -36,6 +36,7 @@ jobs:
       - name: Prepare Jammy build dependencies
         run: |
           test "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.35'
+          python3 tests/deploy/test_abi.py
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends libtirpc-dev
           bash "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics

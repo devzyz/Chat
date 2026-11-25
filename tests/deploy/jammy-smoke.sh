@@ -14,7 +14,7 @@ cleanup() {
     if [[ -n "${redis_pid:-}" ]]; then kill "$redis_pid" 2>/dev/null || true; wait "$redis_pid" || true; fi
     rm -rf -- "$work"
 }
-trap cleanup EXIT
+trap 'result=$?; trap - EXIT; cleanup || exit 1; exit "$result"' EXIT
 (cd "$bundle" && sha256sum -c SHA256SUMS)
 mkdir "$work/source"
 tar -xzf "$bundle/chat-jammy-x64.tar.gz" -C "$work/source"
