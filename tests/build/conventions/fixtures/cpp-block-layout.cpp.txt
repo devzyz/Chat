@@ -1,0 +1,30 @@
+struct Counter {
+    Counter() {}
+    explicit Counter(int value) : value(value) {}
+    ~Counter() {}
+
+    int read() const {
+        return value;
+    }
+
+    int value = 0;
+};
+
+void check(bool ready) {
+    auto ignore = [] {};
+    auto run = [&] {
+        ignore();
+    };
+    if (ready) {}
+    if (ready) {
+        run();
+    }
+    EXPECT_NO_THROW({
+        Counter counter;
+    });
+    EXPECT_THROW(
+        {
+            throw 1;
+        },
+        int);
+}

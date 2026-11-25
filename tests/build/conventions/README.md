@@ -48,8 +48,11 @@ commit 范围排除目标分支已包含的提交及固定历史祖先。缺失�
 
 ## C++ 排版
 
-在仓库根目录运行以下命令。默认检查全部受 Git 跟踪的自有 C++ 源码、头文件及测试；
-第三方包、生成文件及用户维护的 `tests/auto/` 在清单之外。指定 `--write` 将同一套规则应用到源码。
+在仓库根目录运行以下命令。入口先用固定版本的 clang-format 检查[代码块样例](fixtures/cpp-block-layout.cpp.txt)，
+再检查全部受 Git 跟踪的自有 C++ 源码、头文件及测试。样例固定了空构造函数、析构函数和回调的 `{}`，
+以及有内容的函数、回调、分支和异常断言块的多行排版。样例不符合根配置时，入口返回非零。
+
+指定 `--write` 时同样先检查样例，通过后才批量排版源码。第三方包、生成文件及用户维护的 `tests/auto/` 在清单之外。
 
 ```powershell
 python -m pip install --no-deps --only-binary=:all: --target build/conventions/formatter clang-format==19.1.5

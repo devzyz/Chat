@@ -21,6 +21,10 @@ def main():
     if VERSION not in version:
         parser.error(f"clang-format {VERSION} required, got {' '.join(version)}")
 
+    # 在批量写入前校验样例，避免配置变化把预期排版一起改写。
+    fixture = "tests/build/conventions/fixtures/cpp-block-layout.cpp.txt"
+    subprocess.run([args.binary, "--style=file", "--dry-run", "--Werror", "--", fixture], cwd=ROOT, check=True)
+
     tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode("utf-8").split("\0")
     files = [path for path in tracked if Path(path).suffix.lower() in EXTENSIONS
              and not path.startswith(EXCLUDED) and "/node_modules/" not in path
