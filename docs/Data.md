@@ -190,11 +190,15 @@ PBKDF2-HMAC-SHA256 派生，盐为 16 字节安全随机值的十六进制编码
 
 ## 认证状态与恢复
 
-Redis 的 UID 哈希保存当前 Token，空闲 TTL 24 小时；`auth_version_<uid>` 保存撤销代次，
-不能随 Token 过期删除。`usessiontoken_<uid>` 与在线位置同为 90 秒租约，用于匹配会话绑定凭据。
-Gate 改密/退出提升代次并删除 Token；Gate 比较请求代次后原子发布，Chat 匹配当前会话及凭据后续期。
-Gate 在 MySQL 独占连接上持有 `chat-auth-<uid>` 咨询锁，覆盖登录校验和选服，或撤销和密码更新；
-释放锁失败时销毁连接，禁止把残留会话锁还给池。无需新增 schema migration。
+| Redis 记录 | 写入者与有效期 | 续期、撤销或清理 |
+| --- | --- | --- |
+| 账号凭据：以 UID 为键的哈希，字段 `utoken_<uid>`，另有 `auth_version_<uid>` | Gate 比较认证代次后签发当前 Token，空闲期限 24 小时。撤销代次独立保留 | Chat 校验当前会话并匹配绑定 Token 后续期。Gate 改密或成功撤销当前登录时提升代次、删除 Token |
+| 用户在线位置：`uip_<uid>`、`usessionid_<uid>` 和绑定凭据 `usessiontoken_<uid>` | Chat 的 `RedisUserPresenceStore` 校验账号 Token，原子发布实例名、Session ID 和绑定 Token，三键均为 90 秒 | 校验当前 Session ID、位置存在且绑定 Token 仍与账号 Token 匹配后续期。清理时同时比较实例名和 Session ID，匹配才删除三键 |
+| Gate 选服：`chatlease_<实例名>` 和 `logincount` 中的实例字段 | Chat 的 `InstanceLease` 登记进程 owner，租约 90 秒，定时器每 60 秒提交一次续租及连接数更新 | Gate 读取租约与有效计数选服。续租遇到其他 owner 会放弃更新，注销只删除匹配 owner 的租约和计数；租约过期的实例退出候选 |
+
+用户在线记录按连接续期，实例租约按进程续期，两者可独立过期。[凭据签发与选服](../GateServer/GateServer/GateRequestProduction.cpp) · [在线位置](../ChatServer/ChatServer/RedisUserPresenceStore.cpp) · [实例租约](../ChatServer/ChatServer/InstanceLease.h)
+
+Gate 在账号级数据库会话锁内完成登录校验和选服，或撤销和密码更新。MySQL 使用 `chat-auth-<uid>` 命名锁，PostgreSQL 使用按 UID 的咨询锁。两种实现都独占借出的数据库连接，只有确认解锁才归还可复用的连接；解锁结果不明时断开连接。[MySQL 账号锁](../GateServer/GateServer/MysqlDao.cpp) · [PostgreSQL 账号锁](../GateServer/GateServer/PostgresAccounts.h)
 
 备份恢复不能把旧 Redis 凭据直接恢复为有效登录。恢复操作需停止服务、处理旧认证缓存并强制重新登录；
 MySQL、资源目录与持久化 Redis 的一致备份恢复演练仍未完成，不能将仅复制数据库称为完整恢复。
