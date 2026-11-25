@@ -18,6 +18,9 @@ Windows 本地操作以 `scripts/windows-local.ps1` 为统一入口，详细环�
 
 ## C++ Server
 
+AutoDL 的 Ubuntu 22.04 服务包通过 CI 的 `autodl` 输入选择，默认为 `skip`。
+构建基线、制品、部署配置和回滚验证见 [Linux 部署入口](../scripts/deploy/README.md)。
+
 - x64 本地默认 triplet MUST 为 `x64-windows-chat`。
 - CI Release-only triplet MUST 为 `x64-windows-chat-release`，target 和 host triplet 保持一致。
 - CRT MUST 使用动态链接：Debug `/MDd`，Release `/MD`。

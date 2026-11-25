@@ -296,3 +296,18 @@ test('real acceptance shell rejects every unsuccessful dependency before writing
         }
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+// 日常推送、PR 和普通手动运行必须跳过 AutoDL，部署必须由成功的门禁和同次包驱动。
+test('AutoDL deployment is opt-in and consumes the gated develop package', () => {
+    assert.match(ci, /autodl:[\s\S]*?default: skip/);
+    const build = job(ci, 'jammy-package'), deploy = job(ci, 'autodl-deploy');
+    assert.ok(build && deploy);
+    assert.match(build, /needs\.plan\.outputs\.autodl == 'package'/);
+    assert.match(deploy, /needs\.plan\.outputs\.autodl == 'deploy'/);
+    assert.match(deploy, /needs: \[plan, regression, full, jammy-package\]/);
+    assert.match(deploy, /needs\.regression\.result == 'success'/);
+    assert.match(deploy, /needs\.full\.result == 'success'/);
+    assert.match(deploy, /refs\/heads\/develop/);
+    assert.match(deploy, /environment: autodl/);
+    assert.match(workflow('jammy-package.yml'), /runs-on: ubuntu-22\.04/);
+});
