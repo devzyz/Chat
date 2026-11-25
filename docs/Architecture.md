@@ -3,6 +3,8 @@
 
 ## 系统边界
 
+从一次登录或一条消息追踪跨服务的调用顺序、状态所有者和测试入口，见[核心流程与状态机](StateMachines.md)。
+
 ChatServer 的 TCP Session 由 `CServer` 持有，`CSession` 在独立 strand 内管理
 `Created → Active → Closing`、读写队列、心跳与幂等关闭。Active 表示 TCP 可通信，
 `AuthenticatedUid` 才表示 Chat 登录绑定成功；业务入口另查本机 current 身份。

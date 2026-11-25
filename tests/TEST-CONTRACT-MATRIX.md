@@ -91,7 +91,7 @@ registration alone is not PASS evidence.
 
 ## 1. 统计口径
 
-当前公开 runner 的执行注册、报告分组与期望数量以 `scripts/windows-local.ps1` 为唯一来源。
+Windows 模块 runner 的注册、报告分组与期望数量见[公开运行器](../scripts/windows-local.ps1)。Windows 作业另行执行隔离 PostgreSQL 的迁移与原生合同，独立报告为 `postgresql_native.xml`。各平台和专项的执行范围及报告入口见[十类检查](CI-GOVERNANCE.md#十类检查的触发与证据)，单次实绩见对应运行。
 本矩阵维护业务 Test ID、覆盖范围和依赖边界，不再维护全仓总数的阶段增量账本。
 
 Test ID 表示被保护的 Interface 合同，runner testcase 表示测试框架实际报告的用例。二者不必一一对应：例如 Qt `network_state_tests` 是一个 runner testcase，但同时保护拆分 header、拆分 body 和相邻 frame 三个合同。覆盖率、testcase 数量和合同数量必须分别报告，不能相互替代。

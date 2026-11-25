@@ -110,10 +110,9 @@ Qt 消费者已按 `load_more` 和页尾游标继续翻页；不需要迁移或�
 
 ## Redis
 
-Chat 在线位置继续使用 `uip_<uid>`（实例名）与 `usessionid_<uid>`（全局唯一 Session ID）。
-仅 `RedisUserPresenceStore` 维护这两个 key：Lua 原子读取/发布两项，删除时同时比较实例名和
-Session ID。查询区分 Found、NotFound、Unavailable；发布失败不报告 Chat 登录成功。
-本次保留原有无 TTL 的在线记录，崩溃残留及租约续期作为后续设计，不声称已解决。
+Chat 查询用户在线位置时区分找到、记录缺失和存储不可用。发布在线位置失败时登录返回错误；
+已认证连接在收发校验中发现归属或凭据失效时关闭。Gate 为新登录选择实例时读取独立的实例租约与负载。
+键、期限、续期与条件清理规则见[认证状态与恢复](Data.md#认证状态与恢复)。
 
 跨服 `KickUserReq.session_id = 2` 指定被替换连接；缺失字段返回 UidInvalid 并拒绝踢人。
 这是 protobuf 的附加字段，但旧服务端仍会按 UID 踢人，因此本次要求所有 ChatServer 同步升级，
@@ -239,7 +238,7 @@ periodic authoritative synchronization and is sent only to a session that negoti
 密码写入失败则保守地保持撤销。登录在同一账号锁内校验口令并完成选服。
 Gate 签发时原子比较认证代次，代次已变化时拒绝写入。
 
-Token 是 24 小时空闲租约：当前 Chat 会话的业务请求、心跳及推送接收校验原子核对绑定 Token 后续期。
+当前 Chat 会话在业务请求、心跳及推送接收校验时核对绑定 Token，匹配后续期。
 改密、退出、替换登录后，旧连接下一次收发校验失败并关闭；已开始的事务和已写出的字节不承诺撤回。
 Chat 为已认证请求预留数据库执行名额后，在 Redis 池再次校验绑定凭据。复核通过直接使用预留名额，排队期间已撤销凭据的请求不会执行 SQL。
 Resource 直接从 Redis 校验请求凭据。强制终止客户端不能保证发送退出请求，凭据最终由撤销或空闲到期失效。
