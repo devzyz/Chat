@@ -32,6 +32,7 @@ jobs:
           repository: microsoft/vcpkg
           ref: ${{ steps.baseline.outputs.commit }}
           path: .ci/vcpkg
+          fetch-depth: 0
       - name: Prepare Jammy build dependencies
         run: |
           test "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.35'
