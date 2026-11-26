@@ -132,6 +132,30 @@ class ReleaseContracts(unittest.TestCase):
             package.unpack(archive, self.root / 'extract')
         self.assertFalse((self.root / 'escape').exists())
 
+    def test_incomplete_formal_and_unmanaged_latest_fail_closed(self):
+        from rehearse import LocalReleases
+        hub = LocalReleases(self.root / 'store')
+        hub.root.mkdir()
+        tag = 'v2.0.0'
+        hub.refs[tag] = self.sha
+        files = self.root / 'four'
+        files.mkdir()
+        for name in publish.FORMAL[:3]:
+            (files / name).write_text('fixture')
+        with self.assertRaisesRegex(ValueError, 'four'):
+            publish.publish_formal(hub, tag, self.sha, files)
+        self.assertFalse(hub.rows)
+        (files / publish.FORMAL[-1]).write_text('fixture')
+        publish.publish_formal(hub, tag, self.sha, files)
+        hub.refs['latest'] = 'f' * 40
+        with self.assertRaisesRegex(ValueError, 'Unmanaged'):
+            publish.sync_latest(hub)
+        self.assertNotIn('latest', hub.rows)
+        hub.refs[tag] = 'b' * 40
+        with self.assertRaises(ValueError):
+            publish.publish_formal(hub, tag, self.sha, files)
+        self.assertEqual(publish.identity(hub.rows[tag]), (tag, self.sha))
+
     def test_roles_and_rolling_releases(self):
         from rehearse import LocalReleases
         import receive

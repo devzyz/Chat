@@ -166,14 +166,19 @@ def resolve_tag(requested, get=github_json):
         return r, m[1], m[2]
     r, tag, source = record(requested)
     if requested == 'latest':
-        if not r['prerelease']:
-            raise ValueError('expected rolling release')
+        if r['prerelease']:
+            raise ValueError('expected stable rolling release')
         r, pinned, commit = record(tag)
         if (tag, source) != (pinned, commit):
             raise ValueError('rolling and numbered release disagree')
     elif requested != tag:
         raise ValueError('numbered version mismatch')
-    if r['prerelease'] or get('commits/' + tag)['sha'] != source:
+    obj = get('git/ref/tags/' + tag)['object']
+    while obj['type'] == 'tag':
+        if not re.fullmatch('[0-9a-f]{40}', obj['sha']):
+            raise ValueError('invalid annotated tag reference')
+        obj = get('git/tags/' + obj['sha'])['object']
+    if r['prerelease'] or obj.get('type') != 'commit' or obj.get('sha') != source:
         raise ValueError('formal tag no longer points to published source')
     assets = [a for a in r['assets'] if a['name'] == ASSET]
     if len(assets) != 1 or not re.fullmatch(r'sha256:[0-9a-f]{64}', assets[0].get('digest') or ''):

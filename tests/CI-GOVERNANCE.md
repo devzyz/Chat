@@ -172,7 +172,7 @@ Windows 静态检查通过后，Server、Qt、Varify 作业可分别执行；Gat
 Windows 发布冒烟默认在隔离 PostgreSQL 上执行包内迁移，验证 Gate、Chat、Resource 的启动与退出；
 发布冒烟使用 Redis 夹具；真实 Redis、验证码邮件和跨实例消息路径由同 SHA 的 Linux 全量流程验证。
 不将包启动冒烟称为 Windows 真实数据库端到端验证。
-未发布构建允许重试，不占用版本或源码；已发布版本和文件不覆盖，需要新的 VERSION。
+未发布构建允许重试，不占用版本或源码；已发布版本和文件不覆盖，需要新的正式 tag。
 定时、PR、手动全量检查均不发布。N-1 完整矩阵暂缓，已有协议和 schema 迁移回归继续运行。
 
 命令与实际验证边界见 [发布测试入口](release/contracts/README.md)。

@@ -12,7 +12,7 @@
 | `Chat-server-linux-x64.tar.gz` | 同步 |
 
 固定入口为 `/releases/tag/latest` 和 `/releases/download/latest/<文件名>`。
-滚动条目标记为预发布，指向最高已发布正式版本；其附件和 tag 需要允许更新。
+滚动条目显式使用 GitHub 的 make_latest=false，单独指向最高已发布正式版本；其附件和 tag 需要允许更新。
 每个正式版使用同一提交、同次通过验证的四个包，作为草稿上传，核对 GitHub 记录的字节摘要后公开。
 同步滚动版直接下载正式版的两个原件。正式版保留历史；可重试未完草稿或单独重跑滚动作业。
 滚动附件逐个更新；更新异常时恢复上一正式版的两个文件。需要锁定同一版本的消费者先解析正式 tag。
@@ -33,7 +33,7 @@ MySQL 工具测试使用非规范路径并比较解析后的路径，覆盖 Wind
 ## 包与运行验证
 
 ```powershell
-python scripts/release/package.py --artifacts <本次CI制品目录> --output <新目录> --sha <完整SHA>
+python scripts/release/windows_roles.py --artifacts <本次CI制品目录> --output <新目录> --sha <完整SHA> --tag <正式tag>
 python scripts/release/smoke.py --directory <ZIP所在目录> --sha <完整SHA> --report <JUnit路径>
 ```
 

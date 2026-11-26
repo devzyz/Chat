@@ -38,7 +38,7 @@ class LocalReleases:
     def create(self, tag, sha, body):
         assert tag not in self.rows
         self.rows[tag] = {'id': tag, 'tag_name': tag, 'body': body, 'target_commitish': sha,
-                          'draft': True, 'prerelease': tag == 'latest', 'assets': []}
+                          'draft': True, 'prerelease': False, 'assets': []}
         (self.root / tag).mkdir()
         return copy.deepcopy(self.rows[tag])
 
@@ -66,8 +66,8 @@ class LocalReleases:
     def get(self, path):
         if path.startswith('releases/tags/'):
             return self.releases()[path.rsplit('/', 1)[-1]]
-        assert path.startswith('commits/')
-        return {'sha': self.ref(path.rsplit('/', 1)[-1])}
+        assert path.startswith('git/ref/tags/')
+        return {'object': {'type': 'commit', 'sha': self.ref(path.rsplit('/', 1)[-1])}}
 
 
 def rehearse(directory, tag, sha):

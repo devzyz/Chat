@@ -13,12 +13,36 @@ permissions:
   contents: read
 
 jobs:
-  activate:
+  delivery:
     if: >-
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop') ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.conclusion == 'success' && vars.AUTODL_AUTO_DEPLOY == 'true')
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+    outputs:
+      enabled: ${{ steps.gate.outputs.enabled }}
+    steps:
+      - id: gate
+        name: Require completed publication before automatic delivery
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_RUN: ${{ github.event.workflow_run.id }}
+          UPSTREAM_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          set -euo pipefail
+          enabled=true
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+            enabled=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$UPSTREAM_RUN/attempts/$UPSTREAM_ATTEMPT/jobs?per_page=100" \
+              --jq '[.[].jobs[] | select(.name == "formal" or .name == "rolling") | select(.conclusion == "success") | .name] | unique | length == 2')
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+
+  activate:
+    needs: delivery
+    if: needs.delivery.outputs.enabled == 'true'
     environment: autodl
     runs-on: ubuntu-22.04
     timeout-minutes: 45

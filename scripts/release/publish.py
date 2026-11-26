@@ -82,7 +82,7 @@ class GitHub:
 
     def create(self, tag, sha, body):
         return self.api('releases', 'POST', {'tag_name': tag, 'target_commitish': sha, 'name': tag,
-                        'body': body, 'draft': True, 'prerelease': tag == 'latest'})
+                        'body': body, 'draft': True, 'prerelease': False})
 
     def edit(self, release, **fields):
         return self.api('releases/' + str(release['id']), 'PATCH', fields)
@@ -166,7 +166,7 @@ def sync_latest(hub):
     previous = None
     if rolling:
         old_tag, old_sha = identity(rolling)
-        if rolling.get('immutable') or not rolling['prerelease']:
+        if rolling.get('immutable') or rolling['prerelease']:
             raise ValueError('Rolling release must be managed and mutable')
         if not rolling['draft']:
             previous = releases[old_tag]
@@ -184,18 +184,18 @@ def sync_latest(hub):
             upload_set(hub, rolling, new_files)
             if ref is not None and ref != sha:
                 hub.move_latest(sha)
-            hub.edit(rolling, draft=False, prerelease=True, target_commitish=sha,
+            hub.edit(rolling, draft=False, prerelease=False, target_commitish=sha,
                      body=notes(tag, sha), name='latest · ' + tag, make_latest='false')
+            if hub.ref('latest') != sha or identity(hub.releases()['latest']) != (tag, sha):
+                raise ValueError('Rolling ref and release metadata did not converge')
         except Exception:
             if previous:
                 upload_set(hub, hub.releases()['latest'], old_files)
                 if hub.ref('latest') != old_sha:
                     hub.move_latest(old_sha)
                 hub.edit(rolling, body=notes(old_tag, old_sha), name='latest · ' + old_tag,
-                         prerelease=True, make_latest='false')
+                         prerelease=False, make_latest='false')
             raise
-        if hub.ref('latest') != sha or identity(hub.releases()['latest']) != (tag, sha):
-            raise ValueError('Rolling ref and release metadata did not converge')
 
 
 if __name__ == '__main__':
