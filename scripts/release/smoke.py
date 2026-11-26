@@ -129,8 +129,12 @@ def smoke_database(root, diagnostics=None, fixture_name="resource-smoke"):
     options = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                    check=True, timeout=60, creationflags=subprocess.CREATE_NO_WINDOW)
     try:
-        subprocess.run([initdb, '-D', data, '-E', 'UTF8', '--no-locale', '-A', 'scram-sha-256',
-                        '-U', 'chat_fixture', '--pwfile', pwfile], **options)
+        init = subprocess.run([initdb, '-D', data, '-E', 'UTF8', '--no-locale', '-A', 'scram-sha-256',
+                               '-U', 'chat_fixture', '--pwfile', pwfile],
+                              **{**options, 'check': False, 'stdout': subprocess.PIPE, 'stderr': subprocess.STDOUT})
+        if init.returncode:
+            detail = init.stdout.decode(errors='replace').replace(password, '[redacted]')
+            raise RuntimeError('PostgreSQL fixture initialization failed: ' + detail[-1200:])
         pwfile.unlink()
         subprocess.run([ctl, '-D', data, '-l', log_dir / (fixture_name + '-pg.log'),
                         '-w', '-o', f'-h 127.0.0.1 -p {port}', 'start'], **options)
@@ -306,7 +310,18 @@ FlushLevel=warn
     return config + database_section
 
 
+def allow_fixture_user(directory):
+    """Grant the actual runner SID access when PostgreSQL drops its Administrators SID."""
+    identity = subprocess.check_output(['whoami.exe', '/user', '/fo', 'csv', '/nh'])
+    user = re.search(rb'"(S-1-[0-9-]+)"', identity)
+    if not user:
+        raise RuntimeError('Cannot identify Windows fixture owner')
+    grant = '*' + user[1].decode('ascii') + ':(OI)(CI)M'
+    subprocess.run(['icacls.exe', str(directory), '/grant', grant], check=True, capture_output=True, timeout=10)
+
+
 def run(directory, source_sha, report):
+    report = report.resolve()
     suite = ET.Element('testsuite', name='windows-package-smoke')
     failures = 0
     def case(name, action):
@@ -322,7 +337,8 @@ def run(directory, source_sha, report):
         if os.name != 'nt':
             raise RuntimeError('Windows runner required')
         with tempfile.TemporaryDirectory(prefix='chat-smoke-') as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
+            allow_fixture_user(root)
             from windows_roles import WINDOWS, extract_pair
             if any((directory / name).exists() for name in WINDOWS.values()):
                 root = Path(temporary) / 'server'

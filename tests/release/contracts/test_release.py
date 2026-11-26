@@ -132,6 +132,18 @@ class ReleaseContracts(unittest.TestCase):
             package.unpack(archive, self.root / 'extract')
         self.assertFalse((self.root / 'escape').exists())
 
+    def test_windows_smoke_acl_targets_only_the_fixture_owner(self):
+        directory = self.root / 'owned'
+        output = b'"machine\\\\runner","S-1-5-21-101-102-103-1001"'
+        with patch.object(smoke.subprocess, 'check_output', return_value=output), patch.object(smoke.subprocess, 'run') as run:
+            smoke.allow_fixture_user(directory)
+            self.assertEqual(run.call_args.args[0], ['icacls.exe', str(directory), '/grant',
+                             '*S-1-5-21-101-102-103-1001:(OI)(CI)M'])
+        with patch.object(smoke.subprocess, 'check_output', return_value=b'unknown'), patch.object(smoke.subprocess, 'run') as run:
+            with self.assertRaises(RuntimeError):
+                smoke.allow_fixture_user(directory)
+            run.assert_not_called()
+
     def test_incomplete_formal_and_unmanaged_latest_fail_closed(self):
         from rehearse import LocalReleases
         hub = LocalReleases(self.root / 'store')

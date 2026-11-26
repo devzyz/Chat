@@ -42,7 +42,7 @@ Server ZIP 必须携带 MSVC redistributable，Varify ZIP 携带 node.exe；组�
 真实运行配置替换为空白模板；使用说明随包提供，详见 [INSTALL](../../../scripts/release/INSTALL.md)。
 
 Windows 冒烟验证摘要、文件、Gate HTTP 与 Chat 监听启动、独占控制台停止、Qt 窗口和包内 Node/gRPC 模块加载。
-默认用独立临时 PG 运行包内迁移、Gate 和两个服务的启动验证。ResourceServer 另外验证 HTTP 认证拒绝和正常停止。
+Windows 两个 ZIP 分别在独立目录运行。临时工作目录显式授予当前 runner 用户 SID 继承权限，以便 PostgreSQL 放弃管理员组权限后仍能读取独占夹具。默认用独立临时 PG 运行包内迁移和原生服务启动验证。ResourceServer 另外验证 HTTP 认证拒绝和正常停止。
 通过 `CHAT_PG_BIN` 指定 initdb 和 pg_ctl 的目录；psql 单独安装时设置 `CHAT_PG_CLIENT`。
 数据库工具仅用于夹具，服务进程仍使用包内 DLL。兼容验证可显式选择 `CHAT_SMOKE_DATABASE=mysql`。
 该模式的 MySQL 8 工具从 `CHAT_SMOKE_MYSQL_BIN`、PATH 或 Program Files 的唯一 MySQL 8 安装定位；
