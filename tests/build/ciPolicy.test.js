@@ -105,7 +105,7 @@ test('AutoDL records the requested delivery once per CI run', () => {
     const develop = 'refs/heads/develop', master = 'refs/heads/master';
     assert.equal(selectAutodl('push', develop, 'quick'), 'skip');
     assert.equal(selectAutodl('push', develop, 'quick', 'skip', 'false'), 'skip');
-    assert.equal(selectAutodl('push', develop, 'quick', 'skip', 'true'), 'deploy');
+    assert.equal(selectAutodl('push', develop, 'quick', 'skip', 'true'), 'skip');
     assert.equal(selectAutodl('push', master, 'full', 'skip', 'true'), 'skip');
     for (const event of ['pull_request', 'schedule']) {
         assert.equal(selectAutodl(event, develop, 'full', 'deploy', 'true'), 'skip');

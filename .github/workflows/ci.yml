@@ -17,6 +17,10 @@ on:
         type: choice
         options: [skip, package, deploy]
         default: skip
+      release_tag:
+        description: Published AutoDL version (latest or vX.Y.Z)
+        type: string
+        default: latest
       mode:
         description: Validation scope (optional acceptance or maintenance flags require full)
         type: choice
@@ -59,51 +63,18 @@ concurrency:
 jobs:
   jammy-package:
     needs: plan
-    if: needs.plan.outputs.autodl == 'package' || needs.plan.outputs.autodl == 'deploy'
+    if: needs.plan.outputs.autodl == 'package'
     uses: ./.github/workflows/jammy-package.yml
 
   autodl-deploy:
-    needs: [plan, regression, full, jammy-package]
+    needs: [plan, regression, full]
     if: >-
       !cancelled() && github.ref == 'refs/heads/develop' &&
-      needs.plan.outputs.autodl == 'deploy' &&
-      needs.jammy-package.result == 'success' && needs.regression.result == 'success' &&
+      needs.plan.outputs.autodl == 'deploy' && needs.regression.result == 'success' &&
       (needs.full.result == 'success' || (needs.plan.outputs.mode == 'quick' && needs.full.result == 'skipped'))
-    runs-on: ubuntu-22.04
-    environment: autodl
-    timeout-minutes: 10
-    concurrency:
-      group: autodl-activation
-      cancel-in-progress: false
-    steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: jammy-server-release
-          path: bundle
-      - name: Deliver the verified archive to the restricted receiver
-        working-directory: bundle
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SSH_KEY: ${{ secrets.AUTODL_DEPLOY_KEY }}
-          HOST_KEY: ${{ vars.AUTODL_KNOWN_HOSTS }}
-          HOST: ${{ vars.AUTODL_HOST }}
-          PORT: ${{ vars.AUTODL_PORT }}
-          USERNAME: ${{ vars.AUTODL_USER }}
-        run: |
-          set -euo pipefail
-          [[ "$HOST" =~ ^[[:alnum:]][[:alnum:].-]*$ && "$PORT" =~ ^[0-9]{1,5}$ && "$USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]
-          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/develop" --jq .object.sha)" = "$GITHUB_SHA"
-          sha256sum -c SHA256SUMS
-          keydir=$(mktemp -d)
-          trap 'rm -rf -- "$keydir"' EXIT
-          umask 077
-          printf '%s\n' "$SSH_KEY" > "$keydir/key"
-          printf '%s\n' "$HOST_KEY" > "$keydir/known_hosts"
-          digest=$(sha256sum chat-jammy-x64.tar.gz | cut -d' ' -f1)
-          ssh -F /dev/null -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
-            -o UserKnownHostsFile="$keydir/known_hosts" -i "$keydir/key" -p "$PORT" \
-            "$USERNAME@$HOST" "activate $GITHUB_SHA $digest" < chat-jammy-x64.tar.gz
+    uses: ./.github/workflows/autodl.yml
+    with:
+      tag: ${{ inputs.release_tag || 'latest' }}
 
   plan:
     name: Select CI mode
@@ -120,8 +91,6 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Resolve validation scope without toolchain or artifact queries
         id: policy
-        env:
-          AUTODL_AUTO_DEPLOY: ${{ vars.AUTODL_AUTO_DEPLOY }}
         run: node scripts/ci/ciPolicy.js
       - name: Pin requested performance source
         if: steps.policy.outputs.mode == 'performance'
@@ -190,13 +159,6 @@ jobs:
           test "$WINDOWS_RESULT" = success
           test "$LINUX_RESULT" = success
           printf 'Real environment acceptance passed for `%s`. See phase3d-contract-evidence and real-acceptance-widgets.\n' "$SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
-
-  release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    needs: full
-    permissions:
-      contents: write
-    uses: ./.github/workflows/release.yml
 
   performance:
     name: Manual performance (${{ needs.plan.outputs.performance_profile }})

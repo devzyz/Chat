@@ -321,15 +321,19 @@ def run(directory, source_sha, report):
     try:
         if os.name != 'nt':
             raise RuntimeError('Windows runner required')
-        archives = list(directory.glob('Chat-*-windows-x64.zip'))
-        if len(archives) != 1:
-            raise ValueError('Expected one release package')
-        archive = archives[0]
-        if (directory / 'SHA256SUMS').read_text(encoding='utf-8') != sha256(archive.read_bytes()) + '  ' + archive.name + '\n':
-            raise ValueError('Package checksum mismatch')
         with tempfile.TemporaryDirectory(prefix='chat-smoke-') as temporary:
             root = Path(temporary)
-            case('archive and required runtime files', lambda: verify(archive, root, source_sha))
+            from windows_roles import WINDOWS, extract_pair
+            if any((directory / name).exists() for name in WINDOWS.values()):
+                case('independent archives and required runtime files', lambda: extract_pair(directory, root, source_sha))
+            else:
+                archives = list(directory.glob('Chat-*-windows-x64.zip'))
+                if len(archives) != 1:
+                    raise ValueError('Expected one release package')
+                archive = archives[0]
+                if (directory / 'SHA256SUMS').read_text(encoding='utf-8') != sha256(archive.read_bytes()) + '  ' + archive.name + '\n':
+                    raise ValueError('Package checksum mismatch')
+                case('archive and required runtime files', lambda: verify(archive, root, source_sha))
             environment = {key: value for key, value in os.environ.items()
                            if not key.startswith(('CHAT_', 'QT_', 'QML_', 'NODE_'))}
             # Do not let the build toolchain or runner's Node/Qt satisfy missing package DLLs.

@@ -13,7 +13,8 @@
 | develop PR / push（quick） | Windows 全部单元、确定性组件、loopback/进程集成、编译和静态检查 | 否 |
 | 每周一北京时间 03:17 | 默认分支 develop 的 Windows 回归和 Linux 全量集成/E2E | 否 |
 | master PR | 同上全量检查，成功才允许合并 | 否 |
-| master push | 实际合并 SHA 的全量检查、Windows 包启动冒烟 | 成功后自动发布 |
+| master push | 实际合并 SHA 的全量检查 | 否 |
+| 正式 vX.Y.Z tag | Release 工作流运行两平台回归和四包验收 | 四包正式版成功后同步双包 latest |
 | workflow_dispatch | 所选分支默认 full，可选 quick 或独立的[性能模式](#手动性能模式) | 否 |
 
 PR 按目标分支分流；打开、更新提交、重新打开、编辑和转为可评审都会重新判定。功能分支的独立 push 不触发此工作流。[工作流入口](../.github/workflows/ci.yml) · [模式选择](../scripts/ci/ciPolicy.js) · [文档路径判定](../scripts/ci/ciScope.js)
@@ -157,21 +158,16 @@ quick 保留所有 Windows 测试及报告上传，不生成或上传应用 ZIP�
 | 05 运维脚本与进程管理 | Windows 实例脚本 | 同左 | 另加 Linux POSIX 进程检查 | — | 实例验证、启动、PID 归属、退出与清理 |
 | 06 真实依赖与服务集成 | — | 真实 PG 合同见 04 | Linux 双库原生合同及 3C 临时服务集成 | 依赖用于 09 的负载 | 数据库记录、Redis 状态、Mailpit 收件和进程清理 |
 | 07 真实业务端到端 | — | — | Linux 双库跨实例协议及 3D 双服业务；手动勾选后增加四账号专项 | — | 场景 ID、收发双方观察、持久化结果和资源清理；自动控件证据单列 |
-| 08 打包与成品冒烟 | 临时 ZIP 打包合同 | 同左 | 另生成五个应用 ZIP；master push 在全量成功后组装、下载和冒烟发行包 | — | 文件布局、源码 SHA、包摘要、独立 Windows runner 启动记录与上传回验 |
+| 08 打包与成品冒烟 | 临时 ZIP 打包合同 | 同左 | 另生成五个应用 ZIP；正式标签用独立 Release 工作流组装、下载和冒烟四个发行包 | — | 文件布局、源码 SHA、包摘要、独立 Windows runner 启动记录与上传回验 |
 | 09 性能 | — | — | — | 所选档位的真实负载 | 按档位核验样本、内容、去重和超时，吞吐及延迟见当次报告 |
-| 10 报告与失败定位 | 静态作业报告 | Windows 门禁 | 双平台门禁，按需验收门禁；master push 成品冒烟另报 | 专项报告及采样校验 | Actions Summary、原始报告、该次 attempt 的失败步骤与日志 |
+| 10 报告与失败定位 | 静态作业报告 | Windows 门禁 | 双平台门禁，按需验收门禁；正式 tag 成品冒烟另报 | 专项报告及采样校验 | Actions Summary、原始报告、该次 attempt 的失败步骤与日志 |
 
 Windows 静态检查通过后，Server、Qt、Varify 作业可分别执行；Gate、Chat、Resource 和共享协议复用同次服务端构建。Linux 的 3C 与 3D 在构建预检及 POSIX 检查成功后使用独立环境、校验同一提交的运行包。替身的结果只证明调用方对相应返回值的处理。一次运行的通过、跳过、上游失败及清理结果均见该次记录。[Windows 作业](../.github/workflows/windows-ci.yml) · [Linux 作业](../.github/workflows/linux-ci.yml) · [性能作业](../.github/workflows/performance.yml)
 
 ## 3. 发布
 
-合入 master 前在 `VERSION` 更新 x.x.x 版本。发布自动串行执行，不要求环境审批或 owner 凭据。
-直接组装本次 CI 已测试的 Windows ZIP，不再为发布重新编译。
-
-1. 全量检查成功后，从同一次 run 下载 Server、Qt、Varify 包。
-2. 补齐独立运行库、Node、proto、SQL 和配置模板，生成 SHA256SUMS 与源码 SHA 清单。
-3. 新 Windows runner 下载并解压候选包，在源码目录之外验证文件、程序加载、启动和清理。
-4. 创建或继续同 SHA 的未发布草稿，上传同一个 ZIP，再下载核对字节后公开 Release。
+正式标签触发四包发布。阶段顺序、滚动更新及人工演练见[发布模块入口](release/contracts/README.md)。
+普通 master 推送保留全量检查。手动演练仅保存测试制品。
 
 Windows 发布冒烟默认在隔离 PostgreSQL 上执行包内迁移，验证 Gate、Chat、Resource 的启动与退出；
 发布冒烟使用 Redis 夹具；真实 Redis、验证码邮件和跨实例消息路径由同 SHA 的 Linux 全量流程验证。

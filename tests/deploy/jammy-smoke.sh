@@ -95,15 +95,17 @@ done
 sha=$(cat "$work/source/SOURCE_SHA")
 archive="$bundle/chat-jammy-x64.tar.gz"
 digest=$(sha256sum "$archive" | cut -d' ' -f1)
-receive() { SSH_ORIGINAL_COMMAND="activate $sha $1" python3 "$CHAT_DEPLOY_HOME/receive.py" < "$2"; }
-if receive "$(printf '0%.0s' {1..64})" "$archive"; then exit 1; fi
+receive() {
+    PYTHONPATH="$CHAT_DEPLOY_HOME" python3 -c 'import sys,os,receive;from pathlib import Path;receive.install(Path(os.environ["CHAT_DEPLOY_HOME"]),sys.argv[1],sys.argv[2],sys.argv[3],sys.stdin.buffer)' "$3" "$sha" "$1" < "$2"
+}
+if receive "$(printf '0%.0s' {1..64})" "$archive" v0.0.1; then exit 1; fi
 test ! -e "$CHAT_DEPLOY_HOME/current"
-receive "$digest" "$archive"
+receive "$digest" "$archive" v0.0.1
 old=$(readlink "$CHAT_DEPLOY_HOME/current")
 # 替换测试副本中的 Gate，以真实启动失败验证旧版本恢复。
 printf '#!/bin/sh\nexit 1\n' > "$work/source/GateServer/GateServer"
 tar -C "$work/source" -czf "$work/broken.tar.gz" .
-if receive "$(sha256sum "$work/broken.tar.gz" | cut -d' ' -f1)" "$work/broken.tar.gz"; then exit 1; fi
+if receive "$(sha256sum "$work/broken.tar.gz" | cut -d' ' -f1)" "$work/broken.tar.gz" v0.0.2; then exit 1; fi
 test "$(readlink "$CHAT_DEPLOY_HOME/current")" = "$old"
 curl -fsS "http://127.0.0.1:$resource/ready" >/dev/null
 test "$(supervisorctl -c "$CHAT_DEPLOY_HOME/supervisord.conf" status 'chat:*' | grep -c RUNNING)" = 4

@@ -1,7 +1,7 @@
 # Chat Windows x64
 
-本包包含 Qt 客户端、GateServer、ChatServer、ResourceServer 和带 Node.js 的 VarifyServer。
-版本与源码提交见 release-manifest.json；下载后可使用 SHA256SUMS 校验 ZIP。
+服务端附件包含 GateServer、ChatServer、ResourceServer 和带 Node.js 的 VarifyServer。Qt 桌面客户端从同一 tag 的独立客户端 ZIP 获取。
+版本与源码提交见 release-manifest.json；附件摘要由 GitHub Release 提供。
 
 ## 配置与启动
 
@@ -24,7 +24,7 @@
 5. 填写 ResourceServer 的监听地址、Redis、与 Gate 和 Chat 一致的 `[Database]` 配置和可写 StorageRoot；相对存储路径以配置目录为基准。
    在各应用目录启动 VarifyServer（node.exe server.js）、ChatServer.exe、ResourceServer.exe、GateServer.exe。
    C++ 服务支持 --config <文件>；Varify 支持 CHAT_CONFIG 和 CHAT_VARIFY_BIND_ADDRESS。
-6. 填写 chat-client/config.ini 中的 GateServer 地址及 `[ResourceServer] Url`，启动 chat.exe。
+6. 填写独立客户端包根目录 config.ini 中的 GateServer 地址及 `[ResourceServer] Url`，启动 chat.exe。
 
 每个 C++ 应用携带所需运行库；保留 VarifyServer 与 proto 的相邻目录关系。
 客户端正常关闭窗口；控制台服务使用 Ctrl+C 停止。

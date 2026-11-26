@@ -46,10 +46,9 @@ function selectPolicy(eventName, ref, event) {
 }
 
 /** 在运行开始时固定部署选择，后续开关变化只影响下一次运行。 */
-function selectAutodl(eventName, ref, mode, requested = 'skip', automatic = '') {
+function selectAutodl(eventName, ref, mode, requested = 'skip') {
     if (mode === 'performance') return 'skip';
     const develop = ref === 'refs/heads/develop';
-    if (eventName === 'push') return develop && automatic === 'true' ? 'deploy' : 'skip';
     if (eventName !== 'workflow_dispatch') return 'skip';
     if (requested === 'package' || requested === 'skip') return requested;
     if (requested === 'deploy' && develop) return 'deploy';
@@ -68,10 +67,9 @@ function describeCoverage(policy, eventName, ref) {
         return common + ' Automatic develop documentation scope is resolved in the static job. ' +
             'Linux integration, business E2E, application ZIPs and performance are outside quick scope.';
     }
-    const smoke = eventName === 'push' && ref === 'refs/heads/master';
     return common + ' Full adds Linux build/lifecycle, 06 real dependencies, 07 two-server E2E and 08 application ZIPs. ' +
         'Four-account acceptance: ' + (policy.real_acceptance ? 'selected' : 'not requested') +
-        '. Final package smoke: ' + (smoke ? 'after full succeeds' : 'not selected') + '.';
+        '. Formal publication is owned by the stable-tag Release workflow.';
 }
 
 if (require.main === module) {
@@ -79,7 +77,7 @@ if (require.main === module) {
         const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
         const policy = selectPolicy(process.env.GITHUB_EVENT_NAME, process.env.GITHUB_REF, event);
         policy.autodl = selectAutodl(process.env.GITHUB_EVENT_NAME, process.env.GITHUB_REF, policy.mode,
-            event.inputs?.autodl, process.env.AUTODL_AUTO_DEPLOY);
+            event.inputs?.autodl);
         // 序列化固定策略字段为 GitHub 输出。
         const output = Object.entries(policy).map(
             ([key, value]) => `${key}=${value}\n`).join('');

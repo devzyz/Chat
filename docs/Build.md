@@ -110,12 +110,9 @@ AutoDL 的 Ubuntu 22.04 服务包通过 CI 的 `autodl` 输入选择，默认为
 - Qt ZIP MUST 自包含；最终合并包 MUST 包含 VarifyServer 运行库及其相邻 proto 目录。
 - artifact 命名、目录层级和必需文件变化 MUST 同步 CI 校验与文档。
 
-master push 的全量 CI 成功后，使用 [`scripts/release/package.py`](../scripts/release/package.py)
-组装本次运行的 Windows 制品，生成 `Chat-<version>-windows-x64.zip`，不重新编译业务程序。
-候选配置使用无值 `.template`；Server 携带 MSVC runtime，Qt 携带 MinGW/runtime/plugins，
-Varify 携带 Node runtime/锁定依赖，并由合并包的相邻 proto 目录提供协议文件。
-新 Windows runner 下载该 ZIP 完成启动冒烟后，自动上传、下载回验并发布；无人工审批。
-同 SHA 的未发布草稿允许重试，已发布版本不可覆盖。验证范围和命令见 [Release 模块入口](../tests/release/contracts/README.md)。
+正式 tag 在 **Release** 工作流中生成并验证 Windows 和 Linux 的客户端、服务端四个独立包。
+同一正式版本公开后，单独的 `latest` 只同步 Windows 客户端、Linux 服务端。手动执行 Release 为无公开写入演练。
+触发规则、附件名称和回验方式见[发布入口](../tests/release/contracts/README.md)。
 
 ## 跨平台要求
 

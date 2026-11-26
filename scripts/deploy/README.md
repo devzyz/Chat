@@ -1,11 +1,14 @@
 # AutoDL 上的 Ubuntu 22.04 服务端部署
 
-在 GitHub Actions 的 **CI → Run workflow** 选择分支和 `autodl`。默认 `skip`。
-`package` 在 Ubuntu 22.04 x64 / GCC 11 上构建 Gate、Chat、Resource 与 Node 验证码服务，上传
-`jammy-server-release`。`deploy` 只在 `develop` 生效，测试包就绪且本次 quick 或 full
-回归门禁成功后才连接目标机。普通推送默认跳过。需要持续部署时，把**仓库变量**
-`AUTODL_AUTO_DEPLOY` 设为 `true`。CI 在选择本次运行范围时记录该开关；恢复为 `false` 即关闭后续自动部署。PR、周检、
-master 和性能模式不激活目标机。Windows Release 仍走原有 master 发布流程。
+在 **CI → Run workflow** 选择 `develop`、`autodl=deploy`，用 `release_tag` 填写具体 `vX.Y.Z` 或默认的 `latest`。
+SSH 只发送 `deploy TAG`。AutoDL 从公开仓库的 GitHub Release 主动下载 `Chat-server-linux-x64.tar.gz`。
+请求 `latest` 时先读取滚动 Release 记录的正式 tag，再固定下载该正式版的服务端附件。
+接收器自动核对 GitHub 附件摘要、包内提交与正式标签。配置及数据独立保存，版本目录采用正式 tag。
+主机需要访问 api.github.com、github.com 和 GitHub Release 附件下载域名。
+
+默认 `autodl=skip`。普通分支推送跳过部署。`autodl=package` 仅生成测试用 Jammy 包。
+仓库变量 `AUTODL_AUTO_DEPLOY` 默认为 `false`；设置为 `true` 时，正式标签发布并同步滚动版本成功后触发部署。
+手动 Release 演练不会触发自动部署。完整四包和双包规则见[发布说明](../../tests/release/contracts/README.md)。
 
 ## 首次准备目标机
 

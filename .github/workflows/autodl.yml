@@ -1,0 +1,49 @@
+name: AutoDL release deployment
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.conclusion == 'success' && vars.AUTODL_AUTO_DEPLOY == 'true')
+    environment: autodl
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    concurrency:
+      group: autodl-activation
+      cancel-in-progress: false
+    steps:
+      - name: Ask the restricted receiver to pull the selected tag
+        env:
+          TAG: ${{ inputs.tag || 'latest' }}
+          SSH_KEY: ${{ secrets.AUTODL_DEPLOY_KEY }}
+          HOST_KEY: ${{ vars.AUTODL_KNOWN_HOSTS }}
+          HOST: ${{ vars.AUTODL_HOST }}
+          PORT: ${{ vars.AUTODL_PORT }}
+          USERNAME: ${{ vars.AUTODL_USER }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" == latest || "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [[ "$HOST" =~ ^[[:alnum:]][[:alnum:].-]*$ && "$PORT" =~ ^[0-9]{1,5}$ && "$USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          keydir=$(mktemp -d)
+          trap 'rm -rf -- "$keydir"' EXIT
+          umask 077
+          printf '%s\n' "$SSH_KEY" > "$keydir/key"
+          printf '%s\n' "$HOST_KEY" > "$keydir/known_hosts"
+          ssh -n -F /dev/null -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+            -o UserKnownHostsFile="$keydir/known_hosts" -i "$keydir/key" -p "$PORT" \
+            "$USERNAME@$HOST" "deploy $TAG"

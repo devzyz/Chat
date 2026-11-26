@@ -1,9 +1,22 @@
 # 发布包验证
 
-CI 用 `.github/workflows/release.yml` 复用本次 Windows 构建包，不单独重新编译。
-master 全量成功后自动组装、下载冒烟、发布；没有 owner receipt、永久版本登记或环境审批。
-应用 ZIP 仅在 master PR/push、每周和手动全量生成；普通 develop PR/push 仍运行打包合同测试，
-但不生成或上传整套应用包。只有 master push 触发公开发布。
+正式发布由新建的 `vX.Y.Z` 稳定标签触发。两平台的回归、四个真实程序包及解包冒烟均须通过。
+在 **Actions → Release → Run workflow** 手动运行同一流程进行演练；发布和部署作业跳过。
+演练使用本地发布存储，实际核对附件字节并按两个 tag 拉取同一 Linux 服务包。
+
+| 正式版附件 | 独立滚动 Release `latest` |
+| --- | --- |
+| `Chat-client-windows-x64.zip` | 同步 |
+| `Chat-server-windows-x64.zip` | — |
+| `Chat-client-linux-x64.tar.gz` | — |
+| `Chat-server-linux-x64.tar.gz` | 同步 |
+
+固定入口为 `/releases/tag/latest` 和 `/releases/download/latest/<文件名>`。
+滚动条目标记为预发布，指向最高已发布正式版本；其附件和 tag 需要允许更新。
+每个正式版使用同一提交、同次通过验证的四个包，作为草稿上传，核对 GitHub 记录的字节摘要后公开。
+同步滚动版直接下载正式版的两个原件。正式版保留历史；可重试未完草稿或单独重跑滚动作业。
+滚动附件逐个更新；更新异常时恢复上一正式版的两个文件。需要锁定同一版本的消费者先解析正式 tag。
+初次启用前确认仓库策略允许更新滚动 Release 和 `latest` tag。
 
 ## 本地回归
 
@@ -40,6 +53,4 @@ ResourceServer 启动日志也保留于同目录；CI 连同冒烟 XML 上传，
 临时数据库仅验证启动，未执行资源业务或真实 Redis 凭据校验，不声称覆盖 Windows 业务 E2E。
 同 SHA 的 Linux 完整业务 E2E 必须先成功。冒烟失败不发布，JUnit 即使失败也上传。
 
-`VERSION` 在合入 master 前更新，使用 x.x.x。Release 标记为 v<版本>。
-未发布草稿可在同 SHA 下重试并重新上传；已公开版本拒绝覆盖。上传后重新下载核对实际字节，再公开草稿。
-`publish.py` 仅允许 master push，使用当前 workflow 的 GITHUB_TOKEN，不需要 PAT 或人工审批。
+正式 tag 提供发布版本号，手动演练使用仓库 `VERSION` 作为示例版本。
