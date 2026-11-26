@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Receive one checksummed release on stdin and activate it under a dedicated user."""
+"""Pull one published GitHub release by tag and activate it under a dedicated user."""
 import configparser
-import fcntl
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -136,31 +136,102 @@ def activate(home, candidate):
         raise
 
 
+TAG = re.compile(r'v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)')
+REPO = 'devzyz/Chat'
+ASSET = 'Chat-server-linux-x64.tar.gz'
+
+
+def github_json(path):
+    request = urllib.request.Request(f'https://api.github.com/repos/{REPO}/' + path,
+                                     headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'Chat-deployment'})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        data = response.read(2 * 1024 * 1024 + 1)
+    if len(data) > 2 * 1024 * 1024:
+        raise ValueError('GitHub metadata too large')
+    return json.loads(data)
+
+
+def resolve_tag(requested, get=github_json):
+    """Resolve latest once to its numbered release and verify its pinned source and asset."""
+    if requested != 'latest' and not TAG.fullmatch(requested):
+        raise ValueError('expected latest or vX.Y.Z')
+    def record(tag):
+        r = get('releases/tags/' + tag)
+        if r['draft'] or r['tag_name'] != tag:
+            raise ValueError('unpublished or mismatched release')
+        m = re.fullmatch(r'Chat unified release\n\nSource release: \x60([^\x60]+)\x60\nSource commit: \x60([0-9a-f]{40})\x60\n?',
+                         r['body'].replace('\r\n', '\n'))
+        if not m or not TAG.fullmatch(m[1]):
+            raise ValueError('invalid source release metadata')
+        return r, m[1], m[2]
+    r, tag, source = record(requested)
+    if requested == 'latest':
+        if r['prerelease']:
+            raise ValueError('expected stable rolling release')
+        r, pinned, commit = record(tag)
+        if (tag, source) != (pinned, commit):
+            raise ValueError('rolling and numbered release disagree')
+    elif requested != tag:
+        raise ValueError('numbered version mismatch')
+    obj = get('git/ref/tags/' + tag)['object']
+    while obj['type'] == 'tag':
+        if not re.fullmatch('[0-9a-f]{40}', obj['sha']):
+            raise ValueError('invalid annotated tag reference')
+        obj = get('git/tags/' + obj['sha'])['object']
+    if r['prerelease'] or obj.get('type') != 'commit' or obj.get('sha') != source:
+        raise ValueError('formal tag no longer points to published source')
+    assets = [a for a in r['assets'] if a['name'] == ASSET]
+    if len(assets) != 1 or not re.fullmatch(r'sha256:[0-9a-f]{64}', assets[0].get('digest') or ''):
+        raise ValueError('missing verified Linux server archive')
+    return tag, source, assets[0]['digest'][7:]
+
+
+def install(home, tag, source, digest, stream):
+    """Install a fully received archive, preserving the previous version during a failed transfer."""
+    releases = home / 'releases'
+    target = releases / tag
+    with tempfile.TemporaryDirectory(dir=releases) as temp:
+        staged = Path(temp) / 'release'
+        staged.mkdir()
+        unpack(stream, staged, source, digest)
+        if target.exists():
+            if (target / 'SOURCE_SHA').read_text().strip() != source or (target / '.asset-digest').read_text().strip() != digest:
+                raise ValueError('refusing to replace an installed formal version')
+        else:
+            (staged / '.asset-digest').write_text(digest)
+            staged.rename(target)
+    try:
+        activate(home, target)
+    except Exception:
+        if (home / 'current').resolve() != target:
+            shutil.rmtree(target)
+        raise
+    print('Activated and verified', tag, 'source', source)
+
+
+def download_asset(tag):
+    """Download the fixed asset from the resolved formal release on GitHub."""
+    return urllib.request.urlopen(f'https://github.com/{REPO}/releases/download/{tag}/{ASSET}', timeout=60)
+
+
+def pull(home, requested, get=github_json, download=download_asset):
+    """Pin latest once and feed the downloaded bytes to the same tested installer."""
+    tag, source, digest = resolve_tag(requested, get)
+    with download(tag) as stream:
+        install(home, tag, source, digest, stream)
+
+
 def main():
-    """Accept only the fixed forced-command protocol and serialize changes to this deployment."""
-    request = re.fullmatch(r'activate ([0-9a-f]{40}) ([0-9a-f]{64})', os.environ.get('SSH_ORIGINAL_COMMAND', ''))
+    """The forced SSH command accepts only a version; repository and asset are fixed locally."""
+    import fcntl
+    request = re.fullmatch(r'deploy (latest|v[0-9]+\.[0-9]+\.[0-9]+)', os.environ.get('SSH_ORIGINAL_COMMAND', ''))
     if not request:
-        raise ValueError('expected activate SOURCE_SHA SHA256')
+        raise ValueError('expected deploy TAG')
     home = Path(os.environ['CHAT_DEPLOY_HOME']).resolve(strict=True)
     os.umask(0o077)
-    source, digest = request.groups()
-    releases = home / 'releases'
-    target = releases / (source + '-' + digest)
     with (home / 'deploy.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        with tempfile.TemporaryDirectory(dir=releases) as temp:
-            staged = Path(temp) / 'release'
-            staged.mkdir()
-            unpack(sys.stdin.buffer, staged, source, digest)
-            if not target.exists():
-                staged.rename(target)
-        try:
-            activate(home, target)
-        except Exception:
-            if (home / 'current').resolve() != target:
-                shutil.rmtree(target)
-            raise
-        print('Activated and verified develop source', source, 'archive', digest)
+        pull(home, request[1])
 
 
 if __name__ == '__main__':

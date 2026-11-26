@@ -177,13 +177,6 @@ jobs:
           cmake "-DCHAT_TEST_NINJA=$((Get-Command ninja).Source)" -DCHAT_TEST_BINARY_DIR=build/server-only-acceptance-contract -DCHAT_TEST_ACCEPTANCE_RESOURCES=ON -P tests/build/server_only_configuration.cmake
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Reject an already published master version
-        if: github.base_ref == 'master' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python scripts/release/publish.py --check-version
-
       - name: Retain packaging regression results
         if: always()
         id: evidence_1

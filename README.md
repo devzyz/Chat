@@ -2,6 +2,12 @@
 
 面向局域网的 Qt 桌面聊天项目，支持账号注册与恢复、好友与群管理、跨实例收发消息，以及头像和附件传输。聊天消息持久化后才确认；客户端使用 SQLite 保存历史和待发送消息，断线后可以补拉或重试。
 
+## 版本与下载
+
+首次正式发布后，在[正式版本](https://github.com/devzyz/Chat/releases/latest)中选择 Windows 或 Linux 的客户端、服务端。
+[滚动 latest](https://github.com/devzyz/Chat/releases/tag/latest) 只提供[Windows 客户端](https://github.com/devzyz/Chat/releases/download/latest/Chat-client-windows-x64.zip)和[Linux 服务端](https://github.com/devzyz/Chat/releases/download/latest/Chat-server-linux-x64.tar.gz)。
+手动发布演练与正式 tag 的区别见[发布说明](tests/release/contracts/README.md)。
+
 ## 服务与数据
 
 | 模块 | 职责 |

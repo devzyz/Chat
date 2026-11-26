@@ -163,7 +163,9 @@ test('tool selection precedes restore; cold refresh skips caches and Windows app
     const linux = read('.github/workflows/linux-ci.yml');
     assert.doesNotMatch(ci, /promote-toolchain|ci-toolchain-approved|toolchain_lock|toolchain_run/);
     assert.match(ci, /needs: \[plan, windows, linux\]/);
-    assert.match(ci, /needs: full/);
+    const release = read('.github/workflows/release.yml');
+    assert.match(release, /needs: \[source, windows-smoke, linux-client-smoke, linux-server, linux-regression\]/);
+    assert.match(release, /needs: \[source, candidate\]/);
     const server = windows.split('  servers-release:')[1].split('  client-release:')[0];
     assert.ok(server.indexOf('actions/setup-node@') < server.indexOf('node scripts/ci/toolchain.js select'));
     assert.ok(server.indexOf('node scripts/ci/toolchain.js select') < server.indexOf('install-windows-toolchain.ps1'));

@@ -74,23 +74,18 @@ test('platforms consume one policy and remain independent of Windows tools', () 
     assert.match(ci, /mode:\s+description:[^\n]+\s+type: choice\s+options: \[quick, full, performance\]\s+default: full/);
 });
 
-// 验证仅 master 推送且完整检查成功后可发布，冒烟失败不能绕过。
-test('publication requires master push and all full checks; failed smoke cannot publish', () => {
-    const release = job(ci, 'release');
-    const condition = release.match(/^    if: (.+)$/m)[1];
-    const publish = new Function('github', `return ${condition};`);
-    assert.equal(publish({ event_name: 'push', ref: 'refs/heads/master' }), true);
-    for (const event_name of ['schedule', 'workflow_dispatch', 'pull_request']) {
-        assert.equal(publish({ event_name, ref: 'refs/heads/master' }), false);
+// 验证正式标签独占发布权限，四件套经过两平台冒烟后才能同步滚动版本。
+test('formal tag gates all four assets before rolling publication; rehearsal cannot publish', () => {
+    const release = workflow('release.yml');
+    assert.match(release, /tags: \['v\[0-9\]\+/);
+    assert.match(job(release, 'candidate'), /needs: \[source, windows-smoke, linux-client-smoke, linux-server, linux-regression\]/);
+    for (const gate of ['formal', 'rolling']) {
+        assert.match(job(release, gate), /github.event_name == 'push' && github.ref_type == 'tag'/);
     }
-    assert.equal(publish({ event_name: 'push', ref: 'refs/heads/develop' }), false);
-    assert.match(release, /needs: full/);
-    assert.match(job(ci, 'full'), /needs: \[plan, windows, linux\]/);
-    const releaseWorkflow = workflow('release.yml');
-    assert.match(job(releaseWorkflow, 'smoke'), /needs: package/);
-    assert.match(job(releaseWorkflow, 'publish'), /needs: smoke/);
-    assert.doesNotMatch(job(releaseWorkflow, 'publish'), /always\(\)|environment:/);
-    assert.doesNotMatch(releaseWorkflow, /BuildCandidate|RestoreServers|settings_receipt/);
+    assert.match(job(release, 'formal'), /needs: \[source, candidate\]/);
+    assert.match(job(release, 'rolling'), /needs: \[source, formal\]/);
+    assert.match(release, /chat-rolling-latest/);
+    assert.doesNotMatch(ci, /uses: .\/.github\/workflows\/release.yml/);
 });
 
 // 验证策略失败或输出缺失时全量门禁仍执行失败检查。
@@ -209,7 +204,7 @@ test('Linux retains PASS validation without the retired compatibility selector o
     assert.doesNotMatch(linux, /preflight-status|outputs\.status|echo 'status=PASS'/);
     assert.ok(linux.includes("jq -e '.status == \"PASS\"' out/phase3c/preflight/linux-preflight.json"));
     assert.match(job(linux, 'downstream-contract'), /verify-service-reports\.js/);
-    assert.match(job(ci, 'release'), /needs: full/);
+    assert.match(job(workflow('release.yml'), 'windows'), /build_packages: true/);
 });
 
 // 验证资源服务生产目标、存储回归及发布阶段接入统一入口。
@@ -304,10 +299,14 @@ test('AutoDL deployment is opt-in and consumes the gated develop package', () =>
     assert.ok(build && deploy);
     assert.match(build, /needs\.plan\.outputs\.autodl == 'package'/);
     assert.match(deploy, /needs\.plan\.outputs\.autodl == 'deploy'/);
-    assert.match(deploy, /needs: \[plan, regression, full, jammy-package\]/);
+    assert.match(deploy, /needs: \[plan, regression, full\]/);
     assert.match(deploy, /needs\.regression\.result == 'success'/);
     assert.match(deploy, /needs\.full\.result == 'success'/);
     assert.match(deploy, /refs\/heads\/develop/);
-    assert.match(deploy, /environment: autodl/);
+    const pull = workflow('autodl.yml');
+    assert.match(pull, /environment: autodl/);
+    assert.match(pull, /AUTODL_AUTO_DEPLOY == 'true'/);
+    assert.match(pull, /deploy \$TAG/);
+    assert.doesNotMatch(pull, /download-artifact|< chat-jammy/);
     assert.match(workflow('jammy-package.yml'), /runs-on: ubuntu-22\.04/);
 });

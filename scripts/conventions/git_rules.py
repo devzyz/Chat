@@ -51,7 +51,7 @@ def event_range(event, event_name, baseline=BASELINE):
                 "branch": pr["head"]["ref"], "target": pr["base"]["ref"],
                 "message": pr["title"] + "\n\n" + (pr.get("body") or "")}
     if event_name == "push":
-        if event.get("deleted"):
+        if event.get("deleted") or event.get("ref", "").startswith("refs/tags/"):
             return None
         before, after = event["before"], event["after"]
         return {"base": baseline if set(before) == {"0"} else before, "head": after,

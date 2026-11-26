@@ -132,40 +132,89 @@ class ReleaseContracts(unittest.TestCase):
             package.unpack(archive, self.root / 'extract')
         self.assertFalse((self.root / 'escape').exists())
 
-    def test_numeric_version_and_published_version_are_protected(self):
+    def test_windows_smoke_acl_targets_only_the_fixture_owner(self):
+        directory = self.root / 'owned'
+        output = b'"machine\\\\runner","S-1-5-21-101-102-103-1001"'
+        with patch.object(smoke.subprocess, 'check_output', return_value=output), patch.object(smoke.subprocess, 'run') as run:
+            smoke.allow_fixture_user(directory)
+            self.assertEqual(run.call_args.args[0], ['icacls.exe', str(directory), '/grant',
+                             '*S-1-5-21-101-102-103-1001:(OI)(CI)M'])
+        with patch.object(smoke.subprocess, 'check_output', return_value=b'unknown'), patch.object(smoke.subprocess, 'run') as run:
+            with self.assertRaises(RuntimeError):
+                smoke.allow_fixture_user(directory)
+            run.assert_not_called()
+
+    def test_incomplete_formal_and_unmanaged_latest_fail_closed(self):
+        from rehearse import LocalReleases
+        hub = LocalReleases(self.root / 'store')
+        hub.root.mkdir()
+        tag = 'v2.0.0'
+        hub.refs[tag] = self.sha
+        files = self.root / 'four'
+        files.mkdir()
+        for name in publish.FORMAL[:3]:
+            (files / name).write_text('fixture')
+        with self.assertRaisesRegex(ValueError, 'four'):
+            publish.publish_formal(hub, tag, self.sha, files)
+        self.assertFalse(hub.rows)
+        (files / publish.FORMAL[-1]).write_text('fixture')
+        publish.publish_formal(hub, tag, self.sha, files)
+        hub.refs['latest'] = 'f' * 40
+        with self.assertRaisesRegex(ValueError, 'Unmanaged'):
+            publish.sync_latest(hub)
+        self.assertNotIn('latest', hub.rows)
+        hub.refs[tag] = 'b' * 40
+        with self.assertRaises(ValueError):
+            publish.publish_formal(hub, tag, self.sha, files)
+        self.assertEqual(publish.identity(hub.rows[tag]), (tag, self.sha))
+
+    def test_roles_and_rolling_releases(self):
+        from rehearse import LocalReleases
+        import receive
+        import windows_roles
+        real = self.root / 'windows'
+        windows_roles.build(self.artifacts, real, self.sha, 'v1.0.0')
+        windows_roles.extract_pair(real, self.root / 'smoke', self.sha)
+        with zipfile.ZipFile(real / publish.FORMAL[0]) as client:
+            self.assertIn('chat.exe', client.namelist())
+            self.assertNotIn('GateServer/GateServer.exe', client.namelist())
         (self.root / 'VERSION').write_text('1.0.0-rc1')
         with self.assertRaises(ValueError):
             package.read_version(self.root)
-        self.build()
-        environment = {'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/heads/master',
-                       'GITHUB_REPOSITORY': 'example/chat'}
-        releases = [[{'tag_name': 'v' + package.read_version(ROOT), 'draft': False}]]
-        with patch.dict(os.environ, environment), patch.object(publish, 'gh', return_value=json.dumps(releases)) as gh:
-            with self.assertRaisesRegex(ValueError, 'already published'):
-                publish.publish(self.output, self.sha)
-            self.assertEqual(gh.call_count, 1)
+        hub = LocalReleases(self.root / 'hub')
+        hub.root.mkdir()
+        for tag, sha in [('v1.0.0', self.sha), ('v1.10.0', 'b'*40), ('v1.2.0', 'c'*40)]:
+            files = self.root / tag
+            files.mkdir()
+            for name in publish.FORMAL:
+                (files / name).write_bytes((name+tag).encode())
+            hub.refs[tag] = sha
+            if tag == 'v1.0.0':
+                hub.fail_once = (tag, publish.FORMAL[2])
+                with self.assertRaises(IOError):
+                    publish.publish_formal(hub, tag, sha, files)
+                self.assertTrue(hub.rows[tag]['draft'])
+                self.assertNotIn('latest', hub.rows)
+            publish.publish_formal(hub, tag, sha, files)
+            publish.publish_formal(hub, tag, sha, files)
+            if tag == 'v1.10.0':
+                hub.fail_once = ('latest', publish.ROLLING[1])
+                with self.assertRaises(IOError):
+                    publish.sync_latest(hub)
+                self.assertEqual(receive.resolve_tag('latest', hub.get)[:2], ('v1.0.0', self.sha))
+                self.assertEqual(publish.contents(hub.rows['latest']), {
+                    n:publish.contents(hub.rows['v1.0.0'])[n] for n in publish.ROLLING})
+            publish.sync_latest(hub)
+        self.assertEqual(set(publish.contents(hub.rows['latest'])), set(publish.ROLLING))
+        self.assertEqual(receive.resolve_tag('latest', hub.get)[:2], ('v1.10.0', 'b'*40))
+        self.assertEqual(hub.ref('latest'), 'b'*40)
+        for invalid in ['v1', 'v01.0.0', 'v1.0.0-rc.1', '../v1.0.0']:
+            with self.assertRaises(ValueError):
+                receive.resolve_tag(invalid, hub.get)
+        hub.refs['v1.10.0'] = 'd'*40
+        with self.assertRaises(ValueError):
+            receive.resolve_tag('latest', hub.get)
 
-    def test_unpublished_draft_retry_uploads_and_checks_same_bytes_before_publication(self):
-        archive = self.build()
-        calls = []
-        def gh(*arguments):
-            calls.append(arguments)
-            if arguments[0] == 'api':
-                return json.dumps([[{'tag_name': 'v' + package.read_version(ROOT),
-                                     'draft': True, 'target_commitish': self.sha}]])
-            if arguments[:2] == ('release', 'download'):
-                directory = Path(arguments[arguments.index('--dir') + 1])
-                directory.mkdir()
-                for name in (archive.name, 'SHA256SUMS'):
-                    (directory / name).write_bytes((self.output / name).read_bytes())
-            return ''
-        environment = {'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/heads/master',
-                       'GITHUB_REPOSITORY': 'example/chat', 'GITHUB_RUN_ATTEMPT': '2'}
-        with patch.dict(os.environ, environment), patch.object(publish, 'gh', side_effect=gh):
-            publish.publish(self.output, self.sha)
-        self.assertEqual(calls[-1][:2], ('release', 'edit'))
-        self.assertIn('--draft=false', calls[-1])
-        self.assertFalse(any(call[:2] == ('release', 'create') for call in calls))
 
     def test_smoke_failure_still_writes_failed_report(self):
         report = self.root / 'report.xml'
