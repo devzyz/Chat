@@ -325,8 +325,14 @@ def run(directory, source_sha, report):
             root = Path(temporary)
             from windows_roles import WINDOWS, extract_pair
             if any((directory / name).exists() for name in WINDOWS.values()):
-                case('independent archives and required runtime files', lambda: extract_pair(directory, root, source_sha))
+                root = Path(temporary) / 'server'
+                client_folder = Path(temporary) / 'desktop'
+                def prepare_pair():
+                    extract_pair(directory, root, source_sha)
+                    (root / 'chat-client').rename(client_folder)
+                case('independent archives and required runtime files', prepare_pair)
             else:
+                client_folder = root / 'chat-client'
                 archives = list(directory.glob('Chat-*-windows-x64.zip'))
                 if len(archives) != 1:
                     raise ValueError('Expected one release package')
@@ -375,7 +381,7 @@ def run(directory, source_sha, report):
             case('ResourceServer startup, authentication rejection and shutdown',
                  lambda: resource_smoke(root, environment, report.parent / (report.stem + '-logs')))
             def client():
-                folder = root / 'chat-client'
+                folder = client_folder
                 (folder / 'config.ini').write_text('[GateServer]\nhost=127.0.0.1\nport=1\n', encoding='utf-8')
                 with (root / 'client.log').open('wb') as log:
                     process = start([str(folder / 'chat.exe')], folder, environment, log)

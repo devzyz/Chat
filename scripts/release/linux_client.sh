@@ -33,5 +33,6 @@ exec "$root/bin/chat" "$@"
 LAUNCH
 chmod 755 "$stage/chat"
 git rev-parse HEAD > "$stage/SOURCE_SHA"
-printf 'Ubuntu 22.04 x64 desktop (X11 or XWayland). Run ./chat; edit bin/config.ini to select the server.\nSystem packages: libopengl0 libegl1 libgl1 libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-image0 libxcb-render-util0. Supply your graphics driver on the host.\n' > "$stage/README.txt"
+cp scripts/release/linux-desktop-packages.txt "$stage/"
+printf 'Ubuntu 22.04 x64 desktop (X11 or XWayland). Run ./chat; edit bin/config.ini to select the server.\nInstall system libraries with: xargs -a linux-desktop-packages.txt sudo apt-get install -y\nUse the graphics driver provided by your host.\n' > "$stage/README.txt"
 tar -C "$stage" -czf "$out/Chat-client-linux-x64.tar.gz" .

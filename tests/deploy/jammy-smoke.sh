@@ -96,11 +96,11 @@ sha=$(cat "$work/source/SOURCE_SHA")
 archive="$bundle/chat-jammy-x64.tar.gz"
 digest=$(sha256sum "$archive" | cut -d' ' -f1)
 receive() {
-    PYTHONPATH="$CHAT_DEPLOY_HOME" python3 -c 'import sys,os,receive;from pathlib import Path;receive.install(Path(os.environ["CHAT_DEPLOY_HOME"]),sys.argv[1],sys.argv[2],sys.argv[3],sys.stdin.buffer)' "$3" "$sha" "$1" < "$2"
+    python3 "$repo/tests/deploy/pull_fixture.py" "$3" "$sha" "$1" "$2" "${4:-$3}"
 }
 if receive "$(printf '0%.0s' {1..64})" "$archive" v0.0.1; then exit 1; fi
 test ! -e "$CHAT_DEPLOY_HOME/current"
-receive "$digest" "$archive" v0.0.1
+receive "$digest" "$archive" v0.0.1 latest
 old=$(readlink "$CHAT_DEPLOY_HOME/current")
 # 替换测试副本中的 Gate，以真实启动失败验证旧版本恢复。
 printf '#!/bin/sh\nexit 1\n' > "$work/source/GateServer/GateServer"

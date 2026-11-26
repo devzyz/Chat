@@ -6,16 +6,14 @@ import shutil
 import sys
 import tarfile
 import tempfile
-import threading
-import urllib.request
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT / 'scripts/release'), str(ROOT / 'scripts/deploy')]
+sys.path[:0] = [str(ROOT / 'scripts/release'), str(ROOT / 'scripts/deploy'), str(ROOT / 'tests/deploy')]
 import publish
 import receive
+from pull_fixture import release_http
 
 
 class LocalReleases:
@@ -93,44 +91,17 @@ def rehearse(directory, tag, sha):
         assert set(publish.contents(hub.rows['latest'])) == set(publish.ROLLING)
         for name in publish.ROLLING:
             assert publish.checksum(home / 'latest' / name) == publish.checksum(directory / name)
-        class Handler(BaseHTTPRequestHandler):
-            def log_message(self, *args):
-                pass
-
-            def do_GET(self):
-                if self.path == '/download/' + tag + '/' + receive.ASSET:
-                    file = home / tag / receive.ASSET
-                    self.send_response(200)
-                    self.send_header('Content-Length', str(file.stat().st_size))
-                    self.end_headers()
-                    with file.open('rb') as stream:
-                        shutil.copyfileobj(stream, self.wfile)
-                else:
-                    data = json.dumps(hub.get(self.path.lstrip('/'))).encode()
-                    self.send_response(200)
-                    self.end_headers()
-                    self.wfile.write(data)
-
-        with ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
-            thread = threading.Thread(target=server.serve_forever, daemon=True)
-            thread.start()
-            base = f'http://127.0.0.1:{server.server_port}/'
-            def get(path):
-                with urllib.request.urlopen(base + path, timeout=15) as response:
-                    return json.load(response)
-            def download(version):
-                return urllib.request.urlopen(base + 'download/' + version + '/' + receive.ASSET, timeout=60)
-            try:
-                deployment = home / 'host'
-                (deployment / 'releases').mkdir(parents=True)
-                with patch.object(receive, 'activate') as activation:
-                    for requested in (tag, 'latest'):
-                        receive.pull(deployment, requested, get, download)
-                        activation.assert_called_with(deployment, deployment / 'releases' / tag)
-                assert (deployment / 'releases' / tag / 'SOURCE_SHA').read_text().strip() == sha
-            finally:
-                server.shutdown()
-                thread.join()
+        def asset(version, name):
+            if version != tag or name != receive.ASSET:
+                raise KeyError(name)
+            return home / tag / name
+        deployment = home / 'host'
+        (deployment / 'releases').mkdir(parents=True)
+        with release_http(hub.get, asset), patch.object(receive, 'activate') as activation:
+            for requested in (tag, 'latest'):
+                receive.pull(deployment, requested)
+                activation.assert_called_with(deployment, deployment / 'releases' / tag)
+        assert (deployment / 'releases' / tag / 'SOURCE_SHA').read_text().strip() == sha
         print('Rehearsal passed; formal:', tag, *publish.FORMAL, '; rolling latest:', *publish.ROLLING,
               '; both AutoDL pulls verified:', sha)
 
